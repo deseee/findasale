@@ -224,4 +224,76 @@ export const sendWeeklyDigest = async () => {
 
     // Find sales happening this weekend
     const now = new Date();
-    const weekendStart = new Date
+    const weekendStart = new Date(now);
+    weekendStart.setDate(now.getDate() + ((5 + 7 - now.getDay()) % 7)); // Next Friday
+    const weekendEnd = new Date(weekendStart);
+    weekendEnd.setDate(weekendStart.getDate() + 2); // Sunday
+
+    const upcomingSales = await prisma.sale.findMany({
+      where: {
+        OR: [
+          {
+            startDate: {
+              gte: weekendStart,
+              lte: weekendEnd
+            }
+          },
+          {
+            endDate: {
+              gte: weekendStart,
+              lte: weekendEnd
+            }
+          }
+        ]
+      },
+      include: {
+        organizer: {
+          include: {
+            user: {
+              select: {
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (upcomingSales.length === 0) {
+      console.log('No sales found for the upcoming weekend');
+      return;
+    }
+
+    // Group sales by organizer
+    const salesByOrganizer: Record<string, any[]> = {};
+    for (const sale of upcomingSales) {
+      const organizerEmail = sale.organizer.user.email;
+      if (!salesByOrganizer[organizerEmail]) {
+        salesByOrganizer[organizerEmail] = [];
+      }
+      salesByOrganizer[organizerEmail].push(sale);
+    }
+
+    // Send email to each organizer
+    for (const [organizerEmail, sales] of Object.entries(salesByOrganizer)) {
+      try {
+        const salesList = sales.map(sale => 
+          `- ${sale.title} (${new Date(sale.startDate).toLocaleDateString()} to ${new Date(sale.endDate).toLocaleDateString()})`
+        ).join('\n');
+
+        await resendClient.emails.send({
+          from: process.env.FROM_EMAIL || 'noreply@salescout.com',
+          to: organizerEmail,
+          subject: 'Upcoming Weekend Sales Digest',
+          text: `Hi there!\n\nHere are the sales happening this weekend:\n\n${salesList}\n\nBest regards,\nSaleScout Team`
+        });
+
+        console.log(`Weekly digest sent to ${organizerEmail}`);
+      } catch (error) {
+        console.error(`Failed to send weekly digest to ${organizerEmail}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('Error sending weekly digest:', error);
+  }
+};
