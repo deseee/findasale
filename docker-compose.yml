@@ -1,0 +1,97 @@
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: salescout
+      POSTGRES_PASSWORD: salescout
+      POSTGRES_DB: salescout
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U salescout"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Image tagger (FastAPI + Gradio)
+  image-tagger:
+    build: ./packages/backend/services/image-tagger
+    ports:
+      - "5001:5000"
+    environment:
+      MODEL_TYPE: ${TAGGER_MODEL_TYPE:-wd-vit}
+      CONFIDENCE_THRESHOLD: ${TAGGER_CONFIDENCE:-0.35}
+      API_KEY: ${TAGGER_API_KEY:-change-this-in-production}
+      HF_TOKEN: ${HF_TOKEN:-}
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000"]
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # Backend
+  backend:
+    build:
+      context: .
+      dockerfile: ./packages/backend/Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://salescout:salescout@postgres:5432/salescout
+      TAGGER_URL: http://image-tagger:5000
+      TAGGER_API_KEY: ${TAGGER_API_KEY:-change-this-in-production}
+      PORT: 5000
+      FRONTEND_URL: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_VISION_MODEL: qwen3-vl:4b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./packages/backend/src:/app/packages/backend/src
+      - ./packages/database/prisma:/app/packages/database/prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      image-tagger:
+        condition: service_started
+    command: sh -c "cd /app && pnpm --filter database exec prisma db push --accept-data-loss && pnpm --filter database exec prisma generate && pnpm --filter backend run dev"
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: ./packages/frontend/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:5000/api
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./packages/frontend/next.config.js:/app/packages/frontend/next.config.js
+      - ./packages/frontend/pages:/app/packages/frontend/pages
+      - ./packages/frontend/components:/app/packages/frontend/components
+      - ./packages/frontend/styles:/app/packages/frontend/styles
+      - ./packages/frontend/lib:/app/packages/frontend/lib
+      - ./packages/frontend/public:/app/packages/frontend/public
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -58,12 +58,15 @@ Thumbs.db
 *.tsbuildinfo
 
 # =========================
-# Python virtual environment for image tagger
+# Python
 # =========================
+__pycache__/
+*.pyc
+*.pyo
 packages/backend/services/image-tagger/venv/
-packages/backend/services/image-tagger/__pycache__/
 packages/backend/services/image-tagger/uploads/
 packages/backend/services/image-tagger/pytest-cache-files*/
+packages/backend/services/image-tagger/.coverage*
 
 # =========================
 # Local stubs / binaries
