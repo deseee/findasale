@@ -16,11 +16,10 @@ export const createLineEntries = async (saleId: string) => {
   try {
     // Get all subscribers for this sale
     const subscribers = await prisma.saleSubscriber.findMany({
-      where: { 
+      where: {
         saleId,
         phone: { not: null }
       },
-      include: { user: true }
     });
 
     // Create line entries for each subscriber
@@ -84,7 +83,9 @@ export const getLineEntriesForSale = async (saleId: string) => {
   try {
     const entries = await prisma.lineEntry.findMany({
       where: { saleId },
-      include: { user: true },
+      include: {
+        user: { select: { id: true, name: true, email: true } }
+      },
       orderBy: { position: 'asc' }
     });
 

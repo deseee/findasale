@@ -73,7 +73,8 @@ export const getAffiliateLinks = async (req: AuthRequest, res: Response) => {
       },
       orderBy: {
         createdAt: 'desc'
-      }
+      },
+      take: 50
     });
 
     res.json(affiliateLinks);

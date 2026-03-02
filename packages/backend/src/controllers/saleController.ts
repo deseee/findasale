@@ -20,6 +20,7 @@ const iso8601DatetimeSchema = z.string().regex(
 // Validation schemas
 const saleQuerySchema = z.object({
   city: z.string().optional(),
+  zip: z.string().optional(),
   lat: z.string().optional(),
   lng: z.string().optional(),
   radius: z.string().optional(),
@@ -81,16 +82,22 @@ export const listSales = async (req: Request, res: Response) => {
     const limit = parseInt(query.limit);
     const skip = (page - 1) * limit;
     
-    // Build where conditions
-    const where: any = {};
-    
+    // Build where conditions — default to PUBLISHED only for public listing
+    const where: any = {
+      status: 'PUBLISHED',
+    };
+
     if (query.city) {
       where.city = {
         contains: query.city,
         mode: 'insensitive'
       };
     }
-    
+
+    if (query.zip) {
+      where.zip = query.zip;
+    }
+
     if (query.startDate || query.endDate) {
       where.startDate = {};
       if (query.startDate) {

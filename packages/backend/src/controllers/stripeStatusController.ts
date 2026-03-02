@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import stripe from '../utils/stripe';
+import { getStripe } from '../utils/stripe';
 
 const prisma = new PrismaClient();
 
@@ -19,14 +19,15 @@ export const getAccountStatus = async (req: AuthRequest, res: Response) => {
     });
 
     if (!organizer || !organizer.stripeConnectId) {
-      return res.json({ 
-        onboarded: false, 
+      return res.json({
+        onboarded: false,
         needsSetup: true,
         chargesEnabled: false,
-        detailsSubmitted: false 
+        detailsSubmitted: false
       });
     }
 
+    const stripe = getStripe();
     const account = await stripe.accounts.retrieve(organizer.stripeConnectId);
     
     res.json({

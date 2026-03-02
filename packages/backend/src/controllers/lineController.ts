@@ -51,11 +51,11 @@ export const startLine = async (req: AuthRequest, res: Response) => {
 
     // Get all subscribers for this sale
     const subscribers = await prisma.saleSubscriber.findMany({
-      where: { 
+      where: {
         saleId,
         phone: { not: null }
       },
-      include: { user: true }
+      take: 1000,
     });
 
     // Create line entries for each subscriber
@@ -139,9 +139,10 @@ export const callNext = async (req: AuthRequest, res: Response) => {
       },
       include: {
         user: {
-          include: {
+          select: {
             subscriptions: {
-              where: { saleId }
+              where: { saleId },
+              select: { phone: true }
             }
           }
         }
@@ -213,7 +214,7 @@ export const getLineStatus = async (req: AuthRequest, res: Response) => {
     // Get all line entries for this sale
     const entries = await prisma.lineEntry.findMany({
       where: { saleId },
-      include: { 
+      include: {
         user: {
           select: {
             name: true,
@@ -221,7 +222,8 @@ export const getLineStatus = async (req: AuthRequest, res: Response) => {
           }
         }
       },
-      orderBy: { position: 'asc' }
+      orderBy: { position: 'asc' },
+      take: 500,
     });
 
     res.json(entries);
@@ -244,9 +246,9 @@ export const markAsEntered = async (req: AuthRequest, res: Response) => {
     // Verify user is organizer of this sale
     const entry = await prisma.lineEntry.findUnique({
       where: { id: lineEntryId },
-      include: { 
-        sale: true,
-        user: true
+      include: {
+        sale: { select: { organizerId: true } },
+        user: { select: { id: true } }
       }
     });
 

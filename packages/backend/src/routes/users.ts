@@ -111,4 +111,43 @@ router.get('/me/points', authenticate, async (req: AuthRequest, res: Response) =
   }
 });
 
+// Create or update organizer profile
+router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessName, phone, address } = req.body;
+
+    if (req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Only organizers can set up an organizer profile' });
+    }
+
+    const existing = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+
+    if (existing) {
+      const updated = await prisma.organizer.update({
+        where: { userId: req.user.id },
+        data: {
+          businessName: businessName || existing.businessName,
+          phone: phone || existing.phone,
+          address: address || existing.address,
+        }
+      });
+      return res.json({ organizer: updated, created: false });
+    }
+
+    const organizer = await prisma.organizer.create({
+      data: {
+        userId: req.user.id,
+        businessName: businessName || req.user.name,
+        phone: phone || '',
+        address: address || '',
+      }
+    });
+
+    res.status(201).json({ organizer, created: true });
+  } catch (error) {
+    console.error('Error setting up organizer profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;

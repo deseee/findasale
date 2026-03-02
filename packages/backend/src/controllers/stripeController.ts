@@ -1,9 +1,52 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getStripe } from '../utils/stripe';
+import { Resend } from 'resend';
+import { handlePurchaseBadge } from './userController';
 
 const prisma = new PrismaClient();
 const stripe = getStripe();
+
+let _resend: any = null;
+const getResendClient = () => {
+  if (!_resend && process.env.RESEND_API_KEY) {
+    try { _resend = new Resend(process.env.RESEND_API_KEY); } catch { _resend = null; }
+  }
+  return _resend;
+};
+
+const sendReceiptEmail = async (purchase: {
+  id: string;
+  amount: number;
+  user: { email: string; name: string };
+  item: { title: string } | null;
+  sale: { title: string } | null;
+}) => {
+  const resend = getResendClient();
+  if (!resend) return;
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@salescout.app';
+  const historyUrl = `${process.env.FRONTEND_URL || 'https://salescout.app'}/shopper/purchases`;
+  try {
+    await resend.emails.send({
+      from: fromEmail,
+      to: purchase.user.email,
+      subject: `Receipt: ${purchase.item?.title ?? 'Your purchase'}`,
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+          <h2>Payment Confirmed</h2>
+          <p>Hi ${purchase.user.name},</p>
+          <p>Your payment of <strong>$${purchase.amount.toFixed(2)}</strong> for <strong>${purchase.item?.title ?? 'an item'}</strong> from <em>${purchase.sale?.title ?? 'a sale'}</em> has been confirmed.</p>
+          <p>Thank you for your purchase!</p>
+          <a href="${historyUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-top:16px">
+            View Purchase History
+          </a>
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error('Failed to send receipt email:', err);
+  }
+};
 
 interface AuthRequest extends Request {
   user?: any;
@@ -122,8 +165,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       where: { id: itemId },
       include: {
         sale: {
-          include: {
-            organizer: true
+          select: {
+            id: true,
+            isAuctionSale: true,
+            organizer: {
+              select: { stripeConnectId: true }
+            }
           }
         }
       }
@@ -138,11 +185,18 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }
 
     // Ensure we have a valid price value and convert to number
+    // For auction items, use currentBid (the winning bid amount); fall back to auctionStartPrice if no bids yet
     let price: number;
-    if (item.price !== null && item.price !== undefined) {
+    if (item.sale.isAuctionSale) {
+      if (item.currentBid !== null && item.currentBid !== undefined) {
+        price = typeof item.currentBid === 'number' ? item.currentBid : parseFloat(item.currentBid.toString());
+      } else if (item.auctionStartPrice !== null && item.auctionStartPrice !== undefined) {
+        price = typeof item.auctionStartPrice === 'number' ? item.auctionStartPrice : parseFloat(item.auctionStartPrice.toString());
+      } else {
+        price = 0;
+      }
+    } else if (item.price !== null && item.price !== undefined) {
       price = typeof item.price === 'number' ? item.price : parseFloat(item.price.toString());
-    } else if (item.auctionStartPrice !== null && item.auctionStartPrice !== undefined) {
-      price = typeof item.auctionStartPrice === 'number' ? item.auctionStartPrice : parseFloat(item.auctionStartPrice.toString());
     } else {
       price = 0;
     }
@@ -151,6 +205,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     if (isNaN(price) || price <= 0) {
       return res.status(400).json({ message: 'Invalid price value' });
     }
+
+    // Platform fee: 7% for auction items, 5% for regular sales
+    const feePercent = item.sale.isAuctionSale ? 0.07 : 0.05;
+    const platformFeeAmount = Math.round(price * 100 * feePercent); // in cents
 
     // Create a PaymentIntent with automatic confirmation
     const paymentIntent = await stripe.paymentIntents.create({
@@ -161,6 +219,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         saleId: item.sale.id,
         userId: req.user.id
       },
+      application_fee_amount: platformFeeAmount,
+      on_behalf_of: item.sale.organizer.stripeConnectId,
       transfer_data: {
         destination: item.sale.organizer.stripeConnectId,
       },
@@ -173,6 +233,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         itemId: item.id,
         saleId: item.sale.id,
         amount: price,
+        platformFeeAmount: platformFeeAmount / 100, // store in dollars, not cents
         stripePaymentIntentId: paymentIntent.id,
         status: 'PENDING'
       }
@@ -180,7 +241,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 
     res.json({
       clientSecret: paymentIntent.client_secret,
-      purchaseId: purchase.id
+      purchaseId: purchase.id,
+      platformFee: platformFeeAmount / 100,
+      totalAmount: price
     });
   } catch (error: unknown) {
     console.error('Payment Intent creation error:', error);
@@ -204,48 +267,155 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
   // Handle the event
   switch (event.type) {
-    case 'payment_intent.succeeded':
+    case 'payment_intent.succeeded': {
       const paymentIntent = event.data.object;
-      // Find purchase by stripePaymentIntentId (now works because it's unique)
       const purchase = await prisma.purchase.findUnique({
-        where: { stripePaymentIntentId: paymentIntent.id }
+        where: { stripePaymentIntentId: paymentIntent.id },
+        include: {
+          user: { select: { email: true, name: true } },
+          item: { select: { title: true } },
+          sale: { select: { title: true } },
+        },
       });
-      
+
       if (purchase) {
-        // Update purchase status to PAID
         await prisma.purchase.update({
           where: { stripePaymentIntentId: paymentIntent.id },
-          data: { status: 'PAID' }
+          data: { status: 'PAID' },
         });
-        
-        // Update item status to SOLD
-        const metadata = paymentIntent.metadata;
-        if (metadata.itemId) {
+
+        if (paymentIntent.metadata?.itemId) {
           await prisma.item.update({
-            where: { id: metadata.itemId },
-            data: { status: 'SOLD' }
+            where: { id: paymentIntent.metadata.itemId },
+            data: { status: 'SOLD' },
+          });
+        }
+
+        // Award purchase badge
+        await handlePurchaseBadge(purchase.userId);
+
+        // Send receipt email
+        if (purchase.user) {
+          await sendReceiptEmail({
+            id: purchase.id,
+            amount: typeof purchase.amount === 'number' ? purchase.amount : parseFloat(purchase.amount.toString()),
+            user: { email: purchase.user.email, name: purchase.user.name },
+            item: purchase.item,
+            sale: purchase.sale,
           });
         }
       }
       break;
-    case 'payment_intent.payment_failed':
+    }
+    case 'payment_intent.payment_failed': {
       const paymentFailedIntent = event.data.object;
-      // Find purchase by stripePaymentIntentId (now works because it's unique)
-      const failedPurchase = await prisma.purchase.findUnique({
-        where: { stripePaymentIntentId: paymentFailedIntent.id }
+      await prisma.purchase.updateMany({
+        where: { stripePaymentIntentId: paymentFailedIntent.id },
+        data: { status: 'FAILED' },
       });
-      
-      if (failedPurchase) {
-        // Update purchase status to REFUNDED
-        await prisma.purchase.update({
-          where: { stripePaymentIntentId: paymentFailedIntent.id },
-          data: { status: 'REFUNDED' }
-        });
-      }
       break;
+    }
     default:
       console.log(`Unhandled event type ${event.type}`);
   }
 
   res.json({ received: true });
+};
+
+// Return the clientSecret for an existing PENDING purchase (used by auction winners)
+export const getPendingPayment = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { purchaseId } = req.params;
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        item: { select: { title: true } },
+      },
+    });
+
+    if (!purchase) {
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+
+    if (purchase.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    if (purchase.status !== 'PENDING') {
+      return res.status(400).json({ message: 'Purchase is not pending payment' });
+    }
+
+    if (!purchase.stripePaymentIntentId) {
+      return res.status(400).json({ message: 'No payment intent for this purchase' });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(purchase.stripePaymentIntentId);
+
+    const amount = typeof purchase.amount === 'number' ? purchase.amount : parseFloat(purchase.amount.toString());
+    const platformFee = typeof purchase.platformFeeAmount === 'number'
+      ? purchase.platformFeeAmount
+      : parseFloat((purchase.platformFeeAmount ?? 0).toString());
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      totalAmount: amount,
+      platformFee,
+      itemTitle: purchase.item?.title ?? 'Item',
+    });
+  } catch (error) {
+    console.error('getPendingPayment error:', error);
+    res.status(500).json({ message: 'Failed to retrieve payment details' });
+  }
+};
+
+// Issue a refund (organizer or admin only)
+export const createRefund = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+      return res.status(403).json({ message: 'Organizer or admin access required' });
+    }
+
+    const { purchaseId } = req.params;
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        sale: { include: { organizer: { select: { userId: true } } } },
+      },
+    });
+
+    if (!purchase) {
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+
+    if (req.user.role === 'ORGANIZER' && purchase.sale?.organizer?.userId !== req.user.id) {
+      return res.status(403).json({ message: 'You can only refund purchases from your own sales' });
+    }
+
+    if (purchase.status !== 'PAID') {
+      return res.status(400).json({ message: 'Only paid purchases can be refunded' });
+    }
+
+    if (!purchase.stripePaymentIntentId) {
+      return res.status(400).json({ message: 'No payment intent found for this purchase' });
+    }
+
+    await stripe.refunds.create({ payment_intent: purchase.stripePaymentIntentId });
+
+    await prisma.purchase.update({ where: { id: purchaseId }, data: { status: 'REFUNDED' } });
+
+    if (purchase.itemId) {
+      await prisma.item.update({ where: { id: purchase.itemId }, data: { status: 'AVAILABLE' } });
+    }
+
+    res.json({ message: 'Refund issued successfully' });
+  } catch (error) {
+    console.error('createRefund error:', error);
+    res.status(500).json({ message: 'Failed to issue refund' });
+  }
 };

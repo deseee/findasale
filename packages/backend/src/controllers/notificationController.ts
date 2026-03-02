@@ -133,7 +133,8 @@ export const getUserSubscriptions = async (req: AuthRequest, res: Response) => {
             endDate: true
           }
         }
-      }
+      },
+      take: 50,
     });
 
     res.json(subscriptions);
@@ -179,7 +180,8 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
         phone: {
           not: null
         }
-      }
+      },
+      take: 100,
     });
 
     if (subscribers.length === 0) {
@@ -212,88 +214,134 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Send weekly digest email
+// Helper: build the HTML for a weekly digest email
+const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): string => {
+  const saleCards = sales.map((sale) => {
+    const startDate = new Date(sale.startDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const endDate = new Date(sale.endDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const photo = sale.photoUrls?.[0] ? `<img src="${sale.photoUrls[0]}" alt="${sale.title}" style="width:100%;height:160px;object-fit:cover;border-radius:6px 6px 0 0;" />` : '';
+    return `
+      <div style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px;overflow:hidden;font-family:sans-serif;">
+        ${photo}
+        <div style="padding:14px;">
+          <h3 style="margin:0 0 4px;font-size:16px;color:#111827;">${sale.title}</h3>
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">${sale.address}, ${sale.city}, ${sale.state}</p>
+          <p style="margin:0 0 10px;font-size:13px;color:#374151;">${startDate} – ${endDate}</p>
+          <p style="margin:0 0 10px;font-size:12px;color:#9ca3af;">By ${sale.organizer?.businessName || 'Unknown Organizer'}</p>
+          <a href="${frontendUrl}/sales/${sale.id}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">View Sale →</a>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;">
+  <div style="max-width:600px;margin:0 auto;padding:24px 16px;font-family:sans-serif;">
+    <!-- Header -->
+    <div style="background:#2563eb;border-radius:10px;padding:24px;margin-bottom:24px;text-align:center;">
+      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">🏷️ SaleScout</h1>
+      <p style="margin:8px 0 0;color:#bfdbfe;font-size:14px;">Your Weekend Estate Sale Digest</p>
+    </div>
+
+    <!-- Greeting -->
+    <p style="color:#374151;font-size:15px;margin-bottom:20px;">
+      Hi ${userName || 'there'},<br><br>
+      Here are the estate sales happening this weekend near you. Don't miss out!
+    </p>
+
+    <!-- Sale cards -->
+    ${saleCards}
+
+    <!-- Footer -->
+    <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;text-align:center;">
+      <p style="color:#9ca3af;font-size:12px;margin:0;">
+        You're receiving this because you have a SaleScout account.<br>
+        <a href="${frontendUrl}" style="color:#2563eb;">View all sales</a> &middot;
+        <a href="${frontendUrl}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+// Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
-    // Get Resend client
     const resendClient = getResendClient();
     if (!resendClient) {
       console.warn('Email service not configured - skipping weekly digest');
       return;
     }
 
-    // Find sales happening this weekend
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'digest@salescout.app';
+
+    // Find PUBLISHED sales starting in the next 7 days
     const now = new Date();
-    const weekendStart = new Date(now);
-    weekendStart.setDate(now.getDate() + ((5 + 7 - now.getDay()) % 7)); // Next Friday
-    const weekendEnd = new Date(weekendStart);
-    weekendEnd.setDate(weekendStart.getDate() + 2); // Sunday
+    const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     const upcomingSales = await prisma.sale.findMany({
       where: {
-        OR: [
-          {
-            startDate: {
-              gte: weekendStart,
-              lte: weekendEnd
-            }
-          },
-          {
-            endDate: {
-              gte: weekendStart,
-              lte: weekendEnd
-            }
-          }
-        ]
+        status: 'PUBLISHED',
+        startDate: {
+          gte: now,
+          lte: sevenDaysOut,
+        },
       },
       include: {
         organizer: {
-          include: {
-            user: {
-              select: {
-                email: true
-              }
-            }
-          }
-        }
-      }
+          select: { businessName: true },
+        },
+      },
+      orderBy: { startDate: 'asc' },
+      take: 10, // cap at 10 per digest
     });
 
     if (upcomingSales.length === 0) {
-      console.log('No sales found for the upcoming weekend');
+      console.log('Weekly digest: no upcoming published sales — skipping');
       return;
     }
 
-    // Group sales by organizer
-    const salesByOrganizer: Record<string, any[]> = {};
-    for (const sale of upcomingSales) {
-      const organizerEmail = sale.organizer.user.email;
-      if (!salesByOrganizer[organizerEmail]) {
-        salesByOrganizer[organizerEmail] = [];
-      }
-      salesByOrganizer[organizerEmail].push(sale);
-    }
+    // Get all users with email addresses
+    const users = await prisma.user.findMany({
+      select: { id: true, email: true, name: true },
+      where: {
+        email: { not: '' },
+      },
+      take: 5000, // cap digest at 5k users per run
+    });
 
-    // Send email to each organizer
-    for (const [organizerEmail, sales] of Object.entries(salesByOrganizer)) {
+    console.log(`Weekly digest: sending to ${users.length} users with ${upcomingSales.length} sales`);
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const user of users) {
       try {
-        const salesList = sales.map(sale => 
-          `- ${sale.title} (${new Date(sale.startDate).toLocaleDateString()} to ${new Date(sale.endDate).toLocaleDateString()})`
-        ).join('\n');
+        const html = buildDigestHtml(user.name, upcomingSales, frontendUrl);
 
         await resendClient.emails.send({
-          from: process.env.FROM_EMAIL || 'noreply@salescout.com',
-          to: organizerEmail,
-          subject: 'Upcoming Weekend Sales Digest',
-          text: `Hi there!\n\nHere are the sales happening this weekend:\n\n${salesList}\n\nBest regards,\nSaleScout Team`
+          from: fromEmail,
+          to: user.email,
+          subject: `🏷️ ${upcomingSales.length} estate sale${upcomingSales.length > 1 ? 's' : ''} this weekend near you`,
+          html,
         });
 
-        console.log(`Weekly digest sent to ${organizerEmail}`);
+        sent++;
+
+        // Resend free tier: 1 email/sec — add small delay to avoid rate limit
+        await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (error) {
-        console.error(`Failed to send weekly digest to ${organizerEmail}:`, error);
+        console.error(`Weekly digest: failed to send to ${user.email}:`, error);
+        failed++;
       }
     }
+
+    console.log(`Weekly digest complete: ${sent} sent, ${failed} failed`);
   } catch (error) {
-    console.error('Error sending weekly digest:', error);
+    console.error('Weekly digest job error:', error);
   }
 };

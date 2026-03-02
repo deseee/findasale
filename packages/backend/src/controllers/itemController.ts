@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { prisma } from '../index';
+import axios from 'axios';
+import FormData from 'form-data';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -12,6 +14,13 @@ const toNumber = (value: string | undefined | null): number | null => {
   if (!value) return null;
   const num = parseFloat(value);
   return isNaN(num) ? null : num;
+};
+
+// Simulated image upload function - replace with your actual upload logic
+const uploadImages = async (files: Express.Multer.File[]): Promise<string[]> => {
+  // Example: upload to Cloudinary and return URLs
+  // Replace with your own implementation
+  return files.map(file => `https://example.com/uploads/${file.filename}`);
 };
 
 // Bulk import items from CSV
@@ -31,7 +40,11 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
     // Check if sale exists and belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { organizer: true }
+      include: {
+        organizer: {
+          select: { userId: true }
+        }
+      }
     });
 
     if (!sale) {
@@ -126,7 +139,8 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     const { saleId } = req.query;
     const items = await prisma.item.findMany({
       where: { saleId: saleId as string },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 100
     });
 
     res.json(items);
@@ -136,18 +150,36 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Create a new item with image upload and optional AI tagging
+ * Expects multipart/form-data with:
+ * - saleId: string
+ * - title: string
+ * - description?: string
+ * - price?: number
+ * - auctionStartPrice?: number
+ * - bidIncrement?: number
+ * - auctionEndTime?: string (ISO date)
+ * - status?: string (default 'AVAILABLE')
+ * - images: file(s) (field name 'images')
+ */
 export const createItem = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user || req.user.role !== 'ORGANIZER') {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status } = req.body;
+    const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { organizer: true }
+      include: {
+        organizer: {
+          select: { userId: true }
+        }
+      }
     });
 
     if (!sale) {
@@ -158,6 +190,62 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
+    // Resolve photo URLs: accept pre-uploaded URLs from body, or upload files now
+    let photoUrls: string[] = [];
+    if (files && files.length > 0) {
+      photoUrls = await uploadImages(files);
+    } else if (req.body.photoUrls) {
+      photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];
+    }
+
+    // Call AI tagger for the first image to get suggested tags (optional, non-fatal)
+    let suggestedTags: string[] = [];
+    const taggerUrl = process.env.TAGGER_URL;
+    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';
+    if (taggerUrl && files && files.length > 0) {
+      const imageName = files[0].originalname;
+      const taggerStart = Date.now();
+      const attemptTag = async (): Promise<string[]> => {
+        const formData = new FormData();
+        formData.append('image', files[0].buffer, { filename: imageName });
+        formData.append('threshold', '0.35');
+        const response = await axios.post(`${taggerUrl}/api/tag`, formData, {
+          headers: {
+            ...formData.getHeaders(),
+            'X-API-Key': taggerApiKey,
+          },
+          timeout: 5000,
+        });
+        return response.data?.tags?.map((t: any) => t.tag) ?? [];
+      };
+
+      try {
+        suggestedTags = await attemptTag();
+        const elapsed = Date.now() - taggerStart;
+        console.log(`[tagger] tagged "${imageName}" in ${elapsed}ms — ${suggestedTags.length} tags`);
+      } catch (firstError: any) {
+        const isTimeout = firstError.code === 'ECONNABORTED' || firstError.message?.includes('timeout');
+        const isDown = firstError.code === 'ECONNREFUSED' || firstError.code === 'ENOTFOUND';
+
+        if (isTimeout) {
+          // Retry once on timeout
+          console.warn(`[tagger] timeout tagging "${imageName}", retrying once…`);
+          try {
+            suggestedTags = await attemptTag();
+            const elapsed = Date.now() - taggerStart;
+            console.log(`[tagger] retry succeeded for "${imageName}" in ${elapsed}ms`);
+          } catch (retryError: any) {
+            console.warn(`[tagger] retry also timed out for "${imageName}" — continuing without tags`);
+          }
+        } else if (isDown) {
+          console.warn(`[tagger] service unreachable (${taggerUrl}) — continuing without tags`);
+        } else {
+          console.warn(`[tagger] unexpected error tagging "${imageName}": ${firstError.message} — continuing without tags`);
+        }
+      }
+    }
+
+    // Create the item in database
     const item = await prisma.item.create({
       data: {
         saleId,
@@ -167,12 +255,17 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         auctionStartPrice: auctionStartPrice ? parseFloat(auctionStartPrice) : null,
         bidIncrement: bidIncrement ? parseFloat(bidIncrement) : null,
         auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
-        status,
-        photoUrls: photoUrls || []
+        status: status || 'AVAILABLE',
+        photoUrls,
+        // Optionally store tags in a new field or ignore for now
       }
     });
 
-    res.status(201).json(item);
+    // Return item with suggested tags (could be used by frontend to pre-fill fields)
+    res.status(201).json({
+      ...item,
+      suggestedTags, // optional
+    });
   } catch (error) {
     console.error('Error creating item:', error);
     res.status(500).json({ message: 'Server error while creating item' });
@@ -191,7 +284,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { include: { organizer: true } } }
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
     });
 
     if (!item) {
@@ -234,7 +327,7 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { include: { organizer: true } } }
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
     });
 
     if (!item) {
@@ -253,6 +346,86 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error deleting item:', error);
     res.status(500).json({ message: 'Server error while deleting item' });
+  }
+};
+
+/**
+ * Analyze an existing item's photos with the AI tagger.
+ * Downloads the first photo URL and sends it to the tagger service.
+ * Returns { suggestedTags: string[] } — non-fatal if tagger is unavailable.
+ */
+export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    const firstPhotoUrl = item.photoUrls?.[0];
+    if (!firstPhotoUrl) {
+      return res.json({ suggestedTags: [] });
+    }
+
+    const taggerUrl = process.env.TAGGER_URL;
+    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';
+
+    if (!taggerUrl) {
+      return res.json({ suggestedTags: [] });
+    }
+
+    // Download the photo from its URL then send to tagger
+    let suggestedTags: string[] = [];
+    try {
+      const imageResponse = await axios.get(firstPhotoUrl, {
+        responseType: 'arraybuffer',
+        timeout: 8000,
+      });
+
+      const imageBuffer = Buffer.from(imageResponse.data);
+      const filename = firstPhotoUrl.split('/').pop()?.split('?')[0] || 'photo.jpg';
+
+      const formData = new FormData();
+      formData.append('image', imageBuffer, { filename });
+      formData.append('threshold', '0.35');
+
+      const taggerStart = Date.now();
+      const taggerResponse = await axios.post(`${taggerUrl}/api/tag`, formData, {
+        headers: {
+          ...formData.getHeaders(),
+          'X-API-Key': taggerApiKey,
+        },
+        timeout: 5000,
+      });
+
+      suggestedTags = taggerResponse.data?.tags?.map((t: any) => t.tag) ?? [];
+      console.log(`[tagger/analyze] tagged item "${id}" in ${Date.now() - taggerStart}ms — ${suggestedTags.length} tags`);
+    } catch (err: any) {
+      const isDown = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND';
+      if (isDown) {
+        console.warn(`[tagger/analyze] service unreachable — returning empty tags`);
+      } else {
+        console.warn(`[tagger/analyze] error for item "${id}": ${err.message}`);
+      }
+    }
+
+    res.json({ suggestedTags });
+  } catch (error) {
+    console.error('Error analyzing item tags:', error);
+    res.status(500).json({ message: 'Server error while analyzing tags' });
   }
 };
 
@@ -292,9 +465,9 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     // Check if bid meets minimum requirement
     let minBid;
     if (item.currentBid) {
-      minBid = item.currentBid + (item.bidIncrement || 1);
+      minBid = Number(item.currentBid) + (Number(item.bidIncrement) || 1);
     } else {
-      minBid = item.auctionStartPrice;
+      minBid = Number(item.auctionStartPrice);
     }
     
     if (bidAmount < minBid) {

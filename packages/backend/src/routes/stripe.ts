@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { 
+import {
   createConnectAccount,
   createPaymentIntent,
-  webhookHandler
+  webhookHandler,
+  getPendingPayment,
+  createRefund,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
 import { authenticate } from '../middleware/auth';
@@ -15,6 +17,10 @@ router.get('/account-status', authenticate, getAccountStatus);
 
 // Buyer routes
 router.post('/create-payment-intent', authenticate, createPaymentIntent);
+router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
+
+// Organizer refund
+router.post('/refund/:purchaseId', authenticate, createRefund);
 
 // Webhook
 router.post('/webhook', webhookHandler);

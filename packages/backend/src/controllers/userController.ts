@@ -58,6 +58,7 @@ export const getPurchases = async (req: AuthRequest, res: Response) => {
       orderBy: {
         createdAt: 'desc',
       },
+      take: 50,
     });
 
     // Convert Decimal values to numbers
@@ -96,6 +97,7 @@ export const getFavorites = async (req: AuthRequest, res: Response) => {
       orderBy: {
         createdAt: 'desc',
       },
+      take: 50,
     });
 
     res.json(favorites);
@@ -114,11 +116,12 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       include: {
-        userBadges: {          // ✅ FIXED: use 'userBadges' not 'UserBadge'
+        userBadges: {
           include: {
             badge: true
           }
-        }
+        },
+        organizer: true
       }
     });
 
@@ -179,7 +182,8 @@ export const awardBadge = async (userId: string, badgeCriteriaType: string, coun
           path: ['type'],
           equals: badgeCriteriaType
         }
-      }
+      },
+      take: 50,
     });
 
     for (const badge of badges) {
@@ -322,7 +326,8 @@ export const handleExplorerBadge = async (userId: string) => {
       select: {
         city: true
       },
-      distinct: ['city']
+      distinct: ['city'],
+      take: 50,
     });
 
     // Award badge based on number of cities visited

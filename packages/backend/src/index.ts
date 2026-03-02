@@ -36,6 +36,8 @@ if (!envLoaded) {
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
 import saleRoutes from './routes/sales';
 import itemRoutes from './routes/items';
@@ -45,10 +47,15 @@ import stripeRoutes from './routes/stripe';
 import notificationRoutes from './routes/notifications';
 import affiliateRoutes from './routes/affiliate';
 import lineRoutes from './routes/lines';
+import geocodeRoutes from './routes/geocode';
+import uploadRoutes from './routes/upload';
+import organizerRoutes from './routes/organizers';
+import contactRoutes from './routes/contact';
 import { authenticate } from './middleware/auth';
 import { PrismaClient } from '@prisma/client';
 import './jobs/auctionJob';
 import './jobs/notificationJob';
+import './jobs/emailReminderJob';
 
 // Create a single Prisma instance with connection pooling configuration
 export const prisma = new PrismaClient({
@@ -67,8 +74,57 @@ export const prisma = new PrismaClient({
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-app.use(cors());
-app.use(express.json());
+// ─── Security ──────────────────────────────────────────────────────────────
+
+// Helmet sets safe defaults for ~15 HTTP headers
+app.use(
+  helmet({
+    // CSP is handled by Next.js headers config; keep it loose here for the API
+    contentSecurityPolicy: false,
+    // Allow Stripe iframes on the frontend
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// Restrict CORS to known origins
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (curl, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true,
+  })
+);
+
+// Global rate limit — 200 req / 15 min per IP (prevents brute force and scraping)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+app.use(globalLimiter);
+
+// Stricter limit on auth routes — 10 req / 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again later.' },
+});
+
+// Raw body middleware for Stripe webhooks (must come before json parser)
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
+// JSON parser with 1 MB body size limit to prevent payload attacks
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -76,7 +132,7 @@ app.get('/', (req, res) => {
 });
 
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes); // stricter rate limit on auth
 app.use('/api/sales', saleRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/favorites', favoriteRoutes);
@@ -85,6 +141,10 @@ app.use('/api/stripe', stripeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/affiliate', affiliateRoutes);
 app.use('/api/lines', lineRoutes);
+app.use('/api/geocode', geocodeRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/organizers', organizerRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
@@ -105,7 +165,7 @@ process.on('SIGTERM', async () => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`SaleScout backend running on port ${PORT}`);
   
   // Log environment variables status for debugging
   console.log('Environment variables status:');

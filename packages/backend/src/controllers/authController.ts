@@ -7,7 +7,7 @@ import { handleReferralBadge, handlePointsBadge } from './userController';
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email, password, name, role, referralCode } = req.body;
+    const { email, password, name, role, referralCode, businessName, phone, businessAddress } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -36,6 +36,18 @@ export const register = async (req: Request, res: Response) => {
         points: 0
       }
     });
+
+    // If registering as organizer, create Organizer profile
+    if (role === 'ORGANIZER') {
+      await prisma.organizer.create({
+        data: {
+          userId: user.id,
+          businessName: businessName || name,
+          phone: phone || '',
+          address: businessAddress || '',
+        }
+      });
+    }
 
     // Handle referral if provided
     if (referralCode) {
@@ -77,9 +89,16 @@ export const register = async (req: Request, res: Response) => {
       }
     }
 
-    // Generate JWT
+    // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        points: user.points,
+        referralCode: user.referralCode,
+      },
       process.env.JWT_SECRET || 'fallback-secret',
       { expiresIn: '7d' }
     );
@@ -117,9 +136,16 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid credentials - Incorrect password' });
     }
 
-    // Generate JWT
+    // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        points: user.points,
+        referralCode: user.referralCode,
+      },
       process.env.JWT_SECRET || 'fallback-secret',
       { expiresIn: '7d' }
     );
