@@ -25,7 +25,7 @@ const SendUpdatePage = () => {
     queryFn: async () => {
       // In a real implementation, you would fetch subscribers from the backend
       // For now, we'll just return an empty array
-      return [];
+      return [] as Subscriber[];
     },
     enabled: !!saleId,
   });

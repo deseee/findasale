@@ -11,6 +11,8 @@ const ContactPage = () => {
     message: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -21,17 +23,17 @@ const ContactPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, you would send this data to your backend
-    console.log('Form submitted:', formData);
-    setSubmitted(true);
-    
-    // Reset form
-    setFormData({
-      name: '',
-      email: '',
-      subject: '',
-      message: '',
-    });
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await api.post('/contact', formData);
+      setSubmitted(true);
+      setFormData({ name: '', email: '', subject: '', message: '' });
+    } catch (err: any) {
+      setSubmitError(err.response?.data?.message || 'Failed to send message. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -70,18 +72,18 @@ const ContactPage = () => {
                   </svg>
                   <div>
                     <h3 className="font-semibold">Phone</h3>
-                    <p className="text-gray-600">(555) 123-4567</p>
+                    <p className="text-gray-600">Available by email</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 mr-3 mt-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   <div>
-                    <h3 className="font-semibold">Office</h3>
-                    <p className="text-gray-600">123 Tech Street<br />San Francisco, CA 94103</p>
+                    <h3 className="font-semibold">Location</h3>
+                    <p className="text-gray-600">Grand Rapids, MI</p>
                   </div>
                 </div>
               </div>
@@ -157,14 +159,27 @@ const ContactPage = () => {
                   ></textarea>
                 </div>
                 
+                {submitError && (
+                  <div className="mb-3 p-3 bg-red-50 text-red-700 rounded-md text-sm">
+                    {submitError}
+                  </div>
+                )}
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={submitting}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 >
-                  Send Message
+                  {submitting ? 'Sending...' : 'Send Message'}
                 </button>
               </form>
             </div>
+          </div>
+
+          <div className="mt-8 text-center text-sm text-gray-500">
+            Looking for quick answers?{' '}
+            <Link href="/faq" className="text-blue-600 hover:underline">
+              Check our FAQ
+            </Link>
           </div>
         </div>
       </main>

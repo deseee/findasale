@@ -42,18 +42,57 @@ const CityPage: React.FC<CityPageProps> = ({ city, sales, formattedCity }) => {
 
   // Generate JSON-LD for schema.org structured data
   const generateJsonLd = () => {
-    const cityData = {
+    const siteUrl = 'https://salescout.app';
+    const citySlug = city;
+
+    const itemListData = {
       "@context": "https://schema.org",
-      "@type": "Place",
-      "name": `${formattedCity}`,
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": formattedCity,
-        "addressCountry": "US"
-      }
+      "@type": "ItemList",
+      "name": `Estate Sales in ${formattedCity}`,
+      "description": `Find estate sales and auctions in ${formattedCity}`,
+      "url": `${siteUrl}/city/${citySlug}`,
+      "numberOfItems": sales.length,
+      "itemListElement": sales.map((sale, index) => ({
+        "@type": "ListItem",
+        "position": index + 1,
+        "item": {
+          "@type": "Event",
+          "name": sale.title,
+          "url": `${siteUrl}/sales/${sale.id}`,
+          "startDate": sale.startDate,
+          "endDate": sale.endDate,
+          "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
+          "eventStatus": "https://schema.org/EventScheduled",
+          "image": sale.photoUrls && sale.photoUrls.length > 0 ? [sale.photoUrls[0]] : undefined,
+          "location": {
+            "@type": "Place",
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": sale.address,
+              "addressLocality": sale.city,
+              "addressRegion": sale.state,
+              "postalCode": sale.zip,
+              "addressCountry": "US"
+            }
+          },
+          "organizer": {
+            "@type": "Organization",
+            "name": sale.organizer.businessName
+          }
+        }
+      }))
     };
 
-    return JSON.stringify(cityData);
+    const breadcrumbData = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": siteUrl },
+        { "@type": "ListItem", "position": 2, "name": `Estate Sales in ${formattedCity}`, "item": `${siteUrl}/city/${citySlug}` }
+      ]
+    };
+
+    return { itemList: JSON.stringify(itemListData), breadcrumb: JSON.stringify(breadcrumbData) };
   };
 
   const jsonLd = generateJsonLd();
@@ -86,10 +125,10 @@ const CityPage: React.FC<CityPageProps> = ({ city, sales, formattedCity }) => {
         
         {/* JSON-LD Structured Data */}
         {jsonLd && (
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: jsonLd }}
-          />
+          <>
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd.itemList }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd.breadcrumb }} />
+          </>
         )}
       </Head>
 

@@ -1,0 +1,156 @@
+/**
+ * InstallPrompt
+ *
+ * Captures the browser's `beforeinstallprompt` event and shows a native-feeling
+ * banner at the bottom of the screen inviting the user to add SaleScout to their
+ * home screen.  The banner is suppressed for 30 days after a user dismisses it.
+ *
+ * Rules:
+ * - Never shown if already installed (display-mode: standalone)
+ * - Never shown on iOS (iOS uses a separate Share → Add to Home Screen flow; we
+ *   show a one-time informational tooltip for that instead)
+ * - Respects a "dismissed until" timestamp in localStorage
+ */
+
+import { useState, useEffect } from 'react';
+
+const DISMISS_KEY = 'salescout_install_dismissed_until';
+const DISMISS_DAYS = 30;
+
+function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window.navigator as any).standalone === true
+  );
+}
+
+function isIOS(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+}
+
+function isDismissed(): boolean {
+  try {
+    const until = localStorage.getItem(DISMISS_KEY);
+    if (!until) return false;
+    return Date.now() < parseInt(until, 10);
+  } catch {
+    return false;
+  }
+}
+
+function setDismissed() {
+  try {
+    const until = Date.now() + DISMISS_DAYS * 24 * 60 * 60 * 1000;
+    localStorage.setItem(DISMISS_KEY, String(until));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export default function InstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showAndroid, setShowAndroid] = useState(false);
+  const [showIOS, setShowIOS] = useState(false);
+
+  useEffect(() => {
+    if (isStandalone() || isDismissed()) return;
+
+    if (isIOS()) {
+      // Show the iOS instructions tooltip once per dismissal period
+      setShowIOS(true);
+      return;
+    }
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowAndroid(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler as EventListener);
+    return () => window.removeEventListener('beforeinstallprompt', handler as EventListener);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowAndroid(false);
+    }
+    setDeferredPrompt(null);
+  };
+
+  const handleDismiss = () => {
+    setDismissed();
+    setShowAndroid(false);
+    setShowIOS(false);
+  };
+
+  if (showAndroid) {
+    return (
+      <div
+        role="dialog"
+        aria-label="Install SaleScout"
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg px-4 py-4 flex items-center gap-4 sm:max-w-md sm:mx-auto sm:mb-4 sm:rounded-xl sm:border"
+      >
+        {/* App icon */}
+        <img src="/icons/icon-72x72.png" alt="SaleScout icon" className="w-12 h-12 rounded-xl flex-shrink-0" />
+
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-900 text-sm leading-tight">Add SaleScout to your home screen</p>
+          <p className="text-xs text-gray-500 mt-0.5">Quick access to sales near you — no app store needed</p>
+        </div>
+
+        <div className="flex flex-col gap-1.5 flex-shrink-0">
+          <button
+            onClick={handleInstall}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors"
+          >
+            Install
+          </button>
+          <button
+            onClick={handleDismiss}
+            className="text-xs text-gray-400 hover:text-gray-600 text-center"
+          >
+            Not now
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (showIOS) {
+    return (
+      <div
+        role="dialog"
+        aria-label="Add SaleScout to Home Screen"
+        className="fixed bottom-4 left-4 right-4 z-50 bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-4"
+      >
+        <button
+          onClick={handleDismiss}
+          className="absolute top-3 right-4 text-gray-400 hover:text-white text-xl leading-none"
+          aria-label="Dismiss"
+        >
+          &times;
+        </button>
+        <p className="font-semibold text-sm mb-1">Add SaleScout to your Home Screen</p>
+        <p className="text-xs text-gray-300 leading-relaxed">
+          Tap the{' '}
+          <span className="inline-block mx-1">
+            {/* Safari share icon approximation */}
+            <svg className="inline w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z"/>
+            </svg>
+          </span>{' '}
+          Share button, then choose <strong>"Add to Home Screen"</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  return null;
+}

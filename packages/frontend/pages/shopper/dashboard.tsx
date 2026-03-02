@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
+import Skeleton from '../../components/Skeleton';
 
 interface Purchase {
   id: string;
@@ -62,7 +64,11 @@ interface Badge {
 
 const ShopperDashboard = () => {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'purchases' | 'favorites' | 'bids' | 'referrals'>('purchases');
+  // origin is only available client-side; initialise safely to avoid SSR crash
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);
 
   // Fetch user's purchase history
   const { data: purchases = [] } = useQuery({
@@ -111,8 +117,35 @@ const ShopperDashboard = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
+      <div className="min-h-screen bg-gray-50">
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex justify-between items-center mb-8">
+            <Skeleton className="h-9 w-64" />
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-16 h-16 rounded-xl" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-5 w-24 mt-2" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="flex gap-4 border-b pb-4 mb-6">
+              {[1,2,3,4].map(i => <Skeleton key={i} className="h-6 w-24" />)}
+            </div>
+            {[1,2,3].map(i => (
+              <div key={i} className="flex items-center py-4 border-b border-gray-100 space-x-4">
+                <Skeleton className="w-10 h-10 rounded-md" />
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-5 w-16" />
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
@@ -466,13 +499,13 @@ const ShopperDashboard = () => {
                     <input
                       type="text"
                       readOnly
-                      value={`${window.location.origin}/register?ref=${user.referralCode || 'YOUR_CODE'}`}
+                      value={origin ? `${origin}/register?ref=${user.referralCode || 'YOUR_CODE'}` : 'Loading...'}
                       className="flex-grow px-4 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
                     />
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/register?ref=${user.referralCode || 'YOUR_CODE'}`);
-                        alert('Referral link copied to clipboard!');
+                        navigator.clipboard.writeText(`${origin}/register?ref=${user.referralCode || 'YOUR_CODE'}`);
+                        showToast('Referral link copied to clipboard!', 'success');
                       }}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md whitespace-nowrap"
                     >

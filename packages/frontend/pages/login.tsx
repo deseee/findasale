@@ -27,8 +27,11 @@ const LoginPage = () => {
       // Store token in context and localStorage
       login(response.data.token);
       
-      // Redirect based on user role
-      if (response.data.user.role === 'ORGANIZER') {
+      // Honour ?redirect= param, then fall back to role-based default
+      const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
+      if (redirect && redirect.startsWith('/')) {
+        router.push(redirect);
+      } else if (response.data.user.role === 'ORGANIZER') {
         router.push('/organizer/dashboard');
       } else {
         router.push('/');
@@ -111,9 +114,9 @@ const LoginPage = () => {
             </div>
 
             <div className="text-sm">
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
+              <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
                 Forgot your password?
-              </a>
+              </Link>
             </div>
           </div>
 

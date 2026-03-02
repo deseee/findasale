@@ -1,0 +1,210 @@
+import React, { useState, useEffect } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
+import api from '../lib/api';
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+
+// Inner form rendered inside the Elements provider
+interface PaymentFormProps {
+  itemTitle: string;
+  itemPrice: number;
+  platformFee: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: PaymentFormProps) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const total = itemPrice + platformFee;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        // Return URL is required but we handle success inline via webhook
+        return_url: `${window.location.origin}/shopper/purchases`,
+      },
+      redirect: 'if_required',
+    });
+
+    if (error) {
+      setErrorMessage(error.message ?? 'Payment failed. Please try again.');
+      setIsSubmitting(false);
+    } else {
+      onSuccess();
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <p className="text-sm text-gray-600">Item</p>
+        <p className="font-semibold text-gray-900">{itemTitle}</p>
+      </div>
+
+      <div className="mb-4 space-y-1 text-sm">
+        <div className="flex justify-between text-gray-600">
+          <span>Item price</span>
+          <span>${itemPrice.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-gray-600">
+          <span>Platform fee</span>
+          <span>${platformFee.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between font-bold text-gray-900 border-t pt-1 mt-1">
+          <span>Total</span>
+          <span>${total.toFixed(2)}</span>
+        </div>
+      </div>
+
+      <div className="mb-5">
+        <PaymentElement />
+      </div>
+
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          {errorMessage}
+        </div>
+      )}
+
+      <p className="mb-3 text-xs text-gray-500 text-center">
+        All sales final.{' '}
+        <a href="/contact" className="underline hover:text-gray-700">
+          Contact support
+        </a>{' '}
+        for disputes.
+      </p>
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isSubmitting}
+          className="flex-1 py-2 px-4 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={!stripe || !elements || isSubmitting}
+          className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSubmitting ? 'Processing...' : `Pay $${total.toFixed(2)}`}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+// Outer modal that fetches the payment intent and sets up Elements.
+// Pass either itemId (new purchase) OR purchaseId (resume existing — e.g. auction winner).
+interface CheckoutModalProps {
+  itemId?: string;
+  purchaseId?: string;
+  itemTitle: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: CheckoutModalProps) => {
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [itemPrice, setItemPrice] = useState(0);
+  const [platformFee, setPlatformFee] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [resolvedTitle, setResolvedTitle] = useState(itemTitle);
+
+  useEffect(() => {
+    const loadIntent = async () => {
+      try {
+        let data: any;
+        if (purchaseId) {
+          // Resume an existing pending purchase (auction winners)
+          const response = await api.get(`/stripe/pending-payment/${purchaseId}`);
+          data = response.data;
+          if (data.itemTitle) setResolvedTitle(data.itemTitle);
+        } else if (itemId) {
+          // Create a new payment intent
+          const response = await api.post('/stripe/create-payment-intent', { itemId });
+          data = response.data;
+        } else {
+          setLoadError('Invalid checkout configuration.');
+          return;
+        }
+        setClientSecret(data.clientSecret);
+        setItemPrice(data.totalAmount);
+        setPlatformFee(data.platformFee);
+      } catch (err: any) {
+        setLoadError(
+          err.response?.data?.message ?? 'Could not start checkout. Please try again.'
+        );
+      }
+    };
+
+    loadIntent();
+  }, [itemId, purchaseId]);
+
+  const handleSuccess = () => {
+    onSuccess();
+  };
+
+  return (
+    // Backdrop
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-xl font-bold text-gray-900">Complete Purchase</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
+
+        {loadError && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+            {loadError}
+          </div>
+        )}
+
+        {!loadError && !clientSecret && (
+          <div className="py-8 text-center text-gray-500">Loading payment form...</div>
+        )}
+
+        {clientSecret && (
+          <Elements stripe={stripePromise} options={{ clientSecret }}>
+            <PaymentForm
+              itemTitle={resolvedTitle}
+              itemPrice={itemPrice}
+              platformFee={platformFee}
+              onClose={onClose}
+              onSuccess={handleSuccess}
+            />
+          </Elements>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default CheckoutModal;

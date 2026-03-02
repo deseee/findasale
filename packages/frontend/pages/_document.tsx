@@ -1,0 +1,71 @@
+import { Html, Head, Main, NextScript } from 'next/document';
+
+export default function Document() {
+  return (
+    <Html lang="en">
+      <Head>
+        {/* PWA manifest */}
+        <link rel="manifest" href="/manifest.json" />
+
+        {/* Theme color — matches manifest */}
+        <meta name="theme-color" content="#2563EB" />
+
+        {/* iOS PWA support */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="SaleScout" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+        {/* Favicons */}
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+        <link rel="shortcut icon" href="/icons/favicon-32x32.png" />
+
+        {/* Tile for Windows */}
+        <meta name="msapplication-TileColor" content="#2563EB" />
+        <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
+        <meta name="msapplication-config" content="none" />
+
+        {/* Default SEO meta — pages should override these with next/head */}
+        <meta
+          name="description"
+          content="SaleScout — discover estate sales and auctions near you. Browse items, favorite sales, and buy online."
+        />
+        <meta name="keywords" content="estate sales, auctions, antiques, thrift, Grand Rapids" />
+        <meta name="author" content="SaleScout" />
+
+        {/* Open Graph defaults */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="SaleScout" />
+        <meta property="og:title" content="SaleScout — Estate Sales Near You" />
+        <meta
+          property="og:description"
+          content="Discover estate sales and auctions. Browse items, save favorites, and buy online."
+        />
+        <meta property="og:image" content="/icons/icon-512x512.png" />
+
+        {/* Twitter card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="SaleScout — Estate Sales Near You" />
+        <meta
+          name="twitter:description"
+          content="Discover estate sales and auctions. Browse items, save favorites, and buy online."
+        />
+        <meta name="twitter:image" content="/icons/icon-512x512.png" />
+
+        {/* Viewport is set by Next.js automatically in _app; kept here for completeness */}
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="mobile-web-app-capable" content="yes" />
+
+        {/* Preconnect to critical external origins */}
+        <link rel="preconnect" href="https://res.cloudinary.com" />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+        <link rel="preconnect" href="https://tile.openstreetmap.org" />
+      </Head>
+      <body>
+        <Main />
+        <NextScript />
+      </body>
+    </Html>
+  );
+}

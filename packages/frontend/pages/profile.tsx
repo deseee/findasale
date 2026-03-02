@@ -175,4 +175,51 @@ const ProfilePage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          bid.status === 'WINNING' ?
+                          bid.status === 'WINNING' ? 'bg-green-100 text-green-800' :
+                          bid.status === 'WON' ? 'bg-blue-100 text-blue-800' :
+                          bid.status === 'LOST' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {bid.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <Link href={`/items/${bid.itemId}`} className="text-blue-600 hover:text-blue-800">
+                          View Item
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Referrals Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4">My Referrals</h2>
+          {referrals.length === 0 ? (
+            <p className="text-gray-600">No referrals yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {referrals.map((ref) => (
+                <div key={ref.id} className="flex justify-between items-center border rounded p-3">
+                  <div>
+                    <p className="font-medium text-gray-900">{ref.referredUser.name || ref.referredUser.email}</p>
+                    <p className="text-sm text-gray-500">{ref.referredUser.email}</p>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {new Date(ref.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default ProfilePage;
