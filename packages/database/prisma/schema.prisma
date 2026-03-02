@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -17,8 +18,10 @@ model User {
   phone         String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
-  referralCode  String     @unique
-  organizer     Organizer?
+  referralCode      String?    @unique
+  resetToken        String?    @unique
+  resetTokenExpiry  DateTime?
+  organizer         Organizer?
   purchases     Purchase[]
   favorites     Favorite[]
   bids          Bid[]
@@ -82,6 +85,8 @@ model Item {
   bidIncrement     Float?    @default(1)
   auctionEndTime   DateTime?
   status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, AUCTION_ENDED
+  category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
+  condition        String?   // mint, excellent, good, fair, poor
   photoUrls        String[]
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
@@ -122,6 +127,7 @@ model Bid {
 model Purchase {
   id                    String   @id @default(cuid())
   amount                Float
+  platformFeeAmount     Float?
   status                String   @default("PENDING") // PENDING, PAID, REFUNDED
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
@@ -135,8 +141,8 @@ model Purchase {
 }
 
 model SaleSubscriber {
-  userId    String?
-  user      User?     @relation(fields: [userId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
   saleId    String
   sale      Sale      @relation(fields: [saleId], references: [id])
   phone     String?

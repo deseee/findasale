@@ -43,7 +43,6 @@ const saleCreateSchema = z.object({
   photoUrls: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   isAuctionSale: z.boolean().optional().default(false),
-  earlyAccess: z.boolean().optional().default(false)
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();
@@ -134,6 +133,7 @@ export const listSales = async (req: Request, res: Response) => {
       include: {
         organizer: {
           select: {
+            id: true,
             businessName: true,
             phone: true
           }
@@ -168,6 +168,46 @@ export const listSales = async (req: Request, res: Response) => {
   }
 };
 
+export const getMySales = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    if (!organizer) {
+      return res.json({ sales: [] });
+    }
+
+    const sales = await prisma.sale.findMany({
+      where: { organizerId: organizer.id },
+      orderBy: { startDate: 'asc' },
+      include: {
+        organizer: {
+          select: {
+            userId: true,
+            businessName: true,
+            phone: true,
+            address: true
+          }
+        },
+        items: {
+          select: { id: true, status: true }
+        }
+      },
+      take: 50
+    });
+
+    res.json({ sales: sales.map(s => convertDecimalsToNumbers(s)) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error while fetching your sales' });
+  }
+};
+
 export const getSale = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -177,6 +217,8 @@ export const getSale = async (req: Request, res: Response) => {
       include: {
         organizer: {
           select: {
+            id: true,
+            userId: true,
             businessName: true,
             phone: true,
             address: true
@@ -203,14 +245,8 @@ export const getSale = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
     
-    // Log the raw sale data for debugging
-    console.log('Raw sale data:', JSON.stringify(sale, null, 2));
-    
     // Convert Decimal values to numbers (recursively handles nested items)
     const convertedSale = convertDecimalsToNumbers(sale);
-    
-    // Log the converted sale data for debugging
-    console.log('Converted sale data:', JSON.stringify(convertedSale, null, 2));
     
     res.json(convertedSale);
   } catch (error) {
@@ -235,15 +271,22 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       // Admin can create sale for any organizer (optional field)
       organizerId = req.body.organizerId;
     } else if (!organizerId && req.user.role === 'ORGANIZER') {
-      // Get organizer profile for this user
-      const organizerProfile = await prisma.organizer.findUnique({
+      // Get or auto-create organizer profile for this user
+      let organizerProfile = await prisma.organizer.findUnique({
         where: { userId: req.user.id }
       });
-      
+
       if (!organizerProfile) {
-        return res.status(400).json({ message: 'Organizer profile not found' });
+        organizerProfile = await prisma.organizer.create({
+          data: {
+            userId: req.user.id,
+            businessName: req.user.name || 'My Business',
+            phone: req.user.phone || '',
+            address: '',
+          }
+        });
       }
-      
+
       organizerId = organizerProfile.id;
     }
     
@@ -415,6 +458,55 @@ export const searchSales = async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while searching sales' });
+  }
+};
+
+// Update sale status: DRAFT → PUBLISHED → ENDED (owner-gated)
+export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const allowedStatuses = ['PUBLISHED', 'ENDED'];
+    if (!status || !allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` });
+    }
+
+    const existingSale = await prisma.sale.findUnique({ where: { id } });
+    if (!existingSale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Check ownership unless admin
+    if (req.user.role !== 'ADMIN') {
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+      if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
+        return res.status(403).json({ message: 'Access denied. You can only update your own sales.' });
+      }
+    }
+
+    // Enforce valid transitions
+    const transitions: Record<string, string[]> = {
+      DRAFT: ['PUBLISHED'],
+      PUBLISHED: ['ENDED'],
+      ENDED: [],
+    };
+    const allowed = transitions[existingSale.status] || [];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        message: `Cannot transition from ${existingSale.status} to ${status}.`,
+      });
+    }
+
+    const updated = await prisma.sale.update({ where: { id }, data: { status } });
+    res.json(convertDecimalsToNumbers(updated));
+  } catch (error) {
+    console.error('Error updating sale status:', error);
+    res.status(500).json({ message: 'Server error while updating sale status' });
   }
 };
 

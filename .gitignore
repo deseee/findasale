@@ -56,3 +56,22 @@ Thumbs.db
 # TypeScript
 # =========================
 *.tsbuildinfo
+
+# =========================
+# Python virtual environment for image tagger
+# =========================
+packages/backend/services/image-tagger/venv/
+packages/backend/services/image-tagger/__pycache__/
+packages/backend/services/image-tagger/uploads/
+packages/backend/services/image-tagger/pytest-cache-files*/
+
+# =========================
+# Local stubs / binaries
+# =========================
+/next
+/pnpm
+
+# =========================
+# npm lockfile (pnpm workspace)
+# =========================
+packages/database/package-lock.json
