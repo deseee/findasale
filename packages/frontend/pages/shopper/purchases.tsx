@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import CheckoutModal from '../../components/CheckoutModal';
+import { useToast } from '../../components/ToastContext';
 
 interface Purchase {
   id: string;
   amount: number;
   status: string;
   createdAt: string;
+  stripePaymentIntentId: string | null;
   item: {
     title: string;
     photoUrls: string[];
@@ -21,8 +24,10 @@ interface Purchase {
 
 const PurchaseHistoryPage = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const [checkoutPurchase, setCheckoutPurchase] = useState<{ id: string; title: string } | null>(null);
 
-  // Fetch user's purchase history
   const { data: purchases = [], isLoading } = useQuery({
     queryKey: ['purchases'],
     queryFn: async () => {
@@ -51,6 +56,19 @@ const PurchaseHistoryPage = () => {
         <meta name="description" content="Your purchase history" />
       </Head>
 
+      {checkoutPurchase && (
+        <CheckoutModal
+          purchaseId={checkoutPurchase.id}
+          itemTitle={checkoutPurchase.title}
+          onClose={() => setCheckoutPurchase(null)}
+          onSuccess={() => {
+            setCheckoutPurchase(null);
+            showToast('Payment successful!', 'success');
+            queryClient.invalidateQueries({ queryKey: ['purchases'] });
+          }}
+        />
+      )}
+
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Purchase History</h1>
@@ -64,8 +82,8 @@ const PurchaseHistoryPage = () => {
           ) : purchases.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-600 mb-4">You haven't made any purchases yet.</p>
-              <Link 
-                href="/" 
+              <Link
+                href="/"
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
               >
                 Browse Sales
@@ -76,32 +94,23 @@ const PurchaseHistoryPage = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Item
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Sale
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sale</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th scope="col" className="px-6 py-3"></th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {purchases.map((purchase) => (
-                    <tr key={purchase.id}>
+                    <tr key={purchase.id} className={purchase.status === 'PENDING' ? 'bg-yellow-50' : ''}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           {purchase.item.photoUrls.length > 0 ? (
-                            <img 
-                              src={purchase.item.photoUrls[0]} 
-                              alt={purchase.item.title} 
+                            <img
+                              src={purchase.item.photoUrls[0]}
+                              alt={purchase.item.title}
                               className="h-10 w-10 rounded-md object-cover"
                             />
                           ) : (
@@ -120,8 +129,10 @@ const PurchaseHistoryPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          purchase.status === 'PAID' ? 'bg-green-100 text-green-800' :
-                          purchase.status === 'REFUNDED' ? 'bg-yellow-100 text-yellow-800' :
+                          purchase.status === 'PAID'     ? 'bg-green-100 text-green-800' :
+                          purchase.status === 'PENDING'  ? 'bg-yellow-100 text-yellow-800' :
+                          purchase.status === 'REFUNDED' ? 'bg-gray-100 text-gray-600' :
+                          purchase.status === 'FAILED'   ? 'bg-red-100 text-red-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
                           {purchase.status}
@@ -129,6 +140,16 @@ const PurchaseHistoryPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(purchase.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        {purchase.status === 'PENDING' && purchase.stripePaymentIntentId && (
+                          <button
+                            onClick={() => setCheckoutPurchase({ id: purchase.id, title: purchase.item.title })}
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-1.5 rounded"
+                          >
+                            Pay Now
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

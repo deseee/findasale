@@ -7,16 +7,20 @@ export async function getServerSideProps(ctx: any) {
     const salesResponse = await api.get('/sales');
     const sales = salesResponse.data.sales || salesResponse.data;
     
-    // Extract unique cities for city pages
-    const cities = [...new Set(sales.map((sale: any) => 
+    // Extract unique cities and zips for landing pages
+    const cities = Array.from(new Set<string>(sales.map((sale: any) =>
       sale.city.toLowerCase().replace(/\s+/g, '-')
-    ))];
+    )));
+    const zips = Array.from(new Set<string>(
+      sales.map((sale: any) => sale.zip).filter(Boolean)
+    ));
 
     // Generate static URLs
     const staticUrls = [
       '/',
       '/about',
       '/contact',
+      '/faq',
       '/terms',
       '/privacy',
     ].map((url) => ({
@@ -44,7 +48,15 @@ export async function getServerSideProps(ctx: any) {
       priority: 0.6,
     }));
 
-    const fields = [...staticUrls, ...saleUrls, ...cityUrls];
+    // Generate zip URLs
+    const zipUrls = zips.map((zip: string) => ({
+      loc: `${process.env.SITE_URL || 'https://salescout.app'}/sales/zip/${zip}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'daily',
+      priority: 0.6,
+    }));
+
+    const fields = [...staticUrls, ...saleUrls, ...cityUrls, ...zipUrls];
 
     return getServerSideSitemap(ctx, fields);
   } catch (error) {

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import { useToast } from '../components/ToastContext';
 
 interface Referral {
   id: string;
@@ -16,6 +17,8 @@ interface Referral {
 
 const ReferralDashboard = () => {
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const [referralUrl, setReferralUrl] = useState('');
 
   // Fetch user's referrals
   const { data: referrals = [] } = useQuery({
@@ -35,6 +38,13 @@ const ReferralDashboard = () => {
     },
   });
 
+  // Build referral URL on client side only (SSR-safe)
+  useEffect(() => {
+    if (user?.referralCode) {
+      setReferralUrl(`${window.location.origin}/register?ref=${user.referralCode}`);
+    }
+  }, [user?.referralCode]);
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -43,11 +53,9 @@ const ReferralDashboard = () => {
     );
   }
 
-  const referralUrl = `${window.location.origin}/register?ref=${user.referralCode}`;
-
   const copyToClipboard = () => {
     navigator.clipboard.writeText(referralUrl);
-    alert('Referral link copied to clipboard!');
+    showToast('Referral link copied to clipboard!', 'success');
   };
 
   return (

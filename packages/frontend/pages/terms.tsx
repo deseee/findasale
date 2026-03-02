@@ -60,7 +60,21 @@ const TermsPage = () => {
               changes to the terms.
             </p>
             
-            <h2 className="text-xl font-semibold mt-8 mb-4">8. Contact Information</h2>
+            <h2 className="text-xl font-semibold mt-8 mb-4">8. Refund Policy</h2>
+            <p className="mb-4">
+              <strong>All sales are final.</strong> Once a purchase is completed through SaleScout,
+              it cannot be reversed or refunded except in cases of fraud or platform error.
+              If you believe you have been charged in error or have a dispute with a purchase,
+              please <a href="/contact" className="text-blue-600 hover:underline">contact our support team</a> within
+              7 days of the transaction date. We will review each case individually and work with the
+              relevant organizer to resolve legitimate disputes.
+            </p>
+            <p className="mb-4">
+              Estate sale organizers are responsible for accurately representing the items they list.
+              SaleScout acts as a payment facilitator and is not the seller of record for individual items.
+            </p>
+
+            <h2 className="text-xl font-semibold mt-8 mb-4">9. Contact Information</h2>
             <p className="mb-4">
               If you have any questions about these Terms of Service, please contact us at:
               support@salescout.app

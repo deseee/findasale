@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
-import { loadStripe } from '@stripe/stripe-js';
 import { useAuth } from '../../components/AuthContext';
+import CheckoutModal from '../../components/CheckoutModal';
+import { useToast } from '../../components/ToastContext';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 interface Item {
@@ -33,8 +34,6 @@ interface Bid {
   };
   createdAt: string;
 }
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 // Helper function to safely format prices
 const formatPrice = (value: number | string | null | undefined): string => {
@@ -87,8 +86,11 @@ const ItemDetailPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [bidAmount, setBidAmount] = useState('');
+  const [isBidding, setIsBidding] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState('');
+  const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const { data: item, isLoading, isError, refetch } = useQuery({
     queryKey: ['item', id],
@@ -135,61 +137,46 @@ const ItemDetailPage = () => {
     return () => clearInterval(timer);
   }, [item?.auctionEndTime]);
 
-  const handleBuyNow = async () => {
+  const handleBuyNow = () => {
     if (!item) return;
-    
-    try {
-      // Create payment intent
-      const response = await api.post('/stripe/create-payment-intent', { itemId: item.id });
-      
-      // Get Stripe.js instance
-      const stripe = await stripePromise;
-      
-      if (!stripe) {
-        throw new Error('Stripe failed to initialize');
-      }
-      
-      // Confirm the payment
-      const { error } = await stripe.confirmCardPayment(response.data.clientSecret);
-      
-      if (error) {
-        console.error('Payment failed:', error);
-        alert('Payment failed: ' + error.message);
-      } else {
-        alert('Payment successful!');
-        // Refresh the item data
-        refetch();
-      }
-    } catch (err: any) {
-      console.error('Payment error:', err);
-      alert('Payment failed. Please try again.');
-    }
+    setCheckoutItemId(item.id);
+  };
+
+  const handleCheckoutClose = () => {
+    setCheckoutItemId(null);
+  };
+
+  const handleCheckoutSuccess = () => {
+    setCheckoutItemId(null);
+    refetch();
   };
 
   const handlePlaceBid = async () => {
     if (!item || !user) return;
-    
+
     const amount = parseFloat(bidAmount);
     if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid bid amount');
+      showToast('Please enter a valid bid amount', 'error');
       return;
     }
 
+    setIsBidding(true);
     try {
       await api.post(`/items/${item.id}/bid`, { amount });
-      alert('Bid placed successfully!');
+      showToast('Bid placed successfully!', 'success');
       setBidAmount('');
-      // Refresh the item data
       refetch();
     } catch (err: any) {
       console.error('Bid error:', err);
-      alert(err.response?.data?.message || 'Failed to place bid. Please try again.');
+      showToast(err.response?.data?.message || 'Failed to place bid. Please try again.', 'error');
+    } finally {
+      setIsBidding(false);
     }
   };
 
   const toggleFavorite = async () => {
     if (!item || !user) {
-      alert('Please log in to favorite items');
+      showToast('Please log in to favorite items', 'info');
       return;
     }
 
@@ -199,7 +186,7 @@ const ItemDetailPage = () => {
       queryClient.invalidateQueries({ queryKey: ['favorite', id] });
     } catch (err: any) {
       console.error('Favorite error:', err);
-      alert('Failed to update favorite status');
+      showToast('Failed to update favorite status', 'error');
     }
   };
 
@@ -223,6 +210,15 @@ const ItemDetailPage = () => {
         <title>{item.title} - SaleScout</title>
         <meta name="description" content={item.description} />
       </Head>
+
+      {checkoutItemId && item && (
+        <CheckoutModal
+          itemId={checkoutItemId}
+          itemTitle={item.title}
+          onClose={handleCheckoutClose}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
 
       <main className="container mx-auto px-4 py-8">
         {/* Back Button */}
@@ -335,9 +331,10 @@ const ItemDetailPage = () => {
                         />
                         <button
                           onClick={handlePlaceBid}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r"
+                          disabled={isBidding}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r disabled:opacity-50"
                         >
-                          Place Bid
+                          {isBidding ? 'Placing...' : 'Place Bid'}
                         </button>
                       </div>
                       <button

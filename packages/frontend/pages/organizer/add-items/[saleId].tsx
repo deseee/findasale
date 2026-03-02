@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import api from '../../../lib/api';
+import { useToast } from '../../../components/ToastContext';
 
 // Zod schema for form validation
 const itemSchema = z.object({
@@ -24,7 +25,7 @@ const itemSchema = z.object({
 type ItemFormData = z.infer<typeof itemSchema>;
 
 // Helper function to convert datetime-local value to ISO string
-const toISOStringFromDatetimeLocal = (value: string): string | undefined => {
+const toISOStringFromDatetimeLocal = (value: string | undefined): string | undefined => {
   if (!value) return undefined;
   const date = new Date(value);
   if (isNaN(date.getTime())) {
@@ -54,9 +55,32 @@ const AddItemsPage = () => {
   const router = useRouter();
   const { saleId } = router.query;
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [photoUrl, setPhotoUrl] = useState('');
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length + photoFiles.length > 5) {
+      showToast('Maximum 5 photos per item', 'error');
+      return;
+    }
+    setPhotoFiles(prev => [...prev, ...files]);
+    setPhotoPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotoFiles(prev => prev.filter((_, i) => i !== index));
+    setPhotoPreviews(prev => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   // Fetch sale details
   const { data: sale, isLoading: saleLoading, isError: saleError } = useQuery({
@@ -115,13 +139,26 @@ const AddItemsPage = () => {
 
   const onSubmit = async (data: ItemFormData) => {
     try {
+      // Upload photos to Cloudinary first if any selected
+      let uploadedPhotoUrls: string[] = [];
+      if (photoFiles.length > 0) {
+        setUploadingPhotos(true);
+        const uploadForm = new FormData();
+        photoFiles.forEach(f => uploadForm.append('photos', f));
+        const uploadRes = await api.post('/upload/sale-photos', uploadForm, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        uploadedPhotoUrls = uploadRes.data.urls;
+        setUploadingPhotos(false);
+      }
+
       // Build base item data
       const itemData: Record<string, any> = {
         saleId: saleId as string,
         title: data.title,
         description: data.description || '',
         status: data.status,
-        photoUrls: photoUrls,
+        photoUrls: uploadedPhotoUrls,
       };
 
       // Handle auction vs fixed price
@@ -152,9 +189,6 @@ const AddItemsPage = () => {
         }
       });
 
-      // Debug logging
-      console.log('Sending item data to backend:', JSON.stringify(itemData, null, 2));
-
       await api.post('/items', itemData);
       
       // Refresh items list
@@ -162,10 +196,11 @@ const AddItemsPage = () => {
       
       // Reset form
       reset();
-      setPhotoUrls([]);
+      setPhotoFiles([]);
+      setPhotoPreviews([]);
     } catch (error: any) {
       console.error('Error creating item:', error);
-      alert(error.response?.data?.message || 'Failed to create item');
+      showToast(error.response?.data?.message || 'Failed to create item', 'error');
     }
   };
 
@@ -312,36 +347,37 @@ const AddItemsPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Photo URLs
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Item Photos <span className="text-gray-400 font-normal">(up to 5, max 15 MB each)</span>
                   </label>
-                  <div className="flex">
+                  <div
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-5 text-center cursor-pointer hover:border-blue-400 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm text-gray-500">Click to upload photos</p>
                     <input
-                      type="text"
-                      value={photoUrl}
-                      onChange={(e) => setPhotoUrl(e.target.value)}
-                      className="flex-grow px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                      placeholder="https://example.com/photo.jpg"
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handlePhotoChange}
                     />
-                    <button
-                      type="button"
-                      onClick={addPhotoUrl}
-                      className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 rounded-r-md"
-                    >
-                      Add
-                    </button>
                   </div>
-                  {photoUrls.length > 0 && (
-                    <div className="mt-2">
-                      {photoUrls.map((url, index) => (
-                        <div key={index} className="flex items-center mb-1">
-                          <span className="flex-grow text-sm text-gray-600 truncate">{url}</span>
+                  {photoPreviews.length > 0 && (
+                    <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {photoPreviews.map((src, i) => (
+                        <div key={i} className="relative group">
+                          <img src={src} alt={`preview-${i}`} className="w-full h-16 object-cover rounded border border-gray-200" />
                           <button
                             type="button"
-                            onClick={() => removePhotoUrl(index)}
-                            className="text-red-600 hover:text-red-800 ml-2"
+                            onClick={() => removePhoto(i)}
+                            className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            Remove
+                            ✕
                           </button>
                         </div>
                       ))}
@@ -352,10 +388,10 @@ const AddItemsPage = () => {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || uploadingPhotos}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Adding...' : 'Add Item'}
+                    {uploadingPhotos ? 'Uploading photos...' : isSubmitting ? 'Adding...' : 'Add Item'}
                   </button>
                 </div>
               </form>

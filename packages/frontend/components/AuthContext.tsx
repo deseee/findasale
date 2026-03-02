@@ -7,6 +7,7 @@ interface User {
   name: string;
   role: string;
   points: number;
+  referralCode?: string;
 }
 
 interface AuthContextType {

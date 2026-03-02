@@ -4,12 +4,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
-import { loadStripe } from '@stripe/stripe-js';
 import { useAuth } from '../../components/AuthContext';
+import CheckoutModal from '../../components/CheckoutModal';
+import { useToast } from '../../components/ToastContext';
 import { format, parseISO } from 'date-fns';
 import SaleSubscription from '../../components/SaleSubscription';
 import CSVImportModal from '../../components/CSVImportModal';
 import SaleShareButton from '../../components/SaleShareButton';
+import SaleMap from '../../components/SaleMap';
+import Skeleton from '../../components/Skeleton';
+import BadgeDisplay from '../../components/BadgeDisplay';
 
 interface Sale {
   id: string;
@@ -23,11 +27,22 @@ interface Sale {
   zip: string;
   lat: number;
   lng: number;
+  status?: string;
   photoUrls: string[];
   organizer: {
+    id: string;
+    userId: string;
     businessName: string;
     phone: string;
     address: string;
+    badges?: Array<{
+      id: string;
+      name: string;
+      description: string;
+      iconUrl?: string;
+    }>;
+    avgRating?: number;
+    reviewCount?: number;
   };
   items: {
     id: string;
@@ -39,6 +54,8 @@ interface Sale {
     bidIncrement: number;
     auctionEndTime: string;
     status: string;
+    category?: string;
+    condition?: string;
     photoUrls: string[];
   }[];
   isAuctionSale: boolean;
@@ -52,8 +69,6 @@ interface Bid {
   };
   createdAt: string;
 }
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 // Helper function to safely format prices
 const formatPrice = (value: number | string | null | undefined): string => {
@@ -97,7 +112,11 @@ const SaleDetailPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [bidAmounts, setBidAmounts] = useState<{[key: string]: string}>({});
+  const [biddingItemId, setBiddingItemId] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   // Poll for updates every 10 seconds for auction items
   useEffect(() => {
@@ -120,54 +139,37 @@ const SaleDetailPage = () => {
     enabled: !!id,
   });
 
-  const handleBuyNow = async (itemId: string) => {
-    try {
-      // Create payment intent
-      const response = await api.post('/stripe/create-payment-intent', { itemId });
-      
-      // Get Stripe.js instance
-      const stripe = await stripePromise;
-      
-      if (!stripe) {
-        throw new Error('Stripe failed to initialize');
-      }
-      
-      // Confirm the payment
-      const { error } = await stripe.confirmCardPayment(response.data.clientSecret);
-      
-      if (error) {
-        console.error('Payment failed:', error);
-        alert('Payment failed: ' + error.message);
-      } else {
-        alert('Payment successful!');
-        // Refresh the page to show updated item status
-        window.location.reload();
-      }
-    } catch (err: any) {
-      console.error('Payment error:', err);
-      alert('Payment failed. Please try again.');
-    }
+  const handleBuyNow = (itemId: string, itemTitle: string) => {
+    setCheckoutItem({ id: itemId, title: itemTitle });
+  };
+
+  const handleCheckoutClose = () => {
+    setCheckoutItem(null);
+  };
+
+  const handleCheckoutSuccess = () => {
+    setCheckoutItem(null);
+    queryClient.invalidateQueries({ queryKey: ['sale', id] });
   };
 
   const handlePlaceBid = async (itemId: string) => {
-    try {
-      const amount = parseFloat(bidAmounts[itemId]);
-      if (isNaN(amount) || amount <= 0) {
-        alert('Please enter a valid bid amount');
-        return;
-      }
+    const amount = parseFloat(bidAmounts[itemId]);
+    if (isNaN(amount) || amount <= 0) {
+      showToast('Please enter a valid bid amount', 'error');
+      return;
+    }
 
+    setBiddingItemId(itemId);
+    try {
       await api.post(`/items/${itemId}/bid`, { amount });
-      alert('Bid placed successfully!');
-      
-      // Reset bid amount field
+      showToast('Bid placed successfully!', 'success');
       setBidAmounts(prev => ({ ...prev, [itemId]: '' }));
-      
-      // Refresh the sale data
       queryClient.invalidateQueries({ queryKey: ['sale', id] });
     } catch (err: any) {
       console.error('Bid error:', err);
-      alert(err.response?.data?.message || 'Failed to place bid. Please try again.');
+      showToast(err.response?.data?.message || 'Failed to place bid. Please try again.', 'error');
+    } finally {
+      setBiddingItemId(null);
     }
   };
 
@@ -181,12 +183,47 @@ const SaleDetailPage = () => {
     queryClient.invalidateQueries({ queryKey: ['sale', id] });
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="container mx-auto px-4 py-8">
+          <Skeleton className="h-5 w-28 mb-6" />
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <Skeleton className="h-9 w-2/3 mb-4" />
+            <Skeleton className="h-4 w-1/2 mb-2" />
+            <Skeleton className="h-4 w-1/3 mb-6" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <Skeleton className="h-6 w-24 mb-4" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[1,2,3,4].map(i => <Skeleton key={i} className="h-40 w-full" />)}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <Skeleton className="h-6 w-36 mb-6" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1,2,3].map(i => (
+                <div key={i} className="border rounded-lg overflow-hidden">
+                  <Skeleton className="h-48 w-full rounded-none" />
+                  <div className="p-4 space-y-2">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
   if (isError) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Error loading sale</div>;
   if (!sale) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Sale not found</div>;
 
-  // Check if user is organizer or admin
-  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
+  // Check if user is the owner of this specific sale, or an admin
+  const isOrganizer = user?.role === 'ADMIN' || (user?.role === 'ORGANIZER' && sale?.organizer?.userId === user?.id);
 
   // Format dates safely
   const formatSaleDate = (dateString: string | null | undefined): string => {
@@ -204,14 +241,25 @@ const SaleDetailPage = () => {
   const generateJsonLd = () => {
     if (!sale) return null;
 
+    const siteUrl = 'https://salescout.app';
+    const saleUrl = `${siteUrl}/sales/${sale.id}`;
+
+    const eventStatusMap: Record<string, string> = {
+      PUBLISHED: 'https://schema.org/EventScheduled',
+      ENDED: 'https://schema.org/EventScheduled',
+      DRAFT: 'https://schema.org/EventScheduled',
+    };
+
     const eventData = {
       "@context": "https://schema.org",
       "@type": "Event",
       "name": sale.title,
+      "url": saleUrl,
       "startDate": sale.startDate,
       "endDate": sale.endDate,
       "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
-      "eventStatus": "https://schema.org/EventScheduled",
+      "eventStatus": eventStatusMap[sale.status ?? 'PUBLISHED'] ?? 'https://schema.org/EventScheduled',
+      "image": sale.photoUrls && sale.photoUrls.length > 0 ? sale.photoUrls : undefined,
       "location": {
         "@type": "Place",
         "name": sale.title,
@@ -230,20 +278,36 @@ const SaleDetailPage = () => {
         "name": sale.organizer.businessName,
         "telephone": sale.organizer.phone
       },
-      "offers": sale.items.map(item => ({
-        "@type": "Offer",
-        "name": item.title,
-        "price": item.price || item.auctionStartPrice || 0,
+      "offers": {
+        "@type": "AggregateOffer",
         "priceCurrency": "USD",
-        "availability": item.status === "AVAILABLE" 
-          ? "https://schema.org/InStock" 
-          : item.status === "SOLD" 
-            ? "https://schema.org/SoldOut" 
-            : "https://schema.org/PreOrder"
-      }))
+        "offerCount": sale.items.length,
+        "lowPrice": sale.items.length > 0 ? Math.min(...sale.items.map(i => Number(i.price || i.auctionStartPrice || 0))) : 0,
+        "offers": sale.items.map(item => ({
+          "@type": "Offer",
+          "name": item.title,
+          "price": item.price || item.auctionStartPrice || 0,
+          "priceCurrency": "USD",
+          "availability": item.status === "AVAILABLE"
+            ? "https://schema.org/InStock"
+            : item.status === "SOLD"
+              ? "https://schema.org/SoldOut"
+              : "https://schema.org/PreOrder"
+        }))
+      }
     };
 
-    return JSON.stringify(eventData);
+    const breadcrumbData = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": siteUrl },
+        { "@type": "ListItem", "position": 2, "name": `Estate Sales in ${sale.city}`, "item": `${siteUrl}/city/${sale.city.toLowerCase().replace(/\s+/g, '-')}` },
+        { "@type": "ListItem", "position": 3, "name": sale.title, "item": saleUrl }
+      ]
+    };
+
+    return { event: JSON.stringify(eventData), breadcrumb: JSON.stringify(breadcrumbData) };
   };
 
   const jsonLd = generateJsonLd();
@@ -252,44 +316,59 @@ const SaleDetailPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Head>
         <title>{sale.title} - SaleScout</title>
-        <meta name="description" content={sale.description} />
-        
+        <meta name="description" content={`${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}. ${sale.description?.slice(0, 120) ?? ''}`} />
+
         {/* Open Graph Meta Tags */}
         <meta property="og:title" content={sale.title} />
         <meta property="og:description" content={sale.description} />
-        <meta property="og:type" content="website" />
+        <meta property="og:type" content="event" />
         <meta property="og:url" content={`https://salescout.app/sales/${sale.id}`} />
-        {sale.photoUrls && sale.photoUrls.length > 0 && (
-          <meta property="og:image" content={sale.photoUrls[0]} />
-        )}
-        
+        <meta
+          property="og:image"
+          content={
+            sale.photoUrls && sale.photoUrls.length > 0
+              ? sale.photoUrls[0]
+              : `/api/og?title=${encodeURIComponent(sale.title)}&date=${encodeURIComponent(
+                  `${format(new Date(sale.startDate), 'MMM d')} - ${format(new Date(sale.endDate), 'MMM d, yyyy')}`
+                )}&location=${encodeURIComponent(`${sale.city}, ${sale.state}`)}`
+          }
+        />
+
         {/* Twitter Card Meta Tags */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={sale.title} />
         <meta name="twitter:description" content={sale.description} />
-        {sale.photoUrls && sale.photoUrls.length > 0 && (
-          <meta name="twitter:image" content={sale.photoUrls[0]} />
-        )}
-        
-        {/* Dynamic OG Image */}
-        <meta 
-          property="og:image" 
-          content={`/api/og?title=${encodeURIComponent(sale.title)}&date=${encodeURIComponent(
-            `${format(new Date(sale.startDate), 'MMM d')} - ${format(new Date(sale.endDate), 'MMM d, yyyy')}`
-          )}&location=${encodeURIComponent(`${sale.city}, ${sale.state}`)}`} 
+        <meta
+          name="twitter:image"
+          content={
+            sale.photoUrls && sale.photoUrls.length > 0
+              ? sale.photoUrls[0]
+              : `/api/og?title=${encodeURIComponent(sale.title)}&date=${encodeURIComponent(
+                  `${format(new Date(sale.startDate), 'MMM d')} - ${format(new Date(sale.endDate), 'MMM d, yyyy')}`
+                )}&location=${encodeURIComponent(`${sale.city}, ${sale.state}`)}`
+          }
         />
-        
+
         {/* JSON-LD Structured Data */}
         {jsonLd && (
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: jsonLd }}
-          />
+          <>
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd.event }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd.breadcrumb }} />
+          </>
         )}
       </Head>
 
+      {checkoutItem && (
+        <CheckoutModal
+          itemId={checkoutItem.id}
+          itemTitle={checkoutItem.title}
+          onClose={handleCheckoutClose}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
+
       {/* CSV Import Modal */}
-      <CSVImportModal 
+      <CSVImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         saleId={sale.id}
@@ -325,10 +404,18 @@ const SaleDetailPage = () => {
                 </span>
               </div>
             </div>
-            <div className="mt-4 md:mt-0 flex flex-col items-end">
-              <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg mb-3">
+            <div className="mt-4 md:mt-0 flex flex-col items-end gap-2">
+              <Link href={`/organizers/${sale.organizer.id}`} className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-200 transition-colors block">
                 Organized by: {sale.organizer.businessName}
-              </div>
+              </Link>
+              {sale.organizer.badges && sale.organizer.badges.length > 0 && (
+                <BadgeDisplay badges={sale.organizer.badges} size="sm" />
+              )}
+              {sale.organizer.avgRating !== undefined && (
+                <div className="text-sm text-gray-600">
+                  ⭐ {sale.organizer.avgRating} ({sale.organizer.reviewCount} reviews)
+                </div>
+              )}
               <div className="flex space-x-2">
                 {/* Share Button */}
                 <SaleShareButton 
@@ -344,7 +431,7 @@ const SaleDetailPage = () => {
                   onClick={() => {
                     const postText = `Check out this estate sale on SaleScout!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
                     navigator.clipboard.writeText(postText);
-                    alert('Post text copied to clipboard! Paste it into Nextdoor.');
+                    showToast('Post text copied to clipboard! Paste it into Nextdoor.', 'success');
                   }}
                   className="flex items-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
                 >
@@ -415,14 +502,44 @@ const SaleDetailPage = () => {
           )}
         </div>
 
+        {/* Photo Gallery */}
+        {sale.photoUrls && sale.photoUrls.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900">Photos</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {sale.photoUrls.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={url}
+                    alt={`${sale.title} photo ${i + 1}`}
+                    className="w-full h-40 object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity cursor-pointer"
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Map Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-2xl font-bold mb-4 text-gray-900">Location</h2>
-          <div className="h-96 bg-gray-200 rounded-lg flex items-center justify-center">
-            <p className="text-gray-600">
-              Map showing location at ({sale.lat}, {sale.lng})
-            </p>
-          </div>
+          {sale.lat && sale.lng ? (
+            <SaleMap
+              singlePin={{
+                lat: sale.lat,
+                lng: sale.lng,
+                label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
+              }}
+              height="360px"
+            />
+          ) : (
+            <div className="h-72 bg-gray-100 rounded-lg flex items-center justify-center">
+              <p className="text-gray-500">Location not available</p>
+            </div>
+          )}
+          <p className="mt-3 text-sm text-gray-500">
+            {sale.address}, {sale.city}, {sale.state} {sale.zip}
+          </p>
         </div>
 
         {/* Items Section */}
@@ -446,6 +563,43 @@ const SaleDetailPage = () => {
             )}
           </div>
 
+          {/* Category Filter */}
+          {sale.items && sale.items.some((item) => item.category) && (
+            <div className="mb-6">
+              <p className="text-sm font-medium text-gray-700 mb-2">Filter by category:</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedCategory(null)}
+                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                    selectedCategory === null
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  All ({sale.items.length})
+                </button>
+                {Array.from(new Set(sale.items.map((item) => item.category).filter(Boolean))).map(
+                  (category) => {
+                    const count = sale.items.filter((item) => item.category === category).length;
+                    return (
+                      <button
+                        key={category}
+                        onClick={() => setSelectedCategory(category as string)}
+                        className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                          selectedCategory === category
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {(category as string).charAt(0).toUpperCase() + (category as string).slice(1)} ({count})
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+            </div>
+          )}
+
           {sale.items.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-600 mb-4">No items listed for this sale yet.</p>
@@ -463,7 +617,12 @@ const SaleDetailPage = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sale.items.map((item) => (
+              {sale.items
+                .filter(
+                  (item) =>
+                    selectedCategory === null || item.category === selectedCategory
+                )
+                .map((item) => (
                 <div key={item.id} className="border rounded-lg overflow-hidden bg-white">
                   <Link href={`/items/${item.id}`} className="block">
                     {item.photoUrls.length > 0 ? (
@@ -481,7 +640,23 @@ const SaleDetailPage = () => {
                   <div className="p-4">
                     <h3 className="font-bold text-lg mb-2 text-gray-900">{item.title}</h3>
                     <p className="text-gray-600 text-sm mb-3 line-clamp-2">{item.description}</p>
-                    
+
+                    {/* Category and Condition badges */}
+                    {(item.category || item.condition) && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {item.category && (
+                          <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                            {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
+                          </span>
+                        )}
+                        {item.condition && (
+                          <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                            {item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {/* Auction-specific UI */}
                     {sale.isAuctionSale && item.auctionStartPrice ? (
                       <div>
@@ -518,9 +693,10 @@ const SaleDetailPage = () => {
                             />
                             <button
                               onClick={() => handlePlaceBid(item.id)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded-r"
+                              disabled={biddingItemId === item.id}
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded-r disabled:opacity-50"
                             >
-                              Bid
+                              {biddingItemId === item.id ? '...' : 'Bid'}
                             </button>
                           </div>
                         )}
@@ -570,7 +746,7 @@ const SaleDetailPage = () => {
                       )}
                       {!isOrganizer && user && !sale.isAuctionSale && item.status === 'AVAILABLE' && (
                         <button
-                          onClick={() => handleBuyNow(item.id)}
+                          onClick={() => handleBuyNow(item.id, item.title)}
                           className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded"
                         >
                           Buy Now

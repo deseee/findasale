@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -31,6 +31,29 @@ const CreateSalePage = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length + photoFiles.length > 20) {
+      setError('Maximum 20 photos allowed');
+      return;
+    }
+    const newPreviews = files.map((f) => URL.createObjectURL(f));
+    setPhotoFiles((prev) => [...prev, ...files]);
+    setPhotoPreviews((prev) => [...prev, ...newPreviews]);
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+    setPhotoPreviews((prev) => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -52,20 +75,36 @@ const CreateSalePage = () => {
       const formattedStartDate = formData.startDate ? new Date(formData.startDate).toISOString() : '';
       const formattedEndDate = formData.endDate ? new Date(formData.endDate).toISOString() : '';
 
-      // Geocode address to get lat/lng
-      const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        `${formData.address}, ${formData.city}, ${formData.state} ${formData.zip}`
-      )}`;
-      
-      const geocodeResponse = await fetch(geocodeUrl);
-      const geocodeData = await geocodeResponse.json();
-      
+      // Geocode address via our backend (handles rate limiting + caching)
       let lat = 0;
       let lng = 0;
-      
-      if (geocodeData && geocodeData.length > 0) {
-        lat = parseFloat(geocodeData[0].lat);
-        lng = parseFloat(geocodeData[0].lon);
+
+      try {
+        const geocodeResponse = await api.get('/geocode', {
+          params: {
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            zip: formData.zip,
+          },
+        });
+        lat = geocodeResponse.data.lat;
+        lng = geocodeResponse.data.lng;
+      } catch (geocodeError) {
+        console.warn('Geocoding failed, sale will be created without coordinates:', geocodeError);
+      }
+
+      // Upload photos to Cloudinary via backend
+      let photoUrls: string[] = [];
+      if (photoFiles.length > 0) {
+        setUploadingPhotos(true);
+        const formDataPhotos = new FormData();
+        photoFiles.forEach((f) => formDataPhotos.append('photos', f));
+        const uploadResponse = await api.post('/upload/sale-photos', formDataPhotos, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        photoUrls = uploadResponse.data.urls;
+        setUploadingPhotos(false);
       }
 
       // Create sale
@@ -75,6 +114,7 @@ const CreateSalePage = () => {
         endDate: formattedEndDate,
         lat,
         lng,
+        photoUrls,
       });
 
       // Redirect to sale detail page
@@ -249,6 +289,51 @@ const CreateSalePage = () => {
               </label>
             </div>
 
+            {/* Photo Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sale Photos <span className="text-gray-400 font-normal">(up to 20, max 15 MB each)</span>
+              </label>
+
+              {/* Drop zone */}
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm text-gray-500">Click to select photos, or drag and drop</p>
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP accepted</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                />
+              </div>
+
+              {/* Preview grid */}
+              {photoPreviews.length > 0 && (
+                <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                  {photoPreviews.map((src, i) => (
+                    <div key={i} className="relative group">
+                      <img src={src} alt={`preview-${i}`} className="w-full h-20 object-cover rounded-lg border border-gray-200" />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(i)}
+                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end space-x-4 pt-4">
               <Link 
                 href="/organizer/dashboard" 
@@ -258,10 +343,10 @@ const CreateSalePage = () => {
               </Link>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || uploadingPhotos}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
               >
-                {loading ? 'Creating...' : 'Create Sale'}
+                {uploadingPhotos ? 'Uploading photos...' : loading ? 'Creating...' : 'Create Sale'}
               </button>
             </div>
           </form>
