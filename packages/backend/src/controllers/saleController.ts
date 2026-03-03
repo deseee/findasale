@@ -242,7 +242,9 @@ export const getSale = async (req: Request, res: Response) => {
             bidIncrement: true,
             status: true,
             photoUrls: true,
-            auctionEndTime: true
+            auctionEndTime: true,
+            category: true,
+            condition: true
           }
         }
       }

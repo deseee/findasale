@@ -210,21 +210,27 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const feePercent = item.sale.isAuctionSale ? 0.07 : 0.05;
     const platformFeeAmount = Math.round(price * 100 * feePercent); // in cents
 
+    // Idempotency key prevents duplicate charges on network retry (one attempt per user per item)
+    const idempotencyKey = `pi-${itemId}-${req.user.id}`;
+
     // Create a PaymentIntent with automatic confirmation
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(price * 100), // Convert to cents
-      currency: 'usd',
-      metadata: {
-        itemId: item.id,
-        saleId: item.sale.id,
-        userId: req.user.id
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: Math.round(price * 100), // Convert to cents — always from DB, never from request body
+        currency: 'usd',
+        metadata: {
+          itemId: item.id,
+          saleId: item.sale.id,
+          userId: req.user.id
+        },
+        application_fee_amount: platformFeeAmount,
+        on_behalf_of: item.sale.organizer.stripeConnectId,
+        transfer_data: {
+          destination: item.sale.organizer.stripeConnectId,
+        },
       },
-      application_fee_amount: platformFeeAmount,
-      on_behalf_of: item.sale.organizer.stripeConnectId,
-      transfer_data: {
-        destination: item.sale.organizer.stripeConnectId,
-      },
-    });
+      { idempotencyKey }
+    );
 
     // Create a pending purchase record
     const purchase = await prisma.purchase.create({
