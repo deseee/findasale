@@ -288,8 +288,8 @@ async function main() {
         lng,
         status,
         photoUrls: [
-          `https://res.cloudinary.com/demo/image/upload/v1234567890/estate_sale_${i + 1}_sample1.jpg`,
-          `https://res.cloudinary.com/demo/image/upload/v1234567890/estate_sale_${i + 1}_sample2.jpg`,
+          `https://picsum.photos/seed/sale${i + 1}a/800/600`,
+          `https://picsum.photos/seed/sale${i + 1}b/800/600`,
         ],
         tags,
       },
@@ -328,11 +328,11 @@ async function main() {
           status,
           photoUrls: hasMultiplePhotos
             ? [
-                `https://res.cloudinary.com/demo/image/upload/v1234567890/item_${itemCount}_1.jpg`,
-                `https://res.cloudinary.com/demo/image/upload/v1234567890/item_${itemCount}_2.jpg`,
+                `https://picsum.photos/seed/item${itemCount}a/600/400`,
+                `https://picsum.photos/seed/item${itemCount}b/600/400`,
               ]
             : [
-                `https://res.cloudinary.com/demo/image/upload/v1234567890/item_${itemCount}_1.jpg`,
+                `https://picsum.photos/seed/item${itemCount}a/600/400`,
               ],
         },
       });
