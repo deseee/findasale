@@ -176,7 +176,7 @@ Prevention: Never use `db push` on the running dev DB. Always use `migrate dev` 
 
 Symptom:
 - `\"` inside a double-quoted string → Docker receives literal backslash: `DELETE FROM " AffiliateLink\;"`
-- `'DELETE FROM "AffiliateLink";'` single-quoted → PowerShell strips inner double quotes → psql sees `DELETE FROM AffiliateLink;` → relation not found (case mismatch)
+- `'DELETE FROM "AffiliateLink";'` single-quoted → PowerShell strips the inner double quotes → psql sees `DELETE FROM AffiliateLink;` → relation not found (case mismatch)
 
 Fix — assign SQL to a variable first:
 ```powershell
@@ -204,6 +204,62 @@ Fix: Prisma only lives inside Docker on this machine. Never run `npx prisma` fro
 docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma <command>"
 ```
 The container has the correct version (5.22.0) locked in its node_modules.
+
+---
+
+## 15. PowerShell curl JSON body arrives empty inside docker exec
+
+Symptom:
+- `docker exec findasale-backend-1 sh -c 'curl ... -d "{\"email\":\"x\"}"'` → Express `req.body` is `{}`
+- Server returns 500 "Server error during login/registration"
+- Body-parser does NOT throw a parse error — it silently returns an empty object
+
+Cause: PowerShell + `sh -c` quoting mangles the `-d` body or `-H` Content-Type header. Multiple quoting layers (PowerShell → Docker → sh → curl) make double-quote escaping unreliable. The exact failure mode depends on PowerShell version and escaping style.
+
+Fix — use Claude in Chrome or browser fetch instead:
+```javascript
+// From Chrome DevTools console or Claude in Chrome JS tool:
+fetch('http://localhost:5000/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email: 'user11@example.com', password: 'password123' })
+}).then(r => r.json()).then(console.log);
+```
+
+Alternative — use `Invoke-RestMethod` from PowerShell directly (bypasses Docker/sh quoting):
+```powershell
+$body = '{"email":"user11@example.com","password":"password123"}'
+Invoke-RestMethod -Uri http://localhost:5000/api/auth/login -Method POST -ContentType "application/json" -Body $body
+```
+
+Rule: Never use `curl` for JSON POST requests through `docker exec sh -c` on Windows. Use browser fetch, Invoke-RestMethod, or write a temp `.json` file.
+
+---
+
+## 16. Schema drift: schema.prisma fields not matching migration history
+
+Symptom:
+- Prisma client works for some operations but fails for others
+- `The column X does not exist in the current database` (P2022)
+- `Null constraint violation on the fields: (id)` (P2011) when creating records
+
+Cause: `schema.prisma` was edited (e.g., switching from `@id` to `@@id`, adding/removing `updatedAt`) but no migration was created. The Prisma client generates from schema.prisma, but the actual DB tables still match the migration SQL.
+
+Fix: Make schema.prisma match what the migrations actually created. Check the migration SQL files to see the real table structure:
+```powershell
+# Find which migration created a table
+grep -r "CREATE TABLE \"ModelName\"" packages/database/prisma/migrations/ --include="*.sql"
+# See the actual columns
+grep -A 20 "CREATE TABLE \"ModelName\"" <migration-file>
+```
+
+Then update schema.prisma to match. Regenerate and restart:
+```powershell
+docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma generate"
+docker compose restart backend
+```
+
+Prevention: Always create a migration after editing schema.prisma (`prisma migrate dev --name describe_change`). Never edit the schema without a corresponding migration.
 
 ---
 
