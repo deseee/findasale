@@ -35,7 +35,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: payload.email,
           name: payload.name,
           role: payload.role,
-          points: payload.points || 0
+          points: payload.points || 0,
+          referralCode: payload.referralCode || ''
         });
       } catch (e) {
         console.error('Failed to decode token', e);
@@ -56,7 +57,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: payload.email,
         name: payload.name,
         role: payload.role,
-        points: payload.points || 0
+        points: payload.points || 0,
+        referralCode: payload.referralCode || ''
       });
     } catch (e) {
       console.error('Failed to decode token', e);
