@@ -23,6 +23,24 @@ Patrick wants a complete audit and bug hunt before advancing the roadmap. Run al
 
 ---
 
+### Phase 0 — Session Startup: Tool & Plugin Inventory
+
+Before any work begins, Claude must announce which tools and connectors are active. Check and report on all of the following at session start:
+
+**GitHub MCP (`mcp__github__*`):** If active, use for all file pushes. Never write "push from PowerShell" in wrap notes when this is available.
+
+**Web search:** Is `WebSearch` available? Note it for competitor/changelog research tasks.
+
+**Claude in Chrome (`mcp__Claude_in_Chrome__*`):** If active, browser automation is available — useful for manual flow audits, testing live finda.sale pages, or checking Stripe/Resend dashboards.
+
+**Docker status:** Is Docker reachable from the VM? Run `docker ps` via Bash. If not (common — VM can't reach Docker Desktop on Windows host), note it clearly and do not attempt Docker commands from the VM.
+
+**Scheduled tasks:** Are any findasale-* tasks currently running or queued? Check before starting work.
+
+Announce all of the above in a single opening message so Patrick knows what's available without having to ask. This replaces the silent startup pattern that caused the GitHub MCP miss.
+
+---
+
 ### Phase 1 — Automated Scan (run first)
 
 Load and execute the **health-scout skill**. This covers: security headers, unprotected routes, hardcoded secrets, missing alt text, unbounded Prisma queries, console.log statements in production, accessibility basics.

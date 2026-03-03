@@ -384,3 +384,9 @@ Two bugs found in the dev-environment skill and corrected:
 
 Last Updated: 2026-03-03 (session 27 — image loading fixed on production, CORS + proxy fixes)
 Status: finda.sale fully operational with images. localhost needs frontend Docker rebuild for image parity.
+
+---
+
+### Seed Bug Fixes (2026-03-03)
+- ✅ Fixed: organizer users 0–9 now seeded with `role: 'ORGANIZER'` (was always `'USER'`).
+- ✅ Fixed: `stripeConnectId` now always `null` in seed — organizers go through real Stripe Connect onboarding. Fake `acct_test_*` IDs removed.
