@@ -149,7 +149,7 @@ export const listSales = async (req: Request, res: Response) => {
     });
     
     // Convert Decimal values to numbers
-    const convertedSales = sales.map(sale => convertDecimalsToNumbers(sale));
+    const convertedSales = sales.map((sale: any) => convertDecimalsToNumbers(sale));
     
     // Get total count for pagination
     const total = await prisma.sale.count({ where });
@@ -208,7 +208,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
       take: 50
     });
 
-    res.json({ sales: sales.map(s => convertDecimalsToNumbers(s)) });
+    res.json({ sales: sales.map((s: any) => convertDecimalsToNumbers(s)) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while fetching your sales' });
@@ -459,7 +459,7 @@ export const searchSales = async (req: Request, res: Response) => {
     });
     
     // Convert Decimal values to numbers
-    const convertedSales = sales.map(sale => convertDecimalsToNumbers(sale));
+    const convertedSales = sales.map((sale: any) => convertDecimalsToNumbers(sale));
     
     res.json(convertedSales);
   } catch (error) {
@@ -517,6 +517,23 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Track a QR scan event (called from sale detail page when utm_source=qr_sign)
+// Public endpoint — no auth required; silently increments counter
+export const trackQrScan = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.sale.updateMany({
+      where: { id },
+      data: { qrScanCount: { increment: 1 } },
+    });
+    res.status(204).end();
+  } catch (error) {
+    // Non-fatal — analytics tracking must never break the page
+    console.error('Error tracking QR scan:', error);
+    res.status(204).end();
+  }
+};
+
 // Generate QR code for sale
 export const generateQRCode = async (req: AuthRequest, res: Response) => {
   try {
@@ -558,5 +575,66 @@ export const generateQRCode = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error generating QR code:', error);
     res.status(500).json({ message: 'Server error while generating QR code' });
+  }
+};
+
+// Generate iCal (.ics) file for a sale (Phase 11 – calendar integration)
+// Public endpoint — works for any published sale
+export const generateIcal = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      include: { organizer: { select: { businessName: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const saleUrl = `${frontendUrl}/sales/${id}`;
+    const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
+
+    // Format dates as iCal DTSTART/DTEND (YYYYMMDDTHHmmssZ)
+    const toIcalDate = (d: Date) =>
+      d.toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
+
+    const startStr = toIcalDate(new Date(sale.startDate));
+    const endStr   = toIcalDate(new Date(sale.endDate));
+
+    // Escape special iCal characters
+    const esc = (s: string) =>
+      (s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+
+    const location = `${sale.address}\\, ${sale.city}\\, ${sale.state} ${sale.zip}`;
+    const description = esc(sale.description || '') + (sale.description ? '\\n\\n' : '') + `View items online: ${saleUrl}`;
+
+    const ical = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//SaleScout//SaleScout//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:sale-${id}@salescout.app`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${startStr}`,
+      `DTEND:${endStr}`,
+      `SUMMARY:${esc(sale.title)}`,
+      `DESCRIPTION:${description}`,
+      `LOCATION:${location}`,
+      `URL:${saleUrl}`,
+      `ORGANIZER;CN=${esc(sale.organizer.businessName)}:MAILTO:noreply@salescout.app`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const filename = `sale-${id}.ics`;
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(ical);
+  } catch (error) {
+    console.error('Error generating iCal:', error);
+    res.status(500).json({ message: 'Server error while generating calendar file' });
   }
 };

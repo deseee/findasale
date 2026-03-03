@@ -62,7 +62,7 @@ export const getPurchases = async (req: AuthRequest, res: Response) => {
     });
 
     // Convert Decimal values to numbers
-    const convertedPurchases = purchases.map(purchase => convertDecimalsToNumbers(purchase));
+    const convertedPurchases = purchases.map((purchase: any) => convertDecimalsToNumbers(purchase));
     
     res.json(convertedPurchases);
   } catch (error) {

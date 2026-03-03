@@ -43,11 +43,11 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
     let itemsSold = 0;
     let itemsUnsold = 0;
 
-    const saleBreakdown = sales.map((sale) => {
-      const saleRevenue = sale.purchases.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-      const saleFees = sale.purchases.reduce((sum, p) => sum + (Number(p.platformFeeAmount) || 0), 0);
-      const saleSold = sale.items.filter((i) => i.status === 'SOLD').length;
-      const saleUnsold = sale.items.filter((i) => i.status !== 'SOLD').length;
+    const saleBreakdown = sales.map((sale: any) => {
+      const saleRevenue = sale.purchases.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      const saleFees = sale.purchases.reduce((sum: number, p: any) => sum + (Number(p.platformFeeAmount) || 0), 0);
+      const saleSold = sale.items.filter((i: any) => i.status === 'SOLD').length;
+      const saleUnsold = sale.items.filter((i: any) => i.status !== 'SOLD').length;
 
       totalRevenue += saleRevenue;
       totalFees += saleFees;
@@ -62,6 +62,7 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
         itemsUnsold: saleUnsold,
         revenue: saleRevenue,
         fees: saleFees,
+        qrScanCount: (sale as any).qrScanCount ?? 0,
       };
     });
 
@@ -125,7 +126,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     });
 
     const avgRating = reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
       : 0;
 
     res.json({
@@ -134,7 +135,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       phone: organizer.phone,
       address: organizer.address,
       sales: organizer.sales,
-      badges: organizer.user?.userBadges?.map(ub => ({
+      badges: organizer.user?.userBadges?.map((ub: any) => ({
         id: ub.badge.id,
         name: ub.badge.name,
         description: ub.badge.description,
@@ -207,7 +208,7 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
     for (const organizer of organizers) {
       if (!organizer.user) continue;
 
-      const existingBadgeNames = organizer.user.userBadges.map(ub => ub.badgeId);
+      const existingBadgeNames = organizer.user.userBadges.map((ub: any) => ub.badgeId);
 
       // Check for first-time organizer badge
       const firstTimeOrgBadge = await prisma.badge.findUnique({
@@ -247,7 +248,7 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
       });
 
       if (reviews.length >= 3) {
-        const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+        const avgRating = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
         const topRatedBadge = await prisma.badge.findUnique({
           where: { name: 'top-rated-organizer' }
         });
