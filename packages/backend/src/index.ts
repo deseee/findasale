@@ -76,6 +76,9 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // ─── Security ──────────────────────────────────────────────────────────────
 
+// Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
+app.set('trust proxy', 1);
+
 // Helmet sets safe defaults for ~15 HTTP headers
 app.use(
   helmet({
@@ -94,6 +97,8 @@ app.use(
       // Allow requests with no origin (curl, Postman, server-to-server)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
+      // Allow all Vercel preview deployments for this project
+      if (/^https:\/\/findasale[a-z0-9-]*\.vercel\.app$/.test(origin)) return callback(null, true);
       return callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
