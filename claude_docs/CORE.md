@@ -51,6 +51,12 @@ When modifying code:
 - No full rewrites unless requested
 - No unchanged context
 
+Before executing any file change, state the approach in one line:
+- Targeted edit: "Editing [file] lines X–Y"
+- Full rewrite: "Rewriting [file] entirely"
+
+This lets Patrick immediately catch unnecessary rewrites.
+
 ---
 
 ## 5. Auto Compression Protocol

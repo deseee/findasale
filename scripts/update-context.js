@@ -164,8 +164,45 @@ function getEnvDrift() {
   return { missing, extra };
 }
 
+// Environment capabilities — GitHub auth, ngrok tunnel, key CLI tools
+function getEnvironmentStatus() {
+  const lines = [];
+
+  // GitHub CLI auth
+  const ghStatus = runCmd('gh auth status 2>&1');
+  if (ghStatus.startsWith('[Error') || ghStatus.includes('not logged')) {
+    lines.push('- GitHub: ✗ not authenticated (gh auth login to fix)');
+  } else {
+    const accountMatch = ghStatus.match(/Logged in to [^\s]+ account ([^\s]+)/);
+    const account = accountMatch ? accountMatch[1] : 'authenticated';
+    lines.push(`- GitHub: ✓ ${account}`);
+  }
+
+  // ngrok tunnel — check running containers for the tunnel URL
+  const ngrokLog = runCmd('docker logs findasale-ngrok-1 2>&1 | grep -o "https://[^ ]*ngrok[^ ]*" | tail -1');
+  if (ngrokLog && !ngrokLog.startsWith('[Error') && ngrokLog.startsWith('https://')) {
+    lines.push(`- ngrok tunnel: ✓ ${ngrokLog}`);
+  } else {
+    lines.push('- ngrok tunnel: unknown (check Docker Desktop logs for findasale-ngrok-1)');
+  }
+
+  // Key CLI tools
+  const tools = [
+    { cmd: 'gh --version', label: 'gh' },
+    { cmd: 'node --version', label: 'node' },
+    { cmd: 'pnpm --version', label: 'pnpm' },
+  ];
+  const available = tools.filter(t => {
+    try { execSync(t.cmd, { stdio: 'ignore' }); return true; } catch { return false; }
+  }).map(t => t.label);
+  lines.push(`- CLI tools: ${available.join(', ') || 'none detected'}`);
+
+  return lines.join('\n');
+}
+
 const todoScan = getTodoScan();
 const envDrift = getEnvDrift();
+const envStatus = getEnvironmentStatus();
 
 const markdown = `# Dynamic Project Context
 *Generated at ${new Date().toISOString()}*
@@ -185,6 +222,9 @@ ${healthStatus}
 \`\`\`
 ${docker}
 \`\`\`
+
+## Environment
+${envStatus}
 
 ## Signals
 ${envDrift ? `⚠ Env drift — in .env.example but missing from .env: ${envDrift.missing.join(', ')}` : '✓ Env: no drift detected'}
