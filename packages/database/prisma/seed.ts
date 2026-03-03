@@ -624,9 +624,11 @@ async function main() {
   console.log('🔗 Creating 10 affiliate links...');
   for (let i = 0; i < 10; i++) {
     const sale = sales[i * 2]; // Distribute across sales
-    if (sale) {
+    const user = users[Math.floor(Math.random() * 80) + 10]; // Use shopper users
+    if (sale && user) {
       await prisma.affiliateLink.create({
         data: {
+          userId: user.id,
           saleId: sale.id,
           clicks: Math.floor(Math.random() * 100),
         },
