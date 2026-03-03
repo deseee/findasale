@@ -1,32 +1,131 @@
 # Next Session Resume Prompt
-*Written: 2026-03-03T00:00:00Z*
+*Written: 2026-03-03*
 *Session ended: normally*
 
 ## Resume From
-Install the 3 updated skill files (dev-environment.skill, health-scout.skill, findasale-deploy.skill) from the FindaSale project folder via the Cowork skill manager, then uninstall the old `salescout-deploy` skill. After that, set NEXT_PUBLIC_API_URL in Vercel and redeploy to fix "Error Loading Sales" on finda.sale.
 
-## What Was In Progress
-- Nothing mid-task — session ended cleanly.
+Complete audit and bug hunt before continuing the roadmap. All current work is committed and stable. finda.sale is live. localhost is working after frontend rebuild. Seed is fresh with fixes applied.
 
 ## What Was Completed This Session
-- CSP fix: `connect-src` in next.config.js now derives API origin from NEXT_PUBLIC_API_URL at build time (commit acec537). Fixes ngrok URL being blocked by browser on finda.sale.
-- Session self-awareness: update-context.js now emits `## Environment` section; CORE.md got edit transparency rule; context-maintenance skill updated with capabilities inventory, dirty-session detection, breakpoint wraps, two-tier memory, next-session-prompt.md.
-- Post-commit hook: `.git/hooks/post-commit` auto-regenerates context.md on every commit.
-- Scheduled tasks: 9 `salescout-*` tasks replaced with 8 `findasale-*` equivalents (old ones disabled).
-- DB credentials: `packages/backend/.env` DATABASE_URL updated to local Docker postgres URL.
-- Full salescout wipe: zero remaining active salescout/SaleScout references in skills or project docs.
-- 3 skill files repackaged: `dev-environment.skill`, `health-scout.skill`, `findasale-deploy.skill` — all in FindaSale/ root folder.
 
-## Environment Notes
-- **Git:** Changes to claude_docs/ and CLAUDE.md not yet committed — commit them next session or now.
-- **3 skill files need Cowork install:** dev-environment.skill, health-scout.skill, findasale-deploy.skill (all in project root folder).
-- **Uninstall needed:** `salescout-deploy` skill (after installing findasale-deploy).
-- **Vercel redeploy needed:** Set `NEXT_PUBLIC_API_URL=https://pamelia-unweathered-arabesquely.ngrok-free.dev/api` in Vercel env vars → redeploy → finda.sale will load sales correctly.
-- **ngrok:** Verify tunnel is up with `docker logs findasale-ngrok-1` after Docker restart.
-- **Resend:** Check domain verification at resend.com → Domains → finda.sale.
+- **update-context.js stale Docker fix** — removed preservation logic; unavailable message is now always fresh instead of caching old container names
+- **Seed bug #1 fixed** — organizer users 0–9 now seeded with `role: 'ORGANIZER'` (was `'USER'`)
+- **Seed bug #2 fixed** — `stripeConnectId` always `null` in seed; fake `acct_test_*` IDs removed
+- **Reseeded** — clean data, confirmed in Docker output
+- **`findasale-workflow-retrospective`** scheduled task created — runs 8th of each month at 9am
+- **Workflow audit report** written to `claude_docs/workflow-audit-2026-03-03.md`
 
-## Exact Context
-- Skill files location: `C:\Users\desee\ClaudeProjects\FindaSale\` (dev-environment.skill, health-scout.skill, findasale-deploy.skill)
-- findasale-deploy replaces salescout-deploy — same deploy workflow, just rebranded
-- Vercel project URL: findasale.vercel.app
-- ngrok static domain: pamelia-unweathered-arabesquely.ngrok-free.dev
+---
+
+## NEXT SESSION OBJECTIVE: Full Pre-Beta Audit
+
+Patrick wants a complete audit and bug hunt before advancing the roadmap. Run all phases below in order. Use the health-scout skill for the automated pass, then go manual for the flows.
+
+---
+
+### Phase 1 — Automated Scan (run first)
+
+Load and execute the **health-scout skill**. This covers: security headers, unprotected routes, hardcoded secrets, missing alt text, unbounded Prisma queries, console.log statements in production, accessibility basics.
+
+Save the report to `claude_docs/health-reports/2026-03-03-pre-beta.md` (or today's date).
+
+---
+
+### Phase 2 — Backend API Audit
+
+Grep and read the following. Flag anything that needs fixing:
+
+1. **Unprotected mutation routes** — `grep -rn "router\.\(post\|put\|patch\|delete\)(" packages/backend/src/routes/ --include="*.ts" | grep -v "authenticate\|verifyToken"`
+   Every mutation must have `authenticate`. Organizer routes must also have role check.
+
+2. **Unbounded Prisma queries** — `grep -rn "findMany(" packages/backend/src/controllers/ --include="*.ts" | grep -v "take:\|limit"`
+   Every public-facing `findMany` needs a `take` cap.
+
+3. **Async without try/catch** — scan controllers for async handlers missing error handling. (Self-healing Skill 5)
+
+4. **Circular dependency risk** — `grep -rn "from '../index'" packages/backend/src/controllers/ --include="*.ts"`
+   Any hit = circular dep waiting to happen. (Self-healing Skill 10)
+
+5. **Env var completeness** — diff `.env.example` vs `.env` in both `packages/backend/` and `packages/frontend/`. Flag any keys in example but missing from actual.
+
+6. **JWT payload** — verify `authController.ts` jwt.sign() includes: id, email, role, name, points, referralCode, organizerId (if organizer). (Self-healing Skill 2)
+
+---
+
+### Phase 3 — Frontend Flow Audit
+
+Manually trace each critical user flow in the code (pages + API calls). Flag broken wiring, missing error states, missing loading states, or console.log stubs:
+
+**Shopper flows:**
+- [ ] Register → login → shopper dashboard loads with name/points
+- [ ] Browse homepage → filter by date/keyword → sale detail page
+- [ ] Sale detail → subscribe to sale → receive confirmation
+- [ ] Sale detail → buy item → checkout modal → Stripe payment
+- [ ] Shopper dashboard → purchases tab → referral link copy
+- [ ] Forgot password → reset password → login with new password
+
+**Organizer flows:**
+- [ ] Register as organizer → dashboard loads own sales only
+- [ ] Create sale → publish → appears on homepage
+- [ ] Add items (manual) → item appears on sale detail
+- [ ] Add items (CSV import) → items created
+- [ ] Add items (AI photo scan) → form pre-fills
+- [ ] Edit item → changes saved
+- [ ] Stripe Connect onboarding → Setup Payments → returns to dashboard
+- [ ] Download Marketing Kit PDF → QR code present
+- [ ] Manage Queue page → call next, broadcast SMS
+- [ ] Organizer settings → update business name/phone/address
+- [ ] Change password
+
+**Public pages:**
+- [ ] /organizers/[id] → public profile loads with badges, sales
+- [ ] /sales/zip/[zip] → zip landing page loads
+- [ ] /city/[city] → city landing page loads
+- [ ] /faq, /terms, /privacy, /about, /contact → all load without errors
+- [ ] 404 and 500 pages render correctly
+- [ ] offline.tsx renders when offline
+
+---
+
+### Phase 4 — PWA & SEO Audit
+
+1. **Service worker** — check `next.config.js` Workbox rules are current. Verify no stale fallback .js files in `public/` that don't match current build hashes.
+
+2. **Manifest** — verify `public/manifest.json` has all icon sizes, correct start_url, correct theme_color.
+
+3. **SEO** — check `_document.tsx` OG tags, twitter cards. Check `server-sitemap.xml.tsx` includes all live routes. Check `next-sitemap.config.js` robots.txt disallows are correct.
+
+4. **Schema.org** — verify sale detail page JSON-LD is valid (eventStatus, AggregateOffer, BreadcrumbList). Verify city and zip pages have ItemList JSON-LD.
+
+---
+
+### Phase 5 — Database & Schema Audit
+
+1. Read `packages/database/prisma/schema.prisma` in full. Check for: missing indexes on frequently-queried fields (saleId, userId, status, zip), any nullable fields that should be required, any fields added in STATE.md phases but missing from schema.
+
+2. Check migrations directory — are all 14 migrations in sequence with no gaps or failed states?
+
+3. Verify seed produces clean relational data: `docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma studio"` — or just query a few key endpoints to spot-check.
+
+---
+
+### Phase 6 — Documentation Accuracy Check
+
+1. **STATE.md "Pending Manual Action"** — is each item still accurate? The localhost rebuild is now done. Resend domain verification — still pending?
+
+2. **self_healing_skills.md** — any pattern from the last few sessions not yet captured?
+
+3. **DEVELOPMENT.md** — does it reflect the current Docker startup sequence, seed command, and Prisma Studio instructions?
+
+4. **context.md** — after running this session's work, do a `node scripts/update-context.js` from Windows PowerShell to regenerate with fresh git + file tree state.
+
+---
+
+### Deliverable
+
+At end of audit session, produce:
+`claude_docs/audit-report-YYYY-MM-DD.md`
+
+Sections: Critical (fix before beta), Medium (fix within 2 weeks), Low (nice to have), Clean (confirmed working). Include a "safe to launch?" verdict at the top.
+
+Then run **session-wrap** to sync STATE.md and session-log.md.

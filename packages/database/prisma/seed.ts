@@ -78,6 +78,69 @@ const categories = [
 
 const conditions = ['mint', 'excellent', 'good', 'fair', 'poor'];
 
+// Direct fastly.picsum.photos URLs (no redirect) — 25 sale photos
+const salePhotoUrls = [
+  'https://fastly.picsum.photos/id/637/800/600.jpg?hmac=kncdkpbYYQHSXAC06PzTzVvGtm1ebZ_Qe72HkxhRvDk',
+  'https://fastly.picsum.photos/id/613/800/600.jpg?hmac=-0i5Kl_9JQpW3utGuxVgA3zksoEPIAfrI2XjM1kKv2Y',
+  'https://fastly.picsum.photos/id/515/800/600.jpg?hmac=u7HfJd5Ryyt_u5PUGvY_c3P4UdkjRZV0XhyZuL2Ny78',
+  'https://fastly.picsum.photos/id/249/800/600.jpg?hmac=-KQaSdrUVO8GfiMHph5eE-Nwl_DUaXuvZ8O7m0WRhas',
+  'https://fastly.picsum.photos/id/698/800/600.jpg?hmac=IxKdF5SjJdQg56BS_Ejc5JzVLDEe28o6cBbj6jA05Ec',
+  'https://fastly.picsum.photos/id/925/800/600.jpg?hmac=C2FP6ms8hbBOX58pQCijWEP02dyO6wdn8GQ0Vb2vdQ4',
+  'https://fastly.picsum.photos/id/779/800/600.jpg?hmac=AqQVSvC4EDrWxi8BnTBaxQ12KUncMaGmXsLuoFYZeT0',
+  'https://fastly.picsum.photos/id/698/800/600.jpg?hmac=IxKdF5SjJdQg56BS_Ejc5JzVLDEe28o6cBbj6jA05Ec',
+  'https://fastly.picsum.photos/id/465/800/600.jpg?hmac=TpadF5Inc-PTxMXMjB4q5pDPYlahe6CYRDeLbaOjRZk',
+  'https://fastly.picsum.photos/id/492/800/600.jpg?hmac=aolz_CKCnAf54UuNY7lvPbI6wMzb2t81dvRkt2WJdJE',
+  'https://fastly.picsum.photos/id/726/800/600.jpg?hmac=qFPjkmgGGo3bmW20SoJH_QycsmYAJOsKoElFAEamh7g',
+  'https://fastly.picsum.photos/id/719/800/600.jpg?hmac=lxszKi_UN449cJaeWVhr81sYLeXlA9V5ZDLElVdnLY4',
+  'https://fastly.picsum.photos/id/314/800/600.jpg?hmac=OjmCu3etW85aNJD0JaXWdV4XtFax1pY7mNMJbXxYFWY',
+  'https://fastly.picsum.photos/id/663/800/600.jpg?hmac=6KwrDDW7MZ2vTZ-L_3z6b2x_4p_adCqeFB6cIMlYyhc',
+  'https://fastly.picsum.photos/id/788/800/600.jpg?hmac=tgypEsAsBdraA8ehcLjJ88OAYUZHEFrfkPMokkETd0M',
+  'https://fastly.picsum.photos/id/383/800/600.jpg?hmac=nC5kYs09icYCDzp6GiMOTczS-now4ZKQ6tiiCBmcIzo',
+  'https://fastly.picsum.photos/id/272/800/600.jpg?hmac=Si-HAYLaQ3WaGRUeA3_AGOt2Wco07TDtbbLH97g7lZ4',
+  'https://fastly.picsum.photos/id/769/800/600.jpg?hmac=WKPwJzilN_3XU-sLienIORtJxdLRvtRIMhApT28bt8E',
+  'https://fastly.picsum.photos/id/497/800/600.jpg?hmac=MCuRVBkGn7uxJBlW04P9NPb-uEUUkUdaDMk9XXYRQsc',
+  'https://fastly.picsum.photos/id/1011/800/600.jpg?hmac=IdMb_PQfwnMjO6rbG9t4_Y3Mi_9dFpclHfNz4TmXU_0',
+  'https://fastly.picsum.photos/id/1071/800/600.jpg?hmac=jgr4anytYXv1jx6I307HNNj_EP9zHRz2USdKrPrnQb0',
+  'https://fastly.picsum.photos/id/814/800/600.jpg?hmac=DR9NroL4N25_gOp-hiyAPX_R_PiYtI9l4hS9IilOkVI',
+  'https://fastly.picsum.photos/id/896/800/600.jpg?hmac=eZWSQiLrIxVViJ6-Kzn_FYfwl6PBmBvZ68ppzJ8z0wA',
+  'https://fastly.picsum.photos/id/19/800/600.jpg?hmac=YZiJk9CURZWalTNe1plADwYD81NyVVRCY45LrvLMOJI',
+  'https://fastly.picsum.photos/id/443/800/600.jpg?hmac=FsPGcsEyRqjMSVoYtn_Xy9Ej9C87jS9jA3wgyRdvvQ8',
+];
+
+// Direct fastly.picsum.photos URLs for items — cycles through 30 options
+const itemPhotoPool = [
+  'https://fastly.picsum.photos/id/1037/600/400.jpg?hmac=E7oV9MlYzBUFFygTj04kbdysY_Yu8n2jqR9o-hXekyU',
+  'https://fastly.picsum.photos/id/841/600/400.jpg?hmac=iAmjBV3nnPkSjUIMk9sjc2vH4Cm9HNe-BeQ0fu78NcY',
+  'https://fastly.picsum.photos/id/820/600/400.jpg?hmac=FKqdyLSrMLcr2y-nT5m6eVtPj_qC6dcbSn49numf-6s',
+  'https://fastly.picsum.photos/id/949/600/400.jpg?hmac=8R-1KEvShmnk-yZ7_Sv9o3R47y8r_GAyCqYMJi8shzU',
+  'https://fastly.picsum.photos/id/180/600/400.jpg?hmac=GWOD1KQ7oaGkR7Zpj4QJDXLC2XkaKZjoKZ3i824mdUE',
+  'https://fastly.picsum.photos/id/164/600/400.jpg?hmac=AeaV1BoMa0SBprKJm71cmlXO7mUuDsQU5t-n-xUZlus',
+  'https://fastly.picsum.photos/id/568/600/400.jpg?hmac=AC6_PWP-eHtGmBwHnwlj8RTFzHuCK3EWYYFcVAuSxwk',
+  'https://fastly.picsum.photos/id/132/600/400.jpg?hmac=gJk_qWSbbgRfkHDwuIj28xSW_dVYSSzzSWL89GbOHRI',
+  'https://fastly.picsum.photos/id/563/600/400.jpg?hmac=-_o6NDMsUHWq07Ml1TszDSpxv22vrBh8fvcxakx4Pkc',
+  'https://fastly.picsum.photos/id/128/600/400.jpg?hmac=8llVvQyDbjLA-0Fltxos8HsMmiynleSoS_LveaHajmY',
+  'https://fastly.picsum.photos/id/889/600/400.jpg?hmac=VR4I1EZroA_VIV5CDCQubLHktwl0mlI_OWnbo5d0j5w',
+  'https://fastly.picsum.photos/id/657/600/400.jpg?hmac=nYtBa-hScpoMsr8rw1plz8fBjbeqAvL4j1W2Cc1HUvE',
+  'https://fastly.picsum.photos/id/500/600/400.jpg?hmac=z7Vc2MQOfDpqZ_ZIdJpfPWz9RPE3gH5KraMZmtF1fCM',
+  'https://fastly.picsum.photos/id/928/600/400.jpg?hmac=YSm-24h_msfRZ_Au-UFgMzBs-H9oX2sC85Db-2AEaJo',
+  'https://fastly.picsum.photos/id/629/600/400.jpg?hmac=GpzCJ9Ablk0nymWIF0h-6mPkftDFU3rZPjrdnZa29MQ',
+  'https://fastly.picsum.photos/id/20/600/400.jpg?hmac=khWXn2_eQfbxMwcGhPwbHau8xMlt0aauVDoWMS-3DeI',
+  'https://fastly.picsum.photos/id/36/600/400.jpg?hmac=QuAioKTNMPbMTTKwUpUlxstwFxOiqggALh2hZDQuANU',
+  'https://fastly.picsum.photos/id/444/600/400.jpg?hmac=TcPg4WdFg4Ba52dtdFdh3dnlZrhz-fXjelPynWj6W9A',
+  'https://fastly.picsum.photos/id/575/600/400.jpg?hmac=6AsAnS9-eZGiQrwueMtSAqVEUyl7VoeHYXF5UK8RLaE',
+  'https://fastly.picsum.photos/id/71/600/400.jpg?hmac=PTtbHRiDQ1Ylf1l35xMHuukSFRQoe7P_CY9gapSMN6s',
+  'https://fastly.picsum.photos/id/454/600/400.jpg?hmac=sTtExlzPsGG8DaxRYpybNjPD8sPf94uClG_sqcW6oQk',
+  'https://fastly.picsum.photos/id/59/600/400.jpg?hmac=hCS_vJsQfuK1hUlwEUlGbUAnb_pFljGkD-2jdYxB1y8',
+  'https://fastly.picsum.photos/id/840/600/400.jpg?hmac=E4RrHFw5VFjxYGLd2o80owECNqrF9SCvbnrauCrl6Hc',
+  'https://fastly.picsum.photos/id/931/600/400.jpg?hmac=5ZQGLmxrMDfdOh2uEdca30njclOd_9V83oBGLJlNHOQ',
+  'https://fastly.picsum.photos/id/564/600/400.jpg?hmac=OmYp9cwndfkSfjpoQ7sCXjADuN_e5wn9g2iaCvX2Iic',
+  'https://fastly.picsum.photos/id/721/600/400.jpg?hmac=u1SWsr6VbXsDElG75HE-3JFoRY9e6AyQMCtVNqsEMZA',
+  'https://fastly.picsum.photos/id/161/600/400.jpg?hmac=LYQLtMnDDy2fJ3KJW8Nm4Fcjh_HAex5_6c5cnhzCs4E',
+  'https://fastly.picsum.photos/id/258/600/400.jpg?hmac=48yfqynY05XqUa2IuXLYDLCKQZYGautBuONyUYcSkWk',
+  'https://fastly.picsum.photos/id/1019/600/400.jpg?hmac=hnITRYY9HNjnTf6hGmCrOzDjFKUG5wHisDMilWjegrE',
+  'https://fastly.picsum.photos/id/637/600/400.jpg?hmac=ZDNNTkYs1_2N7DdAzKpkC5CmIVFJxHr0R-H7UJFxKsU',
+];
+
 const reviewComments = [
   'Great selection of mid-century pieces!',
   'Prices were fair and reasonable.',
@@ -179,7 +242,7 @@ async function main() {
         email,
         password: defaultPassword,
         name: `${firstName} ${lastName}`,
-        role: 'USER',
+        role: i < 10 ? 'ORGANIZER' : 'USER',
         points,
         phone: hasPhone ? `616-555-${String(i).padStart(4, '0')}` : null,
         referralCode: `REF-${uuidv4().substring(0, 8).toUpperCase()}`,
@@ -198,15 +261,13 @@ async function main() {
     const number = Math.floor(Math.random() * 5000) + 100;
     const address = `${number} ${street}`;
     const zip = grZips[Math.floor(Math.random() * grZips.length)];
-    const hasStripeId = Math.random() > 0.3; // 70% have Stripe ID
-
     const organizer = await prisma.organizer.create({
       data: {
         userId: users[i].id,
         businessName: `${businessName} ${i + 1}`,
         phone: `616-555-${String(1000 + i).padStart(4, '0')}`,
         address: `${address}, Grand Rapids, MI ${zip}`,
-        stripeConnectId: hasStripeId ? `acct_test_${uuidv4().substring(0, 16)}` : null,
+        stripeConnectId: null, // always null — organizers go through real Stripe Connect onboarding
       },
     });
     organizers.push(organizer);
@@ -288,8 +349,7 @@ async function main() {
         lng,
         status,
         photoUrls: [
-          `https://res.cloudinary.com/demo/image/upload/v1234567890/estate_sale_${i + 1}_sample1.jpg`,
-          `https://res.cloudinary.com/demo/image/upload/v1234567890/estate_sale_${i + 1}_sample2.jpg`,
+          salePhotoUrls[i],
         ],
         tags,
       },
@@ -328,11 +388,11 @@ async function main() {
           status,
           photoUrls: hasMultiplePhotos
             ? [
-                `https://res.cloudinary.com/demo/image/upload/v1234567890/item_${itemCount}_1.jpg`,
-                `https://res.cloudinary.com/demo/image/upload/v1234567890/item_${itemCount}_2.jpg`,
+                itemPhotoPool[itemCount % itemPhotoPool.length],
+                itemPhotoPool[(itemCount + 1) % itemPhotoPool.length],
               ]
             : [
-                `https://res.cloudinary.com/demo/image/upload/v1234567890/item_${itemCount}_1.jpg`,
+                itemPhotoPool[itemCount % itemPhotoPool.length],
               ],
         },
       });

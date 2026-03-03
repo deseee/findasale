@@ -8,6 +8,18 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-03 (session 28 — Workflow Audit, Seed Fixes, Retrospective Task)
+**Worked on:** Research-backed audit of AI workflow vs power-user best practices → `claude_docs/workflow-audit-2026-03-03.md`. Fixed `update-context.js` stale Docker fallback (removed preservation logic — unavailable message is now always fresh). Fixed two seed bugs: organizer users 0–9 now seeded with `role: 'ORGANIZER'`; `stripeConnectId` always `null` (fake `acct_test_*` IDs removed). Reseeded DB — clean run confirmed. Created `findasale-workflow-retrospective` scheduled task (runs 8th of each month, 9am). Created `claude_docs/workflow-retrospectives/` directory. Wrote full pre-beta audit plan to `claude_docs/next-session-prompt.md`.
+**Decisions:** Never preserve stale Docker data in update-context.js — always emit fresh unavailable message when Docker unreachable from VM. Seed stripeConnectId is always null; real Stripe Connect onboarding is the only path. Workflow retrospective runs on the 8th (staggered from monthly-digest on the 1st).
+**Next up:** Full pre-beta audit session — run health-scout, then manual flow audit across all shopper/organizer paths, backend API security scan, PWA/SEO check, schema review. See `next-session-prompt.md` for the full 6-phase plan.
+**Blockers:** None. All changes pushed to GitHub via MCP.
+
+### 2026-03-03 (session 27 — Image Loading, CORS & Backend Fixes)
+**Worked on:** Fixed "Error Loading Sales" on finda.sale via `ngrok-skip-browser-warning: true` header in axios (ngrok interstitial was returning HTML instead of JSON to browser fetch). Fixed sale/item card images not loading via multi-round diagnosis: (1) added `fastly.picsum.photos` to CSP `img-src`; (2) fixed Workbox OSM tile pattern, added NetworkOnly for Stripe, StaleWhileRevalidate for picsum; (3) updated seed.ts to use direct `fastly.picsum.photos` HMAC URLs (no redirect chain — eliminates SW redirect interception). Added CORS regex for Vercel preview deployments (`findasale*.vercel.app`). Added `app.set('trust proxy', 1)` to silence rate-limiter X-Forwarded-For warning from ngrok. All fixes committed to GitHub (c813d57, 3cf0833, 28fa3e0). finda.sale images confirmed working.
+**Decisions:** Direct fastly.picsum.photos URLs (HMAC-signed, no redirect) are the correct approach for seed photos — avoids SW + redirect chain interaction entirely. `next.config.js` is NOT bind-mounted in Docker, so CSP changes require a frontend rebuild to reach localhost:3000.
+**Next up:** (1) `docker compose build --no-cache frontend && docker compose up -d` to fix localhost:3000 images. (2) Re-seed DB after rebuild: `docker exec findasale-backend-1 sh -c "cd /app && npx tsx packages/database/prisma/seed.ts"`. (3) Check Resend domain verification. (4) Decide on permanent backend host (Railway/Render/Fly.io).
+**Blockers:** localhost:3000 images still broken — next.config.js CSP change not picked up by Docker frontend container until rebuild.
+
 ### 2026-03-03 (session 26 — Dev Tooling & Full Rebrand Completion)
 **Worked on:** CSP fix for ngrok API calls (connect-src now derives origin from NEXT_PUBLIC_API_URL at build time, committed acec537). Session self-awareness improvements: update-context.js emits ## Environment section (GitHub auth, ngrok URL, CLI tools); CORE.md got edit transparency rule; context-maintenance skill updated with capabilities inventory, dirty-session detection (.last-wrap), breakpoint wraps, two-tier memory, next-session-prompt.md handoff doc. Post-commit hook (.git/hooks/post-commit) auto-regenerates context.md on every commit. All 9 salescout-* scheduled tasks replaced with 8 findasale-* equivalents. backend/.env updated to local Docker postgres URL. All remaining salescout/SaleScout references removed from skills (dev-environment, health-scout, findasale-deploy) and project docs (CLAUDE.md, SECURITY.md, STATE.md, session-log.md, self_healing_skills.md). Three skill files repackaged and ready to install.
 **Decisions:** Historical session-log entries with SaleScout references preserved as accurate records of the rebrand. findasale-deploy replaces salescout-deploy — old skill must be uninstalled after new one is installed.
@@ -37,11 +49,5 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Decisions:** Circular dep fix pattern: never import `prisma` from `index.ts` in any controller — always use local `new PrismaClient()` (matches existing pattern in `stripeController.ts`). Seed bugs documented in STATE.md but not fixed in seed.ts yet (deferred). No-top-level-await rule: tsx CJS scripts must use `async function run() {} run()` wrapper. PowerShell `docker exec` inline scripts must not contain `=>` — use bind-mounted temp files instead.
 **Next up:** Beta-blocker #4 — production domain + `ALLOWED_ORIGINS`. Then fix seed bugs (role + fake stripeConnectId). Consider adding success toast to `handleCheckoutSuccess` in `items/[id].tsx` (currently silent close on payment success).
 **Blockers:** None.
-
-### 2026-03-02 (session 21 — Beta-Blocker #1 & #2)
-**Worked on:** Closed beta-blocker #1 (alt text) — audited all 27 image tags across frontend, fixed 3 using non-descriptive `preview-${i}` in organizer photo upload flows (`create-sale.tsx`, `add-items.tsx`, `add-items/[saleId].tsx`). Wrote E2E test for beta-blocker #2 (email digest) at `packages/backend/src/__tests__/weeklyDigest.e2e.ts` — 12 tests using `vi.hoisted` + `vi.mock('resend')` covering full contract: subject, from/to, HTML body contents, no-sales skip, per-user failure resilience.
-**Decisions:** Issue #2 left open — one manual step deferred: trigger digest on staging + verify in Resend dashboard before launch. No new self-healing patterns captured.
-**Next up:** Beta-blocker #3 (Stripe E2E) — write E2E test for Stripe Connect Express onboarding + fee capture flow. Then #4 (production domain + ALLOWED_ORIGINS).
-**Blockers:** Issue #2 requires staging verification before close. Patrick triggers manually next time staging is active.
 
 

@@ -95,8 +95,7 @@ Prepare for scale to additional metros.
 
 - **Backend hosting not yet chosen** — domain `finda.sale` registered, frontend live on Vercel. Backend needs Railway/Render/Fly.io for `api.finda.sale`. Currently bridged via ngrok (static domain: `pamelia-unweathered-arabesquely.ngrok-free.dev`, runs as Docker service automatically).
 - **Resend domain verification** — records added in Vercel DNS, awaiting Resend to confirm all 4 records active. Check Resend → Domains → finda.sale and hit Verify after reboot.
-- **NEXT_PUBLIC_API_URL in Vercel** — must be set to `https://pamelia-unweathered-arabesquely.ngrok-free.dev/api` in Vercel project environment variables, then redeploy to bake it in.
-- **Backend hosting** — still local via ngrok. Needs Railway/Render/Fly.io for permanent `api.finda.sale` endpoint.
+- **localhost:3000 images** — `next.config.js` is not bind-mounted; Docker frontend container still has old CSP without `fastly.picsum.photos`. Fix: `docker compose build --no-cache frontend && docker compose up -d`.
 
 ---
 
@@ -370,9 +369,18 @@ Two bugs found in the dev-environment skill and corrected:
 
 ---
 
-### Known Seed Bugs (2026-03-02)
-- `packages/database/prisma/seed.ts` creates all 100 users with `role: 'USER'`, creates Organizer profiles for users 1–10 but never sets `User.role = 'ORGANIZER'`. Workaround: run `_fixRoles.ts` after seeding. Fix: add `role: 'ORGANIZER'` to `prisma.user.create()` calls for organizer users in seed.
-- Seed assigns fake `stripeConnectId: 'acct_test_${uuid}'` placeholder — rejected by real Stripe API with 403 PermissionError. Workaround: null out `stripeConnectId` via temp script. Fix: remove fake stripeConnectId from seed (let it be null on fresh start).
+### Seed Bug Fixes (2026-03-03)
+- ✅ Fixed: organizer users 0–9 now seeded with `role: 'ORGANIZER'` (was always `'USER'`).
+- ✅ Fixed: `stripeConnectId` now always `null` in seed — organizers go through real Stripe Connect onboarding. Fake `acct_test_*` IDs removed.
 
-Last Updated: 2026-03-03 (session 25 — rebrand deployed, DNS live, finda.sale loading)
-Status: Rebrand fully deployed. finda.sale live with FindA.Sale branding. DNS resolving. Pending: Resend domain verification, NEXT_PUBLIC_API_URL Vercel env + redeploy, backend hosting decision.
+### Session 27 – Image Loading, CORS & Backend Fixes (2026-03-03)
+- **Seed updated** — `seed.ts` now uses direct `fastly.picsum.photos` HMAC-signed URLs (no redirect). Eliminates Service Worker redirect-interception issue. Commit: c813d57.
+- **CSP hardened** — `next.config.js` `img-src` now includes `https://picsum.photos https://fastly.picsum.photos`; `connect-src` uses `https://*.tile.openstreetmap.org` wildcard. Workbox rules added: StaleWhileRevalidate for picsum/fastly, NetworkOnly for Stripe, fixed OSM tile pattern to `[abc].tile.openstreetmap.org`.
+- **ngrok interstitial fix** — `packages/frontend/lib/api.ts` axios headers include `ngrok-skip-browser-warning: true` — prevents ngrok HTML interstitial from replacing API JSON responses.
+- **SaleCard fallback** — `components/SaleCard.tsx` now has `imgError` state + `onError` handler; broken images fall back to placeholder.svg.
+- **CORS: Vercel previews** — `index.ts` CORS origin check now allows `https://findasale*.vercel.app` via regex. Commit: 3cf0833.
+- **Trust proxy** — `app.set('trust proxy', 1)` added to Express; silences rate-limiter `X-Forwarded-For` validation error from ngrok. Commit: 28fa3e0.
+- **finda.sale images confirmed working**. localhost:3000 images still broken — root cause: `next.config.js` not bind-mounted, frontend container has old CSP. Fix: frontend rebuild.
+
+Last Updated: 2026-03-03 (session 27 — image loading fixed on production, CORS + proxy fixes)
+Status: finda.sale fully operational with images. localhost needs frontend Docker rebuild for image parity.

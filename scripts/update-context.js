@@ -72,20 +72,10 @@ if (commandExists('docker')) {
   }
 }
 if (docker === null) {
-  const contextPath = path.join(__dirname, '..', 'context.md');
-  if (fs.existsSync(contextPath)) {
-    const existing = fs.readFileSync(contextPath, 'utf8');
-    const match = existing.match(/## Docker\n```\n([\s\S]*?)\n```/);
-    const preserved = match ? match[1] : null;
-    const isStale = !preserved
-      || preserved.startsWith('[Error')
-      || preserved.startsWith('Docker status unavailable');
-    docker = isStale
-      ? 'Docker status unavailable — run update-context.js locally to capture container state'
-      : preserved;
-  } else {
-    docker = 'Docker status unavailable — run update-context.js locally to capture container state';
-  }
+  // Never preserve stale Docker data — always emit a fresh unavailable message.
+  // Real container state can only be captured by running this script on Windows
+  // where Docker Desktop is accessible. The nightly VM task cannot reach Docker.
+  docker = 'Docker status unavailable — run update-context.js locally (Windows) to capture container state';
 }
 
 // File tree
