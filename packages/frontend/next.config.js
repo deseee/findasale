@@ -25,15 +25,30 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // OSM map tiles — cache first (tiles rarely change)
+    // Picsum placeholder images — stale-while-revalidate
     {
-      urlPattern: /^https:\/\/tile\.openstreetmap\.org\/.*/i,
+      urlPattern: /^https:\/\/(?:fastly\.)?picsum\.photos\/.*/i,
+      handler: 'StaleWhileRevalidate',
+      options: {
+        cacheName: 'picsum-images',
+        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
+    // OSM map tiles — cache first (subdomain tiles: a/b/c.tile.openstreetmap.org)
+    {
+      urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
       handler: 'CacheFirst',
       options: {
         cacheName: 'osm-tiles',
         expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 7 },
         cacheableResponse: { statuses: [0, 200] },
       },
+    },
+    // Stripe — network only, never intercept
+    {
+      urlPattern: /^https:\/\/js\.stripe\.com\/.*/i,
+      handler: 'NetworkOnly',
     },
     // FindA.Sale API — network first with offline fallback
     {
@@ -128,8 +143,8 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
               "font-src 'self' https://fonts.gstatic.com https://unpkg.com",
-              "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com",
-              `connect-src 'self' https://api.stripe.com https://nominatim.openstreetmap.org https://tile.openstreetmap.org http://localhost:5000 ${apiOrigin}`,
+              "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com https://picsum.photos https://fastly.picsum.photos",
+              `connect-src 'self' https://api.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org http://localhost:5000 ${apiOrigin}`,
               "frame-src https://js.stripe.com https://hooks.stripe.com",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
