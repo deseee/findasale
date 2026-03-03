@@ -76,6 +76,9 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // ─── Security ──────────────────────────────────────────────────────────────
 
+// Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
+app.set('trust proxy', 1);
+
 // Helmet sets safe defaults for ~15 HTTP headers
 app.use(
   helmet({
