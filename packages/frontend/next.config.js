@@ -80,6 +80,16 @@ const withPWA = require('next-pwa')({
   ],
 });
 
+// Derive API origin from env var so CSP stays in sync with NEXT_PUBLIC_API_URL.
+// Falls back to localhost:5000 for local dev when the var isn't set.
+const apiOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').origin;
+  } catch {
+    return 'http://localhost:5000';
+  }
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -119,7 +129,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
               "font-src 'self' https://fonts.gstatic.com https://unpkg.com",
               "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com",
-              "connect-src 'self' https://api.stripe.com https://nominatim.openstreetmap.org https://tile.openstreetmap.org http://localhost:5000",
+              `connect-src 'self' https://api.stripe.com https://nominatim.openstreetmap.org https://tile.openstreetmap.org http://localhost:5000 ${apiOrigin}`,
               "frame-src https://js.stripe.com https://hooks.stripe.com",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
