@@ -93,7 +93,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
         `,
       });
     } else {
-      console.log(`[Password Reset] Token for ${email}: ${resetUrl}`);
+      console.log(`[Password Reset] Token generated for ${email} (Resend not configured \u2014 email not sent)`);
     }
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
