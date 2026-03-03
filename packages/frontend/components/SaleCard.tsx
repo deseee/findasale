@@ -23,6 +23,8 @@ interface SaleCardProps {
 }
 
 const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
+  const [imgError, setImgError] = React.useState(false);
+
   // Format dates safely
   const formatSaleDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'TBA';
@@ -38,17 +40,18 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   return (
     <Link href={`/sales/${sale.id}`} className="block">
       <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-        {sale.photoUrls && sale.photoUrls.length > 0 ? (
-          <img 
-            src={sale.photoUrls[0]} 
+        {sale.photoUrls && sale.photoUrls.length > 0 && !imgError ? (
+          <img
+            src={sale.photoUrls[0]}
             alt={sale.title}
             className="w-full h-48 object-cover"
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="bg-gray-200 h-48 flex items-center justify-center">
-            <img 
-              src="/images/placeholder.svg" 
-              alt="Placeholder" 
+            <img
+              src="/images/placeholder.svg"
+              alt="Placeholder"
               className="w-16 h-16 text-gray-400"
             />
           </div>
