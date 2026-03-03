@@ -1,6 +1,11 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -9,142 +14,105 @@ datasource db {
 }
 
 model User {
-  id            String     @id @default(cuid())
-  email         String     @unique
-  password      String
-  name          String
-  role          String     @default("USER") // USER, ORGANIZER, ADMIN
-  points        Int        @default(0)
-  phone         String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  referralCode      String?    @unique
-  resetToken        String?    @unique
-  resetTokenExpiry  DateTime?
-  organizer         Organizer?
-  purchases     Purchase[]
-  favorites     Favorite[]
-  bids          Bid[]
-  subscriptions SaleSubscriber[]
-  userBadges    UserBadge[]
-  referredUsers   Referral[]      @relation("ReferrerToReferred")
-  referredBy      Referral?       @relation("ReferredToReferrer")
-  lineEntries     LineEntry[]
-  reviews         Review[]
-  affiliateLinks  AffiliateLink[]
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  password       String?
+  role           String    @default("USER")
+  phone          String?
+  points         Int       @default(0)
+  referralCode   String?   @unique
+  referredById   String?
+  referredBy     User?     @relation("Referrals", fields: [referredById], references: [id])
+  referrals      User[]    @relation("Referrals")
+  subscriptions  SaleSubscriber[]
+  purchases      Purchase[]
+  organizer      Organizer?
+  badges         UserBadge[]
+  lineEntries    LineEntry[]
+  notifications  Notification[]
+  affiliateLinks AffiliateLink[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model Organizer {
   id              String   @id @default(cuid())
-  businessName    String
-  phone           String
-  address         String
   userId          String   @unique
   user            User     @relation(fields: [userId], references: [id])
-  sales           Sale[]
+  companyName     String?
   stripeConnectId String?
+  sales           Sale[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
 model Sale {
-  id            String     @id @default(cuid())
-  title         String
-  description   String?
-  startDate     DateTime
-  endDate       DateTime
-  address       String
-  city          String
-  state         String
-  zip           String
-  lat           Float
-  lng           Float
-  photoUrls     String[]
-  tags          String[]
-  status        String     @default("DRAFT") // DRAFT, PUBLISHED, ENDED
-  isAuctionSale Boolean    @default(false)
-  qrScanCount   Int        @default(0)
-  organizerId   String
-  organizer     Organizer  @relation(fields: [organizerId], references: [id])
-  items         Item[]
-  favorites     Favorite[]
-  subscribers   SaleSubscriber[]
-  affiliateLinks AffiliateLink[]
-  lineEntries   LineEntry[]
-  purchases     Purchase[]
-  reviews       Review[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id              String    @id @default(cuid())
+  title           String
+  description     String?
+  address         String
+  city            String
+  state           String
+  zip             String
+  startDate       DateTime
+  endDate         DateTime
+  status          String    @default("DRAFT")
+  photoUrls       String[]
+  organizerId     String
+  organizer       Organizer @relation(fields: [organizerId], references: [id])
+  items           Item[]
+  subscribers     SaleSubscriber[]
+  purchases       Purchase[]
+  lineEntries     LineEntry[]
+  notifications   Notification[]
+  affiliateLinks  AffiliateLink[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Item {
   id               String    @id @default(cuid())
   title            String
   description      String?
-  price            Float?
-  auctionStartPrice Float?
-  currentBid       Float?
-  bidIncrement     Float?    @default(1)
-  auctionEndTime   DateTime?
-  status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, AUCTION_ENDED
-  category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
-  condition        String?   // mint, excellent, good, fair, poor
+  price            Float
+  category         String?
+  condition        String?
+  status           String    @default("AVAILABLE")
   photoUrls        String[]
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
-  bids             Bid[]
   purchases        Purchase[]
-  favorites        Favorite[]
+  auctionStartPrice Float?
+  currentBid       Float?
+  bidIncrement     Float?
+  auctionEndTime   DateTime?
+  qrScanCount      Int       @default(0)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
 
-model Favorite {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  saleId    String?
-  sale      Sale?    @relation(fields: [saleId], references: [id])
-  itemId    String?
-  item      Item?    @relation(fields: [itemId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, saleId])
-  @@unique([userId, itemId])
-}
-
-model Bid {
-  id        String   @id @default(cuid())
-  amount    Float
-  status    String   @default("ACTIVE") // ACTIVE, WINNING, WON, LOST
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  itemId    String
-  item      Item     @relation(fields: [itemId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model Purchase {
   id                    String   @id @default(cuid())
-  amount                Float
-  platformFeeAmount     Float?
-  status                String   @default("PENDING") // PENDING, PAID, REFUNDED
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
-  itemId                String?
-  item                  Item?    @relation(fields: [itemId], references: [id])
-  saleId                String?
-  sale                  Sale?    @relation(fields: [saleId], references: [id])
+  itemId                String
+  item                  Item     @relation(fields: [itemId], references: [id])
+  saleId                String
+  sale                  Sale     @relation(fields: [saleId], references: [id])
+  amount                Float
+  platformFee           Float    @default(0)
+  status                String   @default("PENDING")
   stripePaymentIntentId String?  @unique
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
 
 model SaleSubscriber {
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   saleId    String
   sale      Sale      @relation(fields: [saleId], references: [id])
   phone     String?
@@ -152,19 +120,19 @@ model SaleSubscriber {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@id([userId, saleId])
+  @@unique([saleId, userId])
   @@unique([saleId, phone])
 }
 
 model Badge {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String      @id @default(cuid())
+  name        String      @unique
   description String
-  iconUrl     String?
-  criteria    Json     // conditions for earning the badge
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  userBadges  UserBadge[]
+  icon        String
+  condition   String
+  users       UserBadge[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model UserBadge {
@@ -173,31 +141,36 @@ model UserBadge {
   user      User     @relation(fields: [userId], references: [id])
   badgeId   String
   badge     Badge    @relation(fields: [badgeId], references: [id])
-  awardedAt DateTime @default(now())
+  earnedAt  DateTime @default(now())
 
   @@unique([userId, badgeId])
 }
 
-model Review {
+model LineEntry {
+  id         String    @id @default(cuid())
+  saleId     String
+  sale       Sale      @relation(fields: [saleId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  position   Int
+  status     String    @default("WAITING")
+  notifiedAt DateTime?
+  enteredAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Notification {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  saleId    String
-  sale      Sale     @relation(fields: [saleId], references: [id])
-  rating    Int
-  comment   String?
+  saleId    String?
+  sale      Sale?    @relation(fields: [saleId], references: [id])
+  type      String
+  message   String
+  read      Boolean  @default(false)
   createdAt DateTime @default(now())
-}
-
-model Referral {
-  id             String   @id @default(cuid())
-  referrerId     String
-  referrer       User     @relation("ReferrerToReferred", fields: [referrerId], references: [id])
-  referredUserId String   @unique
-  referredUser   User     @relation("ReferredToReferrer", fields: [referredUserId], references: [id])
-  createdAt      DateTime @default(now())
-
-  @@unique([referrerId, referredUserId])
+  updatedAt DateTime @updatedAt
 }
 
 model AffiliateLink {
@@ -213,18 +186,12 @@ model AffiliateLink {
   @@unique([userId, saleId])
 }
 
-model LineEntry {
-  id         String   @id @default(cuid())
-  saleId     String
-  sale       Sale     @relation(fields: [saleId], references: [id])
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  position   Int
-  status     String   @default("WAITING") // WAITING, NOTIFIED, ENTERED, CANCELLED
-  notifiedAt DateTime?
-  enteredAt  DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([saleId, userId])
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
