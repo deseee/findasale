@@ -78,7 +78,7 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
           </p>
 
           <p style="font-size: 14px; color: #999; margin-top: 30px;">
-            You're receiving this because you're watching this sale on SaleScout.
+            You're receiving this because you're watching this sale on FindA.Sale.
           </p>
         </div>
       `,
@@ -109,7 +109,7 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
         </p>
 
         <p style="font-size: 14px; color: #999; margin-top: 30px;">
-          You're receiving this because you're watching this sale on SaleScout.
+          You're receiving this because you're watching this sale on FindA.Sale.
         </p>
       </div>
     `,
@@ -131,7 +131,7 @@ export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> 
     const { subject, html } = getEmailTemplate(reminder);
 
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'noreply@salescout.app',
+      from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
       to: reminder.to,
       subject,
       html,

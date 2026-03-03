@@ -130,7 +130,7 @@ const CreateSalePage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Create Sale - SaleScout</title>
+        <title>Create Sale - FindA.Sale</title>
         <meta name="description" content="Create a new estate sale" />
       </Head>
 
@@ -320,7 +320,7 @@ const CreateSalePage = () => {
                 <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                   {photoPreviews.map((src, i) => (
                     <div key={i} className="relative group">
-                      <img src={src} alt={`preview-${i}`} className="w-full h-20 object-cover rounded-lg border border-gray-200" />
+                      <img src={src} alt={`Sale photo preview ${i + 1}`} className="w-full h-20 object-cover rounded-lg border border-gray-200" />
                       <button
                         type="button"
                         onClick={() => removePhoto(i)}

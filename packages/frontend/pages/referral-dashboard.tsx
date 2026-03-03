@@ -61,7 +61,7 @@ const ReferralDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Referral Dashboard - SaleScout</title>
+        <title>Referral Dashboard - FindA.Sale</title>
         <meta name="description" content="Track your referrals and earnings" />
       </Head>
 

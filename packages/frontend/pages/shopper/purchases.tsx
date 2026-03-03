@@ -52,7 +52,7 @@ const PurchaseHistoryPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Purchase History - SaleScout</title>
+        <title>Purchase History - FindA.Sale</title>
         <meta name="description" content="Your purchase history" />
       </Head>
 

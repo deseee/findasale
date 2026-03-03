@@ -5,7 +5,7 @@ export default function ServerError() {
   return (
     <>
       <Head>
-        <title>Something went wrong – SaleScout</title>
+        <title>Something went wrong – FindA.Sale</title>
       </Head>
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 text-center">
         <div className="max-w-md">

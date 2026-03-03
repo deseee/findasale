@@ -116,18 +116,28 @@ const SaleDetailPage = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [downloadingKit, setDownloadingKit] = useState(false);
   const { showToast } = useToast();
 
   // Poll for updates every 10 seconds for auction items
   useEffect(() => {
     if (!id) return;
-    
+
     const interval = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ['sale', id] });
     }, 10000);
-    
+
     return () => clearInterval(interval);
   }, [id, queryClient]);
+
+  // Track QR scan — fires once when utm_source=qr_sign is in the URL
+  useEffect(() => {
+    if (!id || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('utm_source') === 'qr_sign') {
+      api.post(`/sales/${id}/track-scan`).catch(() => { /* non-fatal */ });
+    }
+  }, [id]);
 
   const { data: sale, isLoading, isError } = useQuery({
     queryKey: ['sale', id],
@@ -181,6 +191,31 @@ const SaleDetailPage = () => {
     // Close the modal and refresh the sale data
     setIsImportModalOpen(false);
     queryClient.invalidateQueries({ queryKey: ['sale', id] });
+  };
+
+  const handleDownloadMarketingKit = async () => {
+    if (!sale) return;
+    setDownloadingKit(true);
+    try {
+      const response = await api.post(
+        `/sales/${sale.id}/generate-marketing-kit`,
+        {},
+        { responseType: 'blob' }
+      );
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `marketing-kit-${sale.id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Marketing kit downloaded!', 'success');
+    } catch {
+      showToast('Failed to generate marketing kit. Please try again.', 'error');
+    } finally {
+      setDownloadingKit(false);
+    }
   };
 
   if (isLoading) {
@@ -241,7 +276,7 @@ const SaleDetailPage = () => {
   const generateJsonLd = () => {
     if (!sale) return null;
 
-    const siteUrl = 'https://salescout.app';
+    const siteUrl = 'https://finda.sale';
     const saleUrl = `${siteUrl}/sales/${sale.id}`;
 
     const eventStatusMap: Record<string, string> = {
@@ -315,14 +350,14 @@ const SaleDetailPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>{sale.title} - SaleScout</title>
+        <title>{sale.title} - FindA.Sale</title>
         <meta name="description" content={`${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}. ${sale.description?.slice(0, 120) ?? ''}`} />
 
         {/* Open Graph Meta Tags */}
         <meta property="og:title" content={sale.title} />
         <meta property="og:description" content={sale.description} />
         <meta property="og:type" content="event" />
-        <meta property="og:url" content={`https://salescout.app/sales/${sale.id}`} />
+        <meta property="og:url" content={`https://finda.sale/sales/${sale.id}`} />
         <meta
           property="og:image"
           content={
@@ -416,9 +451,19 @@ const SaleDetailPage = () => {
                   ⭐ {sale.organizer.avgRating} ({sale.organizer.reviewCount} reviews)
                 </div>
               )}
+              {/* Add to Calendar */}
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/sales/${sale.id}/calendar.ics`}
+                className="inline-flex items-center bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                </svg>
+                Add to Calendar
+              </a>
               <div className="flex space-x-2">
                 {/* Share Button */}
-                <SaleShareButton 
+                <SaleShareButton
                   saleId={sale.id}
                   saleTitle={sale.title}
                   saleDate={`${format(new Date(sale.startDate), 'MMM d')} - ${format(new Date(sale.endDate), 'MMM d, yyyy')}`}
@@ -429,7 +474,7 @@ const SaleDetailPage = () => {
                 {/* Post to Nextdoor Button */}
                 <button 
                   onClick={() => {
-                    const postText = `Check out this estate sale on SaleScout!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
+                    const postText = `Check out this estate sale on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
                     navigator.clipboard.writeText(postText);
                     showToast('Post text copied to clipboard! Paste it into Nextdoor.', 'success');
                   }}
@@ -489,7 +534,7 @@ const SaleDetailPage = () => {
                 </svg>
                 Import Items
               </button>
-              <Link 
+              <Link
                 href={`/organizer/send-update/${sale.id}`}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
               >
@@ -497,6 +542,25 @@ const SaleDetailPage = () => {
                   <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
                 </svg>
                 Send Update
+              </Link>
+              <button
+                onClick={handleDownloadMarketingKit}
+                disabled={downloadingKit}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded inline-flex items-center disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                {downloadingKit ? 'Generating...' : 'Download Marketing Kit'}
+              </button>
+              <Link
+                href={`/organizer/line-queue/${sale.id}`}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                </svg>
+                Manage Queue
               </Link>
             </div>
           )}

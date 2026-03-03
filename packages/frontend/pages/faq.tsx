@@ -37,7 +37,7 @@ const faqs: FAQItem[] = [
     question: 'What is the platform fee?',
     answer: (
       <>
-        SaleScout charges a small platform fee on each completed purchase to cover payment processing and
+        FindA.Sale charges a small platform fee on each completed purchase to cover payment processing and
         platform maintenance:
         <ul className="list-disc pl-5 mt-2 space-y-1">
           <li><strong>5%</strong> for regular (fixed-price) sales</li>
@@ -82,8 +82,8 @@ const faqs: FAQItem[] = [
         <Link href="/contact" className="text-blue-600 hover:underline">Contact page</Link>. Fill out the form
         and we'll respond by email as quickly as we can, usually within one business day. You can also email
         us directly at{' '}
-        <a href="mailto:support@salescout.app" className="text-blue-600 hover:underline">
-          support@salescout.app
+        <a href="mailto:support@finda.sale" className="text-blue-600 hover:underline">
+          support@finda.sale
         </a>.
       </>
     ),
@@ -122,8 +122,8 @@ const FAQAccordion = ({ question, answer }: FAQItem) => {
 const FAQPage = () => (
   <div className="min-h-screen bg-gray-50">
     <Head>
-      <title>FAQ - SaleScout</title>
-      <meta name="description" content="Frequently asked questions about SaleScout — buying, selling, platform fees, auctions, and refunds." />
+      <title>FAQ - FindA.Sale</title>
+      <meta name="description" content="Frequently asked questions about FindA.Sale — buying, selling, platform fees, auctions, and refunds." />
     </Head>
 
     <main className="container mx-auto px-4 py-12">
@@ -149,8 +149,8 @@ const FAQPage = () => (
             Send us a message
           </Link>{' '}
           or email{' '}
-          <a href="mailto:support@salescout.app" className="text-blue-600 hover:underline">
-            support@salescout.app
+          <a href="mailto:support@finda.sale" className="text-blue-600 hover:underline">
+            support@finda.sale
           </a>
           .
         </div>

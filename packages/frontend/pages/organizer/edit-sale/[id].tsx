@@ -119,7 +119,7 @@ const EditSalePage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Edit Sale - SaleScout</title>
+        <title>Edit Sale - FindA.Sale</title>
         <meta name="description" content="Edit your estate sale" />
       </Head>
 

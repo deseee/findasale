@@ -42,7 +42,7 @@ const CityPage: React.FC<CityPageProps> = ({ city, sales, formattedCity }) => {
 
   // Generate JSON-LD for schema.org structured data
   const generateJsonLd = () => {
-    const siteUrl = 'https://salescout.app';
+    const siteUrl = 'https://finda.sale';
     const citySlug = city;
 
     const itemListData = {
@@ -100,24 +100,24 @@ const CityPage: React.FC<CityPageProps> = ({ city, sales, formattedCity }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Estate Sales in {formattedCity} | SaleScout</title>
+        <title>Estate Sales in {formattedCity} | FindA.Sale</title>
         <meta 
           name="description" 
           content={`Find the best estate sales and auctions happening in ${formattedCity}. Browse listings, items, and locations.`} 
         />
         
         {/* Open Graph Meta Tags */}
-        <meta property="og:title" content={`Estate Sales in ${formattedCity} | SaleScout`} />
+        <meta property="og:title" content={`Estate Sales in ${formattedCity} | FindA.Sale`} />
         <meta 
           property="og:description" 
           content={`Find the best estate sales and auctions happening in ${formattedCity}. Browse listings, items, and locations.`} 
         />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content={`https://salescout.app/city/${city}`} />
+        <meta property="og:url" content={`https://finda.sale/city/${city}`} />
         
         {/* Twitter Card Meta Tags */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`Estate Sales in ${formattedCity} | SaleScout`} />
+        <meta name="twitter:title" content={`Estate Sales in ${formattedCity} | FindA.Sale`} />
         <meta 
           name="twitter:description" 
           content={`Find the best estate sales and auctions happening in ${formattedCity}. Browse listings, items, and locations.`} 

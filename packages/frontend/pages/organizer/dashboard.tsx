@@ -46,6 +46,7 @@ interface SaleAnalytics {
   itemsUnsold: number;
   revenue: number;
   fees: number;
+  qrScanCount: number;
 }
 
 interface Analytics {
@@ -261,7 +262,7 @@ const OrganizerDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Organizer Dashboard - SaleScout</title>
+        <title>Organizer Dashboard - FindA.Sale</title>
         <meta name="description" content="Manage your estate sales" />
       </Head>
 
@@ -444,6 +445,7 @@ const OrganizerDashboard = () => {
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Unsold</th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Revenue</th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Fees</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">QR Scans</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -457,6 +459,7 @@ const OrganizerDashboard = () => {
                               <td className="px-4 py-3 text-sm text-right text-gray-500">{s.itemsUnsold}</td>
                               <td className="px-4 py-3 text-sm text-right font-semibold text-green-700">${s.revenue.toFixed(2)}</td>
                               <td className="px-4 py-3 text-sm text-right text-orange-500">${s.fees.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right text-purple-600 font-medium">{s.qrScanCount ?? 0}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -467,6 +470,7 @@ const OrganizerDashboard = () => {
                             <td className="px-4 py-3 text-sm text-right text-gray-500">{analytics.itemsUnsold}</td>
                             <td className="px-4 py-3 text-sm text-right text-green-700">${analytics.totalRevenue.toFixed(2)}</td>
                             <td className="px-4 py-3 text-sm text-right text-orange-500">${analytics.totalFees.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-sm text-right text-purple-600">{analytics.sales.reduce((sum, s) => sum + (s.qrScanCount ?? 0), 0)}</td>
                           </tr>
                         </tfoot>
                       </table>

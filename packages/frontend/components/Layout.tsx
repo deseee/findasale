@@ -101,7 +101,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="text-2xl font-bold text-blue-600 flex-shrink-0">
-              SaleScout
+              FindA.Sale
             </Link>
 
             {/* Desktop nav */}
@@ -181,7 +181,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <h3 className="text-lg font-bold mb-4">SaleScout</h3>
+              <h3 className="text-lg font-bold mb-4">FindA.Sale</h3>
               <p className="text-gray-400">
                 Helping you find the best estate sales and auctions in Grand Rapids and beyond.
               </p>
@@ -210,7 +210,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </div>
           </div>
           <div className="border-t border-gray-700 mt-8 pt-6 text-center text-gray-400">
-            <p>&copy; {new Date().getFullYear()} SaleScout. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} FindA.Sale. All rights reserved.</p>
           </div>
         </div>
       </footer>

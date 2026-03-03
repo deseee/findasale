@@ -2,7 +2,7 @@
  * InstallPrompt
  *
  * Captures the browser's `beforeinstallprompt` event and shows a native-feeling
- * banner at the bottom of the screen inviting the user to add SaleScout to their
+ * banner at the bottom of the screen inviting the user to add FindA.Sale to their
  * home screen.  The banner is suppressed for 30 days after a user dismisses it.
  *
  * Rules:
@@ -14,7 +14,7 @@
 
 import { useState, useEffect } from 'react';
 
-const DISMISS_KEY = 'salescout_install_dismissed_until';
+const DISMISS_KEY = 'findasale_install_dismissed_until';
 const DISMISS_DAYS = 30;
 
 function isStandalone(): boolean {
@@ -94,14 +94,14 @@ export default function InstallPrompt() {
     return (
       <div
         role="dialog"
-        aria-label="Install SaleScout"
+        aria-label="Install FindA.Sale"
         className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg px-4 py-4 flex items-center gap-4 sm:max-w-md sm:mx-auto sm:mb-4 sm:rounded-xl sm:border"
       >
         {/* App icon */}
-        <img src="/icons/icon-72x72.png" alt="SaleScout icon" className="w-12 h-12 rounded-xl flex-shrink-0" />
+        <img src="/icons/icon-72x72.png" alt="FindA.Sale icon" className="w-12 h-12 rounded-xl flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-sm leading-tight">Add SaleScout to your home screen</p>
+          <p className="font-semibold text-gray-900 text-sm leading-tight">Add FindA.Sale to your home screen</p>
           <p className="text-xs text-gray-500 mt-0.5">Quick access to sales near you — no app store needed</p>
         </div>
 
@@ -127,7 +127,7 @@ export default function InstallPrompt() {
     return (
       <div
         role="dialog"
-        aria-label="Add SaleScout to Home Screen"
+        aria-label="Add FindA.Sale to Home Screen"
         className="fixed bottom-4 left-4 right-4 z-50 bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-4"
       >
         <button
@@ -137,7 +137,7 @@ export default function InstallPrompt() {
         >
           &times;
         </button>
-        <p className="font-semibold text-sm mb-1">Add SaleScout to your Home Screen</p>
+        <p className="font-semibold text-sm mb-1">Add FindA.Sale to your Home Screen</p>
         <p className="text-xs text-gray-300 leading-relaxed">
           Tap the{' '}
           <span className="inline-block mx-1">

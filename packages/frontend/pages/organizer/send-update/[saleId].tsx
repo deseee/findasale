@@ -59,7 +59,7 @@ const SendUpdatePage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Send Update - SaleScout</title>
+        <title>Send Update - FindA.Sale</title>
         <meta name="description" content="Send SMS update to sale subscribers" />
       </Head>
 

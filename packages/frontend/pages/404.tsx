@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <>
       <Head>
-        <title>Page not found – SaleScout</title>
+        <title>Page not found – FindA.Sale</title>
       </Head>
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 text-center">
         <div className="max-w-md">
@@ -19,7 +19,7 @@ export default function NotFound() {
             href="/"
             className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
           >
-            Back to SaleScout
+            Back to FindA.Sale
           </Link>
         </div>
       </div>

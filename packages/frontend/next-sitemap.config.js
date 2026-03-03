@@ -1,5 +1,5 @@
 module.exports = {
-  siteUrl: process.env.SITE_URL || 'https://salescout.app',
+  siteUrl: process.env.SITE_URL || 'https://finda.sale',
   generateRobotsTxt: true,
   exclude: [
     '/server-sitemap.xml',
@@ -36,7 +36,7 @@ module.exports = {
       }
     ],
     additionalSitemaps: [
-      `${process.env.SITE_URL || 'https://salescout.app'}/server-sitemap.xml`,
+      `${process.env.SITE_URL || 'https://finda.sale'}/server-sitemap.xml`,
     ],
   },
 };

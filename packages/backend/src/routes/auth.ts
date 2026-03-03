@@ -74,14 +74,14 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@salescout.app';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
     const resend = getResend();
 
     if (resend) {
       await resend.emails.send({
         from: fromEmail,
         to: email,
-        subject: 'Reset your SaleScout password',
+        subject: 'Reset your FindA.Sale password',
         html: `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
             <h2 style="color:#2563eb;">Reset your password</h2>

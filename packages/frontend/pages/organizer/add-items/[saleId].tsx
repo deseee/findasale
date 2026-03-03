@@ -211,7 +211,7 @@ const AddItemsPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Add Items - SaleScout</title>
+        <title>Add Items - FindA.Sale</title>
         <meta name="description" content="Add items to your sale" />
       </Head>
 
@@ -371,7 +371,7 @@ const AddItemsPage = () => {
                     <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
                       {photoPreviews.map((src, i) => (
                         <div key={i} className="relative group">
-                          <img src={src} alt={`preview-${i}`} className="w-full h-16 object-cover rounded border border-gray-200" />
+                          <img src={src} alt={`Item photo preview ${i + 1}`} className="w-full h-16 object-cover rounded border border-gray-200" />
                           <button
                             type="button"
                             onClick={() => removePhoto(i)}

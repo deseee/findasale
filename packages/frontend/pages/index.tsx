@@ -139,7 +139,7 @@ const HomePage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>SaleScout - Find Estate Sales Near You</title>
+        <title>FindA.Sale - Find Estate Sales Near You</title>
         <meta name="description" content="Find estate sales and auctions near you" />
       </Head>
 
@@ -147,7 +147,7 @@ const HomePage = () => {
         <section className="mb-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-blue-600 mb-4">Discover Amazing Deals</h1>
           <p className="text-xl text-gray-700 max-w-2xl mx-auto">
-            Find estate sales, garage sales, and auctions near you with SaleScout
+            Find estate sales, garage sales, and auctions near you with FindA.Sale
           </p>
         </section>
 

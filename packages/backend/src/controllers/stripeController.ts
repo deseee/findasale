@@ -24,8 +24,8 @@ const sendReceiptEmail = async (purchase: {
 }) => {
   const resend = getResendClient();
   if (!resend) return;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@salescout.app';
-  const historyUrl = `${process.env.FRONTEND_URL || 'https://salescout.app'}/shopper/purchases`;
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
+  const historyUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
   try {
     await resend.emails.send({
       from: fromEmail,

@@ -39,8 +39,8 @@ const ContactPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Contact Us - SaleScout</title>
-        <meta name="description" content="Get in touch with the SaleScout team" />
+        <title>Contact Us - FindA.Sale</title>
+        <meta name="description" content="Get in touch with the FindA.Sale team" />
       </Head>
 
       <main className="container mx-auto px-4 py-8">
@@ -51,7 +51,7 @@ const ContactPage = () => {
             <div>
               <h2 className="text-2xl font-semibold mb-4">Get in Touch</h2>
               <p className="text-gray-700 mb-6">
-                Have questions about SaleScout? Need help with your account or a sale? 
+                Have questions about FindA.Sale? Need help with your account or a sale? 
                 Our team is here to assist you.
               </p>
               
@@ -62,7 +62,7 @@ const ContactPage = () => {
                   </svg>
                   <div>
                     <h3 className="font-semibold">Email</h3>
-                    <p className="text-gray-600">support@salescout.app</p>
+                    <p className="text-gray-600">support@finda.sale</p>
                   </div>
                 </div>
                 

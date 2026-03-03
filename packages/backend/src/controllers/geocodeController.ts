@@ -52,7 +52,7 @@ export const geocodeAddress = async (req: Request, res: Response) => {
       },
       headers: {
         // Nominatim policy: must identify app with User-Agent
-        'User-Agent': 'SaleScout/1.0 (contact@salescout.app)',
+        'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)',
       },
       timeout: 8000,
     });

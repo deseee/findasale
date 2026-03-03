@@ -13,7 +13,7 @@ export default function Document() {
         {/* iOS PWA support */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="SaleScout" />
+        <meta name="apple-mobile-web-app-title" content="FindA.Sale" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 
         {/* Favicons */}
@@ -29,15 +29,15 @@ export default function Document() {
         {/* Default SEO meta — pages should override these with next/head */}
         <meta
           name="description"
-          content="SaleScout — discover estate sales and auctions near you. Browse items, favorite sales, and buy online."
+          content="FindA.Sale — discover estate sales and auctions near you. Browse items, favorite sales, and buy online."
         />
         <meta name="keywords" content="estate sales, auctions, antiques, thrift, Grand Rapids" />
-        <meta name="author" content="SaleScout" />
+        <meta name="author" content="FindA.Sale" />
 
         {/* Open Graph defaults */}
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="SaleScout" />
-        <meta property="og:title" content="SaleScout — Estate Sales Near You" />
+        <meta property="og:site_name" content="FindA.Sale" />
+        <meta property="og:title" content="FindA.Sale — Estate Sales Near You" />
         <meta
           property="og:description"
           content="Discover estate sales and auctions. Browse items, save favorites, and buy online."
@@ -46,7 +46,7 @@ export default function Document() {
 
         {/* Twitter card */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="SaleScout — Estate Sales Near You" />
+        <meta name="twitter:title" content="FindA.Sale — Estate Sales Near You" />
         <meta
           name="twitter:description"
           content="Discover estate sales and auctions. Browse items, save favorites, and buy online."

@@ -100,7 +100,7 @@ function getLastSessionSummary() {
   // Extract the first ### block (most recent session)
   const dateMatch = content.match(/### (\d{4}-\d{2}-\d{2})/);
   if (!dateMatch) return 'No recent session found in log.';
-  const match = content.match(/### \d{4}-\d{2}-\d{2}\n([\s\S]*?)(?=\n### |\n---)/);
+  const match = content.match(/### \d{4}-\d{2}-\d{2}[^\n]*\n([\s\S]*?)(?=\n### |\n---)/);
   if (!match) return 'No recent session found in log.';
   return `### ${dateMatch[1]}\n${match[1].trim()}`;
 }

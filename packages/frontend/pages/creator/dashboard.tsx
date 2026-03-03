@@ -105,7 +105,7 @@ const CreatorDashboard = () => {
     });
   };
 
-  const [origin, setOrigin] = React.useState('https://salescout.app');
+  const [origin, setOrigin] = React.useState('https://finda.sale');
   React.useEffect(() => { setOrigin(window.location.origin); }, []);
 
   const referralLink = user?.referralCode
@@ -136,8 +136,8 @@ const CreatorDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Creator Dashboard - SaleScout</title>
-        <meta name="description" content="Manage your referral links, track affiliate clicks, and grow your earnings on SaleScout." />
+        <title>Creator Dashboard - FindA.Sale</title>
+        <meta name="description" content="Manage your referral links, track affiliate clicks, and grow your earnings on FindA.Sale." />
         <meta name="robots" content="noindex" />
       </Head>
 
@@ -328,8 +328,8 @@ const CreatorDashboard = () => {
             <p className="text-gray-600 mb-6">
               Creators get access to affiliate links, click tracking, and conversion dashboards.
               Share your referral link above to get started — reach out to us at{' '}
-              <a href="mailto:hello@salescout.app" className="text-blue-600 hover:underline">
-                hello@salescout.app
+              <a href="mailto:hello@finda.sale" className="text-blue-600 hover:underline">
+                hello@finda.sale
               </a>{' '}
               to upgrade your account.
             </p>

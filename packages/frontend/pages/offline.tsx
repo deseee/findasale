@@ -5,7 +5,7 @@ export default function OfflinePage() {
   return (
     <>
       <Head>
-        <title>You're offline – SaleScout</title>
+        <title>You're offline – FindA.Sale</title>
       </Head>
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 text-center">
         <div className="max-w-md">

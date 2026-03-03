@@ -28,8 +28,8 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Message too long (max 5000 characters).' });
     }
 
-    const supportEmail = process.env.SUPPORT_EMAIL || 'support@salescout.app';
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@salescout.app';
+    const supportEmail = process.env.SUPPORT_EMAIL || 'support@finda.sale';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
     const resend = getResend();
 
     if (resend) {
@@ -38,7 +38,7 @@ router.post('/', async (req: Request, res: Response) => {
         from: fromEmail,
         to: supportEmail,
         replyTo: email,
-        subject: `[SaleScout Contact] ${subject}`,
+        subject: `[FindA.Sale Contact] ${subject}`,
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
             <h2 style="color:#2563eb;">New Contact Form Submission</h2>
@@ -56,14 +56,14 @@ router.post('/', async (req: Request, res: Response) => {
       await resend.emails.send({
         from: fromEmail,
         to: email,
-        subject: 'We received your message – SaleScout',
+        subject: 'We received your message – FindA.Sale',
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
             <h2 style="color:#2563eb;">Thanks for reaching out, ${name}!</h2>
             <p>We've received your message and will get back to you within 1–2 business days.</p>
             <p style="color:#6b7280;font-size:13px;">Your message: <em>${subject}</em></p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
-            <p style="color:#9ca3af;font-size:12px;">SaleScout &mdash; <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}">salescout.app</a></p>
+            <p style="color:#9ca3af;font-size:12px;">FindA.Sale &mdash; <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}">finda.sale</a></p>
           </div>
         `,
       });

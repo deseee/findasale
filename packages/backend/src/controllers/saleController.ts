@@ -612,11 +612,11 @@ export const generateIcal = async (req: Request, res: Response) => {
     const ical = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//SaleScout//SaleScout//EN',
+      'PRODID:-//FindA.Sale//FindA.Sale//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'BEGIN:VEVENT',
-      `UID:sale-${id}@salescout.app`,
+      `UID:sale-${id}@finda.sale`,
       `DTSTAMP:${now}`,
       `DTSTART:${startStr}`,
       `DTEND:${endStr}`,
@@ -624,7 +624,7 @@ export const generateIcal = async (req: Request, res: Response) => {
       `DESCRIPTION:${description}`,
       `LOCATION:${location}`,
       `URL:${saleUrl}`,
-      `ORGANIZER;CN=${esc(sale.organizer.businessName)}:MAILTO:noreply@salescout.app`,
+      `ORGANIZER;CN=${esc(sale.organizer.businessName)}:MAILTO:noreply@finda.sale`,
       'END:VEVENT',
       'END:VCALENDAR',
     ].join('\r\n');

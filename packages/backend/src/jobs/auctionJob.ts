@@ -95,8 +95,8 @@ export const endAuctions = async () => {
         if (stripePaymentIntentId && highestBid.user?.email) {
           const resend = getResendClient();
           if (resend) {
-            const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@salescout.app';
-            const payUrl = `${process.env.FRONTEND_URL || 'https://salescout.app'}/shopper/purchases`;
+            const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
+            const payUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
             try {
               await resend.emails.send({
                 from: fromEmail,

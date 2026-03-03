@@ -5,8 +5,8 @@ const PrivacyPolicyPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Privacy Policy - SaleScout</title>
-        <meta name="description" content="Privacy Policy for SaleScout" />
+        <title>Privacy Policy - FindA.Sale</title>
+        <meta name="description" content="Privacy Policy for FindA.Sale" />
       </Head>
 
       <main className="container mx-auto px-4 py-8">
@@ -69,7 +69,7 @@ const PrivacyPolicyPage = () => {
             <h2 className="text-xl font-semibold mt-8 mb-4">8. Contact Us</h2>
             <p className="mb-4">
               If you have any questions about this Privacy Policy, please contact us at:
-              privacy@salescout.app
+              privacy@finda.sale
             </p>
           </div>
         </div>

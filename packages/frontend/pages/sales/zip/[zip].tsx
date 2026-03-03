@@ -59,7 +59,7 @@ const ZipLandingPage = () => {
   // Derive city/state from the first sale for richer meta (if available)
   const firstSale = displaySales[0];
   const locationLabel = firstSale ? `${firstSale.city}, ${firstSale.state} ${zip}` : zip;
-  const siteUrl = 'https://salescout.app';
+  const siteUrl = 'https://finda.sale';
 
   const itemListJsonLd = displaySales.length > 0 ? JSON.stringify({
     "@context": "https://schema.org",
@@ -111,14 +111,14 @@ const ZipLandingPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Estate Sales in {locationLabel} - SaleScout</title>
+        <title>Estate Sales in {locationLabel} - FindA.Sale</title>
         <meta name="description" content={`Browse ${displaySales.length > 0 ? `${displaySales.length} ` : ''}estate sales and auctions in ${locationLabel}. Find upcoming sales, view items, and get directions.`} />
-        <meta property="og:title" content={`Estate Sales in ${locationLabel} | SaleScout`} />
+        <meta property="og:title" content={`Estate Sales in ${locationLabel} | FindA.Sale`} />
         <meta property="og:description" content={`Find estate sales and auctions happening in ${locationLabel}. Browse listings, items, and locations.`} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`${siteUrl}/sales/zip/${zip}`} />
         <meta name="twitter:card" content="summary" />
-        <meta name="twitter:title" content={`Estate Sales in ${locationLabel} | SaleScout`} />
+        <meta name="twitter:title" content={`Estate Sales in ${locationLabel} | FindA.Sale`} />
         <meta name="twitter:description" content={`Find estate sales and auctions happening in ${locationLabel}.`} />
         {itemListJsonLd && (
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: itemListJsonLd }} />

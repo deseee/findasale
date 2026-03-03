@@ -2,7 +2,7 @@
 
 ## Overview
 
-SaleScout sends automated reminders to shoppers who are watching sales. Both **email** and **SMS** channels are supported to reach users with different communication preferences.
+FindA.Sale sends automated reminders to shoppers who are watching sales. Both **email** and **SMS** channels are supported to reach users with different communication preferences.
 
 ### Supported Reminder Types
 - **1-Day Before**: Sent 24 hours before sale starts
@@ -41,7 +41,7 @@ SaleScout sends automated reminders to shoppers who are watching sales. Both **e
 ```bash
 # Email (Resend)
 RESEND_API_KEY=re_xxxxxxxxxxxxx
-RESEND_FROM_EMAIL=noreply@salescout.app
+RESEND_FROM_EMAIL=noreply@finda.sale
 
 # SMS (Twilio)
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -112,7 +112,7 @@ This estate sale starts tomorrow:
 
 [View Sale Details Button]
 
-You're receiving this because you're watching this sale on SaleScout.
+You're receiving this because you're watching this sale on FindA.Sale.
 ```
 
 **SMS Template (1-Day Reminder):**
@@ -161,7 +161,7 @@ npm run test -- src/__tests__/emailReminders.e2e.ts
 3. **Monitor logs:**
    ```bash
    # Watch backend logs for reminder processing
-   docker logs salescout-backend
+   docker logs findasale-backend-1
    # Look for: "✓ Reminder email sent to..." and "✓ Reminder SMS sent to..."
    ```
 

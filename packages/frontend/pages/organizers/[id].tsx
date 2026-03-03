@@ -61,7 +61,7 @@ const OrganizerProfilePage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>{organizer.businessName} – SaleScout</title>
+        <title>{organizer.businessName} – FindA.Sale</title>
         <meta name="description" content={`Estate sales by ${organizer.businessName}`} />
       </Head>
 

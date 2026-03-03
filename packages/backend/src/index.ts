@@ -128,7 +128,7 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Health check endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'SaleScout API is running!' });
+  res.json({ message: 'FindA.Sale API is running!' });
 });
 
 // Routes
@@ -165,7 +165,7 @@ process.on('SIGTERM', async () => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`SaleScout backend running on port ${PORT}`);
+  console.log(`FindA.Sale backend running on port ${PORT}`);
   
   // Log environment variables status for debugging
   console.log('Environment variables status:');

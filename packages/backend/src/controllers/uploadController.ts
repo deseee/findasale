@@ -36,7 +36,7 @@ const uploadToCloudinary = (buffer: Buffer, folder: string): Promise<string> => 
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: `salescout/${folder}`,
+        folder: `findasale/${folder}`,
         transformation: [
           { width: 1600, height: 1200, crop: 'limit' }, // Cap dimensions
           { quality: 'auto:good' },                      // Smart compression

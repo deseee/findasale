@@ -231,7 +231,7 @@ const EditItemPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>Edit Item - SaleScout</title>
+        <title>Edit Item - FindA.Sale</title>
         <meta name="description" content="Edit your item" />
       </Head>
 

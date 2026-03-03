@@ -24,7 +24,7 @@ export async function getServerSideProps(ctx: any) {
       '/terms',
       '/privacy',
     ].map((url) => ({
-      loc: `${process.env.SITE_URL || 'https://salescout.app'}${url}`,
+      loc: `${process.env.SITE_URL || 'https://finda.sale'}${url}`,
       lastmod: new Date().toISOString(),
       changefreq: 'daily',
       priority: 0.7,
@@ -33,7 +33,7 @@ export async function getServerSideProps(ctx: any) {
     // Generate sale URLs
     const saleUrls = Array.isArray(sales) 
       ? sales.map((sale: any) => ({
-          loc: `${process.env.SITE_URL || 'https://salescout.app'}/sales/${sale.id}`,
+          loc: `${process.env.SITE_URL || 'https://finda.sale'}/sales/${sale.id}`,
           lastmod: new Date(sale.updatedAt || sale.createdAt || new Date()).toISOString(),
           changefreq: 'hourly',
           priority: 0.8,
@@ -42,7 +42,7 @@ export async function getServerSideProps(ctx: any) {
 
     // Generate city URLs
     const cityUrls = cities.map((city: string) => ({
-      loc: `${process.env.SITE_URL || 'https://salescout.app'}/city/${city}`,
+      loc: `${process.env.SITE_URL || 'https://finda.sale'}/city/${city}`,
       lastmod: new Date().toISOString(),
       changefreq: 'daily',
       priority: 0.6,
@@ -50,7 +50,7 @@ export async function getServerSideProps(ctx: any) {
 
     // Generate zip URLs
     const zipUrls = zips.map((zip: string) => ({
-      loc: `${process.env.SITE_URL || 'https://salescout.app'}/sales/zip/${zip}`,
+      loc: `${process.env.SITE_URL || 'https://finda.sale'}/sales/zip/${zip}`,
       lastmod: new Date().toISOString(),
       changefreq: 'daily',
       priority: 0.6,

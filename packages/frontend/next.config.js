@@ -35,7 +35,7 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // SaleScout API — network first with offline fallback
+    // FindA.Sale API — network first with offline fallback
     {
       urlPattern: /^https?:\/\/.*\/api\/.*/i,
       handler: 'NetworkFirst',

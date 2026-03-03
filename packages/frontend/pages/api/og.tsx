@@ -35,7 +35,7 @@ export default async function handler(req: NextRequest) {
               marginBottom: 20,
             }}
           >
-            SaleScout
+            FindA.Sale
           </div>
           <div
             style={{
@@ -77,7 +77,7 @@ export default async function handler(req: NextRequest) {
               marginTop: 40,
             }}
           >
-            Check it out on SaleScout!
+            Check it out on FindA.Sale!
           </div>
         </div>
       ),

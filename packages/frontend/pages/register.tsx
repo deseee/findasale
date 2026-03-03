@@ -86,8 +86,8 @@ const RegisterPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Head>
-        <title>Register - SaleScout</title>
-        <meta name="description" content="Create a SaleScout account" />
+        <title>Register - FindA.Sale</title>
+        <meta name="description" content="Create a FindA.Sale account" />
       </Head>
 
       <div className="max-w-md w-full space-y-8">

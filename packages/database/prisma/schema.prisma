@@ -62,6 +62,7 @@ model Sale {
   tags          String[]
   status        String     @default("DRAFT") // DRAFT, PUBLISHED, ENDED
   isAuctionSale Boolean    @default(false)
+  qrScanCount   Int        @default(0)
   organizerId   String
   organizer     Organizer  @relation(fields: [organizerId], references: [id])
   items         Item[]

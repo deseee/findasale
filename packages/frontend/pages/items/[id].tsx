@@ -207,7 +207,7 @@ const ItemDetailPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Head>
-        <title>{item.title} - SaleScout</title>
+        <title>{item.title} - FindA.Sale</title>
         <meta name="description" content={item.description} />
       </Head>
 

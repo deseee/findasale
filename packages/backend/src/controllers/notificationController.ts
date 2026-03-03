@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
-import { prisma } from '../index';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 import twilio from 'twilio';
 import { Resend } from 'resend';
 
@@ -241,7 +243,7 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): s
   <div style="max-width:600px;margin:0 auto;padding:24px 16px;font-family:sans-serif;">
     <!-- Header -->
     <div style="background:#2563eb;border-radius:10px;padding:24px;margin-bottom:24px;text-align:center;">
-      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">🏷️ SaleScout</h1>
+      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">🏷️ FindA.Sale</h1>
       <p style="margin:8px 0 0;color:#bfdbfe;font-size:14px;">Your Weekend Estate Sale Digest</p>
     </div>
 
@@ -257,7 +259,7 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): s
     <!-- Footer -->
     <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;text-align:center;">
       <p style="color:#9ca3af;font-size:12px;margin:0;">
-        You're receiving this because you have a SaleScout account.<br>
+        You're receiving this because you have a FindA.Sale account.<br>
         <a href="${frontendUrl}" style="color:#2563eb;">View all sales</a> &middot;
         <a href="${frontendUrl}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
       </p>
@@ -277,7 +279,7 @@ export const sendWeeklyDigest = async () => {
     }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'digest@salescout.app';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'digest@finda.sale';
 
     // Find PUBLISHED sales starting in the next 7 days
     const now = new Date();
