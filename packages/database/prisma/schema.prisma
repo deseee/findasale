@@ -69,7 +69,7 @@ model Sale {
   items         Item[]
   favorites     Favorite[]
   subscribers   SaleSubscriber[]
-  affiliateLink AffiliateLink?
+  affiliateLinks AffiliateLink[]
   lineEntries   LineEntry[]
   purchases     Purchase[]
   reviews       Review[]
