@@ -15,7 +15,7 @@ for (const envPath of possiblePaths) {
   try {
     const result = dotenv.config({ path: envPath });
     if (result.parsed) {
-      console.log('✅ Loaded .env from:', envPath);
+      console.log('\u2705 Loaded .env from:', envPath);
       envLoaded = true;
       break;
     }
@@ -25,12 +25,12 @@ for (const envPath of possiblePaths) {
 }
 
 if (!envLoaded) {
-  console.warn('⚠️  No .env file loaded, checking environment variables directly');
+  console.warn('\u26a0\ufe0f  No .env file loaded, checking environment variables directly');
   // Check if critical env vars are set
   if (process.env.STRIPE_SECRET_KEY) {
-    console.log('✅ STRIPE_SECRET_KEY found in environment');
+    console.log('\u2705 STRIPE_SECRET_KEY found in environment');
   } else {
-    console.log('❌ STRIPE_SECRET_KEY not found in environment');
+    console.log('\u274c STRIPE_SECRET_KEY not found in environment');
   }
 }
 
@@ -74,7 +74,7 @@ export const prisma = new PrismaClient({
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-// ─── Security ──────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Security \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 // Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
 app.set('trust proxy', 1);
@@ -105,7 +105,7 @@ app.use(
   })
 );
 
-// Global rate limit — 200 req / 15 min per IP (prevents brute force and scraping)
+// Global rate limit \u2014 200 req / 15 min per IP (prevents brute force and scraping)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -115,7 +115,7 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// Stricter limit on auth routes — 10 req / 15 min per IP
+// Stricter limit on auth routes \u2014 10 req / 15 min per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -172,10 +172,12 @@ process.on('SIGTERM', async () => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`FindA.Sale backend running on port ${PORT}`);
   
-  // Log environment variables status for debugging
-  console.log('Environment variables status:');
-  console.log('- STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? '✅ Present' : '❌ Missing');
-  console.log('- TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? '✅ Present' : '❌ Missing');
-  console.log('- TWILIO_AUTH_TOKEN:', process.env.TWILIO_AUTH_TOKEN ? '✅ Present' : '❌ Missing');
-  console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '✅ Present' : '❌ Missing');
+  // Log environment variables status for debugging (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Environment variables status:');
+    console.log('- STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? '\u2705 Present' : '\u274c Missing');
+    console.log('- TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? '\u2705 Present' : '\u274c Missing');
+    console.log('- TWILIO_AUTH_TOKEN:', process.env.TWILIO_AUTH_TOKEN ? '\u2705 Present' : '\u274c Missing');
+    console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '\u2705 Present' : '\u274c Missing');
+  }
 });
