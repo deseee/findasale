@@ -25,12 +25,15 @@ export const register = async (req: Request, res: Response) => {
     // Generate unique referral code
     const userReferralCode = uuidv4().substring(0, 8).toUpperCase();
 
+    // Whitelist role — never allow client to self-assign ADMIN
+    const safeRole = ['USER', 'ORGANIZER'].includes(role) ? role : 'USER';
+
     // Create user
     const user = await prisma.user.create({
       data: {
         email,
         name,
-        role,
+        role: safeRole,
         password: hashedPassword,
         referralCode: userReferralCode,
         points: 0
@@ -38,7 +41,7 @@ export const register = async (req: Request, res: Response) => {
     });
 
     // If registering as organizer, create Organizer profile
-    if (role === 'ORGANIZER') {
+    if (safeRole === 'ORGANIZER') {
       await prisma.organizer.create({
         data: {
           userId: user.id,
