@@ -139,8 +139,14 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
           data = response.data;
           if (data.itemTitle) setResolvedTitle(data.itemTitle);
         } else if (itemId) {
-          // Create a new payment intent
-          const response = await api.post('/stripe/create-payment-intent', { itemId });
+          // Create a new payment intent (include affiliate attribution if present)
+          const affiliateLinkId = typeof window !== 'undefined'
+            ? sessionStorage.getItem('affiliateRef') ?? undefined
+            : undefined;
+          const response = await api.post('/stripe/create-payment-intent', {
+            itemId,
+            ...(affiliateLinkId ? { affiliateLinkId } : {})
+          });
           data = response.data;
         } else {
           setLoadError('Invalid checkout configuration.');

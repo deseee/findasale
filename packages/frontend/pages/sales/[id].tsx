@@ -14,6 +14,7 @@ import SaleShareButton from '../../components/SaleShareButton';
 import SaleMap from '../../components/SaleMap';
 import Skeleton from '../../components/Skeleton';
 import BadgeDisplay from '../../components/BadgeDisplay';
+import AuctionCountdown from '../../components/AuctionCountdown';
 
 interface Sale {
   id: string;
@@ -720,9 +721,14 @@ const SaleDetailPage = () => {
                     <h3 className="font-bold text-lg mb-2 text-gray-900">{item.title}</h3>
                     <p className="text-gray-600 text-sm mb-3 line-clamp-2">{item.description}</p>
 
-                    {/* Category and Condition badges */}
-                    {(item.category || item.condition) && (
+                    {/* Category, Condition, and Auction badges */}
+                    {(item.category || item.condition || item.auctionEndTime) && (
                       <div className="flex flex-wrap gap-2 mb-3">
+                        {item.auctionEndTime && (
+                          <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
+                            🔨 Auction
+                          </span>
+                        )}
                         {item.category && (
                           <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
                             {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
@@ -747,9 +753,10 @@ const SaleDetailPage = () => {
                             </span>
                           </div>
                           {item.auctionEndTime && (
-                            <div className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                              {formatTimeRemaining(item.auctionEndTime)} left
-                            </div>
+                            <AuctionCountdown
+                              endTime={item.auctionEndTime}
+                              onExpired={() => queryClient.invalidateQueries({ queryKey: ['sale', id] })}
+                            />
                           )}
                         </div>
                         
