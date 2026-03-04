@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
@@ -24,9 +25,27 @@ interface Purchase {
 
 const PurchaseHistoryPage = () => {
   const { user } = useAuth();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [checkoutPurchase, setCheckoutPurchase] = useState<{ id: string; title: string } | null>(null);
+
+  // ST6: Handle Stripe 3DS redirect return
+  // Stripe appends ?payment_intent=...&redirect_status=succeeded|failed to return_url after 3DS
+  useEffect(() => {
+    const { redirect_status, payment_intent } = router.query;
+    if (!redirect_status || !payment_intent) return;
+
+    if (redirect_status === 'succeeded') {
+      showToast('Payment successful!', 'success');
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
+    } else {
+      showToast('Payment was not completed. Please try again.', 'error');
+    }
+
+    // Strip the Stripe params from the URL without a full navigation
+    router.replace('/shopper/purchases', undefined, { shallow: true });
+  }, [router.query]);
 
   const { data: purchases = [], isLoading } = useQuery({
     queryKey: ['purchases'],
@@ -112,7 +131,8 @@ const PurchaseHistoryPage = () => {
                               src={purchase.item.photoUrls[0]}
                               alt={purchase.item.title}
                               className="h-10 w-10 rounded-md object-cover"
-                             loading="lazy"/>
+                              loading="lazy"
+                            />
                           ) : (
                             <div className="bg-gray-200 border-2 border-dashed rounded-xl w-10 h-10" />
                           )}

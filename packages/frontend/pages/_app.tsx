@@ -35,7 +35,7 @@ function MyApp({ Component, pageProps }: AppProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // 1 minute
+            staleTime: 20 * 1000, // 20 seconds — marketplace data changes frequently
             retry: 1,
           },
         },
