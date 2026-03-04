@@ -1,3 +1,4 @@
+import cron from 'node-cron';
 import { getStripe } from '../utils/stripe';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
@@ -136,3 +137,7 @@ export const endAuctions = async () => {
     console.error('Error in auction end job:', error);
   }
 };
+
+
+// Run every 5 minutes — checks for auctions that have passed their end time
+cron.schedule('*/5 * * * *', endAuctions);
