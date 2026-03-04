@@ -41,8 +41,10 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 - ✅ _document.tsx: Google Fonts loaded, theme-color → #D97706
 - ✅ Layout.tsx: full blue→warm/amber color swap, font-heading on logo, shadow-header
 - ✅ manifest.json: theme_color + background_color updated
-- ✅ Phase 25 partial: BottomTabNav component (Browse/Map/Saved/Profile), integrated into Layout with pb-15 clearance
-- Remaining: skeleton screens for list views, extend warm palette to SaleCard + other page components
+- ✅ Phase 25: BottomTabNav component (Browse/Map/Saved/Profile), integrated into Layout with pb-15 clearance
+- ✅ Full warm palette swap: 586 blue/gray references replaced across 47 files (all components + all pages)
+- ✅ SkeletonCards.tsx: composite skeleton components (SaleCardSkeleton, ItemCardSkeleton, StatCardSkeleton, TableRowSkeleton, SkeletonGrid, TableSkeleton)
+- Sprint B Phase 24+25 COMPLETE. Ready for Sprint C.
 
 ---
 
@@ -68,8 +70,8 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 Five-pillar growth phase. Sprint order:
 1. ~~Sprint A: Phase 12 completion~~ ✅ (2026-03-05)
-2. **Sprint B: Phase 24+25** — Design system + bottom tab nav (NOW)
-3. Sprint C: Phase 14 — Rapid capture carousel + background AI
+2. ~~Sprint B: Phase 24+25~~ ✅ — Design system + bottom tab nav (2026-03-04)
+3. **Sprint C: Phase 14** — Rapid capture carousel + background AI (NEXT)
 4. Sprint D: Phase 17 — Organizer reputation + follow system
 
 Full roadmap: `claude_docs/ROADMAP.md`
@@ -86,4 +88,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-04 (session 44 — Sprint B Phase 24+25 implementation)
+Last Updated: 2026-03-04 (session 44 — Sprint B complete, full warm palette + skeletons)
