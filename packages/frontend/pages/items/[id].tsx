@@ -1,420 +1,171 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Item Detail Page
+ *
+ * Displays:
+ * - Item photos (carousel or gallery)
+ * - Title, description, price/bid info
+ * - Place bid or buy buttons
+ * - Related items from the same sale
+ */
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/router';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../lib/api';
+import BidModal from '../../components/BidModal';
+import CheckoutModal from '../../components/CheckoutModal';
+import AuctionCountdown from '../../components/AuctionCountdown';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import api from '../../lib/api';
-import { useAuth } from '../../components/AuthContext';
-import CheckoutModal from '../../components/CheckoutModal';
-import { useToast } from '../../components/ToastContext';
-import { formatDistanceToNow, parseISO } from 'date-fns';
-
-interface Item {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  auctionStartPrice: number;
-  currentBid: number;
-  bidIncrement: number;
-  auctionEndTime: string;
-  status: string;
-  photoUrls: string[];
-  sale: {
-    id: string;
-    title: string;
-  };
-}
-
-interface Bid {
-  id: string;
-  amount: number;
-  user: {
-    name: string;
-  };
-  createdAt: string;
-}
-
-// Helper function to safely format prices
-const formatPrice = (value: number | string | null | undefined): string => {
-  if (value === null || value === undefined) return 'N/A';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  return isNaN(num) ? 'N/A' : `$${num.toFixed(2)}`;
-};
-
-// Helper function to format time remaining
-const formatTimeRemaining = (endTime: string | null | undefined): string => {
-  if (!endTime) return 'No end time';
-  
-  try {
-    const end = new Date(endTime);
-    const now = new Date();
-    const diff = end.getTime() - now.getTime();
-    
-    if (diff <= 0) {
-      return 'Ended';
-    }
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-      return `${hours}h ${minutes}m ${seconds}s`;
-    } else {
-      return `${minutes}m ${seconds}s`;
-    }
-  } catch (error) {
-    return 'No end time';
-  }
-};
-
-// Helper function to get minimum next bid
-const getMinimumNextBid = (item: any): number => {
-  if (item.currentBid) {
-    return item.currentBid + (item.bidIncrement || 1);
-  }
-  return item.auctionStartPrice || item.price || 0;
-};
 
 const ItemDetailPage = () => {
   const router = useRouter();
   const { id } = router.query;
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [bidAmount, setBidAmount] = useState('');
-  const [isBidding, setIsBidding] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState('');
-  const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);
-  const { showToast } = useToast();
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [currentBid, setCurrentBid] = useState(0);
 
-  const { data: item, isLoading, isError, refetch } = useQuery({
+  const { data: item, isLoading, isError } = useQuery({
     queryKey: ['item', id],
     queryFn: async () => {
-      if (!id) throw new Error('No item ID provided');
       const response = await api.get(`/items/${id}`);
-      return response.data as Item;
+      return response.data;
     },
     enabled: !!id,
   });
 
-  // Check if item is favorited
-  const { data: favoriteStatus } = useQuery({
-    queryKey: ['favorite', id],
-    queryFn: async () => {
-      if (!id || !user) return false;
-      try {
-        const response = await api.get(`/favorites/item/${id}`);
-        return response.data.isFavorite;
-      } catch {
-        return false;
-      }
-    },
-    enabled: !!id && !!user,
-  });
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (isError || !item) return <div className="min-h-screen flex items-center justify-center">Item not found</div>;
 
-  useEffect(() => {
-    if (favoriteStatus !== undefined) {
-      setIsFavorite(favoriteStatus);
-    }
-  }, [favoriteStatus]);
-
-  // Timer effect for auction countdown
-  useEffect(() => {
-    if (!item?.auctionEndTime) return;
-
-    const calculateTimeRemaining = () => {
-      setTimeRemaining(formatTimeRemaining(item.auctionEndTime));
-    };
-
-    calculateTimeRemaining();
-    const timer = setInterval(calculateTimeRemaining, 1000);
-
-    return () => clearInterval(timer);
-  }, [item?.auctionEndTime]);
-
-  const handleBuyNow = () => {
-    if (!item) return;
-    setCheckoutItemId(item.id);
-  };
-
-  const handleCheckoutClose = () => {
-    setCheckoutItemId(null);
-  };
-
-  const handleCheckoutSuccess = () => {
-    setCheckoutItemId(null);
-    refetch();
-  };
-
-  const handlePlaceBid = async () => {
-    if (!item || !user) return;
-
-    const amount = parseFloat(bidAmount);
-    if (isNaN(amount) || amount <= 0) {
-      showToast('Please enter a valid bid amount', 'error');
-      return;
-    }
-
-    setIsBidding(true);
-    try {
-      await api.post(`/items/${item.id}/bid`, { amount });
-      showToast('Bid placed successfully!', 'success');
-      setBidAmount('');
-      refetch();
-    } catch (err: any) {
-      console.error('Bid error:', err);
-      showToast(err.response?.data?.message || 'Failed to place bid. Please try again.', 'error');
-    } finally {
-      setIsBidding(false);
-    }
-  };
-
-  const toggleFavorite = async () => {
-    if (!item || !user) {
-      showToast('Please log in to favorite items', 'info');
-      return;
-    }
-
-    try {
-      await api.post(`/favorites/item/${item.id}`, { isFavorite: !isFavorite });
-      setIsFavorite(!isFavorite);
-      queryClient.invalidateQueries({ queryKey: ['favorite', id] });
-    } catch (err: any) {
-      console.error('Favorite error:', err);
-      showToast('Failed to update favorite status', 'error');
-    }
-  };
-
-  useEffect(() => {
-    if (item && item.auctionStartPrice) {
-      setBidAmount(getMinimumNextBid(item).toString());
-    }
-  }, [item]);
-
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Loading...</div>;
-  if (isError) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Error loading item</div>;
-  if (!item) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Item not found</div>;
-
-  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
-  const isAuctionItem = !!item.auctionStartPrice;
-  const auctionEnded = item.auctionEndTime && new Date(item.auctionEndTime) < new Date();
+  const isSoldOut = item.status === 'SOLD';
+  const isAuction = !!item.auctionEndTime;
+  const isActive = item.status === 'ACTIVE';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       <Head>
         <title>{item.title} - FindA.Sale</title>
         <meta name="description" content={item.description} />
       </Head>
 
-      {checkoutItemId && item && (
-        <CheckoutModal
-          itemId={checkoutItemId}
-          itemTitle={item.title}
-          onClose={handleCheckoutClose}
-          onSuccess={handleCheckoutSuccess}
-        />
-      )}
+      <div className="min-h-screen bg-white">
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <Link href={`/sales/${item.saleId}`} className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
+            Back to sale
+          </Link>
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Back Button */}
-        <Link href={`/sales/${item.sale.id}`} className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-          </svg>
-          Back to {item.sale.title}
-        </Link>
-
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2">
-            {/* Image Gallery */}
-            <div className="p-6">
-              {item.photoUrls.length > 0 ? (
-                <div className="bg-gray-200 rounded-lg overflow-hidden">
-                  <img
-                    src={item.photoUrls[0]}
-                    alt={item.title}
-                    className="w-full h-96 object-contain"
-                    loading="lazy"
-                  />
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Image Section */}
+            <div>
+              {item.photoUrls && item.photoUrls.length > 0 ? (
+                <img
+                  src={item.photoUrls[0]}
+                  alt={item.title}
+                  className="w-full h-96 object-cover rounded-lg shadow-md"
+                />
               ) : (
-                <div className="bg-gray-200 h-96 flex items-center justify-center rounded-lg">
-                  <img
-                    src="/images/placeholder.svg"
-                    alt="Placeholder"
-                    className="w-16 h-16 text-gray-400"
-                    loading="lazy"
-                  />
+                <div className="w-full h-96 bg-warm-200 rounded-lg flex items-center justify-center">
+                  <span className="text-warm-400">No image available</span>
                 </div>
               )}
-              
-              {item.photoUrls.length > 1 && (
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  {item.photoUrls.slice(1, 4).map((url, index) => (
-                    <div key={index} className="bg-gray-200 rounded overflow-hidden">
-                      <img
-                        src={url}
-                        alt={`${item.title} ${index + 2}`}
-                        className="w-full h-24 object-cover"
-                        loading="lazy"
-                      />
-                    </div>
+              {item.photoUrls && item.photoUrls.length > 1 && (
+                <div className="mt-4 flex gap-2 overflow-x-auto">
+                  {item.photoUrls.map((url: string, index: number) => (
+                    <img
+                      key={index}
+                      src={url}
+                      alt={`${item.title} ${index + 1}`}
+                      className="h-20 w-20 object-cover rounded cursor-pointer opacity-75 hover:opacity-100"
+                    />
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Item Details */}
-            <div className="p-6">
-              <div className="flex justify-between items-start">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{item.title}</h1>
-                <button
-                  onClick={toggleFavorite}
-                  className="text-2xl focus:outline-none"
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  {isFavorite ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <p className="text-gray-600 mb-6">{item.description}</p>
-              
-              <div className="mb-6">
-                <Link href={`/sales/${item.sale.id}`} className="text-blue-600 hover:text-blue-800">
-                  ← Back to {item.sale.title}
-                </Link>
+            {/* Details Section */}
+            <div>
+              <h1 className="text-3xl font-bold text-warm-900 mb-2">{item.title}</h1>
+              <p className="text-warm-600 mb-6">{item.description}</p>
+
+              {/* Status and Pricing */}
+              <div className="bg-warm-50 p-6 rounded-lg mb-6">
+                {isAuction ? (
+                  <>
+                    <AuctionCountdown endTime={item.auctionEndTime} />
+                    <div className="mt-4">
+                      <p className="text-sm text-warm-600">Current bid</p>
+                      <p className="text-2xl font-bold text-warm-900">
+                        ${(item.currentBid ?? item.auctionStartPrice ?? 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-warm-600">Price</p>
+                    <p className="text-2xl font-bold text-warm-900">${Number(item.price).toFixed(2)}</p>
+                  </>
+                )}
               </div>
 
-              {isAuctionItem ? (
-                /* Auction Item */
-                <div className="border-t border-b border-gray-200 py-6 mb-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <span className="text-sm text-gray-600">Current Bid:</span>
-                      <span className="font-bold text-blue-600 ml-1 text-xl">
-                        {formatPrice(item.currentBid || item.auctionStartPrice)}
-                      </span>
-                    </div>
-                    {item.auctionEndTime && (
-                      <div className="text-sm bg-yellow-100 text-yellow-800 px-3 py-1 rounded">
-                        {timeRemaining} left
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mb-4">
-                    <span className="text-sm text-gray-600">
-                      Minimum bid: {formatPrice(getMinimumNextBid(item))}
-                    </span>
-                  </div>
-                  
-                  {!isOrganizer && user && item.status === 'AVAILABLE' && !auctionEnded && (
-                    <div className="flex flex-col space-y-3">
-                      <div className="flex">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={getMinimumNextBid(item)}
-                          value={bidAmount}
-                          onChange={(e) => setBidAmount(e.target.value)}
-                          className="flex-grow px-3 py-2 border border-gray-300 rounded-l text-gray-900"
-                          placeholder="Enter bid amount"
-                        />
-                        <button
-                          onClick={handlePlaceBid}
-                          disabled={isBidding}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r disabled:opacity-50"
-                        >
-                          {isBidding ? 'Placing...' : 'Place Bid'}
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => setBidAmount(getMinimumNextBid(item).toString())}
-                        className="text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        Set to minimum bid
-                      </button>
-                    </div>
-                  )}
-                  
-                  {auctionEnded && (
-                    <div className="text-center py-2 bg-gray-100 rounded text-gray-600">
-                      Auction ended
-                    </div>
-                  )}
-                  
-                  {!user && (
-                    <div className="text-center py-2">
-                      <Link href="/login" className="text-blue-600 hover:text-blue-800">
-                        Log in to place a bid
-                      </Link>
-                    </div>
-                  )}
-                  
-                  {item.status === 'SOLD' && (
-                    <div className="text-center py-2 bg-green-100 text-green-800 rounded">
-                      Item sold
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Fixed Price Item */
-                <div className="border-t border-b border-gray-200 py-6 mb-6">
-                  <div className="flex justify-between items-center">
-                    <span className="text-2xl font-bold text-gray-900">{formatPrice(item.price)}</span>
-                    {!isOrganizer && user && item.status === 'AVAILABLE' && (
-                      <button
-                        onClick={handleBuyNow}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded"
-                      >
-                        Buy Now
-                      </button>
-                    )}
-                  </div>
-                  
-                  {!user && (
-                    <div className="text-center mt-4">
-                      <Link href="/login" className="text-blue-600 hover:text-blue-800">
-                        Log in to buy this item
-                      </Link>
-                    </div>
-                  )}
-                  
-                  {item.status === 'SOLD' && (
-                    <div className="mt-4 text-center py-2 bg-red-100 text-red-800 rounded">
-                      Item sold
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Action Buttons */}
+              <div className="flex gap-4">
+                {isSoldOut ? (
+                  <button disabled className="flex-1 bg-warm-300 text-warm-500 font-bold py-3 px-6 rounded-lg cursor-not-allowed">
+                    Sold Out
+                  </button>
+                ) : isAuction ? (
+                  <button
+                    onClick={() => setShowBidModal(true)}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                  >
+                    Place Bid
+                  </button>
+                ) : isActive ? (
+                  <button
+                    onClick={() => setShowCheckoutModal(true)}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                  >
+                    Buy Now
+                  </button>
+                ) : null}
+              </div>
 
-              <div className="flex items-center">
-                <span className={`px-3 py-1 rounded-full text-sm ${
-                  item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
-                  item.status === 'SOLD' ? 'bg-red-100 text-red-800' :
-                  item.status === 'AUCTION_ENDED' ? 'bg-gray-100 text-gray-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {item.status.replace(/_/g, ' ')}
-                </span>
+              {/* Additional Info */}
+              <div className="mt-8 border-t pt-6">
+                <h3 className="font-semibold text-warm-900 mb-2">Sale Details</h3>
+                <p className="text-sm text-warm-600">
+                  Part of <Link href={`/sales/${item.saleId}`} className="text-amber-600 hover:underline">{item.saleName}</Link>
+                </p>
               </div>
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+
+      {/* Modals */}
+      {showBidModal && item && (
+        <BidModal
+          item={item}
+          onClose={() => setShowBidModal(false)}
+          onBidPlaced={(newBid) => {
+            setCurrentBid(newBid);
+            setShowBidModal(false);
+          }}
+        />
+      )}
+
+      {showCheckoutModal && (
+        <CheckoutModal
+          itemId={item.id}
+          itemTitle={item.title}
+          onClose={() => setShowCheckoutModal(false)}
+          onSuccess={() => {
+            setShowCheckoutModal(false);
+            router.push('/shopper/purchases');
+          }}
+        />
+      )}
+    </>
   );
 };
 
