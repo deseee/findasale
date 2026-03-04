@@ -3,9 +3,21 @@ export type Sale = {
   id: string;
   title: string;
   description: string;
-  date: Date;
-  location: string;
-  organizerId: string;
+  startDate: string;
+  endDate: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  lat?: number;
+  lng?: number;
+  photoUrls: string[];
+  organizer: {
+    id: string;
+    businessName: string;
+  };
+  tags?: string[];
+  isAuctionSale?: boolean;
 };
 
 export type Organizer = {

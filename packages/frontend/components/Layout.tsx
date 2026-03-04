@@ -23,19 +23,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     router.push('/login');
   };
 
-  const navLinks = (
-    <>
-      <Link href="/" className="block px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md">
-        Home
-      </Link>
-      <Link href="/about" className="block px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md">
-        About
-      </Link>
-      <Link href="/contact" className="block px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md">
-        Contact
-      </Link>
-    </>
-  );
+  const staticNavLinks = [
+    { href: '/', label: 'Home' },
+    { href: '/about', label: 'About' },
+    { href: '/contact', label: 'Contact' },
+  ];
 
   const authLinks = isClient ? (
     user ? (
@@ -106,9 +98,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
-              <Link href="/" className="text-gray-700 hover:text-blue-600">Home</Link>
-              <Link href="/about" className="text-gray-700 hover:text-blue-600">About</Link>
-              <Link href="/contact" className="text-gray-700 hover:text-blue-600">Contact</Link>
+              {staticNavLinks.map(({ href, label }) => (
+                <Link key={href} href={href} className="text-gray-700 hover:text-blue-600">{label}</Link>
+              ))}
 
               {!isClient ? (
                 <>
@@ -163,7 +155,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         {/* Mobile menu */}
         {menuOpen && (
           <div id="mobile-menu" className="md:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-1">
-            {navLinks}
+            {staticNavLinks.map(({ href, label }) => (
+              <Link key={href} href={href} className="block px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md">
+                {label}
+              </Link>
+            ))}
             <div className="border-t border-gray-100 pt-3 mt-1 space-y-1">
               {authLinks}
             </div>

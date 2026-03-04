@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
-import { format } from 'date-fns';
 import SaleMap, { SalePin } from '../components/SaleMap';
+import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
 
 interface Sale {
@@ -73,17 +72,6 @@ const HomePage = () => {
     }
   }, []);
 
-  const formatSaleDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return 'TBA';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid Date';
-      return format(date, 'MMM d, yyyy');
-    } catch {
-      return 'Invalid Date';
-    }
-  };
-
   // Client-side filtering
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -105,12 +93,13 @@ const HomePage = () => {
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       // H4: Weekend = Saturday+Sunday of the current week.
+      // Handles edge cases: Sunday (weekend already started), Saturday (today), weekday (next Saturday).
       const day = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
       const satDiff = day === 0 ? -1 : day === 6 ? 0 : 6 - day;
       const weekendStart = new Date(todayStart);
-      weekendStart.setDate(weekendStart.getDate() + satDiff);
+      weekendStart.setDate(weekendStart.getDate() + satDiff); // This Saturday
       const weekendEnd = new Date(weekendStart);
-      weekendEnd.setDate(weekendEnd.getDate() + 1);
+      weekendEnd.setDate(weekendEnd.getDate() + 1); // This Sunday
       weekendEnd.setHours(23, 59, 59, 999);
 
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -246,35 +235,7 @@ const HomePage = () => {
           ) : filteredSales.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredSales.map((sale) => (
-                <div key={sale.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                  <Link href={`/sales/${sale.id}`} className="block">
-                    {sale.photoUrls && sale.photoUrls.length > 0 ? (
-                      <img src={sale.photoUrls[0]} alt={sale.title} className="w-full h-48 object-cover" loading="lazy" />
-                    ) : (
-                      <div className="bg-gray-200 h-48 flex items-center justify-center">
-                        <span className="text-gray-500">No image available</span>
-                      </div>
-                    )}
-                    <div className="p-4">
-                      <h3 className="text-xl font-semibold mb-2 text-gray-900">{sale.title}</h3>
-                      <p className="text-gray-600 mb-2 line-clamp-2">{sale.description}</p>
-                      <div className="flex justify-between items-center mt-4">
-                        <span className="text-sm text-gray-500">
-                          {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-sm text-gray-500">{sale.city}, {sale.state}</div>
-                    </div>
-                  </Link>
-                  <div className="px-4 pb-4">
-                    <Link
-                      href={`/organizers/${sale.organizer.id}`}
-                      className="text-sm font-medium text-blue-600 hover:underline"
-                    >
-                      {sale.organizer.businessName}
-                    </Link>
-                  </div>
-                </div>
+                <SaleCard key={sale.id} sale={sale} />
               ))}
             </div>
           ) : (
