@@ -185,15 +185,15 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const isAuctionItem = !!item.auctionStartPrice;
     let price: number;
     if (isAuctionItem) {
-      if (item.currentBid !== null && item.currentBid !== undefined) {
-        price = typeof item.currentBid === 'number' ? item.currentBid : parseFloat(item.currentBid.toString());
-      } else if (item.auctionStartPrice !== null && item.auctionStartPrice !== undefined) {
-        price = typeof item.auctionStartPrice === 'number' ? item.auctionStartPrice : parseFloat(item.auctionStartPrice.toString());
+      if (item.currentBid != null) {
+        price = item.currentBid;
+      } else if (item.auctionStartPrice != null) {
+        price = item.auctionStartPrice;
       } else {
         price = 0;
       }
-    } else if (item.price !== null && item.price !== undefined) {
-      price = typeof item.price === 'number' ? item.price : parseFloat(item.price.toString());
+    } else if (item.price != null) {
+      price = item.price;
     } else {
       price = 0;
     }
@@ -339,7 +339,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
         if (purchase.user) {
           await sendReceiptEmail({
             id: purchase.id,
-            amount: typeof purchase.amount === 'number' ? purchase.amount : parseFloat(purchase.amount.toString()),
+            amount: purchase.amount,
             user: { email: purchase.user.email, name: purchase.user.name },
             item: purchase.item,
             sale: purchase.sale,
@@ -397,10 +397,8 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
 
     const paymentIntent = await stripe.paymentIntents.retrieve(purchase.stripePaymentIntentId);
 
-    const amount = typeof purchase.amount === 'number' ? purchase.amount : parseFloat(purchase.amount.toString());
-    const platformFee = typeof purchase.platformFeeAmount === 'number'
-      ? purchase.platformFeeAmount
-      : parseFloat((purchase.platformFeeAmount ?? 0).toString());
+    const amount = purchase.amount;
+    const platformFee = purchase.platformFeeAmount ?? 0;
 
     res.json({
       clientSecret: paymentIntent.client_secret,
