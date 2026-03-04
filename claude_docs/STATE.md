@@ -96,6 +96,10 @@ Prepare for scale to additional metros.
 - **Backend hosting not yet chosen** — domain `finda.sale` registered, frontend live on Vercel. Backend needs Railway/Render/Fly.io for `api.finda.sale`. Currently bridged via ngrok (static domain: `pamelia-unweathered-arabesquely.ngrok-free.dev`, runs as Docker service automatically).
 - **Resend domain verification** — ✅ Verified (confirmed 2026-03-04).
 - **localhost:3000 images** — `next.config.js` is not bind-mounted; Docker frontend container still has old CSP without `fastly.picsum.photos`. Fix: `docker compose build --no-cache frontend && docker compose up -d`.
+- **Run pending DB migrations** — Phase 9/11 schema changes not yet applied in Docker: `docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma migrate deploy"` (applies 20260304000001 + 20260304000002).
+- **Regenerate Prisma client** — After migrations: `docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma generate"`.
+- **Generate VAPID keys for push notifications** — Run `npx web-push generate-vapid-keys`, add to `packages/backend/.env` (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_CONTACT_EMAIL) and `packages/frontend/.env.local` (NEXT_PUBLIC_VAPID_PUBLIC_KEY). Also add NEXT_PUBLIC_VAPID_PUBLIC_KEY to Vercel environment variables.
+- **Docker rebuild backend** — After migrations + VAPID keys: `docker compose build --no-cache backend && docker compose up -d`.
 
 ---
 
@@ -180,6 +184,35 @@ Prepare for scale to additional metros.
 ## In Progress
 
 None.
+
+### Phase 9 – Affiliate Conversion Tracking (verified 2026-03-04)
+- Fixed `affiliateController.ts`: prisma import (`../lib/prisma`), JSON response replacing redirect, `conversions` added to `getCreatorStats`
+- Schema: `conversions Int @default(0)` on AffiliateLink, `affiliateLinkId String?` on Purchase, FK constraint
+- Migration: `20260304000001_add_affiliate_conversions` (idempotent with IF NOT EXISTS guards)
+- `stripeController.ts`: reads `affiliateLinkId` from body, stores on Purchase, increments conversions in webhook
+- `pages/affiliate/[id].tsx`: click tracking → sessionStorage → redirect to sale
+- `pages/creator/dashboard.tsx`: Conversions + Conv. Rate stat cards added
+- `components/CheckoutModal.tsx`: reads `affiliateRef` from sessionStorage, passes to createPaymentIntent
+- **Pending:** `prisma migrate deploy` to apply 20260304000001 in Docker
+
+### Phase 12 – Auction Launch (verified 2026-03-04)
+- `auctionJob.ts`: added `cron.schedule('*/5 * * * *', endAuctions)` — was never scheduled before
+- `components/AuctionCountdown.tsx`: live per-second countdown, red under 1hr, triggers query invalidation on expiry
+- `components/BidModal.tsx`: bid modal with validation, login prompt if unauthenticated
+- `pages/sales/[id].tsx`: 🔨 Auction badge on items, replaced static time display with live AuctionCountdown
+
+### Phase 11 – PWA Push Notifications (verified 2026-03-04)
+- Schema: `PushSubscription` model added (userId, endpoint, p256dh, auth, @@unique([userId, endpoint]))
+- Migration: `20260304000002_add_push_subscriptions`
+- `pushController.ts` + `routes/push.ts`: subscribe/unsubscribe endpoints (authenticated)
+- `utils/webpush.ts`: lazy-loaded web-push utility, no-op if VAPID keys missing
+- `index.ts`: `/api/push` route registered
+- `emailReminderService.ts`: push notifications sent alongside SMS reminders
+- `hooks/usePushSubscription.ts`: auto-subscribes logged-in users
+- `public/sw-push.js`: push event + notificationclick service worker handlers
+- `pages/_app.tsx`: PushSubscriber component wired inside provider tree
+- `packages/backend/package.json`: web-push + @types/web-push added (pnpm-lock.yaml pushed)
+- **Pending:** `prisma migrate deploy`, VAPID key generation, backend Docker rebuild
 
 ### Session 35 — Bug Burn-Down + Component Drift Fixes (verified 2026-03-04)
 
@@ -295,8 +328,8 @@ None.
 
 ## Next Strategic Move
 
-Feature sprint — all bugs and audit findings closed.
-Next session: research-only — find open-source code to sample for Phase 12 (auctions), Phase 9 (creator analytics), Phase 11 (push notifications) before building.
+Activate Phase 9/11/12 in Docker: run pending migrations, generate VAPID keys, rebuild backend container.
+Then smoke-test push subscriptions at localhost:3000.
 
 ---
 
@@ -423,5 +456,5 @@ See ROADMAP.md for full phase breakdown, success metrics, and decision gates.
 - P1: iCal guard for missing `startDate`/`endDate`
 - GitHub push batching rule added to CORE.md (Section 10): max 3 files per `push_files` call
 
-Last Updated: 2026-03-04 (session 35 — bug burn-down + component drift complete)
-Status: All bugs and audit findings closed. Build clean. Next: research session for Phase 12/9/11 features.
+Last Updated: 2026-03-04 (session 36 — Phase 9/11/12 feature sprint complete)
+Status: Phase 9 (affiliate conversions), Phase 11 (push notifications), Phase 12 (auction launch) all coded and pushed. Vercel build fixed. Pending: run migrations in Docker, generate VAPID keys, rebuild backend.
