@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 
 // Generate affiliate link for a sale
@@ -104,19 +104,11 @@ export const trackAffiliateClick = async (req: Request, res: Response) => {
       data: { clicks: { increment: 1 } }
     });
 
-    // Set cookie to track referral
-    res.cookie('affiliateRef', id, {
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      httpOnly: true,
-      sameSite: 'lax'
-    });
-
-    // Redirect to sale page
-    res.redirect(`/sales/${affiliateLink.saleId}`);
+    // Return JSON so the frontend affiliate page can handle the redirect
+    res.json({ saleId: affiliateLink.saleId });
   } catch (error) {
     console.error('Error tracking affiliate click:', error);
-    // Redirect to home page if there's an error
-    res.redirect('/');
+    res.status(500).json({ message: 'Failed to track affiliate click' });
   }
 };
 
@@ -130,21 +122,17 @@ export const getCreatorStats = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Creator access required.' });
     }
 
-    // Get total clicks across all affiliate links
-    const totalClicks = await prisma.affiliateLink.aggregate({
-      _sum: {
-        clicks: true
-      },
+    // Get aggregate totals across all affiliate links
+    const totals = await prisma.affiliateLink.aggregate({
+      _sum: { clicks: true, conversions: true },
       where: { userId }
     });
 
-    // Get total affiliate links
-    const totalLinks = await prisma.affiliateLink.count({
-      where: { userId }
-    });
+    const totalLinks = await prisma.affiliateLink.count({ where: { userId } });
 
     res.json({
-      totalClicks: totalClicks._sum.clicks || 0,
+      totalClicks: totals._sum.clicks || 0,
+      totalConversions: totals._sum.conversions || 0,
       totalLinks
     });
   } catch (error) {

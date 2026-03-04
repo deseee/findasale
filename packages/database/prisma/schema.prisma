@@ -30,8 +30,9 @@ model User {
   referredUsers   Referral[]      @relation("ReferrerToReferred")
   referredBy      Referral?       @relation("ReferredToReferrer")
   lineEntries     LineEntry[]
-  reviews         Review[]
-  affiliateLinks  AffiliateLink[]
+  reviews           Review[]
+  affiliateLinks    AffiliateLink[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Organizer {
@@ -126,19 +127,21 @@ model Bid {
 }
 
 model Purchase {
-  id                    String   @id @default(cuid())
+  id                    String         @id @default(cuid())
   amount                Float
   platformFeeAmount     Float?
-  status                String   @default("PENDING") // PENDING, PAID, REFUNDED
+  status                String         @default("PENDING") // PENDING, PAID, REFUNDED
   userId                String
-  user                  User     @relation(fields: [userId], references: [id])
+  user                  User           @relation(fields: [userId], references: [id])
   itemId                String?
-  item                  Item?    @relation(fields: [itemId], references: [id])
+  item                  Item?          @relation(fields: [itemId], references: [id])
   saleId                String?
-  sale                  Sale?    @relation(fields: [saleId], references: [id])
-  stripePaymentIntentId String?  @unique
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  sale                  Sale?          @relation(fields: [saleId], references: [id])
+  stripePaymentIntentId String?        @unique
+  affiliateLinkId       String?
+  affiliateLink         AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 }
 
 model SaleSubscriber {
@@ -201,16 +204,30 @@ model Referral {
 }
 
 model AffiliateLink {
-  id        String   @id @default(cuid())
-  userId    String
-  saleId    String
-  clicks    Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  sale      Sale     @relation(fields: [saleId], references: [id])
+  id          String     @id @default(cuid())
+  userId      String
+  saleId      String
+  clicks      Int        @default(0)
+  conversions Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id])
+  sale        Sale       @relation(fields: [saleId], references: [id])
+  purchases   Purchase[]
 
   @@unique([userId, saleId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, endpoint])
 }
 
 model LineEntry {
