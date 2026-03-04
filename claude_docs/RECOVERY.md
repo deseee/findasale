@@ -91,13 +91,16 @@ Fix:
 
 ---
 
-## 8. Socket.io Not Updating
+## 8. Auction Polling Latency (Socket.io Deferred)
 
-Check:
-- Server running
-- CORS config
-- Room join logic
-- Fallback to polling enabled
+Status: DEFERRED (session 36 decision — polling sufficient for MVP)
+
+Current: Auction UI uses polling via React Query (5-second intervals).
+When to revisit: Real auction data shows >2 second bid delays or excessive server load.
+
+If reactivating Socket.io: requires WebSocket gateway, connection state tracking,
+broadcast room logic, graceful fallback to polling on connection loss.
+See ROADMAP.md Phase 12 notes.
 
 ---
 
