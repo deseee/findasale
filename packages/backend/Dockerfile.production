@@ -1,0 +1,35 @@
+FROM node:18-slim
+
+WORKDIR /app
+
+ENV CI=true
+ENV NODE_ENV=production
+
+# OpenSSL required by Prisma client
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# pnpm
+RUN corepack enable && corepack prepare pnpm@8.15.5 --activate
+
+# Copy workspace manifests + lockfile
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+
+# Copy required packages only
+COPY packages/database ./packages/database
+COPY packages/backend ./packages/backend
+
+# Install deps (production + database for migrations)
+RUN pnpm install --frozen-lockfile --filter backend... --filter database
+
+# Generate Prisma client
+RUN pnpm --filter database exec prisma generate
+
+# Build TypeScript → dist/
+RUN pnpm --filter backend run build
+
+WORKDIR /app/packages/backend
+
+EXPOSE 5000
+
+# Run pending migrations then start the compiled server
+CMD ["sh", "-c", "cd /app/packages/database && npx prisma migrate deploy && cd /app/packages/backend && node dist/index.js"]

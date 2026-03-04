@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")       // pooled (PgBouncer) — used by app at runtime
+  directUrl = env("DIRECT_URL")         // non-pooled — used by prisma migrate
 }
 
 model User {
@@ -201,9 +202,9 @@ model Review {
 
 model Referral {
   id             String   @id @default(cuid())
+  referredUserId String   @unique
   referrerId     String
   referrer       User     @relation("ReferrerToReferred", fields: [referrerId], references: [id])
-  referredUserId String   @unique
   referredUser   User     @relation("ReferredToReferrer", fields: [referredUserId], references: [id])
   createdAt      DateTime @default(now())
 
