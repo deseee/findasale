@@ -179,10 +179,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Organizer has not set up payment processing' });
     }
 
-    // Ensure we have a valid price value and convert to number
     // For auction items, use currentBid (the winning bid amount); fall back to auctionStartPrice if no bids yet
+    // Item-level auction detection: auctionStartPrice being set means this is an auction item,
+    // regardless of the sale-level isAuctionSale flag.
+    const isAuctionItem = !!item.auctionStartPrice;
     let price: number;
-    if (item.sale.isAuctionSale) {
+    if (isAuctionItem) {
       if (item.currentBid !== null && item.currentBid !== undefined) {
         price = typeof item.currentBid === 'number' ? item.currentBid : parseFloat(item.currentBid.toString());
       } else if (item.auctionStartPrice !== null && item.auctionStartPrice !== undefined) {
@@ -203,7 +205,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 
     // Platform fee: 7% for auction items, 5% for regular sales
     // ST4: Convert to cents first, then multiply — avoids floating-point rounding errors
-    const feePercent = item.sale.isAuctionSale ? 0.07 : 0.05;
+    const feePercent = isAuctionItem ? 0.07 : 0.05;
     const priceCents = Math.round(price * 100);
     const platformFeeAmount = Math.round(priceCents * feePercent); // in cents
 
