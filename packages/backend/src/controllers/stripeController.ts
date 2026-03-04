@@ -149,7 +149,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { itemId } = req.body;
+    const { itemId, affiliateLinkId } = req.body;
 
     if (!itemId) {
       return res.status(400).json({ message: 'Item ID is required' });
@@ -218,7 +218,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         metadata: {
           itemId: item.id,
           saleId: item.sale.id,
-          userId: req.user.id
+          userId: req.user.id,
+          ...(affiliateLinkId ? { affiliateLinkId } : {})
         },
         application_fee_amount: platformFeeAmount,
         on_behalf_of: item.sale.organizer.stripeConnectId,
@@ -229,7 +230,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       { idempotencyKey }
     );
 
-    // Create a pending purchase record
+    // Create a pending purchase record (optionally linked to affiliate attribution)
     const purchase = await prisma.purchase.create({
       data: {
         userId: req.user.id,
@@ -238,7 +239,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         amount: price,
         platformFeeAmount: platformFeeAmount / 100, // store in dollars, not cents
         stripePaymentIntentId: paymentIntent.id,
-        status: 'PENDING'
+        status: 'PENDING',
+        ...(affiliateLinkId ? { affiliateLinkId } : {})
       }
     });
 
@@ -318,6 +320,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
             where: { id: paymentIntent.metadata.itemId },
             data: { status: 'SOLD' },
           });
+        }
+
+        // Attribute affiliate conversion if purchase was referred
+        if (purchase.affiliateLinkId) {
+          await prisma.affiliateLink.update({
+            where: { id: purchase.affiliateLinkId },
+            data: { conversions: { increment: 1 } }
+          }).catch(err => console.warn('Failed to increment affiliate conversion:', err));
         }
 
         // Award purchase badge

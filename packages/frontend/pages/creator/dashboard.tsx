@@ -32,6 +32,7 @@ interface Sale {
 interface CreatorStats {
   totalLinks: number;
   totalClicks: number;
+  totalConversions: number;
 }
 
 const CreatorDashboard = () => {
@@ -191,10 +192,14 @@ const CreatorDashboard = () => {
                   <p className="text-3xl font-bold text-green-600">{stats?.totalClicks ?? 0}</p>
                 </div>
                 <div className="bg-white rounded-lg shadow-md p-6">
-                  <p className="text-sm text-gray-500 mb-1">Avg Clicks / Link</p>
+                  <p className="text-sm text-gray-500 mb-1">Conversions</p>
+                  <p className="text-3xl font-bold text-orange-600">{stats?.totalConversions ?? 0}</p>
+                </div>
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <p className="text-sm text-gray-500 mb-1">Conv. Rate</p>
                   <p className="text-3xl font-bold text-purple-600">
-                    {stats?.totalLinks
-                      ? ((stats.totalClicks ?? 0) / stats.totalLinks).toFixed(1)
+                    {stats?.totalClicks
+                      ? `${(((stats.totalConversions ?? 0) / stats.totalClicks) * 100).toFixed(1)}%`
                       : '—'}
                   </p>
                 </div>
