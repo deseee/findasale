@@ -1,89 +1,171 @@
 import { Request, Response } from 'express';
-import { prisma } from '../index';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import { prisma } from '../index';
+import { v4 as uuidv4 } from 'uuid';
+import { handleReferralBadge, handlePointsBadge } from './userController';
 
-interface AuthPayload {
-  userId: string;
-  email: string;
-  role: string;
-}
-
-const generateToken = (payload: AuthPayload): string => {
-  return jwt.sign(payload, process.env.JWT_SECRET || 'your-secret-key', {
-    expiresIn: '7d',
-  });
-};
-
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (req: Request, res: Response) => {
   try {
-    const { email, password, businessName } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, businessName, phone, businessAddress } = req.body;
 
-    // H3: Normalize email to lowercase
-    const normalizedEmail = email.toLowerCase().trim();
+    // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
+    const email = rawEmail?.trim().toLowerCase();
+    const name = rawName?.trim();
 
+    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { email }
     });
 
     if (existingUser) {
-      res.status(400).json({ error: 'User already exists' });
-      return;
+      return res.status(400).json({ message: 'User already exists' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        password: hashedPassword,
-        role: 'ORGANIZER',
-        organizer: {
-          create: {
-            businessName,
-          },
-        },
+    // Generate unique referral code
+    const userReferralCode = uuidv4().substring(0, 8).toUpperCase();
+
+    // Whitelist role — never allow client to self-assign ADMIN
+    const safeRole = ['USER', 'ORGANIZER'].includes(role) ? role : 'USER';
+
+    // DB2: Wrap user + organizer creation atomically — neither is orphaned on failure
+    const user = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          name,
+          role: safeRole,
+          password: hashedPassword,
+          referralCode: userReferralCode,
+          points: 0
+        }
+      });
+
+      if (safeRole === 'ORGANIZER') {
+        await tx.organizer.create({
+          data: {
+            userId: newUser.id,
+            businessName: businessName || name,
+            phone: phone || '',
+            address: businessAddress || '',
+          }
+        });
+      }
+
+      return newUser;
+    });
+
+    // Handle referral if provided
+    if (referralCode) {
+      const referrer = await prisma.user.findUnique({
+        where: { referralCode }
+      });
+
+      if (referrer) {
+        // Create referral record
+        await prisma.referral.create({
+          data: {
+            referrerId: referrer.id,
+            referredUserId: user.id
+          }
+        });
+
+        // Award points to referrer (e.g., 50 points)
+        const pointsToAdd = 50;
+        await prisma.user.update({
+          where: { id: referrer.id },
+          data: {
+            points: {
+              increment: pointsToAdd
+            }
+          }
+        });
+
+        // Check for referral badge
+        await handleReferralBadge(referrer.id);
+
+        // Check for points badge
+        const updatedReferrer = await prisma.user.findUnique({
+          where: { id: referrer.id }
+        });
+        
+        if (updatedReferrer) {
+          await handlePointsBadge(referrer.id, updatedReferrer.points);
+        }
+      }
+    }
+
+    // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        points: user.points,
+        referralCode: user.referralCode,
       },
-    });
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '7d' }
+    );
 
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    res.status(201).json({ token, user: { id: user.id, email: user.email } });
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = user;
+    res.status(201).json({ user: userWithoutPassword, token });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({ message: 'Server error during registration' });
   }
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email: rawLoginEmail, password } = req.body;
+    const email = rawLoginEmail?.trim().toLowerCase();
 
-    // H3: Normalize email to lowercase
-    const normalizedEmail = email.toLowerCase().trim();
-
+    // Find user
     const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { email }
     });
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      res.status(401).json({ error: 'Invalid credentials' });
-      return;
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials - User not found' });
     }
 
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
+    // Check if user has a password (some OAuth users might not)
+    if (!user.password) {
+      return res.status(400).json({ message: 'Account not set up for password login. Please contact support.' });
+    }
 
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid credentials - Incorrect password' });
+    }
+
+    // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        points: user.points,
+        referralCode: user.referralCode,
+      },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '7d' }
+    );
+
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword, token });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ message: 'Server error during login' });
   }
 };

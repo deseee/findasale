@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { getStripe } from '../utils/stripe';
 import { Resend } from 'resend';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 const stripe = getStripe();
 
 let _resend: any = null;
