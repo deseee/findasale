@@ -21,9 +21,9 @@ Prepare for scale to additional metros.
 - Stripe Connect Express
 - Leaflet + OSM maps
 - Backend geocoding cache
-- Cloudinary (or Blob) image storage
+- Cloudinary image storage
 - PWA enabled
-- Socket.io auctions
+- Polling for auctions (Socket.io deferred session 36)
 
 ---
 
@@ -93,7 +93,7 @@ Prepare for scale to additional metros.
 
 ## Pending Manual Action
 
-- **Backend hosting not yet chosen** — domain `finda.sale` registered, frontend live on Vercel. Backend needs Railway/Render/Fly.io for `api.finda.sale`. Currently bridged via ngrok (static domain: `pamelia-unweathered-arabesquely.ngrok-free.dev`, runs as Docker service automatically).
+- **Backend hosting: ngrok bridge temporary** — Frontend live on Vercel (finda.sale). Backend running in Docker on Windows, exposed via ngrok static domain `pamelia-unweathered-arabesquely.ngrok-free.dev`. Plan: migrate to Railway/Render/Fly.io before real user traffic. Deferred pending Sprint A completion.
 - **Resend domain verification** — ✅ Verified (confirmed 2026-03-04).
 - **ROADMAP.md audit** — ✅ Complete (session 38, 2026-03-04). Phases 9/11/12 marked complete, sprint order updated. Next sprint: Phase 12 completion (organizer auction toggle + Stripe 7% webhook).
 
@@ -179,7 +179,7 @@ Prepare for scale to additional metros.
 
 ## In Progress
 
-None.
+None — session 39 work complete. Next: Sprint A (Phase 12 auction) + Sprint B (Phase 24+25 design system).
 
 ### Session 37 — Activation Sprint: Migrations + VAPID + Upload Fix + SW Fix (verified 2026-03-04)
 - Applied Phase 9 + 11 DB migrations in Docker (000001 affiliate conversions, 000002 push subscriptions). Migration 000002 required `prisma migrate resolve --applied` — table already existed from prior `db push`.
@@ -308,16 +308,17 @@ None.
 ## Deferred
 
 ### Standard Deferred
-- Auction (Socket.io bidding) — explicitly deferred; polling used for MVP (session 36 decision)
-- Virtual line / QR code — scaffolded + E2E tested (Phase 10); activate when organizer needs it
+- Socket.io live bidding — polling sufficient for MVP (session 36 decision)
+- Virtual line SMS — scaffolded, Twilio E2E untested
 - Multi-metro expansion (currently Grand Rapids only)
-- Real-user beta onboarding (next logical step after Phase 12 completion)
+- Real-user beta onboarding
+- Video-to-inventory (room walkthrough) — vision models not ready, revisit late 2026
 
 ### Infrastructure & Dev Tools (Pre-Beta)
 - ~~Test data seeding script~~ — **Complete (verified 2026-03-02).** See Phase 9 section.
 - Prisma Studio documentation — Already available (`npx prisma studio`); add to DEVELOPMENT.md setup guide. (30 min)
 - ngrok setup guide — For local webhook testing (Stripe, Twilio); add to DEVELOPMENT.md. (1 hour)
-- OAuth social login (Google, GitHub) — Deferred to Phase 16; add to roadmap as P2. (2–3 sprints)
+- OAuth social login (Google, Facebook, Apple) — Promoted to Phase 31 (P1). NextAuth.js v5.
 
 ---
 
@@ -333,22 +334,29 @@ None.
 
 ## Next Strategic Move
 
-Phase 12 completion — organizer auction toggle + Stripe 7% webhook for auction wins. This is the primary revenue unlock. Then real-user beta onboarding in Grand Rapids.
+Five-pillar growth phase. Immediate priorities:
+1. **Sprint A:** Phase 12 completion — organizer auction toggle + Stripe 7% webhook (revenue unlock)
+2. **Sprint B:** Phase 24+25 — Design system foundation + bottom tab navigation (visual overhaul, parallel to Sprint A)
+3. **Sprint C:** Phase 14 — Rapid capture carousel + background AI processing (organizer workflow)
+4. **Sprint D:** Phase 17 — Organizer reputation + follow system (trust foundation)
+
+Full roadmap: `claude_docs/ROADMAP.md` (rewritten 2026-03-04 v2)
 
 ---
 
 ## Growth & Feature Roadmap
 
-Comprehensive roadmap created: `claude_docs/ROADMAP.md`
-
-See ROADMAP.md for full phase breakdown, success metrics, and decision gates.
+See ROADMAP.md for full phase breakdown organized around five pillars:
+1. Organizer Photo/Video Workflow (Phases 14–16)
+2. UI/UX Design Overhaul (Phases 24–27)
+3. Social & Discovery Layer (Phases 17, 28–30)
+4. Shopper Engagement Engine (Phases 18–21)
+5. Creator-Led Growth + Distribution (Phases 22–23, 31–32)
 
 **Completed feature phases:**
-- Phase 9: Creator dashboard + affiliate conversion tracking ✅ (verified 2026-03-04)
-- Phase 11: PWA push notifications ✅ (verified 2026-03-04)
-- Phase 12 (partial): Auction UI + cron ✅ (verified 2026-03-04)
-
-**Next sprint: Phase 12 completion** — organizer auction toggle + Stripe 7% webhook for auction wins → real-user beta onboarding
+- Phase 9: Creator dashboard + affiliate conversion tracking ✅
+- Phase 11: PWA push notifications ✅
+- Phase 12 (partial): Auction UI + cron ✅
 
 ### Phase 7 – Local SEO & Parity (verified 2026-03-02)
 - Item categories: added `category` + `condition` fields to Item schema; migration 20260301000003_add_item_category created
@@ -462,5 +470,5 @@ See ROADMAP.md for full phase breakdown, success metrics, and decision gates.
 - P1: iCal guard for missing `startDate`/`endDate`
 - GitHub push batching rule added to CORE.md (Section 10): max 3 files per `push_files` call
 
-Last Updated: 2026-03-04 (session 38 — ROADMAP audit complete)
-Status: Phases 9/11/12 activated + ROADMAP reconciled. Next sprint: Phase 12 completion (organizer auction toggle + Stripe 7% webhook) → beta.
+Last Updated: 2026-03-04 (session 40 — deep workflow audit, doc fixes, dead code cleanup)
+Status: All doc fixes applied. Stress test planned for session 41.
