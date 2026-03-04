@@ -8,6 +8,18 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-04 (session 47 — Railway + Neon Infrastructure Migration)
+**Worked on:** Migrated backend from local Docker + ngrok to Railway. Fixed 6 TypeScript compilation errors exposed by `tsc --strict` (Prisma compound key naming `saleId_userId`, nullable `userId` on SaleSubscriber, `never` type from always-true `typeof` checks on Prisma Float fields, missing `prisma` import in index.ts SIGINT handler). Fixed Dockerfile binary resolution (`pnpm exec` → `pnpm run` for prisma generate/migrate). Fixed `uuid@13` ESM-only crash by replacing with Node 18 built-in `crypto.randomUUID()`. Railway container now healthy. Ran `prisma migrate deploy` against Neon — all 15 migrations already applied. Set `NEXT_PUBLIC_API_URL` in Vercel to Railway domain.
+**Decisions:** `crypto.randomUUID()` preferred over pinning uuid@9 — eliminates the dependency entirely. `pnpm run` (npm scripts) preferred over `pnpm exec` in Docker for binary resolution reliability.
+**Next up:** Vercel redeploy (rate-limited, pending a few hours). Verify frontend talks to Railway backend end-to-end. Then Sprint E (Phase 26 — listing card redesign).
+**Blockers:** Vercel redeploy rate limit — frontend still points at old backend URL until deploy completes.
+
+### 2026-03-05 (session 42 — Sprint A: Phase 12 Auction Completion)
+**Worked on:** Completed Sprint A. Audited all Phase 12 remaining work against code reality. Discovered frontend auction toggles and schema fields were already complete from session 36. Two actual gaps fixed: (1) `stripeController.ts` was using sale-level `isAuctionSale` flag for both price derivation and 7% fee — replaced with item-level `const isAuctionItem = !!item.auctionStartPrice` so the 7% fee applies to any item with `auctionStartPrice` set regardless of sale type; (2) `itemController.ts` `createItem` and `updateItem` were silently dropping `category` and `condition` from req.body — both now extract and persist those fields. Both files pushed to GitHub (2 commits, bf3ac03).
+**Decisions:** Item-level auction detection preferred over sale-level — enables mixed sales (some auction items, some fixed-price in same sale). Category/condition bug fix treated as part of Sprint A since it affected the same item creation flow.
+**Next up:** Sprint B — Phase 24+25 design system foundation + bottom tab navigation. Load ROADMAP.md Phase 24/25 section before starting.
+**Blockers:** None. Both fixes are backend-only, picked up by nodemon automatically — no Docker rebuild needed.
+
 ### 2026-03-04 (session 41 — 7-Test Workflow Stress Test)
 **Worked on:** Ran all 7 stress tests from next-session-prompt.md to validate guardrails added in sessions 39–40. Tests covered: diff-only gate (CORE §4), session init protocol (CORE §2), MCP push batching (CORE §10), authority hierarchy conflict (CORE §7), Docker command safety (dev-environment skill), dead code detection (context.md accuracy), stale fact detection (polling vs Socket.io). All 7 passed. context.md regenerated locally — stale `contexts/` directory entry now removed.
 **Decisions:** Sonnet is sufficient for Sprint A (Phase 12 auction completion — mechanical, 3-4 file edits). Opus recommended for Sprint B (Phase 24+25 design system — cross-cutting visual overhaul). Sprint A goes next via Sonnet.
@@ -26,15 +38,4 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Next up:** Sprint A (Phase 12 auction completion) + Sprint B (Phase 24+25 design system) in parallel.
 **Blockers:** None. Research-only session — no code changes.
 
-### 2026-03-04 (session 37 — Activation Sprint)
-**Worked on:** Activated Phases 9/11/12 in Docker + Vercel. Applied DB migrations 000001 + 000002 (000002 needed `migrate resolve --applied` — table already existed from prior `db push`). Generated VAPID keys, wired into root `.env`, `docker-compose.yml` (backend + frontend services), and Vercel env vars. Fixed `uploadController.ts` — stale version missing `upload` multer export and wrong handler names; backend crash-looped on startup until corrected. Fixed `docker-compose.yml` missing `hooks/` bind mount — frontend container couldn't resolve `usePushSubscription`. Rebuilt backend `--no-cache`. Confirmed push working on Vercel (SW registered, prompt appeared for first user). Fixed Stripe `clover/stripe.js` SW interception bug — workbox NetworkOnly failing in SW fetch context; fix was to remove Stripe from runtimeCaching entirely + exclude `*.stripe.com` from pages catch-all. Fixed Vercel build TypeScript error in `usePushSubscription.ts` (`Uint8Array<ArrayBufferLike>` → `Uint8Array<ArrayBuffer>`).
-**Decisions:** One-prompt-per-browser for push is correct design — permission is browser-level, not per-user. Stripe domains must be excluded from SW entirely (not just NetworkOnly) due to CORS fetch restrictions in SW context.
-**Next up:** ROADMAP.md audit — Phases 9/11/12 complete, roadmap has stale items. Audit before committing to next feature sprint.
-**Blockers:** None. All changes on GitHub main. Vercel redeploying with Stripe SW fix.
-
-### 2026-03-04 (session 36 — Phase 9/11/12 Feature Sprint)
-**Worked on:** Implemented Phase 9 (affiliate conversion tracking), Phase 12 (auction cron + frontend), and Phase 11 (PWA push notifications). Phase 9: fixed affiliateController prisma import, added `conversions` + `affiliateLinkId` to schema, wired Stripe metadata attribution, built `affiliate/[id].tsx` redirect page, updated creator dashboard stats, wired sessionStorage ref in CheckoutModal. Phase 12: fixed auctionJob.ts cron (was never scheduled), built AuctionCountdown + BidModal components, wired live countdown on sale detail. Phase 11: PushSubscription schema + migration, pushController/routes/webpush utility, usePushSubscription hook, sw-push.js service worker, PushSubscriber in _app.tsx, push sends in emailReminderService. Fixed Vercel build (pnpm-lock.yaml pushed after extended git conflict resolution). Fixed migration 20260304000001 with IF NOT EXISTS guards. Added self-healing skills 14–16 (MCP+untracked conflict, PowerShell bracket wildcards, git lock files).
-**Decisions:** sessionStorage over cookies for affiliate attribution (no cookie-parser). Polling over Socket.io for auction UI (not installed; sufficient for MVP). Lazy require('web-push') so server starts without package.
-**Next up:** Run `prisma migrate deploy` in Docker (both migrations 000001 + 000002 pending). Generate VAPID keys, add to .env files. Docker rebuild backend. Then smoke-test push subscriptions.
-**Blockers:** Migrations not yet applied — need `docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma migrate deploy"`. VAPID keys not yet generated — `npx web-push generate-vapid-keys`.
 

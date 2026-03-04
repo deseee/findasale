@@ -22,10 +22,11 @@ Research archives: `claude_docs/research/competitor-intel-2026-03-04.md`, `claud
 | Sprint | Phases | Focus | Status |
 |--------|--------|-------|--------|
 | A | 12 | Auction completion | ✅ Done |
-| **B** | **24+25** | **Design system + bottom tab nav** | **NOW** |
-| C | 14a+b | Rapid capture + background AI | Next |
-| D | 17 | Reputation + follow system | Next |
-| E | 26 | Listing card redesign + image pipeline | Queued |
+| B | 24+25 | Design system + bottom tab nav | ✅ Done |
+| C | 14a+b+c | Rapid capture + background AI + Cloudinary | ✅ Done |
+| D | 17 | Reputation + follow system | ✅ Code complete (migration applied) |
+| — | Infra | Railway backend + Neon PostgreSQL migration | ✅ Done (ngrok retired) |
+| **E** | **26** | **Listing card redesign + image pipeline** | **Next** |
 | F | 31 | OAuth social login | Queued |
 | G | 28 | Social proof + activity feed | Queued |
 | H | 18 | Photo preview drops | Queued |
@@ -33,7 +34,9 @@ Research archives: `claude_docs/research/competitor-intel-2026-03-04.md`, `claud
 | J | 22 | Creator tier program | Queued |
 | K–S | 15,29,20,21,23,32,27,30,16 | Later phases | Post-beta |
 
-**Parallel tracks:** B+C (different code areas), C+D (backend vs frontend), 22–23 independent of shopper phases, Phase 32 can spread across sprints, partnerships/content marketing need zero code.
+**Parallel tracks:** 22–23 independent of shopper phases, Phase 32 can spread across sprints, partnerships/content marketing need zero code.
+
+**Infrastructure:** Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon, frontend on Vercel (`finda.sale`). ngrok bridge retired.
 
 ---
 

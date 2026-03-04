@@ -50,7 +50,7 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Pending Manual Action
 
-- **Backend hosting: ngrok bridge temporary** — Frontend on Vercel (finda.sale). Backend in Docker on Windows via ngrok static domain. Plan: migrate to Railway/Render/Fly.io before real user traffic.
+- **Vercel redeploy needed** — `NEXT_PUBLIC_API_URL` updated to `https://backend-production-153c9.up.railway.app` but Vercel is rate-limited; redeploy pending (ETA: a few hours). Frontend will not talk to Railway backend until this deploys.
 - **Resend domain verification** — ✅ Verified.
 
 ---
@@ -88,4 +88,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-04 (session 46 — Sprint C complete, Sprint D Phase 17 code complete, Vercel deploy budget rules added)
+Last Updated: 2026-03-04 (session 47 — Railway backend deployed, Neon DB migrated, ngrok bridge retired)
