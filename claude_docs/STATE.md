@@ -36,10 +36,13 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 ## In Progress
 
 **Sprint B — Phase 24+25: Design System + Bottom Tab Navigation**
-- Color palette, typography, spacing tokens in Tailwind config
-- Bottom tab navigation (mobile-first)
-- Skeleton screens for all list views
-- See ROADMAP.md Phase 24/25 specs
+- ✅ Phase 24 complete: warm color palette, typography (Montserrat/Inter), spacing tokens, shadows, touch targets in tailwind.config.js
+- ✅ globals.css rewritten: base layer, component classes (.card, .btn-primary/secondary/ghost), utility classes (.pb-safe, .line-clamp)
+- ✅ _document.tsx: Google Fonts loaded, theme-color → #D97706
+- ✅ Layout.tsx: full blue→warm/amber color swap, font-heading on logo, shadow-header
+- ✅ manifest.json: theme_color + background_color updated
+- ✅ Phase 25 partial: BottomTabNav component (Browse/Map/Saved/Profile), integrated into Layout with pb-15 clearance
+- Remaining: skeleton screens for list views, extend warm palette to SaleCard + other page components
 
 ---
 
@@ -83,4 +86,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-05 (session 43 — doc compression)
+Last Updated: 2026-03-04 (session 44 — Sprint B Phase 24+25 implementation)
