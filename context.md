@@ -1,17 +1,17 @@
 # Dynamic Project Context
-*Generated at 2026-03-04T16:42:28.385Z*
+*Generated at 2026-03-04T17:18:18.644Z*
 
 ## Git Status
-- **Branch:** (run git locally)
-- **Commit:** (run git locally)
-- **Remote:** (run git locally)
+- **Branch:** main
+- **Commit:** 2b017cb
+- **Remote:** https://github.com/deseee/findasale.git
 
 ## Last Session
 ### 2026-03-04
-**Worked on:** Full ROADMAP.md rewrite (v2) with deep research: competitor sentiment (estatesales.net 1.4★ Trustpilot, opaque fees, broken auctions; Facebook Marketplace flags "estate" as Fair Housing violation), UI/UX design system (warm palette, Montserrat/Inter typography, bottom tab nav, card redesign, onboarding flows), social layer (follow organizer, activity feeds, "Share Your Find" modal, dual-sided referral), growth channels (local partnerships, SEO arbitrage, Google Events, Google Play TWA), cross-industry mechanics (Pokemon GO, Fortnite battle pass, Supreme drops, TikTok Shop affiliates). OAuth promoted from deferred to Phase 31 (P1). Roadmap restructured into 5 pillars with phases 14–32. Context alignment audit: fixed stale facts in STACK.md, STATE.md, trimmed session-log.md.
-**Decisions:** Full ROADMAP.md rewrites violated diff-only rule — will use targeted edits going forward. OAuth promoted because social login impacts organizer signup conversion directly.
-**Next up:** Sprint A (Phase 12 auction completion) + Sprint B (Phase 24+25 design system) in parallel.
-**Blockers:** None. Research-only session — no code changes.
+**Worked on:** Deep audit of MCP connectors, doc system logic, power user workflow tips, and tool bugs. Found and fixed 9 issues: CORE.md Section 2 missing MCP check steps (HIGH), CORE.md Section 7 missing Skills in authority hierarchy (MEDIUM), duplicate ToastContext files (HIGH — `contexts/` is dead code, `components/` is canonical), RECOVERY.md stale Socket.io entry replaced with polling note, SECURITY.md timestamp updated post-rebrand, STATE.md stale "In Progress" cleared + backend hosting wording clarified, self_healing_skills.md structural ordering fixed (Skills 17–19 were out of order), context.md GitHub false negative fixed (CLI vs MCP distinction), update-context.js updated with Tool & Skill Tree section. Also completed session 39 context wrap (session-log trim, next-session-prompt, .last-wrap, context.md regen). Research on MCP push_files token limits led to CORE.md Section 10 upgrade (create_or_update_file preference, MAX_MCP_OUTPUT_TOKENS). Diff-only violation root cause diagnosed; added conversation-defaults Rule 3, Self-Healing Skill 19, strengthened CORE.md Section 4.
+**Decisions:** conversation-defaults Rule 3 (announce file mod approach) is the active enforcement checkpoint for diff-only rule. Skills now have explicit position in authority hierarchy (between CORE.md and Root CLAUDE.md). Dead code `contexts/ToastContext.tsx` flagged for deletion.
+**Next up:** Delete `contexts/ToastContext.tsx` (dead code). Sprint A (Phase 12 auction) + Sprint B (Phase 24+25 design system). Push all doc changes to GitHub.
+**Blockers:** `contexts/ToastContext.tsx` deletion needs Patrick confirmation per SECURITY.md rules.
 
 ## Health Status
 Last scan: 2026-03-03
@@ -19,13 +19,18 @@ FindA.Sale is in **GREEN** status — no critical blockers found. The codebase h
 
 ## Docker
 ```
-Docker status unavailable — run update-context.js locally (Windows) to capture container state
+NAMES                      STATUS
+findasale-ngrok-1          Up 4 hours
+findasale-frontend-1       Up 4 hours
+findasale-backend-1        Up 4 hours
+findasale-image-tagger-1   Up 4 hours
+findasale-postgres-1       Up 4 hours (healthy)
 ```
 
 ## Environment
 - GitHub CLI: ✗ not authenticated (not required when GitHub MCP is active — check MCP tools at session start)
 - ngrok tunnel: unknown (check Docker Desktop logs for findasale-ngrok-1)
-- CLI tools: node
+- CLI tools: node, pnpm
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: HF_TOKEN
@@ -36,25 +41,17 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 ├── .env
 ├── .env.example
 ├── .gitignore
-├── CLAUDE.md
-├── README.md
 ├── ai-config/
 │   └── global-instructions.md
+├── CLAUDE.md
 ├── claude_docs/
 │   ├── .last-wrap
-│   ├── CORE.md
-│   ├── DEVELOPMENT.md
-│   ├── OPS.md
-│   ├── RECOVERY.md
-│   ├── ROADMAP.md
-│   ├── SECURITY.md
-│   ├── SEED_SUMMARY.md
-│   ├── STACK.md
-│   ├── STATE.md
 │   ├── changelog-tracker/
 │   │   └── .gitkeep
 │   ├── competitor-intel/
 │   │   └── .gitkeep
+│   ├── CORE.md
+│   ├── DEVELOPMENT.md
 │   ├── feature-research-2026-03-04.md
 │   ├── health-reports/
 │   │   ├── .gitkeep
@@ -64,8 +61,15 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   ├── monthly-digests/
 │   │   └── .gitkeep
 │   ├── next-session-prompt.md
+│   ├── OPS.md
+│   ├── RECOVERY.md
+│   ├── ROADMAP.md
+│   ├── SECURITY.md
+│   ├── SEED_SUMMARY.md
 │   ├── self_healing_skills.md
 │   ├── session-log.md
+│   ├── STACK.md
+│   ├── STATE.md
 │   ├── ux-spotchecks/
 │   │   ├── .gitkeep
 │   │   └── 2026-03-04.md
@@ -97,9 +101,8 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │       │       └── cache/
 │   │   │       │           ├── lastfailed
 │   │   │       │           └── nodeids
-│   │   │       ├── Dockerfile
-│   │   │       ├── TESTING_PROGRESS.md
 │   │   │       ├── app.py
+│   │   │       ├── Dockerfile
 │   │   │       ├── docs/
 │   │   │       │   ├── TAGGER_ACCURACY.md
 │   │   │       │   ├── TAGGER_BENCHMARKS.md
@@ -112,19 +115,15 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │       ├── tagger.py
 │   │   │       ├── templates/
 │   │   │       │   └── index.html
+│   │   │       ├── TESTING_PROGRESS.md
 │   │   │       └── tests/
-│   │   │           ├── __init__.py
 │   │   │           ├── conftest.py
 │   │   │           ├── test_app.py
 │   │   │           ├── test_app_simple.py
 │   │   │           ├── test_tagger.py
-│   │   │           └── test_tagger_simple.py
+│   │   │           ├── test_tagger_simple.py
+│   │   │           └── __init__.py
 │   │   ├── src/
-│   │   │   ├── __tests__/
-│   │   │   │   ├── emailReminders.e2e.ts
-│   │   │   │   ├── stripe.e2e.ts
-│   │   │   │   └── weeklyDigest.e2e.ts
-│   │   │   ├── _triggerDigest.ts
 │   │   │   ├── controllers/
 │   │   │   │   ├── affiliateController.ts
 │   │   │   │   ├── authController.ts
@@ -168,9 +167,14 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   └── users.ts
 │   │   │   ├── services/
 │   │   │   │   └── emailReminderService.ts
-│   │   │   └── utils/
-│   │   │       ├── stripe.ts
-│   │   │       └── webpush.ts
+│   │   │   ├── utils/
+│   │   │   │   ├── stripe.ts
+│   │   │   │   └── webpush.ts
+│   │   │   ├── _triggerDigest.ts
+│   │   │   └── __tests__/
+│   │   │       ├── emailReminders.e2e.ts
+│   │   │       ├── stripe.e2e.ts
+│   │   │       └── weeklyDigest.e2e.ts
 │   │   └── tsconfig.json
 │   ├── database/
 │   │   ├── .env
@@ -188,14 +192,13 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── .env.local
 │   │   ├── .env.local.example
 │   │   ├── CLAUDE.md
-│   │   ├── Dockerfile
 │   │   ├── components/
 │   │   │   ├── AuctionCountdown.tsx
 │   │   │   ├── AuthContext.tsx
 │   │   │   ├── BadgeDisplay.tsx
 │   │   │   ├── BidModal.tsx
-│   │   │   ├── CSVImportModal.tsx
 │   │   │   ├── CheckoutModal.tsx
+│   │   │   ├── CSVImportModal.tsx
 │   │   │   ├── InstallPrompt.tsx
 │   │   │   ├── ItemCard.tsx
 │   │   │   ├── Layout.tsx
@@ -206,8 +209,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   ├── SaleSubscription.tsx
 │   │   │   ├── Skeleton.tsx
 │   │   │   └── ToastContext.tsx
-│   │   ├── contexts/
-│   │   │   └── ToastContext.tsx
+│   │   ├── Dockerfile
 │   │   ├── hooks/
 │   │   │   └── usePushSubscription.ts
 │   │   ├── lib/
@@ -219,8 +221,6 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── pages/
 │   │   │   ├── 404.tsx
 │   │   │   ├── 500.tsx
-│   │   │   ├── _app.tsx
-│   │   │   ├── _document.tsx
 │   │   │   ├── about.tsx
 │   │   │   ├── affiliate/
 │   │   │   │   └── [id].tsx
@@ -261,22 +261,24 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   ├── register.tsx
 │   │   │   ├── reset-password.tsx
 │   │   │   ├── sales/
-│   │   │   │   ├── [id].tsx
-│   │   │   │   └── zip/
-│   │   │   │       └── [zip].tsx
+│   │   │   │   ├── zip/
+│   │   │   │   │   └── [zip].tsx
+│   │   │   │   └── [id].tsx
 │   │   │   ├── server-sitemap.xml.tsx
 │   │   │   ├── shopper/
 │   │   │   │   ├── dashboard.tsx
 │   │   │   │   └── purchases.tsx
 │   │   │   ├── terms.tsx
-│   │   │   └── unsubscribe.tsx
+│   │   │   ├── unsubscribe.tsx
+│   │   │   ├── _app.tsx
+│   │   │   └── _document.tsx
 │   │   ├── postcss.config.js
 │   │   ├── public/
+│   │   │   ├── fallback-er3uCbRza2kFz6gsQte4u.js
+│   │   │   ├── fallback-gNeuXxCbTqbTpJfL6SNTp.js
 │   │   │   ├── fallback-OI8nXpndPrduP2yucmXrX.js
 │   │   │   ├── fallback-UaNjxref6efOge_HGFwCr.js
 │   │   │   ├── fallback-WBXriFD53-Yn3WC9tqMWi.js
-│   │   │   ├── fallback-er3uCbRza2kFz6gsQte4u.js
-│   │   │   ├── fallback-gNeuXxCbTqbTpJfL6SNTp.js
 │   │   │   ├── icons/
 │   │   │   │   ├── apple-touch-icon.png
 │   │   │   │   ├── favicon-16x16.png
@@ -311,6 +313,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │       └── tsconfig.json
 ├── pnpm
 ├── pnpm-workspace.yaml
+├── README.md
 └── scripts/
     └── update-context.js
 
