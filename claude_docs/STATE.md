@@ -207,7 +207,7 @@ None. All C1-C7 and H1-H11 fixes complete and pushed.
 - H9: Stripe webhook — STRIPE_WEBHOOK_SECRET guard before constructEvent
 - H10: CAN-SPAM unsubscribe — one-click unsubscribe link in reminder emails, public backend endpoint, new /unsubscribe frontend page
 - H11: Resend domain verification — confirmed verified in Resend dashboard (no code change needed)
-- Track B: Docker-from-VM gap — all 5 options tested (MCP registry, TCP 2375/2376, SSH, relay); accepted gap documented in RECOVERY.md entry 17
+- Track B: Docker-from-VM gap — TCP socket enabled by Patrick (2026-03-04) but still unreachable; Docker Desktop binds to Windows loopback only, not accessible from the VM. Gap is structural. RECOVERY.md entry 17 updated with root cause and re-test results.
 - All 27 changed files pushed to GitHub via MCP (deseee/findasale, main)
 
 ---
@@ -413,9 +413,3 @@ Two bugs found in the dev-environment skill and corrected:
 
 Last Updated: 2026-03-04 (session 31 — H1-H11 pre-beta audit fixes complete + Track B Docker gap documented)
 Status: All C1-C7 and H1-H11 audit findings resolved. Resend verified. Ready to begin M1-M19 (medium severity) or move to beta.
-
----
-
-### Seed Bug Fixes (2026-03-03)
-- ✅ Fixed: organizer users 0–9 now seeded with `role: 'ORGANIZER'` (was always `'USER'`).
-- ✅ Fixed: `stripeConnectId` now always `null` in seed — organizers go through real Stripe Connect onboarding. Fake `acct_test_*` IDs removed.

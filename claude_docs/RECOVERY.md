@@ -263,27 +263,30 @@ Prevention: Always create a migration after editing schema.prisma (`prisma migra
 
 ---
 
-## 17. Docker-from-VM Gap (2026-03-03)
+## 17. Docker-from-VM Gap (updated 2026-03-04)
 
 **Problem:** Claude's Linux VM cannot run `docker compose` or `docker exec` commands against the Docker Desktop daemon running on the Windows host.
 
-**Investigation results:**
+**Investigation results (2026-03-03):**
 - Option 1 — MCP Docker connector: searched mcp-registry for ["docker", "container", "compose"]. No Docker MCP connector available.
-- Option 2 — Docker TCP socket: tested `host.docker.internal:2375` and `:2376` from the VM. Both returned `Connection refused`. Docker Desktop's TCP socket is not enabled.
+- Option 2 — Docker TCP socket: tested `host.docker.internal:2375` and `:2376` — Connection refused (socket was disabled at time of test).
 - Option 3 — SSH: not tested; unlikely to be configured by default on Windows 10.
 - Option 4 — Bind-mount relay script: not implemented; high-maintenance overhead.
 
-**Accepted workflow (Option 5):**
+**Option 2 re-tested (2026-03-04) — TCP socket enabled, gap remains:**
+Patrick enabled "Expose daemon on tcp://localhost:2375" in Docker Desktop → Settings → General.
+`host.docker.internal` resolves to `10.0.0.24` from the VM. Port 2375 tested on `10.0.0.24`, `localhost`, `172.16.10.1` (gateway), and six common bridge IPs — all refused or timed out.
+
+Root cause: Docker Desktop binds the TCP socket to Windows loopback (`127.0.0.1:2375`) only. The Claude VM is a separate Linux VM; it cannot reach Windows' loopback through any routable address. The toggle alone is insufficient to bridge the gap.
+
+To fully expose the socket to the VM, Docker Desktop would need to bind to `0.0.0.0` (not configurable in the UI) or Patrick would need to add a Windows-side port proxy (`netsh interface portproxy`) forwarding 2375 from a network interface the VM can reach. This is complex and carries the same unauthenticated-access risk — not worth pursuing.
+
+**Accepted workflow (Option 5 — permanent):**
 Claude writes the exact PowerShell command. Patrick pastes it into PowerShell. Patrick pastes output back. Claude in Chrome handles all JSON API smoke tests (no curl through docker exec).
 
 **Tips to minimise the copy-paste loop:**
-- Claude should batch multiple docker commands into a single block separated by `;` or `&&`
-- Claude should use Claude in Chrome browser fetch for API tests instead of curl inside docker exec
-- If Docker Desktop TCP socket gets enabled later, test with: `curl http://host.docker.internal:2375/version` from inside the VM
-
-**To enable Docker TCP socket (if Patrick wants to try Option 2 in future):**
-Docker Desktop → Settings → General → "Expose daemon on tcp://localhost:2375 without TLS" → Apply & restart.
-WARNING: This is unauthenticated — only enable on a trusted private machine.
+- Batch multiple docker commands into a single block separated by `&&`
+- Use Claude in Chrome browser fetch for all API tests instead of curl inside docker exec
 
 ---
 

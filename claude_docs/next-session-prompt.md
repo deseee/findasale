@@ -1,5 +1,5 @@
 # Next Session Resume Prompt
-*Written: 2026-03-04T00:00:00Z*
+*Written: 2026-03-04 (updated after Track B re-test)*
 *Session ended: normally*
 
 ## Resume From
@@ -12,19 +12,9 @@ Nothing unfinished. All H1-H11 fixes are complete and pushed to GitHub.
 
 ## What Was Completed This Session
 
-- **H1** — getSale now returns organizer badges + avgRating (separate review query)
-- **H2** — uploadController: Promise.all → Promise.allSettled for partial batch success
-- **H3** — auth: email.trim().toLowerCase() + name.trim() on register + login
-- **H4** — Homepage weekend filter: Saturday/Sunday edge case fixed
-- **H5** — Organizer dashboard: mobile card views added for all 3 tables
-- **H6** — loading="lazy" added to all 16 frontend files with img tags; JSX arrow-operator bug in SaleCard.tsx (introduced by Python script) caught and fixed
-- **H7** — CSV import: Zod row validation with per-row error collection
-- **H8** — Global Express error handler added to index.ts
-- **H9** — Stripe webhook: STRIPE_WEBHOOK_SECRET guard before constructEvent
-- **H10** — CAN-SPAM: unsubscribe link in reminder emails + public backend endpoint + /unsubscribe frontend page
+- **H1-H11** — All 11 high-severity pre-beta audit findings fixed and pushed (27 files, deseee/findasale main)
 - **H11** — Resend domain already verified; no code change needed
-- **Track B** — Docker-from-VM gap fully investigated; all 5 options exhausted; documented in RECOVERY.md entry 17
-- **27 files pushed to GitHub** via MCP (deseee/findasale, main)
+- **Track B** — Docker TCP socket enabled by Patrick; re-tested from VM — still unreachable. Docker Desktop binds to Windows loopback (127.0.0.1) only; VM cannot reach it. Gap is structural. RECOVERY.md entry 17 updated with root cause. Accepted workflow remains copy-paste PowerShell.
 
 ## Environment Notes
 
@@ -38,6 +28,7 @@ Frontend changes (H4/H5/H6):
 
 No schema changes this session — no migration needed.
 Resend domain is verified. No further DNS action needed.
+Docker TCP socket is enabled in Docker Desktop settings but VM still cannot reach it (loopback binding only).
 
 ## Exact Context
 
@@ -46,4 +37,4 @@ Next logical step is either:
 1. Tackle M1-M19 (medium severity) — pre-beta-audit-2026-03-03.md has the fix list
 2. Skip to real-user beta — all critical and high findings are resolved; the app is functionally sound
 
-Docker-from-VM gap: Claude cannot reach Docker Desktop TCP socket from the VM. Accepted workflow is copy-paste PowerShell. Optional: Patrick can enable TCP socket in Docker Desktop → Settings → General → "Expose daemon on tcp://localhost:2375" (unauthenticated, security tradeoff). See RECOVERY.md entry 17.
+Docker-from-VM gap: the TCP socket setting is ON in Docker Desktop, but it binds to Windows 127.0.0.1 only. The VM resolves host.docker.internal to 10.0.0.24 but that interface doesn't expose port 2375. Accepted workflow is copy-paste PowerShell permanently. See RECOVERY.md entry 17.
