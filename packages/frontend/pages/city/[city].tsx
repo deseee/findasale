@@ -3,8 +3,23 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
 import api from '../../lib/api';
-import SaleCard from '../../components/SaleCard';
-import { Sale } from '../../../../shared/src/index';
+import { format } from 'date-fns';
+
+interface Sale {
+  id: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  photoUrls: string[];
+  organizer: {
+    businessName: string;
+  };
+}
 
 interface CityPageProps {
   city: string;
@@ -13,6 +28,18 @@ interface CityPageProps {
 }
 
 const CityPage: React.FC<CityPageProps> = ({ city, sales, formattedCity }) => {
+  // Format dates safely
+  const formatSaleDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'TBA';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return format(date, 'MMM d, yyyy');
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
   // Generate JSON-LD for schema.org structured data
   const generateJsonLd = () => {
     const siteUrl = 'https://finda.sale';
@@ -138,7 +165,37 @@ const CityPage: React.FC<CityPageProps> = ({ city, sales, formattedCity }) => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sales.map((sale) => (
-                <SaleCard key={sale.id} sale={sale} />
+                <Link href={`/sales/${sale.id}`} key={sale.id} className="block">
+                  <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                    {sale.photoUrls && sale.photoUrls.length > 0 ? (
+                      <img 
+                        src={sale.photoUrls[0]} 
+                        alt={sale.title}
+                        className="w-full h-48 object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="bg-gray-200 h-48 flex items-center justify-center">
+                        <span className="text-gray-500">No image available</span>
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <h3 className="text-xl font-semibold mb-2 text-gray-900">{sale.title}</h3>
+                      <p className="text-gray-600 mb-2">{sale.description}</p>
+                      <div className="flex justify-between items-center mt-4">
+                        <span className="text-sm text-gray-500">
+                          {formatSaleDate(sale.startDate)} - {formatSaleDate(sale.endDate)}
+                        </span>
+                        <span className="text-sm font-medium text-blue-600">
+                          {sale.organizer.businessName}
+                        </span>
+                      </div>
+                      <div className="mt-3 text-sm text-gray-500">
+                        {sale.city}, {sale.state}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           )}
