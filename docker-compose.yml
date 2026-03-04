@@ -42,6 +42,7 @@ services:
       - "5000:5000"
     environment:
       DATABASE_URL: postgresql://findasale:findasale@postgres:5432/findasale
+      DIRECT_URL: postgresql://findasale:findasale@postgres:5432/findasale
       TAGGER_URL: http://image-tagger:5000
       TAGGER_API_KEY: ${TAGGER_API_KEY:-change-this-in-production}
       PORT: 5000
