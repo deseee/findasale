@@ -498,5 +498,54 @@ git push
 
 ---
 
+## Skill 15: PowerShell Treats [ ] in File Paths as Wildcards
+
+**Name:** Remove-Item / Test-Path Fails on Bracket Filenames
+**Trigger:** `Remove-Item "path/[id].tsx"` silently does nothing or deletes the wrong file; `Test-Path` returns false for a file that exists
+**Environment:** Windows PowerShell + Next.js dynamic routes (e.g. `pages/sales/[id].tsx`)
+
+**Pattern:**
+PowerShell's wildcard engine treats `[` and `]` as character-class delimiters. `Remove-Item "pages/affiliate/[id].tsx"` is interpreted as "files matching `pages/affiliate/` + any single char from the set `{i,d}` + `.tsx`" — which matches nothing (or the wrong file). The command exits 0 with no error, giving the illusion the file was deleted.
+
+**Known instance:** 2026-03-04 — `Remove-Item "packages/frontend/pages/affiliate/[id].tsx"` appeared to succeed but file remained; git pull --rebase still failed on that file.
+
+**Fix — always use `-LiteralPath` for Next.js dynamic route files:**
+```powershell
+Remove-Item -LiteralPath "packages/frontend/pages/affiliate/[id].tsx"
+Remove-Item -LiteralPath "packages/frontend/pages/sales/[id].tsx"
+# Same for Test-Path, Get-Item, Copy-Item, Move-Item
+Test-Path -LiteralPath "packages/frontend/pages/sales/[id].tsx"
+```
+
+**Prevention:** Any PowerShell file operation on a path containing `[` or `]` MUST use `-LiteralPath`. Standard double-quoted paths are NOT safe.
+
+**Confidence:** High (observed, structurally certain to recur on all Next.js dynamic route file operations)
+
+---
+
+## Skill 16: Stale Git Lock Files (.git/index.lock, .git/HEAD.lock)
+
+**Name:** Git Lock File Prevents Operations
+**Trigger:** `git add` or `git commit` fails with `fatal: Unable to create '.git/index.lock': File exists` or similar for `HEAD.lock`
+**Environment:** Windows PowerShell + git
+
+**Pattern:**
+A previous git process (e.g. a VS Code git extension, a crashed commit, or a GitHub Desktop background sync) left behind a lock file. Git refuses to proceed until it's removed.
+
+**Known instance:** 2026-03-04 — `git add pnpm-lock.yaml` failed with index.lock; `git commit` then failed with HEAD.lock.
+
+**Fix:**
+```powershell
+Remove-Item C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock
+Remove-Item C:\Users\desee\ClaudeProjects\FindaSale\.git\HEAD.lock
+# Then retry the git command normally
+```
+
+Only remove lock files when you're certain no git process is actively running (no git GUI, no ongoing rebase/merge in another terminal).
+
+**Confidence:** High (common git pattern, certain to recur)
+
+---
+
 Last Updated: 2026-03-04
 Source: Patterns derived from STATE.md (Phases 2–5), RECOVERY.md documented fixes, and health-scout proactive analysis (2026-03-01).
