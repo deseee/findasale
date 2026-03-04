@@ -273,8 +273,6 @@ diff \
 
 ---
 
----
-
 ## Skill 9: Docker/pnpm Monorepo Backend Startup Failure
 
 **Name:** Nodemon Not Found in Docker
@@ -449,5 +447,56 @@ curl -sI http://localhost:3000 | grep -i "content-security-policy"
 
 ---
 
-Last Updated: 2026-03-03
+## Skill 14: MCP Push + Local Unstaged Files = git pull --rebase Failure
+
+**Name:** Untracked File Conflict After MCP Push
+**Trigger:** `git pull --rebase` aborts with "untracked working tree files would be overwritten by checkout"
+**Environment:** Windows (PowerShell) + GitHub MCP active during session
+
+**Pattern:**
+Claude pushes new files to GitHub via `mcp__github__push_files` or `mcp__github__create_or_update_file` during a session. Those files also exist locally (created by Claude in the VM and synced to Patrick's working copy via bind mount) but were never staged by git. When Patrick tries to `git push`, git rejects it (remote ahead). `git pull --rebase` then aborts because it can't overwrite those locally untracked files during the checkout phase of the rebase.
+
+**Known instances:** 2026-03-04 (Phase 9/11/12 session) — observed twice in the same session.
+
+**Exact error:**
+```
+error: The following untracked working tree files would be overwritten by checkout:
+        packages/backend/src/controllers/pushController.ts
+        ...
+Please move or remove them before you switch branches.
+Aborting
+error: could not detach HEAD
+```
+
+**Recovery Steps (give Patrick exactly these commands):**
+```powershell
+# 1. If not already stashed:
+git stash
+
+# 2. Remove all files listed in the error (remote already has the canonical versions)
+Remove-Item "path/to/file1", "path/to/file2"  # use exact paths from error output
+
+# 3. Pull and rebase cleanly
+git pull --rebase
+
+# 4. Restore stash (modified tracked files)
+git stash pop
+
+# 5. Push
+git push
+```
+
+**Prevention:**
+- At session end, when using GitHub MCP to push new files, also immediately `git add <those files>` and commit locally so they become tracked. This keeps local and remote state in sync.
+- Add a note in session-log.md: "MCP pushed new files [list] — Patrick must `git pull` before next local commit."
+
+**Edge Cases:**
+- If `git stash pop` causes conflicts (stash modifies a file that the remote also modified), resolve manually: `git diff` → edit → `git add` → `git rebase --continue`.
+- `pnpm-lock.yaml` (274KB) cannot be pushed via GitHub MCP — exceeds parameter size limit (~10KB). Patrick must push it manually via PowerShell.
+
+**Confidence:** High (observed twice same session, structurally certain to recur whenever MCP pushes new files)
+
+---
+
+Last Updated: 2026-03-04
 Source: Patterns derived from STATE.md (Phases 2–5), RECOVERY.md documented fixes, and health-scout proactive analysis (2026-03-01).
