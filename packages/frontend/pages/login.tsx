@@ -20,7 +20,7 @@ const LoginPage = () => {
 
     try {
       const response = await api.post('/auth/login', { email, password });
-      login(response.data.token, response.data.user);
+      login(response.data.token);
       router.push('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed. Please try again.');
