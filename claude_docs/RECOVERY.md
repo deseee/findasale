@@ -1,301 +1,63 @@
 # TROUBLESHOOTING & RECOVERY
 
-Minimal procedural reference.
-Recovery procedures are operational only.
-Do not modify architecture during recovery unless explicitly instructed.
+Operational procedures only. For pattern-based fixes, see `self_healing_skills.md`.
 
 ---
 
 ## 1. Context Overflow
-
-Symptom:
-- "Prompt too long"
-- Execution stops mid-task
-
-Fix:
-- Restart Claude Desktop
-- Compress state
-- Break into smaller steps
-- Disable unused skills/connectors
-
-Prevention:
-- Auto-compression at 55% context
-- Process files in small batches
-
----
+Symptom: "Prompt too long" or mid-task execution stops.
+Fix: Restart Claude Desktop, compress state, break into smaller steps, disable unused skills/connectors.
 
 ## 2. Cowork Tab Missing
-
-Fix:
-- Update Claude Desktop (v1.8+)
-- Confirm Pro/Max plan
-- Restart app
-- Install Windows updates
-
----
+Fix: Update Claude Desktop (v1.8+), confirm Pro/Max plan, restart app.
 
 ## 3. Slow Performance
-
-Fix:
-- Close heavy apps
-- Ensure SSD
-- Reduce folder file count (<500 ideal)
-- Check RAM usage
-
----
+Fix: Close heavy apps, ensure SSD, reduce folder file count (<500), check RAM.
 
 ## 4. Task Stops Mid-Execution
-
-Cause:
-Large dataset or long-running process.
-
-Fix:
-- Wait 2–3 minutes
-- If stalled → cancel
-- Restart in smaller batches
-
----
+Fix: Wait 2–3 min. If stalled → cancel, restart in smaller batches.
 
 ## 5. File Permission Errors
-
-Fix:
-1. Verify correct folder selected.
-2. Check Windows file permissions.
-3. Run Claude Desktop as normal user.
-4. Avoid symlinked paths.
-
----
+Fix: Verify correct folder selected. Check Windows permissions. Avoid symlinked paths.
 
 ## 6. Stripe Issues
-
-Symptom:
-- Fee not deducted
-- Webhook failure
-
-Check:
-- application_fee_amount set
-- Webhook secret correct
-- Stripe dashboard logs
-
----
+Check: application_fee_amount set, webhook secret correct, Stripe dashboard logs.
 
 ## 7. Geocoding Rate Limit
+Fix: Ensure backend cache active, respect 1 req/sec, add fallback provider if needed.
 
-Symptom:
-- Nominatim blocking requests
-
-Fix:
-- Ensure backend cache active
-- Respect 1 req/sec
-- Add fallback provider if needed
-
----
-
-## 8. Auction Polling Latency (Socket.io Deferred)
-
-Status: DEFERRED (session 36 decision — polling sufficient for MVP)
-
-Current: Auction UI uses polling via React Query (5-second intervals).
-When to revisit: Real auction data shows >2 second bid delays or excessive server load.
-
-If reactivating Socket.io: requires WebSocket gateway, connection state tracking,
-broadcast room logic, graceful fallback to polling on connection loss.
-See ROADMAP.md Phase 12 notes.
-
----
+## 8. Auction Polling (Socket.io Deferred)
+Current: Polling via React Query (5-second intervals). Revisit when data shows >2s bid delays.
 
 ## 9. Service Worker Problems
-
-Symptom:
-- Offline not loading
-- Old assets cached
-
-Fix:
-- Increment version
-- Clear site data
-- Hard refresh
-- Verify offline.html exists
-
----
+Fix: Increment version, clear site data, hard refresh, verify offline.html exists.
+For Stripe/third-party script blocking, see self_healing_skills.md #17.
 
 ## 10. Docker Backend Crash Loop
-
-Symptom:
-- `docker compose ps` shows backend `Restarting`
-
-Common causes and fixes:
-
-**A. Wrong backend startup command in docker-compose.yml**
-- Root cause: pnpm does NOT hoist binaries to workspace root `node_modules/.bin`. Calling `npx nodemon` from `/app` fails because npx can't find it.
-- Fix: use `pnpm --filter backend run dev` in docker-compose.yml — resolves nodemon via pnpm workspace scope.
-- Also ensure `nodemon` and `tsx` are in `dependencies` (not `devDependencies`) in `packages/backend/package.json`.
-- After changing docker-compose.yml: `docker compose down && docker compose up --build --no-cache`
-
-**B. Prisma ENUM vs TEXT mismatch (P2032)**
-- Symptom: `Error converting field "status"/"role" of expected non-nullable type "String"`
-- Cause: init migration created PostgreSQL ENUM types; Prisma schema uses String
-- Fix: create migration to ALTER COLUMN TYPE TEXT USING col::TEXT, then DROP TYPE
-- Applied migrations: `convert_role_to_text`, `convert_status_enums_to_text`
-
-**C. Migration not applied after file change**
-- `docker compose up -d --no-deps backend` does NOT restart a Running container
-- Use `docker compose restart backend` to force restart and re-run migrate deploy
-
----
+See self_healing_skills.md #9 (pnpm/nodemon), #10 (circular deps), #18 (missing bind mount).
+Also: ENUM→TEXT migration fix (P2032) and migration-not-applied restart sequence.
 
 ## 11. Docker Hot Reload Not Working (Windows 10)
+Backend: nodemon `--legacy-watch`. Frontend: `WATCHPACK_POLLING=true` + `CHOKIDAR_USEPOLLING=true`.
 
-Symptom:
-- Editing source files on host; container doesn't detect changes
+## 12. Migration Drift
+See self_healing_skills.md #10 context. Quick fix (local dev, wipes data):
+`docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma migrate reset --force"`
 
-Fix:
-- Backend: nodemon requires `--legacy-watch` flag (polling mode)
-  Command: `npx nodemon --legacy-watch --exec 'tsx src/index.ts'`
-- Frontend: Next.js requires polling env vars in docker-compose.yml:
-  `WATCHPACK_POLLING: "true"` and `CHOKIDAR_USEPOLLING: "true"`
-- After adding these, run `docker compose restart frontend` once
+## 13. PowerShell + Docker Quoting Issues
+Assign SQL to variable first: `$sql = 'DELETE FROM "TableName";'` then pass to docker exec.
+For JSON POST, use `Invoke-RestMethod` or browser fetch — never `curl` through `docker exec sh -c`.
+See self_healing_skills.md #14, #15, #16.
 
----
+## 14. npx prisma Picks Up Wrong Version
+Never run `npx prisma` from Windows. All Prisma commands via Docker:
+`docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma <cmd>"`
 
-## 12. Migration Drift (DB out of sync with migration files)
-
-Symptom:
-- `prisma db push` says "Added the required column X" for a column that already exists in migration files
-- `prisma migrate deploy` applies 0 migrations but DB is missing columns
-
-Cause: DB was created or modified via `db push` or manual SQL at some point, bypassing the migration history. The `_prisma_migrations` table may show migrations as "applied" that never actually ran, or columns exist in migration files but not in the DB.
-
-Fix (local dev only — wipes all data):
-```powershell
-docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma migrate reset --force"
-docker exec findasale-backend-1 sh -c "cd /app && npx tsx packages/database/prisma/seed.ts"
-```
-
-Prevention: Never use `db push` on the running dev DB. Always use `migrate dev` (interactive) or `migrate deploy` (CI/startup).
-
----
-
-## 13. PowerShell quoting with docker exec + psql
-
-Symptom:
-- `\"` inside a double-quoted string → Docker receives literal backslash: `DELETE FROM " AffiliateLink\;"`
-- `'DELETE FROM "AffiliateLink";'` single-quoted → PowerShell strips the inner double quotes → psql sees `DELETE FROM AffiliateLink;` → relation not found (case mismatch)
-
-Fix — assign SQL to a variable first:
-```powershell
-$sql = 'DELETE FROM "AffiliateLink";'
-docker exec findasale-postgres-1 psql -U findasale -d findasale -c $sql
-```
-
-Or use PowerShell backtick escaping inside double quotes:
-```powershell
-docker exec findasale-postgres-1 psql -U findasale -d findasale -c "DELETE FROM `"AffiliateLink`";"
-```
-
----
-
-## 14. npx prisma picks up wrong version (v7 instead of project's v5)
-
-Symptom:
-- `npx --yes prisma migrate dev` → `Error: The datasource property 'url' is no longer supported`
-- Prisma CLI Version shows 7.x but project uses 5.x
-
-Cause: `npx --yes prisma` fetches the latest published version from npm, ignoring the project's lockfile.
-
-Fix: Prisma only lives inside Docker on this machine. Never run `npx prisma` from Windows for this project. All Prisma commands must go through Docker:
-```powershell
-docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma <command>"
-```
-The container has the correct version (5.22.0) locked in its node_modules.
-
----
-
-## 15. PowerShell curl JSON body arrives empty inside docker exec
-
-Symptom:
-- `docker exec findasale-backend-1 sh -c 'curl ... -d "{\"email\":\"x\"}"'` → Express `req.body` is `{}`
-- Server returns 500 "Server error during login/registration"
-- Body-parser does NOT throw a parse error — it silently returns an empty object
-
-Cause: PowerShell + `sh -c` quoting mangles the `-d` body or `-H` Content-Type header. Multiple quoting layers (PowerShell → Docker → sh → curl) make double-quote escaping unreliable. The exact failure mode depends on PowerShell version and escaping style.
-
-Fix — use Claude in Chrome or browser fetch instead:
-```javascript
-// From Chrome DevTools console or Claude in Chrome JS tool:
-fetch('http://localhost:5000/api/auth/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email: 'user11@example.com', password: 'password123' })
-}).then(r => r.json()).then(console.log);
-```
-
-Alternative — use `Invoke-RestMethod` from PowerShell directly (bypasses Docker/sh quoting):
-```powershell
-$body = '{"email":"user11@example.com","password":"password123"}'
-Invoke-RestMethod -Uri http://localhost:5000/api/auth/login -Method POST -ContentType "application/json" -Body $body
-```
-
-Rule: Never use `curl` for JSON POST requests through `docker exec sh -c` on Windows. Use browser fetch, Invoke-RestMethod, or write a temp `.json` file.
-
----
-
-## 16. Schema drift: schema.prisma fields not matching migration history
-
-Symptom:
-- Prisma client works for some operations but fails for others
-- `The column X does not exist in the current database` (P2022)
-- `Null constraint violation on the fields: (id)` (P2011) when creating records
-
-Cause: `schema.prisma` was edited (e.g., switching from `@id` to `@@id`, adding/removing `updatedAt`) but no migration was created. The Prisma client generates from schema.prisma, but the actual DB tables still match the migration SQL.
-
-Fix: Make schema.prisma match what the migrations actually created. Check the migration SQL files to see the real table structure:
-```powershell
-# Find which migration created a table
-grep -r "CREATE TABLE \"ModelName\"" packages/database/prisma/migrations/ --include="*.sql"
-# See the actual columns
-grep -A 20 "CREATE TABLE \"ModelName\"" <migration-file>
-```
-
-Then update schema.prisma to match. Regenerate and restart:
-```powershell
-docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma generate"
-docker compose restart backend
-```
-
-Prevention: Always create a migration after editing schema.prisma (`prisma migrate dev --name describe_change`). Never edit the schema without a corresponding migration.
-
----
-
-## 17. Docker-from-VM Gap (updated 2026-03-04)
-
-**Problem:** Claude's Linux VM cannot run `docker compose` or `docker exec` commands against the Docker Desktop daemon running on the Windows host.
-
-**Investigation results (2026-03-03):**
-- Option 1 — MCP Docker connector: searched mcp-registry for ["docker", "container", "compose"]. No Docker MCP connector available.
-- Option 2 — Docker TCP socket: tested `host.docker.internal:2375` and `:2376` — Connection refused (socket was disabled at time of test).
-- Option 3 — SSH: not tested; unlikely to be configured by default on Windows 10.
-- Option 4 — Bind-mount relay script: not implemented; high-maintenance overhead.
-
-**Option 2 re-tested (2026-03-04) — TCP socket enabled, gap remains:**
-Patrick enabled "Expose daemon on tcp://localhost:2375" in Docker Desktop → Settings → General.
-`host.docker.internal` resolves to `10.0.0.24` from the VM. Port 2375 tested on `10.0.0.24`, `localhost`, `172.16.10.1` (gateway), and six common bridge IPs — all refused or timed out.
-
-Root cause: Docker Desktop binds the TCP socket to Windows loopback (`127.0.0.1:2375`) only. The Claude VM is a separate Linux VM; it cannot reach Windows' loopback through any routable address. The toggle alone is insufficient to bridge the gap.
-
-To fully expose the socket to the VM, Docker Desktop would need to bind to `0.0.0.0` (not configurable in the UI) or Patrick would need to add a Windows-side port proxy (`netsh interface portproxy`) forwarding 2375 from a network interface the VM can reach. This is complex and carries the same unauthenticated-access risk — not worth pursuing.
-
-**Accepted workflow (Option 5 — permanent):**
-Claude writes the exact PowerShell command. Patrick pastes it into PowerShell. Patrick pastes output back. Claude in Chrome handles all JSON API smoke tests (no curl through docker exec).
-
-**Tips to minimise the copy-paste loop:**
-- Batch multiple docker commands into a single block separated by `&&`
-- Use Claude in Chrome browser fetch for all API tests instead of curl inside docker exec
+## 15. Docker-from-VM Gap
+Claude VM cannot reach Docker Desktop daemon. Accepted workflow: Claude writes PowerShell command → Patrick pastes → Patrick returns output. Use Claude in Chrome for API smoke tests.
 
 ---
 
 ## Recovery Principle
 
-Never panic.
-Restore from backup.
-Reduce scope.
-Proceed incrementally.
+Restore from backup. Reduce scope. Proceed incrementally.
