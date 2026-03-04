@@ -1,19 +1,12 @@
-import { Router, Request, Response } from 'express';
-import { 
-  getPurchases, 
-  getFavorites, 
+import { Router, Response } from 'express';
+import {
+  getPurchases,
+  getFavorites,
   getUserProfile,
   getLeaderboard
 } from '../controllers/userController';
-import { authenticate } from '../middleware/auth';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
-// Extend Express Request type
-interface AuthRequest extends Request {
-  user?: any;
-}
+import { authenticate, AuthRequest } from '../middleware/auth';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 

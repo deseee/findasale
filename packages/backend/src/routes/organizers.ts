@@ -1,12 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
-
-interface AuthRequest extends Request {
-  user?: any;
-}
 
 // Authenticated: get revenue analytics for the current organizer
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
