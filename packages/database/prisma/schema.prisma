@@ -33,6 +33,7 @@ model User {
   reviews           Review[]
   affiliateLinks    AffiliateLink[]
   pushSubscriptions PushSubscription[]
+  following         Follow[]
 }
 
 model Organizer {
@@ -44,6 +45,12 @@ model Organizer {
   user            User     @relation(fields: [userId], references: [id])
   sales           Sale[]
   stripeConnectId String?
+  // Phase 17: Reputation
+  reputationTier  String   @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
+  avgRating       Float?
+  totalReviews    Int      @default(0)
+  totalSales      Int      @default(0)
+  followers       Follow[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -244,4 +251,19 @@ model LineEntry {
   updatedAt  DateTime @updatedAt
 
   @@unique([saleId, userId])
+}
+
+// Phase 17: Shopper follows an organizer
+model Follow {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  organizerId String
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  // Notification preferences
+  notifyEmail Boolean   @default(true)
+  notifyPush  Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, organizerId])
 }
