@@ -50,6 +50,14 @@ const withPWA = require('next-pwa')({
       urlPattern: /^https:\/\/js\.stripe\.com\/.*/i,
       handler: 'NetworkOnly',
     },
+    // ngrok tunnel — network only; SW must not cache or retry these.
+    // axios adds ngrok-skip-browser-warning at the page level, but if the
+    // tunnel is down the SW has no fallback entry and emits "no-response".
+    // NetworkOnly lets the failure propagate cleanly to the app layer.
+    {
+      urlPattern: /^https:\/\/.*\.ngrok-free\.app\/.*/i,
+      handler: 'NetworkOnly',
+    },
     // FindA.Sale API — network first with offline fallback
     {
       urlPattern: /^https?:\/\/.*\/api\/.*/i,
@@ -78,6 +86,19 @@ const withPWA = require('next-pwa')({
       options: {
         cacheName: 'next-images',
         expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
+    // unpkg.com CDN — cache first; versioned URLs are immutable.
+    // Without this explicit rule, unpkg falls through to the pages catch-all
+    // (NetworkFirst), which emits "no-response" when the fetch fails and
+    // nothing is cached yet (first load, offline, etc.).
+    {
+      urlPattern: /^https:\/\/unpkg\.com\/.*/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'unpkg-cdn',
+        expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
         cacheableResponse: { statuses: [0, 200] },
       },
     },
