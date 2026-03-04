@@ -3,11 +3,7 @@ import { z } from 'zod';
 import QRCode from 'qrcode';
 import { handleFavoriteBadge } from './userController';
 import { prisma } from '../lib/prisma';
-
-// Extend Express Request type to include user property
-interface AuthRequest extends Request {
-  user?: any;
-}
+import { AuthRequest } from '../middleware/auth';
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
@@ -127,30 +123,30 @@ export const listSales = async (req: Request, res: Response) => {
       };
     }
     
-    // Fetch sales
-    const sales = await prisma.sale.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: {
-        startDate: 'asc'
-      },
-      include: {
-        organizer: {
-          select: {
-            id: true,
-            businessName: true,
-            phone: true
+    // PF1: Run findMany + count in parallel — single round-trip, no serial query doubling
+    const [sales, total] = await Promise.all([
+      prisma.sale.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          startDate: 'asc'
+        },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              businessName: true,
+              phone: true
+            }
           }
         }
-      }
-    });
-    
+      }),
+      prisma.sale.count({ where }),
+    ]);
+
     // Convert Decimal values to numbers
     const convertedSales = sales.map((sale: any) => convertDecimalsToNumbers(sale));
-    
-    // Get total count for pagination
-    const total = await prisma.sale.count({ where });
     
     res.json({
       sales: convertedSales,

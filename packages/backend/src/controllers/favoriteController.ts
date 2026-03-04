@@ -1,9 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { prisma } from '../index';
-
-interface AuthRequest extends Request {
-  user?: any;
-}
+import { AuthRequest } from '../middleware/auth';
 
 export const toggleItemFavorite = async (req: AuthRequest, res: Response) => {
   try {
