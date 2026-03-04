@@ -1,7 +1,41 @@
 import Head from 'next/head';
 import Link from 'next/link';
+import React from 'react';
 
-export default function OfflinePage() {
+// E6: Lightweight error boundary so a Service Worker crash doesn't leave this page broken
+class OfflineErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Something went wrong</h1>
+          <p className="text-gray-600 mb-6">
+            The offline page failed to load. Please try refreshing.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function OfflineContent() {
   return (
     <>
       <Head>
@@ -56,5 +90,13 @@ export default function OfflinePage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function OfflinePage() {
+  return (
+    <OfflineErrorBoundary>
+      <OfflineContent />
+    </OfflineErrorBoundary>
   );
 }
