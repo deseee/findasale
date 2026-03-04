@@ -16,7 +16,8 @@ export const createLineEntries = async (saleId: string) => {
     const subscribers = await prisma.saleSubscriber.findMany({
       where: {
         saleId,
-        phone: { not: null }
+        phone: { not: null },
+        userId: { not: null },
       },
     });
 
@@ -26,7 +27,7 @@ export const createLineEntries = async (saleId: string) => {
       const entry = await prisma.lineEntry.create({
         data: {
           saleId,
-          userId: subscribers[i].userId,
+          userId: subscribers[i].userId!, // userId filtered to non-null above
           position: i + 1,
           status: 'WAITING'
         }

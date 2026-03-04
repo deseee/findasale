@@ -44,12 +44,9 @@ export const endAuctions = async () => {
       });
 
       if (highestBid) {
-        const price =
-          typeof highestBid.amount === 'number'
-            ? highestBid.amount
-            : parseFloat(highestBid.amount.toString());
+        const price = highestBid.amount; // Bid.amount is Float \u2192 always number
 
-        // Mark as AUCTION_ENDED — switches to SOLD only once Stripe webhook confirms payment
+        // Mark as AUCTION_ENDED \u2014 switches to SOLD only once Stripe webhook confirms payment
         await prisma.item.update({
           where: { id: item.id },
           data: { status: 'AUCTION_ENDED', currentBid: price },
@@ -73,7 +70,7 @@ export const endAuctions = async () => {
             console.error(`Stripe PaymentIntent creation failed for item ${item.id}:`, err);
           }
         } else {
-          console.warn(`Organizer for item ${item.id} has no Stripe account — skipping payment intent`);
+          console.warn(`Organizer for item ${item.id} has no Stripe account \u2014 skipping payment intent`);
         }
 
         const platformFeeAmount = Math.round(price * 100 * 0.07) / 100;
@@ -103,7 +100,7 @@ export const endAuctions = async () => {
                 subject: `You won: ${item.title}`,
                 html: `
                   <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-                    <h2>Congratulations — you won the auction!</h2>
+                    <h2>Congratulations \u2014 you won the auction!</h2>
                     <p>Your winning bid of <strong>$${price.toFixed(2)}</strong> was accepted for <strong>${item.title}</strong>.</p>
                     <p>Please complete your payment within 48 hours to secure the item.</p>
                     <a href="${payUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:16px">
@@ -139,5 +136,5 @@ export const endAuctions = async () => {
 };
 
 
-// Run every 5 minutes — checks for auctions that have passed their end time
+// Run every 5 minutes \u2014 checks for auctions that have passed their end time
 cron.schedule('*/5 * * * *', endAuctions);
