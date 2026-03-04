@@ -8,6 +8,12 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-04 (session 36 — Phase 9/11/12 Feature Sprint)
+**Worked on:** Implemented Phase 9 (affiliate conversion tracking), Phase 12 (auction cron + frontend), and Phase 11 (PWA push notifications). Phase 9: fixed affiliateController prisma import, added `conversions` + `affiliateLinkId` to schema, wired Stripe metadata attribution, built `affiliate/[id].tsx` redirect page, updated creator dashboard stats, wired sessionStorage ref in CheckoutModal. Phase 12: fixed auctionJob.ts cron (was never scheduled), built AuctionCountdown + BidModal components, wired live countdown on sale detail. Phase 11: PushSubscription schema + migration, pushController/routes/webpush utility, usePushSubscription hook, sw-push.js service worker, PushSubscriber in _app.tsx, push sends in emailReminderService. Fixed Vercel build (pnpm-lock.yaml pushed after extended git conflict resolution). Fixed migration 20260304000001 with IF NOT EXISTS guards. Added self-healing skills 14–16 (MCP+untracked conflict, PowerShell bracket wildcards, git lock files).
+**Decisions:** sessionStorage over cookies for affiliate attribution (no cookie-parser). Polling over Socket.io for auction UI (not installed; sufficient for MVP). Lazy require('web-push') so server starts without package.
+**Next up:** Run `prisma migrate deploy` in Docker (both migrations 000001 + 000002 pending). Generate VAPID keys, add to .env files. Docker rebuild backend. Then smoke-test push subscriptions.
+**Blockers:** Migrations not yet applied — need `docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma migrate deploy"`. VAPID keys not yet generated — `npx web-push generate-vapid-keys`.
+
 ### 2026-03-04 (session 35 — Bug Burn-Down + Component Drift Fixes)
 **Worked on:** Component drift spot-check on SaleCard/CheckoutModal/Layout — found and fixed stale shared `Sale` type, nested anchor invalid HTML in SaleCard, and mobile-only nav array duplication in Layout. Fixed homepage index.tsx and city/[city].tsx to use `<SaleCard>` instead of inline JSX. Burned down remaining open bugs: removed password reset token from console log (HIGH), added 3D Secure redirect handling in purchases.tsx, reduced React Query staleTime 60s→20s. All 4 fixes pushed in 3 commits. Verified M-series ST1/ST2/E1/E2 and Vercel/Stripe rebrand items already closed (confirmed by Patrick). Session wrap queued next session as research-only: sample code for Phase 12 auctions, Phase 9 creator dashboard, Phase 11 push notifications.
 **Decisions:** All audit findings are now closed. Feature sprint is the next move. Next session is research-only — sample code from open source before building.
@@ -31,9 +37,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Decisions:** Docker-from-VM gap is permanent unless Patrick manually enables TCP socket in Docker Desktop settings. Working pattern remains copy-paste PowerShell.
 **Next up:** Activate fixes in Docker. Then begin M1-M19 medium findings or move to real-user beta.
 **Blockers:** None. All fixes pushed.
-
-### 2026-03-03 (session 30 — C1-C7 Audit Fixes + DB Reset + Smoke Tests)
-**Worked on:** Fixed all 7 critical audit findings: C1 role whitelist, C2 referralCode in JWT/AuthContext, C3 category+condition in getSale, C4 AffiliateLink userId + schema, C5 Stripe idempotency key, C6/C7 verified clean. Fixed cascading schema drift (SaleSubscriber composite PK mismatch, Favorite.updatedAt not in DB). Ran migrate reset --force to fix migration drift, fixed seed.ts, regenerated Prisma client. Smoke-tested C1/C2/C3 via Claude in Chrome fetch API — all pass. Added RECOVERY.md entries 12–16.
-**Decisions:** Use Claude in Chrome (browser fetch) for all API smoke tests — never curl through docker exec sh -c on Windows.
-**Next up:** Fix H1-H11 (high severity findings).
-**Blockers:** None. All C1-C7 fixes pushed to GitHub.

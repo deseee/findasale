@@ -1,64 +1,62 @@
 # Next Session Resume Prompt
-*Written: 2026-03-04T05:00:00Z*
+*Written: 2026-03-04T12:00:00Z*
 *Session ended: normally*
 
 ## Resume From
-
-Research-only session. Find open-source code to sample from for the next three roadmap features **before writing any code**. Output a single research doc at `claude_docs/feature-research-2026-03-04.md` with snippets, library picks, and a build-first order recommendation per feature.
+Run pending DB migrations in Docker, generate VAPID keys, and rebuild the backend container to activate Phase 9/11/12.
 
 ## What Was In Progress
-
-Nothing in flight. All bugs and audit findings closed.
+- **Migrations not applied** — `20260304000001_add_affiliate_conversions` and `20260304000002_add_push_subscriptions` exist on GitHub and locally but have NOT been run in Docker. The rolled-back marker for 000001 was cleared; both are ready to deploy.
+- **VAPID keys not generated** — web-push is installed but no keys exist. Push notifications silently no-op until keys are set.
+- **Backend needs Docker rebuild** — `web-push` was added to package.json after the last image build. The running container doesn't have it.
 
 ## What Was Completed This Session
-
-- Component drift audit + fixes: SaleCard shared type, nested anchor HTML fix, Layout `staticNavLinks` array, homepage and city page `<SaleCard>` replacement
-- Bug fixes: password reset token removed from console log (HIGH), 3DS redirect handling in purchases.tsx, staleTime 60s→20s
-- Verified M-series ST1/ST2/E1/E2 and Vercel/Stripe rebrand items already closed
-- Commits: `72379f9`, `517f843`, `b7d207b` — all on GitHub main
-
-## Research Goals
-
-Three upcoming roadmap features, in priority order:
-
-### 1. Phase 12 — Socket.io Auction Bidding
-What to find:
-- Open-source Socket.io auction/bidding room implementations (GitHub: `socket.io auction bidding`)
-- Race condition handling — two bids arriving simultaneously (DB-level lock or optimistic lock?)
-- Room lifecycle: create, join, bid, close, winner notification
-- Reconnection handling (shopper drops WiFi mid-auction)
-- Load testing patterns for 100+ concurrent bidders
-- Whether Pusher Channels is a simpler alternative worth evaluating
-
-Read first: `packages/backend/src/jobs/auctionJob.ts` and `packages/backend/src/routes/auctions.ts` — understand what's already scaffolded before searching externally.
-
-### 2. Phase 9 — Creator Dashboard Analytics
-What to find:
-- UTM click tracking + aggregation at the DB level (no GA dependency)
-- Referral conversion attribution (link visit → signup → purchase — how do you chain the attribution?)
-- Open-source affiliate dashboard examples (GitHub: `affiliate tracking nodejs prisma`)
-- Simple shortlink generation pattern
-
-Read first: `packages/database/prisma/schema.prisma` (AffiliateLink model), `packages/frontend/pages/creator/dashboard.tsx` (current state of the UI).
-
-### 3. Phase 11 — PWA Push Notifications
-What to find:
-- `web-push` npm package: VAPID key setup, sending a push from Node.js, subscription storage schema
-- Service worker `push` event → show notification → `notificationclick` deep-link to `/sales/[id]`
-- Subscription lifecycle management (user revokes → backend cleans up stale endpoints)
-- Google Web Push codelab patterns
-
-Read first: `public/sw.js` and `pages/_app.tsx` ServiceWorkerUpdateNotifier — understand what's already hooked up.
-
-## Research Deliverable
-
-`claude_docs/feature-research-2026-03-04.md` containing:
-- Per feature: 2-3 code snippets to sample, recommended libraries, "what to build first" order
-- Conflicts with existing scaffold code (flag anything that will need rework)
-- Rough complexity estimate (LOC, risk areas)
+- Phase 9 (affiliate conversion attribution): affiliateController fix, schema + migration, Stripe webhook attribution, `affiliate/[id].tsx` redirect page, creator dashboard Conversions/Conv. Rate stats, CheckoutModal sessionStorage ref
+- Phase 12 (auction launch): auctionJob cron schedule added (critical fix — auctions were never ending), AuctionCountdown component, BidModal component, sale detail page wired
+- Phase 11 (PWA push notifications): PushSubscription model + migration, push controller/routes/webpush utility, usePushSubscription hook, sw-push.js service worker, PushSubscriber in _app.tsx
+- Vercel build fixed: pnpm-lock.yaml pushed after extended git conflict resolution
+- Migration 20260304000001 made idempotent (IF NOT EXISTS guards)
+- Self-healing skills 14–16 added
 
 ## Environment Notes
+- Vercel is building from updated main. Build should be clean.
+- Docker backend is running the OLD image (no web-push). Push endpoints will 500 until after rebuild.
+- All code is on GitHub main (commit `74684b9`).
 
-- All fixes on GitHub main — no pending pushes
-- No Docker restarts or migrations needed (research only)
-- GitHub MCP is active — use `mcp__github__get_file_contents` to read existing scaffold before searching externally
+## Exact Commands for Next Session Start
+
+**Step 1 — Apply migrations:**
+```powershell
+docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma migrate deploy"
+```
+
+**Step 2 — Regenerate Prisma client:**
+```powershell
+docker exec findasale-backend-1 sh -c "cd /app/packages/database && npx prisma generate"
+```
+
+**Step 3 — Generate VAPID keys (one-time, save output):**
+```powershell
+npx web-push generate-vapid-keys
+```
+Add to `packages/backend/.env`:
+```
+VAPID_PUBLIC_KEY=<public-key>
+VAPID_PRIVATE_KEY=<private-key>
+VAPID_CONTACT_EMAIL=admin@finda.sale
+```
+Add to `packages/frontend/.env.local`:
+```
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public-key>
+```
+Also add `NEXT_PUBLIC_VAPID_PUBLIC_KEY` to Vercel project → Environment Variables.
+
+**Step 4 — Rebuild backend:**
+```powershell
+docker compose build --no-cache backend
+docker compose up -d
+```
+
+**Step 5 — Smoke test:**
+- Log in at localhost:3000, accept push permission prompt
+- Check backend logs: `docker compose logs backend | Select-String "Push"`
