@@ -93,9 +93,9 @@ Prepare for scale to additional metros.
 
 ## Pending Manual Action
 
-- **Backend hosting: ngrok bridge temporary** — Frontend live on Vercel (finda.sale). Backend running in Docker on Windows, exposed via ngrok static domain `pamelia-unweathered-arabesquely.ngrok-free.dev`. Plan: migrate to Railway/Render/Fly.io before real user traffic. Deferred pending Sprint A completion.
+- **Backend hosting: ngrok bridge temporary** — Frontend live on Vercel (finda.sale). Backend running in Docker on Windows, exposed via ngrok static domain `pamelia-unweathered-arabesquely.ngrok-free.dev`. Plan: migrate to Railway/Render/Fly.io before real user traffic. Deferred pending Sprint B completion.
 - **Resend domain verification** — ✅ Verified (confirmed 2026-03-04).
-- **ROADMAP.md audit** — ✅ Complete (session 38, 2026-03-04). Phases 9/11/12 marked complete, sprint order updated. Next sprint: Phase 12 completion (organizer auction toggle + Stripe 7% webhook).
+- **ROADMAP.md audit** — ✅ Complete (session 38, 2026-03-04). Phases 9/11/12 marked complete, sprint order updated.
 
 ---
 
@@ -179,7 +179,7 @@ Prepare for scale to additional metros.
 
 ## In Progress
 
-None — session 39 work complete. Next: Sprint A (Phase 12 auction) + Sprint B (Phase 24+25 design system).
+None — Sprint A complete. Next: Sprint B (Phase 24+25 design system).
 
 ### Session 37 — Activation Sprint: Migrations + VAPID + Upload Fix + SW Fix (verified 2026-03-04)
 - Applied Phase 9 + 11 DB migrations in Docker (000001 affiliate conversions, 000002 push subscriptions). Migration 000002 required `prisma migrate resolve --applied` — table already existed from prior `db push`.
@@ -201,11 +201,13 @@ None — session 39 work complete. Next: Sprint A (Phase 12 auction) + Sprint B 
 - `components/CheckoutModal.tsx`: reads `affiliateRef` from sessionStorage, passes to createPaymentIntent
 - **Pending:** `prisma migrate deploy` to apply 20260304000001 in Docker
 
-### Phase 12 – Auction Launch (verified 2026-03-04)
+### Phase 12 – Auction Launch (verified 2026-03-05)
 - `auctionJob.ts`: added `cron.schedule('*/5 * * * *', endAuctions)` — was never scheduled before
 - `components/AuctionCountdown.tsx`: live per-second countdown, red under 1hr, triggers query invalidation on expiry
 - `components/BidModal.tsx`: bid modal with validation, login prompt if unauthenticated
 - `pages/sales/[id].tsx`: 🔨 Auction badge on items, replaced static time display with live AuctionCountdown
+- `stripeController.ts`: item-level auction detection (`!!item.auctionStartPrice`) replaces sale-level `isAuctionSale` check; 7% fee now applies to any item with `auctionStartPrice` set regardless of sale type
+- `itemController.ts` createItem + updateItem: `category` and `condition` were silently dropped; now extracted from req.body and persisted to Prisma (pre-existing bug fixed in same pass)
 
 ### Phase 11 – PWA Push Notifications (verified 2026-03-04)
 - Schema: `PushSubscription` model added (userId, endpoint, p256dh, auth, @@unique([userId, endpoint]))
@@ -335,8 +337,8 @@ None — session 39 work complete. Next: Sprint A (Phase 12 auction) + Sprint B 
 ## Next Strategic Move
 
 Five-pillar growth phase. Immediate priorities:
-1. **Sprint A:** Phase 12 completion — organizer auction toggle + Stripe 7% webhook (revenue unlock)
-2. **Sprint B:** Phase 24+25 — Design system foundation + bottom tab navigation (visual overhaul, parallel to Sprint A)
+1. ~~**Sprint A:** Phase 12 completion~~ ✅ Complete (2026-03-05)
+2. **Sprint B:** Phase 24+25 — Design system foundation + bottom tab navigation (visual overhaul)
 3. **Sprint C:** Phase 14 — Rapid capture carousel + background AI processing (organizer workflow)
 4. **Sprint D:** Phase 17 — Organizer reputation + follow system (trust foundation)
 
@@ -356,7 +358,7 @@ See ROADMAP.md for full phase breakdown organized around five pillars:
 **Completed feature phases:**
 - Phase 9: Creator dashboard + affiliate conversion tracking ✅
 - Phase 11: PWA push notifications ✅
-- Phase 12 (partial): Auction UI + cron ✅
+- Phase 12: Auction UI + cron + 7% fee + item-level detection ✅
 
 ### Phase 7 – Local SEO & Parity (verified 2026-03-02)
 - Item categories: added `category` + `condition` fields to Item schema; migration 20260301000003_add_item_category created
@@ -470,5 +472,5 @@ See ROADMAP.md for full phase breakdown organized around five pillars:
 - P1: iCal guard for missing `startDate`/`endDate`
 - GitHub push batching rule added to CORE.md (Section 10): max 3 files per `push_files` call
 
-Last Updated: 2026-03-04 (session 40 — deep workflow audit, doc fixes, dead code cleanup)
-Status: All doc fixes applied. Stress test planned for session 41.
+Last Updated: 2026-03-05 (session 42 — Sprint A complete)
+Status: Phase 12 auction fully closed. Stripe 7% fee now item-level. category/condition persistence bug fixed. Sprint B (design system) is next.
