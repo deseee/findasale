@@ -49,7 +49,7 @@ const RegisterPage = () => {
         role: formData.accountType === 'organizer' ? 'ORGANIZER' : 'SHOPPER',
       });
 
-      login(response.data.token, response.data.user);
+      login(response.data.token);
       router.push('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
