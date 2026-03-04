@@ -22,7 +22,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Add a response interceptor to handle 401 errors
+// Add a response interceptor to handle auth errors and surface Zod validation messages
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -33,6 +33,16 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+
+    // E5: When the backend returns 400 with a Zod `errors` array, attach a
+    // human-readable `validationMessage` so callers can display per-field feedback.
+    if (error.response?.status === 400 && Array.isArray(error.response.data?.errors)) {
+      const fieldMessages = (error.response.data.errors as Array<{ path?: string[]; message: string }>)
+        .map((e) => (e.path?.length ? `${e.path.join('.')}: ${e.message}` : e.message))
+        .join(' • ');
+      error.validationMessage = fieldMessages || error.response.data.message;
+    }
+
     return Promise.reject(error);
   }
 );
