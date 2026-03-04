@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { handleReferralBadge, handlePointsBadge } from './userController';
 
 export const register = async (req: Request, res: Response) => {
@@ -27,7 +27,7 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Generate unique referral code
-    const userReferralCode = uuidv4().substring(0, 8).toUpperCase();
+    const userReferralCode = randomUUID().substring(0, 8).toUpperCase();
 
     // Whitelist role — never allow client to self-assign ADMIN
     const safeRole = ['USER', 'ORGANIZER'].includes(role) ? role : 'USER';
