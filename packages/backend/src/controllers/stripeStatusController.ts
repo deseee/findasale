@@ -1,10 +1,7 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { getStripe } from '../utils/stripe';
 import { prisma } from '../lib/prisma';
-
-interface AuthRequest extends Request {
-  user?: any;
-}
+import { AuthRequest } from '../middleware/auth';
 
 export const getAccountStatus = async (req: AuthRequest, res: Response) => {
   try {

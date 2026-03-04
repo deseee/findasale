@@ -1,10 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../lib/prisma';
-
-interface AuthRequest extends Request {
-  user?: any;
-}
+import { AuthRequest } from '../middleware/auth';
 
 // Helper function to convert Decimal values to numbers recursively
 const convertDecimalsToNumbers = (obj: any) => {

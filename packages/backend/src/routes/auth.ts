@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { register, login } from '../controllers/authController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
 import { Resend } from 'resend';
@@ -11,10 +11,6 @@ const getResend = () => {
   if (!_resend && process.env.RESEND_API_KEY) _resend = new Resend(process.env.RESEND_API_KEY);
   return _resend;
 };
-
-interface AuthRequest extends Request {
-  user?: any;
-}
 
 const router = Router();
 
@@ -93,7 +89,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
         `,
       });
     } else {
-      console.log(`[Password Reset] Token generated for ${email} (Resend not configured \u2014 email not sent)`);
+      console.log(`[Password Reset] Token generated for ${email} (Resend not configured — email not sent)`);
     }
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
