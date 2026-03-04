@@ -45,11 +45,9 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // Stripe — network only, never intercept
-    {
-      urlPattern: /^https:\/\/js\.stripe\.com\/.*/i,
-      handler: 'NetworkOnly',
-    },
+    // Stripe — excluded entirely from SW; browser fetches directly.
+    // NetworkOnly can still reject via 'no-response' if the SW-context fetch fails
+    // (e.g. CORS restrictions on clover/stripe.js). Best to not intercept at all.
     // ngrok tunnel — network only; SW must not cache or retry these.
     // axios adds ngrok-skip-browser-warning at the page level, but if the
     // tunnel is down the SW has no fallback entry and emits "no-response".
@@ -102,9 +100,9 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // HTML pages — network first
+    // HTML pages — network first (Stripe domains excluded so SW never intercepts them)
     {
-      urlPattern: /^https?:\/\/[^/]+\/(?!api\/).*/i,
+      urlPattern: /^https?:\/\/(?!(?:js|hooks|m|api)\.stripe\.com)[^/]+\/(?!api\/).*/i,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'pages',
