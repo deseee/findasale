@@ -65,7 +65,7 @@ export const startLine = async (req: AuthRequest, res: Response) => {
 
     // Get subscribers with phone numbers (opted in to SMS)
     const subscribers = await prisma.saleSubscriber.findMany({
-      where: { saleId, phone: { not: null } },
+      where: { saleId, phone: { not: null }, userId: { not: null } },
       take: 1000,
     });
 
@@ -75,7 +75,7 @@ export const startLine = async (req: AuthRequest, res: Response) => {
       const entry = await prisma.lineEntry.create({
         data: {
           saleId,
-          userId: subscribers[i].userId,
+          userId: subscribers[i].userId!, // userId filtered to non-null above
           position: i + 1,
           status: 'WAITING',
         },
@@ -134,7 +134,7 @@ export const callNext = async (req: AuthRequest, res: Response) => {
 
     // Look up the subscriber's phone
     const subscriber = await prisma.saleSubscriber.findUnique({
-      where: { userId_saleId: { userId: nextEntry.userId, saleId } },
+      where: { saleId_userId: { userId: nextEntry.userId, saleId } },
     });
 
     if (subscriber?.phone) {
@@ -246,7 +246,7 @@ export const broadcastPositionUpdates = async (req: AuthRequest, res: Response) 
     let smsSent = 0;
     for (const entry of waitingEntries) {
       const subscriber = await prisma.saleSubscriber.findUnique({
-        where: { userId_saleId: { userId: entry.userId, saleId } },
+        where: { saleId_userId: { userId: entry.userId, saleId } },
       });
       if (subscriber?.phone) {
         await sendSMS(
@@ -312,7 +312,7 @@ export const joinLine = async (req: AuthRequest, res: Response) => {
 
     // Send SMS confirmation if subscriber has phone
     const subscriber = await prisma.saleSubscriber.findUnique({
-      where: { userId_saleId: { userId: req.user.id, saleId } },
+      where: { saleId_userId: { userId: req.user.id, saleId } },
     });
     if (subscriber?.phone) {
       await sendSMS(

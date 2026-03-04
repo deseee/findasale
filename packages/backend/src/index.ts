@@ -57,8 +57,9 @@ import './jobs/auctionJob';
 import './jobs/notificationJob';
 import './jobs/emailReminderJob';
 
-// Re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
-export { prisma } from './lib/prisma';
+// Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
+import { prisma } from './lib/prisma';
+export { prisma };
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
