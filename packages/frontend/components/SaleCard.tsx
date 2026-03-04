@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { getOptimizedUrl } from '../lib/imageUtils';
 
 interface Sale {
   id: string;
@@ -43,7 +44,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
       <Link href={`/sales/${sale.id}`} className="block">
         {sale.photoUrls && sale.photoUrls.length > 0 && !imgError ? (
           <img
-            src={sale.photoUrls[0]}
+            src={getOptimizedUrl(sale.photoUrls[0])}
             alt={sale.title}
             className="w-full h-48 object-cover"
             onError={() => setImgError(true)}

@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { getOptimizedUrl } from '../lib/imageUtils';
 
 interface Item {
   id: string;
@@ -61,7 +62,7 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
     <Link href={`/items/${item.id}`}>
       <div className="card overflow-hidden hover:shadow-card-hover transition-shadow">
         {item.photoUrl ? (
-          <img src={item.photoUrl} alt={item.title} className="w-full h-48 object-cover" />
+          <img src={getOptimizedUrl(item.photoUrl)} alt={item.title} className="w-full h-48 object-cover" loading="lazy" />
         ) : (
           <div className="w-full h-48 bg-warm-200 flex items-center justify-center">
             <span className="text-warm-400">No image</span>
