@@ -1,6 +1,15 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+/**
+ * ToastContext — Global toast notifications for FindA.Sale
+ *
+ * A lightweight context + provider for showing transient alerts throughout the app.
+ * Usage:
+ *   const { showToast } = useToast();
+ *   showToast('Success!', 'success');
+ */
 
-type ToastType = 'success' | 'error' | 'info';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+
+type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 interface Toast {
   id: string;
@@ -8,67 +17,56 @@ interface Toast {
   type: ToastType;
 }
 
-interface ToastContextValue {
+interface ToastContextType {
   showToast: (message: string, type?: ToastType) => void;
 }
 
-const ToastContext = createContext<ToastContextValue>({ showToast: () => {} });
+const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-export const useToast = () => useContext(ToastContext);
-
-const TOAST_DURATION_MS = 4000;
-
-const ToastItem = ({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) => {
-  useEffect(() => {
-    const timer = setTimeout(() => onDismiss(toast.id), TOAST_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, [toast.id, onDismiss]);
-
-  const bg =
-    toast.type === 'success' ? 'bg-green-600' :
-    toast.type === 'error'   ? 'bg-red-600' :
-                               'bg-gray-800';
-
-  return (
-    <div className={`${bg} text-white px-4 py-3 rounded shadow-lg flex items-start gap-3 max-w-sm w-full`}>
-      <span className="flex-1 text-sm">{toast.message}</span>
-      <button
-        onClick={() => onDismiss(toast.id)}
-        className="text-white opacity-70 hover:opacity-100 text-lg leading-none mt-px"
-        aria-label="Dismiss"
-      >
-        &times;
-      </button>
-    </div>
-  );
-};
-
-export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
+export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setToasts(prev => [...prev, { id, message, type }]);
-  }, []);
+    const id = Math.random().toString(36).substr(2, 9);
+    const toast: Toast = { id, message, type };
+    setToasts((prev) => [...prev, toast]);
 
-  const dismiss = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
   }, []);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {/* Toast stack — bottom-right; aria-live so screen readers announce each toast */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="false"
-        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end"
-      >
-        {toasts.map(toast => (
-          <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} />
-        ))}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map((toast) => {
+          const baseClasses = 'px-4 py-3 rounded shadow-lg text-white font-medium max-w-xs';
+          const typeClasses = {
+            success: 'bg-green-500',
+            error: 'bg-red-500',
+            info: 'bg-blue-500',
+            warning: 'bg-yellow-500',
+          };
+
+          return (
+            <div
+              key={toast.id}
+              className={`${baseClasses} ${typeClasses[toast.type]} animate-fade-in`}
+            >
+              {toast.message}
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );
+};
+
+export const useToast = (): ToastContextType => {
+  const context = useContext(ToastContext);
+  if (!context) {
+    throw new Error('useToast must be used within ToastProvider');
+  }
+  return context;
 };
