@@ -1,6 +1,7 @@
 import { prisma } from '../index';
 import { Resend } from 'resend';
 import twilio from 'twilio';
+import { sendPushNotification } from '../utils/webpush';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -144,7 +145,7 @@ const getSMSTemplate = (reminder: ReminderSMS): string => {
   const formattedDate = formatSaleDateTime(reminder.startDate);
 
   if (reminder.reminderType === 'one-day') {
-    return `🏷️ Reminder: ${reminder.saleName} starts tomorrow at ${formattedDate}. 📍 ${reminder.saleAddress}`;
+    return `🍿 Reminder: ${reminder.saleName} starts tomorrow at ${formattedDate}. 📍 ${reminder.saleAddress}`;
   }
 
   return `⏰ Sale happening soon! ${reminder.saleName} starts in 2 hours. 📍 ${reminder.saleAddress}`;
@@ -215,7 +216,7 @@ export const processReminderEmails = async (): Promise<void> => {
       },
       include: {
         subscribers: {
-          select: { email: true, phone: true },
+          select: { email: true, phone: true, userId: true },
         },
       },
     });
@@ -247,6 +248,20 @@ export const processReminderEmails = async (): Promise<void> => {
             reminderType: 'one-day',
           });
         }
+
+        // Send push notifications if user has subscriptions
+        if (subscriber.userId) {
+          const pushSubs = await prisma.pushSubscription.findMany({
+            where: { userId: subscriber.userId }
+          });
+          for (const ps of pushSubs) {
+            await sendPushNotification(ps, {
+              title: `Tomorrow: ${sale.title}`,
+              body: `${sale.address}, ${sale.city} — starts tomorrow`,
+              url: saleUrl,
+            }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
+          }
+        }
       }
     }
 
@@ -261,7 +276,7 @@ export const processReminderEmails = async (): Promise<void> => {
       },
       include: {
         subscribers: {
-          select: { email: true, phone: true },
+          select: { email: true, phone: true, userId: true },
         },
       },
     });
@@ -292,6 +307,20 @@ export const processReminderEmails = async (): Promise<void> => {
             startDate: sale.startDate,
             reminderType: 'two-hours',
           });
+        }
+
+        // Send push notifications if user has subscriptions
+        if (subscriber.userId) {
+          const pushSubs = await prisma.pushSubscription.findMany({
+            where: { userId: subscriber.userId }
+          });
+          for (const ps of pushSubs) {
+            await sendPushNotification(ps, {
+              title: `Starting soon: ${sale.title}`,
+              body: `${sale.address}, ${sale.city} — starts in about 2 hours`,
+              url: saleUrl,
+            }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
+          }
         }
       }
     }

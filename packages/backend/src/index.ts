@@ -51,6 +51,7 @@ import geocodeRoutes from './routes/geocode';
 import uploadRoutes from './routes/upload';
 import organizerRoutes from './routes/organizers';
 import contactRoutes from './routes/contact';
+import pushRoutes from './routes/push';
 import { authenticate } from './middleware/auth';
 import './jobs/auctionJob';
 import './jobs/notificationJob';
@@ -62,7 +63,7 @@ export { prisma } from './lib/prisma';
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-// ─── Security ──────────────────────────────────────────────────────────────
+// ─── Security ───────────────────────────────────────────────────────────────────────────────
 
 // Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
 app.set('trust proxy', 1);
@@ -138,6 +139,7 @@ app.use('/api/geocode', geocodeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/organizers', organizerRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/push', pushRoutes);
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
