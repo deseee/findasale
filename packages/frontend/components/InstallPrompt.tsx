@@ -95,26 +95,26 @@ export default function InstallPrompt() {
       <div
         role="dialog"
         aria-label="Install FindA.Sale"
-        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg px-4 py-4 flex items-center gap-4 sm:max-w-md sm:mx-auto sm:mb-4 sm:rounded-xl sm:border"
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-warm-200 shadow-lg px-4 py-4 flex items-center gap-4 sm:max-w-md sm:mx-auto sm:mb-4 sm:rounded-xl sm:border"
       >
         {/* App icon */}
         <img src="/icons/icon-72x72.png" alt="FindA.Sale icon" className="w-12 h-12 rounded-xl flex-shrink-0"  loading="lazy"/>
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-sm leading-tight">Add FindA.Sale to your home screen</p>
-          <p className="text-xs text-gray-500 mt-0.5">Quick access to sales near you — no app store needed</p>
+          <p className="font-semibold text-warm-900 text-sm leading-tight">Add FindA.Sale to your home screen</p>
+          <p className="text-xs text-warm-500 mt-0.5">Quick access to sales near you — no app store needed</p>
         </div>
 
         <div className="flex flex-col gap-1.5 flex-shrink-0">
           <button
             onClick={handleInstall}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors"
+            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors"
           >
             Install
           </button>
           <button
             onClick={handleDismiss}
-            className="text-xs text-gray-400 hover:text-gray-600 text-center"
+            className="text-xs text-warm-400 hover:text-warm-600 text-center"
           >
             Not now
           </button>
@@ -128,17 +128,17 @@ export default function InstallPrompt() {
       <div
         role="dialog"
         aria-label="Add FindA.Sale to Home Screen"
-        className="fixed bottom-4 left-4 right-4 z-50 bg-gray-900 text-white rounded-2xl shadow-xl px-4 py-4"
+        className="fixed bottom-4 left-4 right-4 z-50 bg-warm-900 text-white rounded-2xl shadow-xl px-4 py-4"
       >
         <button
           onClick={handleDismiss}
-          className="absolute top-3 right-4 text-gray-400 hover:text-white text-xl leading-none"
+          className="absolute top-3 right-4 text-warm-400 hover:text-white text-xl leading-none"
           aria-label="Dismiss"
         >
           &times;
         </button>
         <p className="font-semibold text-sm mb-1">Add FindA.Sale to your Home Screen</p>
-        <p className="text-xs text-gray-300 leading-relaxed">
+        <p className="text-xs text-warm-300 leading-relaxed">
           Tap the{' '}
           <span className="inline-block mx-1">
             {/* Safari share icon approximation */}

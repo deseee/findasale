@@ -53,21 +53,21 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-        <p className="text-sm text-gray-600">Item</p>
-        <p className="font-semibold text-gray-900">{itemTitle}</p>
+      <div className="mb-4 p-3 bg-warm-50 rounded-lg">
+        <p className="text-sm text-warm-600">Item</p>
+        <p className="font-semibold text-warm-900">{itemTitle}</p>
       </div>
 
       <div className="mb-4 space-y-1 text-sm">
-        <div className="flex justify-between text-gray-600">
+        <div className="flex justify-between text-warm-600">
           <span>Item price</span>
           <span>${itemPrice.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between text-gray-600">
+        <div className="flex justify-between text-warm-600">
           <span>Platform fee</span>
           <span>${platformFee.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between font-bold text-gray-900 border-t pt-1 mt-1">
+        <div className="flex justify-between font-bold text-warm-900 border-t pt-1 mt-1">
           <span>Total</span>
           <span>${total.toFixed(2)}</span>
         </div>
@@ -83,9 +83,9 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
         </div>
       )}
 
-      <p className="mb-3 text-xs text-gray-500 text-center">
+      <p className="mb-3 text-xs text-warm-500 text-center">
         All sales final.{' '}
-        <a href="/contact" className="underline hover:text-gray-700">
+        <a href="/contact" className="underline hover:text-warm-700">
           Contact support
         </a>{' '}
         for disputes.
@@ -96,14 +96,14 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
           type="button"
           onClick={onClose}
           disabled={isSubmitting}
-          className="flex-1 py-2 px-4 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!stripe || !elements || isSubmitting}
-          className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Processing...' : `Pay $${total.toFixed(2)}`}
         </button>
@@ -177,10 +177,10 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
     >
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <div className="flex justify-between items-center mb-5">
-          <h2 className="text-xl font-bold text-gray-900">Complete Purchase</h2>
+          <h2 className="text-xl font-bold text-warm-900">Complete Purchase</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+            className="text-warm-400 hover:text-warm-600 text-2xl leading-none"
             aria-label="Close"
           >
             &times;
@@ -194,7 +194,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
         )}
 
         {!loadError && !clientSecret && (
-          <div className="py-8 text-center text-gray-500">Loading payment form...</div>
+          <div className="py-8 text-center text-warm-500">Loading payment form...</div>
         )}
 
         {clientSecret && (

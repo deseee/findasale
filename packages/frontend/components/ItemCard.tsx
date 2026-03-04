@@ -49,39 +49,39 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
       case 'ACTIVE':
         return 'bg-green-100 text-green-800';
       case 'SOLD':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-warm-100 text-warm-800';
       case 'PENDING':
         return 'bg-yellow-100 text-yellow-800';
       default:
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-amber-100 text-amber-800';
     }
   };
 
   return (
     <Link href={`/items/${item.id}`}>
-      <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+      <div className="card overflow-hidden hover:shadow-card-hover transition-shadow">
         {item.photoUrl ? (
           <img src={item.photoUrl} alt={item.title} className="w-full h-48 object-cover" />
         ) : (
-          <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-            <span className="text-gray-400">No image</span>
+          <div className="w-full h-48 bg-warm-200 flex items-center justify-center">
+            <span className="text-warm-400">No image</span>
           </div>
         )}
         <div className="p-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{item.description}</p>
+          <h3 className="text-lg font-semibold text-warm-900 mb-1">{item.title}</h3>
+          <p className="text-sm text-warm-600 mb-3 line-clamp-2">{item.description}</p>
 
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-xs text-gray-500">Current Bid</p>
-              <p className="text-lg font-bold text-gray-900">{formatPrice(item.currentBid)}</p>
+              <p className="text-xs text-warm-500">Current Bid</p>
+              <p className="text-lg font-bold text-warm-900">{formatPrice(item.currentBid)}</p>
             </div>
             <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor()}`}>
               {item.status}
             </span>
           </div>
 
-          <div className="pt-2 border-t border-gray-200">
+          <div className="pt-2 border-t border-warm-200">
             <p className="text-xs text-orange-600 font-semibold">{getCountdownText()}</p>
           </div>
         </div>

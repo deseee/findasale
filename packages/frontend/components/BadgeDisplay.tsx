@@ -26,8 +26,8 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({ badges, size = 'md' }) => {
 
   const badgeColors: {[key: string]: {bg: string; text: string; icon: string}} = {
     'first-time-organizer': {
-      bg: 'bg-blue-100',
-      text: 'text-blue-800',
+      bg: 'bg-amber-100',
+      text: 'text-amber-800',
       icon: '🌟'
     },
     'verified-organizer': {
@@ -46,8 +46,8 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({ badges, size = 'md' }) => {
     <div className="flex flex-wrap gap-2">
       {badges.map((badge) => {
         const color = badgeColors[badge.name] || {
-          bg: 'bg-gray-100',
-          text: 'text-gray-800',
+          bg: 'bg-warm-100',
+          text: 'text-warm-800',
           icon: '⊙'
         };
 
