@@ -73,6 +73,62 @@ export const uploadItemPhoto = async (req: Request, res: Response): Promise<void
   }
 };
 
+// POST /api/upload/rapid-batch — Phase 14: upload + AI analyze in one call
+// Accepts up to 20 images. Returns { results: Array<{ index, cloudinaryUrl, ai, error? }> }
+export const rapidBatchUpload = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: 'No files provided' });
+      return;
+    }
+
+    const prompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
+{
+  "title": "short descriptive item title",
+  "description": "1-2 sentence description mentioning condition and notable features",
+  "category": "one of: furniture, electronics, clothing, books, kitchenware, tools, art, jewelry, toys, sports, collectibles, other",
+  "condition": "one of: mint, excellent, good, fair, poor",
+  "suggestedPrice": 12.50
+}`;
+
+    // Process each file: upload to Cloudinary + AI analysis in parallel per file
+    const results = await Promise.allSettled(
+      files.map(async (file, index) => {
+        // Upload to Cloudinary
+        const cloudinaryUrl = await uploadToCloudinary(file.buffer);
+
+        // AI analysis (best-effort — don't fail the whole batch if AI is down)
+        let ai: Record<string, unknown> | null = null;
+        try {
+          const base64Image = file.buffer.toString('base64');
+          const aiResponse = await axios.post(
+            `${OLLAMA_URL}/api/generate`,
+            { model: OLLAMA_VISION_MODEL, prompt, images: [base64Image], stream: false },
+            { timeout: 45000 }
+          );
+          const raw = aiResponse.data.response.replace(/```json\n?|\n?```/g, '').trim();
+          ai = JSON.parse(raw);
+        } catch {
+          // AI failed — that's OK, organizer can fill in manually
+        }
+
+        return { index, cloudinaryUrl, ai };
+      })
+    );
+
+    const output = results.map((r, i) => {
+      if (r.status === 'fulfilled') return r.value;
+      return { index: i, cloudinaryUrl: null, ai: null, error: (r.reason as Error)?.message ?? 'Failed' };
+    });
+
+    res.json({ results: output });
+  } catch (error) {
+    console.error('rapidBatchUpload error:', error);
+    res.status(500).json({ error: 'Batch processing failed' });
+  }
+};
+
 // POST /api/upload/analyze-photo — sends image to Ollama qwen3-vl:4b
 // Returns { title, description, category, condition, suggestedPrice }
 export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<void> => {
