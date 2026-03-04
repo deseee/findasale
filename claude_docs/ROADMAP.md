@@ -1,7 +1,7 @@
 # ROADMAP – FindA.Sale Development Workflow
 
-**Last Updated:** 2026-03-04
-**Status:** Production-ready MVP. Reorganized for development flow (not timeline-based).
+**Last Updated:** 2026-03-04 (post-session-37 audit)
+**Status:** Production-ready MVP with push notifications, creator dashboard, and auction UI live. Phases 9, 11, and 12 (partial) completed.
 **Approach:** Phases grouped by technical dependencies, parallelizability, and shipping readiness. Not strict milestones — Patrick uses this for PM communication; this structure optimizes for coding velocity.
 
 ---
@@ -66,8 +66,8 @@ These are **developer experience, testing, and operational items** that should b
   - Check CI/CD status before deploy
   - Link commits to STATE.md updates automatically
 - **Install:** Settings → Connectors → search "GitHub" → Connect
-- **Status:** Not yet connected — P1 for next infrastructure sprint
-- **Effort:** 5 minutes (OAuth connect, no code changes)
+- **Status:** ✅ Connected and active (verified session 18+). Claude uses `mcp__github__push_files` for all GitHub pushes.
+- **Effort:** Already done.
 
 ### GitHub ↔ Local Drift Audit (Recurring Dev Tool)
 - **Problem:** Several components have been rewritten locally but the old version was never pushed to GitHub. When Vercel builds from GitHub, it hits stale TypeScript errors that don't exist locally (e.g. `InstallPrompt.tsx` called `prompt()` twice; `SaleMapInner.tsx` had `sales` as a required required prop). These are invisible during local dev.
@@ -97,17 +97,20 @@ These are **developer experience, testing, and operational items** that should b
 - PWA hardening, accessibility (aria-labels, skip-to-content, toasts, SR announcements)
 - Search + date filters on homepage
 - Contact form, FAQ, password reset, referral code
-- Creator dashboard (/creator/dashboard) — exists but no UI population yet
+- **Creator dashboard (/creator/dashboard)** — fully implemented: referral link card, stats row, affiliate link generator/table, sales picker, how-it-works panel (Phase 9, verified 2026-03-04)
+- **Affiliate conversion tracking** — click → sessionStorage → checkout attribution → Stripe webhook increments conversions (Phase 9, verified 2026-03-04)
 - Item categories + condition tagging with filters
 - Zip-level landing pages with email reminders (hourly job)
+- **PWA push notifications** — VAPID, PushSubscription DB, service worker, auto-subscribe on login, push sent alongside email reminders (Phase 11, verified 2026-03-04)
+- **Auction UI + cron** — AuctionCountdown, BidModal, auctionJob.ts cron scheduled (Phase 12 partial, verified 2026-03-04)
 - All C1-C7, H1-H11, and M-series audit findings resolved
 
 ### ⏸️ Deferred (Scoped, Not Shipped)
-- **Virtual line / QR code** – scaffolded, not E2E tested
-- **Auctions** – Socket.io bidding, timed lots, schema exists (routes scaffolded)
+- **Virtual line / QR code** – scaffolded + E2E tested (Phase 10); ready to activate when organizer needs it
+- **Auction live bidding** – Socket.io real-time bidding deferred; polling used for MVP (decision: session 36). Organizer auction toggle + Stripe 7% webhook for auction wins still needed.
 - **Multi-metro** – currently Grand Rapids only
-- **Real-user beta** – onboarding flow not defined
-- **Notification system** – intentionally deferred (documented TODO)
+- **Real-user beta** – onboarding flow not defined (next logical step post-Phase 12)
+- **SMS line updates** – Twilio configured, untested E2E
 
 ---
 
@@ -117,14 +120,16 @@ These are **developer experience, testing, and operational items** that should b
 |-----|----------|--------|-------|
 | Schema.org event markup | P1 | ✅ Done (session 33) | — |
 | Email digest E2E test | P0 | ✅ Done | — |
-| SMS notifications | P1 | Configured, untested | **Phase 8** |
-| Creator dashboard population | P1 | Skeleton exists | Phase 9 |
+| SMS notifications | P1 | Configured, untested E2E | **Phase 8** |
+| Creator dashboard population | P1 | ✅ Done (Phase 9, verified 2026-03-04) | — |
+| Affiliate conversion tracking | P1 | ✅ Done (Phase 9, verified 2026-03-04) | — |
+| PWA push notifications | P1 | ✅ Done (Phase 11, verified 2026-03-04) | — |
 | Item category filters | P1 | ✅ Done (Phase 7) | — |
 | Organizer trust badges | P2 | ✅ Done (Phase 7) | — |
 | QR sign generator | P1 | ✅ Done (Phase 10) | — |
-| Auctions / timed lots | P1 (deferred) | Scaffolded | Phase 12 |
+| Auctions / timed lots | P1 | Partial — UI done, organizer toggle + Stripe 7% webhook pending | Phase 12 |
 | Calendar integration | P3 | ✅ Done (Phase 10) | — |
-| Virtual line / QR check-in | P1 (deferred) | Scaffolded | Phase 10 |
+| Virtual line / QR check-in | P1 (deferred) | Scaffolded + E2E tested (Phase 10) | — |
 
 ---
 
@@ -162,12 +167,12 @@ These are **developer experience, testing, and operational items** that should b
 
 | Feature | Current | Competitor | Gap | Priority |
 |---------|---------|------------|-----|----------|
-| Timed auction lots | ⏸️ Scaffolded | ✓ All | Deferred; no E2E | **P1 (deferred)** |
-| Live bidding UI | ❌ No | ✓ All | Real-time bidding missing | **P1 (deferred)** |
-| **Optional "Auction" toggle per item** | ❌ No | ✓ All | Can't flag high-value items for auction | **P1 (deferred)** |
+| Timed auction lots | ⚠️ Partial (UI done, payment not wired) | ✓ All | Organizer toggle + Stripe 7% webhook needed | **P1** |
+| Live bidding UI | ✅ BidModal built (polling) | ✓ All | Socket.io deferred; polling used for MVP | **P2 (deferred)** |
+| **Optional "Auction" toggle per item** | ❌ No | ✓ All | Can't flag high-value items for auction | **P1** |
 | Reservation/hold workflow | ⚠️ Partial (Stripe reservations exist) | ✓ All | Not exposed in UI | **P2** |
 
-**Status:** Auction is a key revenue lever (7% vs 5% fee). Defer to Phase 12 post-beta.
+**Status:** Auction UI live (Phase 12 partial). Organizer toggle + Stripe 7% webhook still needed to unlock revenue. Socket.io deferred — polling used for MVP.
 
 ---
 
@@ -179,7 +184,7 @@ These are **developer experience, testing, and operational items** that should b
 | Email reminders | ✅ Yes (verified) | ✓ All | Closed | — |
 | **Calendar integration** (Google/Apple) | ✅ Done (Phase 10) | ✓ Eventbrite, Meetup | Closed | — |
 | **Neighborhood/hood landing pages** | ⚠️ Partial (/city/[city]) | ✓ Nextdoor, Craigslist | Not hyperlocal (zip-level) | **P2** |
-| **RSVP/watch workflow** | ⚠️ Exists via subscription | ✓ Eventbrite, Meetup | Email only; no push, SMS, or calendar prompt | **P2** |
+| **RSVP/watch workflow** | ✅ Email + Push + iCal done | ✓ Eventbrite, Meetup | SMS reminder E2E untested; no in-app notification center | **P2** |
 
 ---
 
@@ -187,9 +192,9 @@ These are **developer experience, testing, and operational items** that should b
 
 | Feature | Current | Competitor | Gap | Priority |
 |---------|---------|------------|-----|----------|
-| Creator dashboard | ✅ Exists (/creator/dashboard) | ✓ All | UI not populated; no creator tools | **P1** |
+| Creator dashboard | ✅ Done (Phase 9) | ✓ All | Stats, referral link, affiliate table fully implemented | — |
 | **Short-form content hooks** | ❌ No | ✓ All | No way for creators to link to "best finds" | **P2** |
-| **Affiliate-style referral links** | ⚠️ Partial (referral code exists) | ✓ All | Not creator-focused or trackable per creator | **P2** |
+| **Affiliate-style referral links** | ✅ Done (Phase 9) | ✓ All | Affiliate links with UTM tracking + conversion tracking via Stripe webhook | — |
 | **Creator early-access previews** | ❌ No | ✓ Poshmark Closet Ambassador, TikTok | No pre-launch access for influencers | **P3** |
 | **Creator revenue sharing** | ❌ No | ✓ Shopify affiliates, Poshmark, TikTok | No payout for successful referrals | **P3** |
 
@@ -335,23 +340,47 @@ The AI Image Tagger is a core organizer feature that was started but remains **c
 
 ## Phase-by-Phase Implementation Plan
 
-### Phase 9 – Creator Growth Platform (2 sprints)
+### ✅ Phase 9 – Creator Growth Platform (verified 2026-03-04)
 **Goal:** Activate micro-creators for viral loop, build creator dashboard
 
-- Populate /creator/dashboard: organizer feed, referral link, traffic stats
-- Creator shortlink per sale with UTM tracking
-- Backend: GET /api/creators/[id]/stats
+- ✅ /creator/dashboard fully implemented: referral link hero, stats row, affiliate link generator, affiliate links table, sales picker, how-it-works steps
+- ✅ Affiliate shortlinks per sale with UTM tracking + click tracking
+- ✅ Conversion tracking: click → sessionStorage → checkout → Stripe webhook increments `conversions` on AffiliateLink
+- ✅ Creator stats: total referrals, conversions, conversion rate displayed on dashboard
+- ✅ DB migration 20260304000001 applied in production Docker
 
 ---
 
-### Phase 12 – Auction Launch (3 sprints)
+### ✅ Phase 11 – PWA Push Notifications (verified 2026-03-04)
+**Goal:** Enable re-engagement via browser push on PWA
+
+- ✅ PushSubscription schema + migration (20260304000002 applied)
+- ✅ pushController + routes/push.ts: subscribe/unsubscribe (authenticated)
+- ✅ usePushSubscription hook: auto-subscribes logged-in users on first visit
+- ✅ sw-push.js service worker: push event handler + notificationclick
+- ✅ PushSubscriber component wired in _app.tsx
+- ✅ Push sent alongside email reminders in emailReminderService.ts
+- ✅ VAPID keys generated + live in Vercel env vars + docker-compose.yml
+- ✅ Permission prompt verified working on finda.sale (one-prompt-per-browser design)
+
+---
+
+### Phase 12 – Auction Launch (partial — 2 sprints remaining)
 **Goal:** Unlock 7% fee tier, launch live bidding for high-value items
 
-- Socket.io hardening + load test (100+ concurrent bidders)
-- Organizer flow: toggle auction, set reserve price
-- Shopper flow: countdown timer, bid modal, winner notification
-- Payment capture: Stripe webhook for auction wins (7% fee)
-- E2E tests: full auction lifecycle
+**✅ Done (session 36, verified 2026-03-04):**
+- AuctionCountdown.tsx: live per-second countdown, red under 1hr, auto-invalidates on expiry
+- BidModal.tsx: bid modal with validation, login prompt if unauthenticated
+- auctionJob.ts cron: `*/5 * * * *` job now actually scheduled (was never running before)
+- Auction badge + live countdown wired into sales/[id].tsx
+
+**🔲 Remaining (estimated 1–2 sprints):**
+- Organizer flow: toggle item as auction, set reserve price (UI + backend endpoint)
+- Stripe webhook for auction wins: capture payment at 7% fee when auction ends with bid ≥ reserve
+- Winner notification: push + email to winning bidder
+- E2E tests: full auction lifecycle (open → bid → close → payment → notify)
+
+**Note:** Socket.io real-time bidding explicitly deferred (session 36 decision). Polling is sufficient for MVP — revisit with real auction data.
 
 ---
 
@@ -379,13 +408,33 @@ The AI Image Tagger is a core organizer feature that was started but remains **c
 
 ## Dependency Map
 
-### Critical Path
-1. **Phase 12 (Auctions)** → unblocks 7% fee revenue
-2. **Phase 9 (Creator dashboard)** → unblocks creator pilot during beta
+### Current State (post-session-37)
+- Phase 9 ✅ complete — creator pilot can start now
+- Phase 11 ✅ complete — push re-engagement live
+- Phase 12 🔲 partial — auction UI live but revenue path (7% webhook) not wired
+
+### Recommended Sprint Order
+
+**Sprint 1 — Phase 12 completion (highest priority):**
+- Organizer auction toggle + reserve price UI
+- Stripe webhook for auction wins (7% fee)
+- Winner notification (push + email)
+- This is the primary revenue differentiator; everything else waits on it
+
+**Sprint 2 — Real-user beta onboarding:**
+- All bugs closed, push notifications live, creator dashboard working
+- Onboard first real organizers in Grand Rapids
+- Define beta feedback loop (where do issues get reported?)
+
+**Sprint 3+ — Phase 14 Growth Mechanics (parallel once beta is live):**
+- Weekend cluster view + route planner
+- Timed photo drops (scarcity mechanic)
+- Top collector leaderboard
 
 ### Parallel Tracks
-- **Phase 14 can start anytime** (independent experiments)
-- **Phase 15 should wait for Phase 12** (want stable core before SaaS add-ons)
+- **Phase 14 can start anytime** (independent experiments, no dependencies)
+- **Phase 15 (SaaS add-ons) should wait for Phase 12** (want stable revenue model before upsell features)
+- **Socket.io live bidding** — keep deferred; revisit once real auction data shows polling is insufficient
 
 ---
 
@@ -406,6 +455,6 @@ The AI Image Tagger is a core organizer feature that was started but remains **c
 ---
 
 ## Last Updated
-2026-03-04 — All C1-C7, H1-H11, and M-series audit findings closed. Added GitHub ↔ Local Drift Audit section. Vercel build fixed (InstallPrompt, SaleMapInner). Parity table updated to reflect completed phases.
+2026-03-04 (session 37 audit) — Phases 9 (Creator Growth Platform), 11 (PWA Push), and 12 (partial — auction UI + cron) verified complete. Roadmap reconciled against STATE.md. GitHub MCP marked active. Dependency map updated with revised sprint order: Phase 12 completion → real-user beta → Phase 14 growth mechanics. Socket.io live bidding remains deferred.
 
-**Next Review:** Post-beta launch — validate with real user data before committing Phase 14 resources.
+**Next Review:** Post-beta launch — validate Phase 14 priorities with real user data before committing resources.
