@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { getStripe } from '../utils/stripe';
+import { AuthRequest } from '../middleware/auth';
 import { Resend } from 'resend';
 import { handlePurchaseBadge } from './userController';
 import { prisma } from '../lib/prisma';
@@ -45,10 +46,6 @@ const sendReceiptEmail = async (purchase: {
     console.error('Failed to send receipt email:', err);
   }
 };
-
-interface AuthRequest extends Request {
-  user?: any;
-}
 
 // Create a Stripe Connect account for an organizer
 export const createConnectAccount = async (req: AuthRequest, res: Response) => {
