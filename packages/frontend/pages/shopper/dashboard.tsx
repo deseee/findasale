@@ -17,10 +17,10 @@ import Head from 'next/head';
 
 const ShopperDashboard = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'purchases' | 'favorites' | 'subscribed'>('purchases');
 
-  if (!loading && !user) {
+  if (!isLoading && !user) {
     router.push('/login');
     return null;
   }
@@ -43,7 +43,7 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
     <>

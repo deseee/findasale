@@ -15,7 +15,7 @@ import Link from 'next/link';
 
 const ProfilePage = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -25,7 +25,7 @@ const ProfilePage = () => {
   });
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!loading && !user) {
+  if (!isLoading && !user) {
     router.push('/login');
     return null;
   }
@@ -43,7 +43,7 @@ const ProfilePage = () => {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <>
