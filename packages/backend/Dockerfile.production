@@ -17,11 +17,11 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/database ./packages/database
 COPY packages/backend ./packages/backend
 
-# Install deps (including devDeps — prisma CLI + tsc needed at build time)
+# Install deps (production + database for migrations)
 RUN pnpm install --frozen-lockfile --filter backend... --filter database
 
-# Generate Prisma client
-RUN pnpm --filter database exec prisma generate
+# Generate Prisma client (use run script, not exec — exec has binary resolution issues in monorepos)
+RUN pnpm --filter database run db:generate
 
 # Build TypeScript → dist/
 RUN pnpm --filter backend run build
