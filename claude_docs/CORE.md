@@ -143,6 +143,25 @@ Large batches exceed the output token limit and silently fail or crash the sessi
 This applies to every session wrap and any mid-session push. Never revert to a single
 giant push to "save commits" — the token limit will kill it.
 
+### MCP vs PowerShell Decision Rule
+
+Use **MCP** (`push_files`) when ALL of the following are true:
+- 1–3 files in the batch, AND
+- All files were read or edited in the **current turn** (already in context — no re-read cost), AND
+- No single file is a large doc (>300 lines) that wasn't actively changed this turn
+
+Tell Patrick **"please run `git push` in PowerShell"** when ANY of the following apply:
+- 4+ files need pushing as a group
+- Any file is large (>300 lines) and was NOT edited this turn — re-reading it just to push is wasteful
+- Session wrap involves >5 changed files total
+- A file needs to be re-read from GitHub before pushing (drift scenario — skip MCP, use PowerShell)
+
+### Standing File Rules
+
+- **ROADMAP.md** — Only push in the **same turn** it was edited. Never re-read and re-push across turns.
+- **STATE.md** — Push **once**, at session wrap only. Never mid-session.
+- **Large docs not touched this turn** — Do not re-read for the sole purpose of pushing. Flag for PowerShell instead.
+
 ---
 
 Status: Behavioral Authority
