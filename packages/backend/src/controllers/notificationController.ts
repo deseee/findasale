@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 import twilio from 'twilio';
+import { prisma } from '../lib/prisma';
 import { Resend } from 'resend';
 
 // Lazy-loaded Twilio client
@@ -117,6 +115,25 @@ export const unsubscribeFromSale = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error unsubscribing from sale:', error);
     res.status(500).json({ message: 'Failed to unsubscribe from sale' });
+  }
+};
+
+// H10: Public one-click unsubscribe by email — no auth required (CAN-SPAM compliance)
+export const unsubscribeByEmail = async (req: Request, res: Response) => {
+  try {
+    const email = (req.query.email as string)?.trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ message: 'Email parameter is required' });
+    }
+    // Delete all reminder subscriptions for this email address
+    const result = await prisma.saleSubscriber.deleteMany({
+      where: { email }
+    });
+    console.log(`Unsubscribed ${result.count} subscription(s) for ${email}`);
+    res.json({ message: 'Successfully unsubscribed from all sale reminders', count: result.count });
+  } catch (error) {
+    console.error('Error unsubscribing by email:', error);
+    res.status(500).json({ message: 'Failed to unsubscribe' });
   }
 };
 

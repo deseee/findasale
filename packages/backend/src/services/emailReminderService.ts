@@ -118,6 +118,28 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
   };
 };
 
+// EM2/EM3: Shared retry helper with exponential backoff — used for both email and SMS sends
+const withRetry = async <T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelayMs = 500
+): Promise<T> => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      const isRateLimit = error?.status === 429 || error?.code === 20429 || error?.statusCode === 429;
+      if (attempt === maxRetries - 1) throw error;
+      // Longer backoff for rate-limit errors, standard exponential otherwise
+      const delay = isRateLimit
+        ? baseDelayMs * Math.pow(4, attempt)  // 500ms, 2s, 8s
+        : baseDelayMs * Math.pow(2, attempt); // 500ms, 1s, 2s
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('Max retries exceeded');
+};
+
 const getSMSTemplate = (reminder: ReminderSMS): string => {
   const formattedDate = formatSaleDateTime(reminder.startDate);
 
@@ -129,41 +151,44 @@ const getSMSTemplate = (reminder: ReminderSMS): string => {
 };
 
 export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> => {
+  const { subject, html } = getEmailTemplate(reminder);
   try {
-    const { subject, html } = getEmailTemplate(reminder);
-
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
-      to: reminder.to,
-      subject,
-      html,
-    });
-
+    // EM2: Retry up to 3 times with exponential backoff on transient Resend failures
+    await withRetry(() =>
+      resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
+        to: reminder.to,
+        subject,
+        html,
+      })
+    );
     console.log(`✓ Reminder email sent to ${reminder.to} for ${reminder.saleName}`);
   } catch (error) {
-    console.error(`✗ Failed to send reminder email to ${reminder.to}:`, error);
+    console.error(`✗ Failed to send reminder email to ${reminder.to} after retries:`, error);
   }
 };
 
 export const sendReminderSMS = async (reminder: ReminderSMS): Promise<void> => {
+  const twilioClient = getTwilioClient();
+  if (!twilioClient || !process.env.TWILIO_PHONE_NUMBER) {
+    console.warn('⚠️ Twilio not configured - skipping SMS reminder');
+    return;
+  }
+  const smsBody = getSMSTemplate(reminder);
   try {
-    const twilioClient = getTwilioClient();
-    if (!twilioClient || !process.env.TWILIO_PHONE_NUMBER) {
-      console.warn('⚠️ Twilio not configured - skipping SMS reminder');
-      return;
-    }
-
-    const smsBody = getSMSTemplate(reminder);
-
-    await twilioClient.messages.create({
-      body: smsBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: reminder.to,
-    });
-
+    // EM3: Retry with 4x backoff on Twilio 429 rate-limit errors (code 20429)
+    await withRetry(
+      () => twilioClient.messages.create({
+        body: smsBody,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: reminder.to,
+      }),
+      3,
+      1000 // start at 1s for SMS (Twilio limits are per-second, not per-ms)
+    );
     console.log(`✓ Reminder SMS sent to ${reminder.to} for ${reminder.saleName}`);
   } catch (error) {
-    console.error(`✗ Failed to send reminder SMS to ${reminder.to}:`, error);
+    console.error(`✗ Failed to send reminder SMS to ${reminder.to} after retries:`, error);
   }
 };
 
