@@ -19,10 +19,10 @@ import Link from 'next/link';
 const AddItemsDetailPage = () => {
   const router = useRouter();
   const { saleId, method } = router.query;
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const [showCSVModal, setShowCSVModal] = useState(method === 'csv');
 
-  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -36,7 +36,7 @@ const AddItemsDetailPage = () => {
     enabled: !!saleId,
   });
 
-  if (loading || !saleId) return <div>Loading...</div>;
+  if (isLoading || !saleId) return <div>Loading...</div>;
 
   return (
     <>
