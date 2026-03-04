@@ -89,7 +89,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
         `,
       });
     } else {
-      console.log(`[Password Reset] Token generated for ${email} (Resend not configured — email not sent)`);
+      // Do not log the token — it is a security-sensitive credential
+      console.warn(`[Password Reset] Reset email not sent for ${email} — RESEND_API_KEY not configured.`);
     }
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
