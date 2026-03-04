@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import twilio from 'twilio';
+import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Resend } from 'resend';
 
@@ -37,10 +38,6 @@ const getResendClient = () => {
   }
   return _resend;
 };
-
-interface AuthRequest extends Request {
-  user?: any;
-}
 
 // Subscribe to sale notifications
 export const subscribeToSale = async (req: AuthRequest, res: Response) => {

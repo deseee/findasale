@@ -1,12 +1,9 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import QRCode from 'qrcode';
 // pdfkit is loaded lazily inside the handler so the server doesn't crash
 // before the Docker image is rebuilt with the new dependency.
 import { prisma } from '../lib/prisma';
-
-interface AuthRequest extends Request {
-  user?: any;
-}
+import { AuthRequest } from '../middleware/auth';
 
 const formatDate = (dateStr: string | Date): string => {
   const date = new Date(dateStr);
@@ -84,7 +81,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
     const margin = 60;
     const contentWidth = pageWidth - margin * 2;
 
-    // ── Header bar ────────────────────────────────────────────────────────────
+    // ── Header bar ────────────────────────────────────────────
     doc.rect(0, 0, pageWidth, 90).fill('#1d4ed8');
     doc
       .fillColor('#ffffff')
@@ -97,7 +94,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
       .fontSize(12)
       .text('Estate Sale Marketing Kit', margin, 60, { lineBreak: false });
 
-    // ── Sale title ───────────────────────────────────────────────────────────────
+    // ── Sale title ───────────────────────────────────────────
     doc
       .fillColor('#111827')
       .font('Helvetica-Bold')
@@ -106,7 +103,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
 
     const afterTitle = doc.y + 10;
 
-    // ── Divider ──────────────────────────────────────────────────────────────────
+    // ── Divider ────────────────────────────────────────────
     doc
       .strokeColor('#d1d5db')
       .lineWidth(1)
@@ -114,7 +111,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
       .lineTo(pageWidth - margin, afterTitle)
       .stroke();
 
-    // ── Location ────────────────────────────────────────────────────────────────
+    // ── Location ───────────────────────────────────────────
     const locY = afterTitle + 24;
     doc
       .fillColor('#374151')
@@ -128,7 +125,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
       .text(sale.address, margin, doc.y + 6, { width: contentWidth, align: 'center' })
       .text(`${sale.city}, ${sale.state} ${sale.zip}`, { width: contentWidth, align: 'center' });
 
-    // ── Dates ────────────────────────────────────────────────────────────────────
+    // ── Dates ────────────────────────────────────────────
     const datesY = doc.y + 22;
     doc
       .fillColor('#374151')
@@ -142,7 +139,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
       .text(`Start: ${formatDate(sale.startDate)}`, margin, doc.y + 6, { width: contentWidth, align: 'center' })
       .text(`End:    ${formatDate(sale.endDate)}`, { width: contentWidth, align: 'center' });
 
-    // ── QR section ────────────────────────────────────────────────────────────────
+    // ── QR section ───────────────────────────────────────────
     const qrLabelY = doc.y + 26;
     doc
       .fillColor('#374151')
@@ -165,7 +162,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
       .fontSize(9)
       .text(saleUrl, margin, doc.y + 4, { width: contentWidth, align: 'center' });
 
-    // ── Organizer line ───────────────────────────────────────────────────────────────
+    // ── Organizer line ───────────────────────────────────────────
     const orgY = doc.y + 20;
     doc
       .fillColor('#6b7280')
@@ -176,7 +173,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
         align: 'center',
       });
 
-    // ── Footer bar ───────────────────────────────────────────────────────────────
+    // ── Footer bar ───────────────────────────────────────────
     doc.rect(0, pageHeight - 50, pageWidth, 50).fill('#f3f4f6');
     doc
       .fillColor('#9ca3af')

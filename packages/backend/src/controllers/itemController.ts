@@ -1,13 +1,25 @@
 import { Request, Response } from 'express';
 import { parse } from 'csv-parse';
+import { AuthRequest } from '../middleware/auth';
 import { Readable } from 'stream';
 import { prisma } from '../index';
 import axios from 'axios';
 import FormData from 'form-data';
+import { z } from 'zod';
 
-interface AuthRequest extends Request {
-  user?: any;
-}
+// H7: Zod schema for CSV row validation — prevents injection and malformed data
+const csvRowSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200, 'Title too long (max 200 chars)').trim(),
+  description: z.string().max(2000, 'Description too long (max 2000 chars)').optional().default(''),
+  price: z.string().optional(),
+  auctionStartPrice: z.string().optional(),
+  bidIncrement: z.string().optional(),
+  auctionEndTime: z.string().optional(),
+  status: z.enum(['AVAILABLE', 'SOLD', 'RESERVED', 'AUCTION_ENDED']).optional().default('AVAILABLE'),
+  photoUrls: z.string().optional(),
+  category: z.string().max(50).optional(),
+  condition: z.string().max(50).optional(),
+});
 
 // Helper function to convert string to number safely
 const toNumber = (value: string | undefined | null): number | null => {
@@ -68,25 +80,41 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
       records.push(record);
     }
 
-    // Validate and transform records
-    const itemsToCreate = records.map(record => {
-      // Validate required fields
-      if (!record.title) {
-        throw new Error('Missing required field: title');
-      }
+    // H7: Validate and sanitise each row with Zod before inserting
+    const itemsToCreate: any[] = [];
+    const rowErrors: { row: number; errors: string[] }[] = [];
 
-      return {
-        saleId,
-        title: record.title,
-        description: record.description || '',
-        price: toNumber(record.price),
-        auctionStartPrice: toNumber(record.auctionStartPrice),
-        bidIncrement: toNumber(record.bidIncrement),
-        auctionEndTime: record.auctionEndTime ? new Date(record.auctionEndTime) : null,
-        status: record.status || 'AVAILABLE',
-        photoUrls: record.photoUrls ? record.photoUrls.split(',').map((url: string) => url.trim()) : []
-      };
+    records.forEach((record, idx) => {
+      const result = csvRowSchema.safeParse(record);
+      if (!result.success) {
+        rowErrors.push({
+          row: idx + 2, // +2 for 1-indexed + header row
+          errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`),
+        });
+      } else {
+        const d = result.data;
+        itemsToCreate.push({
+          saleId,
+          title: d.title,
+          description: d.description || '',
+          price: toNumber(d.price),
+          auctionStartPrice: toNumber(d.auctionStartPrice),
+          bidIncrement: toNumber(d.bidIncrement),
+          auctionEndTime: d.auctionEndTime ? new Date(d.auctionEndTime) : null,
+          status: d.status || 'AVAILABLE',
+          category: d.category || null,
+          condition: d.condition || null,
+          photoUrls: d.photoUrls ? d.photoUrls.split(',').map((url: string) => url.trim()) : [],
+        });
+      }
     });
+
+    if (itemsToCreate.length === 0) {
+      return res.status(400).json({
+        message: 'No valid rows found — all rows failed validation',
+        errors: rowErrors,
+      });
+    }
 
     // Create items in database
     const createdItems = await prisma.item.createMany({
@@ -95,8 +123,9 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
     });
 
     res.json({
-      message: `Successfully imported ${createdItems.count} items`,
-      itemCount: createdItems.count
+      message: `Successfully imported ${createdItems.count} items${rowErrors.length > 0 ? ` (${rowErrors.length} row(s) skipped due to validation errors)` : ''}`,
+      itemCount: createdItems.count,
+      ...(rowErrors.length > 0 ? { rowErrors } : {}),
     });
   } catch (error: any) {
     console.error('CSV import error:', error);
