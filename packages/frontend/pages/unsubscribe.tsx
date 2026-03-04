@@ -1,77 +1,67 @@
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
-import Head from 'next/head';
-import Link from 'next/link';
-import api from '../lib/api';
+/**
+ * Unsubscribe Page
+ *
+ * Allows users to unsubscribe from email notifications via link.
+ */
 
-export default function UnsubscribePage() {
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import api from '../lib/api';
+import Head from 'next/head';
+
+const UnsubscribePage = () => {
   const router = useRouter();
-  const { email } = router.query;
-  const [status, setStatus] = useState<'pending' | 'loading' | 'success' | 'error'>('pending');
+  const { token } = router.query;
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    if (!router.isReady) return;
-    if (!email || typeof email !== 'string') {
-      setStatus('error');
-      setMessage('No email address provided. Please use the unsubscribe link from your reminder email.');
-      return;
+    if (token) {
+      unsubscribe();
     }
-    // Auto-trigger on page load (one-click unsubscribe as required by CAN-SPAM)
-    setStatus('loading');
-    api.get(`/notifications/unsubscribe-email?email=${encodeURIComponent(email)}`)
-      .then((res) => {
-        setStatus('success');
-        setMessage(res.data.count > 0
-          ? `You've been unsubscribed from all FindA.Sale reminder emails.`
-          : `No active subscriptions found for ${email}.`);
-      })
-      .catch(() => {
-        setStatus('error');
-        setMessage('Something went wrong. Please try again or contact us at hello@finda.sale.');
-      });
-  }, [router.isReady, email]);
+  }, [token]);
+
+  const unsubscribe = async () => {
+    try {
+      await api.post('/notifications/unsubscribe-link', { token });
+      setStatus('success');
+      setMessage('You have been unsubscribed from notifications.');
+    } catch (error: any) {
+      setStatus('error');
+      setMessage(error.response?.data?.message || 'Failed to unsubscribe. Please try again.');
+    }
+  };
 
   return (
     <>
       <Head>
-        <title>Unsubscribe — FindA.Sale</title>
-        <meta name="robots" content="noindex" />
+        <title>Unsubscribe - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-xl shadow-md p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold text-warm-900 mb-6">Email Preferences</h1>
+
           {status === 'loading' && (
-            <>
-              <div className="text-4xl mb-4">⏳</div>
-              <h1 className="text-xl font-bold text-gray-800 mb-2">Unsubscribing…</h1>
-              <p className="text-gray-500 text-sm">Just a moment.</p>
-            </>
+            <p className="text-warm-600">Processing your request...</p>
           )}
+
           {status === 'success' && (
-            <>
-              <div className="text-4xl mb-4">✅</div>
-              <h1 className="text-xl font-bold text-gray-800 mb-2">Unsubscribed</h1>
-              <p className="text-gray-600 text-sm mb-6">{message}</p>
-              <Link href="/" className="text-blue-600 hover:underline text-sm">Browse estate sales →</Link>
-            </>
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+              <p className="font-medium mb-2">Unsubscribed</p>
+              <p className="text-sm">{message}</p>
+            </div>
           )}
+
           {status === 'error' && (
-            <>
-              <div className="text-4xl mb-4">⚠️</div>
-              <h1 className="text-xl font-bold text-gray-800 mb-2">Something went wrong</h1>
-              <p className="text-gray-600 text-sm mb-6">{message}</p>
-              <Link href="/" className="text-blue-600 hover:underline text-sm">Go to homepage →</Link>
-            </>
-          )}
-          {status === 'pending' && (
-            <>
-              <div className="text-4xl mb-4">📧</div>
-              <h1 className="text-xl font-bold text-gray-800 mb-2">Unsubscribe from reminders</h1>
-              <p className="text-gray-500 text-sm">Loading…</p>
-            </>
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+              <p className="font-medium mb-2">Error</p>
+              <p className="text-sm">{message}</p>
+            </div>
           )}
         </div>
       </div>
     </>
   );
-}
+};
+
+export default UnsubscribePage;
