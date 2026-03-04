@@ -45,7 +45,8 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
-    console.error('Change password error:', error);
+    // Log error without including sensitive data (passwords, user ID, etc.)
+    console.error('Change password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -95,7 +96,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    // Log error without including sensitive data (email, token, etc.)
+    console.error('Forgot password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -124,7 +126,8 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
     res.json({ message: 'Password reset successfully. You can now log in.' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    // Log error without including sensitive data (token, password, etc.)
+    console.error('Reset password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error.' });
   }
 });
