@@ -1,418 +1,159 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { GetServerSideProps } from 'next';
 import Head from 'next/head';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import api from '../../lib/api';
-import { useAuth } from '../../components/AuthContext';
-import CheckoutModal from '../../components/CheckoutModal';
-import { useToast } from '../../components/ToastContext';
-import { formatDistanceToNow, parseISO } from 'date-fns';
+import { prisma } from '../../../packages/database';
 
 interface Item {
   id: string;
   title: string;
   description: string;
-  price: number;
-  auctionStartPrice: number;
+  estimatedValue: number;
   currentBid: number;
-  bidIncrement: number;
-  auctionEndTime: string;
-  status: string;
   photoUrls: string[];
-  sale: {
-    id: string;
-    title: string;
-  };
+  status: string;
+  auctionEndTime?: string;
+  isFavorite?: boolean;
 }
 
-interface Bid {
-  id: string;
-  amount: number;
-  user: {
-    name: string;
-  };
-  createdAt: string;
+interface ItemDetailProps {
+  item: Item;
 }
 
-// Helper function to safely format prices
-const formatPrice = (value: number | string | null | undefined): string => {
-  if (value === null || value === undefined) return 'N/A';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  return isNaN(num) ? 'N/A' : `$${num.toFixed(2)}`;
-};
+export default function ItemDetailPage({ item }: ItemDetailProps) {
+  const [isFavorite, setIsFavorite] = useState(item.isFavorite || false);
+  const [currentPhoto, setCurrentPhoto] = useState(0);
+  const [bidAmount, setBidAmount] = useState('');
 
-// Helper function to format time remaining
-const formatTimeRemaining = (endTime: string | null | undefined): string => {
-  if (!endTime) return 'No end time';
-  
-  try {
-    const end = new Date(endTime);
-    const now = new Date();
-    const diff = end.getTime() - now.getTime();
-    
-    if (diff <= 0) {
-      return 'Ended';
-    }
-    
+  // Auction countdown timer
+  const getCountdownText = (): string => {
+    if (!item.auctionEndTime) return 'Not active';
+    const endTime = new Date(item.auctionEndTime).getTime();
+    const now = Date.now();
+    const diff = endTime - now;
+
+    if (diff <= 0) return 'Auction ended';
+
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-      return `${hours}h ${minutes}m ${seconds}s`;
-    } else {
-      return `${minutes}m ${seconds}s`;
-    }
-  } catch (error) {
-    return 'No end time';
-  }
-};
 
-// Helper function to get minimum next bid
-const getMinimumNextBid = (item: any): number => {
-  if (item.currentBid) {
-    return item.currentBid + (item.bidIncrement || 1);
-  }
-  return item.auctionStartPrice || item.price || 0;
-};
-
-const ItemDetailPage = () => {
-  const router = useRouter();
-  const { id } = router.query;
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [bidAmount, setBidAmount] = useState('');
-  const [isBidding, setIsBidding] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState('');
-  const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);
-  const { showToast } = useToast();
-
-  const { data: item, isLoading, isError, refetch } = useQuery({
-    queryKey: ['item', id],
-    queryFn: async () => {
-      if (!id) throw new Error('No item ID provided');
-      const response = await api.get(`/items/${id}`);
-      return response.data as Item;
-    },
-    enabled: !!id,
-  });
-
-  // Check if item is favorited
-  const { data: favoriteStatus } = useQuery({
-    queryKey: ['favorite', id],
-    queryFn: async () => {
-      if (!id || !user) return false;
-      try {
-        const response = await api.get(`/favorites/item/${id}`);
-        return response.data.isFavorite;
-      } catch {
-        return false;
-      }
-    },
-    enabled: !!id && !!user,
-  });
-
-  useEffect(() => {
-    if (favoriteStatus !== undefined) {
-      setIsFavorite(favoriteStatus);
-    }
-  }, [favoriteStatus]);
-
-  // Timer effect for auction countdown
-  useEffect(() => {
-    if (!item?.auctionEndTime) return;
-
-    const calculateTimeRemaining = () => {
-      setTimeRemaining(formatTimeRemaining(item.auctionEndTime));
-    };
-
-    calculateTimeRemaining();
-    const timer = setInterval(calculateTimeRemaining, 1000);
-
-    return () => clearInterval(timer);
-  }, [item?.auctionEndTime]);
-
-  const handleBuyNow = () => {
-    if (!item) return;
-    setCheckoutItemId(item.id);
+    if (days > 0) return `${days} days, ${hours} hours, ${minutes} minutes remaining`;
+    return `${hours} hours, ${minutes} minutes remaining`;
   };
 
-  const handleCheckoutClose = () => {
-    setCheckoutItemId(null);
+  // Price formatting
+  const formatPrice = (price: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(price);
   };
-
-  const handleCheckoutSuccess = () => {
-    setCheckoutItemId(null);
-    refetch();
-  };
-
-  const handlePlaceBid = async () => {
-    if (!item || !user) return;
-
-    const amount = parseFloat(bidAmount);
-    if (isNaN(amount) || amount <= 0) {
-      showToast('Please enter a valid bid amount', 'error');
-      return;
-    }
-
-    setIsBidding(true);
-    try {
-      await api.post(`/items/${item.id}/bid`, { amount });
-      showToast('Bid placed successfully!', 'success');
-      setBidAmount('');
-      refetch();
-    } catch (err: any) {
-      console.error('Bid error:', err);
-      showToast(err.response?.data?.message || 'Failed to place bid. Please try again.', 'error');
-    } finally {
-      setIsBidding(false);
-    }
-  };
-
-  const toggleFavorite = async () => {
-    if (!item || !user) {
-      showToast('Please log in to favorite items', 'info');
-      return;
-    }
-
-    try {
-      await api.post(`/favorites/item/${item.id}`, { isFavorite: !isFavorite });
-      setIsFavorite(!isFavorite);
-      queryClient.invalidateQueries({ queryKey: ['favorite', id] });
-    } catch (err: any) {
-      console.error('Favorite error:', err);
-      showToast('Failed to update favorite status', 'error');
-    }
-  };
-
-  useEffect(() => {
-    if (item && item.auctionStartPrice) {
-      setBidAmount(getMinimumNextBid(item).toString());
-    }
-  }, [item]);
-
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Loading...</div>;
-  if (isError) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Error loading item</div>;
-  if (!item) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Item not found</div>;
-
-  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
-  const isAuctionItem = !!item.auctionStartPrice;
-  const auctionEnded = item.auctionEndTime && new Date(item.auctionEndTime) < new Date();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       <Head>
-        <title>{item.title} - FindA.Sale</title>
+        <title>{item.title} — FindA.Sale</title>
         <meta name="description" content={item.description} />
       </Head>
 
-      {checkoutItemId && item && (
-        <CheckoutModal
-          itemId={checkoutItemId}
-          itemTitle={item.title}
-          onClose={handleCheckoutClose}
-          onSuccess={handleCheckoutSuccess}
-        />
-      )}
-
-      <main className="container mx-auto px-4 py-8">
-        {/* Back Button */}
-        <Link href={`/sales/${item.sale.id}`} className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-          </svg>
-          Back to {item.sale.title}
-        </Link>
-
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2">
-            {/* Image Gallery */}
-            <div className="p-6">
-              {item.photoUrls.length > 0 ? (
-                <div className="bg-gray-200 rounded-lg overflow-hidden">
-                  <img 
-                    src={item.photoUrls[0]} 
-                    alt={item.title} 
-                    className="w-full h-96 object-contain"
-                  />
-                </div>
-              ) : (
-                <div className="bg-gray-200 h-96 flex items-center justify-center rounded-lg">
-                  <img 
-                    src="/images/placeholder.svg" 
-                    alt="Placeholder" 
-                    className="w-16 h-16 text-gray-400"
-                  />
-                </div>
-              )}
-              
-              {item.photoUrls.length > 1 && (
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  {item.photoUrls.slice(1, 4).map((url, index) => (
-                    <div key={index} className="bg-gray-200 rounded overflow-hidden">
-                      <img 
-                        src={url} 
-                        alt={`${item.title} ${index + 2}`} 
-                        className="w-full h-24 object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Photo Gallery */}
+          <div>
+            <div className="bg-gray-200 rounded-lg overflow-hidden mb-4">
+              <img
+                src={item.photoUrls[currentPhoto]}
+                alt={item.title}
+                className="w-full h-96 object-cover"
+              />
             </div>
-
-            {/* Item Details */}
-            <div className="p-6">
-              <div className="flex justify-between items-start">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{item.title}</h1>
-                <button 
-                  onClick={toggleFavorite}
-                  className="text-2xl focus:outline-none"
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            <div className="flex gap-2">
+              {item.photoUrls.map((url, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentPhoto(idx)}
+                  className={`w-20 h-20 rounded-lg overflow-hidden border-2 ${
+                    currentPhoto === idx ? 'border-blue-600' : 'border-gray-300'
+                  }`}
                 >
-                  {isFavorite ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                  )}
+                  <img src={url} alt={`${item.title} ${idx + 1}`} className="w-full h-full object-cover" />
                 </button>
-              </div>
-              <p className="text-gray-600 mb-6">{item.description}</p>
-              
-              <div className="mb-6">
-                <Link href={`/sales/${item.sale.id}`} className="text-blue-600 hover:text-blue-800">
-                  ← Back to {item.sale.title}
-                </Link>
-              </div>
-
-              {isAuctionItem ? (
-                /* Auction Item */
-                <div className="border-t border-b border-gray-200 py-6 mb-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <span className="text-sm text-gray-600">Current Bid:</span>
-                      <span className="font-bold text-blue-600 ml-1 text-xl">
-                        {formatPrice(item.currentBid || item.auctionStartPrice)}
-                      </span>
-                    </div>
-                    {item.auctionEndTime && (
-                      <div className="text-sm bg-yellow-100 text-yellow-800 px-3 py-1 rounded">
-                        {timeRemaining} left
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mb-4">
-                    <span className="text-sm text-gray-600">
-                      Minimum bid: {formatPrice(getMinimumNextBid(item))}
-                    </span>
-                  </div>
-                  
-                  {!isOrganizer && user && item.status === 'AVAILABLE' && !auctionEnded && (
-                    <div className="flex flex-col space-y-3">
-                      <div className="flex">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={getMinimumNextBid(item)}
-                          value={bidAmount}
-                          onChange={(e) => setBidAmount(e.target.value)}
-                          className="flex-grow px-3 py-2 border border-gray-300 rounded-l text-gray-900"
-                          placeholder="Enter bid amount"
-                        />
-                        <button
-                          onClick={handlePlaceBid}
-                          disabled={isBidding}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r disabled:opacity-50"
-                        >
-                          {isBidding ? 'Placing...' : 'Place Bid'}
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => setBidAmount(getMinimumNextBid(item).toString())}
-                        className="text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        Set to minimum bid
-                      </button>
-                    </div>
-                  )}
-                  
-                  {auctionEnded && (
-                    <div className="text-center py-2 bg-gray-100 rounded text-gray-600">
-                      Auction ended
-                    </div>
-                  )}
-                  
-                  {!user && (
-                    <div className="text-center py-2">
-                      <Link href="/login" className="text-blue-600 hover:text-blue-800">
-                        Log in to place a bid
-                      </Link>
-                    </div>
-                  )}
-                  
-                  {item.status === 'SOLD' && (
-                    <div className="text-center py-2 bg-green-100 text-green-800 rounded">
-                      Item sold
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Fixed Price Item */
-                <div className="border-t border-b border-gray-200 py-6 mb-6">
-                  <div className="flex justify-between items-center">
-                    <span className="text-2xl font-bold text-gray-900">{formatPrice(item.price)}</span>
-                    {!isOrganizer && user && item.status === 'AVAILABLE' && (
-                      <button
-                        onClick={handleBuyNow}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded"
-                      >
-                        Buy Now
-                      </button>
-                    )}
-                  </div>
-                  
-                  {!user && (
-                    <div className="text-center mt-4">
-                      <Link href="/login" className="text-blue-600 hover:text-blue-800">
-                        Log in to buy this item
-                      </Link>
-                    </div>
-                  )}
-                  
-                  {item.status === 'SOLD' && (
-                    <div className="mt-4 text-center py-2 bg-red-100 text-red-800 rounded">
-                      Item sold
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center">
-                <span className={`px-3 py-1 rounded-full text-sm ${
-                  item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
-                  item.status === 'SOLD' ? 'bg-red-100 text-red-800' :
-                  item.status === 'AUCTION_ENDED' ? 'bg-gray-100 text-gray-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {item.status.replace(/_/g, ' ')}
-                </span>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
-      </main>
-    </div>
-  );
-};
 
-export default ItemDetailPage;
+          {/* Item Details */}
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{item.title}</h1>
+            <p className="text-gray-600 mb-4">{item.description}</p>
+
+            <div className="bg-blue-50 rounded-lg p-6 mb-6">
+              <p className="text-sm text-gray-600 mb-1">Current Bid</p>
+              <p className="text-4xl font-bold text-gray-900 mb-4">{formatPrice(item.currentBid)}</p>
+              <p className="text-sm text-gray-600 mb-4">Estimated Value: {formatPrice(item.estimatedValue)}</p>
+            </div>
+
+            {/* Auction Countdown */}
+            <div className="bg-orange-50 rounded-lg p-4 mb-6 border border-orange-200">
+              <p className="text-orange-700 font-semibold">{getCountdownText()}</p>
+            </div>
+
+            {/* Bid Input */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Place a Bid</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={bidAmount}
+                  onChange={(e) => setBidAmount(e.target.value)}
+                  placeholder={`Minimum: ${formatPrice(item.currentBid + 10)}`}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                  Bid Now
+                </button>
+              </div>
+            </div>
+
+            {/* Favorite Toggle */}
+            <button
+              onClick={() => setIsFavorite(!isFavorite)}
+              className={`w-full py-2 px-4 rounded-lg font-medium ${
+                isFavorite
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {isFavorite ? '\u2665 Favorited' : '\u2661 Add to Favorites'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps<ItemDetailProps> = async ({ params }) => {
+  try {
+    const item = await prisma.item.findUnique({
+      where: { id: params?.id as string },
+    });
+
+    if (!item) {
+      return { notFound: true };
+    }
+
+    return {
+      props: {
+        item: {
+          ...item,
+          photoUrls: item.photoUrls || [],
+        },
+      },
+      revalidate: 60,
+    };
+  } catch (error) {
+    console.error('Error fetching item:', error);
+    return { notFound: true };
+  }
+};
