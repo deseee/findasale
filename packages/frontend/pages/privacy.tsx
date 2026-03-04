@@ -1,81 +1,63 @@
 import React from 'react';
 import Head from 'next/head';
 
-const PrivacyPolicyPage = () => {
+const PrivacyPage = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       <Head>
         <title>Privacy Policy - FindA.Sale</title>
-        <meta name="description" content="Privacy Policy for FindA.Sale" />
       </Head>
+      <div className="min-h-screen bg-white">
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          <h1 className="text-4xl font-bold text-warm-900 mb-8">Privacy Policy</h1>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">Privacy Policy</h1>
-          
-          <div className="prose prose-lg text-gray-700">
-            <p className="mb-4"><strong>Last Updated:</strong> April 5, 2025</p>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">1. Information We Collect</h2>
-            <p className="mb-4">
-              We collect information you provide directly to us, such as when you create an account, 
-              participate in auctions, make purchases, or contact us for support. This may include your name, 
-              email address, phone number, payment information, and other personal details.
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 mb-4">Introduction</h2>
+            <p className="text-warm-700 leading-relaxed">
+              FindA.Sale ("we", "us", or "our") operates the FindA.Sale platform. This page informs you of our policies
+              regarding the collection, use, and disclosure of personal data when you use our service.
             </p>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">2. How We Use Your Information</h2>
-            <p className="mb-4">
-              We use your information to provide, maintain, and improve our services, including:
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 mb-4">Information Collection and Use</h2>
+            <p className="text-warm-700 leading-relaxed mb-4">
+              We collect several different types of information for various purposes to provide and improve our service:
             </p>
-            <ul className="list-disc pl-6 mb-4">
-              <li>Processing transactions and sending transaction confirmations</li>
-              <li>Communicating with you about your account and our services</li>
-              <li>Providing customer support</li>
-              <li>Analyzing usage patterns to improve our platform</li>
+            <ul className="list-disc list-inside text-warm-700 space-y-2">
+              <li><strong>Personal Data:</strong> Name, email address, phone number, location, payment information</li>
+              <li><strong>Usage Data:</strong> Browser type, IP address, pages visited, time spent on pages</li>
+              <li><strong>Cookies:</strong> We use cookies to enhance your experience</li>
             </ul>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">3. Information Sharing</h2>
-            <p className="mb-4">
-              We do not sell, trade, or rent your personal information to third parties. We may share 
-              information with trusted third parties who assist us in operating our website, conducting 
-              business, or servicing you, as long as those parties agree to keep this information confidential.
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 mb-4">Security of Data</h2>
+            <p className="text-warm-700 leading-relaxed">
+              The security of your data is important to us but remember that no method of transmission over the Internet
+              or method of electronic storage is 100% secure. While we strive to use commercially acceptable means to protect
+              your Personal Data, we cannot guarantee its absolute security.
             </p>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">4. Data Security</h2>
-            <p className="mb-4">
-              We implement a variety of security measures to maintain the safety of your personal information. 
-              These measures include encryption, secure server hosting, and regular security audits.
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 mb-4">Changes to This Privacy Policy</h2>
+            <p className="text-warm-700 leading-relaxed">
+              We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new
+              Privacy Policy on this page and updating the "effective date" at the top of this Privacy Policy.
             </p>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">5. Cookies</h2>
-            <p className="mb-4">
-              We use cookies and similar tracking technologies to track activity on our service and hold 
-              certain information. You can instruct your browser to refuse all cookies or to indicate when 
-              a cookie is being sent.
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-semibold text-warm-800 mb-4">Contact Us</h2>
+            <p className="text-warm-700">
+              If you have questions about this Privacy Policy, please contact us at privacy@findasale.com.
             </p>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">6. Your Rights</h2>
-            <p className="mb-4">
-              Depending on your location, you may have certain rights regarding your personal information, 
-              including the right to access, correct, or delete your personal information.
-            </p>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">7. Changes to This Privacy Policy</h2>
-            <p className="mb-4">
-              We may update our Privacy Policy from time to time. We will notify you of any changes by 
-              posting the new Privacy Policy on this page.
-            </p>
-            
-            <h2 className="text-xl font-semibold mt-8 mb-4">8. Contact Us</h2>
-            <p className="mb-4">
-              If you have any questions about this Privacy Policy, please contact us at:
-              privacy@finda.sale
-            </p>
-          </div>
+          </section>
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 };
 
-export default PrivacyPolicyPage;
+export default PrivacyPage;
