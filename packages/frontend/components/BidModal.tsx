@@ -57,10 +57,10 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
         className="bg-white rounded-xl shadow-xl w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Place a Bid</h2>
-        <p className="text-sm text-gray-500 mb-4 line-clamp-2">{item.title}</p>
+        <h2 className="text-xl font-bold text-warm-900 mb-1">Place a Bid</h2>
+        <p className="text-sm text-warm-500 mb-4 line-clamp-2">{item.title}</p>
 
-        <div className="flex justify-between text-sm text-gray-600 mb-4">
+        <div className="flex justify-between text-sm text-warm-600 mb-4">
           <span>
             Current bid:{' '}
             <strong>
@@ -70,18 +70,18 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
             </strong>
           </span>
           <span>
-            Min next bid: <strong className="text-blue-600">${minBid.toFixed(2)}</strong>
+            Min next bid: <strong className="text-amber-600">${minBid.toFixed(2)}</strong>
           </span>
         </div>
 
         {!user ? (
-          <p className="text-center text-sm text-gray-500 py-4">
-            Please <a href="/login" className="text-blue-600 underline">log in</a> to place a bid.
+          <p className="text-center text-sm text-warm-500 py-4">
+            Please <a href="/login" className="text-amber-600 underline">log in</a> to place a bid.
           </p>
         ) : (
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-warm-700 mb-1">
                 Your bid ($)
               </label>
               <input
@@ -90,7 +90,7 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
                 min={minBid}
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-warm-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 required
               />
             </div>
@@ -98,14 +98,14 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+                className="flex-1 px-4 py-2 border border-warm-300 rounded-lg text-warm-700 hover:bg-warm-50 font-medium"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium disabled:opacity-50"
               >
                 {submitting ? 'Placing…' : 'Place Bid'}
               </button>

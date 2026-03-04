@@ -75,7 +75,7 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
           <h3 className="text-xl font-bold">Import Items from CSV</h3>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-warm-500 hover:text-warm-700"
             aria-label="Close modal"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -85,13 +85,13 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
         </div>
         
         <div className="mb-4">
-          <p className="text-gray-600 mb-4">
+          <p className="text-warm-600 mb-4">
             Upload a CSV file to bulk import items for this sale.
           </p>
           
           <button
             onClick={downloadTemplate}
-            className="text-blue-600 hover:text-blue-800 text-sm font-medium mb-4 inline-flex items-center"
+            className="text-amber-600 hover:text-amber-800 text-sm font-medium mb-4 inline-flex items-center"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -99,7 +99,7 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
             Download CSV Template
           </button>
           
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+          <div className="border-2 border-dashed border-warm-300 rounded-lg p-6 text-center">
             <input
               type="file"
               accept=".csv"
@@ -109,13 +109,13 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
             />
             <label htmlFor="csv-upload" className="cursor-pointer">
               <div className="flex flex-col items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-warm-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p className="mt-2 text-sm text-gray-600">
-                  <span className="font-medium text-blue-600">Click to upload</span> or drag and drop
+                <p className="mt-2 text-sm text-warm-600">
+                  <span className="font-medium text-amber-600">Click to upload</span> or drag and drop
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-warm-500">
                   CSV file up to 10MB
                 </p>
               </div>
@@ -123,7 +123,7 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
           </div>
           
           {file && (
-            <div className="mt-2 text-sm text-gray-600">
+            <div className="mt-2 text-sm text-warm-600">
               Selected file: {file.name}
             </div>
           )}
@@ -138,14 +138,14 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
         <div className="flex justify-end space-x-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            className="px-4 py-2 border border-warm-300 rounded-md text-warm-700 hover:bg-warm-50"
           >
             Cancel
           </button>
           <button
             onClick={handleUpload}
             disabled={!file || isUploading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
           >
             {isUploading ? 'Uploading...' : 'Import Items'}
           </button>

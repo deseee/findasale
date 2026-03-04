@@ -64,16 +64,16 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
     <div className="relative">
       <button
         onClick={handleShare}
-        className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        className="flex items-center bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+          <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47C13.456 7.68 14.19 8 15 8z" />
         </svg>
         Share
       </button>
       
       {showCopyFeedback && (
-        <div className="absolute top-full mt-2 right-0 bg-gray-800 text-white text-sm py-2 px-3 rounded shadow-lg">
+        <div className="absolute top-full mt-2 right-0 bg-warm-800 text-white text-sm py-2 px-3 rounded shadow-lg">
           Link copied to clipboard!
         </div>
       )}
