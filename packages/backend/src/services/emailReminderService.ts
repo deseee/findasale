@@ -78,7 +78,8 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
           </p>
 
           <p style="font-size: 14px; color: #999; margin-top: 30px;">
-            You're receiving this because you're watching this sale on FindA.Sale.
+            You're receiving this because you're watching this sale on FindA.Sale.<br/>
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?email=${encodeURIComponent(reminder.to)}" style="color: #999;">Unsubscribe from reminders</a>
           </p>
         </div>
       `,
@@ -109,7 +110,8 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
         </p>
 
         <p style="font-size: 14px; color: #999; margin-top: 30px;">
-          You're receiving this because you're watching this sale on FindA.Sale.
+          You're receiving this because you're watching this sale on FindA.Sale.<br/>
+          <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?email=${encodeURIComponent(reminder.to)}" style="color: #999;">Unsubscribe from reminders</a>
         </p>
       </div>
     `,
