@@ -14,11 +14,11 @@ import Head from 'next/head';
 
 const CreatorDashboard = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'sales' | 'analytics' | 'settings'>('sales');
 
   // Redirect if not authenticated or not an organizer
-  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -33,7 +33,7 @@ const CreatorDashboard = () => {
     enabled: !!user?.id,
   });
 
-  if (loading) return <div>Loading...</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <>
