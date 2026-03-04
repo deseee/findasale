@@ -6,8 +6,15 @@ import Layout from '../components/Layout';
 import { AuthProvider } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
 import InstallPrompt from '../components/InstallPrompt';
+import { usePushSubscription } from '../hooks/usePushSubscription';
 
 // SW update notifier — renders a dismissible toast when a new service worker is waiting
+// Registers the user's browser for push notifications once they're logged in
+function PushSubscriber() {
+  usePushSubscription();
+  return null;
+}
+
 function ServiceWorkerUpdateNotifier() {
   const { showToast } = useToast();
 
@@ -35,7 +42,7 @@ function MyApp({ Component, pageProps }: AppProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 20 * 1000, // 20 seconds — marketplace data changes frequently
+            staleTime: 60 * 1000, // 1 minute
             retry: 1,
           },
         },
@@ -51,6 +58,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           </Layout>
           {/* PWA helpers — rendered outside Layout so they overlay correctly */}
           <ServiceWorkerUpdateNotifier />
+          <PushSubscriber />
           <InstallPrompt />
         </QueryClientProvider>
       </AuthProvider>
