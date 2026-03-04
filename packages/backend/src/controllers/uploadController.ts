@@ -15,18 +15,53 @@ export const upload = multer({ storage: multer.memoryStorage() });
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 
-// Upload a single buffer to Cloudinary — returns the secure URL
-const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<string> =>
+// ── Cloudinary image variants (Phase 14c) ─────────────────────────────────
+// Eager transformations generate optimized variants at upload time.
+// No webhooks needed — all variants are ready when the upload resolves.
+const EAGER_TRANSFORMS = [
+  // Thumbnail: 200×200 auto-crop face/center, WebP, quality 60
+  { width: 200, height: 200, crop: 'fill', gravity: 'auto', quality: 60, format: 'webp' },
+  // Optimized: 800px wide, auto quality, WebP — listing cards + detail page
+  { width: 800, crop: 'limit', quality: 'auto', format: 'webp' },
+  // Full-res: 1600px cap, auto quality, WebP — lightbox / zoom
+  { width: 1600, crop: 'limit', quality: 'auto:good', format: 'webp' },
+];
+
+interface CloudinaryUrls {
+  original: string;
+  thumbnail: string;
+  optimized: string;
+  full: string;
+}
+
+// Upload a single buffer to Cloudinary — returns multi-res URLs
+const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<CloudinaryUrls> =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { resource_type: 'auto', folder },
+      {
+        resource_type: 'auto',
+        folder,
+        eager: EAGER_TRANSFORMS,
+        eager_async: false, // wait for transforms before resolving
+      },
       (error, result) => {
         if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
-        resolve(result.secure_url);
+
+        const eager = result.eager || [];
+        resolve({
+          original: result.secure_url,
+          thumbnail: eager[0]?.secure_url || result.secure_url,
+          optimized: eager[1]?.secure_url || result.secure_url,
+          full: eager[2]?.secure_url || result.secure_url,
+        });
       }
     );
     stream.end(buffer);
   });
+
+// Backward-compat helper — returns just the original URL (used by legacy endpoints)
+const uploadToCloudinarySimple = (buffer: Buffer, folder = 'findasale'): Promise<string> =>
+  uploadToCloudinary(buffer, folder).then(urls => urls.original);
 
 // POST /api/upload/sale-photos — up to 20 images, returns { urls: string[] }
 export const uploadSalePhotos = async (req: Request, res: Response): Promise<void> => {
@@ -43,13 +78,18 @@ export const uploadSalePhotos = async (req: Request, res: Response): Promise<voi
     );
 
     const urls: string[] = [];
+    const imageVariants: CloudinaryUrls[] = [];
     const partialErrors: string[] = [];
     results.forEach((r, i) => {
-      if (r.status === 'fulfilled') urls.push(r.value);
-      else partialErrors.push(`File ${i + 1}: ${(r.reason as Error)?.message ?? 'upload failed'}`);
+      if (r.status === 'fulfilled') {
+        urls.push(r.value.original); // backward-compat: flat URL array
+        imageVariants.push(r.value);
+      } else {
+        partialErrors.push(`File ${i + 1}: ${(r.reason as Error)?.message ?? 'upload failed'}`);
+      }
     });
 
-    res.json({ urls, ...(partialErrors.length ? { partialErrors } : {}) });
+    res.json({ urls, imageVariants, ...(partialErrors.length ? { partialErrors } : {}) });
   } catch (error) {
     console.error('uploadSalePhotos error:', error);
     res.status(500).json({ error: 'Upload failed' });
@@ -65,8 +105,8 @@ export const uploadItemPhoto = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const url = await uploadToCloudinary(file.buffer);
-    res.json({ url });
+    const urls = await uploadToCloudinary(file.buffer);
+    res.json({ url: urls.original, imageVariants: urls });
   } catch (error) {
     console.error('uploadItemPhoto error:', error);
     res.status(500).json({ error: 'Upload failed' });
@@ -95,8 +135,8 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
     // Process each file: upload to Cloudinary + AI analysis in parallel per file
     const results = await Promise.allSettled(
       files.map(async (file, index) => {
-        // Upload to Cloudinary
-        const cloudinaryUrl = await uploadToCloudinary(file.buffer);
+        // Upload to Cloudinary (multi-res)
+        const imageUrls = await uploadToCloudinary(file.buffer);
 
         // AI analysis (best-effort — don't fail the whole batch if AI is down)
         let ai: Record<string, unknown> | null = null;
@@ -113,7 +153,7 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
           // AI failed — that's OK, organizer can fill in manually
         }
 
-        return { index, cloudinaryUrl, ai };
+        return { index, cloudinaryUrl: imageUrls.original, imageVariants: imageUrls, ai };
       })
     );
 
