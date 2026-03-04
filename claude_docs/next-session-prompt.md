@@ -1,29 +1,28 @@
 # Next Session Resume Prompt
-*Written: 2026-03-04T22:30:00Z*
+*Written: 2026-03-04T23:30:00Z*
 *Session ended: normally*
 
 ## Resume From
-Verify that the Vercel redeploy completed and the frontend is talking to the Railway backend. Test a basic flow (e.g., load finda.sale, check network tab for requests hitting `backend-production-153c9.up.railway.app`).
+Build Phase 17 notification delivery - when an organizer publishes a sale, query the Follow table and send email (Resend) + push (VAPID) to all followers who have notifyEmail/notifyPush enabled.
 
 ## What Was In Progress
-- Vercel redeploy pending due to rate limit. `NEXT_PUBLIC_API_URL` has been set to `https://backend-production-153c9.up.railway.app` but the deploy hasn't run yet.
+- Phase 17 notification delivery - blocking gap. Follow/unfollow API and DB schema exist and work. Missing piece is in saleController.ts: when updateSaleStatus transitions a sale to PUBLISHED, it must look up all followers and dispatch notifications. notifyEmail/notifyPush fields are stored but never read.
+- Phase 31 NextAuth.js - schema is live on Neon (oauthProvider, oauthId, password now optional). Next step: install NextAuth.js v5, wire Google + Facebook providers.
 
 ## What Was Completed This Session
-- All 6 TypeScript compilation errors fixed (compound key naming, nullable userId, Prisma Float typeof narrowing, prisma import scope)
-- Dockerfile.production fixed: `pnpm run` instead of `pnpm exec` for prisma binary resolution; CMD uses `pnpm --filter database run db:deploy`
-- uuid@13 ESM crash fixed: replaced with `crypto.randomUUID()` from Node 18 built-in
-- Railway backend container healthy (public domain: `backend-production-153c9.up.railway.app`)
-- Prisma migrations confirmed applied to Neon (all 15, none pending)
-- Vercel env var `NEXT_PUBLIC_API_URL` updated to Railway URL
+- Security fix: sanitized console.error in packages/backend/src/routes/auth.ts - no longer leaks Prisma error objects that could expose reset token details
+- Phase 31 schema applied: migration 20260304000003_phase31_oauth_fields live on Neon
+- Docker crash loop fixed: DIRECT_URL added to docker-compose.yml backend environment
+- packages/database/.env updated with DIRECT_URL pointing to local postgres
 
 ## Environment Notes
-- Railway backend is live and healthy at `https://backend-production-153c9.up.railway.app`
-- Neon PostgreSQL has all 15 migrations applied
-- Vercel needs a redeploy — was rate-limited at session end. Patrick may need to manually trigger redeploy or push a commit
-- ngrok bridge is now retired — local Docker backend is no longer the production backend
-- All fixes pushed to GitHub main via MCP
+- Vercel redeploy still pending from prior session (rate limit) - verify before frontend-dependent testing.
+- packages/backend/.env has Neon URLs (Patrick set for migration). Safe to revert to local Docker URLs for day-to-day dev.
+- Railway backend was 502 during this session - may be transient. Check at session start.
+- All changes pushed to GitHub main (latest commit: ace79de).
 
 ## Exact Context
-- Railway service domain: `backend-production-153c9.up.railway.app` (port 5000)
-- Neon connection string uses pooler endpoint: `ep-plain-sound-aeefcq1y-pooler.c-2.us-east-2.aws.neon.tech`
-- Key files changed this session: `authController.ts`, `lineController.ts`, `notificationController.ts`, `stripeController.ts`, `auctionJob.ts`, `models/LineEntry.ts`, `src/index.ts`, `Dockerfile.production`
+- Follow notification gap: packages/backend/src/controllers/saleController.ts - updateSaleStatus function. After PUBLISHED transition: query Follow where organizerId = sale.organizerId, fan out Resend email (notifyEmail: true) and VAPID push (notifyPush: true).
+- Resend pattern: packages/backend/src/routes/auth.ts forgot-password route.
+- VAPID push pattern: packages/backend/src/utils/webpush.ts + pushController.ts.
+- Phase 31: install next-auth@beta in frontend, create pages/api/auth/[...nextauth].ts, configure Google + Facebook providers.
