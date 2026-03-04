@@ -3,7 +3,6 @@ FROM node:18-slim
 WORKDIR /app
 
 ENV CI=true
-ENV NODE_ENV=production
 
 # OpenSSL required by Prisma client
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
@@ -18,7 +17,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/database ./packages/database
 COPY packages/backend ./packages/backend
 
-# Install deps (production + database for migrations)
+# Install deps (including devDeps — prisma CLI + tsc needed at build time)
 RUN pnpm install --frozen-lockfile --filter backend... --filter database
 
 # Generate Prisma client
@@ -26,6 +25,9 @@ RUN pnpm --filter database exec prisma generate
 
 # Build TypeScript → dist/
 RUN pnpm --filter backend run build
+
+# Set production mode only at runtime — not during build (keeps devDeps available for prisma + tsc)
+ENV NODE_ENV=production
 
 WORKDIR /app/packages/backend
 
