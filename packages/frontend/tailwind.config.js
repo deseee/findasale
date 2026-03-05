@@ -42,9 +42,22 @@ module.exports = {
           600: '#059669',
           700: '#047857',
         },
+        // CD1: Brand sage-green — sustainability, calm, secondary accents
+        sage: {
+          DEFAULT: '#6B9E7F',
+          50: '#F0F7F3',
+          100: '#D9EDE3',
+          200: '#B3DAC7',
+          300: '#8DC6AB',
+          400: '#6B9E7F',  // brand sage — taglines, secondary accents
+          500: '#52876A',
+          600: '#3E6E53',
+          700: '#2D5440',
+        },
       },
       fontFamily: {
-        heading: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // CD1: Fraunces — serif headlines (heritage, premium feel)
+        heading: ['Fraunces', 'Georgia', 'ui-serif', 'serif'],
         body: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       fontSize: {
