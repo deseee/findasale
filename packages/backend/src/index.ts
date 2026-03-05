@@ -58,6 +58,7 @@ import searchRoutes from './routes/search'; // Phase 29: Discovery + search
 import reviewRoutes from './routes/reviews'; // Phase 15: Review + rating system
 import messageRoutes from './routes/messages'; // Phase 20: Shopper messaging
 import reservationRoutes from './routes/reservations'; // Phase 21: Item reservations/holds
+import referralRoutes from './routes/referrals'; // Phase 23: Referral program
 import { authenticate } from './middleware/auth';
 import './jobs/auctionJob';
 import './jobs/notificationJob';
@@ -155,6 +156,7 @@ app.use('/api/search', searchRoutes); // Phase 29: Discovery + search
 app.use('/api/reviews', reviewRoutes); // Phase 15: Review + rating system
 app.use('/api/messages', messageRoutes); // Phase 20: Shopper messaging
 app.use('/api/reservations', reservationRoutes); // Phase 21: Item reservations/holds
+app.use('/api/referrals', referralRoutes); // Phase 23: Referral program
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
