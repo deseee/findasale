@@ -4,10 +4,11 @@ import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
 import usePoints from '../hooks/usePoints';
 import PointsBadge from './PointsBadge';
+import useUnreadMessages from '../hooks/useUnreadMessages';
 
 /**
  * BottomTabNav — Phase 25 mobile bottom navigation
- * 4 primary tabs: Browse, Map, Saved, Profile
+ * 5 primary tabs: Browse, Map, Saved, Messages, Profile
  * Hidden on desktop (md+). Fixed to bottom with safe-area padding.
  */
 
@@ -50,6 +51,14 @@ const ProfileIcon = ({ active }: { active: boolean }) => (
   </svg>
 );
 
+const MessagesIcon = ({ active }: { active: boolean }) => (
+  <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5}
+      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+    />
+  </svg>
+);
+
 type Tab = {
   href: string;
   label: string;
@@ -61,6 +70,7 @@ const BottomTabNav = () => {
   const router = useRouter();
   const { user } = useAuth();
   const { data: pointsData } = usePoints(!!user);
+  const { data: unreadData } = useUnreadMessages(!!user);
 
   // Profile tab destination depends on user role
   const profileHref = user?.role === 'ORGANIZER'
@@ -87,6 +97,12 @@ const BottomTabNav = () => {
       label: 'Saved',
       icon: HeartIcon,
       matchPaths: ['/shopper/dashboard'],
+    },
+    {
+      href: '/messages',
+      label: 'Messages',
+      icon: MessagesIcon,
+      matchPaths: ['/messages'],
     },
     {
       href: profileHref,
@@ -130,6 +146,11 @@ const BottomTabNav = () => {
                     points={pointsData.points}
                     className="absolute -top-1.5 -right-2.5"
                   />
+                )}
+                {tab.label === 'Messages' && unreadData && unreadData.unread > 0 && (
+                  <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                    {unreadData.unread > 9 ? '9+' : unreadData.unread}
+                  </span>
                 )}
               </div>
               <span className="text-[10px] mt-0.5 font-medium leading-none">
