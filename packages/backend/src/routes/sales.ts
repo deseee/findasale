@@ -14,6 +14,7 @@ import {
   getSalesByNeighborhood,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
+import { getSaleLabels } from '../controllers/labelController'; // W2
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -35,5 +36,6 @@ router.post('/:id/generate-qr', authenticate, generateQRCode);
 router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);
 router.post('/:id/track-scan', trackQrScan); // public, no auth needed
 router.get('/:id/calendar.ics', generateIcal); // public, no auth needed
+router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
 
 export default router;

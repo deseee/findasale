@@ -42,6 +42,8 @@ model User {
   shopperConversations  Conversation[]    @relation("ShopperConversations")
   sentMessages          Message[]         @relation("SentMessages")
   reservations          ItemReservation[]
+  bounties              MissingListingBounty[]
+  webhooks              Webhook[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -94,6 +96,7 @@ model Sale {
   purchases     Purchase[]
   reviews       Review[]
   conversations Conversation[]
+  bounties      MissingListingBounty[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -113,12 +116,16 @@ model Item {
   photoUrls        String[]
   // U1: Ollama nomic-embed-text 768-dim vector for semantic search
   embedding        Float[]
+  // W1: Shipping
+  shippingAvailable Boolean  @default(false)
+  shippingPrice    Float?
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]
   purchases        Purchase[]
   favorites        Favorite[]
   reservation      ItemReservation?
+  bountyFulfillments MissingListingBounty[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -335,6 +342,39 @@ model ItemReservation {
   status    String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED, EXPIRED
   expiresAt DateTime
   note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// V3: UGC missing-listing bounties
+// Shoppers flag items they couldn't find at a sale; organizers can fulfill by listing the item.
+model MissingListingBounty {
+  id          String   @id @default(cuid())
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  description String   // What the shopper is looking for
+  offerPrice  Float?   // What they'd pay if listed
+  status      String   @default("OPEN") // OPEN, FULFILLED, CANCELLED
+  itemId      String?  // Linked by organizer when fulfilled
+  item        Item?    @relation(fields: [itemId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([saleId, status])
+  @@index([userId])
+}
+
+// X1: Zapier / webhook registrations — organizer registers a URL + event list
+model Webhook {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  url       String
+  events    String[] // e.g. ["bid.placed","purchase.completed","sale.published"]
+  secret    String   // HMAC-SHA256 signing secret
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
