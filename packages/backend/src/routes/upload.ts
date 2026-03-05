@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { upload, uploadSalePhotos, uploadItemPhoto, analyzePhotoWithAI } from '../controllers/uploadController';
+import { upload, uploadSalePhotos, uploadItemPhoto, analyzePhotoWithAI, rapidBatchUpload } from '../controllers/uploadController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -15,5 +15,8 @@ router.post('/item-photo', upload.single('photo'), uploadItemPhoto);
 
 // POST /api/upload/analyze-photo — send image to qwen3-vl:4b, returns { title, description, category, condition, suggestedPrice }
 router.post('/analyze-photo', upload.single('photo'), analyzePhotoWithAI);
+
+// POST /api/upload/rapid-batch — Phase 14: upload + AI in one call (up to 20 images)
+router.post('/rapid-batch', upload.array('photos', 20), rapidBatchUpload);
 
 export default router;

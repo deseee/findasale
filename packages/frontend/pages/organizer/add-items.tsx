@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
+import RapidCapture from '../../components/RapidCapture';
 
 interface Sale {
   id: string;
@@ -65,6 +66,174 @@ const AddItemsPage = () => {
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Rapid Capture state ────────────────────────────────────────────────────────────
+  const [showRapidCapture, setShowRapidCapture] = useState(false);
+
+  interface BatchItem {
+    id: string;
+    blob: Blob;
+    previewUrl: string;
+    status: 'queued' | 'uploading' | 'analyzing' | 'done' | 'error';
+    aiResult?: AIAnalysis;
+    cloudinaryUrl?: string;
+    error?: string;
+  }
+  const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
+  const [batchProcessing, setBatchProcessing] = useState(false);
+
+  // Handle photos returned from RapidCapture
+  const handleRapidCaptureComplete = useCallback(
+    (photos: { blob: Blob; previewUrl: string }[]) => {
+      setShowRapidCapture(false);
+
+      // Create batch queue entries
+      const items: BatchItem[] = photos.map((p, i) => ({
+        id: `batch-${Date.now()}-${i}`,
+        blob: p.blob,
+        previewUrl: p.previewUrl,
+        status: 'queued' as const,
+      }));
+
+      setBatchQueue(items);
+
+      // Kick off background processing
+      processBatch(items);
+    },
+    [saleId]
+  );
+
+  // Background batch processor — single /rapid-batch call for all photos
+  const processBatch = async (items: BatchItem[]) => {
+    setBatchProcessing(true);
+
+    // Mark all as uploading
+    setBatchQueue((prev) =>
+      prev.map((q) => ({ ...q, status: 'uploading' as const }))
+    );
+
+    try {
+      // Build FormData with all blobs
+      const formData = new FormData();
+      items.forEach((item, i) => {
+        formData.append('photos', item.blob, `capture-${i + 1}.jpg`);
+      });
+
+      // Single batch call — Cloudinary upload + AI analysis server-side
+      const res = await api.post('/upload/rapid-batch', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: items.length * 45000 + 30000, // generous timeout
+      });
+
+      const results: { index: number; cloudinaryUrl: string | null; ai: AIAnalysis | null; error?: string }[] =
+        res.data.results || [];
+
+      // Map results back to batch items
+      setBatchQueue((prev) =>
+        prev.map((q, i) => {
+          const result = results.find((r) => r.index === i);
+          if (!result) return { ...q, status: 'error' as const, error: 'No result returned' };
+          if (result.error) return { ...q, status: 'error' as const, error: result.error };
+          return {
+            ...q,
+            status: 'done' as const,
+            cloudinaryUrl: result.cloudinaryUrl || undefined,
+            aiResult: result.ai || undefined,
+          };
+        })
+      );
+    } catch (err: any) {
+      // If the batch call itself fails, fall back to sequential processing
+      const msg = err.response?.data?.error || err.message || 'Batch processing failed';
+      console.error('Rapid batch failed, falling back to sequential:', msg);
+      await processSequential(items);
+    }
+
+    setBatchProcessing(false);
+  };
+
+  // Fallback: sequential processing if batch endpoint is unavailable
+  const processSequential = async (items: BatchItem[]) => {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+
+      setBatchQueue((prev) =>
+        prev.map((q) => (q.id === item.id ? { ...q, status: 'uploading' as const } : q))
+      );
+
+      try {
+        const uploadForm = new FormData();
+        uploadForm.append('photos', item.blob, `capture-${i + 1}.jpg`);
+        const uploadRes = await api.post('/upload/sale-photos', uploadForm, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const cloudinaryUrl = uploadRes.data.urls?.[0] || '';
+
+        setBatchQueue((prev) =>
+          prev.map((q) =>
+            q.id === item.id ? { ...q, status: 'analyzing' as const, cloudinaryUrl } : q
+          )
+        );
+
+        const aiForm = new FormData();
+        aiForm.append('photo', item.blob, `capture-${i + 1}.jpg`);
+        const aiRes = await api.post<AIAnalysis>('/upload/analyze-photo', aiForm, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 45000,
+        });
+
+        setBatchQueue((prev) =>
+          prev.map((q) =>
+            q.id === item.id ? { ...q, status: 'done' as const, aiResult: aiRes.data } : q
+          )
+        );
+      } catch (err: any) {
+        const msg = err.response?.data?.error || err.message || 'Processing failed';
+        setBatchQueue((prev) =>
+          prev.map((q) => (q.id === item.id ? { ...q, status: 'error' as const, error: msg } : q))
+        );
+      }
+    }
+  };
+
+  // Pre-uploaded Cloudinary URLs from batch (skip re-upload on submit)
+  const [preUploadedUrls, setPreUploadedUrls] = useState<string[]>([]);
+
+  // Use a batch item to pre-fill the form (one-click item creation)
+  const useBatchItem = (item: BatchItem) => {
+    if (!item.aiResult) return;
+
+    setFormData({
+      ...EMPTY_FORM,
+      title: item.aiResult.title || '',
+      description: item.aiResult.description || '',
+      category: item.aiResult.category?.toLowerCase() || '',
+      condition: item.aiResult.condition?.toLowerCase() || '',
+      price: item.aiResult.suggestedPrice != null ? String(item.aiResult.suggestedPrice) : '',
+    });
+
+    // Set the photo
+    if (item.cloudinaryUrl) {
+      setPreUploadedUrls([item.cloudinaryUrl]);
+      setPhotoFiles([]);
+      setPhotoPreviews([item.previewUrl]);
+    }
+
+    // Clear the AI scan state since we're using batch
+    clearAiScan();
+
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Remove a batch item
+  const removeBatchItem = (id: string) => {
+    setBatchQueue((prev) => {
+      const item = prev.find((q) => q.id === id);
+      if (item) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((q) => q.id !== id);
+    });
+  };
+
   const { data: sale, isLoading: saleLoading } = useQuery({
     queryKey: ['sale', saleId],
     queryFn: async () => {
@@ -75,7 +244,7 @@ const AddItemsPage = () => {
     enabled: !!saleId,
   });
 
-  // ── AI Photo Scan ──────────────────────────────────────────────────────────
+  // ── AI Photo Scan ──────────────────────────────────────────────────────────────────
 
   const handleAiPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -130,7 +299,7 @@ const AddItemsPage = () => {
     if (aiInputRef.current) aiInputRef.current.value = '';
   };
 
-  // ── Item photos (additional) ───────────────────────────────────────────────
+  // ── Item photos (additional) ─────────────────────────────────────────────────────────
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -151,7 +320,7 @@ const AddItemsPage = () => {
     });
   };
 
-  // ── Form ───────────────────────────────────────────────────────────────────
+  // ── Form ─────────────────────────────────────────────────────────────────────────
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -163,6 +332,7 @@ const AddItemsPage = () => {
     setFormData(EMPTY_FORM);
     setPhotoFiles([]);
     setPhotoPreviews([]);
+    setPreUploadedUrls([]);
     clearAiScan();
     setError('');
     setSuccess('');
@@ -175,15 +345,15 @@ const AddItemsPage = () => {
     setSuccess('');
 
     try {
-      // 1. Upload photos
-      let uploadedPhotoUrls: string[] = [];
+      // 1. Upload photos (skip if pre-uploaded from batch queue)
+      let uploadedPhotoUrls: string[] = [...preUploadedUrls];
       if (photoFiles.length > 0) {
         const uploadForm = new FormData();
         photoFiles.forEach((f) => uploadForm.append('photos', f));
         const uploadRes = await api.post('/upload/sale-photos', uploadForm, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        uploadedPhotoUrls = uploadRes.data.urls;
+        uploadedPhotoUrls = [...uploadedPhotoUrls, ...uploadRes.data.urls];
       }
 
       // 2. Create item
@@ -220,7 +390,7 @@ const AddItemsPage = () => {
   if (!sale && saleId) return <div className="min-h-screen flex items-center justify-center">Sale not found</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-warm-50">
       <Head>
         <title>Add Items - FindA.Sale</title>
         <meta name="description" content="Add items to your sale" />
@@ -228,22 +398,140 @@ const AddItemsPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Add Items to &ldquo;{sale?.title}&rdquo;</h1>
+          <h1 className="text-3xl font-bold text-warm-900">Add Items to &ldquo;{sale?.title}&rdquo;</h1>
           <Link
             href="/organizer/dashboard"
-            className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+            className="bg-warm-500 hover:bg-warm-600 text-white font-bold py-2 px-4 rounded"
           >
             Back to Dashboard
           </Link>
         </div>
 
+        {/* ── Rapid Capture Overlay ──────────────────────────────── */}
+        {showRapidCapture && (
+          <RapidCapture
+            onComplete={handleRapidCaptureComplete}
+            onCancel={() => setShowRapidCapture(false)}
+            maxPhotos={20}
+          />
+        )}
+
+        {/* ── Batch Processing Queue ─────────────────────────────── */}
+        {batchQueue.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6 max-w-3xl mx-auto mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-warm-900">
+                Rapid Capture Queue
+                {batchProcessing && (
+                  <span className="ml-2 text-sm font-normal text-warm-500">Processing...</span>
+                )}
+              </h2>
+              <span className="text-sm text-warm-500">
+                {batchQueue.filter((q) => q.status === 'done').length} / {batchQueue.length} ready
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {batchQueue.map((item) => (
+                <div
+                  key={item.id}
+                  className={`relative rounded-lg overflow-hidden border-2 transition-colors ${
+                    item.status === 'done'
+                      ? 'border-green-400 cursor-pointer hover:border-green-500'
+                      : item.status === 'error'
+                        ? 'border-red-400'
+                        : 'border-warm-200'
+                  }`}
+                  onClick={() => item.status === 'done' && useBatchItem(item)}
+                >
+                  <img
+                    src={item.previewUrl}
+                    alt="Captured item"
+                    className="w-full h-24 object-cover"
+                  />
+                  {/* Status overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {item.status === 'uploading' && (
+                      <div className="bg-black/60 rounded-full px-2 py-1">
+                        <span className="text-white text-xs">Uploading...</span>
+                      </div>
+                    )}
+                    {item.status === 'analyzing' && (
+                      <div className="bg-black/60 rounded-full px-2 py-1">
+                        <span className="text-white text-xs flex items-center gap-1">
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                          AI...
+                        </span>
+                      </div>
+                    )}
+                    {item.status === 'done' && (
+                      <div className="bg-green-600/80 rounded-full px-2 py-1">
+                        <span className="text-white text-xs font-medium">✓ Tap to use</span>
+                      </div>
+                    )}
+                    {item.status === 'error' && (
+                      <div className="bg-red-600/80 rounded-full px-2 py-1">
+                        <span className="text-white text-xs">Failed</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeBatchItem(item.id); }}
+                    className="absolute top-1 right-1 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                    aria-label="Remove"
+                  >
+                    ✕
+                  </button>
+                  {/* AI result preview */}
+                  {item.status === 'done' && item.aiResult && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-2 py-1">
+                      <p className="text-white text-[10px] truncate">{item.aiResult.title}</p>
+                      {item.aiResult.suggestedPrice != null && (
+                        <p className="text-amber-400 text-[10px] font-bold">
+                          ${item.aiResult.suggestedPrice.toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-warm-400">
+              Tap a green card to pre-fill the form below. AI fills title, description, category, condition &amp; price.
+            </p>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg shadow-md p-6 max-w-3xl mx-auto">
 
-          {/* ── AI Photo Scan ─────────────────────────────────────────── */}
+          {/* ── Rapid Capture Button ────────────────────────────────── */}
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => setShowRapidCapture(true)}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 text-white font-bold text-lg shadow-md hover:shadow-lg transition-shadow flex items-center justify-center gap-3"
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+              </svg>
+              Rapid Capture — Photograph Items Fast
+            </button>
+            <p className="text-center text-xs text-warm-400 mt-2">
+              Opens full-screen camera. Snap up to 20 items, AI fills details in background.
+            </p>
+          </div>
+
+          <hr className="border-warm-200 mb-6" />
+
+          {/* ── AI Photo Scan ───────────────────────────────────────── */}
           <div className="mb-8">
-            <p className="text-sm font-semibold text-gray-700 mb-2">
+            <p className="text-sm font-semibold text-warm-700 mb-2">
               ✨ AI Photo Scan{' '}
-              <span className="font-normal text-gray-400">— snap a photo to auto-fill the form</span>
+              <span className="font-normal text-warm-400">— snap a photo to auto-fill the form</span>
             </p>
 
             {!aiPreview ? (
@@ -253,7 +541,7 @@ const AddItemsPage = () => {
               >
                 <div className="text-4xl mb-2">📷</div>
                 <p className="text-sm font-medium text-indigo-700">Tap to scan an item photo</p>
-                <p className="text-xs text-gray-400 mt-1">AI will fill in title, description, category, condition &amp; price</p>
+                <p className="text-xs text-warm-400 mt-1">AI will fill in title, description, category, condition &amp; price</p>
                 <input
                   ref={aiInputRef}
                   type="file"
@@ -291,7 +579,7 @@ const AddItemsPage = () => {
                   <button
                     type="button"
                     onClick={clearAiScan}
-                    className="mt-2 text-xs text-gray-500 hover:text-red-600 underline"
+                    className="mt-2 text-xs text-warm-500 hover:text-red-600 underline"
                   >
                     Clear scan
                   </button>
@@ -300,7 +588,7 @@ const AddItemsPage = () => {
             )}
           </div>
 
-          <hr className="border-gray-200 mb-6" />
+          <hr className="border-warm-200 mb-6" />
 
           {error && (
             <div className="rounded-md bg-red-50 p-4 mb-6">
@@ -317,7 +605,7 @@ const AddItemsPage = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
 
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="title" className="block text-sm font-medium text-warm-700 mb-1">
                 Item Title
               </label>
               <input
@@ -327,13 +615,13 @@ const AddItemsPage = () => {
                 value={formData.title}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                 placeholder="e.g. Victorian Wooden Secretary Desk"
               />
             </div>
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="description" className="block text-sm font-medium text-warm-700 mb-1">
                 Description
               </label>
               <textarea
@@ -342,7 +630,7 @@ const AddItemsPage = () => {
                 value={formData.description}
                 onChange={handleChange}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                 placeholder="Describe the item, condition, special features, etc."
               />
             </div>
@@ -354,16 +642,16 @@ const AddItemsPage = () => {
                 type="checkbox"
                 checked={formData.isAuctionItem}
                 onChange={handleChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded"
               />
-              <label htmlFor="isAuctionItem" className="ml-2 block text-sm text-gray-900">
+              <label htmlFor="isAuctionItem" className="ml-2 block text-sm text-warm-900">
                 This is an auction item
               </label>
             </div>
 
             {!formData.isAuctionItem ? (
               <div>
-                <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="price" className="block text-sm font-medium text-warm-700 mb-1">
                   Price ($)
                 </label>
                 <input
@@ -374,14 +662,14 @@ const AddItemsPage = () => {
                   onChange={handleChange}
                   step="0.01"
                   min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                   placeholder="0.00"
                 />
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="auctionStartPrice" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auctionStartPrice" className="block text-sm font-medium text-warm-700 mb-1">
                     Starting Price ($)
                   </label>
                   <input
@@ -392,12 +680,12 @@ const AddItemsPage = () => {
                     onChange={handleChange}
                     step="0.01"
                     min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                    className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                     placeholder="0.00"
                   />
                 </div>
                 <div>
-                  <label htmlFor="bidIncrement" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="bidIncrement" className="block text-sm font-medium text-warm-700 mb-1">
                     Bid Increment ($)
                   </label>
                   <input
@@ -408,12 +696,12 @@ const AddItemsPage = () => {
                     onChange={handleChange}
                     step="0.01"
                     min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                    className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                     placeholder="1.00"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label htmlFor="auctionEndTime" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="auctionEndTime" className="block text-sm font-medium text-warm-700 mb-1">
                     Auction End Time (Optional)
                   </label>
                   <input
@@ -422,7 +710,7 @@ const AddItemsPage = () => {
                     name="auctionEndTime"
                     value={formData.auctionEndTime}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                    className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                   />
                 </div>
               </div>
@@ -430,7 +718,7 @@ const AddItemsPage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="status" className="block text-sm font-medium text-warm-700 mb-1">
                   Status
                 </label>
                 <select
@@ -438,7 +726,7 @@ const AddItemsPage = () => {
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                 >
                   <option value="AVAILABLE">Available</option>
                   <option value="SOLD">Sold</option>
@@ -448,7 +736,7 @@ const AddItemsPage = () => {
               </div>
 
               <div>
-                <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="category" className="block text-sm font-medium text-warm-700 mb-1">
                   Category
                 </label>
                 <select
@@ -456,7 +744,7 @@ const AddItemsPage = () => {
                   name="category"
                   value={formData.category}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                 >
                   <option value="">Select category…</option>
                   <option value="furniture">Furniture</option>
@@ -475,7 +763,7 @@ const AddItemsPage = () => {
               </div>
 
               <div>
-                <label htmlFor="condition" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="condition" className="block text-sm font-medium text-warm-700 mb-1">
                   Condition
                 </label>
                 <select
@@ -483,7 +771,7 @@ const AddItemsPage = () => {
                   name="condition"
                   value={formData.condition}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
                 >
                   <option value="">Select condition…</option>
                   <option value="mint">Mint / New</option>
@@ -497,18 +785,18 @@ const AddItemsPage = () => {
 
             {/* Additional photos */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-warm-700 mb-2">
                 Additional Photos{' '}
-                <span className="text-gray-400 font-normal">(up to 5 total)</span>
+                <span className="text-warm-400 font-normal">(up to 5 total)</span>
               </label>
               <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-5 text-center cursor-pointer hover:border-blue-400 transition-colors"
+                className="border-2 border-dashed border-warm-300 rounded-lg p-5 text-center cursor-pointer hover:border-amber-400 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto text-warm-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm text-gray-500">Click to upload more photos</p>
+                <p className="text-sm text-warm-500">Click to upload more photos</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -522,7 +810,7 @@ const AddItemsPage = () => {
                 <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
                   {photoPreviews.map((src, i) => (
                     <div key={i} className="relative group">
-                      <img src={src} alt={`Item photo preview ${i + 1}`} className="w-full h-16 object-cover rounded border border-gray-200"  loading="lazy"/>
+                      <img src={src} alt={`Item photo preview ${i + 1}`} className="w-full h-16 object-cover rounded border border-warm-200"  loading="lazy"/>
                       {i === 0 && aiFile && photoFiles[0] === aiFile && (
                         <span className="absolute bottom-0.5 left-0.5 bg-indigo-600 text-white text-xs px-1 rounded">AI</span>
                       )}
@@ -543,14 +831,14 @@ const AddItemsPage = () => {
             <div className="flex justify-end space-x-4 pt-4">
               <Link
                 href="/organizer/dashboard"
-                className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+                className="bg-warm-500 hover:bg-warm-600 text-white font-bold py-2 px-4 rounded"
               >
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={loading || aiAnalyzing}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
               >
                 {loading ? 'Adding…' : 'Add Item'}
               </button>

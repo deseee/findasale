@@ -15,6 +15,8 @@ import SaleMap from '../../components/SaleMap';
 import Skeleton from '../../components/Skeleton';
 import BadgeDisplay from '../../components/BadgeDisplay';
 import AuctionCountdown from '../../components/AuctionCountdown';
+import PhotoLightbox from '../../components/PhotoLightbox';
+import { getThumbnailUrl } from '../../lib/imageUtils';
 
 interface Sale {
   id: string;
@@ -118,6 +120,7 @@ const SaleDetailPage = () => {
   const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [downloadingKit, setDownloadingKit] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { showToast } = useToast();
 
   // Poll for updates every 10 seconds for auction items
@@ -139,6 +142,15 @@ const SaleDetailPage = () => {
       api.post(`/sales/${id}/track-scan`).catch(() => { /* non-fatal */ });
     }
   }, [id]);
+
+  // Phase 19: Award 1 point for visiting a sale page (once per sale per day, auth required)
+  // Phase 27: Show amber toast when points are awarded
+  useEffect(() => {
+    if (!id || !user) return;
+    api.post('/points/track-visit', { saleId: id })
+      .then((res) => { if (res.data?.awarded === true) showToast('🏆 +1 pt earned!', 'points'); })
+      .catch(() => { /* non-fatal */ });
+  }, [id, user]);
 
   const { data: sale, isLoading, isError } = useQuery({
     queryKey: ['sale', id],
@@ -221,7 +233,7 @@ const SaleDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-warm-50">
         <main className="container mx-auto px-4 py-8">
           <Skeleton className="h-5 w-28 mb-6" />
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
@@ -255,8 +267,8 @@ const SaleDetailPage = () => {
       </div>
     );
   }
-  if (isError) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Error loading sale</div>;
-  if (!sale) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Sale not found</div>;
+  if (isError) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Error loading sale</div>;
+  if (!sale) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Sale not found</div>;
 
   // Check if user is the owner of this specific sale, or an admin
   const isOrganizer = user?.role === 'ADMIN' || (user?.role === 'ORGANIZER' && sale?.organizer?.userId === user?.id);
@@ -364,7 +376,7 @@ const SaleDetailPage = () => {
   const jsonLd = generateJsonLd();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-warm-50">
       <Head>
         <title>{sale.title} - FindA.Sale</title>
         <meta name="description" content={`${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}. ${sale.description?.slice(0, 120) ?? ''}`} />
@@ -409,6 +421,15 @@ const SaleDetailPage = () => {
         )}
       </Head>
 
+      {/* Phase 18: Photo lightbox */}
+      {lightboxIndex !== null && sale?.photoUrls?.length > 0 && (
+        <PhotoLightbox
+          photos={sale.photoUrls}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+
       {checkoutItem && (
         <CheckoutModal
           itemId={checkoutItem.id}
@@ -428,8 +449,8 @@ const SaleDetailPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         {/* Back Button */}
-        <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+        <Link href="/" className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
           </svg>
           Back to Home
@@ -439,31 +460,31 @@ const SaleDetailPage = () => {
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{sale.title}</h1>
-              <div className="flex items-center text-gray-600 mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+              <h1 className="text-3xl font-bold text-warm-900 mb-2">{sale.title}</h1>
+              <div className="flex items-center text-warm-600 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-warm-600" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                 </svg>
-                <span className="text-gray-600">{sale.address}, {sale.city}, {sale.state} {sale.zip}</span>
+                <span className="text-warm-600">{sale.address}, {sale.city}, {sale.state} {sale.zip}</span>
               </div>
-              <div className="flex items-center text-gray-600">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+              <div className="flex items-center text-warm-600">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-warm-600" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                 </svg>
-                <span className="text-gray-600">
+                <span className="text-warm-600">
                   {formatSaleDate(sale.startDate)} - {formatSaleDate(sale.endDate)}
                 </span>
               </div>
             </div>
             <div className="mt-4 md:mt-0 flex flex-col items-end gap-2">
-              <Link href={`/organizers/${sale.organizer.id}`} className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-200 transition-colors block">
+              <Link href={`/organizers/${sale.organizer.id}`} className="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors block">
                 Organized by: {sale.organizer.businessName}
               </Link>
               {sale.organizer.badges && sale.organizer.badges.length > 0 && (
                 <BadgeDisplay badges={sale.organizer.badges} size="sm" />
               )}
               {sale.organizer.avgRating !== undefined && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-warm-600">
                   ⭐ {sale.organizer.avgRating} ({sale.organizer.reviewCount} reviews)
                 </div>
               )}
@@ -508,8 +529,8 @@ const SaleDetailPage = () => {
 
           {sale.description && (
             <div className="mt-6">
-              <h2 className="text-xl font-semibold mb-2 text-gray-900">Description</h2>
-              <p className="text-gray-700">{sale.description}</p>
+              <h2 className="text-xl font-semibold mb-2 text-warm-900">Description</h2>
+              <p className="text-warm-700">{sale.description}</p>
             </div>
           )}
 
@@ -525,7 +546,7 @@ const SaleDetailPage = () => {
             <div className="mt-6 flex flex-wrap gap-3">
               <Link 
                 href={`/organizer/edit-sale/${sale.id}`}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -582,19 +603,39 @@ const SaleDetailPage = () => {
           )}
         </div>
 
-        {/* Photo Gallery */}
+        {/* Photo Gallery — Phase 18: click to open lightbox */}
         {sale.photoUrls && sale.photoUrls.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900">Photos</h2>
+            <h2 className="text-2xl font-bold mb-4 text-warm-900">
+              Photos
+              <span className="ml-2 text-sm font-normal text-warm-400">
+                ({sale.photoUrls.length})
+              </span>
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {sale.photoUrls.map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                <button
+                  key={i}
+                  onClick={() => setLightboxIndex(i)}
+                  className="group relative aspect-square overflow-hidden rounded-lg border border-warm-200 bg-warm-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  aria-label={`View photo ${i + 1} of ${sale.photoUrls.length}`}
+                >
                   <img
-                    src={url}
+                    src={getThumbnailUrl(url) || url}
                     alt={`${sale.title} photo ${i + 1}`}
-                    className="w-full h-40 object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity cursor-pointer"
-                   loading="lazy"/>
-                </a>
+                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow"
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                  </div>
+                </button>
               ))}
             </div>
           </div>
@@ -602,7 +643,7 @@ const SaleDetailPage = () => {
 
         {/* Map Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-gray-900">Location</h2>
+          <h2 className="text-2xl font-bold mb-4 text-warm-900">Location</h2>
           {sale.lat && sale.lng ? (
             <SaleMap
               singlePin={{
@@ -613,11 +654,11 @@ const SaleDetailPage = () => {
               height="360px"
             />
           ) : (
-            <div className="h-72 bg-gray-100 rounded-lg flex items-center justify-center">
-              <p className="text-gray-500">Location not available</p>
+            <div className="h-72 bg-warm-100 rounded-lg flex items-center justify-center">
+              <p className="text-warm-500">Location not available</p>
             </div>
           )}
-          <p className="mt-3 text-sm text-gray-500">
+          <p className="mt-3 text-sm text-warm-500">
             {sale.address}, {sale.city}, {sale.state} {sale.zip}
           </p>
         </div>
@@ -625,7 +666,7 @@ const SaleDetailPage = () => {
         {/* Items Section */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-2xl font-bold text-warm-900">
               {sale.isAuctionSale ? 'Auction Items' : 'Items for Sale'}
             </h2>
             {isOrganizer && sale.items.length > 0 && (
@@ -646,14 +687,14 @@ const SaleDetailPage = () => {
           {/* Category Filter */}
           {sale.items && sale.items.some((item) => item.category) && (
             <div className="mb-6">
-              <p className="text-sm font-medium text-gray-700 mb-2">Filter by category:</p>
+              <p className="text-sm font-medium text-warm-700 mb-2">Filter by category:</p>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedCategory(null)}
                   className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                     selectedCategory === null
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
                   }`}
                 >
                   All ({sale.items.length})
@@ -667,8 +708,8 @@ const SaleDetailPage = () => {
                         onClick={() => setSelectedCategory(category as string)}
                         className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                           selectedCategory === category
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
                         }`}
                       >
                         {(category as string).charAt(0).toUpperCase() + (category as string).slice(1)} ({count})
@@ -682,7 +723,7 @@ const SaleDetailPage = () => {
 
           {sale.items.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-600 mb-4">No items listed for this sale yet.</p>
+              <p className="text-warm-600 mb-4">No items listed for this sale yet.</p>
               {isOrganizer && (
                 <Link 
                   href={`/organizer/add-items/${sale.id}`}
@@ -712,14 +753,14 @@ const SaleDetailPage = () => {
                         className="w-full h-48 object-cover"
                        loading="lazy"/>
                     ) : (
-                      <div className="bg-gray-200 h-48 flex items-center justify-center">
-                        <span className="text-gray-500">No image</span>
+                      <div className="bg-warm-200 h-48 flex items-center justify-center">
+                        <span className="text-warm-500">No image</span>
                       </div>
                     )}
                   </Link>
                   <div className="p-4">
-                    <h3 className="font-bold text-lg mb-2 text-gray-900">{item.title}</h3>
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{item.description}</p>
+                    <h3 className="font-bold text-lg mb-2 text-warm-900">{item.title}</h3>
+                    <p className="text-warm-600 text-sm mb-3 line-clamp-2">{item.description}</p>
 
                     {/* Category, Condition, and Auction badges */}
                     {(item.category || item.condition || item.auctionEndTime) && (
@@ -730,7 +771,7 @@ const SaleDetailPage = () => {
                           </span>
                         )}
                         {item.category && (
-                          <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                          <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-medium">
                             {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
                           </span>
                         )}
@@ -747,8 +788,8 @@ const SaleDetailPage = () => {
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <div>
-                            <span className="text-sm text-gray-600">Current Bid:</span>
-                            <span className="font-bold text-blue-600 ml-1">
+                            <span className="text-sm text-warm-600">Current Bid:</span>
+                            <span className="font-bold text-amber-600 ml-1">
                               {formatPrice(item.currentBid || item.auctionStartPrice)}
                             </span>
                           </div>
@@ -761,7 +802,7 @@ const SaleDetailPage = () => {
                         </div>
                         
                         <div className="mb-2">
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-warm-600">
                             Minimum bid: {formatPrice((item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1))}
                           </span>
                         </div>
@@ -774,13 +815,13 @@ const SaleDetailPage = () => {
                               min={(item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1)}
                               value={bidAmounts[item.id] || ''}
                               onChange={(e) => handleBidAmountChange(item.id, e.target.value)}
-                              className="flex-grow px-2 py-1 border border-gray-300 rounded-l text-sm text-gray-900"
+                              className="flex-grow px-2 py-1 border border-warm-300 rounded-l text-sm text-warm-900"
                               placeholder="Enter bid amount"
                             />
                             <button
                               onClick={() => handlePlaceBid(item.id)}
                               disabled={biddingItemId === item.id}
-                              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded-r disabled:opacity-50"
+                              className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded-r disabled:opacity-50"
                             >
                               {biddingItemId === item.id ? '...' : 'Bid'}
                             </button>
@@ -788,7 +829,7 @@ const SaleDetailPage = () => {
                         )}
                         
                         {item.status === 'AUCTION_ENDED' && (
-                          <div className="text-sm text-center py-2 bg-gray-100 rounded text-gray-600">
+                          <div className="text-sm text-center py-2 bg-warm-100 rounded text-warm-600">
                             Auction ended
                           </div>
                         )}
@@ -802,7 +843,7 @@ const SaleDetailPage = () => {
                     ) : (
                       /* Regular sale item */
                       <div className="flex justify-between items-center">
-                        <span className="font-bold text-blue-600">
+                        <span className="font-bold text-amber-600">
                           {formatPrice(item.price)}
                         </span>
                         {item.currentBid && (
@@ -817,15 +858,15 @@ const SaleDetailPage = () => {
                       <span className={`px-2 py-1 rounded text-xs ${
                         item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
                         item.status === 'SOLD' ? 'bg-red-100 text-red-800' :
-                        item.status === 'AUCTION_ENDED' ? 'bg-gray-100 text-gray-800' :
-                        'bg-gray-100 text-gray-800'
+                        item.status === 'AUCTION_ENDED' ? 'bg-warm-100 text-warm-800' :
+                        'bg-warm-100 text-warm-800'
                       }`}>
                         {item.status.replace(/_/g, ' ')}
                       </span>
                       {isOrganizer && (
                         <Link 
                           href={`/organizer/edit-item/${item.id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm"
+                          className="text-amber-600 hover:text-amber-800 text-sm"
                         >
                           Edit
                         </Link>
@@ -833,7 +874,7 @@ const SaleDetailPage = () => {
                       {!isOrganizer && user && !sale.isAuctionSale && item.status === 'AVAILABLE' && (
                         <button
                           onClick={() => handleBuyNow(item.id, item.title)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded"
+                          className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
                         >
                           Buy Now
                         </button>

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { handleReferralBadge, handlePointsBadge } from './userController';
 
 export const register = async (req: Request, res: Response) => {
@@ -27,7 +27,7 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Generate unique referral code
-    const userReferralCode = uuidv4().substring(0, 8).toUpperCase();
+    const userReferralCode = randomUUID().substring(0, 8).toUpperCase();
 
     // Whitelist role — never allow client to self-assign ADMIN
     const safeRole = ['USER', 'ORGANIZER'].includes(role) ? role : 'USER';
@@ -119,6 +119,71 @@ export const register = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ message: 'Server error during registration' });
+  }
+};
+
+// Phase 31: OAuth social login — find-or-create user by provider identity, return JWT
+export const oauthLogin = async (req: Request, res: Response) => {
+  try {
+    const { provider, providerId, email: rawEmail, name: rawName } = req.body;
+
+    if (!provider || !providerId) {
+      return res.status(400).json({ message: 'provider and providerId are required' });
+    }
+
+    const email = rawEmail?.trim().toLowerCase() || null;
+    const name  = rawName?.trim() || 'User';
+
+    // 1. Find by OAuth identity (returning user)
+    let user = await prisma.user.findFirst({
+      where: { oauthProvider: provider, oauthId: providerId },
+    });
+
+    // 2. Link OAuth to an existing email account
+    if (!user && email) {
+      const emailUser = await prisma.user.findUnique({ where: { email } });
+      if (emailUser) {
+        user = await prisma.user.update({
+          where: { id: emailUser.id },
+          data: { oauthProvider: provider, oauthId: providerId },
+        });
+      }
+    }
+
+    // 3. Create new account (shoppers only — role upgrade via settings)
+    if (!user) {
+      const userReferralCode = randomUUID().substring(0, 8).toUpperCase();
+      user = await prisma.user.create({
+        data: {
+          email: email ?? `${provider}_${providerId}@oauth.placeholder`,
+          name,
+          role: 'USER',
+          oauthProvider: provider,
+          oauthId: providerId,
+          referralCode: userReferralCode,
+          points: 0,
+        },
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id:           user.id,
+        email:        user.email,
+        name:         user.name,
+        role:         user.role,
+        points:       user.points,
+        referralCode: user.referralCode,
+      },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '7d' }
+    );
+
+    const { password: _, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword, token });
+  } catch (error) {
+    console.error('OAuth login error:', error);
+    res.status(500).json({ message: 'Server error during OAuth login' });
   }
 };
 

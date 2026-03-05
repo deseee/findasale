@@ -75,7 +75,85 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
-// Public: get organizer profile + their upcoming/active sales + badges
+// Authenticated: get current organizer's own profile + tier data (Phase 22)
+// Must be registered before /:id to avoid being swallowed by the wildcard
+router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      include: {
+        _count: {
+          select: {
+            followers: true,
+          },
+        },
+      },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const [endedSalesCount, reviews] = await Promise.all([
+      prisma.sale.count({
+        where: { organizerId: organizer.id, status: 'ENDED' },
+      }),
+      prisma.review.findMany({
+        where: { sale: { organizerId: organizer.id } },
+        select: { rating: true },
+      }),
+    ]);
+
+    const followerCount = (organizer as any)._count.followers ?? 0;
+    const avgRating =
+      reviews.length > 0
+        ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
+        : 0;
+
+    // Build progress message toward next tier
+    let progressMessage = '';
+    if (organizer.reputationTier === 'NEW') {
+      const salesNeeded = Math.max(0, 5 - endedSalesCount);
+      if (salesNeeded > 0) {
+        progressMessage = `${salesNeeded} more completed sale${salesNeeded !== 1 ? 's' : ''} to reach Trusted Seller.`;
+      } else {
+        progressMessage = 'Achieve a 4.0+ average rating to reach Trusted Seller.';
+      }
+    } else if (organizer.reputationTier === 'TRUSTED') {
+      const parts: string[] = [];
+      const salesNeeded = Math.max(0, 20 - endedSalesCount);
+      const followersNeeded = Math.max(0, 50 - followerCount);
+      if (salesNeeded > 0) parts.push(`${salesNeeded} more sale${salesNeeded !== 1 ? 's' : ''}`);
+      if (followersNeeded > 0) parts.push(`${followersNeeded} more follower${followersNeeded !== 1 ? 's' : ''}`);
+      if (avgRating < 4.5) parts.push('a 4.5+ average rating');
+      progressMessage = parts.length > 0
+        ? `Need ${parts.join(', ')} to reach Estate Curator.`
+        : 'You qualify for Estate Curator — tier recalculation runs weekly.';
+    } else {
+      progressMessage = "You've reached the highest tier!";
+    }
+
+    res.json({
+      id: organizer.id,
+      businessName: organizer.businessName,
+      reputationTier: organizer.reputationTier,
+      avgRating: organizer.avgRating,
+      totalReviews: organizer.totalReviews,
+      completedSales: endedSalesCount,
+      followerCount,
+      progressMessage,
+    });
+  } catch (error) {
+    console.error('Error fetching organizer /me profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Public: get organizer profile + their upcoming/active sales + badges + reputation
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const organizer = await prisma.organizer.findUnique({
@@ -107,6 +185,7 @@ router.get('/:id', async (req: Request, res: Response) => {
             isAuctionSale: true,
           },
         },
+        _count: { select: { followers: true } },
       },
     });
 
@@ -125,11 +204,28 @@ router.get('/:id', async (req: Request, res: Response) => {
       ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
       : 0;
 
+    // Check if requesting user follows this organizer
+    let isFollowing = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded: any = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET!);
+        const follow = await prisma.follow.findUnique({
+          where: { userId_organizerId: { userId: decoded.id, organizerId: organizer.id } },
+        });
+        isFollowing = !!follow;
+      } catch {
+        // Not logged in or invalid token — isFollowing stays false
+      }
+    }
+
     res.json({
       id: organizer.id,
       businessName: organizer.businessName,
       phone: organizer.phone,
       address: organizer.address,
+      reputationTier: organizer.reputationTier,
       sales: organizer.sales,
       badges: organizer.user?.userBadges?.map((ub: any) => ({
         id: ub.badge.id,
@@ -140,9 +236,95 @@ router.get('/:id', async (req: Request, res: Response) => {
       })) || [],
       reviewCount: reviews.length,
       avgRating: Math.round(avgRating * 10) / 10,
+      followerCount: (organizer as any)._count?.followers ?? 0,
+      isFollowing,
     });
   } catch (error) {
     console.error('Error fetching organizer profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /:id/follow — follow an organizer (authenticated)
+router.post('/:id/follow', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+
+    const organizerId = req.params.id;
+    const organizer = await prisma.organizer.findUnique({ where: { id: organizerId } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found' });
+
+    // Can't follow yourself
+    if (organizer.userId === req.user.id) {
+      return res.status(400).json({ message: 'Cannot follow yourself' });
+    }
+
+    const follow = await prisma.follow.upsert({
+      where: { userId_organizerId: { userId: req.user.id, organizerId } },
+      update: {}, // already following — no-op
+      create: { userId: req.user.id, organizerId },
+    });
+
+    // Return updated follower count
+    const count = await prisma.follow.count({ where: { organizerId } });
+
+    res.json({ following: true, followerCount: count });
+  } catch (error) {
+    console.error('Error following organizer:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// DELETE /:id/follow — unfollow an organizer (authenticated)
+router.delete('/:id/follow', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+
+    const organizerId = req.params.id;
+
+    await prisma.follow.deleteMany({
+      where: { userId: req.user.id, organizerId },
+    });
+
+    const count = await prisma.follow.count({ where: { organizerId } });
+
+    res.json({ following: false, followerCount: count });
+  } catch (error) {
+    console.error('Error unfollowing organizer:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /:id/followers — list followers of an organizer (public, paginated)
+router.get('/:id/followers', async (req: Request, res: Response) => {
+  try {
+    const organizerId = req.params.id;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+    const [followers, total] = await Promise.all([
+      prisma.follow.findMany({
+        where: { organizerId },
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.follow.count({ where: { organizerId } }),
+    ]);
+
+    res.json({
+      followers: followers.map((f: any) => ({
+        userId: f.user.id,
+        name: f.user.name,
+        followedAt: f.createdAt,
+      })),
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error('Error fetching followers:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

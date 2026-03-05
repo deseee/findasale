@@ -1,36 +1,25 @@
-import { useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/router';
-import api from '../../lib/api';
+import { useEffect } from 'react';
 
-/**
- * Affiliate link handler page.
- * Tracks the click via backend, stores the affiliateLinkId in sessionStorage
- * for checkout attribution, then redirects to the sale page.
- */
-const AffiliatePage = () => {
+const AffiliateRedirect = () => {
   const router = useRouter();
   const { id } = router.query;
 
   useEffect(() => {
-    if (!id || typeof id !== 'string') return;
-
-    api.get(`/affiliate/click/${id}`)
-      .then(res => {
-        const { saleId } = res.data;
-        // Store for checkout attribution — passed to createPaymentIntent
-        sessionStorage.setItem('affiliateRef', id);
-        router.replace(`/sales/${saleId}`);
-      })
-      .catch(() => {
-        router.replace('/');
-      });
-  }, [id]);
+    if (id) {
+      // Store the affiliate ID in sessionStorage for attribution
+      sessionStorage.setItem('affiliateRef', String(id));
+      // Redirect to home
+      router.push('/');
+    }
+  }, [id, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <p className="text-gray-500 text-sm">Redirecting…</p>
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-warm-600">Redirecting...</p>
     </div>
   );
 };
 
-export default AffiliatePage;
+export default AffiliateRedirect;

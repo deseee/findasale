@@ -127,7 +127,7 @@ function getTodoScan() {
   const packagesDir = path.join(__dirname, '..', 'packages');
   if (!fs.existsSync(packagesDir)) return null;
   const result = runCmd(
-    `grep -rn "TODO\|FIXME\|HACK\|WIRE UP" "${packagesDir}" --include="*.ts" --include="*.tsx" --exclude-dir="node_modules" 2>/dev/null | head -10`,
+    `grep -rn "TODO\\|FIXME\\|HACK\\|WIRE UP" "${packagesDir}" --include="*.ts" --include="*.tsx" --exclude-dir="node_modules" 2>/dev/null | head -10`,
     {}
   );
   if (!result || result.startsWith('[Error')) return null;
@@ -158,14 +158,14 @@ function getEnvDrift() {
 function getEnvironmentStatus() {
   const lines = [];
 
-  // GitHub CLI auth
+  // GitHub CLI auth (note: GitHub MCP is separate and checked at session start)
   const ghStatus = runCmd('gh auth status 2>&1');
   if (ghStatus.startsWith('[Error') || ghStatus.includes('not logged')) {
-    lines.push('- GitHub: ✗ not authenticated (gh auth login to fix)');
+    lines.push('- GitHub CLI: ✗ not authenticated (not required when GitHub MCP is active — check MCP tools at session start)');
   } else {
     const accountMatch = ghStatus.match(/Logged in to [^\s]+ account ([^\s]+)/);
     const account = accountMatch ? accountMatch[1] : 'authenticated';
-    lines.push(`- GitHub: ✓ ${account}`);
+    lines.push(`- GitHub CLI: ✓ ${account}`);
   }
 
   // ngrok tunnel — check running containers for the tunnel URL
@@ -223,6 +223,31 @@ ${todoScan ? `⚠ ${todoScan.count}+ TODO/FIXME markers in source (showing up to
 ## Project File Tree
 \`\`\`
 ${fileTree}
+\`\`\`
+
+## Tool & Skill Tree
+MCP tools are injected at session start — check active tools before assuming availability.
+\`\`\`
+MCP Connectors (check at session start):
+├── mcp__github__*          — GitHub file push, PR, issues (repo: deseee/findasale)
+├── mcp__Claude_in_Chrome__ — Browser automation, screenshots, form filling
+├── mcp__MCP_DOCKER__       — Playwright browser, code execution
+├── mcp__scheduled-tasks__  — Cron scheduling for recurring tasks
+├── mcp__cowork__           — File access, directory requests, file presentation
+└── mcp__mcp-registry__     — Search/suggest additional connectors
+
+Skills (loaded on demand):
+├── conversation-defaults   — AskUserQuestion workaround + diff-only gate (ALWAYS ACTIVE)
+├── dev-environment         — Docker/DB/Prisma reference (load before shell commands)
+├── context-maintenance     — Session wrap protocol (load at session end)
+├── health-scout            — Proactive code scanning (load before deploys)
+├── findasale-deploy        — Deploy checklist (load before production push)
+├── skill-creator           — Create/edit/eval skills
+├── docx / xlsx / pptx / pdf — Document creation skills
+└── schedule                — Create scheduled tasks
+
+Self-Healing Skills: 19 entries in claude_docs/self_healing_skills.md
+Docker Containers: findasale-backend-1, findasale-frontend-1, findasale-postgres-1, findasale-image-tagger-1
 \`\`\`
 
 ## On-Demand References

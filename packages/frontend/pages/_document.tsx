@@ -7,8 +7,8 @@ export default function Document() {
         {/* PWA manifest */}
         <link rel="manifest" href="/manifest.json" />
 
-        {/* Theme color — matches manifest */}
-        <meta name="theme-color" content="#2563EB" />
+        {/* Theme color — warm amber accent */}
+        <meta name="theme-color" content="#D97706" />
 
         {/* iOS PWA support */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -22,7 +22,7 @@ export default function Document() {
         <link rel="shortcut icon" href="/icons/favicon-32x32.png" />
 
         {/* Tile for Windows */}
-        <meta name="msapplication-TileColor" content="#2563EB" />
+        <meta name="msapplication-TileColor" content="#D97706" />
         <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
         <meta name="msapplication-config" content="none" />
 
@@ -56,6 +56,14 @@ export default function Document() {
         {/* Viewport is set by Next.js automatically in _app; kept here for completeness */}
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
+
+        {/* Google Fonts — Montserrat (headings) + Inter (body) */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700&display=swap"
+          rel="stylesheet"
+        />
 
         {/* Preconnect to critical external origins */}
         <link rel="preconnect" href="https://res.cloudinary.com" />

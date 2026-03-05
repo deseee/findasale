@@ -1,0 +1,38 @@
+FROM node:18-slim
+
+WORKDIR /app
+
+ENV CI=true
+
+# OpenSSL required by Prisma client
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# pnpm
+RUN corepack enable && corepack prepare pnpm@8.15.5 --activate
+
+# Copy workspace manifests + lockfile
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+
+# Copy required packages only
+COPY packages/database ./packages/database
+COPY packages/backend ./packages/backend
+
+# Install deps (production + database for migrations)
+RUN pnpm install --frozen-lockfile --filter backend... --filter database
+
+# Generate Prisma client (use run script, not exec — exec has binary resolution issues in monorepos)
+RUN pnpm --filter database run db:generate
+
+# Build TypeScript → dist/
+RUN pnpm --filter backend run build
+
+# Set production mode only at runtime — not during build (keeps devDeps available for prisma + tsc)
+ENV NODE_ENV=production
+
+WORKDIR /app/packages/backend
+
+EXPOSE 5000
+
+# Run pending migrations then start the compiled server
+# Use pnpm run (not npx) so pnpm resolves the prisma binary from the workspace install
+CMD ["sh", "-c", "cd /app && pnpm --filter database run db:deploy && node /app/packages/backend/dist/index.js"]

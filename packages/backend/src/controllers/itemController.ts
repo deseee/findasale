@@ -190,6 +190,8 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
  * - bidIncrement?: number
  * - auctionEndTime?: string (ISO date)
  * - status?: string (default 'AVAILABLE')
+ * - category?: string
+ * - condition?: string
  * - images: file(s) (field name 'images')
  */
 export const createItem = async (req: AuthRequest, res: Response) => {
@@ -198,7 +200,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -285,8 +287,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         bidIncrement: bidIncrement ? parseFloat(bidIncrement) : null,
         auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
         status: status || 'AVAILABLE',
+        category: category || null,
+        condition: condition || null,
         photoUrls,
-        // Optionally store tags in a new field or ignore for now
       }
     });
 
@@ -308,7 +311,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls } = req.body;
+    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition } = req.body;
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -334,6 +337,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         bidIncrement: bidIncrement !== undefined ? (bidIncrement ? parseFloat(bidIncrement) : null) : undefined,
         auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
         status,
+        category: category !== undefined ? (category || null) : undefined,
+        condition: condition !== undefined ? (condition || null) : undefined,
         photoUrls: photoUrls || undefined
       }
     });

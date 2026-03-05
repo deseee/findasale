@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { register, login } from '../controllers/authController';
+import { register, login, oauthLogin } from '../controllers/authController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
@@ -16,6 +16,7 @@ const router = Router();
 
 router.post('/register', register);
 router.post('/login', login);
+router.post('/oauth', oauthLogin); // Phase 31: social login token exchange
 
 // Change password — requires current password for verification
 router.post('/change-password', authenticate, async (req: AuthRequest, res: Response) => {
@@ -45,7 +46,7 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
-    console.error('Change password error:', error);
+    console.error('Change password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -89,13 +90,12 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
         `,
       });
     } else {
-      // Do not log the token — it is a security-sensitive credential
       console.warn(`[Password Reset] Reset email not sent for ${email} — RESEND_API_KEY not configured.`);
     }
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('Forgot password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -124,7 +124,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
     res.json({ message: 'Password reset successfully. You can now log in.' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('Reset password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error.' });
   }
 });

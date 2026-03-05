@@ -1,186 +1,92 @@
-import React, { useState, useEffect } from 'react';
-import Head from 'next/head';
-import Link from 'next/link';
+/**
+ * Shopper Purchases
+ *
+ * Shows a shopper's purchase history with filters/sorting.
+ */
+
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
-import CheckoutModal from '../../components/CheckoutModal';
-import { useToast } from '../../components/ToastContext';
+import Head from 'next/head';
 
-interface Purchase {
-  id: string;
-  amount: number;
-  status: string;
-  createdAt: string;
-  stripePaymentIntentId: string | null;
-  item: {
-    title: string;
-    photoUrls: string[];
-  };
-  sale: {
-    title: string;
-  };
-}
-
-const PurchaseHistoryPage = () => {
-  const { user } = useAuth();
+const ShopperPurchasesPage = () => {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { showToast } = useToast();
-  const [checkoutPurchase, setCheckoutPurchase] = useState<{ id: string; title: string } | null>(null);
+  const { user, loading } = useAuth();
+  const [sort, setSort] = useState<'recent' | 'price-high' | 'price-low'>('recent');
 
-  // ST6: Handle Stripe 3DS redirect return
-  // Stripe appends ?payment_intent=...&redirect_status=succeeded|failed to return_url after 3DS
-  useEffect(() => {
-    const { redirect_status, payment_intent } = router.query;
-    if (!redirect_status || !payment_intent) return;
-
-    if (redirect_status === 'succeeded') {
-      showToast('Payment successful!', 'success');
-      queryClient.invalidateQueries({ queryKey: ['purchases'] });
-    } else {
-      showToast('Payment was not completed. Please try again.', 'error');
-    }
-
-    // Strip the Stripe params from the URL without a full navigation
-    router.replace('/shopper/purchases', undefined, { shallow: true });
-  }, [router.query]);
-
-  const { data: purchases = [], isLoading } = useQuery({
-    queryKey: ['purchases'],
-    queryFn: async () => {
-      const response = await api.get('/users/purchases');
-      return response.data as Purchase[];
-    },
-  });
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Please log in to view your purchases</h2>
-          <Link href="/login" className="text-blue-600 hover:text-blue-800">
-            Go to Login
-          </Link>
-        </div>
-      </div>
-    );
+  if (!loading && !user) {
+    router.push('/login');
+    return null;
   }
 
+  const { data: purchases, isLoading } = useQuery({
+    queryKey: ['purchases', sort],
+    queryFn: async () => {
+      const response = await api.get('/shopper/purchases', { params: { sort } });
+      return response.data;
+    },
+    enabled: !!user?.id,
+  });
+
+  if (loading) return <div>Loading...</div>;
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       <Head>
-        <title>Purchase History - FindA.Sale</title>
-        <meta name="description" content="Your purchase history" />
+        <title>My Purchases - FindA.Sale</title>
       </Head>
+      <div className="min-h-screen bg-white">
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <h1 className="text-3xl font-bold text-warm-900 mb-8">My Purchases</h1>
 
-      {checkoutPurchase && (
-        <CheckoutModal
-          purchaseId={checkoutPurchase.id}
-          itemTitle={checkoutPurchase.title}
-          onClose={() => setCheckoutPurchase(null)}
-          onSuccess={() => {
-            setCheckoutPurchase(null);
-            showToast('Payment successful!', 'success');
-            queryClient.invalidateQueries({ queryKey: ['purchases'] });
-          }}
-        />
-      )}
+          <div className="mb-6 flex justify-between items-center">
+            <p className="text-warm-600">{purchases?.length || 0} items purchased</p>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as any)}
+              className="px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="recent">Most Recent</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="price-low">Price: Low to High</option>
+            </select>
+          </div>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Purchase History</h1>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6">
           {isLoading ? (
-            <div className="text-center py-8">
-              <p>Loading purchase history...</p>
-            </div>
-          ) : purchases.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-600 mb-4">You haven't made any purchases yet.</p>
-              <Link
-                href="/"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-              >
-                Browse Sales
-              </Link>
+            <p>Loading purchases...</p>
+          ) : purchases && purchases.length > 0 ? (
+            <div className="space-y-4">
+              {purchases.map((purchase: any) => (
+                <div key={purchase.id} className="card p-6 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-semibold text-lg text-warm-900 mb-1">{purchase.itemTitle}</h3>
+                    <p className="text-sm text-warm-600">From: {purchase.organizerName}</p>
+                    <p className="text-xs text-warm-500 mt-1">Purchased {purchase.purchasedDate}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-warm-900">${purchase.amount}</p>
+                    <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
+                      purchase.status === 'completed'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {purchase.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sale</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th scope="col" className="px-6 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {purchases.map((purchase) => (
-                    <tr key={purchase.id} className={purchase.status === 'PENDING' ? 'bg-yellow-50' : ''}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {purchase.item.photoUrls.length > 0 ? (
-                            <img
-                              src={purchase.item.photoUrls[0]}
-                              alt={purchase.item.title}
-                              className="h-10 w-10 rounded-md object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="bg-gray-200 border-2 border-dashed rounded-xl w-10 h-10" />
-                          )}
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{purchase.item.title}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {purchase.sale.title}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${purchase.amount.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          purchase.status === 'PAID'     ? 'bg-green-100 text-green-800' :
-                          purchase.status === 'PENDING'  ? 'bg-yellow-100 text-yellow-800' :
-                          purchase.status === 'REFUNDED' ? 'bg-gray-100 text-gray-600' :
-                          purchase.status === 'FAILED'   ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {purchase.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(purchase.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        {purchase.status === 'PENDING' && purchase.stripePaymentIntentId && (
-                          <button
-                            onClick={() => setCheckoutPurchase({ id: purchase.id, title: purchase.item.title })}
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-1.5 rounded"
-                          >
-                            Pay Now
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="text-center py-12">
+              <p className="text-warm-600 mb-4">You haven't made any purchases yet.</p>
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 };
 
-export default PurchaseHistoryPage;
+export default ShopperPurchasesPage;

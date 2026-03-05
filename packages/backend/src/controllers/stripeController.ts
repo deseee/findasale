@@ -3,6 +3,7 @@ import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { Resend } from 'resend';
 import { handlePurchaseBadge } from './userController';
+import { awardPoints } from '../services/pointsService';
 import { prisma } from '../lib/prisma';
 const stripe = getStripe();
 
@@ -112,7 +113,6 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
 
     res.json({ url: accountLink.url });
   } catch (error: unknown) {
-    // Safely extract error information
     let message = 'Unknown error';
     let type = undefined;
     let stack = undefined;
@@ -155,7 +155,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Item ID is required' });
     }
 
-    // Fetch the item and its sale/organizer details
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       include: {
@@ -179,41 +178,35 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Organizer has not set up payment processing' });
     }
 
-    // Ensure we have a valid price value and convert to number
-    // For auction items, use currentBid (the winning bid amount); fall back to auctionStartPrice if no bids yet
+    const isAuctionItem = !!item.auctionStartPrice;
     let price: number;
-    if (item.sale.isAuctionSale) {
-      if (item.currentBid !== null && item.currentBid !== undefined) {
-        price = typeof item.currentBid === 'number' ? item.currentBid : parseFloat(item.currentBid.toString());
-      } else if (item.auctionStartPrice !== null && item.auctionStartPrice !== undefined) {
-        price = typeof item.auctionStartPrice === 'number' ? item.auctionStartPrice : parseFloat(item.auctionStartPrice.toString());
+    if (isAuctionItem) {
+      if (item.currentBid != null) {
+        price = item.currentBid;
+      } else if (item.auctionStartPrice != null) {
+        price = item.auctionStartPrice;
       } else {
         price = 0;
       }
-    } else if (item.price !== null && item.price !== undefined) {
-      price = typeof item.price === 'number' ? item.price : parseFloat(item.price.toString());
+    } else if (item.price != null) {
+      price = item.price;
     } else {
       price = 0;
     }
 
-    // Validate price is a valid number
     if (isNaN(price) || price <= 0) {
       return res.status(400).json({ message: 'Invalid price value' });
     }
 
-    // Platform fee: 7% for auction items, 5% for regular sales
-    // ST4: Convert to cents first, then multiply — avoids floating-point rounding errors
-    const feePercent = item.sale.isAuctionSale ? 0.07 : 0.05;
+    const feePercent = isAuctionItem ? 0.07 : 0.05;
     const priceCents = Math.round(price * 100);
-    const platformFeeAmount = Math.round(priceCents * feePercent); // in cents
+    const platformFeeAmount = Math.round(priceCents * feePercent);
 
-    // Idempotency key prevents duplicate charges on network retry (one attempt per user per item)
     const idempotencyKey = `pi-${itemId}-${req.user.id}`;
 
-    // Create a PaymentIntent with automatic confirmation
     const paymentIntent = await stripe.paymentIntents.create(
       {
-        amount: priceCents, // Always derived from DB price — never from request body
+        amount: priceCents,
         currency: 'usd',
         metadata: {
           itemId: item.id,
@@ -230,14 +223,13 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       { idempotencyKey }
     );
 
-    // Create a pending purchase record (optionally linked to affiliate attribution)
     const purchase = await prisma.purchase.create({
       data: {
         userId: req.user.id,
         itemId: item.id,
         saleId: item.sale.id,
         amount: price,
-        platformFeeAmount: platformFeeAmount / 100, // store in dollars, not cents
+        platformFeeAmount: platformFeeAmount / 100,
         stripePaymentIntentId: paymentIntent.id,
         status: 'PENDING',
         ...(affiliateLinkId ? { affiliateLinkId } : {})
@@ -261,7 +253,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'] as string;
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  // H9: Guard missing STRIPE_WEBHOOK_SECRET — fail fast with clear error
   if (!endpointSecret) {
     console.error('STRIPE_WEBHOOK_SECRET is not configured — webhook verification cannot proceed');
     return res.status(500).send('Webhook Error: STRIPE_WEBHOOK_SECRET not configured');
@@ -276,7 +267,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Handle the event
   switch (event.type) {
     case 'payment_intent.succeeded': {
       const paymentIntent = event.data.object;
@@ -295,8 +285,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
       });
 
       if (purchase) {
-        // ST3: Verify the payment was destined for the correct organizer's Stripe account.
-        // Prevents a spoofed or replayed webhook from marking an unrelated item as SOLD.
         const expectedConnectId = purchase.sale?.organizer?.stripeConnectId;
         if (
           expectedConnectId &&
@@ -307,7 +295,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             `ST3 webhook mismatch for PI ${paymentIntent.id}: ` +
             `expected connectId=${expectedConnectId}, got=${paymentIntent.on_behalf_of}`
           );
-          break; // Skip processing — do not mark purchase as PAID
+          break;
         }
 
         await prisma.purchase.update({
@@ -322,7 +310,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
           });
         }
 
-        // Attribute affiliate conversion if purchase was referred
         if (purchase.affiliateLinkId) {
           await prisma.affiliateLink.update({
             where: { id: purchase.affiliateLinkId },
@@ -333,11 +320,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // Award purchase badge
         await handlePurchaseBadge(purchase.userId);
 
+        // Phase 19: Award 10 points for purchase
+        awardPoints(
+          purchase.userId,
+          'PURCHASE',
+          10,
+          purchase.saleId ?? undefined,
+          paymentIntent.metadata?.itemId,
+          'Purchased an item',
+        ).catch(err => console.warn('[points] Failed to award purchase points:', err));
+
         // Send receipt email
         if (purchase.user) {
           await sendReceiptEmail({
             id: purchase.id,
-            amount: typeof purchase.amount === 'number' ? purchase.amount : parseFloat(purchase.amount.toString()),
+            amount: purchase.amount,
             user: { email: purchase.user.email, name: purchase.user.name },
             item: purchase.item,
             sale: purchase.sale,
@@ -395,10 +392,8 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
 
     const paymentIntent = await stripe.paymentIntents.retrieve(purchase.stripePaymentIntentId);
 
-    const amount = typeof purchase.amount === 'number' ? purchase.amount : parseFloat(purchase.amount.toString());
-    const platformFee = typeof purchase.platformFeeAmount === 'number'
-      ? purchase.platformFeeAmount
-      : parseFloat((purchase.platformFeeAmount ?? 0).toString());
+    const amount = purchase.amount;
+    const platformFee = purchase.platformFeeAmount ?? 0;
 
     res.json({
       clientSecret: paymentIntent.client_secret,

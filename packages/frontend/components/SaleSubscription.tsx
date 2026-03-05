@@ -95,16 +95,16 @@ const SaleSubscription: React.FC<SaleSubscriptionProps> = ({
       {!showForm ? (
         <button
           onClick={() => setShowForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded"
         >
           Subscribe to Updates
         </button>
       ) : (
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-medium text-gray-900 mb-3">Subscribe to Sale Updates</h3>
+        <div className="p-4 bg-warm-50 rounded-lg">
+          <h3 className="font-medium text-warm-900 mb-3">Subscribe to Sale Updates</h3>
           <form onSubmit={handleSubscribe} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-warm-700 mb-1">
                 Email (for weekly digests)
               </label>
               <input
@@ -112,13 +112,13 @@ const SaleSubscription: React.FC<SaleSubscriptionProps> = ({
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                 placeholder="your@email.com"
               />
             </div>
             
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="phone" className="block text-sm font-medium text-warm-700 mb-1">
                 Phone (for SMS alerts)
               </label>
               <input
@@ -126,7 +126,7 @@ const SaleSubscription: React.FC<SaleSubscriptionProps> = ({
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                 placeholder="(123) 456-7890"
               />
             </div>
@@ -135,14 +135,14 @@ const SaleSubscription: React.FC<SaleSubscriptionProps> = ({
               <button
                 type="submit"
                 disabled={subscribeMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
               >
                 {subscribeMutation.isPending ? 'Subscribing...' : 'Subscribe'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+                className="bg-warm-500 hover:bg-warm-600 text-white font-bold py-2 px-4 rounded"
               >
                 Cancel
               </button>

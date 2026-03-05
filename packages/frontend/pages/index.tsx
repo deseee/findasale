@@ -30,16 +30,12 @@ interface Sale {
 type DateFilter = 'all' | 'upcoming' | 'this-weekend' | 'this-month';
 
 const SaleCardSkeleton = () => (
-  <div className="bg-white rounded-lg shadow-md overflow-hidden">
-    <Skeleton className="h-48 w-full rounded-none" />
-    <div className="p-4 space-y-2">
-      <Skeleton className="h-6 w-3/4" />
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-1/2" />
-      <div className="flex justify-between mt-4">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-4 w-24" />
-      </div>
+  <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
+    <Skeleton className="aspect-square w-full rounded-none" />
+    <div className="p-3 space-y-2 flex flex-col flex-1">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-3 w-1/2" />
+      <Skeleton className="h-3 w-2/5 mt-1" />
     </div>
   </div>
 );
@@ -125,7 +121,7 @@ const HomePage = () => {
   }, [sales, searchQuery, dateFilter]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-warm-50">
       <Head>
         <title>FindA.Sale - Find Estate Sales Near You</title>
         <meta name="description" content="Find estate sales and auctions near you" />
@@ -133,8 +129,8 @@ const HomePage = () => {
 
       <main className="container mx-auto px-4 py-8">
         <section className="mb-12 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-blue-600 mb-4">Discover Amazing Deals</h1>
-          <p className="text-xl text-gray-700 max-w-2xl mx-auto">
+          <h1 className="text-4xl md:text-5xl font-bold text-amber-600 mb-4">Discover Amazing Deals</h1>
+          <p className="text-xl text-warm-700 max-w-2xl mx-auto">
             Find estate sales, garage sales, and auctions near you with FindA.Sale
           </p>
         </section>
@@ -142,7 +138,7 @@ const HomePage = () => {
         {/* Map Section */}
         <section className="mb-12">
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900">Sales Near You</h2>
+            <h2 className="text-2xl font-bold mb-4 text-warm-900">Sales Near You</h2>
             {isLoading ? (
               <Skeleton className="h-96 w-full" />
             ) : (
@@ -175,7 +171,7 @@ const HomePage = () => {
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-grow">
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-warm-400"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -188,7 +184,7 @@ const HomePage = () => {
                 placeholder="Search by title, city, or keyword…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+                className="w-full pl-10 pr-4 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-warm-900"
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -198,8 +194,8 @@ const HomePage = () => {
                   onClick={() => setDateFilter(f)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                     dateFilter === f
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                      ? 'bg-amber-600 text-white border-amber-600'
+                      : 'bg-white text-warm-700 border-warm-300 hover:border-amber-400'
                   }`}
                 >
                   {f === 'all' ? 'All' : f === 'upcoming' ? 'Upcoming' : f === 'this-weekend' ? 'This Weekend' : 'This Month'}
@@ -212,35 +208,35 @@ const HomePage = () => {
         {/* Featured Sales */}
         <section>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-900">Featured Sales</h2>
+            <h2 className="text-3xl font-bold text-warm-900">Featured Sales</h2>
             {!isLoading && sales && (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-warm-500">
                 {filteredSales.length} of {sales.length} sale{sales.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
             </div>
           ) : isError ? (
             <div className="text-center py-12">
               <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h2>
-              <p className="text-gray-600 mb-4">There was a problem loading sales data.</p>
-              <button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+              <p className="text-warm-600 mb-4">There was a problem loading sales data.</p>
+              <button onClick={() => window.location.reload()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
                 Retry
               </button>
             </div>
           ) : filteredSales.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredSales.map((sale) => (
                 <SaleCard key={sale.id} sale={sale} />
               ))}
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-600">
+              <p className="text-warm-600">
                 {searchQuery || dateFilter !== 'all'
                   ? 'No sales match your search. Try adjusting your filters.'
                   : 'No sales available at the moment. Check back later!'}
@@ -248,7 +244,7 @@ const HomePage = () => {
               {(searchQuery || dateFilter !== 'all') && (
                 <button
                   onClick={() => { setSearchQuery(''); setDateFilter('all'); }}
-                  className="mt-4 text-blue-600 hover:underline text-sm"
+                  className="mt-4 text-amber-600 hover:underline text-sm"
                 >
                   Clear filters
                 </button>

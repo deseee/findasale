@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { handleFavoriteBadge } from './userController';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
@@ -137,16 +138,24 @@ export const listSales = async (req: Request, res: Response) => {
             select: {
               id: true,
               businessName: true,
-              phone: true
+              phone: true,
+              reputationTier: true, // Phase 22: for TierBadge on SaleCard
             }
-          }
+          },
+          // Phase 28: social proof — favorite count per sale
+          _count: {
+            select: { favorites: true },
+          },
         }
       }),
       prisma.sale.count({ where }),
     ]);
 
-    // Convert Decimal values to numbers
-    const convertedSales = sales.map((sale: any) => convertDecimalsToNumbers(sale));
+    // Convert Decimal values + flatten _count into favoriteCount
+    const convertedSales = sales.map((sale: any) => {
+      const { _count, ...rest } = convertDecimalsToNumbers(sale);
+      return { ...rest, favoriteCount: _count?.favorites ?? 0 };
+    });
     
     res.json({
       sales: convertedSales,
@@ -544,6 +553,12 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     }
 
     const updated = await prisma.sale.update({ where: { id }, data: { status } });
+
+    // Phase 17: Notify followers when a sale transitions DRAFT → PUBLISHED
+    if (status === 'PUBLISHED' && existingSale.status === 'DRAFT') {
+      notifyFollowersOfNewSale(updated).catch(() => {});
+    }
+
     res.json(convertDecimalsToNumbers(updated));
   } catch (error) {
     console.error('Error updating sale status:', error);

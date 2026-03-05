@@ -4,14 +4,15 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")       // pooled (PgBouncer) — used by app at runtime
+  directUrl = env("DIRECT_URL")         // non-pooled — used by prisma migrate
 }
 
 model User {
   id            String     @id @default(cuid())
   email         String     @unique
-  password      String
+  password      String?    // Optional: OAuth users won't have a password
   name          String
   role          String     @default("USER") // USER, ORGANIZER, ADMIN
   points        Int        @default(0)
@@ -21,6 +22,9 @@ model User {
   referralCode      String?    @unique
   resetToken        String?    @unique
   resetTokenExpiry  DateTime?
+  // Phase 31: OAuth / NextAuth social login
+  oauthProvider     String?    // "google", "facebook", null for email/password auth
+  oauthId           String?    // Provider's unique user ID
   organizer         Organizer?
   purchases     Purchase[]
   favorites     Favorite[]
@@ -33,6 +37,10 @@ model User {
   reviews           Review[]
   affiliateLinks    AffiliateLink[]
   pushSubscriptions PushSubscription[]
+  following         Follow[]
+  pointsTransactions    PointsTransaction[]
+
+  @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
 
 model Organizer {
@@ -44,6 +52,12 @@ model Organizer {
   user            User     @relation(fields: [userId], references: [id])
   sales           Sale[]
   stripeConnectId String?
+  // Phase 17: Reputation
+  reputationTier  String   @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
+  avgRating       Float?
+  totalReviews    Int      @default(0)
+  totalSales      Int      @default(0)
+  followers       Follow[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -138,7 +152,7 @@ model Purchase {
   saleId                String?
   sale                  Sale?          @relation(fields: [saleId], references: [id])
   stripePaymentIntentId String?        @unique
-  affiliateLinkId       String?
+  affiliateLinkId       String?        
   affiliateLink         AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
@@ -244,4 +258,32 @@ model LineEntry {
   updatedAt  DateTime @updatedAt
 
   @@unique([saleId, userId])
+}
+
+// Phase 19: Hunt Pass — shopper points ledger
+model PointsTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW"
+  points      Int
+  saleId      String?
+  itemId      String?
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+// Phase 17: Shopper follows an organizer
+model Follow {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  organizerId String
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  // Notification preferences
+  notifyEmail Boolean   @default(true)
+  notifyPush  Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, organizerId])
 }

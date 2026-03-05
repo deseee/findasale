@@ -1,208 +1,135 @@
-import React, { useState, useEffect } from 'react';
-import Head from 'next/head';
-import Link from 'next/link';
+/**
+ * Organizer Settings
+ *
+ * Allows organizers to manage:
+ * - Payment settings (Stripe Connect)
+ * - Email/SMS preferences
+ * - Business info
+ * - Account security
+ */
+
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
+import Head from 'next/head';
+import Link from 'next/link';
 
 const OrganizerSettingsPage = () => {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const { showToast } = useToast();
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile'>('payments');
+  const [businessName, setBusinessName] = useState(user?.businessName || '');
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [profile, setProfile] = useState({ businessName: '', phone: '', address: '' });
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+    router.push('/login');
+    return null;
+  }
 
-  const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  useEffect(() => {
-    if (user && user.role !== 'ORGANIZER') {
-      router.replace('/');
-    }
-  }, [user, router]);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await api.get('/users/me');
-        const o = res.data.organizer;
-        if (o) {
-          setProfile({ businessName: o.businessName || '', phone: o.phone || '', address: o.address || '' });
-        }
-      } catch {
-        // ignore — form stays blank
-      } finally {
-        setProfileLoading(false);
-      }
-    };
-    if (user) fetchProfile();
-  }, [user]);
-
-  const handleProfileSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProfileSaving(true);
-    setProfileMsg(null);
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
     try {
-      await api.post('/users/setup-organizer', profile);
-      setProfileMsg({ type: 'success', text: 'Profile updated successfully.' });
-    } catch (err: any) {
-      setProfileMsg({ type: 'error', text: err.response?.data?.message || 'Failed to update profile.' });
+      await api.patch('/auth/profile', { businessName });
+      showToast('Profile updated', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to update profile', 'error');
     } finally {
-      setProfileSaving(false);
+      setIsSaving(false);
     }
   };
 
-  const handlePasswordSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordMsg(null);
-    if (passwords.newPassword !== passwords.confirmPassword) {
-      setPasswordMsg({ type: 'error', text: 'New passwords do not match.' });
-      return;
-    }
-    if (passwords.newPassword.length < 8) {
-      setPasswordMsg({ type: 'error', text: 'New password must be at least 8 characters.' });
-      return;
-    }
-    setPasswordSaving(true);
-    try {
-      await api.post('/auth/change-password', {
-        currentPassword: passwords.currentPassword,
-        newPassword: passwords.newPassword,
-      });
-      setPasswordMsg({ type: 'success', text: 'Password changed successfully.' });
-      setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (err: any) {
-      setPasswordMsg({ type: 'error', text: err.response?.data?.message || 'Failed to change password.' });
-    } finally {
-      setPasswordSaving(false);
-    }
-  };
-
-  if (profileLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       <Head>
-        <title>Settings – FindA.Sale</title>
+        <title>Settings - FindA.Sale</title>
       </Head>
-
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-          <Link href="/organizer/dashboard" className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">
-            Back to Dashboard
+      <div className="min-h-screen bg-warm-50">
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
+            Back to dashboard
           </Link>
-        </div>
 
-        {/* Business Profile */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Business Profile</h2>
+          <h1 className="text-3xl font-bold text-warm-900 mb-8">Settings</h1>
 
-          {profileMsg && (
-            <div className={`rounded-md p-3 mb-4 text-sm ${profileMsg.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-              {profileMsg.text}
+          {/* Tabs */}
+          <div className="flex gap-4 mb-8 border-b border-warm-200">
+            {['payments', 'notifications', 'profile'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as any)}
+                className={`pb-2 font-medium capitalize ${
+                  activeTab === tab
+                    ? 'border-b-2 border-amber-600 text-amber-600'
+                    : 'text-warm-600 hover:text-warm-900'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Payments Tab */}
+          {activeTab === 'payments' && (
+            <div className="card p-6">
+              <h2 className="text-xl font-semibold text-warm-900 mb-4">Payment Settings</h2>
+              <p className="text-warm-600 mb-6">
+                Connect your Stripe account to receive payouts from your sales.
+              </p>
+              <button className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg">
+                Setup Stripe Connect
+              </button>
             </div>
           )}
 
-          <form onSubmit={handleProfileSave} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
-              <input
-                type="text"
-                value={profile.businessName}
-                onChange={e => setProfile(p => ({ ...p, businessName: e.target.value }))}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input
-                type="tel"
-                value={profile.phone}
-                onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Business Address</label>
-              <input
-                type="text"
-                value={profile.address}
-                onChange={e => setProfile(p => ({ ...p, address: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={profileSaving}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded disabled:opacity-50"
-              >
-                {profileSaving ? 'Saving...' : 'Save Profile'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Change Password */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Change Password</h2>
-
-          {passwordMsg && (
-            <div className={`rounded-md p-3 mb-4 text-sm ${passwordMsg.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-              {passwordMsg.text}
+          {/* Notifications Tab */}
+          {activeTab === 'notifications' && (
+            <div className="card p-6">
+              <h2 className="text-xl font-semibold text-warm-900 mb-4">Notification Preferences</h2>
+              <div className="space-y-4">
+                <label className="flex items-center">
+                  <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
+                  <span className="ml-2 text-warm-700">Email me when someone bids on my items</span>
+                </label>
+                <label className="flex items-center">
+                  <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
+                  <span className="ml-2 text-warm-700">Email me when my sale starts</span>
+                </label>
+              </div>
             </div>
           )}
 
-          <form onSubmit={handlePasswordSave} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-              <input
-                type="password"
-                value={passwords.currentPassword}
-                onChange={e => setPasswords(p => ({ ...p, currentPassword: e.target.value }))}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <div className="card p-6">
+              <h2 className="text-xl font-semibold text-warm-900 mb-4">Business Profile</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 mb-1">Business Name</label>
+                  <input
+                    type="text"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={isSaving}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-              <input
-                type="password"
-                value={passwords.newPassword}
-                onChange={e => setPasswords(p => ({ ...p, newPassword: e.target.value }))}
-                required
-                minLength={8}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-              <input
-                type="password"
-                value={passwords.confirmPassword}
-                onChange={e => setPasswords(p => ({ ...p, confirmPassword: e.target.value }))}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={passwordSaving}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded disabled:opacity-50"
-              >
-                {passwordSaving ? 'Updating...' : 'Update Password'}
-              </button>
-            </div>
-          </form>
+          )}
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 };
 

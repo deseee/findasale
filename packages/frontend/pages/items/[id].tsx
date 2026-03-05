@@ -6,7 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
+import PhotoLightbox from '../../components/PhotoLightbox';
 import { useToast } from '../../components/ToastContext';
+import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 interface Item {
@@ -90,6 +92,8 @@ const ItemDetailPage = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState('');
   const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { showToast } = useToast();
 
   const { data: item, isLoading, isError, refetch } = useQuery({
@@ -196,20 +200,29 @@ const ItemDetailPage = () => {
     }
   }, [item]);
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Loading...</div>;
-  if (isError) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Error loading item</div>;
-  if (!item) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Item not found</div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Loading...</div>;
+  if (isError) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Error loading item</div>;
+  if (!item) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Item not found</div>;
 
   const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
   const isAuctionItem = !!item.auctionStartPrice;
   const auctionEnded = item.auctionEndTime && new Date(item.auctionEndTime) < new Date();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-warm-50">
       <Head>
         <title>{item.title} - FindA.Sale</title>
         <meta name="description" content={item.description} />
       </Head>
+
+      {/* Phase 18: Photo lightbox */}
+      {lightboxIndex !== null && item?.photoUrls?.length > 0 && (
+        <PhotoLightbox
+          photos={item.photoUrls}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
 
       {checkoutItemId && item && (
         <CheckoutModal
@@ -222,8 +235,8 @@ const ItemDetailPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         {/* Back Button */}
-        <Link href={`/sales/${item.sale.id}`} className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+        <Link href={`/sales/${item.sale.id}`} className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
           </svg>
           Back to {item.sale.title}
@@ -231,40 +244,72 @@ const ItemDetailPage = () => {
 
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2">
-            {/* Image Gallery */}
+            {/* Image Gallery — Phase 18: selected thumbnail + lightbox */}
             <div className="p-6">
               {item.photoUrls.length > 0 ? (
-                <div className="bg-gray-200 rounded-lg overflow-hidden">
-                  <img
-                    src={item.photoUrls[0]}
-                    alt={item.title}
-                    className="w-full h-96 object-contain"
-                    loading="lazy"
-                  />
-                </div>
+                <>
+                  {/* Main photo — click to open lightbox */}
+                  <button
+                    onClick={() => setLightboxIndex(selectedPhotoIndex)}
+                    className="group relative w-full bg-warm-200 rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    aria-label="View full-size photo"
+                  >
+                    <img
+                      src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex]) || item.photoUrls[selectedPhotoIndex]}
+                      alt={item.title}
+                      className="w-full h-96 object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                      loading="lazy"
+                    />
+                    {/* Zoom hint */}
+                    <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                      </svg>
+                      View full size
+                    </div>
+                  </button>
+
+                  {/* Thumbnail strip — all photos, click to select or double-tap to open lightbox */}
+                  {item.photoUrls.length > 1 && (
+                    <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
+                      {item.photoUrls.map((url, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (selectedPhotoIndex === i) {
+                              // Second tap on active thumbnail opens lightbox
+                              setLightboxIndex(i);
+                            } else {
+                              setSelectedPhotoIndex(i);
+                            }
+                          }}
+                          className={`flex-shrink-0 w-20 h-20 rounded overflow-hidden border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                            i === selectedPhotoIndex
+                              ? 'border-amber-500'
+                              : 'border-transparent hover:border-amber-300'
+                          }`}
+                          aria-label={`View photo ${i + 1}`}
+                          aria-pressed={i === selectedPhotoIndex}
+                        >
+                          <img
+                            src={getThumbnailUrl(url) || url}
+                            alt={`${item.title} ${i + 1}`}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
-                <div className="bg-gray-200 h-96 flex items-center justify-center rounded-lg">
+                <div className="bg-warm-200 h-96 flex items-center justify-center rounded-lg">
                   <img
                     src="/images/placeholder.svg"
-                    alt="Placeholder"
-                    className="w-16 h-16 text-gray-400"
+                    alt="No photo available"
+                    className="w-16 h-16 opacity-30"
                     loading="lazy"
                   />
-                </div>
-              )}
-              
-              {item.photoUrls.length > 1 && (
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  {item.photoUrls.slice(1, 4).map((url, index) => (
-                    <div key={index} className="bg-gray-200 rounded overflow-hidden">
-                      <img
-                        src={url}
-                        alt={`${item.title} ${index + 2}`}
-                        className="w-full h-24 object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  ))}
                 </div>
               )}
             </div>
@@ -272,7 +317,7 @@ const ItemDetailPage = () => {
             {/* Item Details */}
             <div className="p-6">
               <div className="flex justify-between items-start">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{item.title}</h1>
+                <h1 className="text-3xl font-bold text-warm-900 mb-2">{item.title}</h1>
                 <button
                   onClick={toggleFavorite}
                   className="text-2xl focus:outline-none"
@@ -283,27 +328,27 @@ const ItemDetailPage = () => {
                       <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                     </svg>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-warm-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                   )}
                 </button>
               </div>
-              <p className="text-gray-600 mb-6">{item.description}</p>
+              <p className="text-warm-600 mb-6">{item.description}</p>
               
               <div className="mb-6">
-                <Link href={`/sales/${item.sale.id}`} className="text-blue-600 hover:text-blue-800">
+                <Link href={`/sales/${item.sale.id}`} className="text-amber-600 hover:text-amber-800">
                   ← Back to {item.sale.title}
                 </Link>
               </div>
 
               {isAuctionItem ? (
                 /* Auction Item */
-                <div className="border-t border-b border-gray-200 py-6 mb-6">
+                <div className="border-t border-b border-warm-200 py-6 mb-6">
                   <div className="flex justify-between items-center mb-4">
                     <div>
-                      <span className="text-sm text-gray-600">Current Bid:</span>
-                      <span className="font-bold text-blue-600 ml-1 text-xl">
+                      <span className="text-sm text-warm-600">Current Bid:</span>
+                      <span className="font-bold text-amber-600 ml-1 text-xl">
                         {formatPrice(item.currentBid || item.auctionStartPrice)}
                       </span>
                     </div>
@@ -315,7 +360,7 @@ const ItemDetailPage = () => {
                   </div>
                   
                   <div className="mb-4">
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-warm-600">
                       Minimum bid: {formatPrice(getMinimumNextBid(item))}
                     </span>
                   </div>
@@ -329,20 +374,20 @@ const ItemDetailPage = () => {
                           min={getMinimumNextBid(item)}
                           value={bidAmount}
                           onChange={(e) => setBidAmount(e.target.value)}
-                          className="flex-grow px-3 py-2 border border-gray-300 rounded-l text-gray-900"
+                          className="flex-grow px-3 py-2 border border-warm-300 rounded-l text-warm-900"
                           placeholder="Enter bid amount"
                         />
                         <button
                           onClick={handlePlaceBid}
                           disabled={isBidding}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r disabled:opacity-50"
+                          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-r disabled:opacity-50"
                         >
                           {isBidding ? 'Placing...' : 'Place Bid'}
                         </button>
                       </div>
                       <button
                         onClick={() => setBidAmount(getMinimumNextBid(item).toString())}
-                        className="text-sm text-blue-600 hover:text-blue-800"
+                        className="text-sm text-amber-600 hover:text-amber-800"
                       >
                         Set to minimum bid
                       </button>
@@ -350,14 +395,14 @@ const ItemDetailPage = () => {
                   )}
                   
                   {auctionEnded && (
-                    <div className="text-center py-2 bg-gray-100 rounded text-gray-600">
+                    <div className="text-center py-2 bg-warm-100 rounded text-warm-600">
                       Auction ended
                     </div>
                   )}
                   
                   {!user && (
                     <div className="text-center py-2">
-                      <Link href="/login" className="text-blue-600 hover:text-blue-800">
+                      <Link href="/login" className="text-amber-600 hover:text-amber-800">
                         Log in to place a bid
                       </Link>
                     </div>
@@ -371,13 +416,13 @@ const ItemDetailPage = () => {
                 </div>
               ) : (
                 /* Fixed Price Item */
-                <div className="border-t border-b border-gray-200 py-6 mb-6">
+                <div className="border-t border-b border-warm-200 py-6 mb-6">
                   <div className="flex justify-between items-center">
-                    <span className="text-2xl font-bold text-gray-900">{formatPrice(item.price)}</span>
+                    <span className="text-2xl font-bold text-warm-900">{formatPrice(item.price)}</span>
                     {!isOrganizer && user && item.status === 'AVAILABLE' && (
                       <button
                         onClick={handleBuyNow}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded"
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded"
                       >
                         Buy Now
                       </button>
@@ -386,7 +431,7 @@ const ItemDetailPage = () => {
                   
                   {!user && (
                     <div className="text-center mt-4">
-                      <Link href="/login" className="text-blue-600 hover:text-blue-800">
+                      <Link href="/login" className="text-amber-600 hover:text-amber-800">
                         Log in to buy this item
                       </Link>
                     </div>
@@ -404,8 +449,8 @@ const ItemDetailPage = () => {
                 <span className={`px-3 py-1 rounded-full text-sm ${
                   item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
                   item.status === 'SOLD' ? 'bg-red-100 text-red-800' :
-                  item.status === 'AUCTION_ENDED' ? 'bg-gray-100 text-gray-800' :
-                  'bg-gray-100 text-gray-800'
+                  item.status === 'AUCTION_ENDED' ? 'bg-warm-100 text-warm-800' :
+                  'bg-warm-100 text-warm-800'
                 }`}>
                   {item.status.replace(/_/g, ' ')}
                 </span>

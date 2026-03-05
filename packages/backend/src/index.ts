@@ -52,13 +52,18 @@ import uploadRoutes from './routes/upload';
 import organizerRoutes from './routes/organizers';
 import contactRoutes from './routes/contact';
 import pushRoutes from './routes/push';
+import feedRoutes from './routes/feed'; // Phase 28: personalized activity feed
+import pointsRoutes from './routes/points'; // Phase 19: Hunt Pass shopper points
+import searchRoutes from './routes/search'; // Phase 29: Discovery + search
 import { authenticate } from './middleware/auth';
 import './jobs/auctionJob';
 import './jobs/notificationJob';
 import './jobs/emailReminderJob';
+import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier recalculation
 
-// Re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
-export { prisma } from './lib/prisma';
+// Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
+import { prisma } from './lib/prisma';
+export { prisma };
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -140,6 +145,9 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/organizers', organizerRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed
+app.use('/api/points', pointsRoutes); // Phase 19: Hunt Pass shopper points
+app.use('/api/search', searchRoutes); // Phase 29: Discovery + search
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

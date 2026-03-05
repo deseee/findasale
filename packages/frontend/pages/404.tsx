@@ -1,28 +1,24 @@
-import Head from 'next/head';
+import React from 'react';
 import Link from 'next/link';
 
-export default function NotFound() {
+const NotFoundPage = () => {
   return (
-    <>
-      <Head>
-        <title>Page not found – FindA.Sale</title>
-      </Head>
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 text-center">
-        <div className="max-w-md">
-          <p className="text-6xl font-extrabold text-blue-600 mb-4">404</p>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">Page not found</h1>
-          <p className="text-gray-600 mb-8">
-            The page you're looking for doesn't exist or may have moved. Double-check the URL or
-            head back to the homepage.
-          </p>
-          <Link
-            href="/"
-            className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
-          >
-            Back to FindA.Sale
-          </Link>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-warm-50 to-white">
+      <div className="text-center px-4">
+        <h1 className="text-6xl font-bold text-warm-900 mb-4">404</h1>
+        <p className="text-xl text-warm-600 mb-8">Page not found</p>
+        <p className="text-warm-500 mb-8">
+          Sorry, the page you're looking for doesn't exist or has been moved.
+        </p>
+        <Link
+          href="/"
+          className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-lg transition-colors"
+        >
+          Back to Home
+        </Link>
       </div>
-    </>
+    </div>
   );
-}
+};
+
+export default NotFoundPage;
