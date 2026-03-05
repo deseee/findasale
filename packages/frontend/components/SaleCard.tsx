@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
+import TierBadge from './TierBadge'; // Phase 22
 
 interface Sale {
   id: string;
@@ -18,6 +19,7 @@ interface Sale {
   organizer: {
     id: string;
     businessName: string;
+    reputationTier?: string; // Phase 22
   };
   status?: string;
   isAuctionSale?: boolean;
@@ -133,12 +135,17 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           </p>
         </Link>
         <div className="flex items-center justify-between mt-2">
-          <Link
-            href={`/organizers/${sale.organizer.id}`}
-            className="text-xs font-medium text-amber-600 hover:underline line-clamp-1"
-          >
-            {sale.organizer.businessName}
-          </Link>
+          <div className="flex items-center gap-1 min-w-0">
+            <Link
+              href={`/organizers/${sale.organizer.id}`}
+              className="text-xs font-medium text-amber-600 hover:underline line-clamp-1"
+            >
+              {sale.organizer.businessName}
+            </Link>
+            {sale.organizer.reputationTier && (
+              <TierBadge tier={sale.organizer.reputationTier} />
+            )}
+          </div>
           {typeof sale.favoriteCount === 'number' && sale.favoriteCount > 0 && (
             <span className="text-xs text-warm-400 flex-shrink-0 ml-1">
               ♥ {sale.favoriteCount}

@@ -75,6 +75,84 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
+// Authenticated: get current organizer's own profile + tier data (Phase 22)
+// Must be registered before /:id to avoid being swallowed by the wildcard
+router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      include: {
+        _count: {
+          select: {
+            followers: true,
+          },
+        },
+      },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const [endedSalesCount, reviews] = await Promise.all([
+      prisma.sale.count({
+        where: { organizerId: organizer.id, status: 'ENDED' },
+      }),
+      prisma.review.findMany({
+        where: { sale: { organizerId: organizer.id } },
+        select: { rating: true },
+      }),
+    ]);
+
+    const followerCount = (organizer as any)._count.followers ?? 0;
+    const avgRating =
+      reviews.length > 0
+        ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
+        : 0;
+
+    // Build progress message toward next tier
+    let progressMessage = '';
+    if (organizer.reputationTier === 'NEW') {
+      const salesNeeded = Math.max(0, 5 - endedSalesCount);
+      if (salesNeeded > 0) {
+        progressMessage = `${salesNeeded} more completed sale${salesNeeded !== 1 ? 's' : ''} to reach Trusted Seller.`;
+      } else {
+        progressMessage = 'Achieve a 4.0+ average rating to reach Trusted Seller.';
+      }
+    } else if (organizer.reputationTier === 'TRUSTED') {
+      const parts: string[] = [];
+      const salesNeeded = Math.max(0, 20 - endedSalesCount);
+      const followersNeeded = Math.max(0, 50 - followerCount);
+      if (salesNeeded > 0) parts.push(`${salesNeeded} more sale${salesNeeded !== 1 ? 's' : ''}`);
+      if (followersNeeded > 0) parts.push(`${followersNeeded} more follower${followersNeeded !== 1 ? 's' : ''}`);
+      if (avgRating < 4.5) parts.push('a 4.5+ average rating');
+      progressMessage = parts.length > 0
+        ? `Need ${parts.join(', ')} to reach Estate Curator.`
+        : 'You qualify for Estate Curator — tier recalculation runs weekly.';
+    } else {
+      progressMessage = "You've reached the highest tier!";
+    }
+
+    res.json({
+      id: organizer.id,
+      businessName: organizer.businessName,
+      reputationTier: organizer.reputationTier,
+      avgRating: organizer.avgRating,
+      totalReviews: organizer.totalReviews,
+      completedSales: endedSalesCount,
+      followerCount,
+      progressMessage,
+    });
+  } catch (error) {
+    console.error('Error fetching organizer /me profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 router.get('/:id', async (req: Request, res: Response) => {
   try {
