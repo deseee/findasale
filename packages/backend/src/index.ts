@@ -65,6 +65,7 @@ import './jobs/notificationJob';
 import './jobs/emailReminderJob';
 import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier recalculation
 import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 min
+import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
