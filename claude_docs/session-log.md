@@ -8,6 +8,18 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-05 (session 64 — strategic review + parallel roadmap)
+**Worked on:** Comprehensive strategic review of FindA.Sale post-Sprint X. Market research ($2.7B–$4B US estate sale market, $186B secondhand market). Competitor ToS research across 7 platforms. Branding brief (warm amber palette, serif+sans typography, affordable path). Cross-industry feature brainstorm (25+ features ranked). Built 5-path parallel roadmap v2: P (Patrick human tasks), CA (production readiness), CB (AI tagging), CC (business intel), CD (innovation & experience). All research saved to `claude_docs/research/`.
+**Decisions:** Parallel path model adopted as new roadmap structure. Sync points at 8 defined moments over 8 weeks. AI tagging production: Google Vision + Claude Haiku ($10–50/mo). 3-tier pricing proposed (3%/5%/4%). P1 partially done (LLC/EIN/bank done; email/cards/GBP open). P3 already done (original project research).
+**Next up:** Sonnet merges parallel-roadmap-v2 + long-term hold into official `roadmap.md`, audits all claude_docs for alignment. Then CA1 (ToS) and CB1 (AI tagging spec).
+**Blockers:** Branding direction needs Patrick decision. AI tagging API keys need Patrick. Phase 31 OAuth env vars still needed.
+
+### 2026-03-05 (session 63 — migrations, lockfile, pre-push hook, TS fixes)
+**Worked on:** Wired `BountyModal` into `sales/[id].tsx` and Print Labels button into `organizer/dashboard.tsx`. Fixed backend crash (`socket.io` missing from Docker image — rebuilt). Fixed `ERR_PNPM_OUTDATED_LOCKFILE` on Vercel by syncing `pnpm-lock.yaml`. Fixed TypeScript errors in `bounties.tsx` and `payouts.tsx` (TanStack Query v5 removed `onSuccess` from `useQuery` — replaced with `useEffect`). Fixed pre-push hook picking up global Prisma 7.4.2 instead of local v5 (hook now `cd packages/database` first). Created + applied Follow table migration (`20260305000009_add_follow_table`) to both Neon and local Docker. Reconciled local Docker migration history (26 migrations all marked applied via bulk `resolve --applied` loop).
+**Decisions:** Pre-push hook must always invoke prisma from within `packages/database` to avoid global CLI version conflicts. TanStack Query v5 pattern: `useEffect` watching `data` replaces `onSuccess` in `useQuery`.
+**Next up:** Define Sprint Y or begin beta onboarding. Codebase is fully clean — all migrations applied, lockfile synced, no TS errors.
+**Blockers:** Phase 31 OAuth env vars still needed in Vercel (`GOOGLE_CLIENT_ID` etc). Sentry test route not yet verified end-to-end.
+
 ### 2026-03-05 (session 62+ — Sprints V2–X1 complete, full post-launch track done)
 **Worked on:** V2 (instant payouts): `payoutController.ts` (balance, payout schedule, on-demand payout), `routes/stripe.ts` (4 new routes), `pages/organizer/payouts.tsx`. V3 (UGC bounties): `MissingListingBounty` schema + migration, `bountyController.ts`, `routes/bounties.ts`, `pages/organizer/bounties.tsx`, `components/BountyModal.tsx`. W1 (shipping): `shippingAvailable`/`shippingPrice` on Item + migration, item CRUD updated, payment intent accepts `shippingRequested`. W2 (label PDF): `labelController.ts` with pdfkit, single-item and all-items endpoints. X1 (Zapier webhooks): `Webhook` model + migration, `webhookService.ts` (HMAC-SHA256 signed), `webhookController.ts`, `routes/webhooks.ts`, `pages/organizer/webhooks.tsx`. Hooks fired on `bid.placed` and `purchase.completed`. All pushed to GitHub.
 **Decisions:** Webhook secrets shown once on creation. Instant payout eligibility errors handled gracefully. Shipping cost added to Stripe charge total, stored in payment intent metadata. Label PDF uses pdfkit 4×3" pages (already installed).
@@ -25,15 +37,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Decisions:** Tier 1/2/3 doc classification locked in CORE.md §14. Archive trigger now enforced at every session wrap via context-maintenance Step 0. Git drift is structurally certain to recur — self-healing entry #29 is the canonical fix.
 **Next up:** Patrick must run git fix commands, then Docker rebuilds (backend for Prisma, frontend for next-auth), then Sprint T begins.
 **Blockers:** Local git CRLF drift (ROADMAP.md perpetually dirty) — run `git stash; git pull --rebase; git stash pop; git push`. `reservationExpiryJob` TypeError — run `docker-compose up --build -d backend`. `next-auth` missing — run `pnpm install` then `docker compose build --no-cache frontend && docker compose up -d`.
-
-### 2026-03-05 (session 58 — Sprint S complete + post-launch reorganization)
-**Worked on:** Pushed Phase 16 (advanced photo pipeline) to GitHub — 5 files: `itemController.ts` (addItemPhoto/removeItemPhoto/reorderItemPhotos), `items.ts` (3 new routes), `ItemPhotoManager.tsx` (new component), `edit-item/[id].tsx`, `add-items/[saleId].tsx`. Fixed Railway production error: `ItemReservation` table missing from Neon — ran `prisma migrate deploy` to apply 4 pending migrations (Phases 19, 22, 20, 21). Railway redeployed clean. Diagnosed homepage console log — all CSP errors from Yoroi browser extension, not the app. Reorganized all project docs: roadmap v9 with post-launch Sprint Track T–X, STATE.md trimmed to post-launch structure, self-healing entry #28 (pre-fill Neon URLs from .env).
-**Decisions:** Sprint Track T–X consolidates all deferred features, nice-to-haves, and infrastructure items into buildable sprints. Human-only items (beta onboarding, revenue goals, multi-metro) excluded. Polling for auctions stays until Sprint V.
-**Next up:** Sprint T — Production Hardening: stress test suite, pre-commit validation, favorites categories, virtual line SMS E2E.
-**Blockers:** Phase 31 OAuth env vars still needed in Vercel. Uptime/Sentry accounts needed before those items can start.
-
-### 2026-03-05 (session 57 — Sprints O–R: Hold UI + Referral + Curator Email + CSV Export)
-**Worked on:** Sprint O (Phase 21): `dashboard.tsx` with Manage Holds button. Sprint P (Phase 23): `referralController.ts` + `/api/referrals/dashboard` + `refer/[code].tsx` + fixed `referral-dashboard.tsx`. Sprint Q (Phase 30): `curatorEmailJob.ts` (Monday 8AM cron, HTML digest). Sprint R (Phase 32): `GET /organizers/me/export/items/:saleId` + Export CSV button.
-**Decisions:** Phase 32 export route before `/:id` wildcard to avoid routing collision. Authenticated blob download for CSV (no `Authorization` in `<a download>`).
-**Next up:** Sprint S — Phase 16.
-**Blockers:** Phase 31 OAuth env vars still needed. Phase 21/23 Neon migrations needed.
