@@ -39,6 +39,7 @@ const saleCreateSchema = z.object({
   photoUrls: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   isAuctionSale: z.boolean().optional().default(false),
+  neighborhood: z.string().optional(), // U2
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();
@@ -50,15 +51,12 @@ const convertDecimalsToNumbers = (obj: any) => {
   const converted: any = {};
   for (const key in obj) {
     if (obj[key] && typeof obj[key] === 'object' && 'toNumber' in obj[key]) {
-      // Convert Decimal to number
       converted[key] = obj[key].toNumber();
     } else if (Array.isArray(obj[key])) {
-      // Recursively process arrays
       converted[key] = obj[key].map((item: any) => 
         typeof item === 'object' ? convertDecimalsToNumbers(item) : item
       );
     } else if (obj[key] && typeof obj[key] === 'object' && !(obj[key] instanceof Date)) {
-      // Recursively process nested objects, but don't convert Date objects
       converted[key] = convertDecimalsToNumbers(obj[key]);
     } else {
       converted[key] = obj[key];
@@ -69,24 +67,18 @@ const convertDecimalsToNumbers = (obj: any) => {
 
 export const listSales = async (req: Request, res: Response) => {
   try {
-    // Validate query parameters
     const query = saleQuerySchema.parse(req.query);
     
-    // Parse pagination
     const page = parseInt(query.page);
     const limit = parseInt(query.limit);
     const skip = (page - 1) * limit;
     
-    // Build where conditions — default to PUBLISHED only for public listing
     const where: any = {
       status: 'PUBLISHED',
     };
 
     if (query.city) {
-      where.city = {
-        contains: query.city,
-        mode: 'insensitive'
-      };
+      where.city = { contains: query.city, mode: 'insensitive' };
     }
 
     if (query.zip) {
@@ -95,63 +87,36 @@ export const listSales = async (req: Request, res: Response) => {
 
     if (query.startDate || query.endDate) {
       where.startDate = {};
-      if (query.startDate) {
-        where.startDate.gte = new Date(query.startDate);
-      }
-      if (query.endDate) {
-        where.startDate.lte = new Date(query.endDate);
-      }
+      if (query.startDate) where.startDate.gte = new Date(query.startDate);
+      if (query.endDate) where.startDate.lte = new Date(query.endDate);
     }
     
-    // Geospatial filtering (bounding box approach)
     if (query.lat && query.lng && query.radius) {
       const lat = parseFloat(query.lat);
       const lng = parseFloat(query.lng);
-      const radius = parseFloat(query.radius); // in kilometers
-      
-      // Approximate degrees per kilometer
-      const latDelta = radius / 111; // 1 degree latitude ≈ 111 km
-      const lngDelta = radius / (111 * Math.cos(lat * Math.PI / 180)); // Adjust for longitude
-      
-      where.lat = {
-        gte: lat - latDelta,
-        lte: lat + latDelta
-      };
-      
-      where.lng = {
-        gte: lng - lngDelta,
-        lte: lng + lngDelta
-      };
+      const radius = parseFloat(query.radius);
+      const latDelta = radius / 111;
+      const lngDelta = radius / (111 * Math.cos(lat * Math.PI / 180));
+      where.lat = { gte: lat - latDelta, lte: lat + latDelta };
+      where.lng = { gte: lng - lngDelta, lte: lng + lngDelta };
     }
     
-    // PF1: Run findMany + count in parallel — single round-trip, no serial query doubling
     const [sales, total] = await Promise.all([
       prisma.sale.findMany({
         where,
         skip,
         take: limit,
-        orderBy: {
-          startDate: 'asc'
-        },
+        orderBy: { startDate: 'asc' },
         include: {
           organizer: {
-            select: {
-              id: true,
-              businessName: true,
-              phone: true,
-              reputationTier: true, // Phase 22: for TierBadge on SaleCard
-            }
+            select: { id: true, businessName: true, phone: true, reputationTier: true }
           },
-          // Phase 28: social proof — favorite count per sale
-          _count: {
-            select: { favorites: true },
-          },
+          _count: { select: { favorites: true } },
         }
       }),
       prisma.sale.count({ where }),
     ]);
 
-    // Convert Decimal values + flatten _count into favoriteCount
     const convertedSales = sales.map((sale: any) => {
       const { _count, ...rest } = convertDecimalsToNumbers(sale);
       return { ...rest, favoriteCount: _count?.favorites ?? 0 };
@@ -159,19 +124,11 @@ export const listSales = async (req: Request, res: Response) => {
     
     res.json({
       sales: convertedSales,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        message: 'Validation error', 
-        errors: error.errors 
-      });
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
     }
     console.error(error);
     res.status(500).json({ message: 'Server error while fetching sales' });
@@ -184,29 +141,15 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId: req.user.id }
-    });
-
-    if (!organizer) {
-      return res.json({ sales: [] });
-    }
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) return res.json({ sales: [] });
 
     const sales = await prisma.sale.findMany({
       where: { organizerId: organizer.id },
       orderBy: { startDate: 'asc' },
       include: {
-        organizer: {
-          select: {
-            userId: true,
-            businessName: true,
-            phone: true,
-            address: true
-          }
-        },
-        items: {
-          select: { id: true, status: true }
-        }
+        organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
+        items: { select: { id: true, status: true } }
       },
       take: 50
     });
@@ -227,45 +170,22 @@ export const getSale = async (req: Request, res: Response) => {
       include: {
         organizer: {
           select: {
-            id: true,
-            userId: true,
-            businessName: true,
-            phone: true,
-            address: true,
-            // H1: Include badge and rating data for trust signals on sale detail page
-            user: {
-              select: {
-                userBadges: {
-                  include: { badge: true }
-                }
-              }
-            }
+            id: true, userId: true, businessName: true, phone: true, address: true,
+            user: { select: { userBadges: { include: { badge: true } } } }
           }
         },
         items: {
           select: {
-            id: true,
-            title: true,
-            description: true,
-            price: true,
-            auctionStartPrice: true,
-            currentBid: true,
-            bidIncrement: true,
-            status: true,
-            photoUrls: true,
-            auctionEndTime: true,
-            category: true,
-            condition: true
+            id: true, title: true, description: true, price: true,
+            auctionStartPrice: true, currentBid: true, bidIncrement: true,
+            status: true, photoUrls: true, auctionEndTime: true, category: true, condition: true
           }
         }
       }
     });
     
-    if (!sale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
 
-    // H1: Compute organizer avgRating and reviewCount from all their sales' reviews
     const reviews = await prisma.review.findMany({
       where: { sale: { organizerId: sale.organizerId } },
       select: { rating: true }
@@ -274,26 +194,17 @@ export const getSale = async (req: Request, res: Response) => {
       ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
       : 0;
 
-    // H1: Shape organizer.badges to match what the frontend BadgeDisplay component expects
     const organizer = sale.organizer as any;
     const badges = organizer.user?.userBadges?.map((ub: any) => ({
-      id: ub.badge.id,
-      name: ub.badge.name,
-      description: ub.badge.description,
-      iconUrl: ub.badge.iconUrl,
-      awardedAt: ub.awardedAt,
+      id: ub.badge.id, name: ub.badge.name, description: ub.badge.description,
+      iconUrl: ub.badge.iconUrl, awardedAt: ub.awardedAt,
     })) || [];
 
     const convertedSale = convertDecimalsToNumbers({
       ...sale,
       organizer: {
-        id: organizer.id,
-        userId: organizer.userId,
-        businessName: organizer.businessName,
-        phone: organizer.phone,
-        address: organizer.address,
-        badges,
-        avgRating,
+        id: organizer.id, userId: organizer.userId, businessName: organizer.businessName,
+        phone: organizer.phone, address: organizer.address, badges, avgRating,
         reviewCount: reviews.length,
       },
     });
@@ -307,25 +218,17 @@ export const getSale = async (req: Request, res: Response) => {
 
 export const createSale = async (req: AuthRequest, res: Response) => {
   try {
-    // Verify user is organizer or admin
     if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
     
-    // Validate request body
     const saleData = saleCreateSchema.parse(req.body);
     
-    // For organizers, set organizerId to their profile
     let organizerId = req.user.organizerProfile?.id;
     if (!organizerId && req.user.role === 'ADMIN') {
-      // Admin can create sale for any organizer (optional field)
       organizerId = req.body.organizerId;
     } else if (!organizerId && req.user.role === 'ORGANIZER') {
-      // Get or auto-create organizer profile for this user
-      let organizerProfile = await prisma.organizer.findUnique({
-        where: { userId: req.user.id }
-      });
-
+      let organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile) {
         organizerProfile = await prisma.organizer.create({
           data: {
@@ -336,28 +239,17 @@ export const createSale = async (req: AuthRequest, res: Response) => {
           }
         });
       }
-
       organizerId = organizerProfile.id;
     }
     
     const sale = await prisma.sale.create({
-      data: {
-        ...saleData,
-        organizerId,
-        status: 'DRAFT' // Default to draft
-      }
+      data: { ...saleData, organizerId, status: 'DRAFT' }
     });
     
-    // Convert Decimal values to numbers
-    const convertedSale = convertDecimalsToNumbers(sale);
-    
-    res.status(201).json(convertedSale);
+    res.status(201).json(convertDecimalsToNumbers(sale));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        message: 'Validation error', 
-        errors: error.errors 
-      });
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
     }
     console.error(error);
     res.status(500).json({ message: 'Server error while creating sale' });
@@ -366,50 +258,28 @@ export const createSale = async (req: AuthRequest, res: Response) => {
 
 export const updateSale = async (req: AuthRequest, res: Response) => {
   try {
-    // Verify user is organizer or admin
     if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
     
     const { id } = req.params;
-    
-    // Validate request body
     const saleData = saleUpdateSchema.parse(req.body);
     
-    // Check if sale exists and belongs to organizer (unless admin)
-    const existingSale = await prisma.sale.findUnique({
-      where: { id }
-    });
-    
-    if (!existingSale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
+    const existingSale = await prisma.sale.findUnique({ where: { id } });
+    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
     
     if (req.user.role !== 'ADMIN') {
-      const organizerProfile = await prisma.organizer.findUnique({
-        where: { userId: req.user.id }
-      });
-      
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only update your own sales.' });
       }
     }
     
-    const sale = await prisma.sale.update({
-      where: { id },
-      data: saleData
-    });
-    
-    // Convert Decimal values to numbers
-    const convertedSale = convertDecimalsToNumbers(sale);
-    
-    res.json(convertedSale);
+    const sale = await prisma.sale.update({ where: { id }, data: saleData });
+    res.json(convertDecimalsToNumbers(sale));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        message: 'Validation error', 
-        errors: error.errors 
-      });
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
     }
     console.error(error);
     res.status(500).json({ message: 'Server error while updating sale' });
@@ -418,42 +288,23 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
 
 export const deleteSale = async (req: AuthRequest, res: Response) => {
   try {
-    // Verify user is organizer or admin
     if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
       return res.status(403).json({ message: 'Access denied. Organizer/Admin access required.' });
     }
     
     const { id } = req.params;
-    
-    // Check if sale exists and belongs to organizer (unless admin)
-    const existingSale = await prisma.sale.findUnique({
-      where: { id }
-    });
-    
-    if (!existingSale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
+    const existingSale = await prisma.sale.findUnique({ where: { id } });
+    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
     
     if (req.user.role !== 'ADMIN') {
-      const organizerProfile = await prisma.organizer.findUnique({
-        where: { userId: req.user.id }
-      });
-      
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only delete your own sales.' });
       }
     }
     
-    // Delete related items first (cascade delete)
-    await prisma.item.deleteMany({
-      where: { saleId: id }
-    });
-    
-    // Delete the sale
-    await prisma.sale.delete({
-      where: { id }
-    });
-    
+    await prisma.item.deleteMany({ where: { saleId: id } });
+    await prisma.sale.delete({ where: { id } });
     res.json({ message: 'Sale deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -464,7 +315,6 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
 export const searchSales = async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
-    
     if (!q || typeof q !== 'string') {
       return res.status(400).json({ message: 'Search query is required' });
     }
@@ -472,46 +322,22 @@ export const searchSales = async (req: Request, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: {
         OR: [
-          {
-            title: {
-              contains: q,
-              mode: 'insensitive'
-            }
-          },
-          {
-            description: {
-              contains: q,
-              mode: 'insensitive'
-            }
-          },
-          {
-            tags: {
-              hasSome: [q]
-            }
-          }
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+          { tags: { hasSome: [q] } }
         ]
       },
-      include: {
-        organizer: {
-          select: {
-            businessName: true
-          }
-        }
-      },
+      include: { organizer: { select: { businessName: true } } },
       take: 20
     });
     
-    // Convert Decimal values to numbers
-    const convertedSales = sales.map((sale: any) => convertDecimalsToNumbers(sale));
-    
-    res.json(convertedSales);
+    res.json(sales.map((sale: any) => convertDecimalsToNumbers(sale)));
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while searching sales' });
   }
 };
 
-// Update sale status: DRAFT → PUBLISHED → ENDED (owner-gated)
 export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
@@ -527,11 +353,8 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     }
 
     const existingSale = await prisma.sale.findUnique({ where: { id } });
-    if (!existingSale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
+    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
 
-    // Check ownership unless admin
     if (req.user.role !== 'ADMIN') {
       const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
@@ -539,7 +362,6 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Enforce valid transitions
     const transitions: Record<string, string[]> = {
       DRAFT: ['PUBLISHED'],
       PUBLISHED: ['ENDED'],
@@ -554,7 +376,6 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
 
     const updated = await prisma.sale.update({ where: { id }, data: { status } });
 
-    // Phase 17: Notify followers when a sale transitions DRAFT → PUBLISHED
     if (status === 'PUBLISHED' && existingSale.status === 'DRAFT') {
       notifyFollowersOfNewSale(updated).catch(() => {});
     }
@@ -566,8 +387,6 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Track a QR scan event (called from sale detail page when utm_source=qr_sign)
-// Public endpoint — no auth required; silently increments counter
 export const trackQrScan = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -577,48 +396,31 @@ export const trackQrScan = async (req: Request, res: Response) => {
     });
     res.status(204).end();
   } catch (error) {
-    // Non-fatal — analytics tracking must never break the page
     console.error('Error tracking QR scan:', error);
     res.status(204).end();
   }
 };
 
-// Generate QR code for sale
 export const generateQRCode = async (req: AuthRequest, res: Response) => {
   try {
-    // Verify user is organizer or admin
     if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
     const { id } = req.params;
-    
-    // Check if sale exists and belongs to organizer (unless admin)
-    const existingSale = await prisma.sale.findUnique({
-      where: { id }
-    });
-    
-    if (!existingSale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
+    const existingSale = await prisma.sale.findUnique({ where: { id } });
+    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
     
     if (req.user.role !== 'ADMIN') {
-      const organizerProfile = await prisma.organizer.findUnique({
-        where: { userId: req.user.id }
-      });
-      
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only generate QR codes for your own sales.' });
       }
     }
     
-    // Generate QR code with UTM tracking
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const saleUrl = `${frontendUrl}/sales/${id}?utm_source=qr`;
-    
-    // Generate QR code as SVG
     const qrCodeSvg = await QRCode.toString(saleUrl, { type: 'svg' });
-    
     res.setHeader('Content-Type', 'image/svg+xml');
     res.send(qrCodeSvg);
   } catch (error) {
@@ -627,8 +429,6 @@ export const generateQRCode = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Generate iCal (.ics) file for a sale (Phase 11 – calendar integration)
-// Public endpoint — works for any published sale
 export const generateIcal = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -639,8 +439,6 @@ export const generateIcal = async (req: Request, res: Response) => {
     });
 
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
-
-    // P1: Both dates are required for a valid .ics file
     if (!sale.startDate || !sale.endDate) {
       return res.status(400).json({ message: 'Sale is missing required start or end date' });
     }
@@ -648,15 +446,7 @@ export const generateIcal = async (req: Request, res: Response) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const saleUrl = `${frontendUrl}/sales/${id}`;
     const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
-
-    // Format dates as iCal DTSTART/DTEND (YYYYMMDDTHHmmssZ)
-    const toIcalDate = (d: Date) =>
-      d.toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
-
-    const startStr = toIcalDate(new Date(sale.startDate));
-    const endStr   = toIcalDate(new Date(sale.endDate));
-
-    // Escape special iCal characters
+    const toIcalDate = (d: Date) => d.toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
     const esc = (s: string) =>
       (s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 
@@ -664,31 +454,56 @@ export const generateIcal = async (req: Request, res: Response) => {
     const description = esc(sale.description || '') + (sale.description ? '\\n\\n' : '') + `View items online: ${saleUrl}`;
 
     const ical = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//FindA.Sale//FindA.Sale//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'BEGIN:VEVENT',
-      `UID:sale-${id}@finda.sale`,
-      `DTSTAMP:${now}`,
-      `DTSTART:${startStr}`,
-      `DTEND:${endStr}`,
-      `SUMMARY:${esc(sale.title)}`,
-      `DESCRIPTION:${description}`,
-      `LOCATION:${location}`,
-      `URL:${saleUrl}`,
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FindA.Sale//FindA.Sale//EN',
+      'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+      `UID:sale-${id}@finda.sale`, `DTSTAMP:${now}`,
+      `DTSTART:${toIcalDate(new Date(sale.startDate))}`,
+      `DTEND:${toIcalDate(new Date(sale.endDate))}`,
+      `SUMMARY:${esc(sale.title)}`, `DESCRIPTION:${description}`,
+      `LOCATION:${location}`, `URL:${saleUrl}`,
       `ORGANIZER;CN=${esc(sale.organizer.businessName)}:MAILTO:noreply@finda.sale`,
-      'END:VEVENT',
-      'END:VCALENDAR',
+      'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
 
-    const filename = `sale-${id}.ics`;
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="sale-${id}.ics"`);
     res.send(ical);
   } catch (error) {
     console.error('Error generating iCal:', error);
     res.status(500).json({ message: 'Server error while generating calendar file' });
+  }
+};
+
+/**
+ * GET /api/sales/neighborhood/:slug
+ * U2: Returns upcoming/active published sales tagged with this neighborhood slug.
+ * Public — used by SEO landing pages at /neighborhoods/[slug].
+ */
+export const getSalesByNeighborhood = async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const now = new Date();
+
+    const sales = await (prisma as any).sale.findMany({
+      where: {
+        neighborhood: slug,
+        status: 'PUBLISHED',
+        endDate: { gte: now },
+      },
+      select: {
+        id: true, title: true, description: true, startDate: true, endDate: true,
+        address: true, city: true, state: true, zip: true, lat: true, lng: true,
+        neighborhood: true, photoUrls: true, tags: true,
+        organizer: { select: { businessName: true, avgRating: true } },
+        _count: { select: { items: true } },
+      },
+      orderBy: { startDate: 'asc' },
+      take: 50,
+    });
+
+    res.json({ neighborhood: slug, sales, total: sales.length });
+  } catch (error) {
+    console.error('Error fetching neighborhood sales:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
