@@ -151,6 +151,20 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 - `DIRECT_URL`: `postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require`
 **Test:** Patrick can copy-paste command block without editing anything.
 
+### 29. Local/GitHub Drift — git pull --rebase Blocked by Unstaged Changes
+**Trigger:** `git pull --rebase` fails with "unstaged changes" or "cannot pull with rebase" — even after `git restore <file>` clears the visible modified file. Root cause: MCP pushes files directly to GitHub without touching Patrick's local repo. Claude's Write/Edit tools modify local tracked files (including CRLF conversions that git treats as modifications). Local HEAD falls behind GitHub. Hidden tracked-file changes (not always visible in `git status`) block the rebase.
+**Fix (copy-paste sequence):**
+```powershell
+git stash
+git pull --rebase
+git stash pop
+git push
+```
+If stash pop hits a conflict on a specific file: `git checkout -- <file>` then retry `git stash pop`.
+If `git status` shows a modified file that `git restore` won't clear, use `git checkout -- <file>` instead.
+**Prevention:** CORE.md §2 step 6 catches drift at session start. After any MCP push mid-session, note in session-log so Patrick knows to pull before next local commit.
+**Recurrence pattern:** Happens whenever Claude edits docs locally AND pushes different files via MCP in the same session — two separate commit streams diverge on the same branch.
+
 ---
 
-Last Updated: 2026-03-05 (added entry 28 — pre-fill Neon DB URLs from .env for zero-friction commands)
+Last Updated: 2026-03-05 (added entry 29 — git local/GitHub drift self-healing pattern)
