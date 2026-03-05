@@ -153,6 +153,72 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Phase 32: CSV export — GET /api/organizers/me/export/items/:saleId
+// Streams a CSV of all items in the given sale (organizer-owned sales only)
+router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+
+    // Verify the sale belongs to this organizer
+    const sale = await prisma.sale.findFirst({
+      where: { id: req.params.saleId, organizerId: organizer.id },
+      select: { title: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+
+    const items = await prisma.item.findMany({
+      where: { saleId: req.params.saleId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        price: true,
+        auctionStartPrice: true,
+        currentBid: true,
+        condition: true,
+        category: true,
+        status: true,
+        auctionEndTime: true,
+        createdAt: true,
+      },
+    });
+
+    // Build CSV — escape fields containing commas/quotes
+    const esc = (v: any): string => {
+      if (v == null) return '';
+      const s = String(v);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const header = ['id', 'title', 'description', 'price', 'auctionStartPrice', 'currentBid',
+                    'condition', 'category', 'status', 'auctionEndTime', 'createdAt'];
+    const rows = items.map((item) => [
+      item.id, item.title, item.description, item.price, item.auctionStartPrice,
+      item.currentBid, item.condition, item.category, item.status,
+      item.auctionEndTime?.toISOString() ?? '', item.createdAt.toISOString(),
+    ].map(esc).join(','));
+
+    const csv = [header.join(','), ...rows].join('\r\n');
+    const filename = `${sale.title.replace(/[^a-z0-9]/gi, '_')}_items.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting items CSV:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 router.get('/:id', async (req: Request, res: Response) => {
   try {
