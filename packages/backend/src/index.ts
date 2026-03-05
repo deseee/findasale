@@ -62,6 +62,8 @@ import reviewRoutes from './routes/reviews'; // Phase 15: Review + rating system
 import messageRoutes from './routes/messages'; // Phase 20: Shopper messaging
 import reservationRoutes from './routes/reservations'; // Phase 21: Item reservations/holds
 import referralRoutes from './routes/referrals'; // Phase 23: Referral program
+import bountyRoutes from './routes/bounties';    // V3: UGC missing-listing bounties
+import webhookRoutes from './routes/webhooks';   // X1: Zapier webhook system
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -80,7 +82,7 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 // V1: Wrap Express in a bare HTTP server so Socket.io can share the same port
 const httpServer = http.createServer(app);
 
-// ─── Security ───────────────────────────────────────────────────────────────────────────────
+// ─── Security ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
 app.set('trust proxy', 1);
@@ -167,7 +169,9 @@ app.use('/api/search', searchRoutes); // Phase 29: Discovery + search
 app.use('/api/reviews', reviewRoutes); // Phase 15: Review + rating system
 app.use('/api/messages', messageRoutes); // Phase 20: Shopper messaging
 app.use('/api/reservations', reservationRoutes); // Phase 21: Item reservations/holds
-app.use('/api/referrals', referralRoutes); // Phase 23: Referral program
+app.use('/api/referrals', referralRoutes);  // Phase 23: Referral program
+app.use('/api/bounties', bountyRoutes);    // V3: UGC missing-listing bounties
+app.use('/api/webhooks', webhookRoutes);   // X1: Zapier webhook system
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

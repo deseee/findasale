@@ -5,6 +5,7 @@ import { Resend } from 'resend';
 import { handlePurchaseBadge } from './userController';
 import { awardPoints } from '../services/pointsService';
 import { prisma } from '../lib/prisma';
+import { fireWebhooks } from '../services/webhookService'; // X1
 const stripe = getStripe();
 
 let _resend: any = null;
@@ -149,7 +150,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { itemId, affiliateLinkId } = req.body;
+    const { itemId, affiliateLinkId, shippingRequested } = req.body;
 
     if (!itemId) {
       return res.status(400).json({ message: 'Item ID is required' });
@@ -198,8 +199,14 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid price value' });
     }
 
+    // W1: Add shipping cost if buyer opted in and item ships
+    let shippingCost = 0;
+    if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
+      shippingCost = item.shippingPrice;
+    }
+
     const feePercent = isAuctionItem ? 0.07 : 0.05;
-    const priceCents = Math.round(price * 100);
+    const priceCents = Math.round((price + shippingCost) * 100);
     const platformFeeAmount = Math.round(priceCents * feePercent);
 
     const idempotencyKey = `pi-${itemId}-${req.user.id}`;
@@ -212,7 +219,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           itemId: item.id,
           saleId: item.sale.id,
           userId: req.user.id,
-          ...(affiliateLinkId ? { affiliateLinkId } : {})
+          ...(affiliateLinkId ? { affiliateLinkId } : {}),
+          ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
         },
         application_fee_amount: platformFeeAmount,
         on_behalf_of: item.sale.organizer.stripeConnectId,
@@ -278,7 +286,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           sale: {
             select: {
               title: true,
-              organizer: { select: { stripeConnectId: true } },
+              organizer: { select: { stripeConnectId: true, userId: true } },
             },
           },
         },
@@ -339,6 +347,20 @@ export const webhookHandler = async (req: Request, res: Response) => {
             item: purchase.item,
             sale: purchase.sale,
           });
+        }
+
+        // X1: Fire webhooks (non-blocking)
+        const orgUserId = (purchase.sale as any)?.organizer?.userId;
+        if (orgUserId) {
+          setImmediate(() =>
+            fireWebhooks(orgUserId, 'purchase.completed', {
+              purchaseId: purchase.id,
+              itemId: paymentIntent.metadata?.itemId,
+              itemTitle: purchase.item?.title,
+              amount: purchase.amount,
+              buyerEmail: purchase.user?.email,
+            })
+          );
         }
       }
       break;

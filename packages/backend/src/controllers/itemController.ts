@@ -7,6 +7,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { z } from 'zod';
 import { getIO } from '../lib/socket'; // V1: live bidding broadcast
+import { fireWebhooks } from '../services/webhookService'; // X1
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -222,7 +223,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -312,6 +313,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         category: category || null,
         condition: condition || null,
         photoUrls,
+        // W1: Shipping
+        shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
+        shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,
       }
     });
 
@@ -336,7 +340,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition } = req.body;
+    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice } = req.body;
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -364,7 +368,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         status,
         category: category !== undefined ? (category || null) : undefined,
         condition: condition !== undefined ? (condition || null) : undefined,
-        photoUrls: photoUrls || undefined
+        photoUrls: photoUrls || undefined,
+        // W1: Shipping
+        ...(shippingAvailable !== undefined && { shippingAvailable: shippingAvailable === true || shippingAvailable === 'true' }),
+        ...(shippingPrice !== undefined && { shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null }),
       }
     });
 
@@ -497,7 +504,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ── Phase 16: Advanced photo pipeline ──────────────────────────────────────
+// ── Phase 16: Advanced photo pipeline ─────────────────────────────────────────────────────────────────────────────
 
 // Helper: fetch item and verify organizer ownership
 const getItemForOrganizer = async (id: string, userId: string) => {
@@ -607,7 +614,7 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ── End Phase 16 ────────────────────────────────────────────────────────────
+// ── End Phase 16 ─────────────────────────────────────────────────────────────────────────────
 
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
@@ -627,6 +634,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     // Check if item exists and is part of an auction
     const item = await prisma.item.findUnique({
       where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } },
     });
 
     if (!item) {
@@ -679,6 +687,19 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       });
     } catch {
       // Socket not initialized (e.g. test environment) — non-fatal
+    }
+
+    // X1: Fire webhooks (non-blocking)
+    const organizerUserId = (item as any).sale?.organizer?.userId;
+    if (organizerUserId) {
+      setImmediate(() =>
+        fireWebhooks(organizerUserId, 'bid.placed', {
+          itemId: id,
+          itemTitle: item.title,
+          bidAmount,
+          bidderId: req.user.id,
+        })
+      );
     }
 
     res.status(201).json(bid);
