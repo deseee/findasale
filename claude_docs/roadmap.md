@@ -55,15 +55,15 @@ Original project research done. Notes available.
 - [ ] ⚡ **Sync: feedback → Claude for iteration**
 
 ### P5: API Keys & Services (As Needed)
-- [ ] Google Cloud account + Vision API key
-- [ ] Anthropic API key (for Claude Haiku — may already have)
-- [ ] UptimeRobot/StatusGator monitoring
-- [ ] OAuth credentials (Google, Facebook)
+- [x] Google Cloud account + Vision API key ✅ 2026-03-05
+- [x] Anthropic API key (for Claude Haiku) ✅ 2026-03-05
+- [x] UptimeRobot monitoring ✅ 2026-03-05
+- [ ] OAuth credentials (Google, Facebook) → Vercel env vars: GOOGLE_CLIENT_ID/SECRET, FACEBOOK_CLIENT_ID/SECRET
 - [ ] VAPID keys confirmed in production
 
 ### P6: Branding Decisions (Week 2–4)
-- [ ] Review branding brief (`claude_docs/research/branding-brief-2026-03-05.md`)
-- [ ] Decide: DIY Phase 1 ($200–300) or skip to 99designs ($1,200–1,500)?
+- [x] Review branding brief (`claude_docs/research/branding-brief-2026-03-05.md`)
+- [x] Logo generated via AI (SVG) — `claude_docs/brand/logo-primary.svg` ✅ 2026-03-05 — unblocks business cards + CD1
 - [ ] ⚡ **Sync: Claude implements chosen color palette, typography, PWA manifest (CD1)**
 
 ---
