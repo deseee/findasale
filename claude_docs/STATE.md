@@ -24,7 +24,7 @@ Maintain stable MVP in Grand Rapids. Prepare for scale to additional metros.
 
 ## Completed Phases (summary)
 
-Phases 1–13 + pre-beta audit + rebrand + Sprints A–L + Phase 31 all verified and shipped.
+Phases 1–13 + pre-beta audit + rebrand + Sprints A–M + Phase 31 all verified and shipped.
 Key milestones: JWT auth, sale management, Stripe payments, push notifications,
 creator affiliates, auction UI + cron + 7% item-level fee, QR marketing,
 virtual line, AI item tagging, Schema.org SEO, PWA hardening,
@@ -36,7 +36,8 @@ photo preview lightbox — PhotoLightbox component, sale + item detail pages (Ph
 Hunt Pass + shopper points — PointsTransaction model + pointsService + /api/points + PointsBadge + usePoints + profile tier display (Phase 19),
 Creator Tier Program — weekly reputationJob cron + TierBadge + organizer /me endpoint + tier card in dashboard (Phase 22),
 Shopper onboarding + empty states + microinteractions — OnboardingModal + points toast (amber, bottom-20) + empty states across all major shopper screens (Phase 27),
-Discovery + search — /api/search full-text + /api/search/categories/:cat + /search page + /categories/[category] page (Phase 29).
+Discovery + search — /api/search full-text + /api/search/categories/:cat + /search page + /categories/[category] page (Phase 29),
+Review + rating system — reviewController + /api/reviews (sale+organizer) + StarRating + ReviewsSection + avgRating recalc + 5pt award (Phase 15).
 
 Full detail: `claude_docs/COMPLETED_PHASES.md`
 
@@ -44,7 +45,7 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## In Progress
 
-None. Sprints I–L complete (2026-03-05). Next: Sprint M — Phase 15 (Review + rating system UI).
+None. Sprint M complete (2026-03-05). Next: Sprint N — Phase 20 (Shopper messaging).
 
 ---
 
@@ -52,6 +53,7 @@ None. Sprints I–L complete (2026-03-05). Next: Sprint M — Phase 15 (Review +
 
 - **Phase 31 OAuth env vars** — Social login dormant until added to Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Also configure redirect URIs in Google Console + Meta Dev Portal → `https://finda.sale/api/auth/callback/{google,facebook}`.
 - **Resend domain verification** — ✅ Verified.
+- **UptimeRobot** — Add 3 monitors (API health, frontend, keyword). See setup instructions from session 55.
 
 ---
 
@@ -80,7 +82,8 @@ Five-pillar growth phase. Sprint order:
 10. ~~Sprint J — Phase 22~~ ✅ — Creator Tier Program: reputationJob cron + TierBadge + organizer /me route + tier card in dashboard (2026-03-05)
 11. ~~Sprint K — Phase 27~~ ✅ — Onboarding + Empty States + Microinteractions: OnboardingModal + points toast + shopper empty states (2026-03-05)
 12. ~~Sprint L — Phase 29~~ ✅ — Discovery + Search: /api/search + /search page + /categories/[category] page (2026-03-05)
-13. **Sprint M — Phase 15** — Review + rating system UI
+13. ~~Sprint M — Phase 15~~ ✅ — Review + rating system: reviewController + StarRating + ReviewsSection + points award (2026-03-05)
+14. **Sprint N — Phase 20** — Shopper messaging
 
 Full roadmap: `claude_docs/ROADMAP.md`
 
@@ -110,4 +113,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-05 (session 54 — Production live: CORS, NextAuth, Railway PORT mismatch fixed, missing reputationTier migration added, Neon DB seeded)
+Last Updated: 2026-03-05 (session 55 — Sprint M done: Phase 15 reviews/ratings system, security fix auth.ts token log, stress-test.js 43-check suite, pre-commit hook, UptimeRobot config)
