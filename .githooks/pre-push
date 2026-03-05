@@ -1,0 +1,17 @@
+#!/bin/sh
+# Pre-push hook: runs TypeScript check on frontend before any push.
+# To enable: git config core.hooksPath .githooks
+
+echo "[pre-push] Running TypeScript check on frontend..."
+
+cd packages/frontend && npx tsc --noEmit
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "[pre-push] TypeScript errors found. Push aborted."
+  echo "Fix the errors above, then push again."
+  exit 1
+fi
+
+echo "[pre-push] TypeScript check passed."
+exit 0
