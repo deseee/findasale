@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { handleFavoriteBadge } from './userController';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
@@ -544,6 +545,12 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     }
 
     const updated = await prisma.sale.update({ where: { id }, data: { status } });
+
+    // Phase 17: Notify followers when a sale transitions DRAFT → PUBLISHED
+    if (status === 'PUBLISHED' && existingSale.status === 'DRAFT') {
+      notifyFollowersOfNewSale(updated).catch(() => {});
+    }
+
     res.json(convertDecimalsToNumbers(updated));
   } catch (error) {
     console.error('Error updating sale status:', error);
