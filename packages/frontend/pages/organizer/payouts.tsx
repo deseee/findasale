@@ -6,7 +6,7 @@
  * - Trigger an on-demand payout (standard or instant)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -57,10 +57,11 @@ const OrganizerPayoutsPage = () => {
       return res.data as { interval: Interval; weeklyAnchor: string | null; monthlyAnchor: number | null };
     },
     enabled: !!user?.id,
-    onSuccess: (data) => {
-      if (selectedInterval === null) setSelectedInterval(data.interval);
-    },
   });
+
+  useEffect(() => {
+    if (schedule && selectedInterval === null) setSelectedInterval(schedule.interval);
+  }, [schedule]);
 
   // ─── Mutations ───────────────────────────────────────────────────────────────
 

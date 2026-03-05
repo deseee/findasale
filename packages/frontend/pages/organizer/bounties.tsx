@@ -4,7 +4,7 @@
  * Organizer can fulfill a bounty by entering the item ID they listed.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -53,10 +53,11 @@ const OrganizerBountiesPage = () => {
       return res.data.map((s: any) => ({ id: s.id, title: s.title }));
     },
     enabled: !!user?.id,
-    onSuccess: (data) => {
-      if (data?.length && !selectedSaleId) setSelectedSaleId(data[0].id);
-    },
   });
+
+  useEffect(() => {
+    if (sales?.length && !selectedSaleId) setSelectedSaleId(sales[0].id);
+  }, [sales]);
 
   const { data: bounties = [], isLoading: bountiesLoading } = useQuery<Bounty[]>({
     queryKey: ['bounties', selectedSaleId],
