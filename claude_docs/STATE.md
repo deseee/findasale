@@ -38,7 +38,11 @@ Creator Tier Program — weekly reputationJob cron + TierBadge + organizer /me e
 Shopper onboarding + empty states + microinteractions — OnboardingModal + points toast (amber, bottom-20) + empty states across all major shopper screens (Phase 27),
 Discovery + search — /api/search full-text + /api/search/categories/:cat + /search page + /categories/[category] page (Phase 29),
 Review + rating system — reviewController + /api/reviews (sale+organizer) + StarRating + ReviewsSection + avgRating recalc + 5pt award (Phase 15),
-Shopper messaging — Conversation + Message models + messageController + /api/messages (5 routes) + messages inbox + thread page + new conversation page + unread badge in BottomTabNav + Message organizer button on sale detail (Phase 20).
+Shopper messaging — Conversation + Message models + messageController + /api/messages (5 routes) + messages inbox + thread page + new conversation page + unread badge in BottomTabNav + Message organizer button on sale detail (Phase 20),
+Reservation/hold UI — ItemReservation model + holds migration + reservationController + /api/reservations (5 routes) + reserve button on item detail (shoppers) + organizer holds management page + Manage Holds button on dashboard (Phase 21),
+Affiliate + referral program — referralController + /api/referrals/dashboard + /refer/[code].tsx redirect page + referral-dashboard.tsx fixed (user.referralCode) + recent referrals list (Phase 23),
+Weekly curator email — curatorEmailJob.ts (Monday 8AM cron) + per-organizer HTML digest to followers with notifyEmail=true + upcoming PUBLISHED sales in next 7 days (Phase 30),
+Creator tools CSV export — GET /organizers/me/export/items/:saleId backend endpoint (RFC 4180 CSV) + Export CSV button on add-items page (authenticated fetch + blob URL) (Phase 32).
 
 Full detail: `claude_docs/COMPLETED_PHASES.md`
 
@@ -46,7 +50,7 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## In Progress
 
-None. Sprint N complete (2026-03-05). Next: Sprint O — Phase 21 (Reservation/hold UI).
+None. Sprints O–R complete (2026-03-05). Next: Sprint S — Phase 16 (Advanced photo pipeline).
 
 ---
 
@@ -54,7 +58,6 @@ None. Sprint N complete (2026-03-05). Next: Sprint O — Phase 21 (Reservation/h
 
 - **Phase 31 OAuth env vars** — Social login dormant until added to Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Also configure redirect URIs in Google Console + Meta Dev Portal → `https://finda.sale/api/auth/callback/{google,facebook}`.
 - **Resend domain verification** — ✅ Verified.
-- **Phase 20 migration** — Run `prisma migrate deploy` on Neon to create Conversation + Message tables (migration: `20260305000002_phase20_messaging`).
 
 ---
 
@@ -85,7 +88,11 @@ Five-pillar growth phase. Sprint order:
 12. ~~Sprint L — Phase 29~~ ✅ — Discovery + Search: /api/search + /search page + /categories/[category] page (2026-03-05)
 13. ~~Sprint M — Phase 15~~ ✅ — Review + rating system UI (2026-03-05)
 14. ~~Sprint N — Phase 20~~ ✅ — Shopper messaging (2026-03-05)
-15. **Sprint O — Phase 21** — Reservation / hold UI
+15. ~~Sprint O — Phase 21~~ ✅ — Reservation / hold UI (2026-03-05)
+16. ~~Sprint P — Phase 23~~ ✅ — Affiliate + referral program (2026-03-05)
+17. ~~Sprint Q — Phase 30~~ ✅ — Weekly curator email (2026-03-05)
+18. ~~Sprint R — Phase 32~~ ✅ — Creator tools CSV export (2026-03-05)
+19. **Sprint S — Phase 16** — Advanced photo pipeline
 
 Full roadmap: `claude_docs/ROADMAP.md`
 
@@ -115,4 +122,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-05 (session 56 — Sprint N done: Phase 20 shopper messaging — Conversation+Message models, messageController, /api/messages, inbox+thread+new pages, unread badge, Message organizer button)
+Last Updated: 2026-03-05 (session 57 — Sprints O–R done: Phase 21 reservation/hold UI, Phase 23 referral program, Phase 30 weekly curator email, Phase 32 CSV export)
