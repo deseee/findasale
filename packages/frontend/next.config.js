@@ -1,3 +1,5 @@
+const { withSentryConfig } = require('@sentry/nextjs');
+
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
@@ -163,7 +165,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
               "font-src 'self' https://fonts.gstatic.com https://unpkg.com",
               "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com https://picsum.photos https://fastly.picsum.photos",
-              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org http://localhost:5000 ${apiOrigin}`,
+              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io`,
               "frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
@@ -187,4 +189,13 @@ const nextConfig = {
   },
 };
 
-module.exports = withPWA(nextConfig);
+module.exports = withSentryConfig(withPWA(nextConfig), {
+  // Suppress non-essential Sentry CLI output during builds
+  silent: true,
+  // Hide source maps from client bundle (security)
+  hideSourceMaps: true,
+  // Tree-shake Sentry logger in production
+  disableLogger: true,
+  // Source map upload requires SENTRY_AUTH_TOKEN — skipped until configured
+  sourcemaps: { disable: true },
+});

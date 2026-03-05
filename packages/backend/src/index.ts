@@ -1,3 +1,4 @@
+import './instrument'; // must be first — initializes Sentry before all other imports
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -34,6 +35,7 @@ if (!envLoaded) {
   }
 }
 
+import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -163,6 +165,10 @@ app.use('/api/referrals', referralRoutes); // Phase 23: Referral program
 app.get('/api/protected', authenticate, (req, res) => {
   res.json({ message: 'This is a protected route', user: (req as any).user });
 });
+
+// Sentry error handler — must be registered after all routes and before the custom error handler
+// Captures exceptions and attaches Sentry event IDs to req.sentry
+Sentry.setupExpressErrorHandler(app);
 
 // H8: Global error handler — catches uncaught async errors forwarded via next(err)
 // Must be defined AFTER all routes and BEFORE app.listen
