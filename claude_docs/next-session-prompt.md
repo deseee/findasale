@@ -1,46 +1,31 @@
 # Next Session Resume Prompt
-*Written: 2026-03-05T00:00:00Z*
-*Session ended: normally — Sprint Track T–X fully complete*
+*Written: 2026-03-05T19:15:00Z*
+*Session ended: normally*
 
 ## Resume From
-
-Run `prisma migrate deploy` on Neon for 3 pending migrations (see below), then decide what Sprint Y looks like.
-
----
+All Sprint T–X work is complete and fully synced. Start by defining Sprint Y or discussing beta onboarding strategy with Patrick.
 
 ## What Was In Progress
-
-Nothing mid-task. All sprints complete.
-
----
+Nothing in-flight. Session ended cleanly.
 
 ## What Was Completed This Session
-
-- **V2** — Instant payouts: `payoutController.ts`, `pages/organizer/payouts.tsx`, 4 new stripe routes
-- **V3** — UGC missing-listing bounties: `MissingListingBounty` model + migration, `bountyController.ts`, `routes/bounties.ts`, `pages/organizer/bounties.tsx`, `components/BountyModal.tsx`
-- **W1** — Shipping: `shippingAvailable`/`shippingPrice` on Item + migration, item CRUD updated, payment intent accepts `shippingRequested`
-- **W2** — Label PDF: `labelController.ts` (pdfkit), single-item `/api/items/:id/label` + all-items `/api/sales/:saleId/labels`
-- **X1** — Zapier webhooks: `webhookService.ts` (HMAC-SHA256), `webhookController.ts`, `routes/webhooks.ts`, `pages/organizer/webhooks.tsx`; hooks in `itemController` (`bid.placed`) and `stripeController` (`purchase.completed`)
-- Full post-launch Sprint Track T–X now complete
-
----
+- Wired `BountyModal` into `pages/sales/[id].tsx`
+- Added Print Labels button to `pages/organizer/dashboard.tsx`
+- Fixed backend socket.io crash (Docker rebuild with `--no-cache`)
+- Synced `pnpm-lock.yaml` with socket.io (pushed to GitHub, unblocked Vercel)
+- Fixed TS errors in `bounties.tsx` + `payouts.tsx` (TanStack Query v5 `onSuccess` → `useEffect`)
+- Fixed pre-push hook to use local Prisma v5 instead of global v7.4.2
+- Created and applied Follow table migration (`20260305000009_add_follow_table`) to Neon + local Docker
+- Reconciled local Docker migration history (all 26 migrations marked applied)
 
 ## Environment Notes
+- All 26 migrations applied to both Neon and local Docker — clean state
+- `pnpm-lock.yaml` committed and pushed — Vercel deploys unblocked
+- GitHub is fully up to date (no pending pushes)
+- Docker is running and healthy (backend + frontend + postgres + image-tagger)
+- Pre-push hook patched — future pushes will use local prisma v5
 
-⚠️ **3 migrations pending on Neon — run before next deploy:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-$env:DIRECT_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-pnpm run db:generate
-npx prisma migrate deploy
-```
-Migrations: `20260305000006_v3_bounties`, `20260305000007_w1_shipping`, `20260305000008_x1_webhooks`
-
-- Phase 31 OAuth env vars still needed in Vercel
-- After migration deploy, Docker `docker compose build --no-cache backend && docker compose up -d` to pick up new Prisma client
-
-## Items Built But Not Yet Wired Into UI
-
-- `BountyModal` component exists at `components/BountyModal.tsx` — needs to be imported into `pages/sales/[id].tsx` to be visible to buyers
-- Label print buttons not yet added to organizer sale management UI — endpoints exist at `/api/items/:id/label` and `/api/sales/:saleId/labels`
+## Pending Manual Actions (unchanged from previous sessions)
+- **Phase 31 OAuth env vars** — still needed in Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`
+- **Sentry end-to-end test** — add `/sentry-test` route, verify event in Sentry dashboard, remove route
+- **Uptime monitoring** — UptimeRobot or StatusGator account still not set up

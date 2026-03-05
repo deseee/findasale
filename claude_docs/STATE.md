@@ -70,16 +70,15 @@ None. **Sprints T–X complete.** All post-launch sprint tracks shipped.
 
 ## Next Strategic Move
 
-Post-launch Sprint Track T–X **fully complete**. All roadmap items shipped.
+Post-launch Sprint Track T–X **fully complete**. All roadmap items shipped. All migrations applied.
 Next: define Sprint Y or begin beta onboarding / real-user testing.
-Consider: `prisma migrate deploy` for the 3 pending migrations before next deploy.
 
 ---
 
 ## Known Gotchas (Production)
 
 - **Railway PORT mismatch** — `PORT=5000` locked in Railway Variables. Must match `EXPOSE 5000` in Dockerfile. Do not remove.
-- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. ⚠️ 3 new migrations pending from Sprint V3/W1/X1: `20260305000006_v3_bounties`, `20260305000007_w1_shipping`, `20260305000008_x1_webhooks`. Run from `packages/database` with production env vars set.
+- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. All 26 migrations applied to both Neon and local Docker as of 2026-03-05.
 - **Production seed:**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -100,4 +99,4 @@ Consider: `prisma migrate deploy` for the 3 pending migrations before next deplo
 
 ---
 
-Last Updated: 2026-03-05 (session 62+ — Sprints U1/U2/V1-V3/W1-W2/X1 complete. Full post-launch track shipped. 3 migrations pending on Neon.)
+Last Updated: 2026-03-05 (session 63 — All migrations applied to Neon + Docker. Pre-push hook fixed for Prisma v7 global. Lockfile synced. Clean state.)
