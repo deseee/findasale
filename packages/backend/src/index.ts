@@ -1,6 +1,7 @@
 import './instrument'; // must be first — initializes Sentry before all other imports
 import dotenv from 'dotenv';
 import path from 'path';
+import http from 'http'; // V1: needed to attach Socket.io alongside Express
 
 // Try multiple paths to load .env file
 const possiblePaths = [
@@ -62,6 +63,7 @@ import messageRoutes from './routes/messages'; // Phase 20: Shopper messaging
 import reservationRoutes from './routes/reservations'; // Phase 21: Item reservations/holds
 import referralRoutes from './routes/referrals'; // Phase 23: Referral program
 import { authenticate } from './middleware/auth';
+import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
 import './jobs/notificationJob';
 import './jobs/emailReminderJob';
@@ -75,6 +77,8 @@ export { prisma };
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
+// V1: Wrap Express in a bare HTTP server so Socket.io can share the same port
+const httpServer = http.createServer(app);
 
 // ─── Security ───────────────────────────────────────────────────────────────────────────────
 
@@ -93,6 +97,10 @@ app.use(
 
 // Restrict CORS to known origins
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
+
+// V1: Initialize Socket.io on the shared HTTP server — mirrors the Express CORS policy
+initSocket(httpServer, allowedOrigins);
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -182,17 +190,20 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
   await prisma.$disconnect();
+  httpServer.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('Shutting down gracefully...');
   await prisma.$disconnect();
+  httpServer.close();
   process.exit(0);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`FindA.Sale backend running on port ${PORT}`);
+// V1: Listen on the HTTP server (not app.listen) so Socket.io shares the same port
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`FindA.Sale backend running on port ${PORT} (HTTP + Socket.io)`);
   
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {

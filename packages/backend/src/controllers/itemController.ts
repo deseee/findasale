@@ -6,6 +6,7 @@ import { prisma } from '../index';
 import axios from 'axios';
 import FormData from 'form-data';
 import { z } from 'zod';
+import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -669,6 +670,16 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: { currentBid: bidAmount }
     });
+
+    // V1: Broadcast live bid update to all clients viewing this item
+    try {
+      getIO().to(`item:${id}`).emit('bid:update', {
+        itemId: id,
+        currentBid: bidAmount,
+      });
+    } catch {
+      // Socket not initialized (e.g. test environment) — non-fatal
+    }
 
     res.status(201).json(bid);
   } catch (error) {

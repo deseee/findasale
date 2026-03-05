@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { io as socketIO, Socket } from 'socket.io-client'; // V1: live bidding
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
@@ -95,6 +96,7 @@ const ItemDetailPage = () => {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [holdCountdown, setHoldCountdown] = useState('');
+  const socketRef = useRef<Socket | null>(null); // V1: live bidding socket
   const { showToast } = useToast();
 
   const { data: item, isLoading, isError, refetch } = useQuery({
@@ -198,6 +200,42 @@ const ItemDetailPage = () => {
 
     return () => clearInterval(timer);
   }, [item?.auctionEndTime]);
+
+  // V1: Live bid updates via Socket.io — only active for auction items
+  useEffect(() => {
+    if (!id || !item?.auctionStartPrice) return; // non-auction items don't need a socket
+
+    // Derive socket server URL from the API base URL (strip /api suffix)
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ?? apiBase.replace(/\/api\/?$/, '');
+
+    const socket = socketIO(socketUrl, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+    });
+    socketRef.current = socket;
+
+    socket.emit('join:item', id as string);
+
+    socket.on('bid:update', (data: { itemId: string; currentBid: number }) => {
+      if (data.itemId !== id) return;
+      // Update the React Query cache so the UI reflects the new bid instantly
+      queryClient.setQueryData(['item', id], (old: Item | undefined) => {
+        if (!old) return old;
+        return { ...old, currentBid: data.currentBid };
+      });
+      // Also advance the bid input to the new minimum
+      setBidAmount((data.currentBid + (item?.bidIncrement ?? 1)).toFixed(2));
+    });
+
+    return () => {
+      socket.emit('leave:item', id as string);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+    // Re-subscribe if item ID changes (navigation between auction items)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, !!item?.auctionStartPrice]);
 
   const handleBuyNow = () => {
     if (!item) return;
@@ -398,7 +436,7 @@ const ItemDetailPage = () => {
               
               <div className="mb-6">
                 <Link href={`/sales/${item.sale.id}`} className="text-amber-600 hover:text-amber-800">
-                  ← Back to {item.sale.title}
+                  \u2190 Back to {item.sale.title}
                 </Link>
               </div>
 
@@ -530,7 +568,7 @@ const ItemDetailPage = () => {
                         disabled={cancelMutation.isPending}
                         className="text-sm text-red-600 hover:text-red-800 underline disabled:opacity-50"
                       >
-                        {cancelMutation.isPending ? 'Cancelling…' : 'Cancel hold'}
+                        {cancelMutation.isPending ? 'Cancelling\u2026' : 'Cancel hold'}
                       </button>
                     </div>
                   ) : someoneElseHolds ? (
@@ -545,7 +583,7 @@ const ItemDetailPage = () => {
                       disabled={placeMutation.isPending}
                       className="w-full border border-amber-600 text-amber-600 hover:bg-amber-50 font-semibold py-2 px-6 rounded transition-colors disabled:opacity-50"
                     >
-                      {placeMutation.isPending ? 'Placing hold…' : 'Hold for 24 hours'}
+                      {placeMutation.isPending ? 'Placing hold\u2026' : 'Hold for 24 hours'}
                     </button>
                   ) : null}
                 </div>
