@@ -143,6 +143,12 @@ const SaleDetailPage = () => {
     }
   }, [id]);
 
+  // Phase 19: Award 1 point for visiting a sale page (once per sale per day, auth required)
+  useEffect(() => {
+    if (!id || !user) return;
+    api.post('/points/track-visit', { saleId: id }).catch(() => { /* non-fatal */ });
+  }, [id, user]);
+
   const { data: sale, isLoading, isError } = useQuery({
     queryKey: ['sale', id],
     queryFn: async () => {
