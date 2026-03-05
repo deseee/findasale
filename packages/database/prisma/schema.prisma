@@ -38,6 +38,7 @@ model User {
   affiliateLinks    AffiliateLink[]
   pushSubscriptions PushSubscription[]
   following         Follow[]
+  pointsTransactions    PointsTransaction[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -257,6 +258,19 @@ model LineEntry {
   updatedAt  DateTime @updatedAt
 
   @@unique([saleId, userId])
+}
+
+// Phase 19: Hunt Pass — shopper points ledger
+model PointsTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW"
+  points      Int
+  saleId      String?
+  itemId      String?
+  description String?
+  createdAt   DateTime @default(now())
 }
 
 // Phase 17: Shopper follows an organizer
