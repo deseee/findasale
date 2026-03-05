@@ -51,12 +51,43 @@ const AddItemsDetailPage = () => {
 
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-warm-900">Add Items</h1>
-            <button
-              onClick={() => setShowCSVModal(true)}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg"
-            >
-              Import CSV
-            </button>
+            <div className="flex gap-2">
+              {/* Phase 32: Export inventory as CSV */}
+              {items && items.length > 0 && (
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/organizers/me/export/items/${saleId}`}
+                  download
+                  className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-4 rounded-lg text-sm"
+                  onClick={(e) => {
+                    // Attach auth token to download request via hidden fetch + blob URL
+                    e.preventDefault();
+                    const token = localStorage.getItem('token');
+                    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+                    fetch(`${apiBase}/api/organizers/me/export/items/${saleId}`, {
+                      headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    })
+                      .then((res) => res.blob())
+                      .then((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `items_${saleId}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      })
+                      .catch(() => alert('Export failed. Please try again.'));
+                  }}
+                >
+                  Export CSV
+                </a>
+              )}
+              <button
+                onClick={() => setShowCSVModal(true)}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg"
+              >
+                Import CSV
+              </button>
+            </div>
           </div>
 
           {itemsLoading ? (
