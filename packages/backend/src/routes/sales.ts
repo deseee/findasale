@@ -11,6 +11,7 @@ import {
   generateQRCode,
   trackQrScan,
   generateIcal,
+  getSalesByNeighborhood,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { authenticate } from '../middleware/auth';
@@ -20,6 +21,7 @@ const router = Router();
 // Public routes
 router.get('/', listSales);
 router.get('/search', searchSales);
+router.get('/neighborhood/:slug', getSalesByNeighborhood); // U2: SEO landing pages
 
 // /mine must be registered before /:id so Express doesn't treat "mine" as an ID
 router.get('/mine', authenticate, getMySales);

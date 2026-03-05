@@ -78,6 +78,7 @@ model Sale {
   zip           String
   lat           Float
   lng           Float
+  neighborhood  String?    // U2: Grand Rapids neighborhood slug e.g. "eastown"
   photoUrls     String[]
   tags          String[]
   status        String     @default("DRAFT") // DRAFT, PUBLISHED, ENDED
@@ -110,6 +111,8 @@ model Item {
   category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
   condition        String?   // mint, excellent, good, fair, poor
   photoUrls        String[]
+  // U1: Ollama nomic-embed-text 768-dim vector for semantic search
+  embedding        Float[]
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]

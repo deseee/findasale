@@ -7,6 +7,27 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { z } from 'zod';
 
+// U1: Fire-and-forget embedding helper — never throws, non-blocking
+const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
+const OLLAMA_EMBED_MODEL = 'nomic-embed-text';
+
+function scheduleItemEmbedding(itemId: string, text: string): void {
+  setImmediate(async () => {
+    try {
+      const embedRes = await axios.post(
+        `${OLLAMA_URL}/api/embeddings`,
+        { model: OLLAMA_EMBED_MODEL, prompt: text },
+        { timeout: 10000 }
+      );
+      const vec: number[] | undefined = embedRes.data?.embedding;
+      if (!Array.isArray(vec) || vec.length === 0) return;
+      await prisma.item.update({ where: { id: itemId }, data: { embedding: vec } });
+    } catch {
+      // Ollama unavailable — embedding stays empty, search falls back to text
+    }
+  });
+}
+
 // H7: Zod schema for CSV row validation — prevents injection and malformed data
 const csvRowSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title too long (max 200 chars)').trim(),
@@ -298,6 +319,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       ...item,
       suggestedTags, // optional
     });
+
+    // U1: Queue embedding generation (non-blocking — after response sent)
+    scheduleItemEmbedding(item.id, [title, description, category].filter(Boolean).join(' '));
   } catch (error) {
     console.error('Error creating item:', error);
     res.status(500).json({ message: 'Server error while creating item' });
@@ -344,6 +368,15 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     });
 
     res.json(updatedItem);
+
+    // U1: Re-embed when searchable fields change
+    if (title || description || category) {
+      scheduleItemEmbedding(id, [
+        title ?? updatedItem.title,
+        description ?? updatedItem.description,
+        category ?? updatedItem.category,
+      ].filter(Boolean).join(' '));
+    }
   } catch (error) {
     console.error('Error updating item:', error);
     res.status(500).json({ message: 'Server error while updating item' });
