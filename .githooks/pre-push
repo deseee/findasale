@@ -18,11 +18,13 @@ echo "  ✅ TypeScript passed."
 
 # ── 2. Prisma schema validation ───────────────────────────────────────────────
 echo "[pre-push] 2/4 Prisma schema lint..."
-npx prisma validate --schema packages/database/prisma/schema.prisma 2>&1
+cd packages/database && npx prisma validate --schema prisma/schema.prisma 2>&1
 if [ $? -ne 0 ]; then
+  cd ../..
   echo "❌ [pre-push] Prisma schema invalid. Push aborted."
   exit 1
 fi
+cd ../..
 echo "  ✅ Prisma schema valid."
 
 # ── 3. Controller stubs: console.log / TODO / alert( ─────────────────────────
