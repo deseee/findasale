@@ -17,6 +17,7 @@ import BadgeDisplay from '../../components/BadgeDisplay';
 import AuctionCountdown from '../../components/AuctionCountdown';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import { getThumbnailUrl } from '../../lib/imageUtils';
+import ReviewsSection from '../../components/ReviewsSection';
 
 interface Sale {
   id: string;
@@ -480,6 +481,18 @@ const SaleDetailPage = () => {
               <Link href={`/organizers/${sale.organizer.id}`} className="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors block">
                 Organized by: {sale.organizer.businessName}
               </Link>
+              {/* Phase 20: Message organizer — shoppers only */}
+              {user && user.role !== 'ORGANIZER' && (
+                <Link
+                  href={`/messages/new?organizerId=${sale.organizer.id}&saleId=${sale.id}`}
+                  className="flex items-center gap-1.5 bg-white border border-warm-300 text-warm-800 px-4 py-2 rounded-lg hover:bg-warm-50 transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Message organizer
+                </Link>
+              )}
               {sale.organizer.badges && sale.organizer.badges.length > 0 && (
                 <BadgeDisplay badges={sale.organizer.badges} size="sm" />
               )}
@@ -886,6 +899,14 @@ const SaleDetailPage = () => {
             </div>
           )}
         </div>
+        {/* Phase 15: Reviews section */}
+        <ReviewsSection
+          mode="sale"
+          saleId={sale.id}
+          saleStatus={sale.status}
+          avgRating={sale.organizer.avgRating}
+          totalReviews={sale.organizer.reviewCount}
+        />
       </main>
     </div>
   );
