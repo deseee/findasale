@@ -41,10 +41,11 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
 
   const getStatusBadge = (): { label: string; className: string } | null => {
     switch (item.status) {
-      case 'SOLD':    return { label: 'SOLD',    className: 'bg-warm-700 text-white' };
-      case 'PENDING': return { label: 'PENDING', className: 'bg-yellow-500 text-white' };
-      case 'ACTIVE':  return { label: 'ACTIVE',  className: 'bg-green-600 text-white' };
-      default:        return null;
+      case 'SOLD':     return { label: 'SOLD',    className: 'bg-warm-700 text-white' };
+      case 'PENDING':  return { label: 'PENDING', className: 'bg-yellow-500 text-white' };
+      case 'ACTIVE':   return { label: 'ACTIVE',  className: 'bg-green-600 text-white' };
+      case 'RESERVED': return { label: 'ON HOLD', className: 'bg-amber-500 text-white' };
+      default:         return null;
     }
   };
 

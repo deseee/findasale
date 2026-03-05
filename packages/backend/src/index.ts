@@ -57,11 +57,13 @@ import pointsRoutes from './routes/points'; // Phase 19: Hunt Pass shopper point
 import searchRoutes from './routes/search'; // Phase 29: Discovery + search
 import reviewRoutes from './routes/reviews'; // Phase 15: Review + rating system
 import messageRoutes from './routes/messages'; // Phase 20: Shopper messaging
+import reservationRoutes from './routes/reservations'; // Phase 21: Item reservations/holds
 import { authenticate } from './middleware/auth';
 import './jobs/auctionJob';
 import './jobs/notificationJob';
 import './jobs/emailReminderJob';
 import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier recalculation
+import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 min
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -152,6 +154,7 @@ app.use('/api/points', pointsRoutes); // Phase 19: Hunt Pass shopper points
 app.use('/api/search', searchRoutes); // Phase 29: Discovery + search
 app.use('/api/reviews', reviewRoutes); // Phase 15: Review + rating system
 app.use('/api/messages', messageRoutes); // Phase 20: Shopper messaging
+app.use('/api/reservations', reservationRoutes); // Phase 21: Item reservations/holds
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
