@@ -59,6 +59,8 @@ const AddItemsPage = () => {
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiDone, setAiDone] = useState(false);
   const [aiError, setAiError] = useState('');
+  // CB3: hold raw AI result for review before applying to form
+  const [aiSuggestions, setAiSuggestions] = useState<AIAnalysis | null>(null);
   const aiInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(false);
@@ -256,6 +258,7 @@ const AddItemsPage = () => {
     setAiError('');
 
     setAiAnalyzing(true);
+    setAiSuggestions(null);
     try {
       const fd = new FormData();
       fd.append('photo', file);
@@ -264,15 +267,8 @@ const AddItemsPage = () => {
       });
       const ai = res.data;
 
-      // Pre-fill form — only overwrite blank fields so manual edits survive a re-scan
-      setFormData(prev => ({
-        ...prev,
-        title:       prev.title       || ai.title,
-        description: prev.description || ai.description,
-        category:    prev.category    || ai.category,
-        condition:   prev.condition   || ai.condition,
-        price:       prev.price       || (ai.suggestedPrice != null ? String(ai.suggestedPrice) : ''),
-      }));
+      // CB3: Store suggestions for review — don't silently pre-fill the form
+      setAiSuggestions(ai);
 
       // Also add the AI scan photo to the item photo list
       setPhotoFiles(prev => (prev.length < 5 ? [file, ...prev] : prev));
@@ -296,7 +292,21 @@ const AddItemsPage = () => {
     setAiPreview(null);
     setAiDone(false);
     setAiError('');
+    setAiSuggestions(null);
     if (aiInputRef.current) aiInputRef.current.value = '';
+  };
+
+  // CB3: Apply AI suggestions to form (replaces all fields)
+  const applyAiSuggestions = (ai: AIAnalysis) => {
+    setFormData(prev => ({
+      ...prev,
+      title:       ai.title       || prev.title,
+      description: ai.description || prev.description,
+      category:    ai.category?.toLowerCase() || prev.category,
+      condition:   ai.condition?.toLowerCase() || prev.condition,
+      price:       ai.suggestedPrice != null ? String(ai.suggestedPrice) : prev.price,
+    }));
+    setAiSuggestions(null);
   };
 
   // ── Item photos (additional) ─────────────────────────────────────────────────────────
@@ -565,13 +575,52 @@ const AddItemsPage = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
-                      Analyzing with qwen3-vl…
+                      Analyzing with AI…
                     </div>
                   )}
-                  {aiDone && (
+                  {aiDone && !aiSuggestions && (
                     <p className="text-sm font-medium text-green-700">
-                      ✅ Form pre-filled — review and edit before saving
+                      ✅ Applied — review the form below before saving
                     </p>
+                  )}
+                  {aiDone && aiSuggestions && (
+                    <div className="w-full">
+                      <p className="text-xs font-semibold text-indigo-700 mb-2">✨ AI Suggestions — apply or dismiss:</p>
+                      <div className="space-y-1 text-xs text-warm-700 mb-3">
+                        <div><span className="font-medium text-warm-500">Title:</span> {aiSuggestions.title}</div>
+                        <div><span className="font-medium text-warm-500">Desc:</span> {aiSuggestions.description}</div>
+                        <div className="flex gap-3">
+                          <span><span className="font-medium text-warm-500">Cat:</span> {aiSuggestions.category}</span>
+                          <span><span className="font-medium text-warm-500">Cond:</span> {aiSuggestions.condition}</span>
+                          {aiSuggestions.suggestedPrice != null && (
+                            <span className="font-bold text-amber-700">${aiSuggestions.suggestedPrice.toFixed(2)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => applyAiSuggestions(aiSuggestions)}
+                          className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700"
+                        >
+                          Apply to form
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAiSuggestions(null)}
+                          className="px-3 py-1.5 bg-warm-100 text-warm-600 text-xs rounded-md hover:bg-warm-200"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearAiScan}
+                          className="px-3 py-1.5 bg-warm-100 text-warm-600 text-xs rounded-md hover:bg-warm-200"
+                        >
+                          Rescan
+                        </button>
+                      </div>
+                    </div>
                   )}
                   {aiError && (
                     <p className="text-sm text-red-600">{aiError}</p>
