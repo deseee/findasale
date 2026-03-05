@@ -110,12 +110,6 @@ Expected response:
 }
 ```
 
-### Gradio UI (Debug Only)
-
-A Gradio web interface is available at `http://localhost:5001/` for manual testing. Use this to visually test tagging without writing curl commands. Not intended for production use.
-
-**Note**: Requires Gradio 4.44+. If you see 500 errors, rebuild the container.
-
 ### Re-analyzing Existing Items
 
 Organizers can re-run AI tagging on an existing item from the Edit Item page. A "✨ AI suggest" link appears next to the Category field when:
@@ -185,4 +179,4 @@ python -m pytest tests/ -v
 
 ## Deployment
 
-See `claude_docs/OPS.md` for deployment instructions and infrastructure details.
+Frontend: Vercel (`finda.sale`). Backend: Railway. See `claude_docs/SECURITY.md` §8 for deploy checklist and `claude_docs/RECOVERY.md` for troubleshooting.
