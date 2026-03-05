@@ -138,7 +138,8 @@ export const listSales = async (req: Request, res: Response) => {
             select: {
               id: true,
               businessName: true,
-              phone: true
+              phone: true,
+              reputationTier: true, // Phase 22: for TierBadge on SaleCard
             }
           },
           // Phase 28: social proof — favorite count per sale
