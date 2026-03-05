@@ -8,7 +8,7 @@
  * - Status (active, draft, ended)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -46,19 +46,22 @@ const EditSalePage = () => {
       return response.data;
     },
     enabled: !!id,
-    onSuccess: (data) => {
-      setFormData({
-        title: data.title,
-        description: data.description,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        zip: data.zip,
-      });
-    },
   });
+
+  useEffect(() => {
+    if (sale) {
+      setFormData({
+        title: sale.title,
+        description: sale.description,
+        startDate: sale.startDate,
+        endDate: sale.endDate,
+        address: sale.address,
+        city: sale.city,
+        state: sale.state,
+        zip: sale.zip,
+      });
+    }
+  }, [sale]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {

@@ -7,7 +7,7 @@
  * - Update status (active, sold, etc.)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -41,15 +41,18 @@ const EditItemPage = () => {
       return response.data;
     },
     enabled: !!id,
-    onSuccess: (data) => {
-      setFormData({
-        title: data.title,
-        description: data.description,
-        price: data.price || '',
-        status: data.status,
-      });
-    },
   });
+
+  useEffect(() => {
+    if (item) {
+      setFormData({
+        title: item.title,
+        description: item.description,
+        price: item.price || '',
+        status: item.status,
+      });
+    }
+  }, [item]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
