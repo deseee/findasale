@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
 import InstallPrompt from '../components/InstallPrompt';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import OnboardingModal from '../components/OnboardingModal'; // Phase 27
 
 // SW update notifier — renders a dismissible toast when a new service worker is waiting
 // Registers the user's browser for push notifications once they're logged in
@@ -37,9 +38,6 @@ function ServiceWorkerUpdateNotifier() {
 }
 
 // Phase 31: Bridge NextAuth OAuth session → our JWT AuthContext.
-// Runs silently on every page. When NextAuth returns a backendJwt (from an
-// OAuth sign-in), it passes it to AuthContext.login() then clears the
-// NextAuth session — we own the JWT from that point on.
 function OAuthBridge() {
   const { data: session, status } = useSession();
   const { login, user, isLoading: authLoading } = useAuth();
@@ -55,14 +53,39 @@ function OAuthBridge() {
   return null;
 }
 
+/**
+ * Phase 27: Show 3-step onboarding modal to new shoppers on first login.
+ * Organizers and admins are excluded. Completion stored in localStorage.
+ */
+function OnboardingShower() {
+  const { user } = useAuth();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!user || user.role === 'ORGANIZER' || user.role === 'ADMIN') return;
+    if (typeof window === 'undefined') return;
+    const done = localStorage.getItem('findasale_onboarded');
+    if (!done) setShow(true);
+  }, [user]);
+
+  const handleComplete = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('findasale_onboarded', '1');
+    }
+    setShow(false);
+  };
+
+  if (!show) return null;
+  return <OnboardingModal onComplete={handleComplete} />;
+}
+
 function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
-  // QueryClient must be in state so it is stable across renders and SSR
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // 1 minute
+            staleTime: 60 * 1000,
             retry: 1,
           },
         },
@@ -77,12 +100,14 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
             <Layout>
               <Component {...pageProps} />
             </Layout>
-            {/* PWA helpers — rendered outside Layout so they overlay correctly */}
+            {/* PWA helpers */}
             <ServiceWorkerUpdateNotifier />
             <PushSubscriber />
             <InstallPrompt />
-            {/* Phase 31: OAuth → JWT bridge (must be inside both providers) */}
+            {/* Phase 31: OAuth → JWT bridge */}
             <OAuthBridge />
+            {/* Phase 27: First-time shopper onboarding */}
+            <OnboardingShower />
           </QueryClientProvider>
         </AuthProvider>
       </ToastProvider>
