@@ -31,6 +31,7 @@ const CreateSalePage = () => {
     city: '',
     state: '',
     zip: '',
+    neighborhood: '',
     auctionEnabled: false,
   });
 
@@ -182,6 +183,35 @@ const CreateSalePage = () => {
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
+            </div>
+
+            {/* Neighborhood — U2 */}
+            <div>
+              <label className="block text-sm font-medium text-warm-700 mb-2">
+                Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
+              </label>
+              <select
+                name="neighborhood"
+                value={formData.neighborhood}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white"
+              >
+                <option value="">— Select neighborhood —</option>
+                <option value="downtown">Downtown</option>
+                <option value="eastown">Eastown</option>
+                <option value="east-hills">East Hills</option>
+                <option value="heritage-hill">Heritage Hill</option>
+                <option value="creston">Creston</option>
+                <option value="westside">Westside</option>
+                <option value="midtown">Midtown</option>
+                <option value="fulton-heights">Fulton Heights</option>
+                <option value="alger-heights">Alger Heights</option>
+                <option value="ada">Ada Township</option>
+                <option value="cascade">Cascade</option>
+                <option value="kentwood">Kentwood</option>
+                <option value="wyoming">Wyoming</option>
+                <option value="grandville">Grandville</option>
+              </select>
             </div>
 
             {/* Options */}
