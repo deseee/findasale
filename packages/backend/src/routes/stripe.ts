@@ -7,6 +7,7 @@ import {
   createRefund,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
+import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout } from '../controllers/payoutController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -21,6 +22,12 @@ router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
 
 // Organizer refund
 router.post('/refund/:purchaseId', authenticate, createRefund);
+
+// V2: Instant payouts — balance + on-demand payouts + schedule management
+router.get('/balance', authenticate, getBalance);
+router.get('/payout-schedule', authenticate, getPayoutSchedule);
+router.patch('/payout-schedule', authenticate, updatePayoutSchedule);
+router.post('/payout', authenticate, createPayout);
 
 // Webhook
 router.post('/webhook', webhookHandler);
