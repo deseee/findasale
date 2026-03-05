@@ -136,6 +136,15 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts, please try again later.' },
 });
 
+// Contact form limiter — 5 submissions / 15 min per IP (M3: prevents spam campaigns)
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many messages sent. Please wait before trying again.' },
+});
+
 // Raw body middleware for Stripe webhooks (must come before json parser)
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 
@@ -161,7 +170,7 @@ app.use('/api/lines', lineRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/organizers', organizerRoutes);
-app.use('/api/contact', contactRoutes);
+app.use('/api/contact', contactLimiter, contactRoutes); // M3: dedicated contact spam limiter
 app.use('/api/push', pushRoutes);
 app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed
 app.use('/api/points', pointsRoutes); // Phase 19: Hunt Pass shopper points
