@@ -33,7 +33,8 @@ const ReferralDashboard = () => {
     enabled: !!user?.id,
   });
 
-  const referralLink = `${typeof window !== 'undefined' ? window.location.origin : ''}/affiliate/${user?.id}`;
+  // Phase 23: use /refer/[referralCode] — routes to register?ref=CODE
+  const referralLink = `${typeof window !== 'undefined' ? window.location.origin : ''}/refer/${user?.referralCode}`;
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(referralLink);
@@ -84,6 +85,23 @@ const ReferralDashboard = () => {
               <p className="text-3xl font-bold text-warm-900">${referralData?.earnings || '0.00'}</p>
             </div>
           </div>
+
+          {/* Recent referrals list */}
+          {referralData?.referrals?.length > 0 && (
+            <div className="card p-6">
+              <h2 className="text-lg font-semibold text-warm-900 mb-4">Recent Referrals</h2>
+              <div className="space-y-3">
+                {referralData.referrals.map((r: { id: string; name: string; joinedAt: string }) => (
+                  <div key={r.id} className="flex items-center justify-between py-2 border-b border-warm-100 last:border-0">
+                    <span className="text-warm-800 font-medium">{r.name}</span>
+                    <span className="text-xs text-warm-500">
+                      {new Date(r.joinedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
