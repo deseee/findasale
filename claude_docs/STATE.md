@@ -24,12 +24,15 @@ Maintain stable MVP in Grand Rapids. Prepare for scale to additional metros.
 
 ## Completed Phases (summary)
 
-Phases 1–13 + pre-beta audit + rebrand + Sprint A + Sprint B + Sprint D + Phase 31 all verified and shipped.
+Phases 1–13 + pre-beta audit + rebrand + Sprints A–H + Phase 31 all verified and shipped.
 Key milestones: JWT auth, sale management, Stripe payments, push notifications,
 creator affiliates, auction UI + cron + 7% item-level fee, QR marketing,
 virtual line, AI item tagging, Schema.org SEO, PWA hardening,
 warm design system (Phase 24), bottom tab nav (Phase 25), full palette swap (586 refs / 47 files), skeleton components,
-follow system + notification delivery (Phase 17), OAuth social login via NextAuth v4 (Phase 31).
+follow system + notification delivery (Phase 17), OAuth social login via NextAuth v4 (Phase 31),
+listing card redesign — LQIP blur-up + square aspect ratio + badge overlays (Phase 26),
+social proof + activity feed — /api/feed + favoriteCount + /feed page (Phase 28),
+photo preview lightbox — PhotoLightbox component, sale + item detail pages (Phase 18).
 
 Full detail: `claude_docs/COMPLETED_PHASES.md`
 
@@ -37,11 +40,7 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## In Progress
 
-None. Sprint D + Phase 31 both complete and pushed.
-
-**Sprint C — Phase 14: Rapid Capture + Background AI** ✅ COMPLETE
-- ✅ Phase 14a+14b: RapidCapture + batch upload + AI analysis
-- ✅ Phase 14c: Cloudinary eager transforms (thumbnail 200×200, optimized 800w, full 1600w — all WebP), imageUtils.ts frontend helpers, SaleCard/ItemCard using optimized URLs
+None. Sprint H complete. Next: Sprint I — Phase 19 (Hunt Pass + points).
 
 ---
 
@@ -71,6 +70,10 @@ Five-pillar growth phase. Sprint order:
 3. ~~Sprint C: Phase 14~~ ✅ — Rapid capture + background AI + Cloudinary image optimization (2026-03-04)
 4. ~~Sprint D: Phase 17~~ ✅ — Follow system + notification delivery complete (2026-03-05)
 5. ~~Phase 31~~ ✅ — OAuth social login (NextAuth v4) complete (2026-03-05) — env vars pending in Vercel
+6. ~~Sprint E — Phase 26~~ ✅ — Listing card redesign (LQIP, square, badges, 2-col grid) (2026-03-05)
+7. ~~Sprint G — Phase 28~~ ✅ — Social proof + activity feed /api/feed + /feed page (2026-03-05)
+8. ~~Sprint H — Phase 18~~ ✅ — Photo lightbox (PhotoLightbox component, sale + item detail pages) (2026-03-05)
+9. **Sprint I — Phase 19** — Hunt Pass + shopper points system
 
 Full roadmap: `claude_docs/ROADMAP.md`
 
@@ -86,4 +89,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-05 (session 49 — Phase 17 notification delivery complete, Phase 31 OAuth/NextAuth v4 complete and pushed)
+Last Updated: 2026-03-05 (session 51 — Phase 18 photo lightbox complete; Phases 26, 28, 18 all pushed this session)
