@@ -39,6 +39,8 @@ model User {
   pushSubscriptions PushSubscription[]
   following         Follow[]
   pointsTransactions    PointsTransaction[]
+  shopperConversations  Conversation[] @relation("ShopperConversations")
+  sentMessages          Message[]      @relation("SentMessages")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -58,6 +60,7 @@ model Organizer {
   totalReviews    Int      @default(0)
   totalSales      Int      @default(0)
   followers       Follow[]
+  conversations   Conversation[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -88,6 +91,7 @@ model Sale {
   lineEntries   LineEntry[]
   purchases     Purchase[]
   reviews       Review[]
+  conversations Conversation[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -271,6 +275,34 @@ model PointsTransaction {
   itemId      String?
   description String?
   createdAt   DateTime @default(now())
+}
+
+// Phase 20: Shopper messaging — conversation thread per shopper+organizer+sale
+model Conversation {
+  id            String    @id @default(cuid())
+  saleId        String?
+  sale          Sale?     @relation(fields: [saleId], references: [id])
+  shopperUserId String
+  shopperUser   User      @relation("ShopperConversations", fields: [shopperUserId], references: [id])
+  organizerId   String
+  organizer     Organizer @relation(fields: [organizerId], references: [id])
+  messages      Message[]
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([shopperUserId, organizerId, saleId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+  body           String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
 }
 
 // Phase 17: Shopper follows an organizer
