@@ -140,14 +140,21 @@ export const listSales = async (req: Request, res: Response) => {
               businessName: true,
               phone: true
             }
-          }
+          },
+          // Phase 28: social proof — favorite count per sale
+          _count: {
+            select: { favorites: true },
+          },
         }
       }),
       prisma.sale.count({ where }),
     ]);
 
-    // Convert Decimal values to numbers
-    const convertedSales = sales.map((sale: any) => convertDecimalsToNumbers(sale));
+    // Convert Decimal values + flatten _count into favoriteCount
+    const convertedSales = sales.map((sale: any) => {
+      const { _count, ...rest } = convertDecimalsToNumbers(sale);
+      return { ...rest, favoriteCount: _count?.favorites ?? 0 };
+    });
     
     res.json({
       sales: convertedSales,

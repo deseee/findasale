@@ -22,6 +22,7 @@ interface Sale {
   status?: string;
   isAuctionSale?: boolean;
   tags?: string[];
+  favoriteCount?: number;
 }
 
 interface SaleCardProps {
@@ -131,12 +132,19 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
           </p>
         </Link>
-        <Link
-          href={`/organizers/${sale.organizer.id}`}
-          className="text-xs font-medium text-amber-600 hover:underline mt-2 line-clamp-1"
-        >
-          {sale.organizer.businessName}
-        </Link>
+        <div className="flex items-center justify-between mt-2">
+          <Link
+            href={`/organizers/${sale.organizer.id}`}
+            className="text-xs font-medium text-amber-600 hover:underline line-clamp-1"
+          >
+            {sale.organizer.businessName}
+          </Link>
+          {typeof sale.favoriteCount === 'number' && sale.favoriteCount > 0 && (
+            <span className="text-xs text-warm-400 flex-shrink-0 ml-1">
+              ♥ {sale.favoriteCount}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

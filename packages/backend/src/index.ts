@@ -52,6 +52,7 @@ import uploadRoutes from './routes/upload';
 import organizerRoutes from './routes/organizers';
 import contactRoutes from './routes/contact';
 import pushRoutes from './routes/push';
+import feedRoutes from './routes/feed'; // Phase 28: personalized activity feed
 import { authenticate } from './middleware/auth';
 import './jobs/auctionJob';
 import './jobs/notificationJob';
@@ -141,6 +142,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/organizers', organizerRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
