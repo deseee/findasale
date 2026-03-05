@@ -1,7 +1,7 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-05 (v3 — compressed; research split to claude_docs/research/)
-**Status:** Production MVP live at finda.sale. 12 phases shipped. Entering growth phase.
+**Last Updated:** 2026-03-05 (v5 — sprint I–L done, workflow track restored)
+**Status:** Production MVP live at finda.sale. 16 phases shipped. Entering growth phase.
 
 ---
 
@@ -24,17 +24,22 @@ Research archives: `claude_docs/research/competitor-intel-2026-03-04.md`, `claud
 | A | 12 | Auction completion | ✅ Done |
 | B | 24+25 | Design system + bottom tab nav | ✅ Done |
 | C | 14a+b+c | Rapid capture + background AI + Cloudinary | ✅ Done |
-| D | 17 | Reputation + follow system | ✅ Code complete (migration applied) |
+| D | 17 | Reputation + follow system | ✅ Done |
 | — | Infra | Railway backend + Neon PostgreSQL migration | ✅ Done (ngrok retired) |
 | E | 26 | Listing card redesign + image pipeline | ✅ Done |
 | F | 31 | OAuth social login | ✅ Done |
 | G | 28 | Social proof + activity feed | ✅ Done |
 | H | 18 | Photo preview drops | ✅ Done |
-| **I** | **19** | **Hunt Pass + points** | **Next** |
-| J | 22 | Creator tier program | Queued |
-| K–S | 15,29,20,21,23,32,27,30,16 | Later phases | Post-beta |
+| I | 19 | Hunt Pass + shopper points | ✅ Done |
+| J | 22 | Creator tier program | ✅ Done |
+| K | 27 | Onboarding + empty states + microinteractions | ✅ Done |
+| L | 29 | Discovery + search | ✅ Done |
+| **M** | **15** | **Review + rating system UI** | **Next** |
+| N | 20 | Shopper messaging | Queued |
+| O | 21 | Reservation / hold UI | Queued |
+| P–S | 23,30,32,16 | Later phases | Post-beta |
 
-**Parallel tracks:** 22–23 independent of shopper phases, Phase 32 can spread across sprints, partnerships/content marketing need zero code.
+**Parallel tracks:** Phase 32 can spread across sprints, partnerships/content marketing need zero code.
 
 **Infrastructure:** Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon, frontend on Vercel (`finda.sale`). ngrok bridge retired.
 
@@ -120,7 +125,7 @@ NextAuth.js v5, Google + Facebook. OAuthProvider + oauthId fields on User. Apple
 ## Deferred Features
 
 | Feature | Reason | Revisit |
-|---------|--------|----------|
+|---------|--------|---------|
 | Socket.io live bidding | Polling sufficient for MVP | Real data shows demand |
 | Multi-metro | Grand Rapids first | Post-beta validation |
 | Shipping workflow | Not in-person scope | Organizer demand signal |
@@ -130,10 +135,30 @@ NextAuth.js v5, Google + Facebook. OAuthProvider + oauthId fields on User. Apple
 
 ## Remaining Feature Gaps
 
-**Must-have before scale:** Quick-list flow (Phase 14 solves), reviews/ratings UI (Phase 17), follow organizer (Phase 17), OAuth (Phase 31), shopper messaging (standalone sprint), photo room overviews (Phase 14 onboarding).
+**Must-have before scale:** Reviews/ratings UI (Phase 15 — next sprint), shopper messaging (Phase 20), photo room overviews (Phase 14 onboarding).
 
 **Nice-to-have (post-beta):** Reservation/hold UI, weekly curator email, neighborhood landing pages, favorites categories, missing listing UGC bounties, instant payouts, shipping, label printing, Zapier/CSV export.
 
 ---
 
-*v3 compressed 2026-03-05. Research archives in claude_docs/research/. Next review: post-Sprint B.*
+## Workflow & Infrastructure Track (Parallel — No Sprint Slot)
+
+These run alongside feature sprints. No dedicated sprint needed.
+
+| Task | Priority | Status |
+|------|----------|--------|
+| Model routing (Opus/Sonnet/Haiku sub-agents) | High | ✅ Implemented — model-routing.md |
+| Session safeguards (repair loop circuit breakers) | High | ✅ Implemented — session-safeguards.md, CORE.md §12 |
+| Patrick language map | High | ✅ Implemented — patrick-language-map.md, CORE.md §13 |
+| Weekly industry intel scheduled task | Medium | ✅ Created — Mondays 9am |
+| Daily context freshness check | Medium | ✅ Created — daily 8am |
+| Self-healing entries 21–24 | High | ✅ Added |
+| Uptime monitoring (external + Cowork investigation) | Medium | Queued — needs StatusGator/UptimeRobot |
+| Sentry MCP (production error tracking) | Medium | Queued — needs Sentry account |
+| Ollama embeddings for semantic search | Low | Queued — after Phase 29 |
+| Stress test suite (schema drift, dead code, stale docs) | Medium | Queued — next Sonnet session |
+| Pre-commit validation skill | Medium | Queued — next Sonnet session |
+
+---
+
+*v5 compressed 2026-03-05. Sprints I–L marked done, Workflow track restored (concurrent session overlap fix). Research archives in claude_docs/research/. Next review: post-Sprint M.*
