@@ -39,8 +39,9 @@ model User {
   pushSubscriptions PushSubscription[]
   following         Follow[]
   pointsTransactions    PointsTransaction[]
-  shopperConversations  Conversation[] @relation("ShopperConversations")
-  sentMessages          Message[]      @relation("SentMessages")
+  shopperConversations  Conversation[]    @relation("ShopperConversations")
+  sentMessages          Message[]         @relation("SentMessages")
+  reservations          ItemReservation[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -114,6 +115,7 @@ model Item {
   bids             Bid[]
   purchases        Purchase[]
   favorites        Favorite[]
+  reservation      ItemReservation?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -318,4 +320,18 @@ model Follow {
   createdAt   DateTime  @default(now())
 
   @@unique([userId, organizerId])
+}
+
+// Phase 21: Item reservation/hold system
+model ItemReservation {
+  id        String   @id @default(cuid())
+  itemId    String   @unique           // one active hold per item
+  item      Item     @relation(fields: [itemId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  status    String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED, EXPIRED
+  expiresAt DateTime
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
