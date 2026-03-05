@@ -199,6 +199,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid price value' });
     }
 
+    // CA3: Stripe minimum charge is $0.50 — reject below that to avoid Stripe error
+    if (price < 0.5) {
+      return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
+    }
+
     // W1: Add shipping cost if buyer opted in and item ships
     let shippingCost = 0;
     if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
@@ -312,6 +317,27 @@ export const webhookHandler = async (req: Request, res: Response) => {
         });
 
         if (paymentIntent.metadata?.itemId) {
+          // CA3: Concurrent purchase guard — check item status before marking SOLD
+          // If another buyer's PI already marked it SOLD, refund this one automatically
+          const item = await prisma.item.findUnique({
+            where: { id: paymentIntent.metadata.itemId },
+            select: { status: true },
+          });
+
+          if (item && item.status === 'SOLD' && purchase.status !== 'PAID') {
+            // Second buyer won the race — refund silently and stop
+            console.warn(
+              `CA3 concurrent purchase: item ${paymentIntent.metadata.itemId} already SOLD, ` +
+              `refunding PI ${paymentIntent.id}`
+            );
+            await stripe.refunds.create({ payment_intent: paymentIntent.id });
+            await prisma.purchase.update({
+              where: { stripePaymentIntentId: paymentIntent.id },
+              data: { status: 'REFUNDED' },
+            });
+            break;
+          }
+
           await prisma.item.update({
             where: { id: paymentIntent.metadata.itemId },
             data: { status: 'SOLD' },
