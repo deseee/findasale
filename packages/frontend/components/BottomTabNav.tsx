@@ -2,6 +2,8 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
+import usePoints from '../hooks/usePoints';
+import PointsBadge from './PointsBadge';
 
 /**
  * BottomTabNav — Phase 25 mobile bottom navigation
@@ -58,6 +60,7 @@ type Tab = {
 const BottomTabNav = () => {
   const router = useRouter();
   const { user } = useAuth();
+  const { data: pointsData } = usePoints(!!user);
 
   // Profile tab destination depends on user role
   const profileHref = user?.role === 'ORGANIZER'
@@ -120,7 +123,15 @@ const BottomTabNav = () => {
               }`}
               aria-current={active ? 'page' : undefined}
             >
-              <Icon active={active} />
+              <div className="relative">
+                <Icon active={active} />
+                {tab.label === 'Profile' && pointsData && pointsData.points > 0 && (
+                  <PointsBadge
+                    points={pointsData.points}
+                    className="absolute -top-1.5 -right-2.5"
+                  />
+                )}
+              </div>
               <span className="text-[10px] mt-0.5 font-medium leading-none">
                 {tab.label}
               </span>
