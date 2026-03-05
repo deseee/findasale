@@ -5,11 +5,13 @@
  * Usage:
  *   const { showToast } = useToast();
  *   showToast('Success!', 'success');
+ *   showToast('\uD83C\uDFC6 +1 pt earned!', 'points'); // amber, bottom-right
  */
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
-type ToastType = 'success' | 'error' | 'info' | 'warning';
+// Phase 27: added 'points' type — renders in amber at bottom-right above BottomTabNav
+export type ToastType = 'success' | 'error' | 'info' | 'warning' | 'points';
 
 interface Toast {
   id: string;
@@ -36,28 +38,43 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }, 3000);
   }, []);
 
+  const standardToasts = toasts.filter((t) => t.type !== 'points');
+  const pointsToasts = toasts.filter((t) => t.type === 'points');
+
+  const typeClasses: Record<ToastType, string> = {
+    success: 'bg-green-500 text-white',
+    error: 'bg-red-500 text-white',
+    info: 'bg-blue-500 text-white',
+    warning: 'bg-yellow-500 text-white',
+    points: 'bg-amber-500 text-white',
+  };
+
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {toasts.map((toast) => {
-          const baseClasses = 'px-4 py-3 rounded shadow-lg text-white font-medium max-w-xs';
-          const typeClasses = {
-            success: 'bg-green-500',
-            error: 'bg-red-500',
-            info: 'bg-blue-500',
-            warning: 'bg-yellow-500',
-          };
 
-          return (
-            <div
-              key={toast.id}
-              className={`${baseClasses} ${typeClasses[toast.type]} animate-fade-in`}
-            >
-              {toast.message}
-            </div>
-          );
-        })}
+      {/* Standard toasts — top-right */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {standardToasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`px-4 py-3 rounded shadow-lg font-medium max-w-xs ${typeClasses[toast.type]}`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+
+      {/* Points toasts — bottom-right, above BottomTabNav */}
+      <div className="fixed bottom-20 right-4 z-50 space-y-2">
+        {pointsToasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`px-3 py-2 rounded-lg shadow-lg font-semibold text-sm max-w-xs ${typeClasses.points}`}
+          >
+            {toast.message}
+          </div>
+        ))}
       </div>
     </ToastContext.Provider>
   );
