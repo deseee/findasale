@@ -1,90 +1,154 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-05 (v8 — Sprint S done: Phase 16 complete. All Five Pillars shipped.)
-**Status:** Production MVP live at finda.sale. 21 phases shipped. All Five Pillars complete.
+**Last Updated:** 2026-03-05 (v9 — Post-launch reorganization. All Five Pillars done. Sprint Track T–X defined.)
+**Status:** Production MVP live at finda.sale. 21 phases shipped. Entering post-launch improvement track.
 
 ---
 
-## Five Pillars
+## Achievement: Five Pillars Complete ✅
 
-1. **Organizer Photo/Video Workflow** (Phases 14–16) ✅
-2. **UI/UX Design Overhaul** (Phases 24–27) ✅
-3. **Social & Discovery Layer** (Phases 17, 28–30) ✅
-4. **Shopper Engagement Engine** (Phases 18–21) ✅
-5. **Creator-Led Growth + Distribution** (Phases 22–23, 31–32) ✅
+21 phases shipped across 5 pillars (Sprints A–S, 2026-03-04 to 2026-03-05):
 
-Research archives: `claude_docs/research/competitor-intel-2026-03-04.md`, `claude_docs/research/growth-channels-2026-03-04.md`
+1. **Organizer Photo/Video Workflow** — rapid capture, AI tagging, Cloudinary pipeline, multi-photo manager (14, 15, 16)
+2. **UI/UX Design Overhaul** — warm design system, bottom tab nav, listing card redesign, onboarding + empty states (24, 25, 26, 27)
+3. **Social & Discovery Layer** — follow system, social proof feed, full-text search, weekly curator email (17, 28, 29, 30)
+4. **Shopper Engagement Engine** — lightbox, Hunt Pass points, messaging, reservation/hold UI (18, 19, 20, 21)
+5. **Creator-Led Growth + Distribution** — creator tier, affiliate/referral, OAuth login, CSV export (22, 23, 31, 32)
 
----
-
-## Sprint Priority Order
-
-| Sprint | Phases | Focus | Status |
-|--------|--------|-------|--------|
-| A | 12 | Auction completion | ✅ Done |
-| B | 24+25 | Design system + bottom tab nav | ✅ Done |
-| C | 14a+b+c | Rapid capture + background AI + Cloudinary | ✅ Done |
-| D | 17 | Reputation + follow system | ✅ Done |
-| — | Infra | Railway backend + Neon PostgreSQL migration | ✅ Done (ngrok retired) |
-| E | 26 | Listing card redesign + image pipeline | ✅ Done |
-| F | 31 | OAuth social login | ✅ Done |
-| G | 28 | Social proof + activity feed | ✅ Done |
-| H | 18 | Photo preview drops | ✅ Done |
-| I | 19 | Hunt Pass + shopper points | ✅ Done |
-| J | 22 | Creator tier program | ✅ Done |
-| K | 27 | Onboarding + empty states + microinteractions | ✅ Done |
-| L | 29 | Discovery + search | ✅ Done |
-| M | 15 | Review + rating system UI | ✅ Done |
-| N | 20 | Shopper messaging | ✅ Done |
-| O | 21 | Reservation / hold UI | ✅ Done |
-| P | 23 | Affiliate + referral program | ✅ Done |
-| Q | 30 | Weekly curator email | ✅ Done |
-| R | 32 | Creator tools — CSV export | ✅ Done |
-| S | 16 | Advanced photo pipeline | ✅ Done |
-
-**All Five Pillars complete.** Next phase: Workflow & Infrastructure track or new sprint planning per Patrick.
-
-**Infrastructure:** Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon, frontend on Vercel (`finda.sale`). ngrok bridge retired.
+Research archives: `claude_docs/research/`
 
 ---
 
-## Deferred Features
+## Post-Launch Sprint Track
 
-| Feature | Reason | Revisit |
-|---------|--------|------|
-| Socket.io live bidding | Polling sufficient for MVP | Real data shows demand |
-| Multi-metro | Grand Rapids first | Post-beta validation |
-| Shipping workflow | Not in-person scope | Organizer demand signal |
-| Video-to-inventory | Vision models can't segment rooms | Late 2026+ |
+All items below are buildable by Claude — no external accounts or human decisions required unless noted.
 
----
-
-## Remaining Feature Gaps
-
-**Must-have before scale:** None from original Five Pillars — all shipped.
-
-**Nice-to-have (post-beta):** Neighborhood landing pages, favorites categories, UGC bounties, instant payouts, shipping, label printing, Zapier integration, multi-metro expansion.
+| Sprint | Focus | Status |
+|--------|-------|--------|
+| **T** | **Production Hardening** | **Next** |
+| U | Search & Discovery Upgrade | Queued |
+| V | Live Engagement | Queued |
+| W | Organizer Workflow | Queued |
+| X | Integrations | Queued |
 
 ---
 
-## Workflow & Infrastructure Track (Parallel — No Sprint Slot)
+## Sprint T — Production Hardening ← Next
 
-These run alongside feature sprints. No dedicated sprint needed.
+**Goal:** Catch regressions early, finish scaffolded features, add quick shopper wins.
 
-| Task | Priority | Status |
-|------|----------|--------|
-| Model routing (Opus/Sonnet/Haiku sub-agents) | High | ✅ Implemented — model-routing.md |
-| Session safeguards (repair loop circuit breakers) | High | ✅ Implemented — session-safeguards.md, CORE.md §12 |
-| Patrick language map | High | ✅ Implemented — patrick-language-map.md, CORE.md §13 |
-| Weekly industry intel scheduled task | Medium | ✅ Created — Mondays 9am |
-| Daily context freshness check | Medium | ✅ Created — daily 8am |
-| Self-healing entries 21–24 | High | ✅ Added |
-| Uptime monitoring (external + Cowork investigation) | Medium | Queued — needs StatusGator/UptimeRobot |
-| Sentry MCP (production error tracking) | Medium | Queued — needs Sentry account |
-| Ollama embeddings for semantic search | Low | Queued — after Phase 29 |
-| Stress test suite (schema drift, dead code, stale docs) | Medium | Queued — next Sonnet session |
-| Pre-commit validation skill | Medium | Queued — next Sonnet session |
+### T1 — Stress Test Suite
+Automated checks for: schema drift (Prisma model vs migration mismatch), dead routes (registered but no controller export), stale docs (STATE.md references non-existent files), orphaned migrations, console.log stubs in controllers.
+- `scripts/health-check.ts` — runs all checks, outputs pass/fail report
+- Wires into health-scout skill and pre-deploy checklist
+
+### T2 — Pre-Commit Validation Skill
+Extend `.githooks/pre-push` beyond TypeScript check to also run: Prisma schema lint, grep for `console.log` / `TODO` / `alert(` in controllers, check for missing `authenticate` on mutation routes.
+- Update `packages/backend/.githooks/pre-push`
+- Update findasale-deploy skill checklist to reference it
+
+### T3 — Favorites Categories
+Let shoppers filter their saved favorites by category. Builds on existing favorites + search.
+- `GET /api/favorites?category=X` — add category filter param
+- Update `/favorites` page with category tabs (reuse `/search` category tab pattern)
+- Zero schema changes needed
+
+### T4 — Virtual Line SMS E2E
+`VirtualLine` model and `lineController` are already scaffolded. Twilio is configured. Complete the flow end-to-end:
+- `POST /api/lines/:saleId/join` → SMS confirmation to shopper via Twilio
+- `POST /api/lines/:saleId/notify` → organizer broadcasts "now serving #N" via SMS blast
+- Simple organizer UI on sale management page (join count + notify button)
 
 ---
 
-*v8 updated 2026-03-05. Sprint S complete — Phase 16 advanced photo pipeline. All 19 roadmap sprints done. Five Pillars fully shipped.*
+## Sprint U — Search & Discovery Upgrade
+
+### U1 — Ollama Semantic Search
+Replace Prisma `contains` in `/api/search` with Ollama embedding vectors for semantic matching.
+- `qwen3-vl:4b` + `nomic-embed-text` model via Ollama `/api/embeddings`
+- Store embeddings on `Item` (pgvector or Float[] column + cosine similarity query)
+- Graceful fallback to text search if Ollama unavailable
+- Migration: `add_item_embedding`
+
+### U2 — Neighborhood Landing Pages
+SEO-friendly pages for "Estate Sales in [Grand Rapids Neighborhood]".
+- `pages/neighborhoods/[slug].tsx` — upcoming sales filtered by neighborhood/area
+- Prisma query by city district or lat/lng bounding box
+- Add to sitemap for SEO indexing
+
+---
+
+## Sprint V — Live Engagement
+
+### V1 — Socket.io Live Bidding
+Replace 10s auction polling with real-time bid events.
+- Add `socket.io` to backend, emit `bid:update` on each `placeBid` call
+- Frontend: replace polling `useEffect` in auction item detail with `useSocket` hook
+- Graceful fallback to polling if socket drops
+
+### V2 — Instant Payouts
+Allow organizers to configure faster Stripe payout schedule.
+- `POST /api/organizers/me/payout-schedule` → `{ interval: 'daily' | 'weekly' | 'manual' }`
+- Stripe Connect `account.update({ settings: { payouts: { schedule } } })`
+- Display current schedule + change option in organizer dashboard
+
+### V3 — UGC Missing-Listing Bounties
+Reward shoppers who photograph and submit items the organizer missed.
+- `POST /api/items/suggest` — shopper submits photo + title + description
+- `/organizer/suggestions` — organizer review queue (approve/reject)
+- On approval: 25pt award to submitter, item added to sale
+
+---
+
+## Sprint W — Organizer Workflow
+
+### W1 — Shipping Workflow
+For organizers who ship items (antique dealers, online-first sellers).
+- `shippingAvailable Boolean @default(false)` + `shippingPrice Decimal?` on `Item`
+- Checkout: shopper selects local pickup or shipping
+- Flat-rate shipping calculator (organizer sets price per item or per order)
+
+### W2 — Label Printing
+PDF-printable item price tags for in-person sales.
+- `GET /api/items/:id/label.pdf` — single label: title, price, QR code, sale name
+- `GET /api/sales/:id/labels.pdf` — all items in one print-ready PDF
+- Builds on existing QR scan infrastructure
+
+---
+
+## Sprint X — Integrations
+
+### X1 — Zapier Webhook System
+Let organizers push FindA.Sale events to external tools (CRMs, email lists, inventory systems).
+- `Webhook` model: `{ id, organizerId, url, events String[], secret String }`
+- Events: `sale.published`, `item.sold`, `reservation.created`, `review.posted`
+- `POST /api/organizers/me/webhooks` — register; `DELETE` to remove; `POST .../test` to verify
+- Background job fires signed `axios.post(webhook.url, payload)` on each event
+
+---
+
+## Needs Patrick First (Blocked on External Setup)
+
+| Item | What's Needed |
+|------|---------------|
+| Uptime monitoring | Create free UptimeRobot or StatusGator account → add monitor for `finda.sale` and Railway backend URL → share alert email |
+| Sentry error tracking | Create Sentry project → share DSN → Claude wires `@sentry/node` + `@sentry/nextjs` |
+
+---
+
+## Long-Term Hold
+
+| Item | Reason | Revisit |
+|------|--------|---------|
+| Video-to-inventory | Vision models can't segment rooms reliably yet | Late 2026+ |
+| Multi-metro expansion | Business decision — Grand Rapids validation first | After beta data |
+
+---
+
+## Infrastructure (All Done)
+
+Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon, frontend on Vercel (`finda.sale`). Session safeguards, model routing, scheduled tasks, self-healing skills all active. See `claude_docs/CORE.md` and `claude_docs/self_healing_skills.md`.
+
+---
+
+*v9 updated 2026-03-05. Five Pillars complete. Post-launch Sprint Track T–X defined.*
