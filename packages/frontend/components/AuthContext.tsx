@@ -5,6 +5,8 @@ interface User {
   id: string;
   email: string;
   name: string;
+  firstName?: string;
+  businessName?: string;
   role: string;
   points: number;
   referralCode?: string;
@@ -39,6 +41,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: payload.id,
           email: payload.email,
           name: payload.name,
+          firstName: payload.firstName || '',
+          businessName: payload.businessName || '',
           role: payload.role,
           points: payload.points || 0,
           referralCode: payload.referralCode || ''
@@ -61,6 +65,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: payload.id,
         email: payload.email,
         name: payload.name,
+        firstName: payload.firstName || '',
+        businessName: payload.businessName || '',
         role: payload.role,
         points: payload.points || 0,
         referralCode: payload.referralCode || ''
