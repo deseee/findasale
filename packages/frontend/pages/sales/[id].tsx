@@ -144,9 +144,12 @@ const SaleDetailPage = () => {
   }, [id]);
 
   // Phase 19: Award 1 point for visiting a sale page (once per sale per day, auth required)
+  // Phase 27: Show amber toast when points are awarded
   useEffect(() => {
     if (!id || !user) return;
-    api.post('/points/track-visit', { saleId: id }).catch(() => { /* non-fatal */ });
+    api.post('/points/track-visit', { saleId: id })
+      .then((res) => { if (res.data?.awarded === true) showToast('🏆 +1 pt earned!', 'points'); })
+      .catch(() => { /* non-fatal */ });
   }, [id, user]);
 
   const { data: sale, isLoading, isError } = useQuery({

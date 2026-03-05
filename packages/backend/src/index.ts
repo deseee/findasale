@@ -54,6 +54,7 @@ import contactRoutes from './routes/contact';
 import pushRoutes from './routes/push';
 import feedRoutes from './routes/feed'; // Phase 28: personalized activity feed
 import pointsRoutes from './routes/points'; // Phase 19: Hunt Pass shopper points
+import searchRoutes from './routes/search'; // Phase 29: Discovery + search
 import { authenticate } from './middleware/auth';
 import './jobs/auctionJob';
 import './jobs/notificationJob';
@@ -91,7 +92,7 @@ app.use(
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       // Allow all Vercel preview deployments for this project
-      if (/^\/\/findasale[a-z0-9-]*\.vercel\.app$/.test(origin)) return callback(null, true);
+      if (/^https:\/\/findasale[a-z0-9-]*\.vercel\.app$/.test(origin)) return callback(null, true);
       return callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
@@ -146,6 +147,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed
 app.use('/api/points', pointsRoutes); // Phase 19: Hunt Pass shopper points
+app.use('/api/search', searchRoutes); // Phase 29: Discovery + search
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
