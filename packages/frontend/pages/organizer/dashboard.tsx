@@ -94,7 +94,7 @@ const OrganizerDashboard = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-4 mb-8">
+          <div className="flex flex-wrap gap-4 mb-8">
             <Link
               href="/organizer/create-sale"
               className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
@@ -106,6 +106,12 @@ const OrganizerDashboard = () => {
               className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
               Add Items
+            </Link>
+            <Link
+              href="/organizer/holds"
+              className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              Manage Holds
             </Link>
           </div>
 
