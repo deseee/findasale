@@ -18,13 +18,13 @@ import Link from 'next/link';
 
 const OrganizerSettingsPage = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -41,7 +41,7 @@ const OrganizerSettingsPage = () => {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <>

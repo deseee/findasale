@@ -41,11 +41,11 @@ const TIER_BENEFITS: Record<string, string[]> = {
 
 const OrganizerDashboard = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'analytics'>('overview');
 
   // Redirect if not authenticated or not an organizer
-  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -76,7 +76,7 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id,
   });
 
-  if (loading) {
+  if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 

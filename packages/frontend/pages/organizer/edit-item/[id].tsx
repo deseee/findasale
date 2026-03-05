@@ -19,7 +19,7 @@ import Link from 'next/link';
 const EditItemPage = () => {
   const router = useRouter();
   const { id } = router.query;
-  const { user, loading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -29,7 +29,7 @@ const EditItemPage = () => {
     status: 'AVAILABLE',
   });
 
-  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -64,7 +64,7 @@ const EditItemPage = () => {
     },
   });
 
-  if (loading || isLoading) return <div>Loading...</div>;
+  if (authLoading || isLoading) return <div>Loading...</div>;
 
   return (
     <>

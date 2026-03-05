@@ -20,7 +20,7 @@ import Link from 'next/link';
 const EditSalePage = () => {
   const router = useRouter();
   const { id } = router.query;
-  const { user, loading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -34,7 +34,7 @@ const EditSalePage = () => {
     zip: '',
   });
 
-  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -78,7 +78,7 @@ const EditSalePage = () => {
     setFormData({ ...formData, [name]: value });
   };
 
-  if (loading || isLoading) return <div>Loading...</div>;
+  if (authLoading || isLoading) return <div>Loading...</div>;
 
   return (
     <>

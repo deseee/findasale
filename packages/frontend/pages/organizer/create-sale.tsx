@@ -19,7 +19,7 @@ import Link from 'next/link';
 
 const CreateSalePage = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -36,7 +36,7 @@ const CreateSalePage = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!loading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -64,7 +64,7 @@ const CreateSalePage = () => {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <>

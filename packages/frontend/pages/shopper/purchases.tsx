@@ -13,10 +13,10 @@ import Head from 'next/head';
 
 const ShopperPurchasesPage = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [sort, setSort] = useState<'recent' | 'price-high' | 'price-low'>('recent');
 
-  if (!loading && !user) {
+  if (!authLoading && !user) {
     router.push('/login');
     return null;
   }
@@ -30,7 +30,7 @@ const ShopperPurchasesPage = () => {
     enabled: !!user?.id,
   });
 
-  if (loading) return <div>Loading...</div>;
+  if (authLoading) return <div>Loading...</div>;
 
   return (
     <>

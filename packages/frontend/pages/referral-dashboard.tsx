@@ -17,9 +17,9 @@ import { useRouter } from 'next/router';
 
 const ReferralDashboard = () => {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  if (!loading && !user) {
+  if (!isLoading && !user) {
     router.push('/login');
     return null;
   }
@@ -39,7 +39,7 @@ const ReferralDashboard = () => {
     navigator.clipboard.writeText(referralLink);
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <>
