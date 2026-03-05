@@ -13,6 +13,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -126,6 +127,16 @@ const EditItemPage = () => {
                 <option value="UNAVAILABLE">Unavailable</option>
               </select>
             </div>
+
+            {/* Phase 16: Photo management */}
+            {item && (
+              <div>
+                <ItemPhotoManager
+                  itemId={String(id)}
+                  initialPhotos={item.photoUrls || []}
+                />
+              </div>
+            )}
 
             <button
               type="submit"

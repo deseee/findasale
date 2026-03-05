@@ -463,6 +463,118 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// ── Phase 16: Advanced photo pipeline ──────────────────────────────────────
+
+// Helper: fetch item and verify organizer ownership
+const getItemForOrganizer = async (id: string, userId: string) => {
+  const item = await prisma.item.findUnique({
+    where: { id },
+    include: { sale: { include: { organizer: { select: { userId: true } } } } },
+  });
+  if (!item) return null;
+  if (item.sale.organizer.userId !== userId) return null;
+  return item;
+};
+
+/**
+ * POST /api/items/:id/photos
+ * Body: { url: string } — a Cloudinary URL already uploaded via /api/upload/item-photo
+ * Appends the URL to item.photoUrls. Returns { photoUrls }.
+ */
+export const addItemPhoto = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id } = req.params;
+    const { url } = req.body;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ message: 'url is required' });
+    }
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls: [...item.photoUrls, url] },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('addItemPhoto error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * DELETE /api/items/:id/photos/:photoIndex
+ * Removes the photo at the given 0-based index. Returns { photoUrls }.
+ */
+export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id, photoIndex } = req.params;
+    const idx = parseInt(photoIndex, 10);
+    if (isNaN(idx)) return res.status(400).json({ message: 'Invalid photoIndex' });
+
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    if (idx < 0 || idx >= item.photoUrls.length) {
+      return res.status(400).json({ message: 'Photo index out of range' });
+    }
+
+    const newUrls = item.photoUrls.filter((_, i) => i !== idx);
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls: newUrls },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('removeItemPhoto error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * PATCH /api/items/:id/photos/reorder
+ * Body: { photoUrls: string[] } — same URLs in a new order.
+ * Validates that no new URLs are injected. Returns { photoUrls }.
+ */
+export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id } = req.params;
+    const { photoUrls } = req.body;
+    if (!Array.isArray(photoUrls)) {
+      return res.status(400).json({ message: 'photoUrls must be an array' });
+    }
+
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+
+    // Ensure the new array contains exactly the same URLs (no injection)
+    const existing = new Set(item.photoUrls);
+    const allValid = photoUrls.every((u: any) => typeof u === 'string' && existing.has(u));
+    if (!allValid || photoUrls.length !== item.photoUrls.length) {
+      return res.status(400).json({ message: 'Invalid photoUrls — can only reorder existing photos' });
+    }
+
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('reorderItemPhotos error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// ── End Phase 16 ────────────────────────────────────────────────────────────
+
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {

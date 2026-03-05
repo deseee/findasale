@@ -9,10 +9,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import CSVImportModal from '../../../components/CSVImportModal';
 import { useAuth } from '../../../components/AuthContext';
+import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -20,6 +21,8 @@ const AddItemsDetailPage = () => {
   const router = useRouter();
   const { saleId, method } = router.query;
   const { user, isLoading } = useAuth();
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [showCSVModal, setShowCSVModal] = useState(method === 'csv');
 
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -34,6 +37,15 @@ const AddItemsDetailPage = () => {
       return response.data;
     },
     enabled: !!saleId,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (itemId: string) => api.delete(`/items/${itemId}`),
+    onSuccess: () => {
+      showToast('Item deleted', 'success');
+      queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
+    },
+    onError: () => showToast('Failed to delete item', 'error'),
   });
 
   if (isLoading || !saleId) return <div>Loading...</div>;
@@ -101,8 +113,23 @@ const AddItemsDetailPage = () => {
                     <p className="text-sm text-warm-600">{item.description}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="text-amber-600 hover:underline text-sm">Edit</button>
-                    <button className="text-red-600 hover:underline text-sm">Delete</button>
+                    <Link
+                      href={`/organizer/edit-item/${item.id}`}
+                      className="text-amber-600 hover:underline text-sm"
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete "${item.title}"?`)) {
+                          deleteMutation.mutate(item.id);
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="text-red-600 hover:underline text-sm disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
