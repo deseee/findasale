@@ -1,30 +1,41 @@
 # Next Session Resume Prompt
-*Written: 2026-03-05T00:00:00Z*
+*Written: 2026-03-05T04:52:02Z*
 *Session ended: normally*
 
 ## Resume From
 
 Start Sprint M — Phase 15 (Review + rating system UI). Full spec below.
 
-**Critical blocker first:** Run the Phase 19 Neon migration before testing anything points-related. The `PointsTransaction` table does not exist yet — the points system will throw DB errors until it's applied. Migration name: `phase19_points_transaction`. Requires local env with `DIRECT_URL`.
+**No critical blockers** — production is live and stable. Seed succeeded. Phase 22 migration applied.
+
+**One pending check:** The Phase 19 Neon migration (`phase19_points_transaction`) was flagged in session 53 as needed. The session 54 seed succeeded but may not have written PointsTransaction records. If points features throw DB errors, run `prisma migrate deploy` with `phase19_points_transaction` migration (migration file should already exist in `packages/database/prisma/migrations/`).
 
 ## What Was In Progress
 
-Nothing — session ended cleanly. Sprints I–L all complete and pushed.
+Nothing — session ended cleanly. All production incidents resolved.
 
-## What Was Completed This Session
+## What Was Completed This Session (54)
 
-- **Sprint I — Phase 19** — Hunt Pass + shopper points: `PointsTransaction` schema, `pointsService.ts`, `/api/points` routes (GET + track-visit idempotent), `PointsBadge.tsx`, `usePoints` hook, profile tier display (Scout 0–99 / Hunter 100–499 / Estate Pro 500+), BottomTabNav badge, visit tracking + amber toast in `sales/[id].tsx`. Commits 723bafe, 114f55c (partial), 89b732f.
-- **Sprint J — Phase 22** — Creator Tier Program: `reputationJob.ts` (weekly cron `0 2 * * 1`, `NEW`/`TRUSTED`/`ESTATE_CURATOR`), `TierBadge.tsx` (compact inline badge, no badge for NEW), `GET /api/organizers/me` (progress message), `reputationTier` added to `listSales` response, `SaleCard` TierBadge, organizer dashboard tier card + benefits checklist. Commits 723bafe, 114f55c.
-- **Sprint K — Phase 27** — Onboarding + Empty States + Microinteractions: `OnboardingModal.tsx` (3-step, push permission request, localStorage `findasale_onboarded` gate, excluded for ORGANIZER/ADMIN), `_app.tsx` OnboardingShower, `ToastContext` points type (amber `bg-amber-500`, `bottom-20 right-4`), shopper dashboard empty states (purchases, favorites, subscribed). Commit 89b732f.
-- **Sprint L — Phase 29** — Discovery + Search: `packages/backend/src/routes/search.ts` (`GET /` unified full-text, `GET /categories/:category`), `/search` page (TanStack Query, tabs all/sales/items, category chips), `/categories/[category]` page (10 categories, item grid, empty state), wired `app.use('/api/search', searchRoutes)` in `index.ts`, fixed CORS regex bug. Commits 89b732f, 991cb40.
+- **Railway backend 502 fixed** — root cause: `EXPOSE 5000` in Dockerfile but Railway was injecting `PORT=8080`. Fixed by setting `PORT=5000` explicitly in Railway Variables. Backend now returns 200.
+- **CORS fixed** — `finda.sale` was missing from `ALLOWED_ORIGINS`. Fixed.
+- **NextAuth 500 fixed** — `NEXTAUTH_SECRET` + `NEXTAUTH_URL` were missing from Vercel env vars. Added.
+- **Phase 22 reputationTier migration created** — `reputationTier`/`avgRating`/`totalReviews`/`totalSales` were applied to local DB via `db push` without a migration file, causing seed to fail on Neon. Created `20260305000001_phase22_reputation_tier`, pushed to GitHub, ran `db:deploy` against production.
+- **Neon DB seeded** — `pnpm run db:generate && pnpm run prisma:seed` succeeded.
+- **Dockerfile.production updated** — added warning comment about PORT/EXPOSE alignment.
+- **Self-healing entries 25–27 added** — Railway PORT mismatch, missing Prisma migration, stale Windows Prisma client.
+- **STATE.md, session-log.md, context.md** all synced.
 
 ## Environment Notes
 
-- **Neon migration REQUIRED before testing points** — `PointsTransaction` table missing. Run `prisma migrate deploy` locally with migration `phase19_points_transaction`.
-- **Vercel redeploy still pending** — rate-limited. Frontend may still point at old backend URL.
-- **Phase 31 OAuth dormant** — add to Vercel: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GOOGLE_CLIENT_ID/SECRET`, `FACEBOOK_CLIENT_ID/SECRET` + redirect URIs in Google Console + Meta Dev Portal.
-- Railway backend: healthy. GitHub MCP active — push via `mcp__github__push_files`.
+- **Production: LIVE and stable.** Railway backend healthy on PORT 5000. Vercel frontend deployed. Neon DB seeded with demo data.
+- **`PORT=5000` locked in Railway Variables** — must stay aligned with `EXPOSE 5000` in `Dockerfile.production`. Do not remove.
+- **Phase 31 OAuth still dormant** — add to Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET` + configure redirect URIs → `https://finda.sale/api/auth/callback/{google,facebook}`.
+- **Seed command (Windows):** `cd packages\database`, then set `$env:DATABASE_URL` and `$env:DIRECT_URL` from `packages/backend/.env`, then `pnpm run db:generate && pnpm run prisma:seed`. ⚠️ Clears all data.
+- GitHub MCP active — push via `mcp__github__push_files`. Repo: `deseee/findasale`, branch: `main`.
+
+## Exact Context
+
+All session 54 fixes were pushed to GitHub. No uncommitted changes expected.
 
 ---
 

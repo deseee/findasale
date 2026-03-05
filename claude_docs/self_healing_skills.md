@@ -123,6 +123,25 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 **Fix:** Always batch-Read all target files at the start of a multi-file edit session. Plan reads before edits.
 **Test:** Before any Edit call, confirm the file appears in recent Read results.
 
+### 25. Railway PORT / EXPOSE Mismatch (502 x-railway-fallback)
+**Trigger:** Railway deployment shows Active/Online, deploy logs show backend started on a port, but all HTTP requests return 502 with `x-railway-fallback: true`
+**Environment:** Railway + Docker + Express
+**Pattern:** Railway's public networking routes traffic to the port in `EXPOSE` (e.g. 5000). Railway also injects a dynamic `PORT` env var (e.g. 8080). If the backend listens on the injected PORT but Railway routes to the EXPOSE port, every request returns 502. The process is alive (cron jobs fire, health check passed) but HTTP never reaches it.
+**Fix:** Set `PORT=<EXPOSE value>` explicitly in Railway Variables. This overrides Railway's dynamic injection and aligns the backend's listen port with Railway's routing. Example: `EXPOSE 5000` → set `PORT=5000` in Variables.
+**Test:** `curl -s -o /dev/null -w "%{http_code}" https://<railway-domain>/` → should return 200, not 502.
+
+### 26. Missing Prisma Migration (schema drift via db push)
+**Trigger:** Seed or runtime error: `The column 'X' does not exist in the current database` — even though `prisma migrate deploy` reports "No pending migrations"
+**Pattern:** A field was added to schema.prisma and applied to local DB via `prisma db push` without creating a migration file. The column exists locally but not in production.
+**Fix:** Create migration file manually: `packages/database/prisma/migrations/YYYYMMDDNNNNNN_name/migration.sql` with the matching `ALTER TABLE` statement. Push to GitHub. Run `pnpm run db:deploy` against production.
+**Test:** `pnpm run db:deploy` → should report migration applied. Then re-run seed.
+
+### 27. Prisma Client Stale on Windows Before Seed
+**Trigger:** Seed fails with TypeScript type error on a known-good field (e.g. `userId does not exist in type X`) when running on Windows
+**Pattern:** The Prisma client in Windows `node_modules` was generated against an older schema. After schema changes, the client needs regenerating before TypeScript can compile the seed.
+**Fix:** `pnpm run db:generate` (or `pnpm --filter database run db:generate`) before running the seed. Also use `pnpm run prisma:seed` not `npx tsx` — ts-node is the configured runner.
+**Test:** Re-run `pnpm run prisma:seed` — should compile and execute without TS errors.
+
 ---
 
-Last Updated: 2026-03-05 (added entries 21–24 from Opus research session)
+Last Updated: 2026-03-05 (added entries 25–27 from session 54 production incident)

@@ -50,23 +50,8 @@ None. Sprints I–L complete (2026-03-05). Next: Sprint M — Phase 15 (Review +
 
 ## Pending Manual Action
 
-- **Production seed** — Neon DB is empty. Run seed against production to populate demo data (see Known Gotchas below for command).
 - **Phase 31 OAuth env vars** — Social login dormant until added to Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Also configure redirect URIs in Google Console + Meta Dev Portal → `https://finda.sale/api/auth/callback/{google,facebook}`.
 - **Resend domain verification** — ✅ Verified.
-
----
-
-## Known Gotchas (Production)
-
-- **Railway PORT mismatch** — Railway's public networking routes to the port listed in `EXPOSE` in the Dockerfile (5000). Railway also injects a dynamic `PORT` env var (e.g. 8080). If these differ, the backend is unreachable (502 with `x-railway-fallback: true`). **Fix already applied:** `PORT=5000` is now set explicitly in Railway Variables so both sides agree. Do not remove this variable. If you change `EXPOSE` in the Dockerfile, update the Railway Variable to match.
-- **Production seed command** — Seed script requires production DATABASE_URL. Get `DATABASE_URL` and `DIRECT_URL` values from Railway Variables, then run on Windows:
-  ```powershell
-  $env:DATABASE_URL="<neon-pooled-url-from-railway>"
-  $env:DIRECT_URL="<neon-direct-url-from-railway>"
-  cd packages\database
-  npx tsx prisma/seed.ts
-  ```
-  ⚠️ Seed clears all existing data. Run intentionally.
 
 ---
 
@@ -101,6 +86,20 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
+## Known Gotchas (Production)
+
+- **Railway PORT mismatch** — Railway's public networking routes to the port listed in `EXPOSE` in the Dockerfile (5000). Railway also injects a dynamic `PORT` env var (e.g. 8080). If these differ, the backend is unreachable (502 with `x-railway-fallback: true`). **Fix already applied:** `PORT=5000` is now set explicitly in Railway Variables so both sides agree. Do not remove this variable. If you change `EXPOSE` in the Dockerfile, update the Railway Variable to match.
+- **Production seed command** — Seed clears and recreates all data. Run from `packages\database` with env vars set:
+  ```powershell
+  $env:DATABASE_URL="<neon-pooled-url>"   # from packages/backend/.env
+  $env:DIRECT_URL="<neon-direct-url>"     # from packages/backend/.env
+  pnpm run db:generate                    # regenerate Prisma client first
+  pnpm run prisma:seed
+  ```
+  ⚠️ Seed clears all existing data. Run intentionally.
+
+---
+
 ## Constraints
 
 - Token efficiency required
@@ -111,4 +110,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-05 (session 54 — Production fixes: CORS, NextAuth, Railway PORT mismatch resolved. Backend live at backend-production-153c9.up.railway.app)
+Last Updated: 2026-03-05 (session 54 — Production live: CORS, NextAuth, Railway PORT mismatch fixed, missing reputationTier migration added, Neon DB seeded)
