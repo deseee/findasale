@@ -37,7 +37,8 @@ Hunt Pass + shopper points — PointsTransaction model + pointsService + /api/po
 Creator Tier Program — weekly reputationJob cron + TierBadge + organizer /me endpoint + tier card in dashboard (Phase 22),
 Shopper onboarding + empty states + microinteractions — OnboardingModal + points toast (amber, bottom-20) + empty states across all major shopper screens (Phase 27),
 Discovery + search — /api/search full-text + /api/search/categories/:cat + /search page + /categories/[category] page (Phase 29),
-Review + rating system — reviewController + /api/reviews (sale+organizer) + StarRating + ReviewsSection + avgRating recalc + 5pt award (Phase 15).
+Review + rating system — reviewController + /api/reviews (sale+organizer) + StarRating + ReviewsSection + avgRating recalc + 5pt award (Phase 15),
+Shopper messaging — Conversation + Message models + messageController + /api/messages (5 routes) + messages inbox + thread page + new conversation page + unread badge in BottomTabNav + Message organizer button on sale detail (Phase 20).
 
 Full detail: `claude_docs/COMPLETED_PHASES.md`
 
@@ -45,7 +46,7 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## In Progress
 
-None. Sprint M complete (2026-03-05). Next: Sprint N — Phase 20 (Shopper messaging).
+None. Sprint N complete (2026-03-05). Next: Sprint O — Phase 21 (Reservation/hold UI).
 
 ---
 
@@ -53,7 +54,7 @@ None. Sprint M complete (2026-03-05). Next: Sprint N — Phase 20 (Shopper messa
 
 - **Phase 31 OAuth env vars** — Social login dormant until added to Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Also configure redirect URIs in Google Console + Meta Dev Portal → `https://finda.sale/api/auth/callback/{google,facebook}`.
 - **Resend domain verification** — ✅ Verified.
-- **UptimeRobot** — Add 3 monitors (API health, frontend, keyword). See setup instructions from session 55.
+- **Phase 20 migration** — Run `prisma migrate deploy` on Neon to create Conversation + Message tables (migration: `20260305000002_phase20_messaging`).
 
 ---
 
@@ -82,8 +83,9 @@ Five-pillar growth phase. Sprint order:
 10. ~~Sprint J — Phase 22~~ ✅ — Creator Tier Program: reputationJob cron + TierBadge + organizer /me route + tier card in dashboard (2026-03-05)
 11. ~~Sprint K — Phase 27~~ ✅ — Onboarding + Empty States + Microinteractions: OnboardingModal + points toast + shopper empty states (2026-03-05)
 12. ~~Sprint L — Phase 29~~ ✅ — Discovery + Search: /api/search + /search page + /categories/[category] page (2026-03-05)
-13. ~~Sprint M — Phase 15~~ ✅ — Review + rating system: reviewController + StarRating + ReviewsSection + points award (2026-03-05)
-14. **Sprint N — Phase 20** — Shopper messaging
+13. ~~Sprint M — Phase 15~~ ✅ — Review + rating system UI (2026-03-05)
+14. ~~Sprint N — Phase 20~~ ✅ — Shopper messaging (2026-03-05)
+15. **Sprint O — Phase 21** — Reservation / hold UI
 
 Full roadmap: `claude_docs/ROADMAP.md`
 
@@ -113,4 +115,4 @@ Full roadmap: `claude_docs/ROADMAP.md`
 
 ---
 
-Last Updated: 2026-03-05 (session 55 — Sprint M done: Phase 15 reviews/ratings system, security fix auth.ts token log, stress-test.js 43-check suite, pre-commit hook, UptimeRobot config)
+Last Updated: 2026-03-05 (session 56 — Sprint N done: Phase 20 shopper messaging — Conversation+Message models, messageController, /api/messages, inbox+thread+new pages, unread badge, Message organizer button)

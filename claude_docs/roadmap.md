@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-05 (v5 — sprint I–L done, workflow track restored)
+**Last Updated:** 2026-03-05 (v6 — Sprint N done: Phase 20 shopper messaging)
 **Status:** Production MVP live at finda.sale. 16 phases shipped. Entering growth phase.
 
 ---
@@ -34,9 +34,9 @@ Research archives: `claude_docs/research/competitor-intel-2026-03-04.md`, `claud
 | J | 22 | Creator tier program | ✅ Done |
 | K | 27 | Onboarding + empty states + microinteractions | ✅ Done |
 | L | 29 | Discovery + search | ✅ Done |
-| **M** | **15** | **Review + rating system UI** | **Next** |
-| N | 20 | Shopper messaging | Queued |
-| O | 21 | Reservation / hold UI | Queued |
+| M | 15 | Review + rating system UI | ✅ Done |
+| N | 20 | Shopper messaging | ✅ Done |
+| **O** | **21** | **Reservation / hold UI** | **Next** |
 | P–S | 23,30,32,16 | Later phases | Post-beta |
 
 **Parallel tracks:** Phase 32 can spread across sprints, partnerships/content marketing need zero code.
@@ -135,9 +135,9 @@ NextAuth.js v5, Google + Facebook. OAuthProvider + oauthId fields on User. Apple
 
 ## Remaining Feature Gaps
 
-**Must-have before scale:** Reviews/ratings UI (Phase 15 — next sprint), shopper messaging (Phase 20), photo room overviews (Phase 14 onboarding).
+**Must-have before scale:** Reservation/hold UI (Phase 21 — next sprint), photo room overviews (Phase 14 onboarding).
 
-**Nice-to-have (post-beta):** Reservation/hold UI, weekly curator email, neighborhood landing pages, favorites categories, missing listing UGC bounties, instant payouts, shipping, label printing, Zapier/CSV export.
+**Nice-to-have (post-beta):** Weekly curator email, neighborhood landing pages, favorites categories, missing listing UGC bounties, instant payouts, shipping, label printing, Zapier/CSV export.
 
 ---
 
@@ -161,4 +161,4 @@ These run alongside feature sprints. No dedicated sprint needed.
 
 ---
 
-*v5 compressed 2026-03-05. Sprints I–L marked done, Workflow track restored (concurrent session overlap fix). Research archives in claude_docs/research/. Next review: post-Sprint M.*
+*v6 compressed 2026-03-05. Sprint N done (Phase 20 shopper messaging). Next: Sprint O — Phase 21 reservation/hold UI.*
