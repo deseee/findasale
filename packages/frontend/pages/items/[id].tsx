@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
@@ -94,6 +94,7 @@ const ItemDetailPage = () => {
   const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [holdCountdown, setHoldCountdown] = useState('');
   const { showToast } = useToast();
 
   const { data: item, isLoading, isError, refetch } = useQuery({
@@ -126,6 +127,63 @@ const ItemDetailPage = () => {
       setIsFavorite(favoriteStatus);
     }
   }, [favoriteStatus]);
+
+  // Phase 21: Fetch active reservation for this item
+  const { data: reservation, refetch: refetchReservation } = useQuery({
+    queryKey: ['reservation', id],
+    queryFn: async () => {
+      if (!id || !user) return null;
+      try {
+        const response = await api.get(`/reservations/item/${id}`);
+        return response.data as { id: string; userId: string; status: string; expiresAt: string } | null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!id && !!user,
+    refetchInterval: 30000,
+  });
+
+  // Countdown timer for the shopper's own hold
+  useEffect(() => {
+    if (!reservation || reservation.userId !== user?.id) return;
+    const tick = () => {
+      const diff = new Date(reservation.expiresAt).getTime() - Date.now();
+      if (diff <= 0) { setHoldCountdown('Expired'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      setHoldCountdown(`${h}h ${m}m remaining`);
+    };
+    tick();
+    const t = setInterval(tick, 60000);
+    return () => clearInterval(t);
+  }, [reservation, user?.id]);
+
+  // Phase 21: Place hold mutation
+  const placeMutation = useMutation({
+    mutationFn: () => api.post('/reservations', { itemId: id }),
+    onSuccess: () => {
+      showToast('Item held for 24 hours!', 'success');
+      refetch();
+      refetchReservation();
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to place hold', 'error');
+    },
+  });
+
+  // Phase 21: Cancel hold mutation
+  const cancelMutation = useMutation({
+    mutationFn: (reservationId: string) => api.delete(`/reservations/${reservationId}`),
+    onSuccess: () => {
+      showToast('Hold cancelled', 'success');
+      refetch();
+      refetchReservation();
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to cancel hold', 'error');
+    },
+  });
 
   // Timer effect for auction countdown
   useEffect(() => {
@@ -207,6 +265,8 @@ const ItemDetailPage = () => {
   const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
   const isAuctionItem = !!item.auctionStartPrice;
   const auctionEnded = item.auctionEndTime && new Date(item.auctionEndTime) < new Date();
+  const myHold = reservation && user && reservation.userId === user.id;
+  const someoneElseHolds = reservation && user && reservation.userId !== user.id && ['PENDING', 'CONFIRMED'].includes(reservation.status);
 
   return (
     <div className="min-h-screen bg-warm-50">
@@ -449,12 +509,55 @@ const ItemDetailPage = () => {
                 <span className={`px-3 py-1 rounded-full text-sm ${
                   item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
                   item.status === 'SOLD' ? 'bg-red-100 text-red-800' :
+                  item.status === 'RESERVED' ? 'bg-amber-100 text-amber-800' :
                   item.status === 'AUCTION_ENDED' ? 'bg-warm-100 text-warm-800' :
                   'bg-warm-100 text-warm-800'
                 }`}>
                   {item.status.replace(/_/g, ' ')}
                 </span>
               </div>
+
+              {/* Phase 21: Reservation / hold UI */}
+              {!isOrganizer && user && !isAuctionItem && (
+                <div className="mt-4">
+                  {myHold && ['PENDING', 'CONFIRMED'].includes(reservation!.status) ? (
+                    /* Shopper holds this item */
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <p className="text-sm font-semibold text-amber-800 mb-1">You have this item on hold</p>
+                      <p className="text-xs text-amber-600 mb-3">{holdCountdown}</p>
+                      <button
+                        onClick={() => cancelMutation.mutate(reservation!.id)}
+                        disabled={cancelMutation.isPending}
+                        className="text-sm text-red-600 hover:text-red-800 underline disabled:opacity-50"
+                      >
+                        {cancelMutation.isPending ? 'Cancelling…' : 'Cancel hold'}
+                      </button>
+                    </div>
+                  ) : someoneElseHolds ? (
+                    /* Someone else holds it */
+                    <div className="bg-warm-100 border border-warm-200 rounded-lg p-3 text-sm text-warm-600">
+                      Item is currently on hold
+                    </div>
+                  ) : item.status === 'AVAILABLE' ? (
+                    /* Available — show hold button */
+                    <button
+                      onClick={() => placeMutation.mutate()}
+                      disabled={placeMutation.isPending}
+                      className="w-full border border-amber-600 text-amber-600 hover:bg-amber-50 font-semibold py-2 px-6 rounded transition-colors disabled:opacity-50"
+                    >
+                      {placeMutation.isPending ? 'Placing hold…' : 'Hold for 24 hours'}
+                    </button>
+                  ) : null}
+                </div>
+              )}
+
+              {!user && item.status === 'AVAILABLE' && !isAuctionItem && (
+                <div className="mt-4 text-sm text-center">
+                  <Link href="/login" className="text-amber-600 hover:text-amber-800">
+                    Log in to hold this item
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
