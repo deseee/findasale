@@ -1,17 +1,81 @@
 #!/bin/sh
-# Pre-push hook: runs TypeScript check on frontend before any push.
-# To enable: git config core.hooksPath .githooks
+# FindA.Sale pre-push hook — Sprint T2
+# Checks: TypeScript, Prisma schema lint, controller stubs, auth coverage
+# Install: git config core.hooksPath .githooks
 
-echo "[pre-push] Running TypeScript check on frontend..."
+echo "[pre-push] Starting pre-push checks..."
 
+# ── 1. TypeScript check (frontend) ──────────────────────────────────────────
+echo "[pre-push] 1/4 TypeScript check..."
 cd packages/frontend && npx tsc --noEmit
-
 if [ $? -ne 0 ]; then
   echo ""
-  echo "[pre-push] TypeScript errors found. Push aborted."
-  echo "Fix the errors above, then push again."
+  echo "❌ [pre-push] TypeScript errors. Push aborted."
   exit 1
 fi
+cd ../..
+echo "  ✅ TypeScript passed."
 
-echo "[pre-push] TypeScript check passed."
+# ── 2. Prisma schema validation ───────────────────────────────────────────────
+echo "[pre-push] 2/4 Prisma schema lint..."
+npx prisma validate --schema packages/database/prisma/schema.prisma 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ [pre-push] Prisma schema invalid. Push aborted."
+  exit 1
+fi
+echo "  ✅ Prisma schema valid."
+
+# ── 3. Controller stubs: console.log / TODO / alert( ─────────────────────────
+echo "[pre-push] 3/4 Controller stub check..."
+CTRL_DIR="packages/backend/src/controllers"
+
+CONSOLE_HITS=$(grep -rn 'console\.log' "$CTRL_DIR" --include="*.ts" \
+  | grep -v 'NODE_ENV\|process\.env\|✅\|❌\|⚠️\|catch\|error\|Error' \
+  | head -10 || true)
+if [ -n "$CONSOLE_HITS" ]; then
+  echo "⚠️  Unguarded console.log in controllers (clean up before launch):"
+  echo "$CONSOLE_HITS"
+fi
+
+TODO_HITS=$(grep -rn 'TODO\|FIXME' "$CTRL_DIR" --include="*.ts" | head -5 || true)
+if [ -n "$TODO_HITS" ]; then
+  echo "⚠️  TODO/FIXME markers in controllers:"
+  echo "$TODO_HITS"
+fi
+
+ALERT_HITS=$(grep -rn 'alert(' "$CTRL_DIR" --include="*.ts" | head -5 || true)
+if [ -n "$ALERT_HITS" ]; then
+  echo "❌ alert() in controller code. Push aborted."
+  echo "$ALERT_HITS"
+  exit 1
+fi
+echo "  ✅ Controller stub check passed."
+
+# ── 4. Auth coverage on mutation routes ──────────────────────────────────────
+echo "[pre-push] 4/4 Auth coverage check..."
+ROUTE_DIR="packages/backend/src/routes"
+MISSING_AUTH=""
+
+for routefile in "$ROUTE_DIR"/*.ts; do
+  filename=$(basename "$routefile")
+  case "$filename" in
+    auth.ts|contact.ts|geocode.ts|stripe.ts) continue ;;
+  esac
+  while IFS= read -r line; do
+    if echo "$line" | grep -qE 'router\.(post|put|patch|delete)\s*\('; then
+      if ! echo "$line" | grep -q 'authenticate'; then
+        MISSING_AUTH="$MISSING_AUTH\n  $filename: $line"
+      fi
+    fi
+  done < "$routefile"
+done
+
+if [ -n "$MISSING_AUTH" ]; then
+  echo "⚠️  Mutation routes possibly missing authenticate (verify manually):"
+  printf "%b\n" "$MISSING_AUTH"
+fi
+echo "  ✅ Auth coverage check complete."
+
+echo ""
+echo "✅ [pre-push] All checks passed."
 exit 0

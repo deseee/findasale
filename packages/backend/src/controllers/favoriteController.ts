@@ -42,6 +42,69 @@ export const toggleItemFavorite = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// GET /api/favorites?category=X — list all favorited items for the logged-in user
+// Optional ?category=furniture (any Item.category value). Returns items with sale info.
+export const getUserFavorites = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { category } = req.query as { category?: string };
+
+    const favorites = await prisma.favorite.findMany({
+      where: {
+        userId: req.user.id,
+        itemId: { not: null },
+        ...(category ? { item: { is: { category } } } : {}),
+      },
+      include: {
+        item: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            status: true,
+            category: true,
+            condition: true,
+            photoUrls: true,
+            sale: {
+              select: {
+                id: true,
+                title: true,
+                startDate: true,
+                endDate: true,
+                status: true,
+                organizer: { select: { id: true, businessName: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    // Pull distinct categories from all user favorites (for tab building)
+    const allFavs = await prisma.favorite.findMany({
+      where: { userId: req.user.id, itemId: { not: null } },
+      select: { item: { select: { category: true } } },
+    });
+    const categories = [...new Set(
+      allFavs.map(f => f.item?.category).filter(Boolean) as string[]
+    )].sort();
+
+    res.json({
+      favorites: favorites.map(f => f.item).filter(Boolean),
+      categories,
+      total: favorites.length,
+    });
+  } catch (error) {
+    console.error('Get user favorites error:', error);
+    res.status(500).json({ message: 'Server error while fetching favorites' });
+  }
+};
+
 export const getItemFavoriteStatus = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {

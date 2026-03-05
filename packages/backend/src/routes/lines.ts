@@ -17,7 +17,9 @@ const router = Router();
 router.post('/:saleId/start', authenticate, startLine);
 router.post('/:saleId/next', authenticate, callNext);
 router.get('/:saleId/status', authenticate, getLineStatus);
-router.post('/:saleId/broadcast', authenticate, broadcastPositionUpdates);
+// T4: /notify — "now serving #N" SMS blast to all waiting shoppers
+router.post('/:saleId/notify', authenticate, broadcastPositionUpdates);
+router.post('/:saleId/broadcast', authenticate, broadcastPositionUpdates); // compat alias
 router.post('/entry/:lineEntryId/entered', authenticate, markAsEntered);
 
 // ── Shopper routes ────────────────────────────────────────────────────────────
