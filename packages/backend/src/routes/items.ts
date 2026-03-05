@@ -14,6 +14,7 @@ import {
   reorderItemPhotos,
 } from '../controllers/itemController';
 import { authenticate } from '../middleware/auth';
+import { getSingleItemLabel } from '../controllers/labelController'; // W2
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -33,5 +34,8 @@ router.patch('/:id/photos/reorder', authenticate, reorderItemPhotos);
 
 // CSV import endpoint
 router.post('/:saleId/import-items', authenticate, upload.single('csv'), importItemsFromCSV);
+
+// W2: Label PDF
+router.get('/:id/label', authenticate, getSingleItemLabel);
 
 export default router;
