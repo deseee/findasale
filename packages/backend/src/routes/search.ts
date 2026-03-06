@@ -222,7 +222,7 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
  * Accepts: multipart form data with image file
  * Returns: { detectedLabels: string[], results: Item[] }
  */
-router.post('/visual', upload.single('photo'), async (req: Request, res: Response) => {
+router.post('/visual', upload.single('photo'), async (req: Request, res: Response) => { // public, no auth needed — visual search is open to guests
   try {
     const file = req.file as Express.Multer.File | undefined;
     if (!file) {

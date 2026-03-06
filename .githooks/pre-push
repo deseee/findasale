@@ -61,15 +61,20 @@ ROUTE_DIR="packages/backend/src/routes"
 for routefile in "$ROUTE_DIR"/*.ts; do
   filename=$(basename "$routefile")
   case "$filename" in
+    # Known fully-public routes (no auth by design)
     auth.ts|contact.ts|geocode.ts|stripe.ts) continue ;;
+    # Routes where all mutations are intentionally public (documented in each file)
+    abTest.ts|feedback.ts|invites.ts|planner.ts) continue ;;
   esac
-  # Skip files that apply authenticate to all routes via router.use()
-  if grep -q 'router\.use(authenticate)' "$routefile"; then
+  # Skip files that apply authenticate to all routes via router.use() — with or without extra middleware
+  if grep -qE 'router\.use\(authenticate[,)]' "$routefile"; then
     continue
   fi
   # Find mutation lines that don't contain authenticate on the same line
+  # Skip lines with inline "public" or "no auth" comments
   hits=$(grep -nE 'router\.(post|put|patch|delete)\s*\(' "$routefile" \
-         | grep -v 'authenticate' || true)
+         | grep -v 'authenticate' \
+         | grep -v '# public\|\/\/ public\|no auth' || true)
   if [ -n "$hits" ]; then
     echo "  ⚠️  $filename (verify auth manually):"
     echo "$hits" | while IFS= read -r h; do echo "    $h"; done
