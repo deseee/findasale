@@ -10,6 +10,10 @@ interface User {
   role: string;
   points: number;
   referralCode?: string;
+  categoryInterests?: string[];
+  streakPoints?: number;
+  huntPassActive?: boolean;
+  organizerTier?: string;
 }
 
 interface AuthContextType {
