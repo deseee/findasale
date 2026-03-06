@@ -191,7 +191,11 @@ const RegisterPage = () => {
             <div className="rounded-md shadow-sm -space-y-px">
               <p className="text-sm font-medium text-warm-700 mb-2 pt-2">Business Information</p>
               <div>
+                <label htmlFor="businessName" className="sr-only">
+                  Business Name
+                </label>
                 <input
+                  id="businessName"
                   name="businessName"
                   type="text"
                   required
@@ -202,7 +206,11 @@ const RegisterPage = () => {
                 />
               </div>
               <div>
+                <label htmlFor="phone" className="sr-only">
+                  Business Phone
+                </label>
                 <input
+                  id="phone"
                   name="phone"
                   type="tel"
                   required
@@ -213,7 +221,11 @@ const RegisterPage = () => {
                 />
               </div>
               <div>
+                <label htmlFor="businessAddress" className="sr-only">
+                  Business Address
+                </label>
                 <input
+                  id="businessAddress"
                   name="businessAddress"
                   type="text"
                   required

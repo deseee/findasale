@@ -11,7 +11,7 @@ const CityPage = () => {
   const { city } = router.query;
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['sales', 'city', city, page],
     queryFn: async () => {
       const response = await api.get(`/sales/city/${city}`, {
@@ -45,8 +45,9 @@ const CityPage = () => {
           )}
 
           {isError && (
-            <div className="text-center py-8">
-              <p className="text-warm-600">Unable to load sales. Please try again.</p>
+            <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 gap-4">
+              <p className="text-warm-700 text-lg">Failed to load city listings.</p>
+              <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
             </div>
           )}
 
