@@ -6,7 +6,8 @@ import { handlePurchaseBadge } from './userController';
 import { awardPoints } from '../services/pointsService';
 import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
-const stripe = getStripe();
+// Lazy — avoids crash when module loads before dotenv runs
+const stripe = () => getStripe();
 
 let _resend: any = null;
 const getResendClient = () => {
@@ -69,12 +70,12 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
     if (organizer.stripeConnectId) {
       try {
         // First, try to create a login link (works only if account is fully onboarded)
-        const loginLink = await stripe.accounts.createLoginLink(organizer.stripeConnectId);
+        const loginLink = await stripe().accounts.createLoginLink(organizer.stripeConnectId);
         return res.json({ url: loginLink.url });
       } catch (loginError: any) {
         // If login link fails because onboarding is incomplete, create a new account link
         if (loginError.message?.includes('not completed onboarding')) {
-          const accountLink = await stripe.accountLinks.create({
+          const accountLink = await stripe().accountLinks.create({
             account: organizer.stripeConnectId,
             refresh_url: `${process.env.FRONTEND_URL}/organizer/dashboard`,
             return_url: `${process.env.FRONTEND_URL}/organizer/dashboard`,
@@ -88,7 +89,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
     }
 
     // No existing Stripe account: create a new one
-    const account = await stripe.accounts.create({
+    const account = await stripe().accounts.create({
       type: 'express',
       email: req.user.email,
       business_type: 'individual',
@@ -105,7 +106,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
     });
 
     // Create an account link for onboarding
-    const accountLink = await stripe.accountLinks.create({
+    const accountLink = await stripe().accountLinks.create({
       account: account.id,
       refresh_url: `${process.env.FRONTEND_URL}/organizer/dashboard`,
       return_url: `${process.env.FRONTEND_URL}/organizer/dashboard`,
@@ -199,6 +200,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid price value' });
     }
 
+    // CA3: Stripe minimum charge is $0.50 — reject below that to avoid Stripe error
+    if (price < 0.5) {
+      return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
+    }
+
     // W1: Add shipping cost if buyer opted in and item ships
     let shippingCost = 0;
     if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
@@ -211,7 +217,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 
     const idempotencyKey = `pi-${itemId}-${req.user.id}`;
 
-    const paymentIntent = await stripe.paymentIntents.create(
+    const paymentIntent = await stripe().paymentIntents.create(
       {
         amount: priceCents,
         currency: 'usd',
@@ -269,7 +275,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    event = stripe().webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err: any) {
     console.error('Webhook signature verification failed.', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -312,6 +318,27 @@ export const webhookHandler = async (req: Request, res: Response) => {
         });
 
         if (paymentIntent.metadata?.itemId) {
+          // CA3: Concurrent purchase guard — check item status before marking SOLD
+          // If another buyer's PI already marked it SOLD, refund this one automatically
+          const item = await prisma.item.findUnique({
+            where: { id: paymentIntent.metadata.itemId },
+            select: { status: true },
+          });
+
+          if (item && item.status === 'SOLD' && purchase.status !== 'PAID') {
+            // Second buyer won the race — refund silently and stop
+            console.warn(
+              `CA3 concurrent purchase: item ${paymentIntent.metadata.itemId} already SOLD, ` +
+              `refunding PI ${paymentIntent.id}`
+            );
+            await stripe().refunds.create({ payment_intent: paymentIntent.id });
+            await prisma.purchase.update({
+              where: { stripePaymentIntentId: paymentIntent.id },
+              data: { status: 'REFUNDED' },
+            });
+            break;
+          }
+
           await prisma.item.update({
             where: { id: paymentIntent.metadata.itemId },
             data: { status: 'SOLD' },
@@ -412,7 +439,7 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No payment intent for this purchase' });
     }
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(purchase.stripePaymentIntentId);
+    const paymentIntent = await stripe().paymentIntents.retrieve(purchase.stripePaymentIntentId);
 
     const amount = purchase.amount;
     const platformFee = purchase.platformFeeAmount ?? 0;
@@ -461,7 +488,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No payment intent found for this purchase' });
     }
 
-    await stripe.refunds.create({ payment_intent: purchase.stripePaymentIntentId });
+    await stripe().refunds.create({ payment_intent: purchase.stripePaymentIntentId });
 
     await prisma.purchase.update({ where: { id: purchaseId }, data: { status: 'REFUNDED' } });
 
