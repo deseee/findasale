@@ -10,6 +10,7 @@ import CheckoutModal from '../../components/CheckoutModal';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import CountdownTimer from '../../components/CountdownTimer'; // CD2: Live Drop
 import ReverseAuctionBadge from '../../components/ReverseAuctionBadge'; // CD2 Phase 4
+import BuyingPoolCard from '../../components/BuyingPoolCard';
 import { useToast } from '../../components/ToastContext';
 import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -379,7 +380,7 @@ const ItemDetailPage = () => {
         if (wishlist) {
           const wishlistItem = wishlist.items?.find((item) => item.itemId === id);
           if (wishlistItem) {
-            return api.delete(`/wishlists/items/${wishlistItem.id}`);
+            return api.delete(`/wishlists/items/${wishlistItem.itemId}`);
           }
         }
         return Promise.resolve();
@@ -874,6 +875,16 @@ const ItemDetailPage = () => {
                   {item.status.replace(/_/g, ' ')}
                 </span>
               </div>
+
+              {/* Group Buying Pools — for high-value items ($100+) */}
+              {!isAuctionItem && item && (
+                <BuyingPoolCard
+                  itemId={item.id}
+                  itemPrice={item.price || 0}
+                  itemStatus={item.status}
+                  userId={user?.id}
+                />
+              )}
 
               {/* Phase 21: Reservation / hold UI */}
               {!isOrganizer && user && !isAuctionItem && (
