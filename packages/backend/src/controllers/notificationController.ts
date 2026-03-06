@@ -197,7 +197,7 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
           not: null
         }
       },
-      take: 200,
+      take: 100,
     });
 
     if (subscribers.length === 0) {
@@ -235,34 +235,34 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): s
   const saleCards = sales.map((sale) => {
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const endDate = new Date(sale.endDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const photo = sale.photoUrls?.[0] ? `<img src=\"${sale.photoUrls[0]}\" alt=\"${sale.title}\" style=\"width:100%;height:160px;object-fit:cover;border-radius:6px 6px 0 0;\" />` : '';
+    const photo = sale.photoUrls?.[0] ? `<img src="${sale.photoUrls[0]}" alt="${sale.title}" style="width:100%;height:160px;object-fit:cover;border-radius:6px 6px 0 0;" />` : '';
     return `
-      <div style=\"border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px;overflow:hidden;font-family:sans-serif;\">
+      <div style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px;overflow:hidden;font-family:sans-serif;">
         ${photo}
-        <div style=\"padding:14px;\">
-          <h3 style=\"margin:0 0 4px;font-size:16px;color:#111827;\">${sale.title}</h3>
-          <p style=\"margin:0 0 6px;font-size:13px;color:#6b7280;\">${sale.address}, ${sale.city}, ${sale.state}</p>
-          <p style=\"margin:0 0 10px;font-size:13px;color:#374151;\">${startDate} – ${endDate}</p>
-          <p style=\"margin:0 0 10px;font-size:12px;color:#9ca3af;\">By ${sale.organizer?.businessName || 'Unknown Organizer'}</p>
-          <a href=\"${frontendUrl}/sales/${sale.id}\" style=\"display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;\">View Sale →</a>
+        <div style="padding:14px;">
+          <h3 style="margin:0 0 4px;font-size:16px;color:#111827;">${sale.title}</h3>
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">${sale.address}, ${sale.city}, ${sale.state}</p>
+          <p style="margin:0 0 10px;font-size:13px;color:#374151;">${startDate} – ${endDate}</p>
+          <p style="margin:0 0 10px;font-size:12px;color:#9ca3af;">By ${sale.organizer?.businessName || 'Unknown Organizer'}</p>
+          <a href="${frontendUrl}/sales/${sale.id}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">View Sale →</a>
         </div>
-      </div>`);
+      </div>`;
   }).join('');
 
   return `
 <!DOCTYPE html>
 <html>
-<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>
-<body style=\"margin:0;padding:0;background:#f9fafb;\">
-  <div style=\"max-width:600px;margin:0 auto;padding:24px 16px;font-family:sans-serif;\">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;">
+  <div style="max-width:600px;margin:0 auto;padding:24px 16px;font-family:sans-serif;">
     <!-- Header -->
-    <div style=\"background:#2563eb;border-radius:10px;padding:24px;margin-bottom:24px;text-align:center;\">
-      <h1 style=\"margin:0;color:#fff;font-size:24px;font-weight:700;\">🏷️ FindA.Sale</h1>
-      <p style=\"margin:8px 0 0;color:#bfdbfe;font-size:14px;\">Your Weekend Estate Sale Digest</p>
+    <div style="background:#2563eb;border-radius:10px;padding:24px;margin-bottom:24px;text-align:center;">
+      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">🏷️ FindA.Sale</h1>
+      <p style="margin:8px 0 0;color:#bfdbfe;font-size:14px;">Your Weekend Estate Sale Digest</p>
     </div>
 
     <!-- Greeting -->
-    <p style=\"color:#374151;font-size:15px;margin-bottom:20px;\">
+    <p style="color:#374151;font-size:15px;margin-bottom:20px;">
       Hi ${userName || 'there'},<br><br>
       Here are the estate sales happening this weekend near you. Don't miss out!
     </p>
@@ -271,11 +271,11 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): s
     ${saleCards}
 
     <!-- Footer -->
-    <div style=\"border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;text-align:center;\">
-      <p style=\"color:#9ca3af;font-size:12px;margin:0;\">
+    <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;text-align:center;">
+      <p style="color:#9ca3af;font-size:12px;margin:0;">
         You're receiving this because you have a FindA.Sale account.<br>
-        <a href=\"${frontendUrl}\" style=\"color:#2563eb;\">View all sales</a> ·
-        <a href=\"${frontendUrl}/shopper/dashboard\" style=\"color:#2563eb;\">My Dashboard</a>
+        <a href="${frontendUrl}" style="color:#2563eb;">View all sales</a> &middot;
+        <a href="${frontendUrl}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
       </p>
     </div>
   </div>
