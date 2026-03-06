@@ -113,6 +113,8 @@ const ItemDetailPage = () => {
   const [isLiveDropRevealed, setIsLiveDropRevealed] = useState(false); // CD2
   const [wishlistDropdownOpen, setWishlistDropdownOpen] = useState(false);
   const [wishlistsInItem, setWishlistsInItem] = useState<Set<string>>(new Set());
+  const [onWaitlist, setOnWaitlist] = useState(false);
+  const [isJoiningWaitlist, setIsJoiningWaitlist] = useState(false);
   const socketRef = useRef<Socket | null>(null); // V1: live bidding socket
   const { showToast } = useToast();
 
@@ -180,6 +182,27 @@ const ItemDetailPage = () => {
     },
     enabled: !!id && !!user,
   });
+
+  // Feature: Item Waitlist — check if user is on waitlist for this item
+  const { data: waitlistStatus, refetch: refetchWaitlist } = useQuery({
+    queryKey: ['waitlist', id, user?.id],
+    queryFn: async () => {
+      if (!id) return { onWaitlist: false, count: 0 };
+      try {
+        const response = await api.get(`/waitlist/status/${id}`);
+        return response.data as { onWaitlist: boolean; count: number };
+      } catch {
+        return { onWaitlist: false, count: 0 };
+      }
+    },
+    enabled: !!id,
+  });
+
+  useEffect(() => {
+    if (waitlistStatus !== undefined) {
+      setOnWaitlist(waitlistStatus.onWaitlist);
+    }
+  }, [waitlistStatus]);
 
   // Phase 21: Fetch active reservation for this item
   const { data: reservation, refetch: refetchReservation } = useQuery({
@@ -393,6 +416,36 @@ const ItemDetailPage = () => {
       showToast(err.response?.data?.message || 'Failed to update wishlist', 'error');
     },
   });
+
+  // Feature: Item Waitlist — toggle join/leave waitlist
+  const handleToggleWaitlist = async () => {
+    if (!user) {
+      showToast('Please log in to join the waitlist', 'info');
+      return;
+    }
+
+    if (!item) return;
+
+    setIsJoiningWaitlist(true);
+    try {
+      if (onWaitlist) {
+        // Leave waitlist
+        await api.delete(`/waitlist/${item.id}`);
+        setOnWaitlist(false);
+        showToast('Removed from waitlist', 'success');
+      } else {
+        // Join waitlist
+        await api.post(`/waitlist/${item.id}`);
+        setOnWaitlist(true);
+        showToast('Added to waitlist! We\'ll email you when it\'s available.', 'success');
+      }
+      refetchWaitlist();
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to update waitlist', 'error');
+    } finally {
+      setIsJoiningWaitlist(false);
+    }
+  };
 
   const toggleWishlistItem = (wishlistId: string) => {
     const isInWishlist = wishlistsInItem.has(wishlistId);
@@ -917,6 +970,29 @@ const ItemDetailPage = () => {
                       {placeMutation.isPending ? 'Placing hold…' : 'Hold for 24 hours'}
                     </button>
                   ) : null}
+                </div>
+              )}
+
+              {/* Feature: Item Waitlist — "Notify Me" button for SOLD/RESERVED items */}
+              {!isOrganizer && user && !isAuctionItem && (item.status === 'SOLD' || item.status === 'RESERVED') && (
+                <div className="mt-4">
+                  <button
+                    onClick={handleToggleWaitlist}
+                    disabled={isJoiningWaitlist}
+                    className={`w-full font-semibold py-2 px-6 rounded transition-colors disabled:opacity-50 ${
+                      onWaitlist
+                        ? 'bg-green-100 border border-green-600 text-green-700 hover:bg-green-200'
+                        : 'bg-blue-100 border border-blue-600 text-blue-700 hover:bg-blue-200'
+                    }`}
+                  >
+                    {isJoiningWaitlist ? (
+                      <>Loading…</>
+                    ) : onWaitlist ? (
+                      <>✓ You&apos;re on the waitlist</>
+                    ) : (
+                      <>🔔 Notify Me If Available</>
+                    )}
+                  </button>
                 </div>
               )}
 

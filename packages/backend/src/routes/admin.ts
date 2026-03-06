@@ -1,0 +1,27 @@
+import express from 'express';
+import { authenticate } from '../middleware/auth';
+import { requireAdmin } from '../middleware/adminAuth';
+import {
+  getStats,
+  getUsers,
+  updateUserRole,
+  suspendUser,
+  getSales,
+  deleteSale,
+  getRecentActivity,
+} from '../controllers/adminController';
+
+const router = express.Router();
+
+// All admin routes require authentication and admin role
+router.use(authenticate, requireAdmin);
+
+router.get('/stats', getStats);
+router.get('/users', getUsers);
+router.patch('/users/:userId/role', updateUserRole);
+router.patch('/users/:userId/suspend', suspendUser);
+router.get('/sales', getSales);
+router.delete('/sales/:saleId', deleteSale);
+router.get('/activity', getRecentActivity);
+
+export default router;

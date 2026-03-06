@@ -4,6 +4,7 @@
 
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { createNotification } from './notificationService';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -343,6 +344,15 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
           subject: `New sale you might like: ${sale.title}`,
           html,
         });
+
+        // Create in-app notification for matched sale (fire-and-forget)
+        createNotification(
+          buyer.userId,
+          'sale_alert',
+          'New sale you might like',
+          `${sale.title} is now live in ${sale.city}, ${sale.state}`,
+          `/sales/${sale.id}`
+        ).catch(err => console.error('[notification] Failed to create sale alert notification:', err));
 
         sent++;
         console.log(`[buyerMatch] Email sent to ${buyer.email}`);

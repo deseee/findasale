@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { Resend } from 'resend';
 import { handlePurchaseBadge } from './userController';
 import { awardPoints } from '../services/pointsService';
+import { createNotification } from '../services/notificationService';
 import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
 // Lazy — avoids crash when module loads before dotenv runs
@@ -250,6 +251,17 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // Feature: Abandoned Checkout Recovery — track this payment intent for recovery emails
+    await prisma.checkoutAttempt.upsert({
+      where: { paymentIntent: paymentIntent.id },
+      create: {
+        userId: req.user.id,
+        itemId: item.id,
+        paymentIntent: paymentIntent.id,
+      },
+      update: {},
+    }).catch(err => console.warn('[checkout-recovery] Failed to track checkout attempt:', err));
+
     res.json({
       clientSecret: paymentIntent.client_secret,
       purchaseId: purchase.id,
@@ -317,6 +329,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
           data: { status: 'PAID' },
         });
 
+        // Feature: Abandoned Checkout Recovery — mark this checkout as completed
+        await prisma.checkoutAttempt.updateMany({
+          where: { paymentIntent: paymentIntent.id },
+          data: { completedAt: new Date() },
+        }).catch(err => console.warn('[checkout-recovery] Failed to mark checkout as completed:', err));
+
         if (paymentIntent.metadata?.itemId) {
           // CA3: Concurrent purchase guard — check item status before marking SOLD
           // If another buyer's PI already marked it SOLD, refund this one automatically
@@ -375,6 +393,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
             sale: purchase.sale,
           });
         }
+
+        // Create in-app notification for purchase confirmation (fire-and-forget)
+        createNotification(
+          purchase.userId,
+          'purchase',
+          'Purchase confirmed',
+          `Your purchase of "${purchase.item?.title || 'item'}" is confirmed!`,
+          '/shopper/purchases'
+        ).catch(err => console.error('[notification] Failed to create purchase notification:', err));
 
         // X1: Fire webhooks (non-blocking)
         const orgUserId = (purchase.sale as any)?.organizer?.userId;

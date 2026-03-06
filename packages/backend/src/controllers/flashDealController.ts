@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { sendPushNotification } from '../utils/webpush';
+import { createNotification } from '../services/notificationService';
 
 const flashDealCreateSchema = z.object({
   itemId: z.string().min(1),
@@ -93,6 +94,21 @@ export const createFlashDeal = async (req: AuthRequest, res: Response) => {
           where: { id: flashDeal.id },
           data: { notified: true },
         });
+
+        // Create in-app notifications for flash deal (fire-and-forget)
+        const notificationPromises = subscribers
+          .filter((sub) => sub.user)
+          .map((sub) =>
+            createNotification(
+              sub.user!.id,
+              'flash_deal',
+              '⚡ Flash Deal',
+              `${validated.discountPct}% off ${item.title} — limited time!`,
+              `/sales/${item.saleId}`
+            ).catch(err => console.error('[notification] Failed to create flash deal notification:', err))
+          );
+
+        await Promise.all(notificationPromises);
       } catch (err) {
         console.warn('Push notification service degraded:', (err as Error).message);
         // Non-critical: continue even if push fails
