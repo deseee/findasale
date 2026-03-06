@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 
 /**
  * Get top shoppers by streakPoints (or points if streakPoints not available)
- * Returns anonymized names, badges, and points
+ * Returns anonymized names and points
  */
 export const getShopperLeaderboard = async (req: Request, res: Response) => {
   try {
@@ -14,21 +14,8 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       select: {
         id: true,
         name: true,
-        city: true,
         streakPoints: true,
         points: true,
-        userBadges: {
-          select: {
-            badge: {
-              select: {
-                id: true,
-                name: true,
-                iconUrl: true,
-              },
-            },
-            awardedAt: true,
-          },
-        },
       },
       orderBy: {
         streakPoints: 'desc',
@@ -41,14 +28,8 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       rank: index + 1,
       userId: user.id.slice(0, 4), // Mask user ID for privacy
       name: user.name.split(' ')[0] || 'Shopper', // First name only
-      city: user.city || null,
-      score: user.streakPoints > 0 ? user.streakPoints : user.points,
-      badges: user.userBadges.map((ub) => ({
-        id: ub.badge.id,
-        name: ub.badge.name,
-        iconUrl: ub.badge.iconUrl,
-        awardedAt: ub.awardedAt,
-      })),
+      score: (user.streakPoints ?? 0) > 0 ? user.streakPoints : user.points,
+      badges: [] as { id: string; name: string; iconUrl: string | null; awardedAt: Date }[],
     }));
 
     res.json(leaderboard);
@@ -60,7 +41,7 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
 
 /**
  * Get top organizers by number of completed sales
- * Returns organizer name, city, sale count, and total items sold
+ * Returns organizer name, sale count, and total items sold
  */
 export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
   try {

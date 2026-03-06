@@ -26,9 +26,7 @@ const job = cron.schedule('0 6 * * *', async () => {
         favorites: {
           include: {
             user: {
-              include: {
-                pushSubscriptions: true,
-              },
+              select: { id: true },
             },
           },
         },
@@ -41,7 +39,7 @@ const job = cron.schedule('0 6 * * *', async () => {
       if (
         !item.reverseStartDate ||
         !item.reverseDailyDrop ||
-        item.reverseFloorPrice === undefined
+        item.reverseFloorPrice == null
       ) {
         console.warn(
           `[reverseAuctionJob] Item ${item.id} missing required fields, skipping`
@@ -67,7 +65,7 @@ const job = cron.schedule('0 6 * * *', async () => {
 
       const originalPrice = item.price; // in dollars (float)
       const dailyDropDollars = item.reverseDailyDrop / 100; // convert cents to dollars
-      const floorPriceDollars = item.reverseFloorPrice / 100; // convert cents to dollars
+      const floorPriceDollars = item.reverseFloorPrice! / 100; // convert cents to dollars
       let newPrice = originalPrice - daysElapsed * dailyDropDollars;
 
       // Enforce floor price
@@ -85,37 +83,6 @@ const job = cron.schedule('0 6 * * *', async () => {
         console.log(
           `[reverseAuctionJob] Item ${item.id} (${item.title}): ${item.price} → ${newPrice}`
         );
-
-        // Send push notifications to users who favorited this item
-        if (item.favorites && item.favorites.length > 0) {
-          const notificationPromises = item.favorites.map(async (fav) => {
-            if (!fav.user.pushSubscriptions || fav.user.pushSubscriptions.length === 0) {
-              return; // User has no push subscriptions
-            }
-
-            const title = 'Price Drop!';
-            const body = `${item.title} just dropped to $${newPrice.toFixed(2)} — grab it before it's gone!`;
-            const tag = `price-drop-${item.id}`;
-
-            // Send push to each subscription (user may have multiple devices)
-            for (const sub of fav.user.pushSubscriptions) {
-              try {
-                // In production, use web-push library to send actual push notifications
-                // For now, log the intent (implement push service integration as needed)
-                console.log(
-                  `[reverseAuctionJob] Push notification queued for user ${fav.user.id}: ${title}`
-                );
-              } catch (err) {
-                console.error(
-                  `[reverseAuctionJob] Failed to send push to ${fav.user.id}:`,
-                  err
-                );
-              }
-            }
-          });
-
-          await Promise.all(notificationPromises);
-        }
       }
 
       // Optionally notify organizer when item reaches floor price

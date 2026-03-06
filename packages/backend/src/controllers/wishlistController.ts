@@ -236,7 +236,7 @@ export const generateShareLink = async (req: AuthRequest, res: Response) => {
     }
 
     // Generate new unique slug
-    let shareSlug: string;
+    let shareSlug: string = '';
     let isUnique = false;
     while (!isUnique) {
       shareSlug = uuidv4().split('-')[0]; // Use first part of UUID for short slug
