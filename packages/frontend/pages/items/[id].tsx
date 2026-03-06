@@ -525,7 +525,7 @@ const ItemDetailPage = () => {
                             loading="lazy"
                           />
                         </button>
-                      )))}
+                      ))}
                     </div>
                   )}
                 </>
