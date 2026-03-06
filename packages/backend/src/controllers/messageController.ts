@@ -220,6 +220,7 @@ export const getUnreadCount = async (req: AuthRequest, res: Response) => {
       const conversations = await prisma.conversation.findMany({
         where: { organizerId: organizer.id },
         select: { id: true },
+        take: 200,
       });
       const ids = conversations.map(c => c.id);
 
@@ -230,6 +231,7 @@ export const getUnreadCount = async (req: AuthRequest, res: Response) => {
       const conversations = await prisma.conversation.findMany({
         where: { shopperUserId: userId },
         select: { id: true },
+        take: 200,
       });
       const ids = conversations.map(c => c.id);
 
