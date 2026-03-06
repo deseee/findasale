@@ -55,6 +55,7 @@ No API formatting outside backend.
 ## 4. Operational Rules
 
 - Never use `git add -A` — stage files explicitly by name
+- **Git push**: Patrick uses `.\push.ps1` from PowerShell (NOT `git push` directly). The script self-heals: clears index.lock, CRLF phantoms, fetches + merges (never rebases — rebase is broken with `core.autocrlf=true` on Windows). See `push.ps1` in repo root.
 - Full safety and backup rules: `claude_docs/SECURITY.md`
 
 ---
@@ -76,8 +77,9 @@ The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for smal
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add [specific files]
 git commit -m "..."
-git push origin main
+.\push.ps1
 ```
+**IMPORTANT:** Always tell Patrick to use `.\push.ps1` instead of `git push`. The script handles index.lock cleanup, CRLF phantom clearing, fetch + merge (not rebase), and auto-retry on rejection.
 Never attempt to push the full codebase via MCP — it burns tokens and fails at scale.
 At session wrap, Claude must tell Patrick exactly which files changed so he can git add them.
 

@@ -29,7 +29,7 @@ At the start of every session, before any task work:
 4. Load `claude_docs/STATE.md` — current sprint and blockers
 5. Skim `claude_docs/session-log.md` — last 1–2 entries for recent decisions
 6. **GitHub sync check** — read local `STATE.md` `Last Updated` line, then fetch GitHub version via `mcp__github__get_file_contents` (`deseee/findasale`, `claude_docs/STATE.md`). If the `Last Updated` lines differ, stop immediately and tell Patrick:
-   > "Local docs are behind GitHub. Run this before we start: `git stash && git pull --rebase && git stash pop`"
+   > "Local docs are behind GitHub. Run this before we start: `git fetch origin && git merge origin/main --no-edit` (or just `.\push.ps1` which handles this automatically)"
    Do not make any file edits until Patrick confirms local is synced.
 
 Skip silently if Patrick has already given a task and context was loaded this session.
@@ -169,7 +169,7 @@ Use **MCP** (`push_files`) when ALL of the following are true:
 - All files were read or edited in the **current turn** (already in context — no re-read cost), AND
 - No single file is a large doc (>300 lines) that wasn't actively changed this turn
 
-Tell Patrick **"please run `git push` in PowerShell"** when ANY of the following apply:
+Tell Patrick **"please run `.\push.ps1`"** when ANY of the following apply:
 - 4+ files need pushing as a group
 - Any file is large (>300 lines) and was NOT edited this turn — re-reading it just to push is wasteful
 - Session wrap involves >5 changed files total
