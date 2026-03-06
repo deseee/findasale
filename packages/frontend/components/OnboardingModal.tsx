@@ -6,7 +6,7 @@ interface OnboardingModalProps {
 
 const STEPS = [
   {
-    icon: '🏠',
+    icon: '\uD83C\uDFE0',
     title: 'Welcome to FindA.Sale!',
     body: 'Discover estate sales, garage sales, and auctions near you. Browse hundreds of items and find amazing deals in your area.',
     cta: 'Show me around',
@@ -15,14 +15,14 @@ const STEPS = [
   {
     icon: '\u2665',
     title: 'Save what you love',
-    body: 'Tap the heart on any item to save it. You earn 2 Hunt Pass points every time you favorite — plus 1 point just for visiting a sale!',
+    body: 'Tap the heart on any item to save it. You earn 2 Hunt Pass points every time you favorite \u2014 plus 1 point just for visiting a sale!',
     cta: 'Got it',
     secondary: 'Skip',
   },
   {
-    icon: '🔔',
+    icon: '\uD83D\uDD14',
     title: 'Never miss a sale',
-    body: 'Enable push notifications to get alerted when new sales go live near you and when your favorite organizers post.',
+    body: 'Get alerts when sales near you go live and when organizers you follow post new items. You can disable notifications anytime in your profile settings.',
     cta: 'Enable Notifications',
     secondary: 'Maybe later',
   },
@@ -42,7 +42,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
         try {
           await Notification.requestPermission();
         } catch {
-          // Non-fatal — user may have blocked or browser may not support it
+          // Non-fatal \u2014 user may have blocked or browser may not support it
         }
       }
       onComplete();
