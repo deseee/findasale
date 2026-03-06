@@ -44,7 +44,6 @@ model User {
   reservations          ItemReservation[]
   bounties              MissingListingBounty[]
   webhooks              Webhook[]
-  treasureHuntFinds     TreasureHuntFind[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -120,14 +119,6 @@ model Item {
   // W1: Shipping
   shippingAvailable Boolean  @default(false)
   shippingPrice    Float?
-  // CD2: Live Drop Events
-  isLiveDrop       Boolean   @default(false)
-  liveDropAt       DateTime?
-  // CD2 Phase 4: Reverse Auction (declining price)
-  reverseAuction    Boolean   @default(false)
-  reverseDailyDrop  Int?      // cents to drop per day (e.g., 500 = $5/day)
-  reverseFloorPrice Int?      // minimum price in cents (won't drop below this)
-  reverseStartDate  DateTime? // when daily drops begin
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]
@@ -135,7 +126,6 @@ model Item {
   favorites        Favorite[]
   reservation      ItemReservation?
   bountyFulfillments MissingListingBounty[]
-  treasureHuntFinds TreasureHuntFind[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -291,7 +281,7 @@ model PointsTransaction {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW", "TREASURE_HUNT_FIND"
+  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW"
   points      Int
   saleId      String?
   itemId      String?
@@ -387,36 +377,4 @@ model Webhook {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-// CD2 Phase 2: Treasure Hunt — daily discovery challenge
-model TreasureHunt {
-  id          Int      @id @default(autoincrement())
-  date        String   @unique  // YYYY-MM-DD
-  clue        String
-  category    String
-  keywords    String[]
-  pointReward Int      @default(50)
-  finds       TreasureHuntFind[]
-  createdAt   DateTime @default(now())
-}
-
-model TreasureHuntFind {
-  id       Int      @id @default(autoincrement())
-  userId   String
-  huntId   Int
-  itemId   String
-  foundAt  DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id])
-  hunt     TreasureHunt @relation(fields: [huntId], references: [id])
-  item     Item     @relation(fields: [itemId], references: [id])
-  @@unique([userId, huntId])
-}
-
-// ST4: Stripe webhook event deduplication — prevents idempotency issues
-model StripeEvent {
-  id        String   @id // Stripe event ID (evt_...)
-  processedAt DateTime @default(now())
-
-  @@index([processedAt]) // For cleanup of old events
 }
