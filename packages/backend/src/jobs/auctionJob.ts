@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { getStripe } from '../utils/stripe';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
-const stripe = getStripe();
+const stripe = () => getStripe();
 
 let _resend: any = null;
 const getResendClient = () => {
@@ -57,7 +57,7 @@ export const endAuctions = async () => {
         if (item.sale.organizer.stripeConnectId) {
           try {
             const feeAmount = Math.round(price * 100 * 0.07);
-            const paymentIntent = await stripe.paymentIntents.create({
+            const paymentIntent = await stripe().paymentIntents.create({
               amount: Math.round(price * 100),
               currency: 'usd',
               metadata: { itemId: item.id, saleId: item.sale.id, userId: highestBid.userId },

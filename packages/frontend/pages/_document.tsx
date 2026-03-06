@@ -19,7 +19,8 @@ export default function Document() {
         {/* Favicons */}
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
-        <link rel="shortcut icon" href="/icons/favicon-32x32.png" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.ico" />
 
         {/* Tile for Windows */}
         <meta name="msapplication-TileColor" content="#D97706" />
@@ -57,11 +58,11 @@ export default function Document() {
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
 
-        {/* Google Fonts — Montserrat (headings) + Inter (body) */}
+        {/* Google Fonts — CD1: Fraunces (serif headings) + Inter (body) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600&family=Inter:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
 

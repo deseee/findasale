@@ -99,6 +99,57 @@ const OrganizerSettingsPage = () => {
                   <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
                   <span className="ml-2 text-warm-700">Email me when my sale starts</span>
                 </label>
+                <div className="border-t border-warm-100 pt-4 mt-2">
+                  <p className="text-sm font-medium text-warm-800 mb-3">Push Notifications</p>
+                  {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-warm-700 text-sm">Push notifications are enabled</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const reg = await navigator.serviceWorker.getRegistration();
+                            if (reg) {
+                              const sub = await reg.pushManager.getSubscription();
+                              if (sub) {
+                                await sub.unsubscribe();
+                                await api.delete('/push/unsubscribe', { data: { endpoint: sub.endpoint } });
+                                showToast('Push notifications disabled', 'success');
+                              }
+                            }
+                          } catch {
+                            showToast('Failed to disable push notifications', 'error');
+                          }
+                        }}
+                        className="text-sm text-red-600 hover:underline"
+                      >
+                        Disable
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-warm-600 text-sm">Push notifications are off</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const permission = await Notification.requestPermission();
+                            if (permission === 'granted') {
+                              showToast('Push notifications enabled', 'success');
+                            } else {
+                              showToast('Permission denied — check your browser settings', 'error');
+                            }
+                          } catch {
+                            showToast('Push notifications not supported on this browser', 'error');
+                          }
+                        }}
+                        className="text-sm bg-amber-600 hover:bg-amber-700 text-white py-1 px-3 rounded-lg"
+                      >
+                        Enable
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

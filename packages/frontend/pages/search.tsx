@@ -86,6 +86,7 @@ const SearchPage = () => {
               defaultValue={q}
               key={q}
               placeholder="Search sales, items, keywords\u2026"
+              aria-label="Search sales and items"
               className="flex-1 px-4 py-3 border border-warm-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-warm-900"
               autoFocus={!q}
             />

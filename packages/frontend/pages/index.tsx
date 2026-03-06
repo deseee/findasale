@@ -45,7 +45,7 @@ const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
 
-  const { data: sales, isLoading, isError } = useQuery({
+  const { data: sales, isLoading, isError, refetch } = useQuery({
     queryKey: ['sales'],
     queryFn: async () => {
       try {
@@ -224,7 +224,7 @@ const HomePage = () => {
             <div className="text-center py-12">
               <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h2>
               <p className="text-warm-600 mb-4">There was a problem loading sales data.</p>
-              <button onClick={() => window.location.reload()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
+              <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
                 Retry
               </button>
             </div>

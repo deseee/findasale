@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -21,7 +22,7 @@ const ShopperPurchasesPage = () => {
     return null;
   }
 
-  const { data: purchases, isLoading } = useQuery({
+  const { data: purchases, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchases', sort],
     queryFn: async () => {
       const response = await api.get('/shopper/purchases', { params: { sort } });
@@ -56,6 +57,16 @@ const ShopperPurchasesPage = () => {
 
           {isLoading ? (
             <p>Loading purchases...</p>
+          ) : isError ? (
+            <div className="text-center py-12">
+              <p className="text-warm-600 mb-4">Failed to load purchases. Please try again.</p>
+              <button
+                onClick={() => refetch()}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg"
+              >
+                Retry
+              </button>
+            </div>
           ) : purchases && purchases.length > 0 ? (
             <div className="space-y-4">
               {purchases.map((purchase: any) => (
@@ -81,6 +92,9 @@ const ShopperPurchasesPage = () => {
           ) : (
             <div className="text-center py-12">
               <p className="text-warm-600 mb-4">You haven't made any purchases yet.</p>
+              <Link href="/" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">
+                Browse Sales
+              </Link>
             </div>
           )}
         </div>

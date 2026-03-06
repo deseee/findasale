@@ -697,6 +697,42 @@ const SaleDetailPage = () => {
             )}
           </div>
 
+          {/* CD2 Phase 1: Scarcity + Social Proof Stats Bar */}
+          {sale.items.length > 0 && (() => {
+            const availableCount = sale.items.filter(i => i.status === 'ACTIVE').length;
+            const soldCount = sale.items.filter(i => i.status === 'SOLD' || i.status === 'PENDING').length;
+            const reservedCount = sale.items.filter(i => i.status === 'RESERVED').length;
+            const isLowStock = availableCount > 0 && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
+            const isSoldOut = availableCount === 0;
+            return (
+              <div className="mb-5 flex flex-wrap items-center gap-3">
+                {isSoldOut ? (
+                  <span className="inline-flex items-center gap-1 bg-warm-100 text-warm-600 text-sm font-semibold px-3 py-1.5 rounded-full">
+                    All items sold or reserved
+                  </span>
+                ) : isLowStock ? (
+                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-sm font-bold px-3 py-1.5 rounded-full ring-1 ring-red-200 animate-pulse">
+                    🔥 Only {availableCount} left!
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-sm font-semibold px-3 py-1.5 rounded-full">
+                    ✓ {availableCount} available
+                  </span>
+                )}
+                {soldCount > 0 && (
+                  <span className="text-sm text-warm-500">
+                    {soldCount} sold
+                  </span>
+                )}
+                {reservedCount > 0 && (
+                  <span className="text-sm text-amber-600 font-medium">
+                    {reservedCount} on hold
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Category Filter */}
           {sale.items && sale.items.some((item) => item.category) && (
             <div className="mb-6">
@@ -775,9 +811,20 @@ const SaleDetailPage = () => {
                     <h3 className="font-bold text-lg mb-2 text-warm-900">{item.title}</h3>
                     <p className="text-warm-600 text-sm mb-3 line-clamp-2">{item.description}</p>
 
-                    {/* Category, Condition, and Auction badges */}
-                    {(item.category || item.condition || item.auctionEndTime) && (
+                    {/* Category, Condition, Auction, and Status badges */}
+                    {(item.category || item.condition || item.auctionEndTime || item.status === 'RESERVED' || item.status === 'SOLD' || item.status === 'PENDING') && (
                       <div className="flex flex-wrap gap-2 mb-3">
+                        {/* CD2: Status social-proof badges */}
+                        {item.status === 'RESERVED' && (
+                          <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
+                            🔒 On Hold
+                          </span>
+                        )}
+                        {(item.status === 'SOLD' || item.status === 'PENDING') && (
+                          <span className="inline-block bg-warm-700 text-white px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
+                            ✓ Sold
+                          </span>
+                        )}
                         {item.auctionEndTime && (
                           <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
                             🔨 Auction

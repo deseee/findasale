@@ -32,8 +32,20 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
     onPhotosChange?.(newPhotos);
   };
 
+  const MAX_FILE_SIZE_MB = 5;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+
+    // Client-side file size validation
+    const oversized = Array.from(files).filter((f) => f.size > MAX_FILE_SIZE_BYTES);
+    if (oversized.length > 0) {
+      setError(`Photos must be under ${MAX_FILE_SIZE_MB}MB. ${oversized.map((f) => f.name).join(', ')} ${oversized.length === 1 ? 'is' : 'are'} too large.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setUploading(true);
     setError('');
     try {
@@ -52,8 +64,9 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
         currentPhotos = addRes.data.photoUrls;
       }
       syncPhotos(currentPhotos);
-    } catch {
-      setError('Upload failed. Please try again.');
+    } catch (err: any) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
+      setError(serverMsg ? `Upload failed: ${serverMsg}` : 'Upload failed. Please try again.');
     } finally {
       setUploading(false);
       // Reset file input so the same file can be re-uploaded if needed

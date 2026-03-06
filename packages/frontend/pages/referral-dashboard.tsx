@@ -8,7 +8,7 @@
  * - Earnings summary
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
@@ -18,6 +18,7 @@ import { useRouter } from 'next/router';
 const ReferralDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
+  const [copied, setCopied] = useState(false);
 
   if (!isLoading && !user) {
     router.push('/login');
@@ -36,8 +37,14 @@ const ReferralDashboard = () => {
   // Phase 23: use /refer/[referralCode] — routes to register?ref=CODE
   const referralLink = `${typeof window !== 'undefined' ? window.location.origin : ''}/refer/${user?.referralCode}`;
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(referralLink);
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(referralLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+    }
   };
 
   if (isLoading) return <div>Loading...</div>;
@@ -63,9 +70,10 @@ const ReferralDashboard = () => {
               />
               <button
                 onClick={copyToClipboard}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg min-w-[80px] transition-colors"
+                aria-label="Copy referral link"
               >
-                Copy
+                {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
           </div>
@@ -87,9 +95,9 @@ const ReferralDashboard = () => {
           </div>
 
           {/* Recent referrals list */}
-          {referralData?.referrals?.length > 0 && (
-            <div className="card p-6">
-              <h2 className="text-lg font-semibold text-warm-900 mb-4">Recent Referrals</h2>
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-warm-900 mb-4">Recent Referrals</h2>
+            {referralData?.referrals?.length > 0 ? (
               <div className="space-y-3">
                 {referralData.referrals.map((r: { id: string; name: string; joinedAt: string }) => (
                   <div key={r.id} className="flex items-center justify-between py-2 border-b border-warm-100 last:border-0">
@@ -100,8 +108,12 @@ const ReferralDashboard = () => {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-warm-500 text-sm text-center py-4">
+                No referrals yet — share your link to get started!
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </>

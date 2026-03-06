@@ -22,7 +22,7 @@ const STEPS = [
   {
     icon: '🔔',
     title: 'Never miss a sale',
-    body: 'Enable push notifications to get alerted when new sales go live near you and when your favorite organizers post.',
+    body: 'Get alerts when sales near you go live and when organizers you follow post new items. You can disable notifications anytime in your profile settings.',
     cta: 'Enable Notifications',
     secondary: 'Maybe later',
   },

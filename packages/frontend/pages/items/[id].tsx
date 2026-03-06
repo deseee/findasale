@@ -297,7 +297,14 @@ const ItemDetailPage = () => {
   }, [item]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Loading...</div>;
-  if (isError) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Error loading item</div>;
+  if (isError) return (
+  <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 gap-4">
+    <p className="text-warm-700 text-lg">Failed to load item details.</p>
+    <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">
+      Try again
+    </button>
+  </div>
+);
   if (!item) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Item not found</div>;
 
   const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';

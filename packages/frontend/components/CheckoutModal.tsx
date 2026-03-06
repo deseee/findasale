@@ -24,6 +24,7 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [tosAgreed, setTosAgreed] = useState(false);
 
   const total = itemPrice + platformFee;
 
@@ -83,13 +84,31 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
         </div>
       )}
 
-      <p className="mb-3 text-xs text-warm-500 text-center">
-        All sales final.{' '}
-        <a href="/contact" className="underline hover:text-warm-700">
-          Contact support
-        </a>{' '}
-        for disputes.
-      </p>
+      {/* ToS consent */}
+      <label className="flex items-start gap-2 mb-4 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={tosAgreed}
+          onChange={(e) => setTosAgreed(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-warm-300 accent-amber-600"
+          aria-required="true"
+        />
+        <span className="text-xs text-warm-600 leading-relaxed">
+          I agree to the{' '}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+            Privacy Policy
+          </a>
+          . All sales are final.{' '}
+          <a href="/contact" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+            Contact support
+          </a>{' '}
+          for disputes.
+        </span>
+      </label>
 
       <div className="flex gap-3">
         <button
@@ -102,7 +121,7 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
         </button>
         <button
           type="submit"
-          disabled={!stripe || !elements || isSubmitting}
+          disabled={!stripe || !elements || isSubmitting || !tosAgreed}
           className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Processing...' : `Pay $${total.toFixed(2)}`}
