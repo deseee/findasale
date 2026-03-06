@@ -123,6 +123,11 @@ model Item {
   // CD2: Live Drop Events
   isLiveDrop       Boolean   @default(false)
   liveDropAt       DateTime?
+  // CD2 Phase 4: Reverse Auction (declining price)
+  reverseAuction    Boolean   @default(false)
+  reverseDailyDrop  Int?      // cents to drop per day (e.g., 500 = $5/day)
+  reverseFloorPrice Int?      // minimum price in cents (won't drop below this)
+  reverseStartDate  DateTime? // when daily drops begin
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]
