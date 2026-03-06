@@ -11,6 +11,7 @@ import { format, parseISO } from 'date-fns';
 import SaleSubscription from '../../components/SaleSubscription';
 import CSVImportModal from '../../components/CSVImportModal';
 import SaleShareButton from '../../components/SaleShareButton';
+import SaleQRCode from '../../components/SaleQRCode';
 import SaleMap from '../../components/SaleMap';
 import Skeleton from '../../components/Skeleton';
 import BadgeDisplay from '../../components/BadgeDisplay';
@@ -509,6 +510,13 @@ const SaleDetailPage = () => {
                   Nextdoor
                 </button>
               </div>
+            </div>
+
+            {/* CD2-P2: QR Code for print marketing */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-lg font-bold text-warm-900 mb-2">QR Code</h2>
+              <p className="text-xs text-warm-400 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
+              <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
             </div>
 
             {/* Organizer Contact */}

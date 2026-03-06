@@ -33,6 +33,7 @@ interface AIAnalysis {
   category: string;
   condition: string;
   suggestedPrice: number | null;
+  tags?: string[];
 }
 
 const EMPTY_FORM: ItemFormData = {
@@ -599,25 +600,41 @@ const AddItemsPage = () => {
                       <div className="space-y-1 text-xs text-warm-700 mb-3">
                         <div><span className="font-medium text-warm-500">Title:</span> {aiSuggestions.title}</div>
                         <div><span className="font-medium text-warm-500">Desc:</span> {aiSuggestions.description}</div>
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 flex-wrap">
                           <span><span className="font-medium text-warm-500">Cat:</span> {aiSuggestions.category}</span>
                           <span><span className="font-medium text-warm-500">Cond:</span> {aiSuggestions.condition}</span>
                           {aiSuggestions.suggestedPrice != null && (
                             <span className="font-bold text-amber-700">${aiSuggestions.suggestedPrice.toFixed(2)}</span>
                           )}
                         </div>
+                        {aiSuggestions.tags && aiSuggestions.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {aiSuggestions.tags.map((tag) => (
+                              <span key={tag} className="inline-block bg-indigo-50 text-indigo-700 text-xs px-2 py-0.5 rounded-full border border-indigo-100">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => applyAiSuggestions(aiSuggestions)}
+                          onClick={() => {
+                            applyAiSuggestions(aiSuggestions);
+                            // CB4: feedback tracking
+                            api.post('/upload/ai-feedback', { field: 'all', action: 'accepted' }).catch(() => {});
+                          }}
                           className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700"
                         >
                           Apply to form
                         </button>
                         <button
                           type="button"
-                          onClick={() => setAiSuggestions(null)}
+                          onClick={() => {
+                            setAiSuggestions(null);
+                            api.post('/upload/ai-feedback', { field: 'all', action: 'dismissed' }).catch(() => {});
+                          }}
                           className="px-3 py-1.5 bg-warm-100 text-warm-600 text-xs rounded-md hover:bg-warm-200"
                         >
                           Dismiss

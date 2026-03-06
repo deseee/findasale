@@ -15,6 +15,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier'; // Phase 22
+import SaleQRCode from '../../components/SaleQRCode'; // CD2-P2
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -43,6 +44,7 @@ const OrganizerDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'analytics'>('overview');
+  const [openQRSale, setOpenQRSale] = useState<string | null>(null); // CD2-P2
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -201,7 +203,7 @@ const OrganizerDashboard = () => {
                       <div className="p-4">
                         <h3 className="text-lg font-semibold text-warm-900 mb-2">{sale.title}</h3>
                         <p className="text-sm text-warm-600 mb-4">{sale.city}, {sale.state}</p>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap items-center">
                           <Link
                             href={`/organizer/edit-sale/${sale.id}`}
                             className="text-sm text-amber-600 hover:underline"
@@ -214,7 +216,18 @@ const OrganizerDashboard = () => {
                           >
                             Items
                           </Link>
+                          <button
+                            onClick={() => setOpenQRSale(openQRSale === sale.id ? null : sale.id)}
+                            className="text-sm text-amber-600 hover:underline"
+                          >
+                            {openQRSale === sale.id ? 'Hide QR' : 'QR Code'}
+                          </button>
                         </div>
+                        {openQRSale === sale.id && (
+                          <div className="mt-4 pt-4 border-t border-warm-100">
+                            <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={160} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

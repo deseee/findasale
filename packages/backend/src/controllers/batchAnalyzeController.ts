@@ -58,13 +58,15 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
+    // CB5: Updated Ollama fallback prompt to match cloud AI output format (includes tags).
     const ollamaPrompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
 {
-  "title": "short descriptive item title",
+  "title": "short specific title (include material, era, or maker if visible)",
   "description": "1-2 sentence description mentioning condition and notable features",
-  "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",
+  "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other",
   "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",
-  "suggestedPrice": 12.50
+  "suggestedPrice": 12.50,
+  "suggestedTags": ["Tag1", "Tag2", "Tag3"]
 }`;
 
     const useCloudAI = isCloudAIAvailable();

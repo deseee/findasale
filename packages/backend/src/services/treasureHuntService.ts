@@ -143,7 +143,7 @@ export async function markFound(userId: string, huntId: number, itemId: string):
   });
 
   if (existing) {
-    throw new Error('Item already found for today's hunt');
+    throw new Error("Item already found for today's hunt");
   }
 
   // Get hunt to retrieve pointReward

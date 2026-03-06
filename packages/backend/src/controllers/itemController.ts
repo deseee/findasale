@@ -8,6 +8,7 @@ import FormData from 'form-data';
 import { z } from 'zod';
 import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
+import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -252,52 +253,10 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];
     }
 
-    // Call AI tagger for the first image to get suggested tags (optional, non-fatal)
-    let suggestedTags: string[] = [];
-    const taggerUrl = process.env.TAGGER_URL;
-    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';
-    if (taggerUrl && files && files.length > 0) {
-      const imageName = files[0].originalname;
-      const taggerStart = Date.now();
-      const attemptTag = async (): Promise<string[]> => {
-        const formData = new FormData();
-        formData.append('image', files[0].buffer, { filename: imageName });
-        formData.append('threshold', '0.35');
-        const response = await axios.post(`${taggerUrl}/api/tag`, formData, {
-          headers: {
-            ...formData.getHeaders(),
-            'X-API-Key': taggerApiKey,
-          },
-          timeout: 5000,
-        });
-        return response.data?.tags?.map((t: any) => t.tag) ?? [];
-      };
-
-      try {
-        suggestedTags = await attemptTag();
-        const elapsed = Date.now() - taggerStart;
-        console.log(`[tagger] tagged "${imageName}" in ${elapsed}ms — ${suggestedTags.length} tags`);
-      } catch (firstError: any) {
-        const isTimeout = firstError.code === 'ECONNABORTED' || firstError.message?.includes('timeout');
-        const isDown = firstError.code === 'ECONNREFUSED' || firstError.code === 'ENOTFOUND';
-
-        if (isTimeout) {
-          // Retry once on timeout
-          console.warn(`[tagger] timeout tagging "${imageName}", retrying once…`);
-          try {
-            suggestedTags = await attemptTag();
-            const elapsed = Date.now() - taggerStart;
-            console.log(`[tagger] retry succeeded for "${imageName}" in ${elapsed}ms`);
-          } catch (retryError: any) {
-            console.warn(`[tagger] retry also timed out for "${imageName}" — continuing without tags`);
-          }
-        } else if (isDown) {
-          console.warn(`[tagger] service unreachable (${taggerUrl}) — continuing without tags`);
-        } else {
-          console.warn(`[tagger] unexpected error tagging "${imageName}": ${firstError.message} — continuing without tags`);
-        }
-      }
-    }
+    // CB5: Legacy standalone tagger removed. AI tagging is now done via
+    // POST /upload/analyze-photo (cloudAIService: Google Vision + Claude Haiku).
+    // Organizers review suggestions before saving — no silent pre-fill.
+    const suggestedTags: string[] = [];
 
     // Create the item in database
     const item = await prisma.item.create({
@@ -455,45 +414,22 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
       return res.json({ suggestedTags: [] });
     }
 
-    const taggerUrl = process.env.TAGGER_URL;
-    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';
-
-    if (!taggerUrl) {
-      return res.json({ suggestedTags: [] });
-    }
-
-    // Download the photo from its URL then send to tagger
+    // CB5: Replaced legacy standalone tagger with cloudAIService (Google Vision + Claude Haiku).
     let suggestedTags: string[] = [];
-    try {
-      const imageResponse = await axios.get(firstPhotoUrl, {
-        responseType: 'arraybuffer',
-        timeout: 8000,
-      });
-
-      const imageBuffer = Buffer.from(imageResponse.data);
-      const filename = firstPhotoUrl.split('/').pop()?.split('?')[0] || 'photo.jpg';
-
-      const formData = new FormData();
-      formData.append('image', imageBuffer, { filename });
-      formData.append('threshold', '0.35');
-
-      const taggerStart = Date.now();
-      const taggerResponse = await axios.post(`${taggerUrl}/api/tag`, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          'X-API-Key': taggerApiKey,
-        },
-        timeout: 5000,
-      });
-
-      suggestedTags = taggerResponse.data?.tags?.map((t: any) => t.tag) ?? [];
-      console.log(`[tagger/analyze] tagged item "${id}" in ${Date.now() - taggerStart}ms — ${suggestedTags.length} tags`);
-    } catch (err: any) {
-      const isDown = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND';
-      if (isDown) {
-        console.warn(`[tagger/analyze] service unreachable — returning empty tags`);
-      } else {
-        console.warn(`[tagger/analyze] error for item "${id}": ${err.message}`);
+    if (isCloudAIAvailable()) {
+      try {
+        const imageResponse = await axios.get(firstPhotoUrl, {
+          responseType: 'arraybuffer',
+          timeout: 10000,
+        });
+        const imageBuffer = Buffer.from(imageResponse.data);
+        const aiResult = await analyzeItemImage(imageBuffer, 'image/jpeg');
+        if (aiResult?.tags) {
+          suggestedTags = aiResult.tags;
+        }
+        console.log(`[cloudAI/analyze] analyzed item "${id}" — ${suggestedTags.length} tags`);
+      } catch (err: any) {
+        console.warn(`[cloudAI/analyze] error for item "${id}": ${err.message} — returning empty tags`);
       }
     }
 

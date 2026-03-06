@@ -197,6 +197,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   <>
                     <li><Link href="/organizer/dashboard" className="text-warm-400 hover:text-white">Dashboard</Link></li>
                     <li><Link href="/organizer/create-sale" className="text-warm-400 hover:text-white">Create Sale</Link></li>
+                    <li><Link href="/guide" className="text-warm-400 hover:text-white">Organizer Guide</Link></li>
                   </>
                 )}
               </ul>

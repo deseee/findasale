@@ -22,6 +22,36 @@ export interface AITagResult {
   category: string;
   condition: string;
   suggestedPrice: number;
+  tags: string[];
+}
+
+// ── CB4: In-memory feedback stats (post-beta: migrate to DB table) ─────────────
+interface FeedbackRecord {
+  accepted: number;
+  dismissed: number;
+  edited: number;
+}
+const feedbackStats: Record<string, FeedbackRecord> = {};
+
+/** Record organizer feedback on an AI suggestion field. */
+export function recordAIFeedback(field: string, action: 'accepted' | 'dismissed' | 'edited'): void {
+  if (!feedbackStats[field]) {
+    feedbackStats[field] = { accepted: 0, dismissed: 0, edited: 0 };
+  }
+  feedbackStats[field][action]++;
+}
+
+/** Return current acceptance rates per field (for diagnostic logging). */
+export function getAIFeedbackStats(): Record<string, FeedbackRecord & { acceptRate: string }> {
+  const result: Record<string, FeedbackRecord & { acceptRate: string }> = {};
+  for (const [field, stats] of Object.entries(feedbackStats)) {
+    const total = stats.accepted + stats.dismissed + stats.edited;
+    result[field] = {
+      ...stats,
+      acceptRate: total > 0 ? `${Math.round((stats.accepted / total) * 100)}%` : 'n/a',
+    };
+  }
+  return result;
 }
 
 /** Returns true when both API keys are present in the environment. */
@@ -73,7 +103,7 @@ async function getHaikuAnalysis(
     'https://api.anthropic.com/v1/messages',
     {
       model: ANTHROPIC_MODEL,
-      max_tokens: 300,
+      max_tokens: 400,
       messages: [
         {
           role: 'user',
@@ -88,15 +118,24 @@ async function getHaikuAnalysis(
             },
             {
               type: 'text',
-              text: `You are an estate sale pricing assistant.${labelContext}
+              text: `You are an expert estate sale cataloger for a Grand Rapids, Michigan marketplace.${labelContext}
 
-Look at this item photo and respond with ONLY valid JSON (no markdown, no explanation):
+Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
+
+Title guidelines: Be specific. Include material, era, or maker if visible. Examples: "Vintage Brass Floor Lamp", "Oak Dining Chair Set", "McCoy Pottery Planter".
+Description: 1–2 sentences. Note condition details and standout features. Mention any maker marks, damage, or signs of age.
+Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
+Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
+Price: Realistic Grand Rapids estate sale price (typically 20–50% of retail). Consider condition heavily.
+Tags: 3–6 short tags collectors search for. Examples: "Mid-Century Modern", "Vintage", "Cast Iron", "Hand-painted", "Art Deco", "Set of 4".
+
 {
-  "title": "short descriptive item title",
-  "description": "1-2 sentence description mentioning condition and notable features",
-  "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",
-  "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",
-  "suggestedPrice": 12.50
+  "title": "short specific title",
+  "description": "1-2 sentence description with condition details",
+  "category": "best matching category",
+  "condition": "NEW | LIKE_NEW | GOOD | FAIR | POOR",
+  "suggestedPrice": 12.50,
+  "tags": ["Tag1", "Tag2", "Tag3"]
 }`,
             },
           ],
@@ -115,7 +154,12 @@ Look at this item photo and respond with ONLY valid JSON (no markdown, no explan
 
   const content: string = response.data.content?.[0]?.text ?? '';
   const raw = content.replace(/```json\n?|\n?```/g, '').trim();
-  return JSON.parse(raw) as AITagResult;
+  const parsed = JSON.parse(raw) as AITagResult;
+  // Ensure tags is always an array even if Haiku omits the field
+  if (!Array.isArray(parsed.tags)) {
+    parsed.tags = [];
+  }
+  return parsed;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

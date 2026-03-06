@@ -103,8 +103,14 @@ const OrganizerWebhooksPage = () => {
         <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
           {/* Intro */}
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
-            Send real-time event notifications to Zapier, Make, or any custom URL.
-            Each request is signed with <code className="font-mono bg-blue-100 px-1 rounded">X-FindASale-Signature</code> (HMAC-SHA256).
+            <p>Send real-time event notifications to Zapier, Make, or any custom URL.
+            Each request is signed with <code className="font-mono bg-blue-100 px-1 rounded">X-FindASale-Signature</code> (HMAC-SHA256).</p>
+            <p className="mt-2">
+              New to webhooks?{' '}
+              <Link href="/guide#zapier-webhooks" className="underline font-medium hover:text-blue-900">
+                Read the Zapier integration guide →
+              </Link>
+            </p>
           </div>
 
           {/* Secret revealed once */}
