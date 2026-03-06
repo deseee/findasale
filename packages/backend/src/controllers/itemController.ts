@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
+import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -361,7 +362,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (status === 'AVAILABLE' && previousItem.status !== 'AVAILABLE') {
       const { notifyWaitlist } = require('../controllers/waitlistController');
       setImmediate(() =>
-        notifyWaitlist(id).catch(err => console.error('[waitlist] Failed to notify waitlist:', err))
+        notifyWaitlist(id).catch((err: unknown) => console.error('[waitlist] Failed to notify waitlist:', err))
+      );
+    }
+
+    // Price Drop Alerts — notify users who favorited this item if price dropped
+    if (price !== undefined) {
+      const oldPrice = previousItem.price;
+      const newPrice = updatedItem.price;
+      setImmediate(() =>
+        notifyPriceDropAlerts(id, oldPrice, newPrice).catch((err: unknown) =>
+          console.error('[priceDrop] Failed to send alerts:', (err as Error).message)
+        )
       );
     }
 
