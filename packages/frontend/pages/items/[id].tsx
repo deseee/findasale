@@ -1,1 +1,747 @@
-import React, { useState, useEffect, useRef } from 'react';\nimport Head from 'next/head';\nimport Link from 'next/link';\nimport { useRouter } from 'next/router';\nimport { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';\nimport { io as socketIO, Socket } from 'socket.io-client'; // V1: live bidding\nimport api from '../../lib/api';\nimport { useAuth } from '../../components/AuthContext';\nimport CheckoutModal from '../../components/CheckoutModal';\nimport PhotoLightbox from '../../components/PhotoLightbox';\nimport CountdownTimer from '../../components/CountdownTimer'; // CD2: Live Drop\nimport { useToast } from '../../components/ToastContext';\nimport { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';\nimport { formatDistanceToNow, parseISO } from 'date-fns';\n\ninterface Item {\n  id: string;\n  title: string;\n  description: string;\n  price: number;\n  auctionStartPrice: number;\n  currentBid: number;\n  bidIncrement: number;\n  auctionEndTime: string;\n  status: string;\n  photoUrls: string[];\n  isLiveDrop: boolean; // CD2\n  liveDropAt: string | null; // CD2\n  sale: {\n    id: string;\n    title: string;\n  };\n}\n\ninterface Bid {\n  id: string;\n  amount: number;\n  user: {\n    name: string;\n  };\n  createdAt: string;\n}\n\n// Helper function to safely format prices\nconst formatPrice = (value: number | string | null | undefined): string => {\n  if (value === null || value === undefined) return 'N/A';\n  const num = typeof value === 'string' ? parseFloat(value) : value;\n  return isNaN(num) ? 'N/A' : `$${num.toFixed(2)}`;\n};\n\n// Helper function to format time remaining\nconst formatTimeRemaining = (endTime: string | null | undefined): string => {\n  if (!endTime) return 'No end time';\n  \n  try {\n    const end = new Date(endTime);\n    const now = new Date();\n    const diff = end.getTime() - now.getTime();\n    \n    if (diff <= 0) {\n      return 'Ended';\n    }\n    \n    const days = Math.floor(diff / (1000 * 60 * 60 * 24));\n    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));\n    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));\n    const seconds = Math.floor((diff % (1000 * 60)) / 1000);\n    \n    if (days > 0) {\n      return `${days}d ${hours}h ${minutes}m`;\n    } else if (hours > 0) {\n      return `${hours}h ${minutes}m ${seconds}s`;\n    } else {\n      return `${minutes}m ${seconds}s`;\n    }\n  } catch (error) {\n    return 'No end time';\n  }\n};\n\n// Helper function to get minimum next bid\nconst getMinimumNextBid = (item: any): number => {\n  if (item.currentBid) {\n    return item.currentBid + (item.bidIncrement || 1);\n  }\n  return item.auctionStartPrice || item.price || 0;\n};\n\nconst ItemDetailPage = () => {\n  const router = useRouter();\n  const { id } = router.query;\n  const { user } = useAuth();\n  const queryClient = useQueryClient();\n  const [bidAmount, setBidAmount] = useState('');\n  const [isBidding, setIsBidding] = useState(false);\n  const [isFavorite, setIsFavorite] = useState(false);\n  const [timeRemaining, setTimeRemaining] = useState('');\n  const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);\n  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);\n  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);\n  const [holdCountdown, setHoldCountdown] = useState('');\n  const [isLiveDropRevealed, setIsLiveDropRevealed] = useState(false); // CD2\n  const socketRef = useRef<Socket | null>(null); // V1: live bidding socket\n  const { showToast } = useToast();\n\n  const { data: item, isLoading, isError, refetch } = useQuery({\n    queryKey: ['item', id],\n    queryFn: async () => {\n      if (!id) throw new Error('No item ID provided');\n      const response = await api.get(`/items/${id}`);\n      return response.data as Item;\n    },\n    enabled: !!id,\n  });\n\n  // CD2: Check if Live Drop has been revealed\n  useEffect(() => {\n    if (!item) return;\n    if (!item.isLiveDrop || !item.liveDropAt) {\n      setIsLiveDropRevealed(true);\n      return;\n    }\n    const now = new Date();\n    const reveal = new Date(item.liveDropAt);\n    setIsLiveDropRevealed(now >= reveal);\n  }, [item]);\n\n  // Check if item is favorited\n  const { data: favoriteStatus } = useQuery({\n    queryKey: ['favorite', id],\n    queryFn: async () => {\n      if (!id || !user) return false;\n      try {\n        const response = await api.get(`/favorites/item/${id}`);\n        return response.data.isFavorite;\n      } catch {\n        return false;\n      }\n    },\n    enabled: !!id && !!user,\n  });\n\n  useEffect(() => {\n    if (favoriteStatus !== undefined) {\n      setIsFavorite(favoriteStatus);\n    }\n  }, [favoriteStatus]);\n\n  // Phase 21: Fetch active reservation for this item\n  const { data: reservation, refetch: refetchReservation } = useQuery({\n    queryKey: ['reservation', id],\n    queryFn: async () => {\n      if (!id || !user) return null;\n      try {\n        const response = await api.get(`/reservations/item/${id}`);\n        return response.data as { id: string; userId: string; status: string; expiresAt: string } | null;\n      } catch {\n        return null;\n      }\n    },\n    enabled: !!id && !!user,\n    refetchInterval: 30000,\n  });\n\n  // Countdown timer for the shopper's own hold\n  useEffect(() => {\n    if (!reservation || reservation.userId !== user?.id) return;\n    const tick = () => {\n      const diff = new Date(reservation.expiresAt).getTime() - Date.now();\n      if (diff <= 0) { setHoldCountdown('Expired'); return; }\n      const h = Math.floor(diff / 3600000);\n      const m = Math.floor((diff % 3600000) / 60000);\n      setHoldCountdown(`${h}h ${m}m remaining`);\n    };\n    tick();\n    const t = setInterval(tick, 60000);\n    return () => clearInterval(t);\n  }, [reservation, user?.id]);\n\n  // Phase 21: Place hold mutation\n  const placeMutation = useMutation({\n    mutationFn: () => api.post('/reservations', { itemId: id }),\n    onSuccess: () => {\n      showToast('Item held for 24 hours!', 'success');\n      refetch();\n      refetchReservation();\n    },\n    onError: (err: any) => {\n      showToast(err.response?.data?.message || 'Failed to place hold', 'error');\n    },\n  });\n\n  // Phase 21: Cancel hold mutation\n  const cancelMutation = useMutation({\n    mutationFn: (reservationId: string) => api.delete(`/reservations/${reservationId}`),\n    onSuccess: () => {\n      showToast('Hold cancelled', 'success');\n      refetch();\n      refetchReservation();\n    },\n    onError: (err: any) => {\n      showToast(err.response?.data?.message || 'Failed to cancel hold', 'error');\n    },\n  });\n\n  // Timer effect for auction countdown\n  useEffect(() => {\n    if (!item?.auctionEndTime) return;\n\n    const calculateTimeRemaining = () => {\n      setTimeRemaining(formatTimeRemaining(item.auctionEndTime));\n    };\n\n    calculateTimeRemaining();\n    const timer = setInterval(calculateTimeRemaining, 1000);\n\n    return () => clearInterval(timer);\n  }, [item?.auctionEndTime]);\n\n  // V1: Live bid updates via Socket.io — only active for auction items\n  useEffect(() => {\n    if (!id || !item?.auctionStartPrice) return; // non-auction items don't need a socket\n\n    // Derive socket server URL from the API base URL (strip /api suffix)\n    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';\n    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ?? apiBase.replace(/\\/api\\/?$/, '');\n\n    const socket = socketIO(socketUrl, {\n      transports: ['websocket', 'polling'],\n      reconnectionAttempts: 5,\n    });\n    socketRef.current = socket;\n\n    socket.emit('join:item', id as string);\n\n    socket.on('bid:update', (data: { itemId: string; currentBid: number }) => {\n      if (data.itemId !== id) return;\n      // Update the React Query cache so the UI reflects the new bid instantly\n      queryClient.setQueryData(['item', id], (old: Item | undefined) => {\n        if (!old) return old;\n        return { ...old, currentBid: data.currentBid };\n      });\n      // Also advance the bid input to the new minimum\n      setBidAmount((data.currentBid + (item?.bidIncrement ?? 1)).toFixed(2));\n    });\n\n    return () => {\n      socket.emit('leave:item', id as string);\n      socket.disconnect();\n      socketRef.current = null;\n    };\n    // Re-subscribe if item ID changes (navigation between auction items)\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [id, !!item?.auctionStartPrice]);\n\n  const handleBuyNow = () => {\n    if (!item) return;\n    setCheckoutItemId(item.id);\n  };\n\n  const handleCheckoutClose = () => {\n    setCheckoutItemId(null);\n  };\n\n  const handleCheckoutSuccess = () => {\n    setCheckoutItemId(null);\n    refetch();\n  };\n\n  const handlePlaceBid = async () => {\n    if (!item || !user) return;\n\n    const amount = parseFloat(bidAmount);\n    if (isNaN(amount) || amount <= 0) {\n      showToast('Please enter a valid bid amount', 'error');\n      return;\n    }\n\n    setIsBidding(true);\n    try {\n      await api.post(`/items/${item.id}/bid`, { amount });\n      showToast('Bid placed successfully!', 'success');\n      setBidAmount('');\n      refetch();\n    } catch (err: any) {\n      console.error('Bid error:', err);\n      showToast(err.response?.data?.message || 'Failed to place bid. Please try again.', 'error');\n    } finally {\n      setIsBidding(false);\n    }\n  };\n\n  const toggleFavorite = async () => {\n    if (!item || !user) {\n      showToast('Please log in to favorite items', 'info');\n      return;\n    }\n\n    try {\n      await api.post(`/favorites/item/${item.id}`, { isFavorite: !isFavorite });\n      setIsFavorite(!isFavorite);\n      queryClient.invalidateQueries({ queryKey: ['favorite', id] });\n    } catch (err: any) {\n      console.error('Favorite error:', err);\n      showToast('Failed to update favorite status', 'error');\n    }\n  };\n\n  useEffect(() => {\n    if (item && item.auctionStartPrice) {\n      setBidAmount(getMinimumNextBid(item).toString());\n    }\n  }, [item]);\n\n  if (isLoading) return <div className=\"min-h-screen flex items-center justify-center bg-warm-50\">Loading...</div>;\n  if (isError) return <div className=\"min-h-screen flex items-center justify-center bg-warm-50\">Error loading item</div>;\n  if (!item) return <div className=\"min-h-screen flex items-center justify-center bg-warm-50\">Item not found</div>;\n\n  // CD2: Live Drop teaser mode — show before reveal time\n  if (item.isLiveDrop && item.liveDropAt && !isLiveDropRevealed) {\n    return (\n      <div className=\"min-h-screen bg-warm-50\">\n        <Head>\n          <title>Live Drop Coming Soon - {item.sale.title} - FindA.Sale</title>\n        </Head>\n        <main className=\"container mx-auto px-4 py-8\">\n          <Link href={`/sales/${item.sale.id}`} className=\"inline-flex items-center text-amber-600 hover:text-amber-800 mb-6\">\n            <svg xmlns=\"http://www.w3.org/2000/svg\" className=\"h-5 w-5 mr-1 text-amber-600\" viewBox=\"0 0 20 20\" fill=\"currentColor\">\n              <path fillRule=\"evenodd\" d=\"M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z\" clipRule=\"evenodd\" />\n            </svg>\n            Back to {item.sale.title}\n          </Link>\n\n          <div className=\"bg-white rounded-lg shadow-md overflow-hidden\">\n            <div className=\"grid grid-cols-1 lg:grid-cols-2 gap-8 p-8\">\n              {/* Teaser Image */}\n              <div className=\"flex items-center justify-center\">\n                {item.photoUrls.length > 0 ? (\n                  <div className=\"relative w-full\">\n                    <img\n                      src={getOptimizedUrl(item.photoUrls[0]) || item.photoUrls[0]}\n                      alt={item.title}\n                      className=\"w-full h-96 object-contain rounded-lg blur-xl filter brightness-75\"\n                      loading=\"lazy\"\n                    />\n                    <div className=\"absolute inset-0 flex items-center justify-center rounded-lg\">\n                      <div className=\"text-6xl\">🔥</div>\n                    </div>\n                  </div>\n                ) : (\n                  <div className=\"w-full h-96 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center\">\n                    <div className=\"text-6xl\">🔥</div>\n                  </div>\n                )}\n              </div>\n\n              {/* Teaser Content */}\n              <div className=\"flex flex-col justify-center\">\n                {/* Live Drop Badge */}\n                <div className=\"inline-flex items-center gap-2 mb-4 w-fit\">\n                  <span className=\"text-2xl\">🔥</span>\n                  <span className=\"px-4 py-1 bg-amber-100 text-amber-800 text-sm font-bold rounded-full\">LIVE DROP</span>\n                </div>\n\n                {/* Title */}\n                <h1 className=\"text-4xl font-bold text-warm-900 mb-4\">{item.title}</h1>\n\n                {/* Countdown Timer */}\n                <div className=\"mb-8\">\n                  <p className=\"text-sm text-warm-600 font-medium mb-4\">Reveals in:</p>\n                  <CountdownTimer\n                    targetDate={item.liveDropAt}\n                    onReveal={() => {\n                      setIsLiveDropRevealed(true);\n                      showToast('Item revealed! Refresh to see full details.', 'success');\n                    }}\n                  />\n                </div>\n\n                {/* Set Reminder Text */}\n                <p className=\"text-center text-warm-600 text-sm mb-6\">\n                  Set a reminder to catch this item when it drops!\n                </p>\n\n                {/* Teaser Description */}\n                {item.description && (\n                  <div className=\"mb-6 p-4 bg-warm-50 rounded-lg\">\n                    <p className=\"text-warm-700 text-sm\">{item.description}</p>\n                  </div>\n                )}\n\n                {/* Info Box */}\n                <div className=\"bg-amber-50 border-l-4 border-amber-600 p-4 rounded\">\n                  <p className=\"text-sm text-amber-900\">\n                    Check back when the timer counts down to zero to see the item details, photos, and price.\n                  </p>\n                </div>\n              </div>\n            </div>\n          </div>\n        </main>\n      </div>\n    );\n  }\n\n  // CD2: Normal item view (Live Drop revealed or not a Live Drop)\n  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';\n  const isAuctionItem = !!item.auctionStartPrice;\n  const auctionEnded = item.auctionEndTime && new Date(item.auctionEndTime) < new Date();\n  const myHold = reservation && user && reservation.userId === user.id;\n  const someoneElseHolds = reservation && user && reservation.userId !== user.id && ['PENDING', 'CONFIRMED'].includes(reservation.status);\n\n  return (\n    <div className=\"min-h-screen bg-warm-50\">\n      <Head>\n        <title>{item.title} - FindA.Sale</title>\n        <meta name=\"description\" content={item.description} />\n      </Head>\n\n      {/* Phase 18: Photo lightbox */}\n      {lightboxIndex !== null && item?.photoUrls?.length > 0 && (\n        <PhotoLightbox\n          photos={item.photoUrls}\n          initialIndex={lightboxIndex}\n          onClose={() => setLightboxIndex(null)}\n        />\n      )}\n\n      {checkoutItemId && item && (\n        <CheckoutModal\n          itemId={checkoutItemId}\n          itemTitle={item.title}\n          onClose={handleCheckoutClose}\n          onSuccess={handleCheckoutSuccess}\n        />\n      )}\n\n      <main className=\"container mx-auto px-4 py-8\">\n        {/* Back Button */}\n        <Link href={`/sales/${item.sale.id}`} className=\"inline-flex items-center text-amber-600 hover:text-amber-800 mb-6\">\n          <svg xmlns=\"http://www.w3.org/2000/svg\" className=\"h-5 w-5 mr-1 text-amber-600\" viewBox=\"0 0 20 20\" fill=\"currentColor\">\n            <path fillRule=\"evenodd\" d=\"M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z\" clipRule=\"evenodd\" />\n          </svg>\n          Back to {item.sale.title}\n        </Link>\n\n        <div className=\"bg-white rounded-lg shadow-md overflow-hidden\">\n          <div className=\"grid grid-cols-1 lg:grid-cols-2\">\n            {/* Image Gallery — Phase 18: selected thumbnail + lightbox */}\n            <div className=\"p-6\">\n              {item.photoUrls.length > 0 ? (\n                <>\n                  {/* Main photo — click to open lightbox */}\n                  <button\n                    onClick={() => setLightboxIndex(selectedPhotoIndex)}\n                    className=\"group relative w-full bg-warm-200 rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-amber-500\"\n                    aria-label=\"View full-size photo\"\n                  >\n                    <img\n                      src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex]) || item.photoUrls[selectedPhotoIndex]}\n                      alt={item.title}\n                      className=\"w-full h-96 object-contain transition-transform duration-200 group-hover:scale-[1.02]\"\n                      loading=\"lazy\"\n                    />\n                    {/* Zoom hint */}\n                    <div className=\"absolute bottom-3 right-3 bg-black/50 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity\">\n                      <svg className=\"w-4 h-4 inline mr-1\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" strokeWidth={2}>\n                        <path strokeLinecap=\"round\" strokeLinejoin=\"round\" d=\"M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7\" />\n                      </svg>\n                      View full size\n                    </div>\n                  </button>\n\n                  {/* Thumbnail strip — all photos, click to select or double-tap to open lightbox */}\n                  {item.photoUrls.length > 1 && (\n                    <div className=\"flex gap-2 mt-4 overflow-x-auto pb-1\">\n                      {item.photoUrls.map((url, i) => (\n                        <button\n                          key={i}\n                          onClick={() => {\n                            if (selectedPhotoIndex === i) {\n                              // Second tap on active thumbnail opens lightbox\n                              setLightboxIndex(i);\n                            } else {\n                              setSelectedPhotoIndex(i);\n                            }\n                          }}\n                          className={`flex-shrink-0 w-20 h-20 rounded overflow-hidden border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${\n                            i === selectedPhotoIndex\n                              ? 'border-amber-500'\n                              : 'border-transparent hover:border-amber-300'\n                          }`}\n                          aria-label={`View photo ${i + 1}`}\n                          aria-pressed={i === selectedPhotoIndex}\n                        >\n                          <img\n                            src={getThumbnailUrl(url) || url}\n                            alt={`${item.title} ${i + 1}`}\n                            className=\"w-full h-full object-cover\"\n                            loading=\"lazy\"\n                          />\n                        </button>\n                      ))}\n                    </div>\n                  )}\n                </>\n              ) : (\n                <div className=\"bg-warm-200 h-96 flex items-center justify-center rounded-lg\">\n                  <img\n                    src=\"/images/placeholder.svg\"\n                    alt=\"No photo available\"\n                    className=\"w-16 h-16 opacity-30\"\n                    loading=\"lazy\"\n                  />\n                </div>\n              )}\n            </div>\n\n            {/* Item Details */}\n            <div className=\"p-6\">\n              <div className=\"flex justify-between items-start\">\n                <h1 className=\"text-3xl font-bold text-warm-900 mb-2\">{item.title}</h1>\n                <button\n                  onClick={toggleFavorite}\n                  className=\"text-2xl focus:outline-none\"\n                  aria-label={isFavorite ? \"Remove from favorites\" : \"Add to favorites\"}\n                >\n                  {isFavorite ? (\n                    <svg xmlns=\"http://www.w3.org/2000/svg\" className=\"h-6 w-6 text-red-500\" viewBox=\"0 0 20 20\" fill=\"currentColor\">\n                      <path fillRule=\"evenodd\" d=\"M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z\" clipRule=\"evenodd\" />\n                    </svg>\n                  ) : (\n                    <svg xmlns=\"http://www.w3.org/2000/svg\" className=\"h-6 w-6 text-warm-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\">\n                      <path strokeLinecap=\"round\" strokeLinejoin=\"round\" strokeWidth={2} d=\"M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z\" />\n                    </svg>\n                  )}\n                </button>\n              </div>\n              <p className=\"text-warm-600 mb-6\">{item.description}</p>\n              \n              <div className=\"mb-6\">\n                <Link href={`/sales/${item.sale.id}`} className=\"text-amber-600 hover:text-amber-800\">\n                  ← Back to {item.sale.title}\n                </Link>\n              </div>\n\n              {isAuctionItem ? (\n                /* Auction Item */\n                <div className=\"border-t border-b border-warm-200 py-6 mb-6\">\n                  <div className=\"flex justify-between items-center mb-4\">\n                    <div>\n                      <span className=\"text-sm text-warm-600\">Current Bid:</span>\n                      <span className=\"font-bold text-amber-600 ml-1 text-xl\">\n                        {formatPrice(item.currentBid || item.auctionStartPrice)}\n                      </span>\n                    </div>\n                    {item.auctionEndTime && (\n                      <div className=\"text-sm bg-yellow-100 text-yellow-800 px-3 py-1 rounded\">\n                        {timeRemaining} left\n                      </div>\n                    )}\n                  </div>\n                  \n                  <div className=\"mb-4\">\n                    <span className=\"text-sm text-warm-600\">\n                      Minimum bid: {formatPrice(getMinimumNextBid(item))}\n                    </span>\n                  </div>\n                  \n                  {!isOrganizer && user && item.status === 'AVAILABLE' && !auctionEnded && (\n                    <div className=\"flex flex-col space-y-3\">\n                      <div className=\"flex\">\n                        <input\n                          type=\"number\"\n                          step=\"0.01\"\n                          min={getMinimumNextBid(item)}\n                          value={bidAmount}\n                          onChange={(e) => setBidAmount(e.target.value)}\n                          className=\"flex-grow px-3 py-2 border border-warm-300 rounded-l text-warm-900\"\n                          placeholder=\"Enter bid amount\"\n                        />\n                        <button\n                          onClick={handlePlaceBid}\n                          disabled={isBidding}\n                          className=\"bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-r disabled:opacity-50\"\n                        >\n                          {isBidding ? 'Placing...' : 'Place Bid'}\n                        </button>\n                      </div>\n                      <button\n                        onClick={() => setBidAmount(getMinimumNextBid(item).toString())}\n                        className=\"text-sm text-amber-600 hover:text-amber-800\"\n                      >\n                        Set to minimum bid\n                      </button>\n                    </div>\n                  )}\n                  \n                  {auctionEnded && (\n                    <div className=\"text-center py-2 bg-warm-100 rounded text-warm-600\">\n                      Auction ended\n                    </div>\n                  )}\n                  \n                  {!user && (\n                    <div className=\"text-center py-2\">\n                      <Link href=\"/login\" className=\"text-amber-600 hover:text-amber-800\">\n                        Log in to place a bid\n                      </Link>\n                    </div>\n                  )}\n                  \n                  {item.status === 'SOLD' && (\n                    <div className=\"text-center py-2 bg-green-100 text-green-800 rounded\">\n                      Item sold\n                    </div>\n                  )}\n                </div>\n              ) : (\n                /* Fixed Price Item */\n                <div className=\"border-t border-b border-warm-200 py-6 mb-6\">\n                  <div className=\"flex justify-between items-center\">\n                    <span className=\"text-2xl font-bold text-warm-900\">{formatPrice(item.price)}</span>\n                    {!isOrganizer && user && item.status === 'AVAILABLE' && (\n                      <button\n                        onClick={handleBuyNow}\n                        className=\"bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded\"\n                      >\n                        Buy Now\n                      </button>\n                    )}\n                  </div>\n                  \n                  {!user && (\n                    <div className=\"text-center mt-4\">\n                      <Link href=\"/login\" className=\"text-amber-600 hover:text-amber-800\">\n                        Log in to buy this item\n                      </Link>\n                    </div>\n                  )}\n                  \n                  {item.status === 'SOLD' && (\n                    <div className=\"mt-4 text-center py-2 bg-red-100 text-red-800 rounded\">\n                      Item sold\n                    </div>\n                  )}\n                </div>\n              )}\n\n              <div className=\"flex items-center\">\n                <span className={`px-3 py-1 rounded-full text-sm ${\n                  item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :\n                  item.status === 'SOLD' ? 'bg-red-100 text-red-800' :\n                  item.status === 'RESERVED' ? 'bg-amber-100 text-amber-800' :\n                  item.status === 'AUCTION_ENDED' ? 'bg-warm-100 text-warm-800' :\n                  'bg-warm-100 text-warm-800'\n                }`}>\n                  {item.status.replace(/_/g, ' ')}\n                </span>\n              </div>\n\n              {/* Phase 21: Reservation / hold UI */}\n              {!isOrganizer && user && !isAuctionItem && (\n                <div className=\"mt-4\">\n                  {myHold && ['PENDING', 'CONFIRMED'].includes(reservation!.status) ? (\n                    /* Shopper holds this item */\n                    <div className=\"bg-amber-50 border border-amber-200 rounded-lg p-4\">\n                      <p className=\"text-sm font-semibold text-amber-800 mb-1\">You have this item on hold</p>\n                      <p className=\"text-xs text-amber-600 mb-3\">{holdCountdown}</p>\n                      <button\n                        onClick={() => cancelMutation.mutate(reservation!.id)}\n                        disabled={cancelMutation.isPending}\n                        className=\"text-sm text-red-600 hover:text-red-800 underline disabled:opacity-50\"\n                      >\n                        {cancelMutation.isPending ? 'Cancelling…' : 'Cancel hold'}\n                      </button>\n                    </div>\n                  ) : someoneElseHolds ? (\n                    /* Someone else holds it */\n                    <div className=\"bg-warm-100 border border-warm-200 rounded-lg p-3 text-sm text-warm-600\">\n                      Item is currently on hold\n                    </div>\n                  ) : item.status === 'AVAILABLE' ? (\n                    /* Available — show hold button */\n                    <button\n                      onClick={() => placeMutation.mutate()}\n                      disabled={placeMutation.isPending}\n                      className=\"w-full border border-amber-600 text-amber-600 hover:bg-amber-50 font-semibold py-2 px-6 rounded transition-colors disabled:opacity-50\"\n                    >\n                      {placeMutation.isPending ? 'Placing hold…' : 'Hold for 24 hours'}\n                    </button>\n                  ) : null}\n                </div>\n              )}\n\n              {!user && item.status === 'AVAILABLE' && !isAuctionItem && (\n                <div className=\"mt-4 text-sm text-center\">\n                  <Link href=\"/login\" className=\"text-amber-600 hover:text-amber-800\">\n                    Log in to hold this item\n                  </Link>\n                </div>\n              )}\n            </div>\n          </div>\n        </div>\n      </main>\n    </div>\n  );\n};\n\nexport default ItemDetailPage;\n"
+import React, { useState, useEffect, useRef } from 'react';
+import Head from 'next/head';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { io as socketIO, Socket } from 'socket.io-client'; // V1: live bidding
+import api from '../../lib/api';
+import { useAuth } from '../../components/AuthContext';
+import CheckoutModal from '../../components/CheckoutModal';
+import PhotoLightbox from '../../components/PhotoLightbox';
+import CountdownTimer from '../../components/CountdownTimer'; // CD2: Live Drop
+import { useToast } from '../../components/ToastContext';
+import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
+import { formatDistanceToNow, parseISO } from 'date-fns';
+
+interface Item {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  auctionStartPrice: number;
+  currentBid: number;
+  bidIncrement: number;
+  auctionEndTime: string;
+  status: string;
+  photoUrls: string[];
+  isLiveDrop: boolean; // CD2
+  liveDropAt: string | null; // CD2
+  sale: {
+    id: string;
+    title: string;
+  };
+}
+
+interface Bid {
+  id: string;
+  amount: number;
+  user: {
+    name: string;
+  };
+  createdAt: string;
+}
+
+// Helper function to safely format prices
+const formatPrice = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined) return 'N/A';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return isNaN(num) ? 'N/A' : `$${num.toFixed(2)}`;
+};
+
+// Helper function to format time remaining
+const formatTimeRemaining = (endTime: string | null | undefined): string => {
+  if (!endTime) return 'No end time';
+  
+  try {
+    const end = new Date(endTime);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
+    
+    if (diff <= 0) {
+      return 'Ended';
+    }
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else {
+      return `${minutes}m ${seconds}s`;
+    }
+  } catch (error) {
+    return 'No end time';
+  }
+};
+
+// Helper function to get minimum next bid
+const getMinimumNextBid = (item: any): number => {
+  if (item.currentBid) {
+    return item.currentBid + (item.bidIncrement || 1);
+  }
+  return item.auctionStartPrice || item.price || 0;
+};
+
+const ItemDetailPage = () => {
+  const router = useRouter();
+  const { id } = router.query;
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [bidAmount, setBidAmount] = useState('');
+  const [isBidding, setIsBidding] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState('');
+  const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [holdCountdown, setHoldCountdown] = useState('');
+  const [isLiveDropRevealed, setIsLiveDropRevealed] = useState(false); // CD2
+  const socketRef = useRef<Socket | null>(null); // V1: live bidding socket
+  const { showToast } = useToast();
+
+  const { data: item, isLoading, isError, refetch } = useQuery({
+    queryKey: ['item', id],
+    queryFn: async () => {
+      if (!id) throw new Error('No item ID provided');
+      const response = await api.get(`/items/${id}`);
+      return response.data as Item;
+    },
+    enabled: !!id,
+  });
+
+  // CD2: Check if Live Drop has been revealed
+  useEffect(() => {
+    if (!item) return;
+    if (!item.isLiveDrop || !item.liveDropAt) {
+      setIsLiveDropRevealed(true);
+      return;
+    }
+    const now = new Date();
+    const reveal = new Date(item.liveDropAt);
+    setIsLiveDropRevealed(now >= reveal);
+  }, [item]);
+
+  // Check if item is favorited
+  const { data: favoriteStatus } = useQuery({
+    queryKey: ['favorite', id],
+    queryFn: async () => {
+      if (!id || !user) return false;
+      try {
+        const response = await api.get(`/favorites/item/${id}`);
+        return response.data.isFavorite;
+      } catch {
+        return false;
+      }
+    },
+    enabled: !!id && !!user,
+  });
+
+  useEffect(() => {
+    if (favoriteStatus !== undefined) {
+      setIsFavorite(favoriteStatus);
+    }
+  }, [favoriteStatus]);
+
+  // Phase 21: Fetch active reservation for this item
+  const { data: reservation, refetch: refetchReservation } = useQuery({
+    queryKey: ['reservation', id],
+    queryFn: async () => {
+      if (!id || !user) return null;
+      try {
+        const response = await api.get(`/reservations/item/${id}`);
+        return response.data as { id: string; userId: string; status: string; expiresAt: string } | null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!id && !!user,
+    refetchInterval: 30000,
+  });
+
+  // Countdown timer for the shopper's own hold
+  useEffect(() => {
+    if (!reservation || reservation.userId !== user?.id) return;
+    const tick = () => {
+      const diff = new Date(reservation.expiresAt).getTime() - Date.now();
+      if (diff <= 0) { setHoldCountdown('Expired'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      setHoldCountdown(`${h}h ${m}m remaining`);
+    };
+    tick();
+    const t = setInterval(tick, 60000);
+    return () => clearInterval(t);
+  }, [reservation, user?.id]);
+
+  // Phase 21: Place hold mutation
+  const placeMutation = useMutation({
+    mutationFn: () => api.post('/reservations', { itemId: id }),
+    onSuccess: () => {
+      showToast('Item held for 24 hours!', 'success');
+      refetch();
+      refetchReservation();
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to place hold', 'error');
+    },
+  });
+
+  // Phase 21: Cancel hold mutation
+  const cancelMutation = useMutation({
+    mutationFn: (reservationId: string) => api.delete(`/reservations/${reservationId}`),
+    onSuccess: () => {
+      showToast('Hold cancelled', 'success');
+      refetch();
+      refetchReservation();
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to cancel hold', 'error');
+    },
+  });
+
+  // CD2 Phase 2: Mark as found mutation
+  const treasureHuntMutation = useMutation({
+    mutationFn: () => api.post('/treasure-hunt/found', { itemId: id }),
+    onSuccess: (response: any) => {
+      showToast(`Found it! Earned ${response.data.pointsEarned} points!`, 'success');
+      queryClient.invalidateQueries({ queryKey: ['treasureHunt', 'today'] });
+    },
+    onError: (err: any) => {
+      const message = err.response?.data?.message || 'Item doesn\'t match today\'s clue';
+      showToast(message, 'error');
+    },
+  });
+
+  // Timer effect for auction countdown
+  useEffect(() => {
+    if (!item?.auctionEndTime) return;
+
+    const calculateTimeRemaining = () => {
+      setTimeRemaining(formatTimeRemaining(item.auctionEndTime));
+    };
+
+    calculateTimeRemaining();
+    const timer = setInterval(calculateTimeRemaining, 1000);
+
+    return () => clearInterval(timer);
+  }, [item?.auctionEndTime]);
+
+  // V1: Live bid updates via Socket.io — only active for auction items
+  useEffect(() => {
+    if (!id || !item?.auctionStartPrice) return; // non-auction items don't need a socket
+
+    // Derive socket server URL from the API base URL (strip /api suffix)
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ?? apiBase.replace(/\/api\/?$/, '');
+
+    const socket = socketIO(socketUrl, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+    });
+    socketRef.current = socket;
+
+    socket.emit('join:item', id as string);
+
+    socket.on('bid:update', (data: { itemId: string; currentBid: number }) => {
+      if (data.itemId !== id) return;
+      // Update the React Query cache so the UI reflects the new bid instantly
+      queryClient.setQueryData(['item', id], (old: Item | undefined) => {
+        if (!old) return old;
+        return { ...old, currentBid: data.currentBid };
+      });
+      // Also advance the bid input to the new minimum
+      setBidAmount((data.currentBid + (item?.bidIncrement ?? 1)).toFixed(2));
+    });
+
+    return () => {
+      socket.emit('leave:item', id as string);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+    // Re-subscribe if item ID changes (navigation between auction items)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, !!item?.auctionStartPrice]);
+
+  const handleBuyNow = () => {
+    if (!item) return;
+    setCheckoutItemId(item.id);
+  };
+
+  const handleCheckoutClose = () => {
+    setCheckoutItemId(null);
+  };
+
+  const handleCheckoutSuccess = () => {
+    setCheckoutItemId(null);
+    refetch();
+  };
+
+  const handlePlaceBid = async () => {
+    if (!item || !user) return;
+
+    const amount = parseFloat(bidAmount);
+    if (isNaN(amount) || amount <= 0) {
+      showToast('Please enter a valid bid amount', 'error');
+      return;
+    }
+
+    setIsBidding(true);
+    try {
+      await api.post(`/items/${item.id}/bid`, { amount });
+      showToast('Bid placed successfully!', 'success');
+      setBidAmount('');
+      refetch();
+    } catch (err: any) {
+      console.error('Bid error:', err);
+      showToast(err.response?.data?.message || 'Failed to place bid. Please try again.', 'error');
+    } finally {
+      setIsBidding(false);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!item || !user) {
+      showToast('Please log in to favorite items', 'info');
+      return;
+    }
+
+    try {
+      await api.post(`/favorites/item/${item.id}`, { isFavorite: !isFavorite });
+      setIsFavorite(!isFavorite);
+      queryClient.invalidateQueries({ queryKey: ['favorite', id] });
+    } catch (err: any) {
+      console.error('Favorite error:', err);
+      showToast('Failed to update favorite status', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (item && item.auctionStartPrice) {
+      setBidAmount(getMinimumNextBid(item).toString());
+    }
+  }, [item]);
+
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Loading...</div>;
+  if (isError) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Error loading item</div>;
+  if (!item) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Item not found</div>;
+
+  // CD2: Live Drop teaser mode — show before reveal time
+  if (item.isLiveDrop && item.liveDropAt && !isLiveDropRevealed) {
+    return (
+      <div className="min-h-screen bg-warm-50">
+        <Head>
+          <title>Live Drop Coming Soon - {item.sale.title} - FindA.Sale</title>
+        </Head>
+        <main className="container mx-auto px-4 py-8">
+          <Link href={`/sales/${item.sale.id}`} className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            Back to {item.sale.title}
+          </Link>
+
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-8">
+              {/* Teaser Image */}
+              <div className="flex items-center justify-center">
+                {item.photoUrls.length > 0 ? (
+                  <div className="relative w-full">
+                    <img
+                      src={getOptimizedUrl(item.photoUrls[0]) || item.photoUrls[0]}
+                      alt={item.title}
+                      className="w-full h-96 object-contain rounded-lg blur-xl filter brightness-75"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg">
+                      <div className="text-6xl">🔥</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full h-96 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+                    <div className="text-6xl">🔥</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Teaser Content */}
+              <div className="flex flex-col justify-center">
+                {/* Live Drop Badge */}
+                <div className="inline-flex items-center gap-2 mb-4 w-fit">
+                  <span className="text-2xl">🔥</span>
+                  <span className="px-4 py-1 bg-amber-100 text-amber-800 text-sm font-bold rounded-full">LIVE DROP</span>
+                </div>
+
+                {/* Title */}
+                <h1 className="text-4xl font-bold text-warm-900 mb-4">{item.title}</h1>
+
+                {/* Countdown Timer */}
+                <div className="mb-8">
+                  <p className="text-sm text-warm-600 font-medium mb-4">Reveals in:</p>
+                  <CountdownTimer
+                    targetDate={item.liveDropAt}
+                    onReveal={() => {
+                      setIsLiveDropRevealed(true);
+                      showToast('Item revealed! Refresh to see full details.', 'success');
+                    }}
+                  />
+                </div>
+
+                {/* Set Reminder Text */}
+                <p className="text-center text-warm-600 text-sm mb-6">
+                  Set a reminder to catch this item when it drops!
+                </p>
+
+                {/* Teaser Description */}
+                {item.description && (
+                  <div className="mb-6 p-4 bg-warm-50 rounded-lg">
+                    <p className="text-warm-700 text-sm">{item.description}</p>
+                  </div>
+                )}
+
+                {/* Info Box */}
+                <div className="bg-amber-50 border-l-4 border-amber-600 p-4 rounded">
+                  <p className="text-sm text-amber-900">
+                    Check back when the timer counts down to zero to see the item details, photos, and price.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // CD2: Normal item view (Live Drop revealed or not a Live Drop)
+  const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
+  const isAuctionItem = !!item.auctionStartPrice;
+  const auctionEnded = item.auctionEndTime && new Date(item.auctionEndTime) < new Date();
+  const myHold = reservation && user && reservation.userId === user.id;
+  const someoneElseHolds = reservation && user && reservation.userId !== user.id && ['PENDING', 'CONFIRMED'].includes(reservation.status);
+
+  return (
+    <div className="min-h-screen bg-warm-50">
+      <Head>
+        <title>{item.title} - FindA.Sale</title>
+        <meta name="description" content={item.description} />
+      </Head>
+
+      {/* Phase 18: Photo lightbox */}
+      {lightboxIndex !== null && item?.photoUrls?.length > 0 && (
+        <PhotoLightbox
+          photos={item.photoUrls}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+
+      {checkoutItemId && item && (
+        <CheckoutModal
+          itemId={checkoutItemId}
+          itemTitle={item.title}
+          onClose={handleCheckoutClose}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
+
+      <main className="container mx-auto px-4 py-8">
+        {/* Back Button */}
+        <Link href={`/sales/${item.sale.id}`} className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+          </svg>
+          Back to {item.sale.title}
+        </Link>
+
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-2">
+            {/* Image Gallery — Phase 18: selected thumbnail + lightbox */}
+            <div className="p-6">
+              {item.photoUrls.length > 0 ? (
+                <>
+                  {/* Main photo — click to open lightbox */}
+                  <button
+                    onClick={() => setLightboxIndex(selectedPhotoIndex)}
+                    className="group relative w-full bg-warm-200 rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    aria-label="View full-size photo"
+                  >
+                    <img
+                      src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex]) || item.photoUrls[selectedPhotoIndex]}
+                      alt={item.title}
+                      className="w-full h-96 object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                      loading="lazy"
+                    />
+                    {/* Zoom hint */}
+                    <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                      </svg>
+                      View full size
+                    </div>
+                  </button>
+
+                  {/* Thumbnail strip — all photos, click to select or double-tap to open lightbox */}
+                  {item.photoUrls.length > 1 && (
+                    <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
+                      {item.photoUrls.map((url, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (selectedPhotoIndex === i) {
+                              // Second tap on active thumbnail opens lightbox
+                              setLightboxIndex(i);
+                            } else {
+                              setSelectedPhotoIndex(i);
+                            }
+                          }}
+                          className={`flex-shrink-0 w-20 h-20 rounded overflow-hidden border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                            i === selectedPhotoIndex
+                              ? 'border-amber-500'
+                              : 'border-transparent hover:border-amber-300'
+                          }`}
+                          aria-label={`View photo ${i + 1}`}
+                          aria-pressed={i === selectedPhotoIndex}
+                        >
+                          <img
+                            src={getThumbnailUrl(url) || url}
+                            alt={`${item.title} ${i + 1}`}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="bg-warm-200 h-96 flex items-center justify-center rounded-lg">
+                  <img
+                    src="/images/placeholder.svg"
+                    alt="No photo available"
+                    className="w-16 h-16 opacity-30"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Item Details */}
+            <div className="p-6">
+              <div className="flex justify-between items-start">
+                <h1 className="text-3xl font-bold text-warm-900 mb-2">{item.title}</h1>
+                <button
+                  onClick={toggleFavorite}
+                  className="text-2xl focus:outline-none"
+                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                >
+                  {isFavorite ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-warm-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="text-warm-600 mb-6">{item.description}</p>
+              
+              <div className="mb-6">
+                <Link href={`/sales/${item.sale.id}`} className="text-amber-600 hover:text-amber-800">
+                  ← Back to {item.sale.title}
+                </Link>
+              </div>
+
+              {isAuctionItem ? (
+                /* Auction Item */
+                <div className="border-t border-b border-warm-200 py-6 mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <span className="text-sm text-warm-600">Current Bid:</span>
+                      <span className="font-bold text-amber-600 ml-1 text-xl">
+                        {formatPrice(item.currentBid || item.auctionStartPrice)}
+                      </span>
+                    </div>
+                    {item.auctionEndTime && (
+                      <div className="text-sm bg-yellow-100 text-yellow-800 px-3 py-1 rounded">
+                        {timeRemaining} left
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="mb-4">
+                    <span className="text-sm text-warm-600">
+                      Minimum bid: {formatPrice(getMinimumNextBid(item))}
+                    </span>
+                  </div>
+                  
+                  {!isOrganizer && user && item.status === 'AVAILABLE' && !auctionEnded && (
+                    <div className="flex flex-col space-y-3">
+                      <div className="flex">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={getMinimumNextBid(item)}
+                          value={bidAmount}
+                          onChange={(e) => setBidAmount(e.target.value)}
+                          className="flex-grow px-3 py-2 border border-warm-300 rounded-l text-warm-900"
+                          placeholder="Enter bid amount"
+                        />
+                        <button
+                          onClick={handlePlaceBid}
+                          disabled={isBidding}
+                          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-r disabled:opacity-50"
+                        >
+                          {isBidding ? 'Placing...' : 'Place Bid'}
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setBidAmount(getMinimumNextBid(item).toString())}
+                        className="text-sm text-amber-600 hover:text-amber-800"
+                      >
+                        Set to minimum bid
+                      </button>
+                    </div>
+                  )}
+                  
+                  {auctionEnded && (
+                    <div className="text-center py-2 bg-warm-100 rounded text-warm-600">
+                      Auction ended
+                    </div>
+                  )}
+                  
+                  {!user && (
+                    <div className="text-center py-2">
+                      <Link href="/login" className="text-amber-600 hover:text-amber-800">
+                        Log in to place a bid
+                      </Link>
+                    </div>
+                  )}
+                  
+                  {item.status === 'SOLD' && (
+                    <div className="text-center py-2 bg-green-100 text-green-800 rounded">
+                      Item sold
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Fixed Price Item */
+                <div className="border-t border-b border-warm-200 py-6 mb-6">
+                  <div className="flex justify-between items-center">
+                    <span className="text-2xl font-bold text-warm-900">{formatPrice(item.price)}</span>
+                    {!isOrganizer && user && item.status === 'AVAILABLE' && (
+                      <button
+                        onClick={handleBuyNow}
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded"
+                      >
+                        Buy Now
+                      </button>
+                    )}
+                  </div>
+                  
+                  {!user && (
+                    <div className="text-center mt-4">
+                      <Link href="/login" className="text-amber-600 hover:text-amber-800">
+                        Log in to buy this item
+                      </Link>
+                    </div>
+                  )}
+                  
+                  {item.status === 'SOLD' && (
+                    <div className="mt-4 text-center py-2 bg-red-100 text-red-800 rounded">
+                      Item sold
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center">
+                <span className={`px-3 py-1 rounded-full text-sm ${
+                  item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
+                  item.status === 'SOLD' ? 'bg-red-100 text-red-800' :
+                  item.status === 'RESERVED' ? 'bg-amber-100 text-amber-800' :
+                  item.status === 'AUCTION_ENDED' ? 'bg-warm-100 text-warm-800' :
+                  'bg-warm-100 text-warm-800'
+                }`}>
+                  {item.status.replace(/_/g, ' ')}
+                </span>
+              </div>
+
+              {/* Phase 21: Reservation / hold UI */}
+              {!isOrganizer && user && !isAuctionItem && (
+                <div className="mt-4">
+                  {myHold && ['PENDING', 'CONFIRMED'].includes(reservation!.status) ? (
+                    /* Shopper holds this item */
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <p className="text-sm font-semibold text-amber-800 mb-1">You have this item on hold</p>
+                      <p className="text-xs text-amber-600 mb-3">{holdCountdown}</p>
+                      <button
+                        onClick={() => cancelMutation.mutate(reservation!.id)}
+                        disabled={cancelMutation.isPending}
+                        className="text-sm text-red-600 hover:text-red-800 underline disabled:opacity-50"
+                      >
+                        {cancelMutation.isPending ? 'Cancelling…' : 'Cancel hold'}
+                      </button>
+                    </div>
+                  ) : someoneElseHolds ? (
+                    /* Someone else holds it */
+                    <div className="bg-warm-100 border border-warm-200 rounded-lg p-3 text-sm text-warm-600">
+                      Item is currently on hold
+                    </div>
+                  ) : item.status === 'AVAILABLE' ? (
+                    /* Available — show hold button */
+                    <button
+                      onClick={() => placeMutation.mutate()}
+                      disabled={placeMutation.isPending}
+                      className="w-full border border-amber-600 text-amber-600 hover:bg-amber-50 font-semibold py-2 px-6 rounded transition-colors disabled:opacity-50"
+                    >
+                      {placeMutation.isPending ? 'Placing hold…' : 'Hold for 24 hours'}
+                    </button>
+                  ) : null}
+                </div>
+              )}
+
+              {!user && item.status === 'AVAILABLE' && !isAuctionItem && (
+                <div className="mt-4 text-sm text-center">
+                  <Link href="/login" className="text-amber-600 hover:text-amber-800">
+                    Log in to hold this item
+                  </Link>
+                </div>
+              )}
+
+              {/* CD2 Phase 2: Treasure Hunt "Mark as Found" section */}
+              {user && !isOrganizer && item.status === 'AVAILABLE' && (
+                <div className="mt-6 pt-6 border-t border-warm-200">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">🗺️</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-blue-900 mb-2">
+                          Does this match today's treasure hunt clue?
+                        </p>
+                        <button
+                          onClick={() => treasureHuntMutation.mutate()}
+                          disabled={treasureHuntMutation.isPending}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                        >
+                          {treasureHuntMutation.isPending ? 'Checking…' : 'Mark as Found'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default ItemDetailPage;
