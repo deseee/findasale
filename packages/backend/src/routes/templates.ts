@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import {
   createTemplate,
-  listTemplates,
-  getTemplate,
+  getTemplates,
   updateTemplate,
   deleteTemplate,
-  applyTemplate,
+  trackTemplateUse,
 } from '../controllers/templateController';
 import { authenticate } from '../middleware/auth';
 
@@ -16,12 +15,9 @@ router.use(authenticate);
 
 // CRUD operations
 router.post('/', createTemplate);
-router.get('/', listTemplates);
-router.get('/:id', getTemplate);
+router.get('/', getTemplates);
 router.patch('/:id', updateTemplate);
 router.delete('/:id', deleteTemplate);
-
-// Apply template to create new sale
-router.post('/:id/apply', applyTemplate);
+router.post('/:id/use', trackTemplateUse);
 
 export default router;
