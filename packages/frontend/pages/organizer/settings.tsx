@@ -24,6 +24,23 @@ const OrganizerSettingsPage = () => {
   const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+
+  const handleStripeConnect = async () => {
+    setIsConnectingStripe(true);
+    try {
+      const { data } = await api.post('/stripe/create-connect-account');
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        showToast('Could not start Stripe setup — try again', 'error');
+      }
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to connect Stripe', 'error');
+    } finally {
+      setIsConnectingStripe(false);
+    }
+  };
 
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -84,8 +101,12 @@ const OrganizerSettingsPage = () => {
               <p className="text-warm-600 mb-6">
                 Connect your Stripe account to receive payouts from your sales.
               </p>
-              <button className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg">
-                Setup Stripe Connect
+              <button
+                onClick={handleStripeConnect}
+                disabled={isConnectingStripe}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
+              >
+                {isConnectingStripe ? 'Redirecting to Stripe...' : 'Setup Stripe Connect'}
               </button>
             </div>
           )}
