@@ -54,32 +54,28 @@ fi
 echo "  ✅ Controller stub check passed."
 
 # ── 4. Auth coverage on mutation routes ──────────────────────────────────────
+# Uses file-level grep instead of per-line subshells — avoids hang on large route dirs
 echo "[pre-push] 4/4 Auth coverage check..."
 ROUTE_DIR="packages/backend/src/routes"
-MISSING_AUTH=""
 
 for routefile in "$ROUTE_DIR"/*.ts; do
   filename=$(basename "$routefile")
   case "$filename" in
     auth.ts|contact.ts|geocode.ts|stripe.ts) continue ;;
   esac
-  # If the file uses router.use(authenticate), all routes are covered — skip line-by-line check
+  # Skip files that apply authenticate to all routes via router.use()
   if grep -q 'router\.use(authenticate)' "$routefile"; then
     continue
   fi
-  while IFS= read -r line; do
-    if echo "$line" | grep -qE 'router\.(post|put|patch|delete)\s*\('; then
-      if ! echo "$line" | grep -q 'authenticate'; then
-        MISSING_AUTH="$MISSING_AUTH\n  $filename: $line"
-      fi
-    fi
-  done < "$routefile"
+  # Find mutation lines that don't contain authenticate on the same line
+  hits=$(grep -nE 'router\.(post|put|patch|delete)\s*\(' "$routefile" \
+         | grep -v 'authenticate' || true)
+  if [ -n "$hits" ]; then
+    echo "  ⚠️  $filename (verify auth manually):"
+    echo "$hits" | while IFS= read -r h; do echo "    $h"; done
+  fi
 done
 
-if [ -n "$MISSING_AUTH" ]; then
-  echo "⚠️  Mutation routes possibly missing authenticate (verify manually):"
-  printf "%b\n" "$MISSING_AUTH"
-fi
 echo "  ✅ Auth coverage check complete."
 
 echo ""
