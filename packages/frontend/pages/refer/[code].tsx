@@ -12,10 +12,12 @@ const ReferPage = () => {
     if (!code) return;
     // Persist so the registration form stays pre-filled even if the user
     // navigates away before completing signup
-    try {
-      localStorage.setItem('pendingReferralCode', String(code));
-    } catch {
-      // localStorage may be blocked (private browsing)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('pendingReferralCode', String(code));
+      } catch {
+        // localStorage may be blocked (private browsing)
+      }
     }
     router.replace(`/register?ref=${code}`);
   }, [code, router]);
