@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**CONDITIONAL GO for beta.** Core complete. 2 Patrick actions block launch. Target: March 12–19, 2026.
+**CONDITIONAL GO for beta.** Core complete. 3 Patrick actions block launch. Target: March 12–19, 2026.
 
 ---
 
@@ -48,6 +48,7 @@ Sessions 66–73 complete.
 - **Organizer Onboarding, Manual Item Add, creator/dashboard, Error Boundary** ✅
 - **Health H1/H2/H3** ✅ SSR, pagination, rate limits, alert(), OAuth email.
 - **Stripe Webhook Hardening** ✅ Idempotency (StripeEvent table), signature verify confirmed, dispute/payout/Connect handlers added, Sentry on error, fire-and-forget long ops. 2026-03-05.
+- **Stripe Webhook Secret** ✅ Set in Railway. 2026-03-05.
 - **Beta Readiness Audit** ✅ CONDITIONAL GO. Full doc: `claude_docs/beta-readiness-audit-2026-03-05.md`. 2026-03-05.
 - **P5** ✅ Google Vision, Anthropic API, UptimeRobot done. Remaining: OAuth credentials, VAPID confirm.
 - **P6** ✅ Logos, business cards.
@@ -66,7 +67,7 @@ Sessions 66–73 complete.
    - `20260305140000_add_reverse_auction`
    - `stripe_event_idempotency`
    - Run: `cd packages\database && railway run -- npx prisma migrate deploy`
-4. **Stripe webhook secret** — Set `STRIPE_WEBHOOK_SECRET` in Railway env from Stripe dashboard webhook page.
+4. ~~**Stripe webhook secret**~~ ✅ Done 2026-03-05.
 
 ---
 
@@ -84,7 +85,7 @@ Sessions 66–73 complete.
 
 ## Beta Launch Target
 
-**March 12–19, 2026** — pending Patrick completing items 1–4 above.
+**March 12–19, 2026** — pending Patrick completing items 1–3 above.
 Full go/no-go: `claude_docs/beta-readiness-audit-2026-03-05.md`
 
 ---
@@ -93,6 +94,7 @@ Full go/no-go: `claude_docs/beta-readiness-audit-2026-03-05.md`
 
 - **Railway PORT mismatch** — `PORT=5000` locked. Must match `EXPOSE 5000` in Dockerfile.
 - **Neon production DB** — 4 migrations pending (see above).
+- **Dev stack is now native** — As of 2026-03-05, Docker is no longer used for core dev (backend/frontend/postgres run natively on Windows). Docker remains only for `image-tagger` (AI photo feature). See `claude_docs/DEVELOPMENT.md`.
 - **Production seed:**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -113,4 +115,4 @@ Full go/no-go: `claude_docs/beta-readiness-audit-2026-03-05.md`
 
 ---
 
-Last Updated: 2026-03-05 (session 73 — Smart Upload + Visual Search + Reverse Auction + Stripe hardening + beta audit. CONDITIONAL GO.)
+Last Updated: 2026-03-05 (session 74 — Stripe webhook ✅, native PostgreSQL stack complete, dev docs updated. 3 beta blockers remain.)
