@@ -2,7 +2,7 @@
 dockerfilePath = "packages/backend/Dockerfile.production"
 
 [deploy]
-startCommand = "pnpm --filter database run db:deploy; node /app/packages/backend/dist/index.js"
+startCommand = "node /app/packages/backend/dist/index.js"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
