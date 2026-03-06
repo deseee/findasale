@@ -74,6 +74,7 @@ import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier
 import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 min
 import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
 import './jobs/weeklyEmailJob'; // CD2 Phase 2: Personalized weekly email for shoppers — Sundays 6 PM
+import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop for reverse auctions — 6 AM UTC
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
