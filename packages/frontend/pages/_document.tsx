@@ -19,7 +19,8 @@ export default function Document() {
         {/* Favicons */}
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
-        <link rel="shortcut icon" href="/icons/favicon-32x32.png" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.ico" />
 
         {/* Tile for Windows */}
         <meta name="msapplication-TileColor" content="#D97706" />
