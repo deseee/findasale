@@ -40,7 +40,7 @@ function drawLabel(
     .text(priceText, x, doc.y + 8, { width: LABEL_W - MARGIN * 2, align: 'left' });
 
   // Category + condition chips
-  const chips = [item.category, item.condition].filter(Boolean).join('  ·  ');
+  const chips = [item.category, item.condition].filter(Boolean).join('  \u00b7  ');
   if (chips) {
     doc
       .fontSize(8)
