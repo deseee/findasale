@@ -55,6 +55,9 @@ const AddItemsDetailPage = () => {
     quantity: '1',
     isAuction: false,
     startingBid: '',
+    reverseAuction: false,
+    reverseDailyDrop: '',
+    reverseFloorPrice: '',
   });
 
   const [formError, setFormError] = useState('');
@@ -99,6 +102,9 @@ const AddItemsDetailPage = () => {
         quantity: '1',
         isAuction: false,
         startingBid: '',
+        reverseAuction: false,
+        reverseDailyDrop: '',
+        reverseFloorPrice: '',
       });
       setFormError('');
       queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
@@ -151,6 +157,21 @@ const AddItemsDetailPage = () => {
       return;
     }
 
+    if (formData.reverseAuction && !formData.price) {
+      setFormError('Original price is required for reverse auction items');
+      return;
+    }
+
+    if (formData.reverseAuction && !formData.reverseDailyDrop) {
+      setFormError('Daily drop amount is required for reverse auction items');
+      return;
+    }
+
+    if (formData.reverseAuction && !formData.reverseFloorPrice) {
+      setFormError('Floor price is required for reverse auction items');
+      return;
+    }
+
     const payload: any = {
       saleId,
       title: formData.title,
@@ -164,6 +185,14 @@ const AddItemsDetailPage = () => {
       payload.auctionStartPrice = parseFloat(formData.startingBid);
     } else {
       payload.price = parseFloat(formData.price);
+    }
+
+    // CD2 Phase 4: Reverse Auction fields
+    if (formData.reverseAuction) {
+      payload.reverseAuction = true;
+      payload.reverseDailyDrop = Math.round(parseFloat(formData.reverseDailyDrop) * 100); // convert dollars to cents
+      payload.reverseFloorPrice = Math.round(parseFloat(formData.reverseFloorPrice) * 100); // convert dollars to cents
+      payload.reverseStartDate = new Date().toISOString(); // start immediately
     }
 
     createItemMutation.mutate(payload);
@@ -209,7 +238,8 @@ const AddItemsDetailPage = () => {
                         URL.revokeObjectURL(url);
                       })
                       .catch(() => showToast('Export failed. Please try again.', 'error'));
-                  }}
+                  }
+                  }
                 >
                   Export CSV
                 </a>
@@ -312,7 +342,7 @@ const AddItemsDetailPage = () => {
                     </p>
                   </div>
 
-                  {/* Row: Price vs Starting Bid */}
+                  {/* Row: Price vs Starting Bid vs Reverse Auction */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-4">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -326,6 +356,22 @@ const AddItemsDetailPage = () => {
                         />
                         <span className="text-sm font-medium text-warm-900">
                           This is an auction item
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="reverseAuction"
+                          checked={formData.reverseAuction}
+                          onChange={handleFormChange}
+                          className="w-4 h-4"
+                          disabled={createItemMutation.isPending || formData.isAuction}
+                        />
+                        <span className="text-sm font-medium text-warm-900">
+                          Enable daily price drop (⬇️)
                         </span>
                       </label>
                     </div>
@@ -397,6 +443,63 @@ const AddItemsDetailPage = () => {
                         </>
                       )}
                     </div>
+
+                    {/* Reverse Auction Controls */}
+                    {formData.reverseAuction && (
+                      <div className="bg-amber-50 border-l-4 border-amber-600 p-4 rounded space-y-4">
+                        <div className="text-sm font-medium text-amber-900">
+                          ⬇️ Daily Price Drop Settings
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-warm-900 mb-1">
+                              Drop per day <span className="text-red-600">*</span>
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-4 top-2.5 text-warm-600">$</span>
+                              <input
+                                type="number"
+                                name="reverseDailyDrop"
+                                value={formData.reverseDailyDrop}
+                                onChange={handleFormChange}
+                                min="0"
+                                step="0.01"
+                                placeholder="5.00"
+                                className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                disabled={createItemMutation.isPending}
+                              />
+                            </div>
+                            <p className="text-xs text-warm-600 mt-1">e.g., $5 per day</p>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-warm-900 mb-1">
+                              Floor price <span className="text-red-600">*</span>
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-4 top-2.5 text-warm-600">$</span>
+                              <input
+                                type="number"
+                                name="reverseFloorPrice"
+                                value={formData.reverseFloorPrice}
+                                onChange={handleFormChange}
+                                min="0"
+                                step="0.01"
+                                placeholder="10.00"
+                                className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                disabled={createItemMutation.isPending}
+                              />
+                            </div>
+                            <p className="text-xs text-warm-600 mt-1">Won't drop below this</p>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-amber-700">
+                          Price updates automatically every day at 6:00 AM UTC. Shoppers who favorited this item will get notifications when the price drops.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Category & Condition */}
@@ -501,6 +604,9 @@ const AddItemsDetailPage = () => {
                     <div>
                       <h3 className="font-semibold text-warm-900">{item.title}</h3>
                       <p className="text-sm text-warm-600">{item.description}</p>
+                      {item.reverseAuction && (
+                        <p className="text-xs text-amber-600 mt-1">⬇️ Daily price drop enabled</p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Link
