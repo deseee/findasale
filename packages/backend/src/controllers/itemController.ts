@@ -1,1 +1,732 @@
-import { Request, Response } from 'express';\nimport { parse } from 'csv-parse';\nimport { AuthRequest } from '../middleware/auth';\nimport { Readable } from 'stream';\nimport { prisma } from '../index';\nimport axios from 'axios';\nimport FormData from 'form-data';\nimport { z } from 'zod';\nimport { getIO } from '../lib/socket'; // V1: live bidding broadcast\nimport { fireWebhooks } from '../services/webhookService'; // X1\n\n// U1: Fire-and-forget embedding helper — never throws, non-blocking\nconst OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';\nconst OLLAMA_EMBED_MODEL = 'nomic-embed-text';\n\nfunction scheduleItemEmbedding(itemId: string, text: string): void {\n  setImmediate(async () => {\n    try {\n      const embedRes = await axios.post(\n        `${OLLAMA_URL}/api/embeddings`,\n        { model: OLLAMA_EMBED_MODEL, prompt: text },\n        { timeout: 10000 }\n      );\n      const vec: number[] | undefined = embedRes.data?.embedding;\n      if (!Array.isArray(vec) || vec.length === 0) return;\n      await prisma.item.update({ where: { id: itemId }, data: { embedding: vec } });\n    } catch {\n      // Ollama unavailable — embedding stays empty, search falls back to text\n    }\n  });\n}\n\n// H7: Zod schema for CSV row validation — prevents injection and malformed data\nconst csvRowSchema = z.object({\n  title: z.string().min(1, 'Title is required').max(200, 'Title too long (max 200 chars)').trim(),\n  description: z.string().max(2000, 'Description too long (max 2000 chars)').optional().default(''),\n  price: z.string().optional(),\n  auctionStartPrice: z.string().optional(),\n  bidIncrement: z.string().optional(),\n  auctionEndTime: z.string().optional(),\n  status: z.enum(['AVAILABLE', 'SOLD', 'RESERVED', 'AUCTION_ENDED']).optional().default('AVAILABLE'),\n  photoUrls: z.string().optional(),\n  category: z.string().max(50).optional(),\n  condition: z.string().max(50).optional(),\n});\n\n// Helper function to convert string to number safely\nconst toNumber = (value: string | undefined | null): number | null => {\n  if (!value) return null;\n  const num = parseFloat(value);\n  return isNaN(num) ? null : num;\n};\n\n// Simulated image upload function - replace with your actual upload logic\nconst uploadImages = async (files: Express.Multer.File[]): Promise<string[]> => {\n  // Example: upload to Cloudinary and return URLs\n  // Replace with your own implementation\n  return files.map(file => `https://example.com/uploads/${file.filename}`);\n};\n\n// Bulk import items from CSV\nexport const importItemsFromCSV = async (req: AuthRequest, res: Response) => {\n  try {\n    const { saleId } = req.params;\n    const file = req.file;\n\n    if (!file) {\n      return res.status(400).json({ message: 'No file uploaded' });\n    }\n\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied. Organizer access required.' });\n    }\n\n    // Check if sale exists and belongs to organizer\n    const sale = await prisma.sale.findUnique({\n      where: { id: saleId },\n      include: {\n        organizer: {\n          select: { userId: true }\n        }\n      }\n    });\n\n    if (!sale) {\n      return res.status(404).json({ message: 'Sale not found' });\n    }\n\n    if (sale.organizer.userId !== req.user.id) {\n      return res.status(403).json({ message: 'Access denied. Not your sale.' });\n    }\n\n    // Parse CSV\n    const records: any[] = [];\n    const parser = Readable.from(file.buffer).pipe(\n      parse({\n        columns: true,\n        skip_empty_lines: true\n      })\n    );\n\n    for await (const record of parser) {\n      records.push(record);\n    }\n\n    // H7: Validate and sanitise each row with Zod before inserting\n    const itemsToCreate: any[] = [];\n    const rowErrors: { row: number; errors: string[] }[] = [];\n\n    records.forEach((record, idx) => {\n      const result = csvRowSchema.safeParse(record);\n      if (!result.success) {\n        rowErrors.push({\n          row: idx + 2, // +2 for 1-indexed + header row\n          errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`),\n        });\n      } else {\n        const d = result.data;\n        itemsToCreate.push({\n          saleId,\n          title: d.title,\n          description: d.description || '',\n          price: toNumber(d.price),\n          auctionStartPrice: toNumber(d.auctionStartPrice),\n          bidIncrement: toNumber(d.bidIncrement),\n          auctionEndTime: d.auctionEndTime ? new Date(d.auctionEndTime) : null,\n          status: d.status || 'AVAILABLE',\n          category: d.category || null,\n          condition: d.condition || null,\n          photoUrls: d.photoUrls ? d.photoUrls.split(',').map((url: string) => url.trim()) : [],\n        });\n      }\n    });\n\n    if (itemsToCreate.length === 0) {\n      return res.status(400).json({\n        message: 'No valid rows found — all rows failed validation',\n        errors: rowErrors,\n      });\n    }\n\n    // Create items in database\n    const createdItems = await prisma.item.createMany({\n      data: itemsToCreate,\n      skipDuplicates: false\n    });\n\n    res.json({\n      message: `Successfully imported ${createdItems.count} items${rowErrors.length > 0 ? ` (${rowErrors.length} row(s) skipped due to validation errors)` : ''}`,\n      itemCount: createdItems.count,\n      ...(rowErrors.length > 0 ? { rowErrors } : {}),\n    });\n  } catch (error: any) {\n    console.error('CSV import error:', error);\n    res.status(500).json({ \n      message: 'Failed to import items from CSV', \n      error: error.message \n    });\n  }\n};\n\n// Other existing controller functions...\nexport const getItemById = async (req: Request, res: Response) => {\n  try {\n    const { id } = req.params;\n    const item = await prisma.item.findUnique({\n      where: { id },\n      include: {\n        sale: {\n          select: {\n            title: true,\n            id: true\n          }\n        }\n      }\n    });\n\n    if (!item) {\n      return res.status(404).json({ message: 'Item not found' });\n    }\n\n    res.json(item);\n  } catch (error) {\n    console.error('Error fetching item:', error);\n    res.status(500).json({ message: 'Server error while fetching item' });\n  }\n};\n\nexport const getItemsBySaleId = async (req: Request, res: Response) => {\n  try {\n    const { saleId } = req.query;\n    const items = await prisma.item.findMany({\n      where: { saleId: saleId as string },\n      orderBy: { createdAt: 'desc' },\n      take: 100\n    });\n\n    res.json(items);\n  } catch (error) {\n    console.error('Error fetching items:', error);\n    res.status(500).json({ message: 'Server error while fetching items' });\n  }\n};\n\n/**\n * Create a new item with image upload and optional AI tagging\n * Expects multipart/form-data with:\n * - saleId: string\n * - title: string\n * - description?: string\n * - price?: number\n * - auctionStartPrice?: number\n * - bidIncrement?: number\n * - auctionEndTime?: string (ISO date)\n * - status?: string (default 'AVAILABLE')\n * - category?: string\n * - condition?: string\n * - isLiveDrop?: boolean (CD2)\n * - liveDropAt?: string (ISO date, CD2)\n * - images: file(s) (field name 'images')\n */\nexport const createItem = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied. Organizer access required.' });\n    }\n\n    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, isLiveDrop, liveDropAt } = req.body;\n    const files = req.files as Express.Multer.File[];\n\n    // Check if sale exists and belongs to organizer\n    const sale = await prisma.sale.findUnique({\n      where: { id: saleId },\n      include: {\n        organizer: {\n          select: { userId: true }\n        }\n      }\n    });\n\n    if (!sale) {\n      return res.status(404).json({ message: 'Sale not found' });\n    }\n\n    if (sale.organizer.userId !== req.user.id) {\n      return res.status(403).json({ message: 'Access denied. Not your sale.' });\n    }\n\n    // Resolve photo URLs: accept pre-uploaded URLs from body, or upload files now\n    let photoUrls: string[] = [];\n    if (files && files.length > 0) {\n      photoUrls = await uploadImages(files);\n    } else if (req.body.photoUrls) {\n      photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];\n    }\n\n    // Call AI tagger for the first image to get suggested tags (optional, non-fatal)\n    let suggestedTags: string[] = [];\n    const taggerUrl = process.env.TAGGER_URL;\n    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';\n    if (taggerUrl && files && files.length > 0) {\n      const imageName = files[0].originalname;\n      const taggerStart = Date.now();\n      const attemptTag = async (): Promise<string[]> => {\n        const formData = new FormData();\n        formData.append('image', files[0].buffer, { filename: imageName });\n        formData.append('threshold', '0.35');\n        const response = await axios.post(`${taggerUrl}/api/tag`, formData, {\n          headers: {\n            ...formData.getHeaders(),\n            'X-API-Key': taggerApiKey,\n          },\n          timeout: 5000,\n        });\n        return response.data?.tags?.map((t: any) => t.tag) ?? [];\n      };\n\n      try {\n        suggestedTags = await attemptTag();\n        const elapsed = Date.now() - taggerStart;\n        console.log(`[tagger] tagged \"${imageName}\" in ${elapsed}ms — ${suggestedTags.length} tags`);\n      } catch (firstError: any) {\n        const isTimeout = firstError.code === 'ECONNABORTED' || firstError.message?.includes('timeout');\n        const isDown = firstError.code === 'ECONNREFUSED' || firstError.code === 'ENOTFOUND';\n\n        if (isTimeout) {\n          // Retry once on timeout\n          console.warn(`[tagger] timeout tagging \"${imageName}\", retrying once…`);\n          try {\n            suggestedTags = await attemptTag();\n            const elapsed = Date.now() - taggerStart;\n            console.log(`[tagger] retry succeeded for \"${imageName}\" in ${elapsed}ms`);\n          } catch (retryError: any) {\n            console.warn(`[tagger] retry also timed out for \"${imageName}\" — continuing without tags`);\n          }\n        } else if (isDown) {\n          console.warn(`[tagger] service unreachable (${taggerUrl}) — continuing without tags`);\n        } else {\n          console.warn(`[tagger] unexpected error tagging \"${imageName}\": ${firstError.message} — continuing without tags`);\n        }\n      }\n    }\n\n    // Create the item in database\n    const item = await prisma.item.create({\n      data: {\n        saleId,\n        title,\n        description: description || '',\n        price: price ? parseFloat(price) : null,\n        auctionStartPrice: auctionStartPrice ? parseFloat(auctionStartPrice) : null,\n        bidIncrement: bidIncrement ? parseFloat(bidIncrement) : null,\n        auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,\n        status: status || 'AVAILABLE',\n        category: category || null,\n        condition: condition || null,\n        photoUrls,\n        // W1: Shipping\n        shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',\n        shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,\n        // CD2: Live Drop\n        isLiveDrop: isLiveDrop === true || isLiveDrop === 'true',\n        liveDropAt: liveDropAt ? new Date(liveDropAt) : null,\n      }\n    });\n\n    // Return item with suggested tags (could be used by frontend to pre-fill fields)\n    res.status(201).json({\n      ...item,\n      suggestedTags, // optional\n    });\n\n    // U1: Queue embedding generation (non-blocking — after response sent)\n    scheduleItemEmbedding(item.id, [title, description, category].filter(Boolean).join(' '));\n  } catch (error) {\n    console.error('Error creating item:', error);\n    res.status(500).json({ message: 'Server error while creating item' });\n  }\n};\n\nexport const updateItem = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied. Organizer access required.' });\n    }\n\n    const { id } = req.params;\n    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, isLiveDrop, liveDropAt } = req.body;\n\n    // Check if item exists and belongs to organizer's sale\n    const item = await prisma.item.findUnique({\n      where: { id },\n      include: { sale: { include: { organizer: { select: { userId: true } } } } }\n    });\n\n    if (!item) {\n      return res.status(404).json({ message: 'Item not found' });\n    }\n\n    if (item.sale.organizer.userId !== req.user.id) {\n      return res.status(403).json({ message: 'Access denied. Not your item.' });\n    }\n\n    const updatedItem = await prisma.item.update({\n      where: { id },\n      data: {\n        title,\n        description: description || '',\n        price: price !== undefined ? (price ? parseFloat(price) : null) : undefined,\n        auctionStartPrice: auctionStartPrice !== undefined ? (auctionStartPrice ? parseFloat(auctionStartPrice) : null) : undefined,\n        bidIncrement: bidIncrement !== undefined ? (bidIncrement ? parseFloat(bidIncrement) : null) : undefined,\n        auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,\n        status,\n        category: category !== undefined ? (category || null) : undefined,\n        condition: condition !== undefined ? (condition || null) : undefined,\n        photoUrls: photoUrls || undefined,\n        // W1: Shipping\n        ...(shippingAvailable !== undefined && { shippingAvailable: shippingAvailable === true || shippingAvailable === 'true' }),\n        ...(shippingPrice !== undefined && { shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null }),\n        // CD2: Live Drop\n        ...(isLiveDrop !== undefined && { isLiveDrop: isLiveDrop === true || isLiveDrop === 'true' }),\n        ...(liveDropAt !== undefined && { liveDropAt: liveDropAt ? new Date(liveDropAt) : null }),\n      }\n    });\n\n    res.json(updatedItem);\n\n    // U1: Re-embed when searchable fields change\n    if (title || description || category) {\n      scheduleItemEmbedding(id, [\n        title ?? updatedItem.title,\n        description ?? updatedItem.description,\n        category ?? updatedItem.category,\n      ].filter(Boolean).join(' '));\n    }\n  } catch (error) {\n    console.error('Error updating item:', error);\n    res.status(500).json({ message: 'Server error while updating item' });\n  }\n};\n\nexport const deleteItem = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied. Organizer access required.' });\n    }\n\n    const { id } = req.params;\n\n    // Check if item exists and belongs to organizer's sale\n    const item = await prisma.item.findUnique({\n      where: { id },\n      include: { sale: { include: { organizer: { select: { userId: true } } } } }\n    });\n\n    if (!item) {\n      return res.status(404).json({ message: 'Item not found' });\n    }\n\n    if (item.sale.organizer.userId !== req.user.id) {\n      return res.status(403).json({ message: 'Access denied. Not your item.' });\n    }\n\n    await prisma.item.delete({\n      where: { id }\n    });\n\n    res.json({ message: 'Item deleted successfully' });\n  } catch (error) {\n    console.error('Error deleting item:', error);\n    res.status(500).json({ message: 'Server error while deleting item' });\n  }\n};\n\n/**\n * Analyze an existing item's photos with the AI tagger.\n * Downloads the first photo URL and sends it to the tagger service.\n * Returns { suggestedTags: string[] } — non-fatal if tagger is unavailable.\n */\nexport const analyzeItemTags = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied. Organizer access required.' });\n    }\n\n    const { id } = req.params;\n\n    const item = await prisma.item.findUnique({\n      where: { id },\n      include: { sale: { include: { organizer: { select: { userId: true } } } } }\n    });\n\n    if (!item) {\n      return res.status(404).json({ message: 'Item not found' });\n    }\n\n    if (item.sale.organizer.userId !== req.user.id) {\n      return res.status(403).json({ message: 'Access denied. Not your item.' });\n    }\n\n    const firstPhotoUrl = item.photoUrls?.[0];\n    if (!firstPhotoUrl) {\n      return res.json({ suggestedTags: [] });\n    }\n\n    const taggerUrl = process.env.TAGGER_URL;\n    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';\n\n    if (!taggerUrl) {\n      return res.json({ suggestedTags: [] });\n    }\n\n    // Download the photo from its URL then send to tagger\n    let suggestedTags: string[] = [];\n    try {\n      const imageResponse = await axios.get(firstPhotoUrl, {\n        responseType: 'arraybuffer',\n        timeout: 8000,\n      });\n\n      const imageBuffer = Buffer.from(imageResponse.data);\n      const filename = firstPhotoUrl.split('/').pop()?.split('?')[0] || 'photo.jpg';\n\n      const formData = new FormData();\n      formData.append('image', imageBuffer, { filename });\n      formData.append('threshold', '0.35');\n\n      const taggerStart = Date.now();\n      const taggerResponse = await axios.post(`${taggerUrl}/api/tag`, formData, {\n        headers: {\n          ...formData.getHeaders(),\n          'X-API-Key': taggerApiKey,\n        },\n        timeout: 5000,\n      });\n\n      suggestedTags = taggerResponse.data?.tags?.map((t: any) => t.tag) ?? [];\n      console.log(`[tagger/analyze] tagged item \"${id}\" in ${Date.now() - taggerStart}ms — ${suggestedTags.length} tags`);\n    } catch (err: any) {\n      const isDown = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND';\n      if (isDown) {\n        console.warn(`[tagger/analyze] service unreachable — returning empty tags`);\n      } else {\n        console.warn(`[tagger/analyze] error for item \"${id}\": ${err.message}`);\n      }\n    }\n\n    res.json({ suggestedTags });\n  } catch (error) {\n    console.error('Error analyzing item tags:', error);\n    res.status(500).json({ message: 'Server error while analyzing tags' });\n  }\n};\n\n// ── Phase 16: Advanced photo pipeline ─────────────────────────────────────────────────────────────────────────────\n\n// Helper: fetch item and verify organizer ownership\nconst getItemForOrganizer = async (id: string, userId: string) => {\n  const item = await prisma.item.findUnique({\n    where: { id },\n    include: { sale: { include: { organizer: { select: { userId: true } } } } },\n  });\n  if (!item) return null;\n  if (item.sale.organizer.userId !== userId) return null;\n  return item;\n};\n\n/**\n * POST /api/items/:id/photos\n * Body: { url: string } — a Cloudinary URL already uploaded via /api/upload/item-photo\n * Appends the URL to item.photoUrls. Returns { photoUrls }.\n */\nexport const addItemPhoto = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied' });\n    }\n    const { id } = req.params;\n    const { url } = req.body;\n    if (!url || typeof url !== 'string') {\n      return res.status(400).json({ message: 'url is required' });\n    }\n    const item = await getItemForOrganizer(id, req.user.id);\n    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });\n\n    const updated = await prisma.item.update({\n      where: { id },\n      data: { photoUrls: [...item.photoUrls, url] },\n    });\n    res.json({ photoUrls: updated.photoUrls });\n  } catch (error) {\n    console.error('addItemPhoto error:', error);\n    res.status(500).json({ message: 'Server error' });\n  }\n};\n\n/**\n * DELETE /api/items/:id/photos/:photoIndex\n * Removes the photo at the given 0-based index. Returns { photoUrls }.\n */\nexport const removeItemPhoto = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied' });\n    }\n    const { id, photoIndex } = req.params;\n    const idx = parseInt(photoIndex, 10);\n    if (isNaN(idx)) return res.status(400).json({ message: 'Invalid photoIndex' });\n\n    const item = await getItemForOrganizer(id, req.user.id);\n    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });\n    if (idx < 0 || idx >= item.photoUrls.length) {\n      return res.status(400).json({ message: 'Photo index out of range' });\n    }\n\n    const newUrls = item.photoUrls.filter((_, i) => i !== idx);\n    const updated = await prisma.item.update({\n      where: { id },\n      data: { photoUrls: newUrls },\n    });\n    res.json({ photoUrls: updated.photoUrls });\n  } catch (error) {\n    console.error('removeItemPhoto error:', error);\n    res.status(500).json({ message: 'Server error' });\n  }\n};\n\n/**\n * PATCH /api/items/:id/photos/reorder\n * Body: { photoUrls: string[] } — same URLs in a new order.\n * Validates that no new URLs are injected. Returns { photoUrls }.\n */\nexport const reorderItemPhotos = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user || req.user.role !== 'ORGANIZER') {\n      return res.status(403).json({ message: 'Access denied' });\n    }\n    const { id } = req.params;\n    const { photoUrls } = req.body;\n    if (!Array.isArray(photoUrls)) {\n      return res.status(400).json({ message: 'photoUrls must be an array' });\n    }\n\n    const item = await getItemForOrganizer(id, req.user.id);\n    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });\n\n    // Ensure the new array contains exactly the same URLs (no injection)\n    const existing = new Set(item.photoUrls);\n    const allValid = photoUrls.every((u: any) => typeof u === 'string' && existing.has(u));\n    if (!allValid || photoUrls.length !== item.photoUrls.length) {\n      return res.status(400).json({ message: 'Invalid photoUrls — can only reorder existing photos' });\n    }\n\n    const updated = await prisma.item.update({\n      where: { id },\n      data: { photoUrls },\n    });\n    res.json({ photoUrls: updated.photoUrls });\n  } catch (error) {\n    console.error('reorderItemPhotos error:', error);\n    res.status(500).json({ message: 'Server error' });\n  }\n};\n\n// ── End Phase 16 ─────────────────────────────────────────────────────────────────────────────\n\nexport const placeBid = async (req: AuthRequest, res: Response) => {\n  try {\n    if (!req.user) {\n      return res.status(401).json({ message: 'Authentication required' });\n    }\n\n    const { id } = req.params;\n    const { amount } = req.body;\n\n    // Validate bid amount\n    const bidAmount = parseFloat(amount);\n    if (isNaN(bidAmount) || bidAmount <= 0) {\n      return res.status(400).json({ message: 'Invalid bid amount' });\n    }\n\n    // Check if item exists and is part of an auction\n    const item = await prisma.item.findUnique({\n      where: { id },\n      include: { sale: { include: { organizer: { select: { userId: true } } } } },\n    });\n\n    if (!item) {\n      return res.status(404).json({ message: 'Item not found' });\n    }\n\n    if (!item.auctionStartPrice) {\n      return res.status(400).json({ message: 'Item is not part of an auction' });\n    }\n\n    // Check if auction has ended\n    if (item.auctionEndTime && new Date() > item.auctionEndTime) {\n      return res.status(400).json({ message: 'Auction has ended' });\n    }\n\n    // Check if bid meets minimum requirement\n    let minBid;\n    if (item.currentBid) {\n      minBid = Number(item.currentBid) + (Number(item.bidIncrement) || 1);\n    } else {\n      minBid = Number(item.auctionStartPrice);\n    }\n    \n    if (bidAmount < minBid) {\n      return res.status(400).json({ \n        message: `Bid must be at least $${minBid.toFixed(2)}` \n      });\n    }\n\n    // Create bid record\n    const bid = await prisma.bid.create({\n      data: {\n        itemId: id,\n        userId: req.user.id,\n        amount: bidAmount\n      }\n    });\n\n    // Update item's current bid\n    await prisma.item.update({\n      where: { id },\n      data: { currentBid: bidAmount }\n    });\n\n    // V1: Broadcast live bid update to all clients viewing this item\n    try {\n      getIO().to(`item:${id}`).emit('bid:update', {\n        itemId: id,\n        currentBid: bidAmount,\n      });\n    } catch {\n      // Socket not initialized (e.g. test environment) — non-fatal\n    }\n\n    // X1: Fire webhooks (non-blocking)\n    const organizerUserId = (item as any).sale?.organizer?.userId;\n    if (organizerUserId) {\n      setImmediate(() =>\n        fireWebhooks(organizerUserId, 'bid.placed', {\n          itemId: id,\n          itemTitle: item.title,\n          bidAmount,\n          bidderId: req.user.id,\n        })\n      );\n    }\n\n    res.status(201).json(bid);\n  } catch (error) {\n    console.error('Error placing bid:', error);\n    res.status(500).json({ message: 'Server error while placing bid' });\n  }\n};\n"
+import { Request, Response } from 'express';
+import { parse } from 'csv-parse';
+import { AuthRequest } from '../middleware/auth';
+import { Readable } from 'stream';
+import { prisma } from '../index';
+import axios from 'axios';
+import FormData from 'form-data';
+import { z } from 'zod';
+import { getIO } from '../lib/socket'; // V1: live bidding broadcast
+import { fireWebhooks } from '../services/webhookService'; // X1
+
+// U1: Fire-and-forget embedding helper — never throws, non-blocking
+const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
+const OLLAMA_EMBED_MODEL = 'nomic-embed-text';
+
+function scheduleItemEmbedding(itemId: string, text: string): void {
+  setImmediate(async () => {
+    try {
+      const embedRes = await axios.post(
+        `${OLLAMA_URL}/api/embeddings`,
+        { model: OLLAMA_EMBED_MODEL, prompt: text },
+        { timeout: 10000 }
+      );
+      const vec: number[] | undefined = embedRes.data?.embedding;
+      if (!Array.isArray(vec) || vec.length === 0) return;
+      await prisma.item.update({ where: { id: itemId }, data: { embedding: vec } });
+    } catch {
+      // Ollama unavailable — embedding stays empty, search falls back to text
+    }
+  });
+}
+
+// H7: Zod schema for CSV row validation — prevents injection and malformed data
+const csvRowSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200, 'Title too long (max 200 chars)').trim(),
+  description: z.string().max(2000, 'Description too long (max 2000 chars)').optional().default(''),
+  price: z.string().optional(),
+  auctionStartPrice: z.string().optional(),
+  bidIncrement: z.string().optional(),
+  auctionEndTime: z.string().optional(),
+  status: z.enum(['AVAILABLE', 'SOLD', 'RESERVED', 'AUCTION_ENDED']).optional().default('AVAILABLE'),
+  photoUrls: z.string().optional(),
+  category: z.string().max(50).optional(),
+  condition: z.string().max(50).optional(),
+});
+
+// Helper function to convert string to number safely
+const toNumber = (value: string | undefined | null): number | null => {
+  if (!value) return null;
+  const num = parseFloat(value);
+  return isNaN(num) ? null : num;
+};
+
+// Simulated image upload function - replace with your actual upload logic
+const uploadImages = async (files: Express.Multer.File[]): Promise<string[]> => {
+  // Example: upload to Cloudinary and return URLs
+  // Replace with your own implementation
+  return files.map(file => `https://example.com/uploads/${file.filename}`);
+};
+
+// Bulk import items from CSV
+export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
+  try {
+    const { saleId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    // Check if sale exists and belongs to organizer
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        organizer: {
+          select: { userId: true }
+        }
+      }
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // Parse CSV
+    const records: any[] = [];
+    const parser = Readable.from(file.buffer).pipe(
+      parse({
+        columns: true,
+        skip_empty_lines: true
+      })
+    );
+
+    for await (const record of parser) {
+      records.push(record);
+    }
+
+    // H7: Validate and sanitise each row with Zod before inserting
+    const itemsToCreate: any[] = [];
+    const rowErrors: { row: number; errors: string[] }[] = [];
+
+    records.forEach((record, idx) => {
+      const result = csvRowSchema.safeParse(record);
+      if (!result.success) {
+        rowErrors.push({
+          row: idx + 2, // +2 for 1-indexed + header row
+          errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`),
+        });
+      } else {
+        const d = result.data;
+        itemsToCreate.push({
+          saleId,
+          title: d.title,
+          description: d.description || '',
+          price: toNumber(d.price),
+          auctionStartPrice: toNumber(d.auctionStartPrice),
+          bidIncrement: toNumber(d.bidIncrement),
+          auctionEndTime: d.auctionEndTime ? new Date(d.auctionEndTime) : null,
+          status: d.status || 'AVAILABLE',
+          category: d.category || null,
+          condition: d.condition || null,
+          photoUrls: d.photoUrls ? d.photoUrls.split(',').map((url: string) => url.trim()) : [],
+        });
+      }
+    });
+
+    if (itemsToCreate.length === 0) {
+      return res.status(400).json({
+        message: 'No valid rows found — all rows failed validation',
+        errors: rowErrors,
+      });
+    }
+
+    // Create items in database
+    const createdItems = await prisma.item.createMany({
+      data: itemsToCreate,
+      skipDuplicates: false
+    });
+
+    res.json({
+      message: `Successfully imported ${createdItems.count} items${rowErrors.length > 0 ? ` (${rowErrors.length} row(s) skipped due to validation errors)` : ''}`,
+      itemCount: createdItems.count,
+      ...(rowErrors.length > 0 ? { rowErrors } : {}),
+    });
+  } catch (error: any) {
+    console.error('CSV import error:', error);
+    res.status(500).json({ 
+      message: 'Failed to import items from CSV', 
+      error: error.message 
+    });
+  }
+};
+
+// Other existing controller functions...
+export const getItemById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: {
+        sale: {
+          select: {
+            title: true,
+            id: true
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    res.json(item);
+  } catch (error) {
+    console.error('Error fetching item:', error);
+    res.status(500).json({ message: 'Server error while fetching item' });
+  }
+};
+
+export const getItemsBySaleId = async (req: Request, res: Response) => {
+  try {
+    const { saleId } = req.query;
+    const items = await prisma.item.findMany({
+      where: { saleId: saleId as string },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching items:', error);
+    res.status(500).json({ message: 'Server error while fetching items' });
+  }
+};
+
+/**
+ * Create a new item with image upload and optional AI tagging
+ * Expects multipart/form-data with:
+ * - saleId: string
+ * - title: string
+ * - description?: string
+ * - price?: number
+ * - auctionStartPrice?: number
+ * - bidIncrement?: number
+ * - auctionEndTime?: string (ISO date)
+ * - status?: string (default 'AVAILABLE')
+ * - category?: string
+ * - condition?: string
+ * - isLiveDrop?: boolean (CD2)
+ * - liveDropAt?: string (ISO date, CD2)
+ * - reverseAuction?: boolean (CD2 Phase 4)
+ * - reverseDailyDrop?: number (cents, CD2 Phase 4)
+ * - reverseFloorPrice?: number (cents, CD2 Phase 4)
+ * - reverseStartDate?: string (ISO date, CD2 Phase 4)
+ * - images: file(s) (field name 'images')
+ */
+export const createItem = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, isLiveDrop, liveDropAt, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
+    const files = req.files as Express.Multer.File[];
+
+    // Check if sale exists and belongs to organizer
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        organizer: {
+          select: { userId: true }
+        }
+      }
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // Resolve photo URLs: accept pre-uploaded URLs from body, or upload files now
+    let photoUrls: string[] = [];
+    if (files && files.length > 0) {
+      photoUrls = await uploadImages(files);
+    } else if (req.body.photoUrls) {
+      photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];
+    }
+
+    // Call AI tagger for the first image to get suggested tags (optional, non-fatal)
+    let suggestedTags: string[] = [];
+    const taggerUrl = process.env.TAGGER_URL;
+    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';
+    if (taggerUrl && files && files.length > 0) {
+      const imageName = files[0].originalname;
+      const taggerStart = Date.now();
+      const attemptTag = async (): Promise<string[]> => {
+        const formData = new FormData();
+        formData.append('image', files[0].buffer, { filename: imageName });
+        formData.append('threshold', '0.35');
+        const response = await axios.post(`${taggerUrl}/api/tag`, formData, {
+          headers: {
+            ...formData.getHeaders(),
+            'X-API-Key': taggerApiKey,
+          },
+          timeout: 5000,
+        });
+        return response.data?.tags?.map((t: any) => t.tag) ?? [];
+      };
+
+      try {
+        suggestedTags = await attemptTag();
+        const elapsed = Date.now() - taggerStart;
+        console.log(`[tagger] tagged "${imageName}" in ${elapsed}ms — ${suggestedTags.length} tags`);
+      } catch (firstError: any) {
+        const isTimeout = firstError.code === 'ECONNABORTED' || firstError.message?.includes('timeout');
+        const isDown = firstError.code === 'ECONNREFUSED' || firstError.code === 'ENOTFOUND';
+
+        if (isTimeout) {
+          // Retry once on timeout
+          console.warn(`[tagger] timeout tagging "${imageName}", retrying once…`);
+          try {
+            suggestedTags = await attemptTag();
+            const elapsed = Date.now() - taggerStart;
+            console.log(`[tagger] retry succeeded for "${imageName}" in ${elapsed}ms`);
+          } catch (retryError: any) {
+            console.warn(`[tagger] retry also timed out for "${imageName}" — continuing without tags`);
+          }
+        } else if (isDown) {
+          console.warn(`[tagger] service unreachable (${taggerUrl}) — continuing without tags`);
+        } else {
+          console.warn(`[tagger] unexpected error tagging "${imageName}": ${firstError.message} — continuing without tags`);
+        }
+      }
+    }
+
+    // Create the item in database
+    const item = await prisma.item.create({
+      data: {
+        saleId,
+        title,
+        description: description || '',
+        price: price ? parseFloat(price) : null,
+        auctionStartPrice: auctionStartPrice ? parseFloat(auctionStartPrice) : null,
+        bidIncrement: bidIncrement ? parseFloat(bidIncrement) : null,
+        auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
+        status: status || 'AVAILABLE',
+        category: category || null,
+        condition: condition || null,
+        photoUrls,
+        // W1: Shipping
+        shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
+        shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,
+        // CD2: Live Drop
+        isLiveDrop: isLiveDrop === true || isLiveDrop === 'true',
+        liveDropAt: liveDropAt ? new Date(liveDropAt) : null,
+        // CD2 Phase 4: Reverse Auction
+        reverseAuction: reverseAuction === true || reverseAuction === 'true',
+        reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop) : null,
+        reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice) : null,
+        reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null,
+      }
+    });
+
+    // Return item with suggested tags (could be used by frontend to pre-fill fields)
+    res.status(201).json({
+      ...item,
+      suggestedTags, // optional
+    });
+
+    // U1: Queue embedding generation (non-blocking — after response sent)
+    scheduleItemEmbedding(item.id, [title, description, category].filter(Boolean).join(' '));
+  } catch (error) {
+    console.error('Error creating item:', error);
+    res.status(500).json({ message: 'Server error while creating item' });
+  }
+};
+
+export const updateItem = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, isLiveDrop, liveDropAt, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
+
+    // Check if item exists and belongs to organizer's sale
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    const updatedItem = await prisma.item.update({
+      where: { id },
+      data: {
+        title,
+        description: description || '',
+        price: price !== undefined ? (price ? parseFloat(price) : null) : undefined,
+        auctionStartPrice: auctionStartPrice !== undefined ? (auctionStartPrice ? parseFloat(auctionStartPrice) : null) : undefined,
+        bidIncrement: bidIncrement !== undefined ? (bidIncrement ? parseFloat(bidIncrement) : null) : undefined,
+        auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
+        status,
+        category: category !== undefined ? (category || null) : undefined,
+        condition: condition !== undefined ? (condition || null) : undefined,
+        photoUrls: photoUrls || undefined,
+        // W1: Shipping
+        ...(shippingAvailable !== undefined && { shippingAvailable: shippingAvailable === true || shippingAvailable === 'true' }),
+        ...(shippingPrice !== undefined && { shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null }),
+        // CD2: Live Drop
+        ...(isLiveDrop !== undefined && { isLiveDrop: isLiveDrop === true || isLiveDrop === 'true' }),
+        ...(liveDropAt !== undefined && { liveDropAt: liveDropAt ? new Date(liveDropAt) : null }),
+        // CD2 Phase 4: Reverse Auction
+        ...(reverseAuction !== undefined && { reverseAuction: reverseAuction === true || reverseAuction === 'true' }),
+        ...(reverseDailyDrop !== undefined && { reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop) : null }),
+        ...(reverseFloorPrice !== undefined && { reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice) : null }),
+        ...(reverseStartDate !== undefined && { reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null }),
+      }
+    });
+
+    res.json(updatedItem);
+
+    // U1: Re-embed when searchable fields change
+    if (title || description || category) {
+      scheduleItemEmbedding(id, [
+        title ?? updatedItem.title,
+        description ?? updatedItem.description,
+        category ?? updatedItem.category,
+      ].filter(Boolean).join(' '));
+    }
+  } catch (error) {
+    console.error('Error updating item:', error);
+    res.status(500).json({ message: 'Server error while updating item' });
+  }
+};
+
+export const deleteItem = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    // Check if item exists and belongs to organizer's sale
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    await prisma.item.delete({
+      where: { id }
+    });
+
+    res.json({ message: 'Item deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting item:', error);
+    res.status(500).json({ message: 'Server error while deleting item' });
+  }
+};
+
+/**
+ * Analyze an existing item's photos with the AI tagger.
+ * Downloads the first photo URL and sends it to the tagger service.
+ * Returns { suggestedTags: string[] } — non-fatal if tagger is unavailable.
+ */
+export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    const firstPhotoUrl = item.photoUrls?.[0];
+    if (!firstPhotoUrl) {
+      return res.json({ suggestedTags: [] });
+    }
+
+    const taggerUrl = process.env.TAGGER_URL;
+    const taggerApiKey = process.env.TAGGER_API_KEY || 'change-this-in-production';
+
+    if (!taggerUrl) {
+      return res.json({ suggestedTags: [] });
+    }
+
+    // Download the photo from its URL then send to tagger
+    let suggestedTags: string[] = [];
+    try {
+      const imageResponse = await axios.get(firstPhotoUrl, {
+        responseType: 'arraybuffer',
+        timeout: 8000,
+      });
+
+      const imageBuffer = Buffer.from(imageResponse.data);
+      const filename = firstPhotoUrl.split('/').pop()?.split('?')[0] || 'photo.jpg';
+
+      const formData = new FormData();
+      formData.append('image', imageBuffer, { filename });
+      formData.append('threshold', '0.35');
+
+      const taggerStart = Date.now();
+      const taggerResponse = await axios.post(`${taggerUrl}/api/tag`, formData, {
+        headers: {
+          ...formData.getHeaders(),
+          'X-API-Key': taggerApiKey,
+        },
+        timeout: 5000,
+      });
+
+      suggestedTags = taggerResponse.data?.tags?.map((t: any) => t.tag) ?? [];
+      console.log(`[tagger/analyze] tagged item "${id}" in ${Date.now() - taggerStart}ms — ${suggestedTags.length} tags`);
+    } catch (err: any) {
+      const isDown = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND';
+      if (isDown) {
+        console.warn(`[tagger/analyze] service unreachable — returning empty tags`);
+      } else {
+        console.warn(`[tagger/analyze] error for item "${id}": ${err.message}`);
+      }
+    }
+
+    res.json({ suggestedTags });
+  } catch (error) {
+    console.error('Error analyzing item tags:', error);
+    res.status(500).json({ message: 'Server error while analyzing tags' });
+  }
+};
+
+// ── Phase 16: Advanced photo pipeline ─────────────────────────────────────────────────────────────────────────────
+
+// Helper: fetch item and verify organizer ownership
+const getItemForOrganizer = async (id: string, userId: string) => {
+  const item = await prisma.item.findUnique({
+    where: { id },
+    include: { sale: { include: { organizer: { select: { userId: true } } } } },
+  });
+  if (!item) return null;
+  if (item.sale.organizer.userId !== userId) return null;
+  return item;
+};
+
+/**
+ * POST /api/items/:id/photos
+ * Body: { url: string } — a Cloudinary URL already uploaded via /api/upload/item-photo
+ * Appends the URL to item.photoUrls. Returns { photoUrls }.
+ */
+export const addItemPhoto = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id } = req.params;
+    const { url } = req.body;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ message: 'url is required' });
+    }
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls: [...item.photoUrls, url] },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('addItemPhoto error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * DELETE /api/items/:id/photos/:photoIndex
+ * Removes the photo at the given 0-based index. Returns { photoUrls }.
+ */
+export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id, photoIndex } = req.params;
+    const idx = parseInt(photoIndex, 10);
+    if (isNaN(idx)) return res.status(400).json({ message: 'Invalid photoIndex' });
+
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    if (idx < 0 || idx >= item.photoUrls.length) {
+      return res.status(400).json({ message: 'Photo index out of range' });
+    }
+
+    const newUrls = item.photoUrls.filter((_, i) => i !== idx);
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls: newUrls },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('removeItemPhoto error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * PATCH /api/items/:id/photos/reorder
+ * Body: { photoUrls: string[] } — same URLs in a new order.
+ * Validates that no new URLs are injected. Returns { photoUrls }.
+ */
+export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id } = req.params;
+    const { photoUrls } = req.body;
+    if (!Array.isArray(photoUrls)) {
+      return res.status(400).json({ message: 'photoUrls must be an array' });
+    }
+
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+
+    // Ensure the new array contains exactly the same URLs (no injection)
+    const existing = new Set(item.photoUrls);
+    const allValid = photoUrls.every((u: any) => typeof u === 'string' && existing.has(u));
+    if (!allValid || photoUrls.length !== item.photoUrls.length) {
+      return res.status(400).json({ message: 'Invalid photoUrls — can only reorder existing photos' });
+    }
+
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('reorderItemPhotos error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// ── End Phase 16 ─────────────────────────────────────────────────────────────────────────────
+
+export const placeBid = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { id } = req.params;
+    const { amount } = req.body;
+
+    // Validate bid amount
+    const bidAmount = parseFloat(amount);
+    if (isNaN(bidAmount) || bidAmount <= 0) {
+      return res.status(400).json({ message: 'Invalid bid amount' });
+    }
+
+    // Check if item exists and is part of an auction
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (!item.auctionStartPrice) {
+      return res.status(400).json({ message: 'Item is not part of an auction' });
+    }
+
+    // Check if auction has ended
+    if (item.auctionEndTime && new Date() > item.auctionEndTime) {
+      return res.status(400).json({ message: 'Auction has ended' });
+    }
+
+    // Check if bid meets minimum requirement
+    let minBid;
+    if (item.currentBid) {
+      minBid = Number(item.currentBid) + (Number(item.bidIncrement) || 1);
+    } else {
+      minBid = Number(item.auctionStartPrice);
+    }
+    
+    if (bidAmount < minBid) {
+      return res.status(400).json({ 
+        message: `Bid must be at least $${minBid.toFixed(2)}` 
+      });
+    }
+
+    // Create bid record
+    const bid = await prisma.bid.create({
+      data: {
+        itemId: id,
+        userId: req.user.id,
+        amount: bidAmount
+      }
+    });
+
+    // Update item's current bid
+    await prisma.item.update({
+      where: { id },
+      data: { currentBid: bidAmount }
+    });
+
+    // V1: Broadcast live bid update to all clients viewing this item
+    try {
+      getIO().to(`item:${id}`).emit('bid:update', {
+        itemId: id,
+        currentBid: bidAmount,
+      });
+    } catch {
+      // Socket not initialized (e.g. test environment) — non-fatal
+    }
+
+    // X1: Fire webhooks (non-blocking)
+    const organizerUserId = (item as any).sale?.organizer?.userId;
+    if (organizerUserId) {
+      setImmediate(() =>
+        fireWebhooks(organizerUserId, 'bid.placed', {
+          itemId: id,
+          itemTitle: item.title,
+          bidAmount,
+          bidderId: req.user.id,
+        })
+      );
+    }
+
+    res.status(201).json(bid);
+  } catch (error) {
+    console.error('Error placing bid:', error);
+    res.status(500).json({ message: 'Server error while placing bid' });
+  }
+};
