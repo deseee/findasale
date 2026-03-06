@@ -72,7 +72,6 @@ export const getSaleBounties = async (req: AuthRequest, res: Response) => {
         item: { select: { id: true, title: true, price: true } },
       },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-      take: 200,
     });
 
     return res.json(bounties);
@@ -95,7 +94,6 @@ export const getMyBounties = async (req: AuthRequest, res: Response) => {
         item: { select: { id: true, title: true, price: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 50,
     });
     return res.json(bounties);
   } catch (error) {
