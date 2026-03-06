@@ -1,7 +1,7 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-05 (v11 — Sessions 65–70 completions marked. CB path updated: Cloud AI pipeline shipped, standalone image tagger retired. Brainstorm features integrated into CD2.)
-**Status:** Production MVP live at finda.sale. 21 phases + post-launch T–X complete. CB1–CB3 shipped. CA1–CA6 shipped. CC1–CC3 shipped. CD1 + CD2-Phase1 shipped. Entering beta recruitment.
+**Last Updated:** 2026-03-06 (v12 — Sessions 78–80. All CA/CB/CC paths complete. CD2 Phases 2–4 substantially complete. All 35 Neon migrations applied. Batches 7–17 pushed. push.ps1 + pre-push hook fix shipped.)
+**Status:** Production MVP live at finda.sale. 21 phases + post-launch T–X complete. All CA/CB/CC paths complete. CD1–CD4 shipped. CD2 Phases 2–4 substantially complete. 35 Neon migrations applied. Entering beta recruitment.
 
 ---
 
@@ -74,7 +74,7 @@ Original project research done. Notes available.
 `/terms` and `/privacy` pages live. Footer links + checkout consent checkbox shipped.
 
 ### CA2: Database & Migration Health — ✅ COMPLETE (Session 68)
-Prisma schema validated. Production migration runbook documented. 4 migrations pending Railway deploy (Live Drop, Treasure Hunt, Reverse Auction, StripeEvent).
+Prisma schema validated. Production migration runbook documented. All 35 migrations applied to Neon production (2026-03-06).
 
 ### CA3: Payment Flow Stress Test — ✅ COMPLETE (Session 69)
 All Stripe paths tested. 2 bugs found and fixed. 5%/7% fee logic verified.
@@ -217,8 +217,8 @@ Scheduled bi-weekly review of session logs, skill effectiveness, doc freshness, 
 
 ## Infrastructure (All Done)
 
-Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon, frontend on Vercel (`finda.sale`). Session safeguards, model routing, scheduled tasks, self-healing skills all active. See `claude_docs/CORE.md` and `claude_docs/self_healing_skills.md`.
+Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon (all 35 migrations applied as of 2026-03-06), frontend on Vercel (`finda.sale`). Session safeguards, model routing, scheduled tasks, self-healing skills all active. Git workflow: `.\push.ps1` replaces raw `git push` — handles index.lock, CRLF phantoms, fetch+merge (not rebase). Pre-push hook validates TS, Prisma schema, controller stubs, auth coverage. See `claude_docs/CORE.md` and `claude_docs/self_healing_skills.md`.
 
 ---
 
-*v11 updated 2026-03-05. Sessions 65–70 completions reflected. Cloud AI pipeline (Google Vision + Claude Haiku) shipped and standalone image tagger retired. Brainstorm features integrated into CD2 phases with Claude path assignments. Source: `claude_docs/research/parallel-roadmap-v2-2026-03-05.md`, `claude_docs/research/feature-brainstorm-2026-03-05.md`.*
+*v12 updated 2026-03-06. Sessions 78–80 completions reflected. All 35 Neon migrations applied. Batches 7–17 pushed (81 files, 7,471 insertions). push.ps1 + pre-push hook optimization shipped. All CA/CB/CC paths complete. CD2 Phases 2–4 substantially complete.*
