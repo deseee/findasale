@@ -49,9 +49,28 @@ router.post('/ai/price-suggest', authenticate, async (req, res) => {
       });
     }
 
+    // Fetch up to 5 recently sold items in the same category for comparable pricing
+    const { prisma } = await import('../index');
+    const recentComps = await prisma.item.findMany({
+      where: {
+        category: { equals: category, mode: 'insensitive' },
+        status: 'SOLD',
+        price: { not: null, gt: 0 },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+      select: { title: true, price: true, updatedAt: true },
+    });
+
+    const compData = recentComps.map(c => ({
+      title: c.title,
+      price: c.price!,
+      soldAt: c.updatedAt.toISOString().split('T')[0],
+    }));
+
     // Import here to avoid circular dependencies
     const { suggestPrice } = await import('../services/cloudAIService');
-    const suggestion = await suggestPrice(title, category, condition);
+    const suggestion = await suggestPrice(title, category, condition, compData);
 
     res.json(suggestion);
   } catch (error) {

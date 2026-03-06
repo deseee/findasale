@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import api from '../lib/api';
+import { useToast } from './ToastContext';
 
 const FeedbackWidget = () => {
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -11,7 +13,7 @@ const FeedbackWidget = () => {
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      alert('Please select a rating');
+      showToast('Please select a rating', 'error');
       return;
     }
 
@@ -37,7 +39,7 @@ const FeedbackWidget = () => {
       }, 2000);
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      alert('Failed to submit feedback. Please try again.');
+      showToast('Failed to submit feedback. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }

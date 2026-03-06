@@ -21,7 +21,7 @@ export const createPool = async (req: AuthRequest, res: Response) => {
     // Fetch the item to get its price and sale info
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: { include: { user: true } } } } },
+      include: { sale: { include: { organizer: { include: { user: { select: { email: true, name: true } } } } } } },
     });
 
     if (!item) {
@@ -191,7 +191,7 @@ export const joinPool = async (req: AuthRequest, res: Response) => {
         // Get the actual organizer from the item's sale
         const itemWithSale = await prisma.item.findUnique({
           where: { id: pool.item.id },
-          include: { sale: { include: { organizer: { include: { user: true } } } } },
+          include: { sale: { include: { organizer: { include: { user: { select: { email: true, name: true } } } } } } },
         });
 
         if (itemWithSale?.sale?.organizer?.user?.email) {
@@ -295,7 +295,7 @@ export const cancelPool = async (req: AuthRequest, res: Response) => {
       include: {
         creator: { select: { id: true } },
         participants: { select: { user: { select: { email: true, name: true } } } },
-        item: { select: { id: true, title: true, sale: { include: { organizer: { include: { user: true } } } } } },
+        item: { select: { id: true, title: true, sale: { include: { organizer: { include: { user: { select: { id: true, email: true, name: true } } } } } } } },
       },
     });
 

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import Skeleton from '../components/Skeleton';
+import { useToast } from '../components/ToastContext';
 
 interface Sale {
   id: string;
@@ -29,6 +30,7 @@ interface Sale {
 type DateFilter = 'all' | 'this-week' | 'this-weekend' | 'today';
 
 const MapPage = () => {
+  const { showToast } = useToast();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isGeolocationRequested, setIsGeolocationRequested] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -150,7 +152,7 @@ const MapPage = () => {
         },
         (error) => {
           console.error('Error getting location:', error);
-          alert('Unable to access your location. Please check your browser permissions.');
+          showToast('Unable to access your location. Please check your browser permissions.', 'error');
         }
       );
     }

@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier'; // Phase 22
 import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
@@ -47,6 +48,7 @@ const TIER_BENEFITS: Record<string, string[]> = {
 const OrganizerDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'analytics'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null); // CD2-P2
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
@@ -103,7 +105,7 @@ const OrganizerDashboard = () => {
       router.push(`/organizer/edit-sale/${newSaleId}`);
     } catch (error: any) {
       console.error('Clone failed:', error);
-      alert(error.response?.data?.message || 'Failed to clone sale');
+      showToast(error.response?.data?.message || 'Failed to clone sale', 'error');
     } finally {
       setCloningId(null);
     }

@@ -62,7 +62,7 @@ const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<Cloud
 
 // Backward-compat helper — returns just the original URL (used by legacy endpoints)
 const uploadToCloudinarySimple = (buffer: Buffer, folder = 'findasale'): Promise<string> =>
-  uploadToCloudinary(buffer, folder).then(urls => urls.original);
+  uploadToCloudinary(buffer, folder).then(urls => urls.original).catch((err: unknown) => { console.error('[upload] Cloudinary async upload failed:', err); throw err; });
 
 // POST /api/upload/sale-photos — up to 20 images, returns { urls: string[] }
 export const uploadSalePhotos = async (req: Request, res: Response): Promise<void> => {

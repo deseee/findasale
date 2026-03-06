@@ -18,6 +18,7 @@ import BadgeDisplay from '../../components/BadgeDisplay';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
 import AuctionCountdown from '../../components/AuctionCountdown';
 import PhotoLightbox from '../../components/PhotoLightbox';
+import SaleTourGallery from '../../components/SaleTourGallery';
 import { getThumbnailUrl } from '../../lib/imageUtils';
 import ReviewsSection from '../../components/ReviewsSection';
 import FlashDealBanner from '../../components/FlashDealBanner';
@@ -95,6 +96,7 @@ const SaleDetailPage = () => {
   const [biddingItemId, setBiddingItemId] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [downloadingKit, setDownloadingKit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -437,6 +439,14 @@ const SaleDetailPage = () => {
                     ))}
                   </div>
                 )}
+                <button
+                  onClick={() => setTourOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                  aria-label={`Take a tour of ${sale.title}`}
+                >
+                  <span>🎬</span>
+                  <span>Take a Tour</span>
+                </button>
               </div>
             )}
 
@@ -971,6 +981,10 @@ const SaleDetailPage = () => {
 
       {lightboxOpen && sale.photoUrls.length > 0 && (
         <PhotoLightbox photos={sale.photoUrls} initialIndex={currentPhotoIndex} onClose={() => setLightboxOpen(false)} />
+      )}
+
+      {sale.photoUrls.length > 0 && (
+        <SaleTourGallery photos={sale.photoUrls} saleTitle={sale.title} isOpen={tourOpen} onClose={() => setTourOpen(false)} initialIndex={currentPhotoIndex} />
       )}
     </div>
   );

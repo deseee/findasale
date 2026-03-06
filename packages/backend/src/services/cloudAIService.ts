@@ -203,16 +203,24 @@ export interface PriceSuggestion {
   reasoning: string;
 }
 
+export interface ComparableSale {
+  title: string;
+  price: number;
+  soldAt: string;
+}
+
 /**
  * Suggest a price range for an item based on title, category, and condition.
  * Uses Claude Haiku with estate sale pricing expertise.
+ * Optionally includes comparable sold prices from the platform to inform the suggestion.
  *
  * Returns a fallback price if parsing fails or API is unavailable.
  */
 export async function suggestPrice(
   title: string,
   category: string,
-  condition: string
+  condition: string,
+  comps?: ComparableSale[]
 ): Promise<PriceSuggestion> {
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -224,6 +232,11 @@ export async function suggestPrice(
   }
 
   try {
+    const compsContext =
+      comps && comps.length > 0
+        ? `Comparable sales from our platform:\n${comps.map(c => `- "${c.title}": sold for $${c.price} (${c.soldAt})`).join('\n')}\n\n`
+        : '';
+
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
@@ -238,7 +251,7 @@ Item: ${title}
 Category: ${category}
 Condition: ${condition}
 
-Respond with ONLY valid JSON in this exact format:
+${compsContext}Respond with ONLY valid JSON in this exact format:
 {"low": 5, "high": 25, "suggested": 15, "reasoning": "Similar vintage items sell for $10-25 at local estate sales"}
 
 Be realistic and conservative — estate sale prices are typically 20-50% of retail. Condition heavily affects value.`,
