@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../components/AuthContext';
 import Layout from '../components/Layout';
@@ -191,6 +192,7 @@ const NotificationsPage = () => {
 
   return (
     <Layout>
+      <Head><title>Notifications – FindA.Sale</title></Head>
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           {/* Header */}

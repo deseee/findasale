@@ -234,12 +234,18 @@ const AdminInvitesPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-warm-600">
                           {new Date(invite.createdAt).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
+                          <button
+                            onClick={() => handleCopyCode(getInviteUrl(invite.code))}
+                            className="text-amber-600 hover:text-amber-800 font-medium"
+                          >
+                            {copiedCode === getInviteUrl(invite.code) ? 'Copied!' : 'Copy URL'}
+                          </button>
                           <button
                             onClick={() => handleCopyCode(invite.code)}
-                            className="text-warm-600 hover:text-warm-900 font-medium"
+                            className="text-warm-500 hover:text-warm-700 text-xs"
                           >
-                            {copiedCode === invite.code ? 'Copied!' : 'Copy'}
+                            {copiedCode === invite.code ? 'Copied!' : 'Code only'}
                           </button>
                           {invite.status === 'unused' && (
                             <button

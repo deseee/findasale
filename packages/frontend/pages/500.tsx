@@ -1,9 +1,11 @@
 import React from 'react';
+import Head from 'next/head';
 import Link from 'next/link';
 
 const ErrorPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-warm-50 to-white">
+      <Head><title>Server Error – FindA.Sale</title></Head>
       <div className="text-center px-4">
         <h1 className="text-6xl font-bold text-warm-900 mb-4">500</h1>
         <p className="text-xl text-warm-600 mb-8">Server error</p>
