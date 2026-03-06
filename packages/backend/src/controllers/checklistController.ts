@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 
@@ -74,7 +75,7 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
       checklist = await prisma.saleChecklist.create({
         data: {
           saleId,
-          items: DEFAULT_CHECKLIST,
+          items: DEFAULT_CHECKLIST as unknown as Prisma.InputJsonValue,
         },
       });
     }
@@ -119,13 +120,13 @@ export const updateChecklist = async (req: AuthRequest, res: Response) => {
       checklist = await prisma.saleChecklist.create({
         data: {
           saleId,
-          items: DEFAULT_CHECKLIST,
+          items: DEFAULT_CHECKLIST as unknown as Prisma.InputJsonValue,
         },
       });
     }
 
     // Update items array
-    const items = (checklist.items as ChecklistItem[]) || [];
+    const items = (checklist.items as unknown as ChecklistItem[]) || [];
     const itemIndex = items.findIndex(item => item.id === data.itemId);
 
     if (itemIndex === -1) {
@@ -148,7 +149,7 @@ export const updateChecklist = async (req: AuthRequest, res: Response) => {
     // Save updated checklist
     const updated = await prisma.saleChecklist.update({
       where: { saleId },
-      data: { items },
+      data: { items: items as unknown as Prisma.InputJsonValue },
     });
 
     return res.json(updated);
@@ -194,13 +195,13 @@ export const addChecklistItem = async (req: AuthRequest, res: Response) => {
       checklist = await prisma.saleChecklist.create({
         data: {
           saleId,
-          items: DEFAULT_CHECKLIST,
+          items: DEFAULT_CHECKLIST as unknown as Prisma.InputJsonValue,
         },
       });
     }
 
     // Add new item
-    const items = (checklist.items as ChecklistItem[]) || [];
+    const items = (checklist.items as unknown as ChecklistItem[]) || [];
     const newItem: ChecklistItem = {
       id: `custom_${Date.now()}`,
       phase: data.phase,
@@ -212,7 +213,7 @@ export const addChecklistItem = async (req: AuthRequest, res: Response) => {
     // Save updated checklist
     const updated = await prisma.saleChecklist.update({
       where: { saleId },
-      data: { items },
+      data: { items: items as unknown as Prisma.InputJsonValue },
     });
 
     return res.status(201).json(updated);
@@ -258,7 +259,7 @@ export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
     }
 
     // Remove item
-    const items = (checklist.items as ChecklistItem[]) || [];
+    const items = (checklist.items as unknown as ChecklistItem[]) || [];
     const filtered = items.filter(item => item.id !== itemId);
 
     if (filtered.length === items.length) {
@@ -268,7 +269,7 @@ export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
     // Save updated checklist
     const updated = await prisma.saleChecklist.update({
       where: { saleId },
-      data: { items: filtered },
+      data: { items: filtered as unknown as Prisma.InputJsonValue },
     });
 
     return res.json(updated);

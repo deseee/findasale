@@ -14,7 +14,6 @@ export const getTrendingItems = async (req: Request, res: Response) => {
       },
       include: {
         sale: { select: { id: true, title: true, city: true, state: true } },
-        photos: { select: { url: true }, take: 1 },
         _count: { select: { favorites: true } },
       },
       orderBy: { favorites: { _count: 'desc' } },
@@ -39,9 +38,8 @@ export const getTrendingSales = async (req: Request, res: Response) => {
       },
       include: {
         organizer: { select: { user: { select: { name: true } } } },
-        photos: { select: { url: true }, take: 1 },
         _count: { select: { items: true, rsvps: true } },
-        // Get follower count from Follow relationship
+        // follower count fetched per-sale below via prisma.follow.count
       },
       orderBy: { rsvps: { _count: 'desc' } },
       take: 8,
