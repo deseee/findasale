@@ -51,6 +51,7 @@ model User {
   huntPassActive        Boolean    @default(false)
   huntPassExpiry        DateTime?
   userStreaks           UserStreak[]
+  wishlists             Wishlist[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -71,6 +72,9 @@ model Organizer {
   totalSales      Int      @default(0)
   followers       Follow[]
   conversations   Conversation[]
+  // Phase 31: Organizer Tier Rewards (BRONZE | SILVER | GOLD) — fee benefits based on activity
+  tier            String   @default("BRONZE")
+  tierUpdatedAt   DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -104,6 +108,7 @@ model Sale {
   reviews       Review[]
   conversations Conversation[]
   bounties      MissingListingBounty[]
+  flashDeals    FlashDeal[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -142,6 +147,8 @@ model Item {
   reservation      ItemReservation?
   bountyFulfillments MissingListingBounty[]
   treasureHuntFinds TreasureHuntFind[]
+  flashDeals       FlashDeal[]
+  wishlistItems    WishlistItem[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -439,4 +446,43 @@ model UserStreak {
   updatedAt        DateTime @updatedAt
 
   @@unique([userId, type])
+}
+
+// Flash Deals — time-limited promotions on specific items
+model FlashDeal {
+  id          String   @id @default(uuid())
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  discountPct Int      // e.g. 25 = 25% off
+  startsAt    DateTime
+  endsAt      DateTime
+  notified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// Occasion-based wishlists for shoppers
+model Wishlist {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String         // "Moving to New Place", "Home Office", etc.
+  occasion  String?        // "moving" | "downsizing" | "decorating" | "gifting" | "other"
+  isPublic  Boolean        @default(false)
+  shareSlug String?        @unique
+  items     WishlistItem[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  note       String?
+  addedAt    DateTime @default(now())
+  @@unique([wishlistId, itemId])
 }

@@ -15,10 +15,12 @@ import SaleQRCode from '../../components/SaleQRCode';
 import SaleMap from '../../components/SaleMap';
 import Skeleton from '../../components/Skeleton';
 import BadgeDisplay from '../../components/BadgeDisplay';
+import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
 import AuctionCountdown from '../../components/AuctionCountdown';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import { getThumbnailUrl } from '../../lib/imageUtils';
 import ReviewsSection from '../../components/ReviewsSection';
+import FlashDealBanner from '../../components/FlashDealBanner';
 
 interface Sale {
   id: string;
@@ -40,6 +42,7 @@ interface Sale {
     businessName: string;
     phone: string;
     address: string;
+    tier?: 'BRONZE' | 'SILVER' | 'GOLD'; // Phase 31: Tier Rewards
     badges?: Array<{
       id: string;
       name: string;
@@ -290,7 +293,13 @@ const SaleDetailPage = () => {
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <h2 className="text-xl font-bold text-warm-900 mb-2">Organized by</h2>
-              <p className="text-lg font-semibold text-warm-800">{sale.organizer.businessName}</p>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-lg font-semibold text-warm-800">{sale.organizer.businessName}</p>
+                {/* Phase 31: Show tier badge if SILVER or GOLD */}
+                {sale.organizer.tier && (sale.organizer.tier === 'SILVER' || sale.organizer.tier === 'GOLD') && (
+                  <OrganizerTierBadge tier={sale.organizer.tier} />
+                )}
+              </div>
               <p className="text-sm text-warm-600 mb-4">{sale.organizer.phone}</p>
               {sale.organizer.avgRating && (
                 <div className="flex items-center gap-2 mb-4">
@@ -326,6 +335,9 @@ const SaleDetailPage = () => {
             )}
           </div>
         </div>
+
+        {/* Flash Deal Banner */}
+        <FlashDealBanner saleId={sale.id} itemIds={sale.items.map((item) => item.id)} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Photos & Map */}
