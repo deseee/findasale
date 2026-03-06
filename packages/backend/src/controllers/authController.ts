@@ -139,7 +139,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
       where: { oauthProvider: provider, oauthId: providerId },
     });
 
-    // 2. Link OAuth to an existing email account
+    // 2. Link OAuth to an existing email account (deduplication)
     if (!user && email) {
       const emailUser = await prisma.user.findUnique({ where: { email } });
       if (emailUser) {
@@ -153,9 +153,11 @@ export const oauthLogin = async (req: Request, res: Response) => {
     // 3. Create new account (shoppers only — role upgrade via settings)
     if (!user) {
       const userReferralCode = randomUUID().substring(0, 8).toUpperCase();
+      // Use generated email only if provider didn't return one (no placeholder emails)
+      const finalEmail = email || `oauth_${provider}_${providerId}@noreply.finda.sale`;
       user = await prisma.user.create({
         data: {
-          email: email ?? `${provider}_${providerId}@oauth.placeholder`,
+          email: finalEmail,
           name,
           role: 'USER',
           oauthProvider: provider,
