@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
-import { sendPushNotification } from '../utils/webpush';
 import { createNotification } from '../services/notificationService';
 
 const flashDealCreateSchema = z.object({
@@ -58,61 +57,36 @@ export const createFlashDeal = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // If deal starts within 30 minutes, send push notifications to subscribers
-    if (validated.durationMinutes <= 30 || validated.durationMinutes >= 30) {
-      try {
-        const subscribers = await prisma.saleSubscriber.findMany({
-          where: { saleId: item.saleId },
-          include: { user: true },
-        });
+    // Notify subscribers via in-app notifications
+    try {
+      const subscribers = await prisma.saleSubscriber.findMany({
+        where: { saleId: item.saleId },
+        include: { user: { select: { id: true } } },
+      });
 
-        const pushPromises = subscribers
-          .filter((sub) => sub.user && sub.user.pushSubscriptions)
-          .flatMap((sub) =>
-            (sub.user.pushSubscriptions || []).map((pushSub) =>
-              sendPushNotification(
-                {
-                  endpoint: pushSub.endpoint,
-                  p256dh: pushSub.p256dh,
-                  auth: pushSub.auth,
-                },
-                {
-                  title: '⚡ Flash Deal!',
-                  body: `${validated.discountPct}% off ${item.title} for the next ${validated.durationMinutes} minutes!`,
-                  url: `/sales/${item.saleId}`,
-                }
-              ).catch((err) => {
-                console.warn('Failed to send push notification:', err.message);
-              })
-            )
-          );
+      // Mark as notified
+      await prisma.flashDeal.update({
+        where: { id: flashDeal.id },
+        data: { notified: true },
+      });
 
-        await Promise.all(pushPromises);
+      // Create in-app notifications for flash deal (fire-and-forget)
+      const notificationPromises = subscribers
+        .filter((sub) => sub.user)
+        .map((sub) =>
+          createNotification(
+            sub.user!.id,
+            'flash_deal',
+            '⚡ Flash Deal',
+            `${validated.discountPct}% off ${item.title} — limited time!`,
+            `/sales/${item.saleId}`
+          ).catch((err: unknown) => console.error('[notification] Failed to create flash deal notification:', err))
+        );
 
-        // Mark as notified
-        await prisma.flashDeal.update({
-          where: { id: flashDeal.id },
-          data: { notified: true },
-        });
-
-        // Create in-app notifications for flash deal (fire-and-forget)
-        const notificationPromises = subscribers
-          .filter((sub) => sub.user)
-          .map((sub) =>
-            createNotification(
-              sub.user!.id,
-              'flash_deal',
-              '⚡ Flash Deal',
-              `${validated.discountPct}% off ${item.title} — limited time!`,
-              `/sales/${item.saleId}`
-            ).catch(err => console.error('[notification] Failed to create flash deal notification:', err))
-          );
-
-        await Promise.all(notificationPromises);
-      } catch (err) {
-        console.warn('Push notification service degraded:', (err as Error).message);
-        // Non-critical: continue even if push fails
-      }
+      await Promise.all(notificationPromises);
+    } catch (err) {
+      console.warn('Notification service degraded:', (err as Error).message);
+      // Non-critical: continue even if notification fails
     }
 
     return res.status(201).json(flashDeal);
