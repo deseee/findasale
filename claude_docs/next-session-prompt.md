@@ -1,87 +1,51 @@
 # Next Session Resume Prompt
-*Written: 2026-03-05T (sessions 66–68 wrap)*
+*Written: 2026-03-05T02:20:00Z*
 *Session ended: normally*
 
 ## Resume From
 
-**First:** Verify brand PNGs reached GitHub. Run:
-```
-mcp__github__get_file_contents owner=deseee repo=findasale path=claude_docs/brand/logo-oauth-120.png
-```
-If missing — push all 5 PNGs + STATE.md + session-log.md + next-session-prompt.md before anything else.
+Patrick has 4 manual actions blocking beta launch. Start by asking if any are done, then decide whether to continue feature work or shift to beta support mode.
 
-**Then:** Continue C path — next batch is CA4 + CA6.
+## What Was In Progress
 
----
+Nothing mid-task — all session 73 work is complete and pushed.
 
-## Autonomous Batch-Work Mode — Still Active
+## What Was Completed This Session (69–73)
 
-Patrick has authorized autonomous batch execution. Pick unblocked tasks, execute, update STATE.md, push, repeat. Stop only on interruption or sync points.
-
----
-
-## Path Status
-
-### CA — Production Readiness
-| Task | Status | Notes |
-|------|--------|-------|
-| CA1 | ✅ DONE | ToS + Privacy Policy |
-| CA2 | ✅ DONE | Migration runbook. 4 migrations pending Railway deploy (auto-runs on push) |
-| CA3 | ✅ DONE | Payment stress test + 2 bugs fixed |
-| CA4 | **NEXT** | User flow audit — full shopper/organizer/creator journeys, mobile + a11y, edge cases |
-| CA5 | ✅ DONE | Health scout: GREEN. Medium fixes shipped. |
-| CA6 | **NEXT** | Feature polish — photo upload UX, push notification verify, onboarding, empty states |
-| CA7 | pending | Human docs — organizer guide, shopper FAQ, Zapier docs |
-
-### CB — AI Tagging
-| Task | Status |
-|------|--------|
-| CB1 | ✅ DONE | cloudAIService.ts (Google Vision → Claude Haiku, Ollama fallback) |
-| CB3 | ✅ DONE | AI suggestions review panel in add-items |
-| CB2, CB4+ | blocked | Waiting on Patrick for further AI integrations |
-
-### CC — Business Intel & Content
-| Task | Status |
-|------|--------|
-| CC1 | ✅ DONE | Investor materials |
-| CC2 | ✅ DONE | Marketing content doc |
-| CC3 | ✅ DONE | Pricing analysis — ⚡ Patrick to confirm 5%/7% flat fee |
-
-### CD — Innovation & Experience
-| Task | Status |
-|------|--------|
-| CD1 | ✅ DONE | Fraunces font + sage-green palette |
-| CD2 Phase 1 | ✅ DONE | Scarcity counter + social proof badges |
-| CD2 Phase 2 | **NEXT** | Engagement layer — Treasure Hunt Mode, Live Drop Events, Personalized Weekly Email, Smart Inventory Upload |
-| CD4 | ✅ DONE | Bi-weekly workflow review scheduled task |
-
----
-
-## Recommended Next Batch
-
-**CA4 + CA6 + CD2 Phase 2** — all unblocked, no overlap.
-
----
-
-## Sync Points
-
-| Point | What to surface |
-|-------|----------------|
-| CC3 | ⚡ Patrick confirms 5%/7% flat fee for beta |
-| CA4 if critical UX bug found | Surface before continuing |
-
----
+- favicon.ico (multi-size ICO)
+- CA4b/CA6b: remaining audit fixes (profile, categories, create-sale, register)
+- CA7: organizer guide, shopper FAQ, Zapier docs + in-app tooltips (Tooltip.tsx)
+- CB4: 9 category AI prompts, title format, tag dedup
+- CD2 Phase 2 complete: Live Drop Events, Personalized Weekly Email, Treasure Hunt Mode, Smart Inventory Upload
+- CD2 Phase 3: Dynamic Pricing (suggestPrice + PriceSuggestion.tsx), Visual Search (VisualSearchButton)
+- CD2 Phase 4: Reverse Auction (daily price drop cron, ReverseAuctionBadge)
+- Organizer onboarding walkthrough, manual single-item add, creator dashboard real content
+- Global React Error Boundary
+- Health H1/H2/H3: SSR guards, Prisma pagination, contact rate limit, OAuth email
+- Stripe webhook hardening: StripeEvent idempotency table, dispute/payout handlers, Sentry
+- Beta Readiness Audit: CONDITIONAL GO
 
 ## Environment Notes
 
-- **GitHub MCP active** — push after every batch
-- **Brand PNGs** — push status UNCONFIRMED (verify first thing)
-- **4 Neon migrations pending** — auto-run on Railway deploy via `prisma migrate deploy`
-- **Phase 31 OAuth env vars** — still needed in Vercel (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`)
-- **Google OAuth consent screen** — use `claude_docs/brand/logo-oauth-120.png` (120×120 square PNG, <1MB)
-- **Business cards** — use `claude_docs/brand/business-card-front.png` + `business-card-back.png` at Vistaprint
+4 Railway migrations pending — run before beta:
+  cd packages\database
+  railway run -- npx prisma migrate deploy
 
-## Patrick To-Do (P path)
-- P1: Order business cards at Vistaprint using brand PNGs, set up support@finda.sale, create Google Business Profile
-- P2: Stripe business account, Google Voice number, Google Search Console
-- P5: Add OAuth env vars to Vercel (GOOGLE_CLIENT_ID/SECRET, FACEBOOK_CLIENT_ID/SECRET)
+Pending: add_live_drop, add_treasure_hunt, add_reverse_auction, stripe_event_idempotency
+
+## Patrick Actions Blocking Beta (all ~15 min each)
+
+1. OAuth creds to Vercel: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FACEBOOK_CLIENT_ID, FACEBOOK_CLIENT_SECRET
+   Redirect URIs: https://finda.sale/api/auth/callback/{google,facebook}
+2. support@finda.sale email forwarding via domain registrar
+3. prisma migrate deploy (4 migrations above)
+4. STRIPE_WEBHOOK_SECRET in Railway env (from Stripe dashboard Webhooks page)
+
+## Exact Context
+
+- Beta target: March 12-19, 2026
+- All CA/CB/CC/CD roadmap items complete. Post-beta: AI Discovery Feed, Buyer-to-Sale Matching
+- Next Claude work: P4 beta support or post-beta features on Patrick signal
+- Health: GREEN. Latest: claude_docs/health-reports/2026-03-05-full-scan.md
+- context.md: 464 lines (healthy)
+- GitHub: all pushed to deseee/findasale main. No pending local commits.
