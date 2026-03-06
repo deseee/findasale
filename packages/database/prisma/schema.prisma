@@ -56,6 +56,9 @@ model User {
   wishlists             Wishlist[]
   createdPools          BuyingPool[]      @relation("CreatedPools")
   poolParticipations    PoolParticipant[] @relation("PoolParticipations")
+  notifications         Notification[]
+  checkoutAttempts      CheckoutAttempt[]
+  waitlistEntries       ItemWaitlist[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -154,6 +157,8 @@ model Item {
   flashDeals       FlashDeal[]
   wishlistItems    WishlistItem[]
   buyingPools      BuyingPool[]
+  checkoutAttempts CheckoutAttempt[]
+  waitlist         ItemWaitlist[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -516,4 +521,48 @@ model PoolParticipant {
   pledgeAmount Int      // in cents
   joinedAt   DateTime   @default(now())
   @@unique([poolId, userId])
+}
+
+// Notification Inbox — stores all in-app notifications (sale alerts, purchases, messages, flash deals, etc.)
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // "sale_alert" | "purchase" | "message" | "flash_deal" | "badge" | "system"
+  title     String
+  body      String
+  link      String?  // optional deep link e.g. "/sales/abc123"
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+// Feature: Abandoned Checkout Recovery — track in-progress payment intents for recovery emails
+model CheckoutAttempt {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId        String
+  item          Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  paymentIntent String    @unique
+  recoveryEmailSent Boolean @default(false)
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([completedAt, recoveryEmailSent])
+}
+
+// Feature: Item Waitlist / "Notify Me" — join waitlist for SOLD/ON_HOLD items
+model ItemWaitlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, itemId])
 }

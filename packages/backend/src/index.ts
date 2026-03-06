@@ -73,6 +73,9 @@ import tierRoutes from './routes/tiers'; // Phase 31: Organizer Tier Rewards
 import plannerRoutes from './routes/planner'; // Planning assistant chatbot
 import organizerDigestRoutes from './routes/organizerDigest'; // Organizer weekly digest manual trigger
 import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
+import adminRoutes from './routes/admin'; // Admin panel
+import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
+import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -83,6 +86,7 @@ import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 m
 import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
 import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
 import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest — Mondays 8 AM
+import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly email
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -201,6 +205,9 @@ app.use('/api/tiers', tierRoutes); // Phase 31: Organizer Tier Rewards
 app.use('/api/planner', plannerRoutes); // Planning assistant chatbot
 app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
+app.use('/api/admin', adminRoutes); // Admin panel
+app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
+app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

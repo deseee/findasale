@@ -1,11 +1,13 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import Tooltip from '../../components/Tooltip';
 import RapidCapture from '../../components/RapidCapture';
+import BulkItemToolbar from '../../components/BulkItemToolbar';
+import ItemListWithBulkSelection from '../../components/ItemListWithBulkSelection';
 
 interface Sale {
   id: string;
@@ -54,6 +56,7 @@ const EMPTY_FORM: ItemFormData = {
 const AddItemsPage = () => {
   const router = useRouter();
   const { saleId } = router.query;
+  const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState<ItemFormData>(EMPTY_FORM);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
@@ -73,6 +76,10 @@ const AddItemsPage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Bulk operations state
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // ── Rapid Capture state ────────────────────────────────────────────────────────────
   const [showRapidCapture, setShowRapidCapture] = useState(false);
@@ -252,6 +259,197 @@ const AddItemsPage = () => {
     enabled: !!saleId,
   });
 
+  const { data: items = [], isLoading: itemsLoading, refetch: refetchItems } = useQuery({
+    queryKey: ['items', saleId],
+    queryFn: async () => {
+      if (!saleId) throw new Error('No sale ID provided');
+      const response = await api.get('/items', { params: { saleId } });
+      return response.data;
+    },
+    enabled: !!saleId,
+  });
+
+  // Bulk operations mutations
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      return await api.post('/items/bulk', {
+        itemIds,
+        operation: 'delete',
+      });
+    },
+    onSuccess: () => {
+      refetchItems();
+      setSelectedItemIds(new Set());
+    },
+  });
+
+  const bulkStatusMutation = useMutation({
+    mutationFn: async ({ itemIds, status }: { itemIds: string[]; status: string }) => {
+      return await api.post('/items/bulk', {
+        itemIds,
+        operation: 'status',
+        value: status,
+      });
+    },
+    onSuccess: () => {
+      refetchItems();
+      setSelectedItemIds(new Set());
+    },
+  });
+
+  const bulkCategoryMutation = useMutation({
+    mutationFn: async ({ itemIds, category }: { itemIds: string[]; category: string }) => {
+      return await api.post('/items/bulk', {
+        itemIds,
+        operation: 'category',
+        value: category,
+      });
+    },
+    onSuccess: () => {
+      refetchItems();
+      setSelectedItemIds(new Set());
+    },
+  });
+
+  const bulkPriceMutation = useMutation({
+    mutationFn: async ({ itemIds, percentChange }: { itemIds: string[]; percentChange: number }) => {
+      return await api.post('/items/bulk', {
+        itemIds,
+        operation: 'price_adjust',
+        value: percentChange,
+      });
+    },
+    onSuccess: () => {
+      refetchItems();
+      setSelectedItemIds(new Set());
+    },
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.get(`/items/export/${saleId}`, {
+        responseType: 'blob',
+      });
+      return response.data;
+    },
+    onSuccess: (blob) => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `items-${saleId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
+  });
+
+  // Bulk operation handlers
+  const handleBulkDelete = async () => {
+    if (selectedItemIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await bulkDeleteMutation.mutateAsync(Array.from(selectedItemIds));
+      setSuccess(`Deleted ${selectedItemIds.size} item(s)`);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete items');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkStatusChange = async (status: string) => {
+    if (selectedItemIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await bulkStatusMutation.mutateAsync({
+        itemIds: Array.from(selectedItemIds),
+        status,
+      });
+      setSuccess(`Updated status for ${selectedItemIds.size} item(s)`);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update items');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkCategoryChange = async (category: string) => {
+    if (selectedItemIds.size === 0 || !category) return;
+    setBulkLoading(true);
+    try {
+      await bulkCategoryMutation.mutateAsync({
+        itemIds: Array.from(selectedItemIds),
+        category,
+      });
+      setSuccess(`Updated category for ${selectedItemIds.size} item(s)`);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update items');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkPriceAdjust = async (percentChange: number) => {
+    if (selectedItemIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await bulkPriceMutation.mutateAsync({
+        itemIds: Array.from(selectedItemIds),
+        percentChange,
+      });
+      setSuccess(
+        `Applied ${percentChange > 0 ? '+' : ''}${percentChange}% price adjustment to ${selectedItemIds.size} item(s)`
+      );
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update prices');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleSelectItem = (id: string) => {
+    const newSelected = new Set(selectedItemIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedItemIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    setSelectedItemIds(new Set(items.map((item: any) => item.id)));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedItemIds(new Set());
+  };
+
+  const handleExport = async () => {
+    try {
+      await exportMutation.mutateAsync();
+      setSuccess('Items exported successfully!');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to export items');
+    }
+  };
+
+  const categories = [
+    'furniture',
+    'decor',
+    'vintage',
+    'textiles',
+    'collectibles',
+    'art',
+    'jewelry',
+    'books',
+    'tools',
+    'electronics',
+    'sports',
+    'other',
+  ];
+
   // ── AI Photo Scan ──────────────────────────────────────────────────────────────────
 
   const handleAiPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -414,15 +612,24 @@ const AddItemsPage = () => {
         <meta name="description" content="Add items to your sale" />
       </Head>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 pb-28">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-warm-900">Add Items to &ldquo;{sale?.title}&rdquo;</h1>
-          <Link
-            href="/organizer/dashboard"
-            className="bg-warm-500 hover:bg-warm-600 text-white font-bold py-2 px-4 rounded"
-          >
-            Back to Dashboard
-          </Link>
+          <div className="flex gap-3">
+            <button
+              onClick={handleExport}
+              disabled={items.length === 0 || exportMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded"
+            >
+              {exportMutation.isPending ? 'Exporting...' : 'Export CSV'}
+            </button>
+            <Link
+              href="/organizer/dashboard"
+              className="bg-warm-500 hover:bg-warm-600 text-white font-bold py-2 px-4 rounded"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         {/* ── Rapid Capture Overlay ──────────────────────────────── */}
@@ -966,7 +1173,37 @@ const AddItemsPage = () => {
             </div>
           </form>
         </div>
+
+        {/* ── Items List with Bulk Selection ──────────────────────────────── */}
+        {items.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold text-warm-900 mb-6">
+              Manage Items ({items.length})
+            </h2>
+            <ItemListWithBulkSelection
+              items={items}
+              selectedIds={selectedItemIds}
+              onSelectItem={handleSelectItem}
+              onSelectAll={handleSelectAll}
+              onDeselectAll={handleDeselectAll}
+              loading={itemsLoading}
+            />
+          </div>
+        )}
       </main>
+
+      {/* Bulk toolbar - shows when items selected */}
+      {selectedItemIds.size > 0 && (
+        <BulkItemToolbar
+          selectedCount={selectedItemIds.size}
+          onDelete={handleBulkDelete}
+          onStatusChange={handleBulkStatusChange}
+          onCategoryChange={handleBulkCategoryChange}
+          onPriceAdjust={handleBulkPriceAdjust}
+          loading={bulkLoading}
+          categories={categories}
+        />
+      )}
     </div>
   );
 };

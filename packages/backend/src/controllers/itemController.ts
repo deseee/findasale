@@ -43,6 +43,11 @@ const csvRowSchema = z.object({
   photoUrls: z.string().optional(),
   category: z.string().max(50).optional(),
   condition: z.string().max(50).optional(),
+  // CD2 Phase 4: Reverse Auction
+  reverseAuction: z.string().optional(),
+  reverseDailyDrop: z.string().optional(),
+  reverseFloorPrice: z.string().optional(),
+  reverseStartDate: z.string().optional(),
 });
 
 // Helper function to convert string to number safely
@@ -129,6 +134,11 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
           category: d.category || null,
           condition: d.condition || null,
           photoUrls: d.photoUrls ? d.photoUrls.split(',').map((url: string) => url.trim()) : [],
+          // CD2 Phase 4: Reverse Auction
+          reverseAuction: d.reverseAuction === 'true' || d.reverseAuction === '1',
+          reverseDailyDrop: d.reverseDailyDrop ? Math.round(parseFloat(d.reverseDailyDrop) * 100) : null,
+          reverseFloorPrice: d.reverseFloorPrice ? Math.round(parseFloat(d.reverseFloorPrice) * 100) : null,
+          reverseStartDate: d.reverseStartDate ? new Date(d.reverseStartDate) : null,
         });
       }
     });
@@ -224,7 +234,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -275,6 +285,11 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
         shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,
+        // CD2 Phase 4: Reverse Auction
+        reverseAuction: reverseAuction === true || reverseAuction === 'true',
+        reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null,
+        reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null,
+        reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null,
       }
     });
 
@@ -299,7 +314,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice } = req.body;
+    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -315,6 +330,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
     }
 
+    const previousItem = item; // Store previous status for change detection
     const updatedItem = await prisma.item.update({
       where: { id },
       data: {
@@ -331,10 +347,23 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         ...(shippingAvailable !== undefined && { shippingAvailable: shippingAvailable === true || shippingAvailable === 'true' }),
         ...(shippingPrice !== undefined && { shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null }),
+        // CD2 Phase 4: Reverse Auction
+        ...(reverseAuction !== undefined && { reverseAuction: reverseAuction === true || reverseAuction === 'true' }),
+        ...(reverseDailyDrop !== undefined && { reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null }),
+        ...(reverseFloorPrice !== undefined && { reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null }),
+        ...(reverseStartDate !== undefined && { reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null }),
       }
     });
 
     res.json(updatedItem);
+
+    // Feature: Item Waitlist — notify waitlist when item becomes available
+    if (status === 'AVAILABLE' && previousItem.status !== 'AVAILABLE') {
+      const { notifyWaitlist } = require('../controllers/waitlistController');
+      setImmediate(() =>
+        notifyWaitlist(id).catch(err => console.error('[waitlist] Failed to notify waitlist:', err))
+      );
+    }
 
     // U1: Re-embed when searchable fields change
     if (title || description || category) {
@@ -551,6 +580,154 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
 
 // -- End Phase 16 --
 
+export const bulkUpdateItems = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { itemIds, operation, value } = req.body;
+
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ message: 'itemIds must be a non-empty array' });
+    }
+
+    if (!['delete', 'status', 'category', 'price_adjust'].includes(operation)) {
+      return res.status(400).json({ message: 'Invalid operation' });
+    }
+
+    // Fetch all items to verify organizer ownership
+    const items = await prisma.item.findMany({
+      where: { id: { in: itemIds } },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    // Verify all items belong to the authenticated organizer
+    const ownedItems = items.filter(item => item.sale.organizer.userId === req.user!.id);
+
+    if (ownedItems.length === 0) {
+      return res.status(403).json({ message: 'You do not own any of these items' });
+    }
+
+    let updated = 0;
+    let failed = itemIds.length - ownedItems.length;
+
+    try {
+      if (operation === 'delete') {
+        const result = await prisma.item.deleteMany({
+          where: { id: { in: ownedItems.map(i => i.id) } }
+        });
+        updated = result.count;
+      } else if (operation === 'status') {
+        if (!['AVAILABLE', 'SOLD', 'ON_HOLD'].includes(value)) {
+          return res.status(400).json({ message: 'Invalid status value' });
+        }
+        const result = await prisma.item.updateMany({
+          where: { id: { in: ownedItems.map(i => i.id) } },
+          data: { status: value }
+        });
+        updated = result.count;
+      } else if (operation === 'category') {
+        if (!value || typeof value !== 'string' || value.length > 50) {
+          return res.status(400).json({ message: 'Invalid category value' });
+        }
+        const result = await prisma.item.updateMany({
+          where: { id: { in: ownedItems.map(i => i.id) } },
+          data: { category: value }
+        });
+        updated = result.count;
+      } else if (operation === 'price_adjust') {
+        const percentChange = parseFloat(value);
+        if (isNaN(percentChange)) {
+          return res.status(400).json({ message: 'Invalid price adjustment value' });
+        }
+
+        // Update each item with price adjustment, ensuring no item goes below $1
+        for (const item of ownedItems) {
+          if (item.price && item.price > 0) {
+            const newPrice = Math.max(1, item.price * (1 + percentChange / 100));
+            await prisma.item.update({
+              where: { id: item.id },
+              data: { price: newPrice }
+            });
+            updated++;
+          } else if (!item.price && item.auctionStartPrice && item.auctionStartPrice > 0) {
+            // For auction items, adjust the auction start price
+            const newPrice = Math.max(1, item.auctionStartPrice * (1 + percentChange / 100));
+            await prisma.item.update({
+              where: { id: item.id },
+              data: { auctionStartPrice: newPrice }
+            });
+            updated++;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error performing bulk operation:', error);
+      return res.status(500).json({ message: 'Error performing bulk operation' });
+    }
+
+    res.json({ updated, failed });
+  } catch (error) {
+    console.error('Error in bulkUpdateItems:', error);
+    res.status(500).json({ message: 'Server error while processing bulk operation' });
+  }
+};
+
+export const exportItems = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    // Check if sale exists and belongs to organizer
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        organizer: {
+          select: { userId: true }
+        }
+      }
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // Fetch all items for this sale
+    const items = await prisma.item.findMany({
+      where: { saleId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Generate CSV
+    const csvHeaders = ['Title', 'Category', 'Condition', 'Price', 'Status', 'Tags'];
+    const csvRows = items.map(item => [
+      `"${(item.title || '').replace(/"/g, '""')}"`,
+      `"${(item.category || '').replace(/"/g, '""')}"`,
+      `"${(item.condition || '').replace(/"/g, '""')}"`,
+      item.price ? item.price.toFixed(2) : '',
+      item.status || '',
+      ''
+    ]);
+
+    const csv = [csvHeaders, ...csvRows].map(row => row.join(',')).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="items-${saleId}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting items:', error);
+    res.status(500).json({ message: 'Server error while exporting items' });
+  }
+};
+
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -592,10 +769,10 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     } else {
       minBid = Number(item.auctionStartPrice);
     }
-    
+
     if (bidAmount < minBid) {
-      return res.status(400).json({ 
-        message: `Bid must be at least $${minBid.toFixed(2)}` 
+      return res.status(400).json({
+        message: `Bid must be at least $${minBid.toFixed(2)}`
       });
     }
 

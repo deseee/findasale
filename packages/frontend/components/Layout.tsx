@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
 import BottomTabNav from './BottomTabNav';
+import NotificationBell from './NotificationBell';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
@@ -56,6 +57,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               Referrals
             </Link>
           </>
+        )}
+        {user.role === 'ADMIN' && (
+          <Link href="/admin" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md font-medium bg-amber-50">
+            Admin Panel
+          </Link>
         )}
         <button
           onClick={handleLogout}
@@ -127,6 +133,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       <Link href="/referral-dashboard" className="text-warm-900 hover:text-amber-600">Referrals</Link>
                     </>
                   )}
+                  {user.role === 'ADMIN' && (
+                    <Link href="/admin" className="text-warm-900 hover:text-amber-600 font-medium">Admin Panel</Link>
+                  )}
+                  <NotificationBell />
                   <button onClick={handleLogout} className="text-warm-900 hover:text-amber-600">Logout</button>
                 </div>
               ) : (
