@@ -1,9 +1,14 @@
 /**
- * cloudAIService.ts — CB1
+ * cloudAIService.ts — CB4 (enhanced)
  *
  * Provides cloud-based AI image analysis using:
  *   1. Google Cloud Vision API  — label + object detection
- *   2. Anthropic Claude Haiku   — structured JSON output
+ *   2. Anthropic Claude Haiku   — structured JSON output with category-aware prompts
+ *
+ * CB4 improvements:
+ *   - Category-specific description prompts based on Vision labels
+ *   - Improved title formatting prompts
+ *   - Tag deduplication and normalization
  *
  * Exported as a drop-in replacement for Ollama analysis.
  * Returns null when cloud AI env vars are missing so the caller
@@ -57,6 +62,66 @@ async function getVisionLabels(imageBase64: string): Promise<string[]> {
   return combined.slice(0, 15);
 }
 
+// ── CB4: Category-specific description prompts ─────────────────────────────────
+
+function getCategoryPrompt(labels: string[]): string {
+  const labelsLower = labels.map(l => l.toLowerCase()).join(' ');
+  
+  if (/chair|sofa|couch|table|desk|dresser|bed|cabinet|shelf|bookcase|armoire|wardrobe|chest/.test(labelsLower)) {
+    return 'Describe this furniture piece for an estate sale listing. Include: material (wood/metal/fabric/leather), style/era (mid-century, Victorian, farmhouse, etc.), condition (excellent/good/fair/worn), notable features or markings. Keep it under 40 words. Be specific and honest.';
+  }
+  if (/ring|necklace|bracelet|earring|brooch|pendant|jewelry|jewellery|gemstone|diamond|gold|silver/.test(labelsLower)) {
+    return 'Describe this jewelry piece for an estate sale listing. Include: type, apparent metal (gold/silver/brass/unknown), any visible stones, style era, condition, any visible markings or hallmarks. Keep it under 40 words.';
+  }
+  if (/painting|print|artwork|sculpture|vase|figurine|ceramic|pottery|decor|ornament|statue|tapestry|frame/.test(labelsLower)) {
+    return 'Describe this decorative item for an estate sale listing. Include: type/medium, subject matter, apparent era, condition, any visible signature or maker marks. Keep it under 40 words.';
+  }
+  if (/shirt|dress|coat|jacket|sweater|pants|skirt|blouse|clothing|garment|textile|fabric/.test(labelsLower)) {
+    return 'Describe this clothing item for an estate sale listing. Include: type, color, apparent material, visible brand or label, style era, condition. Keep it under 30 words.';
+  }
+  if (/pot|pan|dish|plate|bowl|cup|mug|kitchen|appliance|mixer|toaster|blender|cookware|cutlery|utensil/.test(labelsLower)) {
+    return 'Describe this kitchen item for an estate sale listing. Include: type, material, brand if visible, era, condition, whether complete set or single piece. Keep it under 35 words.';
+  }
+  if (/tool|drill|saw|wrench|hammer|screwdriver|hardware|equipment|machine|power tool/.test(labelsLower)) {
+    return 'Describe this tool for an estate sale listing. Include: type, brand if visible, condition, whether complete set or single, any accessories included. Keep it under 35 words.';
+  }
+  if (/toy|game|doll|action figure|collectible|model|figurine|comic|card|vintage|antique/.test(labelsLower)) {
+    return 'Describe this collectible or toy for an estate sale listing. Include: type, brand/manufacturer, approximate era, condition, whether original packaging is present. Keep it under 40 words.';
+  }
+  if (/tv|computer|phone|camera|radio|stereo|electronics|device|monitor|speaker/.test(labelsLower)) {
+    return 'Describe this electronic item for an estate sale listing. Include: type, brand, model if visible, approximate era, visible condition, any accessories included. Keep it under 35 words.';
+  }
+  if (/book|magazine|record|vinyl|cd|dvd|media/.test(labelsLower)) {
+    return 'Describe this media item for an estate sale listing. Include: type, title/subject if visible, condition, quantity if multiple. Keep it under 25 words.';
+  }
+  
+  // Default fallback
+  return 'Describe this estate sale item in 30-40 words. Include the most notable physical characteristics, apparent condition, and any brand or maker information visible. Be specific and honest — this description helps buyers decide whether to visit.';
+}
+
+// ── CB4: Title formatting prompt ───────────────────────────────────────────────
+
+function getTitlePrompt(): string {
+  return 'Give a concise 3-7 word title for this estate sale item. Format: [Adjective] [Brand?] [Item Type]. Examples: "Vintage Oak Writing Desk", "Lodge Cast Iron Skillet", "Mid-Century Teak Side Table", "Brass Floor Lamp", "Singer Sewing Machine". Return only the title, nothing else.';
+}
+
+// ── CB4: Tag deduplication and normalization ───────────────────────────────────
+
+function normalizeTags(tags: string[]): string[] {
+  // Lowercase and trim
+  let normalized = tags.map(t => t.toLowerCase().trim());
+  // Remove empty strings
+  normalized = normalized.filter(t => t.length > 0);
+  // Remove duplicates
+  normalized = [...new Set(normalized)];
+  // Remove tags that are substrings of other tags (e.g. "oak" if "oak desk" exists)
+  normalized = normalized.filter((tag, _, arr) => 
+    !arr.some(other => other !== tag && other.includes(tag) && other.length > tag.length + 3)
+  );
+  // Limit to 10 tags max
+  return normalized.slice(0, 10);
+}
+
 // ── Step 2: Claude Haiku structured analysis ──────────────────────────────────
 
 async function getHaikuAnalysis(
@@ -68,6 +133,10 @@ async function getHaikuAnalysis(
     visionLabels.length > 0
       ? `\n\nVision API detected these objects/labels: ${visionLabels.join(', ')}.`
       : '';
+
+  // CB4: Use category-specific description prompt
+  const descriptionPrompt = getCategoryPrompt(visionLabels);
+  const titlePrompt = getTitlePrompt();
 
   const response = await axios.post(
     'https://api.anthropic.com/v1/messages',
@@ -90,10 +159,13 @@ async function getHaikuAnalysis(
               type: 'text',
               text: `You are an estate sale pricing assistant.${labelContext}
 
+Title guidance: ${titlePrompt}
+Description guidance: ${descriptionPrompt}
+
 Look at this item photo and respond with ONLY valid JSON (no markdown, no explanation):
 {
   "title": "short descriptive item title",
-  "description": "1-2 sentence description mentioning condition and notable features",
+  "description": "description following the guidance above",
   "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",
   "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",
   "suggestedPrice": 12.50
@@ -126,7 +198,12 @@ Look at this item photo and respond with ONLY valid JSON (no markdown, no explan
  * Flow:
  *   1. Send image to Google Vision for fast label/object detection.
  *   2. Pass those labels + the raw image to Claude Haiku for
- *      structured estate-sale metadata.
+ *      structured estate-sale metadata with category-specific guidance.
+ *
+ * CB4 enhancements:
+ *   - Category-specific description prompts based on Vision labels
+ *   - Improved title formatting guidance
+ *   - Tag deduplication and normalization
  *
  * Returns null if cloud AI is not configured (caller should fall back to Ollama).
  * Throws on API errors so the caller can handle/log them.
@@ -147,5 +224,6 @@ export async function analyzeItemImage(
     // Vision API unavailable or quota exceeded — Haiku will analyse image alone
   }
 
-  return getHaikuAnalysis(imageBase64, mimeType, visionLabels);
+  const result = await getHaikuAnalysis(imageBase64, mimeType, visionLabels);
+  return result;
 }
