@@ -228,7 +228,7 @@ export const generateShareLink = async (req: AuthRequest, res: Response) => {
 
     // If already has a share slug, return it
     if (wishlist.shareSlug) {
-      const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wishlists/shared/${wishlist.shareSlug}`;
+      const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wishlists/share/${wishlist.shareSlug}`;
       return res.json({
         shareSlug: wishlist.shareSlug,
         shareUrl,
@@ -253,7 +253,7 @@ export const generateShareLink = async (req: AuthRequest, res: Response) => {
       data: { shareSlug, isPublic: true },
     });
 
-    const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wishlists/shared/${updated.shareSlug}`;
+    const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wishlists/share/${updated.shareSlug}`;
 
     res.json({
       shareSlug: updated.shareSlug,
@@ -262,5 +262,67 @@ export const generateShareLink = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error generating share link:', error);
     res.status(500).json({ message: 'Failed to generate share link' });
+  }
+};
+
+// PATCH /api/wishlists/:id/visibility — toggle wishlist public/private
+export const toggleWishlistPublic = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { id: wishlistId } = req.params;
+    const { isPublic } = req.body;
+
+    if (typeof isPublic !== 'boolean') {
+      return res.status(400).json({ message: 'isPublic must be a boolean' });
+    }
+
+    const wishlist = await prisma.wishlist.findUnique({
+      where: { id: wishlistId },
+    });
+
+    if (!wishlist) {
+      return res.status(404).json({ message: 'Wishlist not found' });
+    }
+
+    if (wishlist.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    // If making public and no share slug, generate one
+    let updatedData: any = { isPublic };
+    if (isPublic && !wishlist.shareSlug) {
+      let shareSlug: string = '';
+      let isUnique = false;
+      while (!isUnique) {
+        shareSlug = uuidv4().split('-')[0];
+        const existing = await prisma.wishlist.findUnique({
+          where: { shareSlug },
+        });
+        if (!existing) {
+          isUnique = true;
+        }
+      }
+      updatedData.shareSlug = shareSlug;
+    }
+
+    const updated = await prisma.wishlist.update({
+      where: { id: wishlistId },
+      data: updatedData,
+    });
+
+    const shareUrl = updated.shareSlug ? `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wishlists/share/${updated.shareSlug}` : null;
+
+    res.json({
+      id: updated.id,
+      isPublic: updated.isPublic,
+      shareSlug: updated.shareSlug,
+      shareUrl,
+    });
+  } catch (error) {
+    console.error('Error toggling wishlist visibility:', error);
+    res.status(500).json({ message: 'Failed to toggle wishlist visibility' });
   }
 };

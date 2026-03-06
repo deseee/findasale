@@ -27,6 +27,8 @@ model User {
   oauthId           String?    // Provider's unique user ID
   // Buyer-to-Sale Matching: user's interest categories
   categoryInterests String[]   @default([])
+  // Organizer referral credits: accumulated platform fee discounts
+  organizerCredits  Float      @default(0)
   organizer         Organizer?
   purchases     Purchase[]
   favorites     Favorite[]
@@ -48,6 +50,7 @@ model User {
   webhooks              Webhook[]
   treasureHuntFinds     TreasureHuntFind[]
   streakPoints          Int        @default(0)
+  unsubscribeTokens     UnsubscribeToken[]
   visitStreak           Int        @default(0)
   lastVisitDate         DateTime?
   huntPassActive        Boolean    @default(false)
@@ -61,6 +64,19 @@ model User {
   waitlistEntries       ItemWaitlist[]
   pickupBookings        PickupBooking[]
   notificationPrefs     Json? // Notification preferences: { emailNewSalesFromFollowed, emailFlashDeals, emailWeeklyDigest, pushSalesNearMe }
+  emailWeeklyOrganizerDigest Boolean @default(true) // Organizer weekly analytics digest preference
+  feedbacks             Feedback[]
+  betaInviteUsed        BetaInvite?       // One-to-one: user can only use one invite
+  reviewVotes           ReviewVote[]
+  savedSearches         SavedSearch[]
+  saleRSVPs             SaleRSVP[]
+  organizerReferrer     OrganizerReferral[] @relation("ReferrerOrganizer")
+  organizerReferee      OrganizerReferral?  @relation("RefereeOrganizer")
+  disputesAsBuyer       Dispute[]           @relation("DisputeBuyer")
+  disputesAsSeller      Dispute[]           @relation("DisputeSeller")
+  messageTemplates      MessageTemplate[]   @relation("OrganizerTemplates")
+  shopperCredits    Float      @default(0)   // Batch 17: shopper referral store credit
+  saleWaitlist      SaleWaitlist[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -71,9 +87,17 @@ model Organizer {
   phone           String
   address         String
   bio             String?  // Organizer bio/description (optional)
+  website         String?  // Business website URL
+  profilePhoto    String?  // Profile photo URL (Cloudinary)
+  facebook        String?  // Facebook page URL
+  instagram       String?  // Instagram profile URL
+  etsy            String?  // Etsy shop URL
+  serviceAreas    String?  // CSV or JSON of cities/zip codes served
+  pickupWindows   String?  // Default pickup availability (JSON or text)
   userId          String   @unique
   user            User     @relation(fields: [userId], references: [id])
   sales           Sale[]
+  saleTemplates   SaleTemplate[]
   stripeConnectId String?
   // Phase 17: Reputation
   reputationTier  String   @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
@@ -123,6 +147,9 @@ model Sale {
   bounties      MissingListingBounty[]
   flashDeals    FlashDeal[]
   pickupSlots   PickupSlot[]
+  rsvps         SaleRSVP[]
+  checklist     SaleChecklist?
+  saleWaitlist      SaleWaitlist[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -130,6 +157,7 @@ model Sale {
 model Item {
   id               String    @id @default(cuid())
   title            String
+  sku              String?
   description      String?
   price            Float?
   auctionStartPrice Float?
@@ -166,8 +194,12 @@ model Item {
   buyingPools      BuyingPool[]
   checkoutAttempts CheckoutAttempt[]
   waitlist         ItemWaitlist[]
+  currency          String     @default("USD")  // Batch 17: multi-currency groundwork
+  priceHistory      ItemPriceHistory[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  @@unique([saleId, sku])
 }
 
 model Favorite {
@@ -259,7 +291,21 @@ model Review {
   sale      Sale     @relation(fields: [saleId], references: [id])
   rating    Int
   comment   String?
+  response  String?
+  respondedAt DateTime?
+  votes     ReviewVote[]
   createdAt DateTime @default(now())
+}
+
+model ReviewVote {
+  id        String   @id @default(cuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  helpful   Boolean
+  createdAt DateTime @default(now())
+  @@unique([reviewId, userId])
 }
 
 model Referral {
@@ -596,4 +642,189 @@ model PickupBooking {
   createdAt DateTime    @default(now())
 
   @@unique([slotId, userId])
+}
+
+// In-app feedback widget for beta testers
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  rating    Int      // 1-5
+  text      String?
+  page      String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+// Beta Invite Code System — Patrick controls organizer access during beta
+model BetaInvite {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  email     String?   // Optional: can restrict invite to specific email
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  usedById  String?   @unique // One-to-one: user can only use one invite
+  usedBy    User?     @relation(fields: [usedById], references: [id], onDelete: SetNull)
+}
+
+// Saved Searches — shoppers can save search filters for quick re-runs and alerts
+model SavedSearch {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  filters     Json     // Stored search filters: { q, category, radius, lat, lng, priceMin, priceMax, condition, saleStatus, dateFrom, dateTo }
+  notifyOnNew Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Sale RSVP — shoppers can RSVP to attend a sale ("Going to this sale" feature)
+model SaleRSVP {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([saleId, userId])
+}
+
+// Organizer Referral Program — organizers refer other organizers
+model OrganizerReferral {
+  id            String    @id @default(cuid())
+  referrerId    String
+  referrer      User      @relation("ReferrerOrganizer", fields: [referrerId], references: [id], onDelete: Cascade)
+  refereeId     String    @unique
+  referee       User      @relation("RefereeOrganizer", fields: [refereeId], references: [id], onDelete: Cascade)
+  status        String    @default("PENDING") // PENDING | CREDITED
+  creditAmount  Float?    // Amount credited (in dollars, not cents)
+  createdAt     DateTime  @default(now())
+  creditedAt    DateTime?
+
+  @@unique([referrerId, refereeId])
+}
+
+// Sale Templates — reusable sale setup configurations for organizers
+model SaleTemplate {
+  id           String   @id @default(cuid())
+  organizerId  String
+  organizer    Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  defaultItems Json?    // Default item categories/conditions to pre-populate
+  settings     Json?    // Sale settings: pickup slots, shipping options, etc.
+  usedCount    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([organizerId])
+}
+
+// Token-based email unsubscribe system — type-specific unsubscribe tokens
+model UnsubscribeToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique @default(cuid())
+  type      String   // "all" | "weekly" | "flash" | "newSales" | "priceDrops" | "messages"
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+// A/B Testing — lightweight framework for CTA variants
+model ABTestAssignment {
+  id        String   @id @default(cuid())
+  sessionId String   // anonymous session cookie ID
+  testName  String
+  variant   String
+  createdAt DateTime @default(now())
+  @@unique([sessionId, testName])
+}
+
+model ABTestEvent {
+  id        String   @id @default(cuid())
+  sessionId String
+  testName  String
+  variant   String
+  event     String   // "view" | "click" | "signup" | "conversion"
+  createdAt DateTime @default(now())
+  @@index([testName, variant, event])
+}
+
+// Sale Day-Of Checklist — organizers' pre-sale, during-sale, and post-sale task list
+model SaleChecklist {
+  id        String   @id @default(cuid())
+  saleId    String   @unique
+  items     Json     // Array of { id: string; phase: "pre" | "during" | "post"; label: string; completed: boolean; completedAt?: string }
+  updatedAt DateTime @updatedAt
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+}
+
+// Buyer Protection / Dispute Resolution — track item condition mismatches and issues
+model Dispute {
+  id          String   @id @default(cuid())
+  orderId     String   // references Order or transaction ID
+  buyerId     String
+  sellerId    String
+  saleId      String
+  itemId      String
+  reason      String   // "condition_mismatch" | "item_missing" | "wrong_item" | "other"
+  description String
+  status      String   @default("open")  // "open" | "under_review" | "resolved" | "closed"
+  resolution  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  buyer       User     @relation("DisputeBuyer", fields: [buyerId], references: [id])
+  seller      User     @relation("DisputeSeller", fields: [sellerId], references: [id])
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+}
+
+// Organizer Quick-Reply Templates for shopper messages
+model MessageTemplate {
+  id           String   @id @default(cuid())
+  organizerId  String
+  title        String
+  body         String
+  category     String   @default("general") // "pricing" | "pickup" | "availability" | "general"
+  usageCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  organizer    User     @relation("OrganizerTemplates", fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
+}
+
+// Batch 17: Item Price History — tracks price changes over time
+model ItemPriceHistory {
+  id        String   @id @default(cuid())
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  price     Float
+  changedBy String   // "organizer" | "auction" | "reverseAuction" | "flashDeal"
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+}
+
+// Batch 17: Sale Waitlist — notify shoppers when new items added to a sale
+model SaleWaitlist {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([saleId, userId])
+  @@index([saleId])
 }

@@ -7,12 +7,13 @@ import {
   removeFromWishlist,
   getPublicWishlist,
   generateShareLink,
+  toggleWishlistPublic,
 } from '../controllers/wishlistController';
 
 const router = Router();
 
 // Public route — no auth required
-router.get('/public/:slug', getPublicWishlist);
+router.get('/share/:slug', getPublicWishlist);
 
 // Protected routes
 router.use(authenticate);
@@ -22,5 +23,6 @@ router.post('/', createWishlist);
 router.post('/items', addToWishlist);
 router.delete('/items/:wishlistItemId', removeFromWishlist);
 router.post('/:id/share', generateShareLink);
+router.patch('/:id/visibility', toggleWishlistPublic);
 
 export default router;
