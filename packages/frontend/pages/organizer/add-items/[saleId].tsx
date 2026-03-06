@@ -202,7 +202,7 @@ const AddItemsDetailPage = () => {
                         a.click();
                         URL.revokeObjectURL(url);
                       })
-                      .catch(() => alert('Export failed. Please try again.'));
+                      .catch(() => showToast('Export failed. Please try again.', 'error'));
                   }}
                 >
                   Export CSV
