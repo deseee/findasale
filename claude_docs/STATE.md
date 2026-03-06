@@ -47,31 +47,35 @@ Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## In Progress
 
-Parallel path model active. Sessions 66–70 batches complete.
+Parallel path model active. Sessions 66–71 batches complete.
 
 - **CA1** — ✅ COMPLETE. Full ToS + Privacy Policy + checkout consent checkbox. Pushed 2026-03-05.
-- **CA2** — ✅ COMPLETE. Schema validated (4 additive migrations pending Railway deploy). Migration runbook created. Pushed 2026-03-05.
-- **CA3** — ✅ COMPLETE. Payment stress test map created. 2 bugs fixed: concurrent purchase auto-refund guard + $0.50 minimum check. Pushed 2026-03-05.
-- **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped. Pushed 2026-03-05.
-- **CA4b** — ✅ COMPLETE. Remaining audit fixes: profile push notification toggle + error handling (all 4 queries), categories/city error states + retry buttons, create-sale client-side date validation, register.tsx WCAG htmlFor labels. Pushed 2026-03-05.
+- **CA2** — ✅ COMPLETE. Schema validated. Migration runbook created. Pushed 2026-03-05.
+- **CA3** — ✅ COMPLETE. Payment stress test. 2 bugs fixed. Pushed 2026-03-05.
+- **CA4** — ✅ COMPLETE. User flow audit. 10 fixes shipped. Pushed 2026-03-05.
+- **CA4b** — ✅ COMPLETE. Remaining audit fixes: profile push toggle + error handling, categories/city error states, create-sale date validation, register.tsx WCAG labels. Pushed 2026-03-05.
 - **CA5** — ✅ COMPLETE. Health scout: GREEN. Medium fixes shipped. Pushed 2026-03-05.
-- **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation, push notification toggle (organizer), onboarding copy, empty states. Pushed 2026-03-05.
+- **CA6** — ✅ COMPLETE. Feature polish: photo validation, push toggle, onboarding copy, empty states. Pushed 2026-03-05.
 - **CA6b** — ✅ COMPLETE. Profile shopper push toggle, category/city/profile error states. Pushed 2026-03-05.
 - **CA7** — ✅ COMPLETE. Human documentation: organizer guide, shopper FAQ, Zapier webhook docs. `claude_docs/guides/`. Pushed 2026-03-05.
-- **CA5** — ✅ COMPLETE. Health scout: GREEN. Medium fixes shipped (M1/M2 message pagination take:200/100, M3 contactLimiter 5/15min). Pushed 2026-03-05.
-- **CB1** — ✅ COMPLETE. `cloudAIService.ts` (Google Vision → Claude Haiku). `uploadController.ts` cloud AI primary, Ollama fallback. Pushed 2026-03-05.
-- **CB3** — ✅ COMPLETE. AI tagging suggestions review panel in add-items. Apply/dismiss/rescan. Pushed 2026-03-05.
-- **CB4** — ✅ COMPLETE. Category-specific AI prompts (9 categories), improved title generation (3-7 word format), tag normalization + deduplication (max 10, substring filter). Pushed 2026-03-05.
-- **CC1** — ✅ COMPLETE. Investor materials: exec summary, 12-slide pitch deck outline, 3-year financial model, TAM $150M. Pushed 2026-03-05.
-- **CC2** — ✅ COMPLETE. Marketing content: 2 blog posts, social templates, 4 email templates, messaging pillars. Pushed 2026-03-05.
-- **CC3** — ✅ COMPLETE. Pricing analysis: competitors 13–20% vs FindA.Sale 5%. Recommends flat 5%/7% for beta.
-- **CD1** — ✅ COMPLETE. Fraunces serif font, sage-green color palette added to Tailwind + _document. Pushed 2026-03-05.
-- **CD2 Phase 1** — ✅ COMPLETE. Scarcity counter + social proof stats bar. Pulsing "Only X left!" + "On Hold" / "Sold" badges. Pushed 2026-03-05.
-- **CD2 Phase 2: Live Drop Events** — ✅ COMPLETE. Organizer marks item as Live Drop + reveal datetime. Frontend shows teaser + CountdownTimer. After reveal: normal item page. Schema migration added (isLiveDrop + liveDropAt). Pushed 2026-03-05.
-- **CD2 Phase 2: Personalized Weekly Email** — ✅ COMPLETE. `weeklyEmailService.ts` queries user purchase/favorite history → recommends upcoming items → HTML email. Cron: Sunday 6pm. Pushed 2026-03-05.
-- **CD4** — ✅ COMPLETE. Bi-weekly workflow review scheduled task (1st + 15th, 9AM). First run: March 15.
+- **CB1** — ✅ COMPLETE. `cloudAIService.ts` (Google Vision → Claude Haiku). Cloud AI primary, Ollama fallback. Pushed 2026-03-05.
+- **CB3** — ✅ COMPLETE. AI tagging suggestions review panel in add-items. Pushed 2026-03-05.
+- **CB4** — ✅ COMPLETE. Category-specific AI prompts (9 categories), improved title generation, tag deduplication. Pushed 2026-03-05.
+- **CC1** — ✅ COMPLETE. Investor materials: exec summary, pitch deck outline, 3-year financial model. Pushed 2026-03-05.
+- **CC2** — ✅ COMPLETE. Marketing content: blog posts, social templates, email templates. Pushed 2026-03-05.
+- **CC3** — ✅ COMPLETE. Pricing analysis: 5%/7% confirmed for beta.
+- **CD1** — ✅ COMPLETE. Fraunces serif + sage-green palette. Pushed 2026-03-05.
+- **CD2 Phase 1** — ✅ COMPLETE. Scarcity counter + social proof stats bar. Pushed 2026-03-05.
+- **CD2 Phase 2: Live Drop Events** — ✅ COMPLETE. isLiveDrop + liveDropAt schema, CountdownTimer component, teaser view, organizer form fields. Pushed 2026-03-05.
+- **CD2 Phase 2: Personalized Weekly Email** — ✅ COMPLETE. `weeklyEmailService.ts`, cron Sunday 6pm. Pushed 2026-03-05.
+- **CD2 Phase 3: Dynamic Pricing** — ✅ COMPLETE. `suggestPrice()` in cloudAIService.ts (Haiku estate sale pricing expert), `POST /api/items/ai/price-suggest` route, `PriceSuggestion.tsx` component, wired into item edit form. Pushed 2026-03-05.
+- **CD4** — ✅ COMPLETE. Bi-weekly workflow review scheduled task. First run: March 15.
+- **Organizer Onboarding Walkthrough** — ✅ COMPLETE. `OrganizerOnboardingModal.tsx` (5-step: welcome → create sale → add items → go live → dashboard). Shown once to new ORGANIZER users via localStorage flag. Pushed 2026-03-05.
+- **Manual Single-Item Add Form** — ✅ COMPLETE. New "✏️ Manual Entry" tab in add-items alongside photo upload. Full form: title, description, price/auction toggle, category, condition, quantity. Pushed 2026-03-05.
+- **creator/dashboard.tsx** — ✅ COMPLETE. Replaced placeholder analytics + settings tabs with real UI: referral stats, commission tier, recent referrals table, Stripe payout status, notification toggles. Pushed 2026-03-05.
+- **Global React Error Boundary** — ✅ COMPLETE. `ErrorBoundary.tsx` class component (friendly fallback + dev error panel). Wraps `_app.tsx` with `key={router.asPath}` for auto-reset on navigation. Pushed 2026-03-05.
 - **P5** — ✅ Google Vision, Anthropic API, UptimeRobot DONE. Remaining: OAuth credentials, VAPID production confirm.
-- **P6** — ✅ AI-generated SVG + PNG logos created (`claude_docs/brand/`). Vistaprint-ready. Pushed 2026-03-05.
+- **P6** — ✅ AI-generated SVG + PNG logos created. Vistaprint-ready. Pushed 2026-03-05.
 - **P1** — Support email, business cards (use business-card-front/back.png from claude_docs/brand/), Google Business Profile (Patrick)
 - **P2** — Stripe business account, Google Voice, Search Console (Patrick)
 - **favicon.ico** — ✅ COMPLETE. Multi-size ICO (16/32/48px). Pushed 2026-03-05.
@@ -81,8 +85,8 @@ Parallel path model active. Sessions 66–70 batches complete.
 ## Pending Manual Action
 
 - **Phase 31 OAuth env vars** — Social login dormant until added to Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Configure redirect URIs → `https://finda.sale/api/auth/callback/{google,facebook}`.
-- **Live Drop migration** — New migration `20260305120000_add_live_drop` needs `prisma migrate deploy` on Railway/Neon.
-- **Uptime monitoring** — ✅ UptimeRobot done (Patrick confirmed 2026-03-05).
+- **Live Drop migration** — New migration `20260305120000_add_live_drop` needs `prisma migrate deploy` on Railway/Neon. Use Railway CLI: `railway run -- sh -c "cd /app/packages/database && npx prisma migrate deploy"`
+- **Uptime monitoring** — ✅ UptimeRobot done.
 - **Sentry** — ✅ Fully deployed. DSNs set in Railway + Vercel.
 
 ---
@@ -92,15 +96,16 @@ Parallel path model active. Sessions 66–70 batches complete.
 - Multi-metro expansion — Grand Rapids first, business decision
 - Video-to-inventory — vision models not ready, revisit late 2026
 - Real-user beta onboarding — human task
-- CD2 Phase 2 remaining: Treasure Hunt Mode (complex, post-beta)
-- CD2 Phase 3+: AI Discovery Feed, Dynamic Pricing, Visual Search (post-beta)
+- CD2 Phase 2: Treasure Hunt Mode (complex, post-beta)
+- CD2 Phase 3: AI Discovery Feed, Visual Search, Group Buying (post-beta)
+- CD2 Phase 4: Reverse Auction, White-label MaaS (post-beta)
 
 ---
 
 ## Next Strategic Move
 
-Session 70 complete: CA7 + CA4b/CA6b + CD2-LiveDrop + CD2-WeeklyEmail + CB4 shipped.
-Next: CD2 Phase 2 remaining (Treasure Hunt Mode), CD2 Phase 3 moat features, or beta readiness final check.
+Session 71 complete: organizer onboarding + manual item add + creator dashboard + dynamic pricing + error boundary shipped.
+Roadmap largely complete for beta readiness. Remaining Claude work: CD2 Phase 3 remaining moat features (AI Discovery Feed, Visual Search), beta hardening, or CB4 tuning based on real data.
 Patrick: P1 business cards, P2 Stripe/Search Console, P5 OAuth credentials, run `prisma migrate deploy` on Railway (Live Drop migration pending).
 Beta target: 6–8 weeks. Full roadmap: `claude_docs/roadmap.md`.
 
@@ -109,7 +114,7 @@ Beta target: 6–8 weeks. Full roadmap: `claude_docs/roadmap.md`.
 ## Known Gotchas (Production)
 
 - **Railway PORT mismatch** — `PORT=5000` locked in Railway Variables. Must match `EXPOSE 5000` in Dockerfile. Do not remove.
-- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. All 26 migrations + Live Drop migration pending as of 2026-03-05.
+- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. Live Drop migration pending.
 - **Production seed:**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -130,4 +135,4 @@ Beta target: 6–8 weeks. Full roadmap: `claude_docs/roadmap.md`.
 
 ---
 
-Last Updated: 2026-03-05 (session 70 — CA7 + CA4b/CA6b + CD2-LiveDrop + CD2-WeeklyEmail + CB4 complete. Pushed.)
+Last Updated: 2026-03-05 (session 71 — organizer onboarding + manual item add + creator dashboard + CD2 dynamic pricing + error boundary. Pushed.)
