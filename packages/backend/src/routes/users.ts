@@ -3,17 +3,22 @@ import {
   getPurchases,
   getFavorites,
   getUserProfile,
-  getLeaderboard
+  getLeaderboard,
+  getPublicShopperProfile
 } from '../controllers/userController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
 
+// Authenticated endpoints
 router.get('/purchases', authenticate, getPurchases);
 router.get('/favorites', authenticate, getFavorites);
 router.get('/me', authenticate, getUserProfile);
 router.get('/leaderboard', getLeaderboard);
+
+// Public endpoint — must come after /me to avoid route collision
+router.get('/:id/public', getPublicShopperProfile);
 
 // New endpoints for profile enhancements
 router.get('/me/bids', authenticate, async (req: AuthRequest, res: Response) => {

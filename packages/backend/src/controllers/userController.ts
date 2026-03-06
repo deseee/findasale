@@ -396,3 +396,75 @@ export const handleLegendBadge = async (userId: string) => {
     console.error('Error handling legend badge:', error);
   }
 };
+
+// Public: get shopper's public profile
+export const getPublicShopperProfile = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        role: true,
+        streakPoints: true,
+        points: true,
+        userBadges: {
+          include: {
+            badge: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                iconUrl: true,
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            purchases: true,
+            favorites: true,
+            wishlists: true,
+            reviews: true,
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Shopper not found' });
+    }
+
+    // Calculate streak days from visitStreak (using UserStreak model if needed)
+    const visitStreak = await prisma.userStreak.findFirst({
+      where: { userId, type: 'visit' },
+      select: { currentStreak: true }
+    });
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      createdAt: user.createdAt,
+      role: user.role,
+      streakPoints: user.streakPoints,
+      reputationScore: user.points,
+      totalPurchases: user._count.purchases,
+      totalFavorites: user._count.favorites,
+      totalWishlists: user._count.wishlists,
+      totalReviews: user._count.reviews,
+      streakDays: visitStreak?.currentStreak ?? 0,
+      badges: user.userBadges?.map((ub: any) => ({
+        id: ub.badge.id,
+        name: ub.badge.name,
+        description: ub.badge.description,
+        iconUrl: ub.badge.iconUrl,
+      })) || [],
+    });
+  } catch (error) {
+    console.error('Error fetching public shopper profile:', error);
+    res.status(500).json({ message: 'Server error while fetching profile' });
+  }
+};
