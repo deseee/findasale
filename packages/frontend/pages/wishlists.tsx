@@ -124,7 +124,7 @@ const WishlistsPage = () => {
     }
     createMutation.mutate({
       name: newName,
-      occasion: newOccasion || null,
+      occasion: newOccasion || '',
       isPublic: newIsPublic,
     });
   };
