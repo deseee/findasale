@@ -878,7 +878,7 @@ const SaleDetailPage = () => {
       )}
 
       {isImportModalOpen && isOrganizer && (
-        <CSVImportModal saleId={sale.id} onClose={() => setIsImportModalOpen(false)} onImportComplete={handleImportComplete} />
+        <CSVImportModal isOpen={isImportModalOpen} saleId={sale.id} onClose={() => setIsImportModalOpen(false)} onImportComplete={handleImportComplete} />
       )}
 
       {lightboxOpen && sale.photoUrls.length > 0 && (
