@@ -90,6 +90,7 @@ const SaleDetailPage = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [downloadingKit, setDownloadingKit] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
@@ -172,6 +173,8 @@ const SaleDetailPage = () => {
     setIsImportModalOpen(false);
     queryClient.invalidateQueries({ queryKey: ['sale', id] });
   };
+
+  const formatPrice = (amount: number) => `$${amount.toFixed(2)}`;
 
   const handleDownloadMarketingKit = async () => {
     if (!sale || typeof window === 'undefined') return;
@@ -276,7 +279,7 @@ const SaleDetailPage = () => {
               )}
             </div>
             <div className="flex flex-col gap-2">
-              <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} userId={user?.id} />
+              <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
             </div>
           </div>
         </div>
@@ -295,7 +298,7 @@ const SaleDetailPage = () => {
                   <span className="text-sm text-warm-500">({sale.organizer.reviewCount || 0} reviews)</span>
                 </div>
               )}
-              <BadgeDisplay badges={sale.organizer.badges} />
+              <BadgeDisplay badges={sale.organizer.badges || []} />
             </div>
             {isOrganizer && (
               <div className="flex flex-col gap-2">
@@ -334,7 +337,7 @@ const SaleDetailPage = () => {
                   onClick={() => setLightboxOpen(true)}
                 >
                   <img
-                    src={getThumbnailUrl(sale.photoUrls[currentPhotoIndex], 800)}
+                    src={getThumbnailUrl(sale.photoUrls[currentPhotoIndex])}
                     alt={`Sale photo ${currentPhotoIndex + 1}`}
                     className="w-full h-full object-cover hover:opacity-90 transition"
                   />
@@ -349,7 +352,7 @@ const SaleDetailPage = () => {
                     {sale.photoUrls.map((url, idx) => (
                       <img
                         key={idx}
-                        src={getThumbnailUrl(url, 100)}
+                        src={getThumbnailUrl(url)}
                         alt={`Thumbnail ${idx + 1}`}
                         className={`h-20 w-20 object-cover rounded cursor-pointer transition ${
                           idx === currentPhotoIndex ? 'ring-2 ring-amber-600' : ''
@@ -363,7 +366,14 @@ const SaleDetailPage = () => {
             )}
 
             {/* Map */}
-            <SaleMap lat={sale.lat} lng={sale.lng} address={sale.address} className="mb-8 rounded-lg shadow-md h-96" />
+            <SaleMap
+              singlePin={{
+                lat: sale.lat,
+                lng: sale.lng,
+                label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
+              }}
+              height="360px"
+            />
 
             {/* Description */}
             <div className="bg-white rounded-lg shadow-md p-6 mb-8">
@@ -513,7 +523,7 @@ const SaleDetailPage = () => {
             </div>
 
             {/* Reviews Section */}
-            <ReviewsSection saleId={sale.id} />
+            <ReviewsSection mode="sale" saleId={sale.id} />
           </div>
         </div>
 
@@ -530,7 +540,7 @@ const SaleDetailPage = () => {
               {sale.photoUrls.map((url, i) => (
                 <button
                   key={i}
-                  onClick={() => setLightboxIndex(i)}
+                  onClick={() => { setCurrentPhotoIndex(i); setLightboxOpen(true); }}
                   className="group relative aspect-square overflow-hidden rounded-lg border border-warm-200 bg-warm-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   aria-label={`View photo ${i + 1} of ${sale.photoUrls.length}`}
                 >
@@ -860,18 +870,19 @@ const SaleDetailPage = () => {
       {/* Modals */}
       {checkoutItem && (
         <CheckoutModal
-          item={checkoutItem}
+          itemId={checkoutItem.id}
+          itemTitle={checkoutItem.title}
           onClose={handleCheckoutClose}
           onSuccess={handleCheckoutSuccess}
         />
       )}
 
       {isImportModalOpen && isOrganizer && (
-        <CSVImportModal saleId={sale.id} onClose={() => setIsImportModalOpen(false)} onComplete={handleImportComplete} />
+        <CSVImportModal saleId={sale.id} onClose={() => setIsImportModalOpen(false)} onImportComplete={handleImportComplete} />
       )}
 
       {lightboxOpen && sale.photoUrls.length > 0 && (
-        <PhotoLightbox photos={sale.photoUrls} currentIndex={currentPhotoIndex} onClose={() => setLightboxOpen(false)} onNavigate={setCurrentPhotoIndex} />
+        <PhotoLightbox photos={sale.photoUrls} initialIndex={currentPhotoIndex} onClose={() => setLightboxOpen(false)} />
       )}
     </div>
   );
