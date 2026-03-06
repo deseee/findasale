@@ -13,6 +13,7 @@ export interface SalePin {
   endDate: string;
   organizerName: string;
   photoUrl?: string;
+  status?: 'active' | 'upcoming-soon' | 'upcoming';
 }
 
 interface SaleMapProps {

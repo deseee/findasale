@@ -46,19 +46,26 @@ const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
 
-  const { data: sales, isLoading, isError, refetch } = useQuery({
-    queryKey: ['sales'],
+  const { data: feedData, isLoading, isError, refetch } = useQuery({
+    queryKey: ['feed', userLocation?.lat, userLocation?.lng],
     queryFn: async () => {
       try {
-        const response = await api.get('/sales');
-        return response.data.sales as Sale[];
+        const params = new URLSearchParams();
+        if (userLocation?.lat && userLocation?.lng) {
+          params.append('lat', userLocation.lat.toString());
+          params.append('lng', userLocation.lng.toString());
+        }
+        const response = await api.get(`/feed?${params.toString()}`);
+        return response.data;
       } catch (err: any) {
-        console.error('Error fetching sales:', err);
+        console.error('Error fetching feed:', err);
         throw new Error('Failed to load sales. Please try again later.');
       }
     },
     retry: 1,
   });
+
+  const sales = feedData?.sales as Sale[] | undefined;
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -219,7 +226,19 @@ const HomePage = () => {
         {/* Featured Sales */}
         <section>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-warm-900">Featured Sales</h2>
+            <div className="flex items-center gap-3">
+              {feedData?.personalized && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-medium text-amber-700">
+                  ✨ Picked for you
+                </span>
+              )}
+              {!feedData?.personalized && sales && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs font-medium text-blue-700">
+                  📍 Near Grand Rapids
+                </span>
+              )}
+              <h2 className="text-3xl font-bold text-warm-900">Featured Sales</h2>
+            </div>
             {!isLoading && sales && (
               <span className="text-sm text-warm-500">
                 {filteredSales.length} of {sales.length} sale{sales.length !== 1 ? 's' : ''}

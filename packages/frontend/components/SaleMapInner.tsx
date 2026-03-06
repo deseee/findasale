@@ -24,6 +24,34 @@ const orangeIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+// Status-based colored markers
+const greenIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+const amberIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+const grayIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
 // Helper: fly to user location
 const FlyToUser = ({ lat, lng }: { lat: number; lng: number }) => {
   const map = useMap();
@@ -84,46 +112,53 @@ const SaleMapInner = ({
           </Marker>
         )}
 
-        {/* Multi-pin mode (homepage / search) */}
-        {!singlePin && pins.map((pin) => (
-          <Marker key={pin.id} position={[pin.lat, pin.lng]}>
-            <Popup>
-              <div style={{ minWidth: '180px' }}>
-                {pin.photoUrl && (
-                  <img
-                    src={pin.photoUrl}
-                    alt={pin.title}
-                    style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px', marginBottom: '8px' }}
-                   loading="lazy"/>
-                )}
-                <strong style={{ display: 'block', marginBottom: '4px' }}>{pin.title}</strong>
-                <span style={{ fontSize: '12px', color: '#666', display: 'block' }}>
-                  {pin.city}, {pin.state}
-                </span>
-                <span style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '8px' }}>
-                  {formatDate(pin.startDate)} – {formatDate(pin.endDate)}
-                </span>
-                <span style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '8px' }}>
-                  by {pin.organizerName}
-                </span>
-                <a
-                  href={`/sales/${pin.id}`}
-                  style={{
-                    display: 'inline-block',
-                    background: '#2563eb',
-                    color: '#fff',
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    textDecoration: 'none',
-                  }}
-                >
-                  View Sale →
-                </a>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {/* Multi-pin mode (homepage / search / map page) */}
+        {!singlePin && pins.map((pin) => {
+          let markerIcon = grayIcon;
+          if (pin.status === 'active') markerIcon = greenIcon;
+          else if (pin.status === 'upcoming-soon') markerIcon = amberIcon;
+
+          return (
+            <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={markerIcon}>
+              <Popup>
+                <div style={{ minWidth: '180px' }}>
+                  {pin.photoUrl && (
+                    <img
+                      src={pin.photoUrl}
+                      alt={pin.title}
+                      style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px', marginBottom: '8px' }}
+                      loading="lazy"
+                    />
+                  )}
+                  <strong style={{ display: 'block', marginBottom: '4px' }}>{pin.title}</strong>
+                  <span style={{ fontSize: '12px', color: '#666', display: 'block' }}>
+                    {pin.city}, {pin.state}
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '8px' }}>
+                    {formatDate(pin.startDate)} – {formatDate(pin.endDate)}
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '8px' }}>
+                    by {pin.organizerName}
+                  </span>
+                  <a
+                    href={`/sales/${pin.id}`}
+                    style={{
+                      display: 'inline-block',
+                      background: '#2563eb',
+                      color: '#fff',
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    View Sale →
+                  </a>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
     </>
   );

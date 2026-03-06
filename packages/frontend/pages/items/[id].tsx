@@ -37,6 +37,11 @@ interface Item {
   };
 }
 
+interface Wishlist {
+  id: string;
+  name: string;
+}
+
 interface Bid {
   id: string;
   amount: number;
@@ -105,6 +110,8 @@ const ItemDetailPage = () => {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [holdCountdown, setHoldCountdown] = useState('');
   const [isLiveDropRevealed, setIsLiveDropRevealed] = useState(false); // CD2
+  const [wishlistDropdownOpen, setWishlistDropdownOpen] = useState(false);
+  const [wishlistsInItem, setWishlistsInItem] = useState<Set<string>>(new Set());
   const socketRef = useRef<Socket | null>(null); // V1: live bidding socket
   const { showToast } = useToast();
 
@@ -150,6 +157,28 @@ const ItemDetailPage = () => {
       setIsFavorite(favoriteStatus);
     }
   }, [favoriteStatus]);
+
+  // Fetch wishlists to check which ones contain this item
+  const { data: wishlists = [] } = useQuery({
+    queryKey: ['wishlists', id],
+    queryFn: async () => {
+      if (!id || !user) return [];
+      try {
+        const response = await api.get('/wishlists');
+        const allWishlists = response.data as Array<{ id: string; name: string; items: Array<{ itemId: string }> }>;
+        const inItem = new Set(
+          allWishlists
+            .filter((w) => w.items.some((item) => item.itemId === id))
+            .map((w) => w.id)
+        );
+        setWishlistsInItem(inItem);
+        return allWishlists;
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!id && !!user,
+  });
 
   // Phase 21: Fetch active reservation for this item
   const { data: reservation, refetch: refetchReservation } = useQuery({
@@ -336,11 +365,58 @@ const ItemDetailPage = () => {
     }
   };
 
+  // Mutation to add/remove from wishlist
+  const wishlistMutation = useMutation({
+    mutationFn: async (data: { wishlistId: string; add: boolean }) => {
+      if (data.add) {
+        return api.post('/wishlists/items', {
+          wishlistId: data.wishlistId,
+          itemId: id,
+        });
+      } else {
+        // Find the wishlist item and remove it
+        const wishlist = wishlists.find((w) => w.id === data.wishlistId);
+        if (wishlist) {
+          const wishlistItem = wishlist.items?.find((item) => item.itemId === id);
+          if (wishlistItem) {
+            return api.delete(`/wishlists/items/${wishlistItem.id}`);
+          }
+        }
+        return Promise.resolve();
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wishlists', id] });
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to update wishlist', 'error');
+    },
+  });
+
+  const toggleWishlistItem = (wishlistId: string) => {
+    const isInWishlist = wishlistsInItem.has(wishlistId);
+    wishlistMutation.mutate({
+      wishlistId,
+      add: !isInWishlist,
+    });
+  };
+
   useEffect(() => {
     if (item && item.auctionStartPrice) {
       setBidAmount(getMinimumNextBid(item).toString());
     }
   }, [item]);
+
+  // Close wishlist dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setWishlistDropdownOpen(false);
+    };
+    if (wishlistDropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [wishlistDropdownOpen]);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Loading...</div>;
   if (isError) return (
@@ -555,23 +631,123 @@ const ItemDetailPage = () => {
 
             {/* Item Details */}
             <div className="p-6">
-              <div className="flex justify-between items-start">
-                <h1 className="text-3xl font-bold text-warm-900 mb-2">{item.title}</h1>
-                <button
-                  onClick={toggleFavorite}
-                  className="text-2xl focus:outline-none"
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  {isFavorite ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                    </svg>
+              <div className="flex justify-between items-start mb-4">
+                <h1 className="text-3xl font-bold text-warm-900">{item.title}</h1>
+                <div className="flex gap-2">
+                  {/* Favorite button */}
+                  <button
+                    onClick={toggleFavorite}
+                    className="text-2xl focus:outline-none"
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    {isFavorite ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-warm-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                    )}
+                  </button>
+
+                  {/* Wishlist button */}
+                  {user ? (
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWishlistDropdownOpen(!wishlistDropdownOpen);
+                        }}
+                        className="text-2xl focus:outline-none"
+                        aria-label="Save to wishlist"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-6 w-6 text-amber-600"
+                          fill={wishlistsInItem.size > 0 ? 'currentColor' : 'none'}
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 5a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 19V5z"
+                          />
+                        </svg>
+                      </button>
+
+                      {/* Dropdown Menu */}
+                      {wishlistDropdownOpen && (
+                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg z-50 border border-warm-200">
+                          {wishlists.length === 0 ? (
+                            <div className="p-4 text-center text-warm-600 text-sm">
+                              <p className="mb-3">No wishlists yet.</p>
+                              <Link
+                                href="/wishlists"
+                                className="text-amber-600 hover:text-amber-700 font-medium"
+                              >
+                                Create one
+                              </Link>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="max-h-60 overflow-y-auto">
+                                {wishlists.map((wishlist) => (
+                                  <button
+                                    key={wishlist.id}
+                                    onClick={() => {
+                                      toggleWishlistItem(wishlist.id);
+                                    }}
+                                    className="w-full text-left px-4 py-3 hover:bg-warm-50 border-b border-warm-100 last:border-b-0 flex items-center gap-2"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={wishlistsInItem.has(wishlist.id)}
+                                      onChange={() => {}}
+                                      className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded"
+                                    />
+                                    <span className="text-sm text-warm-900">{wishlist.name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="border-t border-warm-200 p-3">
+                                <Link
+                                  href="/wishlists"
+                                  className="block text-center text-sm text-amber-600 hover:text-amber-700 font-medium"
+                                >
+                                  Manage wishlists
+                                </Link>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-warm-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
+                    <Link
+                      href="/auth/login"
+                      className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                      title="Log in to save to wishlists"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 5a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 19V5z"
+                        />
+                      </svg>
+                    </Link>
                   )}
-                </button>
+                </div>
               </div>
               <p className="text-warm-600 mb-6">{item.description}</p>
               

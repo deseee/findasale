@@ -1,62 +1,41 @@
-import { Router, Response } from 'express';
+import { Router, Response, Request } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { prisma } from '../lib/prisma';
+import { getPersonalizedFeed } from '../services/discoveryService';
 
 const router = Router();
 
 /**
- * GET /api/feed — Phase 28: personalized activity feed
+ * GET /api/feed — AI Discovery personalization
  *
- * Returns recently updated/published sales from organizers the authenticated
- * user follows, ordered by most recent first.
+ * Returns personalized sales ranked by relevance to the authenticated user's
+ * browse/buy history. Supports optional geolocation (?lat=42.96&lng=-85.67).
  *
- * Falls back to all recently published sales when the user follows nobody,
- * with `personalized: false` in the response so the frontend can prompt them
- * to follow organizers.
+ * Anonymous users get geo-sorted popular feed (defaults to Grand Rapids).
+ * Authenticated users get scored by:
+ * - Followed organizers (+30 pts)
+ * - Matching item categories from purchase history (+20 pts each)
+ * - Previously favorited organizers (+10 pts)
+ * - Sale proximity (next 7 days, +5 pts/day)
+ * - Distance bonus within 25 miles (+15 pts)
+ *
+ * Response includes `personalized` flag so frontend can render appropriate label.
  */
-router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/', async (req: AuthRequest | Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = (req as AuthRequest).user?.id ?? null;
+    const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
+    const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
 
-    // Look up which organizers this user follows
-    const follows = await prisma.follow.findMany({
-      where: { userId },
-      select: { organizerId: true },
+    const { sales, personalized } = await getPersonalizedFeed(userId, lat, lng);
+
+    // Return top 20 (vs 30 from old feed for faster response)
+    res.json({
+      sales: sales.slice(0, 20).map(({ score, ...sale }) => sale), // Strip score from response
+      personalized,
+      reason: personalized
+        ? 'Ranked by your browsing history and followed organizers'
+        : 'Sorted by date and proximity to Grand Rapids',
     });
-
-    const organizerIds = follows.map(f => f.organizerId);
-    const personalized = organizerIds.length > 0;
-
-    const where: any = {
-      status: 'PUBLISHED',
-      ...(personalized ? { organizerId: { in: organizerIds } } : {}),
-    };
-
-    const sales = await prisma.sale.findMany({
-      where,
-      include: {
-        organizer: {
-          select: {
-            id: true,
-            businessName: true,
-            reputationTier: true,
-          },
-        },
-        _count: {
-          select: { favorites: true },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 30,
-    });
-
-    // Flatten _count into favoriteCount so the API contract is clean
-    const serialized = sales.map(({ _count, ...sale }) => ({
-      ...sale,
-      favoriteCount: _count.favorites,
-    }));
-
-    res.json({ sales: serialized, personalized });
   } catch (error) {
     console.error('Feed error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error loading feed.' });

@@ -67,6 +67,9 @@ import webhookRoutes from './routes/webhooks';   // X1: Zapier webhook system
 import insightsRoutes from './routes/insights';  // CD2 Phase 3: Organizer insights dashboard
 import leaderboardRoutes from './routes/leaderboard'; // CD2 Phase 3: City leaderboards & badges
 import streakRoutes from './routes/streaks';     // CD2 Phase 2: Streak Challenges + Hunt Pass
+import flashDealRoutes from './routes/flashDeals'; // Flash Deals & Promotions
+import wishlistRoutes from './routes/wishlists'; // Wishlist / Registry feature
+import tierRoutes from './routes/tiers'; // Phase 31: Organizer Tier Rewards
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -187,6 +190,9 @@ app.use('/api/webhooks', webhookRoutes);   // X1: Zapier webhook system
 app.use('/api/insights', insightsRoutes);  // CD2 Phase 3: Organizer insights dashboard
 app.use('/api/leaderboard', leaderboardRoutes); // CD2 Phase 3: City leaderboards & badges
 app.use('/api/streaks', streakRoutes);     // CD2 Phase 2: Streak Challenges + Hunt Pass
+app.use('/api/flash-deals', flashDealRoutes); // Flash Deals & Promotions
+app.use('/api/wishlists', wishlistRoutes); // Wishlist / Registry feature
+app.use('/api/tiers', tierRoutes); // Phase 31: Organizer Tier Rewards
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

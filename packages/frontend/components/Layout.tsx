@@ -26,6 +26,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   const staticNavLinks = [
     { href: '/', label: 'Home' },
+    { href: '/map', label: 'Map' },
     { href: '/about', label: 'About' },
     { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/contact', label: 'Contact' },
@@ -46,6 +47,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <>
             <Link href="/shopper/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               My Profile
+            </Link>
+            <Link href="/wishlists" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              My Wishlists
             </Link>
             <Link href="/referral-dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Referrals
@@ -118,6 +122,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   {(user.role === 'USER' || user.role === 'ADMIN') && (
                     <>
                       <Link href="/shopper/dashboard" className="text-warm-900 hover:text-amber-600">My Profile</Link>
+                      <Link href="/wishlists" className="text-warm-900 hover:text-amber-600">My Wishlists</Link>
                       <Link href="/referral-dashboard" className="text-warm-900 hover:text-amber-600">Referrals</Link>
                     </>
                   )}

@@ -15,7 +15,9 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier'; // Phase 22
+import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
 import SaleQRCode from '../../components/SaleQRCode'; // CD2-P2
+import FlashDealForm from '../../components/FlashDealForm';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -45,6 +47,7 @@ const OrganizerDashboard = () => {
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'analytics'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null); // CD2-P2
+  const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -73,6 +76,32 @@ const OrganizerDashboard = () => {
         completedSales: number;
         followerCount: number;
         avgRating: number | null;
+      };
+    },
+    enabled: !!user?.id,
+  });
+
+  // Phase 31: Fetch organizer tier rewards (tier, benefits, progress)
+  const { data: tierData } = useQuery({
+    queryKey: ['my-tier', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/api/tiers/mine');
+      return response.data as {
+        tier: 'BRONZE' | 'SILVER' | 'GOLD';
+        benefits: {
+          feePct: number;
+          auctionFeePct: number;
+          label: string;
+          perks: string[];
+        };
+        progress: {
+          currentTier: 'BRONZE' | 'SILVER' | 'GOLD';
+          nextTier: 'BRONZE' | 'SILVER' | 'GOLD' | null;
+          completedSales: number;
+          soldItems: number;
+          salesNeeded: number;
+          itemsNeeded: number;
+        };
       };
     },
     enabled: !!user?.id,
@@ -158,6 +187,96 @@ const OrganizerDashboard = () => {
                 </div>
               </div>
 
+              {/* Phase 31: Organizer Tier Rewards card */}
+              {tierData && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  {/* Tier Rewards section */}
+                  <div className="bg-white rounded-lg shadow-md p-6">
+                    <h3 className="text-lg font-semibold text-warm-900 mb-4">Tier Rewards</h3>
+                    <div className="flex items-center gap-3 mb-4">
+                      <OrganizerTierBadge tier={tierData.tier} />
+                      <span className="text-sm text-warm-600 font-medium">{tierData.benefits.label}</span>
+                    </div>
+                    <div className="bg-amber-50 rounded p-3 mb-4">
+                      <p className="text-sm text-warm-900 font-semibold mb-2">Platform Fees</p>
+                      <p className="text-sm text-warm-700">
+                        Standard: {tierData.benefits.feePct}% | Auction: {tierData.benefits.auctionFeePct}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2">Perks</p>
+                      <ul className="space-y-1">
+                        {tierData.benefits.perks.map((perk) => (
+                          <li key={perk} className="flex items-center gap-2 text-sm text-warm-700">
+                            <span className="text-amber-600 flex-shrink-0">✓</span>
+                            {perk}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Progress to next tier */}
+                  {tierData.progress.nextTier && (
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                      <h3 className="text-lg font-semibold text-warm-900 mb-4">Progress to Next Tier</h3>
+                      <p className="text-sm text-warm-600 mb-4">
+                        Upgrade to <strong>{tierData.progress.nextTier}</strong> and get better rates!
+                      </p>
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium text-warm-700">Completed Sales</span>
+                            <span className="text-sm text-warm-600">
+                              {tierData.progress.completedSales} / {tierData.progress.completedSales + tierData.progress.salesNeeded}
+                            </span>
+                          </div>
+                          <div className="w-full bg-warm-200 rounded-full h-2">
+                            <div
+                              className="bg-amber-600 h-2 rounded-full transition-all"
+                              style={{
+                                width: tierData.progress.salesNeeded > 0
+                                  ? `${(tierData.progress.completedSales / (tierData.progress.completedSales + tierData.progress.salesNeeded)) * 100}%`
+                                  : '100%',
+                              }}
+                            />
+                          </div>
+                          {tierData.progress.salesNeeded > 0 && (
+                            <p className="text-xs text-warm-600 mt-1">
+                              {tierData.progress.salesNeeded} more {tierData.progress.salesNeeded === 1 ? 'sale' : 'sales'} needed
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium text-warm-700">Items Sold</span>
+                            <span className="text-sm text-warm-600">
+                              {tierData.progress.soldItems} / {tierData.progress.soldItems + tierData.progress.itemsNeeded}
+                            </span>
+                          </div>
+                          <div className="w-full bg-warm-200 rounded-full h-2">
+                            <div
+                              className="bg-amber-600 h-2 rounded-full transition-all"
+                              style={{
+                                width: tierData.progress.itemsNeeded > 0
+                                  ? `${(tierData.progress.soldItems / (tierData.progress.soldItems + tierData.progress.itemsNeeded)) * 100}%`
+                                  : '100%',
+                              }}
+                            />
+                          </div>
+                          {tierData.progress.itemsNeeded > 0 && (
+                            <p className="text-xs text-warm-600 mt-1">
+                              {tierData.progress.itemsNeeded} more {tierData.progress.itemsNeeded === 1 ? 'item' : 'items'} needed
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Phase 22: Creator Tier card */}
               {orgProfile && (
                 <div className="bg-white rounded-lg shadow-md p-6">
@@ -203,37 +322,57 @@ const OrganizerDashboard = () => {
               {salesLoading ? (
                 <p>Loading your sales...</p>
               ) : salesData && salesData.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="space-y-6">
                   {salesData.map((sale: any) => (
-                    <div key={sale.id} className="card overflow-hidden hover:shadow-lg transition-shadow">
-                      <div className="p-4">
-                        <h3 className="text-lg font-semibold text-warm-900 mb-2">{sale.title}</h3>
-                        <p className="text-sm text-warm-600 mb-4">{sale.city}, {sale.state}</p>
-                        <div className="flex gap-2 flex-wrap items-center">
-                          <Link
-                            href={`/organizer/edit-sale/${sale.id}`}
-                            className="text-sm text-amber-600 hover:underline"
-                          >
-                            Edit
-                          </Link>
-                          <Link
-                            href={`/organizer/add-items/${sale.id}`}
-                            className="text-sm text-amber-600 hover:underline"
-                          >
-                            Items
-                          </Link>
-                          <button
-                            onClick={() => setOpenQRSale(openQRSale === sale.id ? null : sale.id)}
-                            className="text-sm text-amber-600 hover:underline"
-                          >
-                            {openQRSale === sale.id ? 'Hide QR' : 'QR Code'}
-                          </button>
-                        </div>
-                        {openQRSale === sale.id && (
-                          <div className="mt-4 pt-4 border-t border-warm-100">
-                            <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={160} />
+                    <div key={sale.id}>
+                      <div className="card overflow-hidden hover:shadow-lg transition-shadow">
+                        <div className="p-4">
+                          <h3 className="text-lg font-semibold text-warm-900 mb-2">{sale.title}</h3>
+                          <p className="text-sm text-warm-600 mb-4">{sale.city}, {sale.state}</p>
+                          <div className="flex gap-2 flex-wrap items-center">
+                            <Link
+                              href={`/organizer/edit-sale/${sale.id}`}
+                              className="text-sm text-amber-600 hover:underline"
+                            >
+                              Edit
+                            </Link>
+                            <Link
+                              href={`/organizer/add-items/${sale.id}`}
+                              className="text-sm text-amber-600 hover:underline"
+                            >
+                              Items
+                            </Link>
+                            <button
+                              onClick={() => setOpenQRSale(openQRSale === sale.id ? null : sale.id)}
+                              className="text-sm text-amber-600 hover:underline"
+                            >
+                              {openQRSale === sale.id ? 'Hide QR' : 'QR Code'}
+                            </button>
+                            <button
+                              onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)}
+                              className="text-sm text-red-600 hover:underline font-semibold"
+                            >
+                              {flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}
+                            </button>
                           </div>
-                        )}
+                          {openQRSale === sale.id && (
+                            <div className="mt-4 pt-4 border-t border-warm-100">
+                              <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={160} />
+                            </div>
+                          )}
+                          {flashDealSaleId === sale.id && sale.items && (
+                            <div className="mt-4 pt-4 border-t border-warm-100">
+                              <FlashDealForm
+                                saleId={sale.id}
+                                saleItems={sale.items}
+                                onSuccess={() => {
+                                  setFlashDealSaleId(null);
+                                }}
+                                onCancel={() => setFlashDealSaleId(null)}
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
