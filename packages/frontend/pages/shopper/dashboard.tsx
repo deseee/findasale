@@ -14,11 +14,12 @@ import Link from 'next/link';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
+import MyPickupAppointments from '../../components/MyPickupAppointments';
 
 const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'purchases' | 'favorites' | 'subscribed'>('purchases');
+  const [activeTab, setActiveTab] = useState<'purchases' | 'favorites' | 'subscribed' | 'pickups'>('purchases');
 
   if (!isLoading && !user) {
     router.push('/login');
@@ -55,12 +56,12 @@ const ShopperDashboard = () => {
           <h1 className="text-3xl font-bold text-warm-900 mb-6">My Dashboard</h1>
 
           {/* Tabs */}
-          <div className="flex gap-4 mb-8 border-b border-warm-200">
-            {['purchases', 'favorites', 'subscribed'].map((tab) => (
+          <div className="flex gap-4 mb-8 border-b border-warm-200 overflow-x-auto">
+            {['purchases', 'favorites', 'subscribed', 'pickups'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
-                className={`pb-2 font-medium capitalize ${
+                className={`pb-2 font-medium capitalize whitespace-nowrap ${
                   activeTab === tab
                     ? 'border-b-2 border-amber-600 text-amber-600'
                     : 'text-warm-600 hover:text-warm-900'
@@ -141,7 +142,7 @@ const ShopperDashboard = () => {
           {/* Subscribed */}
           {activeTab === 'subscribed' && (
             <div className="text-center py-16">
-              <p className="text-5xl mb-4">\uD83D\uDD14</p>
+              <p className="text-5xl mb-4">🔔</p>
               <h3 className="text-xl font-semibold text-warm-900 mb-2">No subscriptions yet</h3>
               <p className="text-warm-600 mb-6">
                 Subscribe to a sale to get notified about updates and new items.
@@ -153,6 +154,11 @@ const ShopperDashboard = () => {
                 Browse Sales
               </Link>
             </div>
+          )}
+
+          {/* Pickups */}
+          {activeTab === 'pickups' && (
+            <MyPickupAppointments />
           )}
         </div>
       </div>

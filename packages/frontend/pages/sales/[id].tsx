@@ -21,6 +21,7 @@ import PhotoLightbox from '../../components/PhotoLightbox';
 import { getThumbnailUrl } from '../../lib/imageUtils';
 import ReviewsSection from '../../components/ReviewsSection';
 import FlashDealBanner from '../../components/FlashDealBanner';
+import PickupBookingCard from '../../components/PickupBookingCard';
 
 interface Sale {
   id: string;
@@ -246,14 +247,30 @@ const SaleDetailPage = () => {
   const saleHasStarted = now >= saleStartDate;
   const saleHasEnded = now >= saleEndDate;
 
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'https://findasale.com');
+  const ogImageUrl = `${siteUrl}/api/og?${new URLSearchParams({
+    type: 'sale',
+    title: sale.title,
+    date: `${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}`,
+    location: `${sale.city}, ${sale.state}`,
+    itemCount: sale.items?.length?.toString() || '0',
+    organizer: sale.organizer?.businessName || '',
+  }).toString()}`;
+
   return (
     <div className="min-h-screen bg-warm-50">
       <Head>
         <title>{sale.title} - FindA.Sale</title>
-        <meta name="description" content={`${sale.title} in ${sale.city}, ${sale.state}. Sale runs from ${format(saleStartDate, 'MMM d, yyyy')} to ${format(saleEndDate, 'MMM d, yyyy')}.`} />
-        <meta property="og:title" content={sale.title} />
-        <meta property="og:description" content={`${sale.address}, ${sale.city}, ${sale.state}`} />
-        <meta property="og:image" content={sale.photoUrls[0] || '/default-sale.jpg'} />
+        <meta name="description" content={`${sale.title} in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}.`} />
+        <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
+        <meta property="og:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}`} />
+        <meta property="og:image" content={ogImageUrl} />
+        <meta property="og:url" content={`${siteUrl}/sales/${sale.id}`} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
+        <meta name="twitter:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}`} />
+        <meta name="twitter:image" content={ogImageUrl} />
       </Head>
 
       <main className="container mx-auto px-4 py-8">
@@ -541,6 +558,9 @@ const SaleDetailPage = () => {
                 <span className="font-medium text-warm-900">Address:</span> {sale.organizer.address}
               </p>
             </div>
+
+            {/* Pickup Scheduling */}
+            {user && <PickupBookingCard saleId={sale.id} />}
 
             {/* Reviews Section */}
             <ReviewsSection mode="sale" saleId={sale.id} />

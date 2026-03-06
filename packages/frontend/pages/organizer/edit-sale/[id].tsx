@@ -16,6 +16,7 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
+import PickupSlotManager from '../../../components/PickupSlotManager';
 
 const EditSalePage = () => {
   const router = useRouter();
@@ -194,6 +195,9 @@ const EditSalePage = () => {
               {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
+
+          {/* Pickup Scheduling Section */}
+          {id && <div className="mt-12"><PickupSlotManager saleId={id as string} /></div>}
         </div>
       </div>
     </>

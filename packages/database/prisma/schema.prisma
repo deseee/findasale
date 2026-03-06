@@ -59,6 +59,7 @@ model User {
   notifications         Notification[]
   checkoutAttempts      CheckoutAttempt[]
   waitlistEntries       ItemWaitlist[]
+  pickupBookings        PickupBooking[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -68,6 +69,7 @@ model Organizer {
   businessName    String
   phone           String
   address         String
+  bio             String?  // Organizer bio/description (optional)
   userId          String   @unique
   user            User     @relation(fields: [userId], references: [id])
   sales           Sale[]
@@ -82,6 +84,8 @@ model Organizer {
   // Phase 31: Organizer Tier Rewards (BRONZE | SILVER | GOLD) — fee benefits based on activity
   tier            String   @default("BRONZE")
   tierUpdatedAt   DateTime?
+  // Onboarding wizard
+  onboardingComplete Boolean @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -104,6 +108,7 @@ model Sale {
   status        String     @default("DRAFT") // DRAFT, PUBLISHED, ENDED
   isAuctionSale Boolean    @default(false)
   qrScanCount   Int        @default(0)
+  endingSoonNotified Boolean @default(false) // Track if "Sale Ending Soon" notification has been sent
   organizerId   String
   organizer     Organizer  @relation(fields: [organizerId], references: [id])
   items         Item[]
@@ -116,6 +121,7 @@ model Sale {
   conversations Conversation[]
   bounties      MissingListingBounty[]
   flashDeals    FlashDeal[]
+  pickupSlots   PickupSlot[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -565,4 +571,28 @@ model ItemWaitlist {
   createdAt DateTime @default(now())
 
   @@unique([userId, itemId])
+}
+
+// Pickup Appointment Scheduling — organizers set available pickup time slots; shoppers book them
+model PickupSlot {
+  id           String    @id @default(uuid())
+  saleId       String
+  sale         Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  startsAt     DateTime
+  endsAt       DateTime
+  capacity     Int       @default(1)
+  bookings     PickupBooking[]
+  createdAt    DateTime  @default(now())
+}
+
+model PickupBooking {
+  id        String      @id @default(uuid())
+  slotId    String
+  slot      PickupSlot  @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes     String?
+  createdAt DateTime    @default(now())
+
+  @@unique([slotId, userId])
 }

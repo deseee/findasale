@@ -8,7 +8,7 @@
  * - View analytics and earnings
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -18,6 +18,7 @@ import ReputationTier from '../../components/ReputationTier'; // Phase 22
 import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
 import SaleQRCode from '../../components/SaleQRCode'; // CD2-P2
 import FlashDealForm from '../../components/FlashDealForm';
+import OnboardingWizard from '../../components/OnboardingWizard'; // Onboarding wizard
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -48,6 +49,7 @@ const OrganizerDashboard = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'analytics'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null); // CD2-P2
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -76,10 +78,18 @@ const OrganizerDashboard = () => {
         completedSales: number;
         followerCount: number;
         avgRating: number | null;
+        onboardingComplete: boolean;
       };
     },
     enabled: !!user?.id,
   });
+
+  // Show wizard if onboarding not complete and not dismissed
+  useEffect(() => {
+    if (orgProfile && !orgProfile.onboardingComplete && localStorage.getItem('onboardingDismissed') !== 'true') {
+      setShowWizard(true);
+    }
+  }, [orgProfile]);
 
   // Phase 31: Fetch organizer tier rewards (tier, benefits, progress)
   const { data: tierData } = useQuery({
@@ -116,6 +126,16 @@ const OrganizerDashboard = () => {
       <Head>
         <title>Organizer Dashboard - FindA.Sale</title>
       </Head>
+
+      {/* Onboarding Wizard */}
+      {showWizard && (
+        <OnboardingWizard
+          onComplete={() => {
+            setShowWizard(false);
+          }}
+        />
+      )}
+
       <div className="min-h-screen bg-warm-50">
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Header */}

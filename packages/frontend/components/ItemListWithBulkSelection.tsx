@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import Link from 'next/link';
 
 interface Item {
@@ -32,6 +32,10 @@ const ItemListWithBulkSelection: React.FC<ItemListWithBulkSelectionProps> = ({
 }) => {
   const allSelected = items.length > 0 && items.every(item => selectedIds.has(item.id));
   const someSelected = items.length > 0 && items.some(item => selectedIds.has(item.id)) && !allSelected;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
 
   if (items.length === 0) {
     return (
@@ -47,9 +51,9 @@ const ItemListWithBulkSelection: React.FC<ItemListWithBulkSelectionProps> = ({
       {items.length > 0 && (
         <div className="flex items-center gap-3 p-4 bg-warm-50 rounded-lg border border-warm-200">
           <input
+            ref={selectAllRef}
             type="checkbox"
             checked={allSelected}
-            indeterminate={someSelected}
             onChange={() => (allSelected || someSelected ? onDeselectAll() : onSelectAll())}
             className="w-5 h-5 text-amber-600 rounded cursor-pointer"
             aria-label="Select all items"
