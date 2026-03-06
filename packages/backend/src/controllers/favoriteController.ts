@@ -89,6 +89,7 @@ export const getUserFavorites = async (req: AuthRequest, res: Response) => {
     const allFavs = await prisma.favorite.findMany({
       where: { userId: req.user.id, itemId: { not: null } },
       select: { item: { select: { category: true } } },
+      take: 500,
     });
     const categories = [...new Set(
       allFavs.map(f => f.item?.category).filter(Boolean) as string[]
