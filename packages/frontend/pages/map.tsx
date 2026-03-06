@@ -165,6 +165,11 @@ const MapPage = () => {
       <Head>
         <title>Sales Near You - FindA.Sale</title>
         <meta name="description" content="View estate sales on an interactive map near you" />
+        <meta property="og:title" content="Estate Sales Map — FindA.Sale" />
+        <meta property="og:description" content="See all upcoming estate sales on an interactive map. Filter by date and find sales near you in Grand Rapids, MI." />
+        <meta property="og:url" content="https://finda.sale/map" />
+        <meta property="og:image" content="https://finda.sale/og-default.png" />
+        <meta name="twitter:card" content="summary" />
       </Head>
 
       {/* Header Strip */}

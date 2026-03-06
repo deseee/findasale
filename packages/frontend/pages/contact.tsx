@@ -31,6 +31,11 @@ const ContactPage = () => {
     <>
       <Head>
         <title>Contact Us</title>
+        <meta property="og:title" content="Contact FindA.Sale" />
+        <meta property="og:description" content="Get in touch with the FindA.Sale team. We're here to help organizers and shoppers in Grand Rapids, Michigan." />
+        <meta property="og:url" content="https://finda.sale/contact" />
+        <meta property="og:image" content="https://finda.sale/og-default.png" />
+        <meta name="twitter:card" content="summary" />
       </Head>
       <div className="min-h-screen bg-white">
         <div className="max-w-2xl mx-auto px-4 py-12">

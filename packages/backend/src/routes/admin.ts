@@ -10,6 +10,11 @@ import {
   deleteSale,
   getRecentActivity,
 } from '../controllers/adminController';
+import {
+  createInvite,
+  listInvites,
+  deleteInvite,
+} from '../controllers/betaInviteController';
 
 const router = express.Router();
 
@@ -23,5 +28,10 @@ router.patch('/users/:userId/suspend', suspendUser);
 router.get('/sales', getSales);
 router.delete('/sales/:saleId', deleteSale);
 router.get('/activity', getRecentActivity);
+
+// Beta invite management
+router.get('/invites', listInvites);
+router.post('/invites', createInvite);
+router.delete('/invites/:inviteId', deleteInvite);
 
 export default router;

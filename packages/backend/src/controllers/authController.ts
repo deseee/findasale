@@ -7,7 +7,7 @@ import { handleReferralBadge, handlePointsBadge } from './userController';
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, businessName, phone, businessAddress } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, inviteCode, businessName, phone, businessAddress } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -20,6 +20,23 @@ export const register = async (req: Request, res: Response) => {
 
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
+    }
+
+    // Validate invite code if provided (beta access gate)
+    let validatedInvite = null;
+    if (inviteCode) {
+      validatedInvite = await prisma.betaInvite.findUnique({
+        where: { code: inviteCode.toUpperCase() }
+      });
+      if (!validatedInvite) {
+        return res.status(400).json({ message: 'Invalid invite code' });
+      }
+      if (validatedInvite.usedAt) {
+        return res.status(400).json({ message: 'This invite code has already been used' });
+      }
+      if (validatedInvite.email && validatedInvite.email.toLowerCase() !== email) {
+        return res.status(400).json({ message: 'This invite code is restricted to a different email address' });
+      }
     }
 
     // Hash password
@@ -97,6 +114,17 @@ export const register = async (req: Request, res: Response) => {
           await handlePointsBadge(referrer.id, updatedReferrer.points);
         }
       }
+    }
+
+    // Redeem invite code if one was validated
+    if (validatedInvite) {
+      await prisma.betaInvite.update({
+        where: { code: validatedInvite.code },
+        data: {
+          usedAt: new Date(),
+          usedById: user.id
+        }
+      });
     }
 
     // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip

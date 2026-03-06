@@ -87,7 +87,7 @@ export const syncTierForOrganizer = async (req: AuthRequest, res: Response) => {
   try {
     const { organizerId } = req.params;
 
-    // TODO: add admin check here if needed
+    // Admin-only endpoint: requireAdmin middleware enforced in routes/tiers.ts
     await syncOrganizerTier(organizerId);
 
     const organizer = await prisma.organizer.findUnique({

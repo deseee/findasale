@@ -141,6 +141,14 @@ const HomePage = () => {
       <Head>
         <title>FindA.Sale - Find Estate Sales Near You</title>
         <meta name="description" content="Find estate sales and auctions near you" />
+        <meta property="og:title" content="FindA.Sale — Estate Sales in Grand Rapids, MI" />
+        <meta property="og:description" content="Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales in Grand Rapids, Michigan." />
+        <meta property="og:url" content="https://finda.sale" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://finda.sale/og-default.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="FindA.Sale — Estate Sales in Grand Rapids, MI" />
+        <meta name="twitter:description" content="Browse estate sales and auctions near you in Grand Rapids, Michigan." />
         {/* Structured data — Organization + WebSite schema for Google */}
         <script
           type="application/ld+json"

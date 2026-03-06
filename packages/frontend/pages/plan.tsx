@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import api from '../lib/api';
 
 interface Message {
   id: string;
@@ -45,28 +46,17 @@ const PlanPage = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/planner/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [
-            ...messages,
-            userMessage,
-          ].map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-        }),
+      const response = await api.post('/planner/chat', {
+        messages: [
+          ...messages,
+          userMessage,
+        ].map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',

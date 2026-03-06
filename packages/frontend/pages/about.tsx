@@ -7,6 +7,11 @@ const AboutPage = () => {
       <Head>
         <title>About FindA.Sale</title>
         <meta name="description" content="Learn about FindA.Sale and our mission to simplify estate sales." />
+        <meta property="og:title" content="About FindA.Sale" />
+        <meta property="og:description" content="FindA.Sale is a digital platform for estate sale organizers and shoppers in Grand Rapids, Michigan." />
+        <meta property="og:url" content="https://finda.sale/about" />
+        <meta property="og:image" content="https://finda.sale/og-default.png" />
+        <meta name="twitter:card" content="summary" />
       </Head>
       <div className="min-h-screen bg-white">
         <div className="max-w-4xl mx-auto px-4 py-12">
