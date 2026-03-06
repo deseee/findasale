@@ -8,6 +8,12 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-05 (sessions 66–68 — C/P path batch + logo redesign)
+**Worked on:** CB1: `cloudAIService.ts` (Google Vision REST → Claude Haiku chain, Ollama fallback), `uploadController.ts` updated. CA5 medium fixes: message pagination caps (take:200/100), `contactLimiter` (5/15min). CB3: AI suggestions review panel in add-items (Apply/Dismiss/Rescan — no silent pre-fill). CC2: marketing content doc (2 blog posts, social templates, 4 email templates). CA2: schema verified (4 additive migrations pending Railway), migration runbook created. CD1: Fraunces serif font + sage-green palette in Tailwind + `_document.tsx`. CA3: payment stress test doc, 2 Stripe bugs fixed (concurrent purchase auto-refund, $0.50 minimum guard). P6: AI-generated logo — initial SVG + PNG set, then full redesign to clean price tag icon after Patrick rejected phone/Q shape. Five final PNGs: logo-icon-512, logo-oauth-120, logo-primary, business-card-front, business-card-back.
+**Decisions:** Logo concept: amber rounded-square bg, white price tag (pointing left), dark amber price lines inside. No magnifying glass. OAuth consent screen needs 120×120 square PNG — `logo-oauth-120.png` created. Business cards use Vistaprint 3.5×2" @ 300dpi (1050×600px).
+**Next up:** CA4 (user flow audit — full shopper/organizer/creator journey, mobile + a11y), CA6 (feature polish — photo UX, push notifications, onboarding, empty states), CD2 Phase 2 (engagement layer). Patrick: order business cards (business-card-front/back.png in claude_docs/brand/), P2 (Stripe business account, Google Voice, Search Console), P5 OAuth credentials to Vercel.
+**Blockers:** Brand PNGs generated locally but push agent hit token limit — need to verify GitHub has latest logo files. Patrick to confirm 5%/7% flat fee for beta (CC3). Railway migrations (4 pending) — should auto-run on next deploy.
+
 ### 2026-03-05 (session 65 — roadmap merge + claude_docs audit)
 **Worked on:** Merged `parallel-roadmap-v2-2026-03-05.md` into official `roadmap.md` (now v10). Incorporated Long-Term Hold section from old roadmap (video-to-inventory, multi-metro). Updated STATE.md to reflect parallel path model — replaced all Sprint T–X language with 5-path structure (P/CA/CB/CC/CD). Audited claude_docs for stale sprint references; updated next-session-prompt.md and session-log.md.
 **Decisions:** roadmap.md is now authoritative v10 parallel path document. `research/parallel-roadmap-v2-2026-03-05.md` remains in research/ as the source doc.
@@ -31,9 +37,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Decisions:** Webhook secrets shown once on creation. Instant payout eligibility errors handled gracefully. Shipping cost added to Stripe charge total, stored in payment intent metadata. Label PDF uses pdfkit 4×3" pages (already installed).
 **Next up:** Run `prisma migrate deploy` for 3 pending migrations (20260305000006–8) on Neon. Then define Sprint Y or begin real-user beta onboarding.
 **Blockers:** 3 Neon migrations pending before deploy. Phase 31 OAuth env vars still needed in Vercel.
-
-### 2026-03-05 (session 61 — Sentry live, git crisis resolved, doc audit)
-**Worked on:** Completed Sentry deployment: committed updated `pnpm-lock.yaml` (Vercel was failing with frozen lockfile error), fixed Vercel deploy. Resolved multi-session git crisis: `.gitattributes` CRLF rule caused perpetual dirty `roadmap.md`/`ROADMAP.md` (case-sensitivity duplicate index entries on Windows) — resolved via `git reset --hard origin/main`. Restored local `roadmap.md` to v9 (was at v3 — severely stale). Updated STATE.md Sentry entry to "fully deployed". Added self-healing entries 30 (`.gitattributes` CRLF perpetual dirty), 31 (case-sensitivity duplicate index), 32 (pnpm frozen lockfile mismatch). Updated entry 29 with nuclear reset fix.
-**Decisions:** `git reset --hard origin/main` is the canonical nuclear fix for any git state that survives stash/restore loops 3+ times. Never attempt case-only renames on Windows. Always commit `pnpm-lock.yaml` after Claude adds packages.
-**Next up:** Sprint T — Production Hardening. Session-start self-healing diagnostic first.
-**Blockers:** Phase 31 OAuth env vars still needed in Vercel. Sentry test endpoint should be added and removed to verify end-to-end capture.

@@ -1,113 +1,87 @@
 # Next Session Resume Prompt
-*Written: 2026-03-05T (session 65 — wrap)*
+*Written: 2026-03-05T (sessions 66–68 wrap)*
 *Session ended: normally*
 
 ## Resume From
 
-Work autonomously through the CA/CC/CD paths in batches of 3–5 tasks. Pick the next unblocked batch, execute it, update STATE.md, and continue to the next batch. Keep going until Patrick interrupts or all paths are blocked on external dependencies.
+**First:** Verify brand PNGs reached GitHub. Run:
+```
+mcp__github__get_file_contents owner=deseee repo=findasale path=claude_docs/brand/logo-oauth-120.png
+```
+If missing — push all 5 PNGs + STATE.md + session-log.md + next-session-prompt.md before anything else.
+
+**Then:** Continue C path — next batch is CA4 + CA6.
 
 ---
 
-## Autonomous Batch-Work Mode — Operating Instructions
+## Autonomous Batch-Work Mode — Still Active
 
-**Default behavior for this session:**
-1. Select 3–5 unblocked tasks from the path list below
-2. Announce the batch to Patrick in one line: "Starting batch: CA1, CC1, CC3"
-3. Execute each task. Use subagents, skills, and connectors when appropriate (see below)
-4. After each task completes: update STATE.md In Progress section, add to session-log
-5. Select the next batch and repeat
-6. Stop only if: Patrick interrupts, a task needs a sync point Patrick must approve, or all remaining tasks are blocked
-
-**Patrick does NOT need to approve each task individually** — he's authorized batch-mode execution. If a sync point is hit (⚡ in roadmap), pause and surface the decision clearly. Otherwise, keep moving.
+Patrick has authorized autonomous batch execution. Pick unblocked tasks, execute, update STATE.md, push, repeat. Stop only on interruption or sync points.
 
 ---
 
-## Path Status — What's Unblocked
+## Path Status
 
-### CA — Production Readiness (all unblocked except CA2)
+### CA — Production Readiness
+| Task | Status | Notes |
+|------|--------|-------|
+| CA1 | ✅ DONE | ToS + Privacy Policy |
+| CA2 | ✅ DONE | Migration runbook. 4 migrations pending Railway deploy (auto-runs on push) |
+| CA3 | ✅ DONE | Payment stress test + 2 bugs fixed |
+| CA4 | **NEXT** | User flow audit — full shopper/organizer/creator journeys, mobile + a11y, edge cases |
+| CA5 | ✅ DONE | Health scout: GREEN. Medium fixes shipped. |
+| CA6 | **NEXT** | Feature polish — photo upload UX, push notification verify, onboarding, empty states |
+| CA7 | pending | Human docs — organizer guide, shopper FAQ, Zapier docs |
 
-| Task | Sessions | Notes |
-|------|----------|-------|
-| **CA1** — ToS & Privacy Policy | 1 | Start here. Draft + implement /terms and /privacy. Use competitor-standard language (research in `claude_docs/research/`). Add footer links + checkout checkbox. ⚡ Pause for Patrick review before going live. |
-| CA3 — Payment Flow Stress Test | 2 | Map all Stripe paths, test 5%/7% fee logic, webhook failure recovery, edge cases |
-| CA4 — User Flow Audit | 2 | Full shopper, organizer, creator journeys. Mobile + a11y pass. Edge cases. |
-| CA5 — Performance & Security | 1 | Use **health-scout skill**. Lighthouse on key pages, auth middleware, Sentry verify, CSP/CORS |
-| CA6 — Feature Polish | 3 | Photo upload UX, semantic search, push notifications, onboarding, empty states |
-| CA7 — Human Documentation | 2 | Organizer guide, shopper FAQ, Zapier docs, in-app tooltips |
-| ~~CA2~~ | blocked | 3 Neon migrations — Patrick must run `prisma migrate deploy` in PowerShell |
+### CB — AI Tagging
+| Task | Status |
+|------|--------|
+| CB1 | ✅ DONE | cloudAIService.ts (Google Vision → Claude Haiku, Ollama fallback) |
+| CB3 | ✅ DONE | AI suggestions review panel in add-items |
+| CB2, CB4+ | blocked | Waiting on Patrick for further AI integrations |
 
-### CC — Business Intel & Content (all unblocked, fully autonomous)
+### CC — Business Intel & Content
+| Task | Status |
+|------|--------|
+| CC1 | ✅ DONE | Investor materials |
+| CC2 | ✅ DONE | Marketing content doc |
+| CC3 | ✅ DONE | Pricing analysis — ⚡ Patrick to confirm 5%/7% flat fee |
 
-| Task | Sessions | Notes |
-|------|----------|-------|
-| **CC1** — Investor Materials | 2 | Executive summary, pitch deck structure (10–15 slides), financial model, TAM/SAM/SOM |
-| **CC2** — Marketing Content | ongoing | "How to Run an Estate Sale" guide, shopper guide, social templates, email templates |
-| **CC3** — Pricing Model Analysis | 1 | Competitor fee deep dive, break-even by tier, A la carte AI pricing model. ⚡ Pause for Patrick pricing decision |
-
-### CD — Innovation & Experience (partially unblocked)
-
-| Task | Sessions | Notes |
-|------|----------|-------|
-| **CD2 Phase 1** — Quick Win Features | 1–2 | Live Scarcity Counter, Streak Challenges, Social Proof Live Feed — all low effort, high impact |
-| **CD3** — Cross-Industry Research | ongoing | Spawn a research subagent to run a feature-innovation-scan across the monitored industries |
-| **CD4** — Workflow Review Scheduled Task | 0.5 | Use **schedule skill** to set up bi-weekly workflow review task |
-| ~~CD1~~ | blocked | Branding implementation — needs Patrick direction (P6) |
-
-### CB — AI Tagging (all blocked)
-Waiting on Patrick for Google Cloud Vision API key + Anthropic API key (P5). Skip CB entirely until Patrick unblocks.
-
----
-
-## Recommended First Batch
-
-**CA1 + CC3 + CD4** — all 3 complete in ~1–2 sessions, no overlapping dependencies:
-- CA1 first (highest user-facing value, sets up legal compliance)
-- CC3 in parallel or immediately after (pure research + doc, no code)
-- CD4 last (5-min scheduled task setup using the schedule skill)
-
-After that batch: **CA5 + CC1 + CD2-Phase1**
+### CD — Innovation & Experience
+| Task | Status |
+|------|--------|
+| CD1 | ✅ DONE | Fraunces font + sage-green palette |
+| CD2 Phase 1 | ✅ DONE | Scarcity counter + social proof badges |
+| CD2 Phase 2 | **NEXT** | Engagement layer — Treasure Hunt Mode, Live Drop Events, Personalized Weekly Email, Smart Inventory Upload |
+| CD4 | ✅ DONE | Bi-weekly workflow review scheduled task |
 
 ---
 
-## Skills and Tools to Use
+## Recommended Next Batch
 
-| Task | Use |
-|------|-----|
-| CA5 (security scan) | `health-scout` skill |
-| CD4 (scheduled task) | `schedule` skill |
-| CC1 (investor materials) | `docx` or `pdf` skill for final output |
-| CC2 (marketing content) | `docx` skill for guides |
-| Research subtasks | Spawn **Explore or general-purpose subagent** for parallel research |
-| CA3/CA4 (flow testing) | Spawn subagent per journey type to parallelize |
-| GitHub pushes | `mcp__github__push_files` — push after every meaningful task completion |
+**CA4 + CA6 + CD2 Phase 2** — all unblocked, no overlap.
 
 ---
 
-## Sync Points (Stop and Surface to Patrick)
+## Sync Points
 
-These require Patrick input before proceeding:
-
-| Point | Trigger | What to Present |
-|-------|---------|----------------|
-| CA1 complete | ToS/Privacy drafted + implemented | "Pages are live at /terms and /privacy — please review before I add footer links" |
-| CC3 complete | Pricing analysis done | "Here are 3 pricing options with break-even analysis — which do you want to launch with?" |
-| CA3 issues found | Critical payment bug discovered | Surface immediately, don't continue |
-
----
-
-## Completed This Wrap Session
-
-- Merged parallel-roadmap-v2 into roadmap.md (now v10)
-- Updated STATE.md to parallel path model
-- Audited claude_docs for stale Sprint T–X refs — all cleaned
-- Pushed roadmap.md, STATE.md, session-log.md, next-session-prompt.md to GitHub
+| Point | What to surface |
+|-------|----------------|
+| CC3 | ⚡ Patrick confirms 5%/7% flat fee for beta |
+| CA4 if critical UX bug found | Surface before continuing |
 
 ---
 
 ## Environment Notes
 
-- **GitHub MCP active** — push after every batch: `mcp__github__push_files` to `deseee/findasale` main
-- **3 Neon migrations pending** — CA2 blocked until Patrick runs `prisma migrate deploy`
-- **Phase 31 OAuth env vars** — still needed in Vercel (`GOOGLE_CLIENT_ID` etc.)
-- **CB path** — skip entirely until Patrick provides API keys
-- **context.md** — 446 lines (healthy). Regenerate with `node scripts/update-context.js` at session start.
+- **GitHub MCP active** — push after every batch
+- **Brand PNGs** — push status UNCONFIRMED (verify first thing)
+- **4 Neon migrations pending** — auto-run on Railway deploy via `prisma migrate deploy`
+- **Phase 31 OAuth env vars** — still needed in Vercel (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`)
+- **Google OAuth consent screen** — use `claude_docs/brand/logo-oauth-120.png` (120×120 square PNG, <1MB)
+- **Business cards** — use `claude_docs/brand/business-card-front.png` + `business-card-back.png` at Vistaprint
+
+## Patrick To-Do (P path)
+- P1: Order business cards at Vistaprint using brand PNGs, set up support@finda.sale, create Google Business Profile
+- P2: Stripe business account, Google Voice number, Google Search Console
+- P5: Add OAuth env vars to Vercel (GOOGLE_CLIENT_ID/SECRET, FACEBOOK_CLIENT_ID/SECRET)

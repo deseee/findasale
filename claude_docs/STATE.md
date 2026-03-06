@@ -97,7 +97,7 @@ Sessions 66–67 complete: CA2+CA3+CD1+CB1+CB3+CC2 shipped. Next: CA4 (user flow
 - **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. All 26 migrations applied to both Neon and local Docker as of 2026-03-05.
 - **Production seed:**
   ```powershell
-  cd C:\\Users\\desee\\ClaudeProjects\\FindaSale\\packages\\database
+  cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
   $env:DATABASE_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
   $env:DIRECT_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
   pnpm run db:generate

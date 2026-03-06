@@ -1,21 +1,21 @@
 # Dynamic Project Context
-*Generated at 2026-03-05T17:45:18.913Z*
+*Generated at 2026-03-06T00:07:00.236Z*
 
 ## Git Status
 - **Branch:** main
-- **Commit:** 3974bbb
+- **Commit:** 2c0b318
 - **Remote:** https://github.com/deseee/findasale.git
 
 ## Last Session
 ### 2026-03-05
-**Worked on:** V2 (instant payouts): `payoutController.ts` (balance, payout schedule, on-demand payout), `routes/stripe.ts` (4 new routes), `pages/organizer/payouts.tsx`. V3 (UGC bounties): `MissingListingBounty` schema + migration, `bountyController.ts`, `routes/bounties.ts`, `pages/organizer/bounties.tsx`, `components/BountyModal.tsx`. W1 (shipping): `shippingAvailable`/`shippingPrice` on Item + migration, item CRUD updated, payment intent accepts `shippingRequested`. W2 (label PDF): `labelController.ts` with pdfkit, single-item and all-items endpoints. X1 (Zapier webhooks): `Webhook` model + migration, `webhookService.ts` (HMAC-SHA256 signed), `webhookController.ts`, `routes/webhooks.ts`, `pages/organizer/webhooks.tsx`. Hooks fired on `bid.placed` and `purchase.completed`. All pushed to GitHub.
-**Decisions:** Webhook secrets shown once on creation. Instant payout eligibility errors handled gracefully. Shipping cost added to Stripe charge total, stored in payment intent metadata. Label PDF uses pdfkit 4×3" pages (already installed).
-**Next up:** Run `prisma migrate deploy` for 3 pending migrations (20260305000006–8) on Neon. Then define Sprint Y or begin real-user beta onboarding.
-**Blockers:** 3 Neon migrations pending before deploy. Phase 31 OAuth env vars still needed in Vercel.
+**Worked on:** CB1: `cloudAIService.ts` (Google Vision REST → Claude Haiku chain, Ollama fallback), `uploadController.ts` updated. CA5 medium fixes: message pagination caps (take:200/100), `contactLimiter` (5/15min). CB3: AI suggestions review panel in add-items (Apply/Dismiss/Rescan — no silent pre-fill). CC2: marketing content doc (2 blog posts, social templates, 4 email templates). CA2: schema verified (4 additive migrations pending Railway), migration runbook created. CD1: Fraunces serif font + sage-green palette in Tailwind + `_document.tsx`. CA3: payment stress test doc, 2 Stripe bugs fixed (concurrent purchase auto-refund, $0.50 minimum guard). P6: AI-generated logo — initial SVG + PNG set, then full redesign to clean price tag icon after Patrick rejected phone/Q shape. Five final PNGs: logo-icon-512, logo-oauth-120, logo-primary, business-card-front, business-card-back.
+**Decisions:** Logo concept: amber rounded-square bg, white price tag (pointing left), dark amber price lines inside. No magnifying glass. OAuth consent screen needs 120×120 square PNG — `logo-oauth-120.png` created. Business cards use Vistaprint 3.5×2" @ 300dpi (1050×600px).
+**Next up:** CA4 (user flow audit — full shopper/organizer/creator journey, mobile + a11y), CA6 (feature polish — photo UX, push notifications, onboarding, empty states), CD2 Phase 2 (engagement layer). Patrick: order business cards (business-card-front/back.png in claude_docs/brand/), P2 (Stripe business account, Google Voice, Search Console), P5 OAuth credentials to Vercel.
+**Blockers:** Brand PNGs generated locally but push agent hit token limit — need to verify GitHub has latest logo files. Patrick to confirm 5%/7% flat fee for beta (CC3). Railway migrations (4 pending) — should auto-run on next deploy.
 
 ## Health Status
-Last scan: 2026-03-03
-FindA.Sale is in **GREEN** status — no critical blockers found. The codebase has strong fundamentals: all routes use proper auth middleware, CORS is restricted, no hardcoded secrets, all Prisma `findMany` calls are paginated, and SSR-sensitive browser globals are properly guarded in `useEffect`/`onClick` handlers. One high-severity finding (password reset token logged to console) needs fixing before real user traffic arrives. Two medium items are cleanup-grade. This is the healthiest scan to date.
+Last scan: 2026-03-05
+FindA.Sale is in **GREEN** status — excellent health for pre-beta. No critical or high
 
 ## Docker
 ```
@@ -28,9 +28,9 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 - CLI tools: node
 
 ## Signals
-⚠ Env drift — in .env.example but missing from .env: HF_TOKEN
+⚠ Env drift — in .env.example but missing from .env: ANTHROPIC_MODEL, OLLAMA_URL, OLLAMA_VISION_MODEL
 ⚠ 1+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/festive-ecstatic-galileo/mnt/FindaSale/packages/backend/src/controllers/userController.ts:210:          // TODO: Implement notification system when ready
+  C:\Users\desee\ClaudeProjects\FindaSale\packages\backend\src\controllers\userController.ts:210:          // TODO: Implement notification system when ready
 
 ## Project File Tree
 ```
@@ -52,7 +52,6 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   ├── DEVELOPMENT.md
 │   ├── OPS.md
 │   ├── RECOVERY.md
-│   ├── ROADMAP.md
 │   ├── SECURITY.md
 │   ├── SEED_SUMMARY.md
 │   ├── STACK.md
@@ -61,6 +60,13 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── pre-beta-audit-2026-03-03.md
 │   │   ├── rebrand-audit.md
 │   │   └── workflow-audit-2026-03-03.md
+│   ├── brand/
+│   │   ├── README.md
+│   │   ├── business-card-back.png
+│   │   ├── business-card-front.png
+│   │   ├── logo-icon-512.png
+│   │   ├── logo-oauth-120.png
+│   │   └── logo-primary.png
 │   ├── changelog-tracker/
 │   │   └── .gitkeep
 │   ├── competitor-intel/
@@ -70,17 +76,30 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── 2026-03-01.md
 │   │   ├── 2026-03-02.md
 │   │   ├── 2026-03-03.md
-│   │   └── 2026-03-05-health-check.json
+│   │   ├── 2026-03-05-health-check.json
+│   │   └── 2026-03-05.md
+│   ├── migration-runbook.md
 │   ├── model-routing.md
 │   ├── monthly-digests/
 │   │   └── .gitkeep
+│   ├── new 1.txt
 │   ├── new 2.txt
 │   ├── next-session-prompt.md
 │   ├── patrick-language-map.md
+│   ├── payment-stress-test.md
 │   ├── pre-commit-check.md
 │   ├── research/
+│   │   ├── branding-brief-2026-03-05.md
 │   │   ├── competitor-intel-2026-03-04.md
-│   │   └── growth-channels-2026-03-04.md
+│   │   ├── feature-brainstorm-2026-03-05.md
+│   │   ├── growth-channels-2026-03-04.md
+│   │   ├── investor-materials-2026-03-05.md
+│   │   ├── marketing-content-2026-03-05.md
+│   │   ├── parallel-roadmap-2026-03-05.md
+│   │   ├── parallel-roadmap-v2-2026-03-05.md
+│   │   ├── pricing-analysis-2026-03-05.md
+│   │   └── strategic-review-2026-03-05.md
+│   ├── roadmap.md
 │   ├── self_healing_skills.md
 │   ├── session-log.md
 │   ├── session-safeguards.md
@@ -207,6 +226,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── users.ts
 │   │   │   │   └── webhooks.ts
 │   │   │   ├── services/
+│   │   │   │   ├── cloudAIService.ts
 │   │   │   │   ├── emailReminderService.ts
 │   │   │   │   ├── followerNotificationService.ts
 │   │   │   │   ├── pointsService.ts
@@ -223,7 +243,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (27 migrations)
+│   │   │   ├── migrations/ (28 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
