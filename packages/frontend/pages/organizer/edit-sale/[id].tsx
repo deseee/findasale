@@ -23,6 +23,7 @@ const EditSalePage = () => {
   const { id } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const [isCloning, setIsCloning] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -82,6 +83,23 @@ const EditSalePage = () => {
     setFormData({ ...formData, [name]: value });
   };
 
+  const handleCloneSale = async () => {
+    if (!id) return;
+    setIsCloning(true);
+    try {
+      const response = await api.post(`/sales/${id}/clone`);
+      const newSaleId = response.data.id;
+      showToast('Sale cloned! Redirecting...', 'success');
+      setTimeout(() => {
+        router.push(`/organizer/edit-sale/${newSaleId}`);
+      }, 500);
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to clone sale', 'error');
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
   if (authLoading || isLoading) return <div>Loading...</div>;
 
   return (
@@ -98,6 +116,18 @@ const EditSalePage = () => {
           <h1 className="text-3xl font-bold text-warm-900 mb-8">Edit Sale</h1>
 
           <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-6">
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+              <p className="text-sm text-blue-700 mb-3">Want to create a similar sale?</p>
+              <button
+                type="button"
+                onClick={handleCloneSale}
+                disabled={isCloning}
+                className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50"
+              >
+                {isCloning ? 'Duplicating...' : 'Duplicate This Sale'}
+              </button>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-warm-700 mb-2">Title</label>
               <input

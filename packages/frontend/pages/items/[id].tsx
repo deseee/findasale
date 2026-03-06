@@ -140,6 +140,26 @@ const ItemDetailPage = () => {
     setIsLiveDropRevealed(now >= reveal);
   }, [item]);
 
+  // Track recently viewed items in localStorage
+  useEffect(() => {
+    if (!item || typeof window === 'undefined') return;
+    try {
+      const MAX_RECENT = 10;
+      const recent = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+      const entry = {
+        id: item.id,
+        title: item.title,
+        photoUrl: item.photoUrls?.[0],
+        price: item.price,
+        viewedAt: Date.now(),
+      };
+      const filtered = recent.filter((r: any) => r.id !== item.id);
+      localStorage.setItem('recentlyViewed', JSON.stringify([entry, ...filtered].slice(0, MAX_RECENT)));
+    } catch (error) {
+      console.error('Failed to track recently viewed item:', error);
+    }
+  }, [item?.id, item?.title, item?.photoUrls, item?.price]);
+
   // Check if item is favorited
   const { data: favoriteStatus } = useQuery({
     queryKey: ['favorite', id],
@@ -601,6 +621,39 @@ const ItemDetailPage = () => {
         <meta name="twitter:title" content={`${item.title} — ${priceDisplay} | FindA.Sale`} />
         <meta name="twitter:description" content={`${item.status || 'Item'} at estate sale. ${item.description?.substring(0, 100) || ''}`} />
         <meta name="twitter:image" content={ogImageUrl} />
+        {/* Structured data — Product schema for Google rich results */}
+        {item && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Product',
+                name: item.title || '',
+                description: item.description || '',
+                image: item.photoUrls?.[0] || '',
+                offers: {
+                  '@type': 'Offer',
+                  price: item.price ? (item.price / 100).toString() : '0',
+                  priceCurrency: 'USD',
+                  availability:
+                    item.status === 'AVAILABLE'
+                      ? 'https://schema.org/InStock'
+                      : 'https://schema.org/OutOfStock',
+                  url: `https://finda.sale/items/${item.id}`,
+                  seller: {
+                    '@type': 'Organization',
+                    name: 'FindA.Sale',
+                  },
+                },
+                brand: {
+                  '@type': 'Brand',
+                  name: 'FindA.Sale Estate Sales',
+                },
+              }),
+            }}
+          />
+        )}
       </Head>
 
       {/* Phase 18: Photo lightbox */}

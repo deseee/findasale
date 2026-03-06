@@ -50,6 +50,7 @@ const OrganizerDashboard = () => {
   const [openQRSale, setOpenQRSale] = useState<string | null>(null); // CD2-P2
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -90,6 +91,22 @@ const OrganizerDashboard = () => {
       setShowWizard(true);
     }
   }, [orgProfile]);
+
+  // Handle sale cloning
+  const handleCloneSale = async (saleId: string) => {
+    setCloningId(saleId);
+    try {
+      const response = await api.post(`/sales/${saleId}/clone`);
+      const newSaleId = response.data.id;
+      // Redirect to edit the cloned sale
+      router.push(`/organizer/edit-sale/${newSaleId}`);
+    } catch (error: any) {
+      console.error('Clone failed:', error);
+      alert(error.response?.data?.message || 'Failed to clone sale');
+    } finally {
+      setCloningId(null);
+    }
+  };
 
   // Phase 31: Fetch organizer tier rewards (tier, benefits, progress)
   const { data: tierData } = useQuery({
@@ -367,6 +384,13 @@ const OrganizerDashboard = () => {
                               className="text-sm text-amber-600 hover:underline"
                             >
                               {openQRSale === sale.id ? 'Hide QR' : 'QR Code'}
+                            </button>
+                            <button
+                              onClick={() => handleCloneSale(sale.id)}
+                              disabled={cloningId === sale.id}
+                              className="text-sm text-amber-600 hover:underline disabled:opacity-50"
+                            >
+                              {cloningId === sale.id ? 'Cloning...' : 'Clone'}
                             </button>
                             <button
                               onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)}

@@ -141,6 +141,43 @@ const HomePage = () => {
       <Head>
         <title>FindA.Sale - Find Estate Sales Near You</title>
         <meta name="description" content="Find estate sales and auctions near you" />
+        {/* Structured data — Organization + WebSite schema for Google */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'FindA.Sale',
+              url: 'https://finda.sale',
+              logo: 'https://finda.sale/icons/icon-512x512.png',
+              description:
+                'Grand Rapids estate sale marketplace — browse, buy, and sell estate sale items online',
+              address: {
+                '@type': 'PostalAddress',
+                addressLocality: 'Grand Rapids',
+                addressRegion: 'MI',
+                addressCountry: 'US',
+              },
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebSite',
+              name: 'FindA.Sale',
+              url: 'https://finda.sale',
+              potentialAction: {
+                '@type': 'SearchAction',
+                target: 'https://finda.sale/search?q={search_term_string}',
+                'query-input': 'required name=search_term_string',
+              },
+            }),
+          }}
+        />
       </Head>
 
       <main className="container mx-auto px-4 py-8">

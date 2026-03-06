@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { Resend } from 'resend';
 import { sendPushNotification } from '../utils/webpush';
+import { buildEmail } from '../services/emailTemplateService';
 
 let _resend: any = null;
 const getResendClient = () => {
@@ -41,38 +42,18 @@ const getEmailTemplate = (
       ? topCategories.slice(0, 3).join(', ')
       : 'various items';
 
+  const html = buildEmail({
+    preheader: `Last chance: ${saleTitle} ends tomorrow`,
+    headline: '⏰ Last chance! This sale ends tomorrow',
+    body: `<div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;"><h3 style="margin-top: 0; color: #333; margin-bottom: 12px;">${saleTitle}</h3><p style="margin: 8px 0; color: #666;">📍 ${city}</p><p style="margin: 8px 0; color: #666;">⏰ Ends ${formattedDate}</p><p style="margin: 8px 0; color: #666;">Featured: ${categoryList}</p></div>`,
+    ctaText: 'View Sale Now',
+    ctaUrl: saleUrl,
+    accentColor: '#dc2626',
+  });
+
   return {
     subject: `⏰ Last chance: ${saleTitle} ends tomorrow`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #dc2626;">Don't miss out! This sale ends tomorrow</h2>
-
-        <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
-          <h3 style="margin-top: 0; color: #333;">${saleTitle}</h3>
-          <p style="margin: 8px 0; color: #666;">
-            📍 ${city}
-          </p>
-          <p style="margin: 8px 0; color: #666;">
-            ⏰ Ends ${formattedDate}
-          </p>
-          <p style="margin: 8px 0; color: #666;">
-            Featured: ${categoryList}
-          </p>
-        </div>
-
-        <p style="font-size: 16px;">
-          <a href="${saleUrl}"
-             style="background: #dc2626; color: white; padding: 12px 24px;
-                    text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">
-            View Sale Now
-          </a>
-        </p>
-
-        <p style="font-size: 14px; color: #999; margin-top: 30px;">
-          You're receiving this because you're following this sale on FindA.Sale.
-        </p>
-      </div>
-    `,
+    html,
   };
 };
 

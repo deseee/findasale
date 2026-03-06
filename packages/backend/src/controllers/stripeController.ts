@@ -7,6 +7,7 @@ import { awardPoints } from '../services/pointsService';
 import { createNotification } from '../services/notificationService';
 import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
+import { buildEmail } from '../services/emailTemplateService';
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -30,21 +31,20 @@ const sendReceiptEmail = async (purchase: {
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
   const historyUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
   try {
+    const html = buildEmail({
+      preheader: `Receipt for ${purchase.item?.title ?? 'your purchase'}`,
+      headline: 'Your purchase is confirmed! 🎉',
+      body: `<p>Hi ${purchase.user.name},</p><p>Your payment of <strong>$${purchase.amount.toFixed(2)}</strong> for <strong>${purchase.item?.title ?? 'an item'}</strong> from <em>${purchase.sale?.title ?? 'a sale'}</em> has been confirmed.</p><p>Thank you for your purchase! The organizer will be in touch about pickup.</p>`,
+      ctaText: 'View Purchase History',
+      ctaUrl: historyUrl,
+      accentColor: '#10b981',
+    });
+
     await resend.emails.send({
       from: fromEmail,
       to: purchase.user.email,
       subject: `Receipt: ${purchase.item?.title ?? 'Your purchase'}`,
-      html: `
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-          <h2>Payment Confirmed</h2>
-          <p>Hi ${purchase.user.name},</p>
-          <p>Your payment of <strong>$${purchase.amount.toFixed(2)}</strong> for <strong>${purchase.item?.title ?? 'an item'}</strong> from <em>${purchase.sale?.title ?? 'a sale'}</em> has been confirmed.</p>
-          <p>Thank you for your purchase!</p>
-          <a href="${historyUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-top:16px">
-            View Purchase History
-          </a>
-        </div>
-      `,
+      html,
     });
   } catch (err) {
     console.error('Failed to send receipt email:', err);
