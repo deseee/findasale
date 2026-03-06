@@ -215,12 +215,6 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
  * - status?: string (default 'AVAILABLE')
  * - category?: string
  * - condition?: string
- * - isLiveDrop?: boolean (CD2)
- * - liveDropAt?: string (ISO date, CD2)
- * - reverseAuction?: boolean (CD2 Phase 4)
- * - reverseDailyDrop?: number (cents, CD2 Phase 4)
- * - reverseFloorPrice?: number (cents, CD2 Phase 4)
- * - reverseStartDate?: string (ISO date, CD2 Phase 4)
  * - images: file(s) (field name 'images')
  */
 export const createItem = async (req: AuthRequest, res: Response) => {
@@ -229,7 +223,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, isLiveDrop, liveDropAt, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -322,14 +316,6 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
         shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,
-        // CD2: Live Drop
-        isLiveDrop: isLiveDrop === true || isLiveDrop === 'true',
-        liveDropAt: liveDropAt ? new Date(liveDropAt) : null,
-        // CD2 Phase 4: Reverse Auction
-        reverseAuction: reverseAuction === true || reverseAuction === 'true',
-        reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop) : null,
-        reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice) : null,
-        reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null,
       }
     });
 
@@ -354,7 +340,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, isLiveDrop, liveDropAt, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
+    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice } = req.body;
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -386,14 +372,6 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         ...(shippingAvailable !== undefined && { shippingAvailable: shippingAvailable === true || shippingAvailable === 'true' }),
         ...(shippingPrice !== undefined && { shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null }),
-        // CD2: Live Drop
-        ...(isLiveDrop !== undefined && { isLiveDrop: isLiveDrop === true || isLiveDrop === 'true' }),
-        ...(liveDropAt !== undefined && { liveDropAt: liveDropAt ? new Date(liveDropAt) : null }),
-        // CD2 Phase 4: Reverse Auction
-        ...(reverseAuction !== undefined && { reverseAuction: reverseAuction === true || reverseAuction === 'true' }),
-        ...(reverseDailyDrop !== undefined && { reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop) : null }),
-        ...(reverseFloorPrice !== undefined && { reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice) : null }),
-        ...(reverseStartDate !== undefined && { reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null }),
       }
     });
 
@@ -526,7 +504,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ── Phase 16: Advanced photo pipeline ─────────────────────────────────────────────────────────────────────────────
+// -- Phase 16: Advanced photo pipeline
 
 // Helper: fetch item and verify organizer ownership
 const getItemForOrganizer = async (id: string, userId: string) => {
@@ -636,7 +614,7 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ── End Phase 16 ─────────────────────────────────────────────────────────────────────────────
+// -- End Phase 16 --
 
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
