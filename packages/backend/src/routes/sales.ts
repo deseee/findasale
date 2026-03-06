@@ -12,6 +12,7 @@ import {
   trackQrScan,
   generateIcal,
   getSalesByNeighborhood,
+  cloneSale,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
@@ -32,6 +33,7 @@ router.post('/', authenticate, createSale);
 router.put('/:id', authenticate, updateSale);
 router.patch('/:id/status', authenticate, updateSaleStatus);
 router.delete('/:id', authenticate, deleteSale);
+router.post('/:id/clone', authenticate, cloneSale);
 router.post('/:id/generate-qr', authenticate, generateQRCode);
 router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);
 router.post('/:id/track-scan', trackQrScan); // public, no auth needed

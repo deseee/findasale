@@ -6,8 +6,8 @@ import { upload } from '../controllers/uploadController';
 const router = Router();
 
 /**
- * GET /api/search?q=&type=all|sales|items&page=&limit=
- * Phase 29: Full-text search across published sales and available items.
+ * GET /api/search?q=&type=all|sales|items&page=&limit=&priceMin=&priceMax=&condition=&category=&saleStatus=&sortBy=
+ * Phase 29: Full-text search across published sales and available items with advanced filters.
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -16,6 +16,14 @@ router.get('/', async (req: Request, res: Response) => {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 10));
     const skip = (page - 1) * limit;
+
+    // Parse filter params
+    const priceMin = req.query.priceMin ? parseInt(req.query.priceMin as string) : null;
+    const priceMax = req.query.priceMax ? parseInt(req.query.priceMax as string) : null;
+    const condition = (req.query.condition as string)?.trim() || null;
+    const category = (req.query.category as string)?.trim() || null;
+    const saleStatus = (req.query.saleStatus as string) || 'all';
+    const sortBy = (req.query.sortBy as string) || 'recent';
 
     if (!q || q.length < 2) {
       return res.status(400).json({ message: 'q must be at least 2 characters' });
@@ -27,6 +35,55 @@ router.get('/', async (req: Request, res: Response) => {
         { description: { contains: q, mode: 'insensitive' as const } },
       ],
     };
+
+    // Build sale status filter
+    const now = new Date();
+    let saleStatusWhere = {};
+    if (saleStatus === 'active') {
+      saleStatusWhere = {
+        startDate: { lte: now },
+        endDate: { gte: now },
+      };
+    } else if (saleStatus === 'upcoming') {
+      saleStatusWhere = { startDate: { gt: now } };
+    }
+
+    // Build item filters
+    const itemWhere: any = {
+      OR: [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ],
+      status: 'AVAILABLE',
+      sale: { status: 'PUBLISHED', ...saleStatusWhere },
+    };
+
+    // Apply price filters
+    if (priceMin !== null || priceMax !== null) {
+      itemWhere.price = {};
+      if (priceMin !== null) itemWhere.price.gte = priceMin / 100;
+      if (priceMax !== null) itemWhere.price.lte = priceMax / 100;
+    }
+
+    // Apply condition filter
+    if (condition) {
+      itemWhere.condition = { equals: condition, mode: 'insensitive' as const };
+    }
+
+    // Apply category filter
+    if (category) {
+      itemWhere.category = { equals: category, mode: 'insensitive' as const };
+    }
+
+    // Determine sort order
+    let itemOrderBy: any = { createdAt: 'desc' };
+    if (sortBy === 'price_asc') {
+      itemOrderBy = { price: 'asc' };
+    } else if (sortBy === 'price_desc') {
+      itemOrderBy = { price: 'desc' };
+    } else if (sortBy === 'ending_soon') {
+      itemOrderBy = { 'sale.endDate': 'asc' };
+    }
 
     const [salesResult, itemsResult] = await Promise.all([
       type !== 'items'
@@ -51,14 +108,7 @@ router.get('/', async (req: Request, res: Response) => {
         : Promise.resolve([]),
       type !== 'sales'
         ? prisma.item.findMany({
-            where: {
-              OR: [
-                { title: { contains: q, mode: 'insensitive' } },
-                { description: { contains: q, mode: 'insensitive' } },
-              ],
-              status: 'AVAILABLE',
-              sale: { status: 'PUBLISHED' },
-            },
+            where: itemWhere,
             select: {
               id: true,
               title: true,
@@ -75,12 +125,14 @@ router.get('/', async (req: Request, res: Response) => {
                   city: true,
                   state: true,
                   status: true,
+                  startDate: true,
+                  endDate: true,
                 },
               },
             },
             take: limit,
             skip: type === 'items' ? skip : 0,
-            orderBy: { createdAt: 'desc' },
+            orderBy: itemOrderBy,
           })
         : Promise.resolve([]),
     ]);

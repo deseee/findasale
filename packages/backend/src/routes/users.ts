@@ -177,4 +177,40 @@ router.patch('/me/interests', authenticate, async (req: AuthRequest, res: Respon
   }
 });
 
+// Update user's notification preferences
+router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { notificationPrefs } = req.body;
+
+    // Validate notification preferences if provided
+    if (notificationPrefs && typeof notificationPrefs !== 'object') {
+      return res.status(400).json({ message: 'notificationPrefs must be an object' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        ...(notificationPrefs && { notificationPrefs }),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        points: true,
+        streakPoints: true,
+        notificationPrefs: true,
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating user preferences:', error);
+    res.status(500).json({ message: 'Server error while updating preferences' });
+  }
+});
+
 export default router;

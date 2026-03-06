@@ -1,10 +1,14 @@
 /**
- * Shopper Dashboard
+ * Shopper Dashboard - Enhanced
  *
  * For authenticated shoppers to view:
- * - Their purchase history
- * - Saved/favorite items
- * - Subscribed sales with notifications
+ * - Activity summary (purchases, watchlist, saved items, streak points)
+ * - Sales near them
+ * - Recently viewed items
+ * - Active flash deals
+ * - Wishlist previews
+ * - Notification preferences
+ * - Purchase history, favorites, subscriptions, and pickups in tabs
  */
 
 import React, { useState } from 'react';
@@ -14,12 +18,18 @@ import Link from 'next/link';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
+import ActivitySummary from '../../components/ActivitySummary';
+import SalesNearYou from '../../components/SalesNearYou';
+import RecentlyViewed from '../../components/RecentlyViewed';
+import FlashDealsBanner from '../../components/FlashDealsBanner';
+import YourWishlists from '../../components/YourWishlists';
+import NotificationPreferences from '../../components/NotificationPreferences';
 import MyPickupAppointments from '../../components/MyPickupAppointments';
 
 const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'purchases' | 'favorites' | 'subscribed' | 'pickups'>('purchases');
+  const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups'>('overview');
 
   if (!isLoading && !user) {
     router.push('/login');
@@ -44,6 +54,15 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
+  const { data: userData } = useQuery({
+    queryKey: ['user'],
+    queryFn: async () => {
+      const response = await api.get('/users/me');
+      return response.data;
+    },
+    enabled: !!user?.id,
+  });
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
@@ -53,26 +72,57 @@ const ShopperDashboard = () => {
       </Head>
       <div className="min-h-screen bg-warm-50">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold text-warm-900 mb-6">My Dashboard</h1>
+          <h1 className="text-3xl font-bold text-warm-900 mb-8">My Dashboard</h1>
 
           {/* Tabs */}
-          <div className="flex gap-4 mb-8 border-b border-warm-200 overflow-x-auto">
-            {['purchases', 'favorites', 'subscribed', 'pickups'].map((tab) => (
+          <div className="flex gap-2 mb-8 border-b border-warm-200 overflow-x-auto">
+            {[
+              { id: 'overview', label: 'Overview' },
+              { id: 'purchases', label: 'Purchases' },
+              { id: 'favorites', label: 'Favorites' },
+              { id: 'subscribed', label: 'Subscribed' },
+              { id: 'pickups', label: 'Pickups' },
+            ].map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`pb-2 font-medium capitalize whitespace-nowrap ${
-                  activeTab === tab
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`pb-2 font-medium whitespace-nowrap transition-colors ${
+                  activeTab === tab.id
                     ? 'border-b-2 border-amber-600 text-amber-600'
                     : 'text-warm-600 hover:text-warm-900'
                 }`}
               >
-                {tab}
+                {tab.label}
               </button>
             ))}
           </div>
 
-          {/* Purchases */}
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Activity Summary */}
+              <ActivitySummary />
+
+              {/* Sales Near You */}
+              <SalesNearYou />
+
+              {/* Recently Viewed */}
+              <RecentlyViewed />
+
+              {/* Flash Deals Banner */}
+              <FlashDealsBanner />
+
+              {/* Your Wishlists */}
+              <YourWishlists />
+
+              {/* Notification Preferences */}
+              {userData && (
+                <NotificationPreferences userPrefs={userData.notificationPrefs || {}} />
+              )}
+            </div>
+          )}
+
+          {/* Purchases Tab */}
           {activeTab === 'purchases' && (
             <div>
               {purchases && purchases.length > 0 ? (
@@ -89,7 +139,7 @@ const ShopperDashboard = () => {
                 </div>
               ) : (
                 <div className="text-center py-16">
-                  <p className="text-5xl mb-4">\uD83D\uDED2</p>
+                  <p className="text-5xl mb-4">🛍️</p>
                   <h3 className="text-xl font-semibold text-warm-900 mb-2">No purchases yet</h3>
                   <p className="text-warm-600 mb-6">When you buy an item at a sale, it will show up here.</p>
                   <Link
@@ -103,7 +153,7 @@ const ShopperDashboard = () => {
             </div>
           )}
 
-          {/* Favorites */}
+          {/* Favorites Tab */}
           {activeTab === 'favorites' && (
             <div>
               {favorites && favorites.length > 0 ? (
@@ -122,10 +172,10 @@ const ShopperDashboard = () => {
                 </div>
               ) : (
                 <div className="text-center py-16">
-                  <div className="text-6xl mb-4 text-warm-300">\u2665</div>
+                  <div className="text-6xl mb-4 text-warm-300">❤️</div>
                   <h3 className="text-xl font-semibold text-warm-900 mb-2">Nothing saved yet</h3>
                   <p className="text-warm-600 mb-6">
-                    Tap the heart on any item you like and it\u2019ll appear here.
+                    Tap the heart on any item you like and it will appear here.
                     You also earn 2 Hunt Pass points for every favorite!
                   </p>
                   <Link
@@ -139,7 +189,7 @@ const ShopperDashboard = () => {
             </div>
           )}
 
-          {/* Subscribed */}
+          {/* Subscribed Tab */}
           {activeTab === 'subscribed' && (
             <div className="text-center py-16">
               <p className="text-5xl mb-4">🔔</p>
@@ -156,7 +206,7 @@ const ShopperDashboard = () => {
             </div>
           )}
 
-          {/* Pickups */}
+          {/* Pickups Tab */}
           {activeTab === 'pickups' && (
             <MyPickupAppointments />
           )}

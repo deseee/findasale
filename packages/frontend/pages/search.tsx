@@ -2,8 +2,9 @@
  * Phase 29: Full-text search page — /search?q=
  * CD2 Phase 3: Adds visual search support via photo upload
  * Searches across published sales and available items with tabbed results.
+ * Advanced filters: price range, condition, category, sale status, sort
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -11,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import SaleCard from '../components/SaleCard';
 import VisualSearchButton from '../components/VisualSearchButton';
+import SearchFilterPanel, { SearchFilters } from '../components/SearchFilterPanel';
 
 type SearchTab = 'all' | 'sales' | 'items';
 
@@ -52,21 +54,81 @@ interface VisualSearchData {
   results: any[];
 }
 
+const CATEGORIES = [
+  'Furniture', 'Clothing', 'Electronics', 'Books', 'Antiques',
+  'Tools', 'Kitchen', 'Art', 'Jewelry', 'Other',
+];
+
 const SearchPage = () => {
   const router = useRouter();
   const [tab, setTab] = useState<SearchTab>('all');
   const [visualResults, setVisualResults] = useState<VisualSearchData | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Initialize filters from URL query params
+  const [filters, setFilters] = useState<SearchFilters>({
+    priceMin: null,
+    priceMax: null,
+    condition: '',
+    category: '',
+    saleStatus: 'all',
+    sortBy: 'recent',
+  });
+
   const q = ((router.query.q as string) || '').trim();
 
+  // Load filters from URL on mount
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const priceMin = router.query.priceMin ? parseInt(router.query.priceMin as string) : null;
+    const priceMax = router.query.priceMax ? parseInt(router.query.priceMax as string) : null;
+    const condition = (router.query.condition as string) || '';
+    const category = (router.query.category as string) || '';
+    const saleStatus = (router.query.saleStatus as string || 'all') as any;
+    const sortBy = (router.query.sortBy as string || 'recent') as any;
+
+    setFilters({ priceMin, priceMax, condition, category, saleStatus, sortBy });
+
+    // Detect mobile
+    setIsMobile(window.innerWidth < 768);
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [router.isReady, router.query]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['search', q, tab],
+    queryKey: ['search', q, tab, filters],
     queryFn: async () => {
-      const res = await api.get('/search', { params: { q, type: tab } });
+      const params: any = { q, type: tab };
+      if (filters.priceMin !== null) params.priceMin = filters.priceMin;
+      if (filters.priceMax !== null) params.priceMax = filters.priceMax;
+      if (filters.condition) params.condition = filters.condition;
+      if (filters.category) params.category = filters.category;
+      if (filters.saleStatus !== 'all') params.saleStatus = filters.saleStatus;
+      if (filters.sortBy !== 'recent') params.sortBy = filters.sortBy;
+
+      const res = await api.get('/search', { params });
       return res.data as { query: string; sales: any[]; items: any[] };
     },
     enabled: q.length >= 2,
     staleTime: 30_000,
   });
+
+  // Update URL when filters change
+  const handleFiltersChange = (newFilters: SearchFilters) => {
+    setFilters(newFilters);
+
+    const queryParams = new URLSearchParams({ q });
+    if (newFilters.priceMin !== null) queryParams.set('priceMin', newFilters.priceMin.toString());
+    if (newFilters.priceMax !== null) queryParams.set('priceMax', newFilters.priceMax.toString());
+    if (newFilters.condition) queryParams.set('condition', newFilters.condition);
+    if (newFilters.category) queryParams.set('category', newFilters.category);
+    if (newFilters.saleStatus !== 'all') queryParams.set('saleStatus', newFilters.saleStatus);
+    if (newFilters.sortBy !== 'recent') queryParams.set('sortBy', newFilters.sortBy);
+
+    router.push(`/search?${queryParams.toString()}`, undefined, { shallow: true });
+  };
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -111,6 +173,17 @@ const SearchPage = () => {
             </button>
           </div>
         </form>
+
+        {/* Mobile filter panel */}
+        {q && q.length >= 2 && isMobile && (
+          <SearchFilterPanel
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            categories={CATEGORIES}
+            resultCount={data?.items?.length}
+            isMobile={true}
+          />
+        )}
 
         {/* Empty / short query state */}
         {!q && !isShowingVisualResults && (
@@ -179,99 +252,115 @@ const SearchPage = () => {
         {/* Text search results */}
         {q && q.length >= 2 && (
           <>
-            {/* Tabs */}
-            <div className="flex gap-6 mb-6 border-b border-warm-200">
-              {(['all', 'sales', 'items'] as SearchTab[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`pb-2 font-medium capitalize transition-colors ${
-                    tab === t
-                      ? 'border-b-2 border-amber-600 text-amber-600'
-                      : 'text-warm-600 hover:text-warm-900'
-                  }`}
-                >
-                  {t}
-                  {!isLoading && t === 'sales' && ` (${salesCount})`}
-                  {!isLoading && t === 'items' && ` (${itemsCount})`}
-                </button>
-              ))}
-            </div>
+            <div className="flex gap-6">
+              {/* Desktop filter sidebar */}
+              {!isMobile && (
+                <SearchFilterPanel
+                  filters={filters}
+                  onFiltersChange={handleFiltersChange}
+                  categories={CATEGORIES}
+                  resultCount={data?.items?.length}
+                  isMobile={false}
+                />
+              )}
 
-            {isLoading ? (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-lg overflow-hidden animate-pulse">
-                    <div className="aspect-square bg-warm-200" />
-                    <div className="p-3 space-y-2">
-                      <div className="h-4 bg-warm-200 rounded w-3/4" />
-                      <div className="h-3 bg-warm-200 rounded w-1/2" />
-                    </div>
+              {/* Main content area */}
+              <div className="flex-1 min-w-0">
+                {/* Tabs */}
+                <div className="flex gap-6 mb-6 border-b border-warm-200">
+                  {(['all', 'sales', 'items'] as SearchTab[]).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTab(t)}
+                      className={`pb-2 font-medium capitalize transition-colors ${
+                        tab === t
+                          ? 'border-b-2 border-amber-600 text-amber-600'
+                          : 'text-warm-600 hover:text-warm-900'
+                      }`}
+                    >
+                      {t}
+                      {!isLoading && t === 'sales' && ` (${salesCount})`}
+                      {!isLoading && t === 'items' && ` (${itemsCount})`}
+                    </button>
+                  ))}
+                </div>
+
+                {isLoading ? (
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="bg-white rounded-lg overflow-hidden animate-pulse">
+                        <div className="aspect-square bg-warm-200" />
+                        <div className="p-3 space-y-2">
+                          <div className="h-4 bg-warm-200 rounded w-3/4" />
+                          <div className="h-3 bg-warm-200 rounded w-1/2" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <>
+                    {/* Sales */}
+                    {(tab === 'all' || tab === 'sales') && (
+                      <section className="mb-10">
+                        {tab === 'all' && (
+                          <h2 className="text-lg font-semibold text-warm-900 mb-4">
+                            Sales <span className="text-warm-400 font-normal">({salesCount})</span>
+                          </h2>
+                        )}
+                        {salesCount > 0 ? (
+                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                            {data!.sales.map((sale: any) => (
+                              <SaleCard key={sale.id} sale={sale} />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-warm-400 text-sm py-4">No sales found for "{q}".</p>
+                        )}
+                      </section>
+                    )}
+
+                    {/* Items */}
+                    {(tab === 'all' || tab === 'items') && (
+                      <section>
+                        {tab === 'all' && (
+                          <h2 className="text-lg font-semibold text-warm-900 mb-4">
+                            Items <span className="text-warm-400 font-normal">({itemsCount})</span>
+                          </h2>
+                        )}
+                        {itemsCount > 0 ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {data!.items.map((item: any) => (
+                              <ItemCard key={item.id} item={item} />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-warm-400 text-sm py-4">No items found for "{q}".</p>
+                        )}
+                      </section>
+                    )}
+
+                    {/* All empty */}
+                    {salesCount === 0 && itemsCount === 0 && (
+                      <div className="text-center py-16">
+                        <p className="text-warm-600 text-lg mb-2">No results for "{q}".</p>
+                        <p className="text-warm-400 text-sm mb-6">Try a different keyword or browse by category.</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {SUGGESTED_CATEGORIES.map((cat) => (
+                            <Link
+                              key={cat}
+                              href={`/categories/${cat.toLowerCase()}`}
+                              className="px-3 py-1 bg-warm-200 hover:bg-warm-300 text-warm-700 rounded-full text-sm transition-colors"
+                            >
+                              {cat}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            ) : (
-              <>
-                {/* Sales */}
-                {(tab === 'all' || tab === 'sales') && (
-                  <section className="mb-10">
-                    {tab === 'all' && (
-                      <h2 className="text-lg font-semibold text-warm-900 mb-4">
-                        Sales <span className="text-warm-400 font-normal">({salesCount})</span>
-                      </h2>
-                    )}
-                    {salesCount > 0 ? (
-                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                        {data!.sales.map((sale: any) => (
-                          <SaleCard key={sale.id} sale={sale} />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-warm-400 text-sm py-4">No sales found for "{q}".</p>
-                    )}
-                  </section>
-                )}
-
-                {/* Items */}
-                {(tab === 'all' || tab === 'items') && (
-                  <section>
-                    {tab === 'all' && (
-                      <h2 className="text-lg font-semibold text-warm-900 mb-4">
-                        Items <span className="text-warm-400 font-normal">({itemsCount})</span>
-                      </h2>
-                    )}
-                    {itemsCount > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {data!.items.map((item: any) => (
-                          <ItemCard key={item.id} item={item} />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-warm-400 text-sm py-4">No items found for "{q}".</p>
-                    )}
-                  </section>
-                )}
-
-                {/* All empty */}
-                {salesCount === 0 && itemsCount === 0 && (
-                  <div className="text-center py-16">
-                    <p className="text-warm-600 text-lg mb-2">No results for "{q}".</p>
-                    <p className="text-warm-400 text-sm mb-6">Try a different keyword or browse by category.</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {SUGGESTED_CATEGORIES.map((cat) => (
-                        <Link
-                          key={cat}
-                          href={`/categories/${cat.toLowerCase()}`}
-                          className="px-3 py-1 bg-warm-200 hover:bg-warm-300 text-warm-700 rounded-full text-sm transition-colors"
-                        >
-                          {cat}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+            </div>
           </>
         )}
       </main>

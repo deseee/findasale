@@ -60,6 +60,7 @@ model User {
   checkoutAttempts      CheckoutAttempt[]
   waitlistEntries       ItemWaitlist[]
   pickupBookings        PickupBooking[]
+  notificationPrefs     Json? // Notification preferences: { emailNewSalesFromFollowed, emailFlashDeals, emailWeeklyDigest, pushSalesNearMe }
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }

@@ -271,6 +271,41 @@ const SaleDetailPage = () => {
         <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
         <meta name="twitter:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}`} />
         <meta name="twitter:image" content={ogImageUrl} />
+        {/* Structured data — Event schema for Google rich results */}
+        {sale && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Event',
+                name: sale.title || '',
+                description: sale.description || '',
+                startDate: sale.startDate || '',
+                endDate: sale.endDate || '',
+                eventStatus: 'https://schema.org/EventScheduled',
+                eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+                location: {
+                  '@type': 'Place',
+                  name: sale.title || '',
+                  address: {
+                    '@type': 'PostalAddress',
+                    streetAddress: sale.address || '',
+                    addressLocality: sale.city || '',
+                    addressRegion: sale.state || '',
+                    addressCountry: 'US',
+                  },
+                },
+                organizer: {
+                  '@type': 'Organization',
+                  name: sale.organizer?.businessName || 'Estate Sale Organizer',
+                },
+                url: `https://finda.sale/sales/${sale.id}`,
+                image: sale.photoUrls?.[0] || '',
+              }),
+            }}
+          />
+        )}
       </Head>
 
       <main className="container mx-auto px-4 py-8">

@@ -519,3 +519,54 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+export const cloneSale = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    // Fetch the source sale
+    const sourceSale = await prisma.sale.findUnique({ where: { id } });
+    if (!sourceSale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Verify ownership (unless admin)
+    if (req.user.role !== 'ADMIN') {
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+      if (!organizerProfile || sourceSale.organizerId !== organizerProfile.id) {
+        return res.status(403).json({ message: 'Access denied. You can only clone your own sales.' });
+      }
+    }
+
+    // Create a new sale with cloned data
+    const clonedSale = await prisma.sale.create({
+      data: {
+        title: `Copy of ${sourceSale.title}`,
+        description: sourceSale.description,
+        address: sourceSale.address,
+        city: sourceSale.city,
+        state: sourceSale.state,
+        zip: sourceSale.zip,
+        lat: sourceSale.lat,
+        lng: sourceSale.lng,
+        neighborhood: sourceSale.neighborhood,
+        photoUrls: sourceSale.photoUrls,
+        tags: sourceSale.tags,
+        isAuctionSale: sourceSale.isAuctionSale,
+        status: 'DRAFT',
+        startDate: new Date(), // Organizer will fill in dates
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default: 7 days from now
+        organizerId: sourceSale.organizerId,
+      },
+    });
+
+    res.status(201).json(convertDecimalsToNumbers(clonedSale));
+  } catch (error) {
+    console.error('Error cloning sale:', error);
+    res.status(500).json({ message: 'Server error while cloning sale' });
+  }
+};
