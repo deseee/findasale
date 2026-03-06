@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { upload, uploadSalePhotos, uploadItemPhoto, analyzePhotoWithAI, rapidBatchUpload } from '../controllers/uploadController';
+import { batchAnalyzeImages } from '../controllers/batchAnalyzeController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -18,5 +19,8 @@ router.post('/analyze-photo', upload.single('photo'), analyzePhotoWithAI);
 
 // POST /api/upload/rapid-batch — Phase 14: upload + AI in one call (up to 20 images)
 router.post('/rapid-batch', upload.array('photos', 20), rapidBatchUpload);
+
+// POST /api/upload/batch-analyze — CD2 Phase 2: AI analysis for pre-uploaded Cloudinary URLs (5-20 images)
+router.post('/batch-analyze', batchAnalyzeImages);
 
 export default router;

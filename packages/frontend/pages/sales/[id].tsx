@@ -69,69 +69,35 @@ interface Bid {
   id: string;
   amount: number;
   user: {
+    id: string;
     name: string;
+    email: string;
   };
   createdAt: string;
 }
-
-// Helper function to safely format prices
-const formatPrice = (value: number | string | null | undefined): string => {
-  if (value === null || value === undefined) return 'N/A';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  return isNaN(num) ? 'N/A' : `$${num.toFixed(2)}`;
-};
-
-// Helper function to format time remaining
-const formatTimeRemaining = (endTime: string | null | undefined): string => {
-  if (!endTime) return 'No end time';
-  
-  try {
-    const end = new Date(endTime);
-    const now = new Date();
-    const diff = end.getTime() - now.getTime();
-    
-    if (diff <= 0) {
-      return 'Ended';
-    }
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    if (days > 0) {
-      return `${days}d ${hours}h`;
-    } else if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else {
-      return `${minutes}m`;
-    }
-  } catch (error) {
-    return 'No end time';
-  }
-};
 
 const SaleDetailPage = () => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [bidAmounts, setBidAmounts] = useState<{[key: string]: string}>({});
-  const [biddingItemId, setBiddingItemId] = useState<string | null>(null);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [downloadingKit, setDownloadingKit] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { showToast } = useToast();
 
-  // Poll for updates every 10 seconds for auction items
+  const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
+  const [bidAmounts, setBidAmounts] = useState<{ [itemId: string]: string }>({});
+  const [biddingItemId, setBiddingItemId] = useState<string | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [downloadingKit, setDownloadingKit] = useState(false);
+
+  // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
     if (!id) return;
-
-    const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ['sale', id] });
-    }, 10000);
-
+    const interval = setInterval(
+      () => queryClient.invalidateQueries({ queryKey: ['sale', id] }),
+      5000
+    );
     return () => clearInterval(interval);
   }, [id, queryClient]);
 
@@ -208,7 +174,7 @@ const SaleDetailPage = () => {
   };
 
   const handleDownloadMarketingKit = async () => {
-    if (!sale) return;
+    if (!sale || typeof window === 'undefined') return;
     setDownloadingKit(true);
     try {
       const response = await api.post(
@@ -237,296 +203,292 @@ const SaleDetailPage = () => {
       <div className="min-h-screen bg-warm-50">
         <main className="container mx-auto px-4 py-8">
           <Skeleton className="h-5 w-28 mb-6" />
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <Skeleton className="h-9 w-2/3 mb-4" />
-            <Skeleton className="h-4 w-1/2 mb-2" />
-            <Skeleton className="h-4 w-1/3 mb-6" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <Skeleton className="h-6 w-24 mb-4" />
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[1,2,3,4].map(i => <Skeleton key={i} className="h-40 w-full" />)}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8"></div>
+          <Skeleton className="h-64 mb-8" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="md:col-span-2">
+              <Skeleton className="h-96" />
             </div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <Skeleton className="h-6 w-36 mb-6" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1,2,3].map(i => (
-                <div key={i} className="border rounded-lg overflow-hidden">
-                  <Skeleton className="h-48 w-full rounded-none" />
-                  <div className="p-4 space-y-2">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-6 w-20" />
-                  </div>
-                </div>
-              ))}
+            <div>
+              <Skeleton className="h-40" />
             </div>
           </div>
         </main>
       </div>
     );
   }
-  if (isError) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Error loading sale</div>;
-  if (!sale) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Sale not found</div>;
 
-  // Check if user is the owner of this specific sale, or an admin
-  const isOrganizer = user?.role === 'ADMIN' || (user?.role === 'ORGANIZER' && sale?.organizer?.userId === user?.id);
+  if (isError || !sale) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-warm-50">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-warm-900 mb-2">Sale not found</h1>
+          <p className="text-warm-600 mb-6">The sale you're looking for doesn't exist.</p>
+          <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium">
+            Back to browse sales
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
-  // Format dates safely
-  const formatSaleDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return 'TBA';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid Date';
-      return format(date, 'MMMM d, yyyy h:mm a');
-    } catch (error) {
-      return 'Invalid Date';
-    }
-  };
-
-  // Generate JSON-LD for schema.org structured data
-  const generateJsonLd = () => {
-    if (!sale) return null;
-
-    const siteUrl = 'https://finda.sale';
-    const saleUrl = `${siteUrl}/sales/${sale.id}`;
-
-    const eventStatusMap: Record<string, string> = {
-      PUBLISHED: 'https://schema.org/EventScheduled',
-      ENDED: 'https://schema.org/EventScheduled',
-      DRAFT: 'https://schema.org/EventScheduled',
-    };
-
-    const eventData = {
-      "@context": "https://schema.org",
-      "@type": "Event",
-      "name": sale.title,
-      "url": saleUrl,
-      "startDate": sale.startDate,
-      "endDate": sale.endDate,
-      "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
-      "eventStatus": eventStatusMap[sale.status ?? 'PUBLISHED'] ?? 'https://schema.org/EventScheduled',
-      "image": sale.photoUrls && sale.photoUrls.length > 0 ? sale.photoUrls : undefined,
-      "location": {
-        "@type": "Place",
-        "name": sale.title,
-        "address": {
-          "@type": "PostalAddress",
-          "streetAddress": sale.address,
-          "addressLocality": sale.city,
-          "addressRegion": sale.state,
-          "postalCode": sale.zip,
-          "addressCountry": "US"
-        }
-      },
-      "description": sale.description,
-      "organizer": {
-        "@type": "Organization",
-        "name": sale.organizer.businessName,
-        "telephone": sale.organizer.phone
-      },
-      "offers": {
-        "@type": "AggregateOffer",
-        "priceCurrency": "USD",
-        "offerCount": sale.items.length,
-        "lowPrice": sale.items.length > 0 ? Math.min(...sale.items.map(i => Number(i.price || i.auctionStartPrice || 0))) : 0,
-        "offers": sale.items.map(item => {
-          // S1: Map condition string to schema.org OfferItemCondition URL
-          const conditionMap: Record<string, string> = {
-            NEW: 'https://schema.org/NewCondition',
-            LIKE_NEW: 'https://schema.org/UsedCondition',
-            GOOD: 'https://schema.org/UsedCondition',
-            FAIR: 'https://schema.org/UsedCondition',
-            POOR: 'https://schema.org/DamagedCondition',
-          };
-          const offer: Record<string, unknown> = {
-            "@type": "Offer",
-            "name": item.title,
-            "price": item.price || item.auctionStartPrice || 0,
-            "priceCurrency": "USD",
-            "availability": item.status === "AVAILABLE"
-              ? "https://schema.org/InStock"
-              : item.status === "SOLD"
-                ? "https://schema.org/SoldOut"
-                : "https://schema.org/PreOrder",
-          };
-          if (item.category) offer["category"] = item.category;
-          if (item.condition && conditionMap[item.condition]) {
-            offer["itemCondition"] = conditionMap[item.condition];
-          }
-          return offer;
-        })
-      }
-    };
-
-    const breadcrumbData = {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        { "@type": "ListItem", "position": 1, "name": "Home", "item": siteUrl },
-        { "@type": "ListItem", "position": 2, "name": `Estate Sales in ${sale.city}`, "item": `${siteUrl}/city/${sale.city.toLowerCase().replace(/\s+/g, '-')}` },
-        { "@type": "ListItem", "position": 3, "name": sale.title, "item": saleUrl }
-      ]
-    };
-
-    return { event: JSON.stringify(eventData), breadcrumb: JSON.stringify(breadcrumbData) };
-  };
-
-  const jsonLd = generateJsonLd();
+  const isOrganizer = user?.id === sale.organizer.userId;
+  const saleStartDate = parseISO(sale.startDate);
+  const saleEndDate = parseISO(sale.endDate);
+  const now = new Date();
+  const saleHasStarted = now >= saleStartDate;
+  const saleHasEnded = now >= saleEndDate;
 
   return (
     <div className="min-h-screen bg-warm-50">
       <Head>
         <title>{sale.title} - FindA.Sale</title>
-        <meta name="description" content={`${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}. ${sale.description?.slice(0, 120) ?? ''}`} />
-
-        {/* Open Graph Meta Tags */}
+        <meta name="description" content={`${sale.title} in ${sale.city}, ${sale.state}. Sale runs from ${format(saleStartDate, 'MMM d, yyyy')} to ${format(saleEndDate, 'MMM d, yyyy')}.`} />
         <meta property="og:title" content={sale.title} />
-        <meta property="og:description" content={sale.description} />
-        <meta property="og:type" content="event" />
-        <meta property="og:url" content={`https://finda.sale/sales/${sale.id}`} />
-        <meta
-          property="og:image"
-          content={
-            sale.photoUrls && sale.photoUrls.length > 0
-              ? sale.photoUrls[0]
-              : `/api/og?title=${encodeURIComponent(sale.title)}&date=${encodeURIComponent(
-                  `${format(new Date(sale.startDate), 'MMM d')} - ${format(new Date(sale.endDate), 'MMM d, yyyy')}`
-                )}&location=${encodeURIComponent(`${sale.city}, ${sale.state}`)}`
-          }
-        />
-
-        {/* Twitter Card Meta Tags */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={sale.title} />
-        <meta name="twitter:description" content={sale.description} />
-        <meta
-          name="twitter:image"
-          content={
-            sale.photoUrls && sale.photoUrls.length > 0
-              ? sale.photoUrls[0]
-              : `/api/og?title=${encodeURIComponent(sale.title)}&date=${encodeURIComponent(
-                  `${format(new Date(sale.startDate), 'MMM d')} - ${format(new Date(sale.endDate), 'MMM d, yyyy')}`
-                )}&location=${encodeURIComponent(`${sale.city}, ${sale.state}`)}`
-          }
-        />
-
-        {/* JSON-LD Structured Data */}
-        {jsonLd && (
-          <>
-            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd.event }} />
-            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd.breadcrumb }} />
-          </>
-        )}
+        <meta property="og:description" content={`${sale.address}, ${sale.city}, ${sale.state}`} />
+        <meta property="og:image" content={sale.photoUrls[0] || '/default-sale.jpg'} />
       </Head>
 
-      {/* Phase 18: Photo lightbox */}
-      {lightboxIndex !== null && sale?.photoUrls?.length > 0 && (
-        <PhotoLightbox
-          photos={sale.photoUrls}
-          initialIndex={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-        />
-      )}
-
-      {checkoutItem && (
-        <CheckoutModal
-          itemId={checkoutItem.id}
-          itemTitle={checkoutItem.title}
-          onClose={handleCheckoutClose}
-          onSuccess={handleCheckoutSuccess}
-        />
-      )}
-
-      {/* CSV Import Modal */}
-      <CSVImportModal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        saleId={sale.id}
-        onImportComplete={handleImportComplete}
-      />
-
       <main className="container mx-auto px-4 py-8">
-        {/* Back Button */}
-        <Link href="/" className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-          </svg>
-          Back to Home
+        <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
+          ← Back to browse sales
         </Link>
 
         {/* Sale Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="flex flex-col md:flex-row justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-warm-900 mb-2">{sale.title}</h1>
-              <div className="flex items-center text-warm-600 mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-warm-600" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                </svg>
-                <span className="text-warm-600">{sale.address}, {sale.city}, {sale.state} {sale.zip}</span>
-              </div>
-              <div className="flex items-center text-warm-600">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-warm-600" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                </svg>
-                <span className="text-warm-600">
-                  {formatSaleDate(sale.startDate)} - {formatSaleDate(sale.endDate)}
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+            <div className="flex-1">
+              <h1 className="text-4xl font-bold text-warm-900 mb-2">{sale.title}</h1>
+              <p className="text-lg text-warm-700 mb-4">
+                {sale.address}, {sale.city}, {sale.state} {sale.zip}
+              </p>
+              <p className="text-sm text-warm-600 mb-4">
+                {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
+              </p>
+              {sale.status && (
+                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                  sale.status === 'active' ? 'bg-green-100 text-green-800' :
+                  sale.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
                 </span>
-              </div>
+              )}
             </div>
-            <div className="mt-4 md:mt-0 flex flex-col items-end gap-2">
-              <Link href={`/organizers/${sale.organizer.id}`} className="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors block">
-                Organized by: {sale.organizer.businessName}
-              </Link>
-              {/* Phase 20: Message organizer — shoppers only */}
-              {user && user.role !== 'ORGANIZER' && (
-                <Link
-                  href={`/messages/new?organizerId=${sale.organizer.id}&saleId=${sale.id}`}
-                  className="flex items-center gap-1.5 bg-white border border-warm-300 text-warm-800 px-4 py-2 rounded-lg hover:bg-warm-50 transition-colors text-sm font-medium"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  Message organizer
-                </Link>
-              )}
-              {sale.organizer.badges && sale.organizer.badges.length > 0 && (
-                <BadgeDisplay badges={sale.organizer.badges} size="sm" />
-              )}
-              {sale.organizer.avgRating !== undefined && (
-                <div className="text-sm text-warm-600">
-                  ⭐ {sale.organizer.avgRating} ({sale.organizer.reviewCount} reviews)
+            <div className="flex flex-col gap-2">
+              <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} userId={user?.id} />
+            </div>
+          </div>
+        </div>
+
+        {/* Organizer Info Card */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-warm-900 mb-2">Organized by</h2>
+              <p className="text-lg font-semibold text-warm-800">{sale.organizer.businessName}</p>
+              <p className="text-sm text-warm-600 mb-4">{sale.organizer.phone}</p>
+              {sale.organizer.avgRating && (
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-sm font-medium text-warm-700">Rating:</span>
+                  <span className="text-sm text-warm-600">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
+                  <span className="text-sm text-warm-500">({sale.organizer.reviewCount || 0} reviews)</span>
                 </div>
               )}
-              {/* Add to Calendar */}
-              <a
-                href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/sales/${sale.id}/calendar.ics`}
-                className="inline-flex items-center bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                </svg>
-                Add to Calendar
-              </a>
-              <div className="flex space-x-2">
-                {/* Share Button */}
-                <SaleShareButton
-                  saleId={sale.id}
-                  saleTitle={sale.title}
-                  saleDate={`${format(new Date(sale.startDate), 'MMM d')} - ${format(new Date(sale.endDate), 'MMM d, yyyy')}`}
-                  saleLocation={`${sale.city}, ${sale.state}`}
-                  userId={user?.id}
-                />
-                
+              <BadgeDisplay badges={sale.organizer.badges} />
+            </div>
+            {isOrganizer && (
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => router.push(`/organizer/sales/${sale.id}/edit`)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium"
+                >
+                  Edit Sale
+                </button>
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium"
+                >
+                  Import Items
+                </button>
+                <button
+                  onClick={handleDownloadMarketingKit}
+                  disabled={downloadingKit}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium disabled:opacity-50"
+                >
+                  {downloadingKit ? 'Generating...' : 'Download Kit'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Photos & Map */}
+          <div className="lg:col-span-2">
+            {/* Main Photo Gallery */}
+            {sale.photoUrls.length > 0 && (
+              <div className="mb-8">
+                <div
+                  className="relative bg-warm-200 rounded-lg shadow-md overflow-hidden cursor-pointer h-96"
+                  onClick={() => setLightboxOpen(true)}
+                >
+                  <img
+                    src={getThumbnailUrl(sale.photoUrls[currentPhotoIndex], 800)}
+                    alt={`Sale photo ${currentPhotoIndex + 1}`}
+                    className="w-full h-full object-cover hover:opacity-90 transition"
+                  />
+                  {sale.photoUrls.length > 1 && (
+                    <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-3 py-1 rounded text-sm">
+                      {currentPhotoIndex + 1} / {sale.photoUrls.length}
+                    </div>
+                  )}
+                </div>
+                {sale.photoUrls.length > 1 && (
+                  <div className="flex gap-2 mt-4 overflow-x-auto">
+                    {sale.photoUrls.map((url, idx) => (
+                      <img
+                        key={idx}
+                        src={getThumbnailUrl(url, 100)}
+                        alt={`Thumbnail ${idx + 1}`}
+                        className={`h-20 w-20 object-cover rounded cursor-pointer transition ${
+                          idx === currentPhotoIndex ? 'ring-2 ring-amber-600' : ''
+                        }`}
+                        onClick={() => setCurrentPhotoIndex(idx)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Map */}
+            <SaleMap lat={sale.lat} lng={sale.lng} address={sale.address} className="mb-8 rounded-lg shadow-md h-96" />
+
+            {/* Description */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-2xl font-bold text-warm-900 mb-4">About</h2>
+              <p className="text-warm-700 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
+            </div>
+
+            {/* Items */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-2xl font-bold text-warm-900 mb-6">Items</h2>
+              {sale.items.length === 0 ? (
+                <p className="text-warm-600">No items listed yet.</p>
+              ) : (
+                <div className="space-y-6">
+                  {sale.items.map((item) => {
+                    const auctionEndTime = parseISO(item.auctionEndTime);
+                    const auctionEnded = now >= auctionEndTime;
+                    return (
+                      <div key={item.id} className="border border-warm-200 rounded-lg p-6">
+                        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-4">
+                          <div className="flex-1">
+                            <h3 className="text-xl font-bold text-warm-900 mb-2">{item.title}</h3>
+                            <p className="text-warm-700 mb-2">{item.description}</p>
+                            {item.category && <p className="text-sm text-warm-600">Category: {item.category}</p>}
+                            {item.condition && <p className="text-sm text-warm-600">Condition: {item.condition}</p>}
+                          </div>
+                        </div>
+
+                        {/* Pricing Display */}
+                        <div className="mb-4 p-4 bg-warm-50 rounded-lg">
+                          {item.status === 'SOLD' ? (
+                            <p className="text-lg font-bold text-red-600">SOLD</p>
+                          ) : sale.isAuctionSale ? (
+                            <>
+                              <p className="text-sm text-warm-600 mb-1">Auction</p>
+                              <p className="text-2xl font-bold text-warm-900">${item.currentBid.toFixed(2)}</p>
+                              <p className="text-xs text-warm-600 mt-1">Start price: ${item.auctionStartPrice.toFixed(2)}</p>
+                              <p className="text-xs text-warm-600">Bid increment: ${item.bidIncrement.toFixed(2)}</p>
+                              {!auctionEnded && user && (
+                                <AuctionCountdown endTime={item.auctionEndTime} />
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm text-warm-600 mb-1">Fixed Price</p>
+                              <p className="text-2xl font-bold text-warm-900">${item.price.toFixed(2)}</p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 flex-wrap">
+                          {sale.isAuctionSale && !auctionEnded && user ? (
+                            <>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min={item.currentBid + item.bidIncrement}
+                                placeholder="Enter bid"
+                                value={bidAmounts[item.id] || ''}
+                                onChange={(e) => handleBidAmountChange(item.id, e.target.value)}
+                                className="flex-1 px-3 py-2 border border-warm-300 rounded"
+                              />
+                              <button
+                                onClick={() => handlePlaceBid(item.id)}
+                                disabled={biddingItemId === item.id}
+                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium disabled:opacity-50"
+                              >
+                                {biddingItemId === item.id ? 'Placing bid...' : 'Bid'}
+                              </button>
+                            </>
+                          ) : !sale.isAuctionSale && item.status !== 'SOLD' && user ? (
+                            <button
+                              onClick={() => handleBuyNow(item.id, item.title)}
+                              className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium"
+                            >
+                              Buy Now
+                            </button>
+                          ) : !user && item.status !== 'SOLD' ? (
+                            <Link
+                              href="/login"
+                              className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-center"
+                            >
+                              Sign in to bid
+                            </Link>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            {/* Share Buttons */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-lg font-bold text-warm-900 mb-4">Share</h2>
+              <div className="flex flex-col gap-2">
+                {/* Facebook Share */}
+                <button
+                  onClick={() => {
+                    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
+                    window.open(url, '_blank');
+                  }}
+                  className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                  </svg>
+                  Facebook
+                </button>
+
                 {/* Post to Nextdoor Button */}
                 <button 
                   onClick={() => {
-                    const postText = `Check out this estate sale on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
-                    navigator.clipboard.writeText(postText);
-                    showToast('Post text copied to clipboard! Paste it into Nextdoor.', 'success');
+                    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.clipboard) {
+                      const postText = `Check out this estate sale on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
+                      navigator.clipboard.writeText(postText);
+                      showToast('Post text copied to clipboard! Paste it into Nextdoor.', 'success');
+                    } else {
+                      showToast('Clipboard not available', 'error');
+                    }
                   }}
                   className="flex items-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
                 >
@@ -534,86 +496,25 @@ const SaleDetailPage = () => {
                     <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 3 3 0 004.242 0l3-3a3 3 0 00-4.242-4.242l-3 3a3 3 0 000 4.242 1 1 0 101.414-1.414 1 1 0 010-1.414l3-3z" clipRule="evenodd" />
                     <path fillRule="evenodd" d="M14.586 10.586a2 2 0 012.828 0 3 3 0 010 4.242l-3 3a3 3 0 01-4.242 0 1 1 0 101.414 1.414 1 1 0 001.414 0l3-3a1 1 0 000-1.414 1 1 0 00-1.414 0l-3 3a1 1 0 101.414 1.414 3 3 0 010-4.242 1 1 0 000-1.414z" clipRule="evenodd" />
                   </svg>
-                  Post to Nextdoor
+                  Nextdoor
                 </button>
               </div>
             </div>
+
+            {/* Organizer Contact */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-lg font-bold text-warm-900 mb-4">Contact Info</h2>
+              <p className="text-sm text-warm-600 mb-2">
+                <span className="font-medium text-warm-900">Phone:</span> {sale.organizer.phone}
+              </p>
+              <p className="text-sm text-warm-600">
+                <span className="font-medium text-warm-900">Address:</span> {sale.organizer.address}
+              </p>
+            </div>
+
+            {/* Reviews Section */}
+            <ReviewsSection saleId={sale.id} />
           </div>
-
-          {sale.description && (
-            <div className="mt-6">
-              <h2 className="text-xl font-semibold mb-2 text-warm-900">Description</h2>
-              <p className="text-warm-700">{sale.description}</p>
-            </div>
-          )}
-
-          {/* Subscription section for shoppers */}
-          {!isOrganizer && user && (
-            <SaleSubscription 
-              saleId={sale.id} 
-              userEmail={user.email}
-            />
-          )}
-
-          {isOrganizer && (
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link 
-                href={`/organizer/edit-sale/${sale.id}`}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                </svg>
-                Edit Sale Details
-              </Link>
-              <Link 
-                href={`/organizer/add-items/${sale.id}`}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                </svg>
-                Add Items
-              </Link>
-              <button 
-                onClick={() => setIsImportModalOpen(true)}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                Import Items
-              </button>
-              <Link
-                href={`/organizer/send-update/${sale.id}`}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
-                </svg>
-                Send Update
-              </Link>
-              <button
-                onClick={handleDownloadMarketingKit}
-                disabled={downloadingKit}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded inline-flex items-center disabled:opacity-50"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-                {downloadingKit ? 'Generating...' : 'Download Marketing Kit'}
-              </button>
-              <Link
-                href={`/organizer/line-queue/${sale.id}`}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                </svg>
-                Manage Queue
-              </Link>
-            </div>
-          )}
         </div>
 
         {/* Photo Gallery — Phase 18: click to open lightbox */}
@@ -955,6 +856,23 @@ const SaleDetailPage = () => {
           totalReviews={sale.organizer.reviewCount}
         />
       </main>
+
+      {/* Modals */}
+      {checkoutItem && (
+        <CheckoutModal
+          item={checkoutItem}
+          onClose={handleCheckoutClose}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
+
+      {isImportModalOpen && isOrganizer && (
+        <CSVImportModal saleId={sale.id} onClose={() => setIsImportModalOpen(false)} onComplete={handleImportComplete} />
+      )}
+
+      {lightboxOpen && sale.photoUrls.length > 0 && (
+        <PhotoLightbox photos={sale.photoUrls} currentIndex={currentPhotoIndex} onClose={() => setLightboxOpen(false)} onNavigate={setCurrentPhotoIndex} />
+      )}
     </div>
   );
 };

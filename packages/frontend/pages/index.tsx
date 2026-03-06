@@ -5,6 +5,7 @@ import api from '../lib/api';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
+import TreasureHuntBanner from '../components/TreasureHuntBanner';
 
 interface Sale {
   id: string;
@@ -135,6 +136,9 @@ const HomePage = () => {
           </p>
         </section>
 
+        {/* CD2 Phase 2: Treasure Hunt Banner */}
+        <TreasureHuntBanner />
+
         {/* Map Section */}
         <section className="mb-12">
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -157,8 +161,7 @@ const HomePage = () => {
                       endDate: s.endDate,
                       organizerName: s.organizer?.businessName ?? '',
                       photoUrl: s.photoUrls?.[0],
-                    }))
-                }
+                    }))}
                 userLocation={userLocation}
                 height="420px"
               />

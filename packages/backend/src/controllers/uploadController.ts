@@ -16,7 +16,7 @@ export const upload = multer({ storage: multer.memoryStorage() });
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 
-// ── Cloudinary image variants (Phase 14c) ─────────────────────────────────
+// ── Cloudinary image variants (Phase 14c) ────────────────────────────
 // Eager transformations generate optimized variants at upload time.
 // No webhooks needed — all variants are ready when the upload resolves.
 const EAGER_TRANSFORMS = [

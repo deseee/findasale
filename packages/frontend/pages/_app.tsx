@@ -1,6 +1,7 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
 import Layout from '../components/Layout';
@@ -9,6 +10,8 @@ import { ToastProvider, useToast } from '../components/ToastContext';
 import InstallPrompt from '../components/InstallPrompt';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
+import OrganizerOnboardingModal from '../components/OrganizerOnboardingModal';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // SW update notifier — renders a dismissible toast when a new service worker is waiting
 // Registers the user's browser for push notifications once they're logged in
@@ -79,7 +82,34 @@ function OnboardingShower() {
   return <OnboardingModal onComplete={handleComplete} />;
 }
 
+/**
+ * Show organizer onboarding modal for new ORGANIZER users on first login.
+ * Completion stored in localStorage.
+ */
+function OrganizerOnboardingShower() {
+  const { user } = useAuth();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!user || user.role !== 'ORGANIZER') return;
+    if (typeof window === 'undefined') return;
+    const done = localStorage.getItem('organizer_onboarded');
+    if (!done) setShow(true);
+  }, [user]);
+
+  const handleClose = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('organizer_onboarded', 'true');
+    }
+    setShow(false);
+  };
+
+  if (!show) return null;
+  return <OrganizerOnboardingModal onClose={handleClose} />;
+}
+
 function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
+  const router = useRouter();
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -97,9 +127,11 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
       <ToastProvider>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
-            <Layout>
-              <Component {...pageProps} />
-            </Layout>
+            <ErrorBoundary key={router.asPath}>
+              <Layout>
+                <Component {...pageProps} />
+              </Layout>
+            </ErrorBoundary>
             {/* PWA helpers */}
             <ServiceWorkerUpdateNotifier />
             <PushSubscriber />
@@ -108,6 +140,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
             <OAuthBridge />
             {/* Phase 27: First-time shopper onboarding */}
             <OnboardingShower />
+            {/* Organizer post-registration onboarding */}
+            <OrganizerOnboardingShower />
           </QueryClientProvider>
         </AuthProvider>
       </ToastProvider>

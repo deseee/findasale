@@ -1,5 +1,6 @@
 /**
  * Phase 29: Full-text search page — /search?q=
+ * CD2 Phase 3: Adds visual search support via photo upload
  * Searches across published sales and available items with tabbed results.
  */
 import React, { useState } from 'react';
@@ -9,6 +10,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import SaleCard from '../components/SaleCard';
+import VisualSearchButton from '../components/VisualSearchButton';
 
 type SearchTab = 'all' | 'sales' | 'items';
 
@@ -28,7 +30,7 @@ const ItemCard = ({ item }: { item: any }) => (
       />
     ) : (
       <div className="aspect-square bg-warm-200 flex items-center justify-center">
-        <span className="text-warm-400 text-3xl">\uD83D\uDCE6</span>
+        <span className="text-warm-400 text-3xl">📦</span>
       </div>
     )}
     <div className="p-3 flex-1 flex flex-col">
@@ -45,9 +47,15 @@ const ItemCard = ({ item }: { item: any }) => (
   </Link>
 );
 
+interface VisualSearchData {
+  detectedLabels: string[];
+  results: any[];
+}
+
 const SearchPage = () => {
   const router = useRouter();
   const [tab, setTab] = useState<SearchTab>('all');
+  const [visualResults, setVisualResults] = useState<VisualSearchData | null>(null);
   const q = ((router.query.q as string) || '').trim();
 
   const { data, isLoading } = useQuery({
@@ -67,13 +75,18 @@ const SearchPage = () => {
     if (query) router.push(`/search?q=${encodeURIComponent(query)}`);
   };
 
+  const handleVisualSearchResults = (data: VisualSearchData) => {
+    setVisualResults(data);
+  };
+
+  const isShowingVisualResults = visualResults && visualResults.results.length > 0;
   const salesCount = data?.sales?.length ?? 0;
   const itemsCount = data?.items?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-warm-50">
       <Head>
-        <title>{q ? `\u201c${q}\u201d \u2014 Search` : 'Search'} \u2014 FindA.Sale</title>
+        <title>{q ? `"${q}" — Search` : 'Search'} — FindA.Sale</title>
         <meta name="description" content={q ? `Search results for ${q} on FindA.Sale` : 'Search sales and items on FindA.Sale'} />
       </Head>
 
@@ -100,7 +113,7 @@ const SearchPage = () => {
         </form>
 
         {/* Empty / short query state */}
-        {!q && (
+        {!q && !isShowingVisualResults && (
           <div className="text-center py-16">
             <p className="text-warm-500 text-lg mb-6">What are you looking for?</p>
             <div className="flex flex-wrap justify-center gap-2">
@@ -121,7 +134,49 @@ const SearchPage = () => {
           <p className="text-center text-warm-500 py-8">Please enter at least 2 characters.</p>
         )}
 
-        {/* Results */}
+        {/* Visual search results */}
+        {isShowingVisualResults && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-warm-900 mb-3">Visual Search Results</h2>
+              {visualResults!.detectedLabels.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {visualResults!.detectedLabels.map((label) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 text-sm rounded-full"
+                    >
+                      🏷️ {label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="text-sm text-warm-600 mb-4">
+                Found {visualResults!.results.length} item{visualResults!.results.length !== 1 ? 's' : ''} matching your photo
+              </p>
+            </div>
+
+            {visualResults!.results.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
+                {visualResults!.results.map((item: any) => (
+                  <ItemCard key={item.id} item={item} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 mb-12">
+                <p className="text-warm-500">No items found matching your photo. Try searching by text.</p>
+              </div>
+            )}
+
+            {q && (
+              <div className="border-t pt-8">
+                <p className="text-sm text-warm-600 mb-4">Or continue with your text search:</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Text search results */}
         {q && q.length >= 2 && (
           <>
             {/* Tabs */}
@@ -172,7 +227,7 @@ const SearchPage = () => {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-warm-400 text-sm py-4">No sales found for \u201c{q}\u201d.</p>
+                      <p className="text-warm-400 text-sm py-4">No sales found for "{q}".</p>
                     )}
                   </section>
                 )}
@@ -192,7 +247,7 @@ const SearchPage = () => {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-warm-400 text-sm py-4">No items found for \u201c{q}\u201d.</p>
+                      <p className="text-warm-400 text-sm py-4">No items found for "{q}".</p>
                     )}
                   </section>
                 )}
@@ -200,7 +255,7 @@ const SearchPage = () => {
                 {/* All empty */}
                 {salesCount === 0 && itemsCount === 0 && (
                   <div className="text-center py-16">
-                    <p className="text-warm-600 text-lg mb-2">No results for \u201c{q}\u201d.</p>
+                    <p className="text-warm-600 text-lg mb-2">No results for "{q}".</p>
                     <p className="text-warm-400 text-sm mb-6">Try a different keyword or browse by category.</p>
                     <div className="flex flex-wrap justify-center gap-2">
                       {SUGGESTED_CATEGORIES.map((cat) => (

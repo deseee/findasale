@@ -8,6 +8,8 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
 import PhotoLightbox from '../../components/PhotoLightbox';
+import CountdownTimer from '../../components/CountdownTimer'; // CD2: Live Drop
+import ReverseAuctionBadge from '../../components/ReverseAuctionBadge'; // CD2 Phase 4
 import { useToast } from '../../components/ToastContext';
 import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -23,6 +25,12 @@ interface Item {
   auctionEndTime: string;
   status: string;
   photoUrls: string[];
+  isLiveDrop: boolean; // CD2
+  liveDropAt: string | null; // CD2
+  reverseAuction: boolean; // CD2 Phase 4
+  reverseDailyDrop?: number; // CD2 Phase 4
+  reverseFloorPrice?: number; // CD2 Phase 4
+  reverseStartDate?: string; // CD2 Phase 4
   sale: {
     id: string;
     title: string;
@@ -96,6 +104,7 @@ const ItemDetailPage = () => {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [holdCountdown, setHoldCountdown] = useState('');
+  const [isLiveDropRevealed, setIsLiveDropRevealed] = useState(false); // CD2
   const socketRef = useRef<Socket | null>(null); // V1: live bidding socket
   const { showToast } = useToast();
 
@@ -108,6 +117,18 @@ const ItemDetailPage = () => {
     },
     enabled: !!id,
   });
+
+  // CD2: Check if Live Drop has been revealed
+  useEffect(() => {
+    if (!item) return;
+    if (!item.isLiveDrop || !item.liveDropAt) {
+      setIsLiveDropRevealed(true);
+      return;
+    }
+    const now = new Date();
+    const reveal = new Date(item.liveDropAt);
+    setIsLiveDropRevealed(now >= reveal);
+  }, [item]);
 
   // Check if item is favorited
   const { data: favoriteStatus } = useQuery({
@@ -184,6 +205,19 @@ const ItemDetailPage = () => {
     },
     onError: (err: any) => {
       showToast(err.response?.data?.message || 'Failed to cancel hold', 'error');
+    },
+  });
+
+  // CD2 Phase 2: Mark as found mutation
+  const treasureHuntMutation = useMutation({
+    mutationFn: () => api.post('/treasure-hunt/found', { itemId: id }),
+    onSuccess: (response: any) => {
+      showToast(`Found it! Earned ${response.data.pointsEarned} points!`, 'success');
+      queryClient.invalidateQueries({ queryKey: ['treasureHunt', 'today'] });
+    },
+    onError: (err: any) => {
+      const message = err.response?.data?.message || 'Item doesn\'t match today\'s clue';
+      showToast(message, 'error');
     },
   });
 
@@ -307,6 +341,94 @@ const ItemDetailPage = () => {
 );
   if (!item) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Item not found</div>;
 
+  // CD2: Live Drop teaser mode — show before reveal time
+  if (item.isLiveDrop && item.liveDropAt && !isLiveDropRevealed) {
+    return (
+      <div className="min-h-screen bg-warm-50">
+        <Head>
+          <title>Live Drop Coming Soon - {item.sale.title} - FindA.Sale</title>
+        </Head>
+        <main className="container mx-auto px-4 py-8">
+          <Link href={`/sales/${item.sale.id}`} className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            Back to {item.sale.title}
+          </Link>
+
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-8">
+              {/* Teaser Image */}
+              <div className="flex items-center justify-center">
+                {item.photoUrls.length > 0 ? (
+                  <div className="relative w-full">
+                    <img
+                      src={getOptimizedUrl(item.photoUrls[0]) || item.photoUrls[0]}
+                      alt={item.title}
+                      className="w-full h-96 object-contain rounded-lg blur-xl filter brightness-75"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg">
+                      <div className="text-6xl">🔥</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full h-96 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex items-center justify-center">
+                    <div className="text-6xl">🔥</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Teaser Content */}
+              <div className="flex flex-col justify-center">
+                {/* Live Drop Badge */}
+                <div className="inline-flex items-center gap-2 mb-4 w-fit">
+                  <span className="text-2xl">🔥</span>
+                  <span className="px-4 py-1 bg-amber-100 text-amber-800 text-sm font-bold rounded-full">LIVE DROP</span>
+                </div>
+
+                {/* Title */}
+                <h1 className="text-4xl font-bold text-warm-900 mb-4">{item.title}</h1>
+
+                {/* Countdown Timer */}
+                <div className="mb-8">
+                  <p className="text-sm text-warm-600 font-medium mb-4">Reveals in:</p>
+                  <CountdownTimer
+                    targetDate={item.liveDropAt}
+                    onReveal={() => {
+                      setIsLiveDropRevealed(true);
+                      showToast('Item revealed! Refresh to see full details.', 'success');
+                    }}
+                  />
+                </div>
+
+                {/* Set Reminder Text */}
+                <p className="text-center text-warm-600 text-sm mb-6">
+                  Set a reminder to catch this item when it drops!
+                </p>
+
+                {/* Teaser Description */}
+                {item.description && (
+                  <div className="mb-6 p-4 bg-warm-50 rounded-lg">
+                    <p className="text-warm-700 text-sm">{item.description}</p>
+                  </div>
+                )}
+
+                {/* Info Box */}
+                <div className="bg-amber-50 border-l-4 border-amber-600 p-4 rounded">
+                  <p className="text-sm text-amber-900">
+                    Check back when the timer counts down to zero to see the item details, photos, and price.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // CD2: Normal item view (Live Drop revealed or not a Live Drop)
   const isOrganizer = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
   const isAuctionItem = !!item.auctionStartPrice;
   const auctionEnded = item.auctionEndTime && new Date(item.auctionEndTime) < new Date();
@@ -403,7 +525,7 @@ const ItemDetailPage = () => {
                             loading="lazy"
                           />
                         </button>
-                      ))}
+                      )))}
                     </div>
                   )}
                 </>
@@ -443,9 +565,12 @@ const ItemDetailPage = () => {
               
               <div className="mb-6">
                 <Link href={`/sales/${item.sale.id}`} className="text-amber-600 hover:text-amber-800">
-                  \u2190 Back to {item.sale.title}
+                  ← Back to {item.sale.title}
                 </Link>
               </div>
+
+              {/* CD2 Phase 4: Reverse Auction Badge */}
+              {item.reverseAuction && <ReverseAuctionBadge item={item} />}
 
               {isAuctionItem ? (
                 /* Auction Item */
@@ -575,7 +700,7 @@ const ItemDetailPage = () => {
                         disabled={cancelMutation.isPending}
                         className="text-sm text-red-600 hover:text-red-800 underline disabled:opacity-50"
                       >
-                        {cancelMutation.isPending ? 'Cancelling\u2026' : 'Cancel hold'}
+                        {cancelMutation.isPending ? 'Cancelling…' : 'Cancel hold'}
                       </button>
                     </div>
                   ) : someoneElseHolds ? (
@@ -590,7 +715,7 @@ const ItemDetailPage = () => {
                       disabled={placeMutation.isPending}
                       className="w-full border border-amber-600 text-amber-600 hover:bg-amber-50 font-semibold py-2 px-6 rounded transition-colors disabled:opacity-50"
                     >
-                      {placeMutation.isPending ? 'Placing hold\u2026' : 'Hold for 24 hours'}
+                      {placeMutation.isPending ? 'Placing hold…' : 'Hold for 24 hours'}
                     </button>
                   ) : null}
                 </div>
@@ -601,6 +726,29 @@ const ItemDetailPage = () => {
                   <Link href="/login" className="text-amber-600 hover:text-amber-800">
                     Log in to hold this item
                   </Link>
+                </div>
+              )}
+
+              {/* CD2 Phase 2: Treasure Hunt "Mark as Found" section */}
+              {user && !isOrganizer && item.status === 'AVAILABLE' && (
+                <div className="mt-6 pt-6 border-t border-warm-200">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">🗺️</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-blue-900 mb-2">
+                          Does this match today's treasure hunt clue?
+                        </p>
+                        <button
+                          onClick={() => treasureHuntMutation.mutate()}
+                          disabled={treasureHuntMutation.isPending}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                        >
+                          {treasureHuntMutation.isPending ? 'Checking…' : 'Mark as Found'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
