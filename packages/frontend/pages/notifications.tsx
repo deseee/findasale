@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useAuth } from '../components/AuthContext';
 import Layout from '../components/Layout';
 import EmptyState from '../components/EmptyState';
+import api from '../lib/api';
 
 interface Notification {
   id: string;
@@ -74,16 +75,9 @@ const NotificationsPage = () => {
     const fetchNotifications = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/notifications/inbox', {
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data: NotificationResponse = await response.json();
-          setNotifications(data.notifications);
-          setUnreadCount(data.unreadCount);
-        }
+        const res = await api.get('/notifications/inbox');
+        setNotifications(res.data.notifications);
+        setUnreadCount(res.data.unreadCount);
       } catch (err) {
         console.error('Failed to fetch notifications:', err);
       } finally {
@@ -118,11 +112,7 @@ const NotificationsPage = () => {
 
   const handleMarkRead = async (id: string) => {
     try {
-      await fetch(`/api/notifications/inbox/${id}/read`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
+      await api.patch(`/notifications/inbox/${id}/read`);
 
       setNotifications(
         notifications.map((n) =>
@@ -137,11 +127,7 @@ const NotificationsPage = () => {
 
   const handleMarkAllRead = async () => {
     try {
-      await fetch('/api/notifications/inbox/read-all', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
+      await api.patch('/notifications/inbox/read-all');
 
       setNotifications(
         notifications.map((n) => ({ ...n, read: true }))
@@ -154,11 +140,7 @@ const NotificationsPage = () => {
 
   const handleDeleteNotification = async (id: string) => {
     try {
-      await fetch(`/api/notifications/inbox/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
+      await api.delete(`/notifications/inbox/${id}`);
 
       setNotifications(notifications.filter((n) => n.id !== id));
     } catch (err) {

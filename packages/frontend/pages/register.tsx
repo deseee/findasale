@@ -30,7 +30,8 @@ const RegisterPage = () => {
     const ref = params.get('ref');
     const invite = params.get('invite');
     if (ref) setFormData(prev => ({ ...prev, referralCode: ref }));
-    if (invite) setFormData(prev => ({ ...prev, inviteCode: invite.toUpperCase() }));
+    // Invite codes are for organizer beta access — pre-select ORGANIZER role
+    if (invite) setFormData(prev => ({ ...prev, inviteCode: invite.toUpperCase(), role: 'ORGANIZER' }));
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

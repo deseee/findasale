@@ -55,3 +55,9 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Decisions:** Admin findMany pagination health finding was false positive — all calls already have take: limits. All health scout items now clean.
 **Next up:** Patrick to run e2e test checklist before beta. Patrick manual tasks: confirm 5/7% fee, Stripe business account, business cards, beta recruit. Claude: keep going on remaining non-blocking items.
 **Blockers:** Patrick action items gating beta launch (see BETA_CHECKLIST.md).
+
+### 2026-03-06 (session 82 batch 15 — CRLF recovery + notification fixes)
+**Worked on:** Discovered push.ps1 CRLF normalization step had reverted batch 14 changes (effectiveRole, ORGANIZER auto-set, notification fetch fixes). Re-applied all 4 files. Root-level orphan docs (BETA_INVITE_SYSTEM.md, EMAIL_TEMPLATE_SYSTEM.md, IMPLEMENTATION_SUMMARY.md, MOBILE_GESTURES_TESTING.md, PRICE_ALERTS_IMPLEMENTATION.md, SEO_IMPROVEMENTS_SUMMARY.md, SHOPPER_PROFILE_IMPLEMENTATION.md, STRIPE_WEBHOOK_HARDENING.md) moved to claude_docs/feature-notes/ to clean up git status noise. console.log→console.info in notificationController.ts and waitlistController.ts (pre-push hook was flagging these). Confirmed abTest.ts and feedback.ts public routes are intentional. Confirmed planner.ts public endpoint is intentional.
+**Decisions:** CRLF phantom problem: run `git add [files] && git commit` BEFORE running `.\push.ps1` — do NOT chain them in a single command block because push.ps1's CRLF normalization runs before the commit.
+**Next up:** Patrick to push batch 14-15 changes using the corrected git commands (add + commit first, then push.ps1 separately).
+**Blockers:** Patrick's beta checklist items.

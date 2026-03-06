@@ -99,7 +99,7 @@ const sendWaitlistNotificationEmail = async (
       subject: `${itemTitle} is back in stock! 🎉`,
       html,
     });
-    console.log(`✓ Waitlist notification email sent to ${email}`);
+    console.info(`✓ Waitlist notification email sent to ${email}`);
   } catch (err) {
     console.error(`✗ Failed to send waitlist notification email to ${email}:`, err);
     throw err;
@@ -230,7 +230,7 @@ export const getWaitlistStatus = async (req: Request, res: Response) => {
 
 // Internal helper: notify all users on waitlist when item becomes available
 export const notifyWaitlist = async (itemId: string): Promise<void> => {
-  console.log(`[Waitlist] Notifying waitlist for item ${itemId}...`);
+  console.info(`[Waitlist] Notifying waitlist for item ${itemId}...`);
 
   try {
     // Get the item details
@@ -242,7 +242,7 @@ export const notifyWaitlist = async (itemId: string): Promise<void> => {
     });
 
     if (!item) {
-      console.log(`[Waitlist] Item ${itemId} not found`);
+      console.info(`[Waitlist] Item ${itemId} not found`);
       return;
     }
 
@@ -254,10 +254,10 @@ export const notifyWaitlist = async (itemId: string): Promise<void> => {
       },
     });
 
-    console.log(`[Waitlist] Found ${waitlistEntries.length} users to notify for item ${itemId}`);
+    console.info(`[Waitlist] Found ${waitlistEntries.length} users to notify for item ${itemId}`);
 
     if (waitlistEntries.length === 0) {
-      console.log(`[Waitlist] No users to notify for item ${itemId}`);
+      console.info(`[Waitlist] No users to notify for item ${itemId}`);
       return;
     }
 
@@ -289,7 +289,7 @@ export const notifyWaitlist = async (itemId: string): Promise<void> => {
       }
     }
 
-    console.log(`[Waitlist] Notification complete for item ${itemId}. Sent: ${sent}, Errors: ${errors}`);
+    console.info(`[Waitlist] Notification complete for item ${itemId}. Sent: ${sent}, Errors: ${errors}`);
   } catch (err) {
     console.error(`[Waitlist] Failed to process waitlist notifications for item ${itemId}:`, err);
     throw err;
