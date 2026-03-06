@@ -12,8 +12,10 @@ import CountdownTimer from '../../components/CountdownTimer'; // CD2: Live Drop
 import ReverseAuctionBadge from '../../components/ReverseAuctionBadge'; // CD2 Phase 4
 import BuyingPoolCard from '../../components/BuyingPoolCard';
 import { useToast } from '../../components/ToastContext';
+import ItemShareButton from '../../components/ItemShareButton';
 import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import { useHeartAnimation } from '../../hooks/useHeartAnimation';
 
 interface Item {
   id: string;
@@ -35,6 +37,7 @@ interface Item {
   sale: {
     id: string;
     title: string;
+    organizerId: string; // Phase 20: For messaging
   };
 }
 
@@ -117,6 +120,7 @@ const ItemDetailPage = () => {
   const [isJoiningWaitlist, setIsJoiningWaitlist] = useState(false);
   const socketRef = useRef<Socket | null>(null); // V1: live bidding socket
   const { showToast } = useToast();
+  const { isAnimating: isHeartAnimating, triggerAnimation: triggerHeartAnimation } = useHeartAnimation();
 
   const { data: item, isLoading, isError, refetch } = useQuery({
     queryKey: ['item', id],
@@ -393,6 +397,9 @@ const ItemDetailPage = () => {
     }
 
     try {
+      // Trigger heart animation
+      triggerHeartAnimation();
+
       await api.post(`/favorites/item/${item.id}`, { isFavorite: !isFavorite });
       setIsFavorite(!isFavorite);
       queryClient.invalidateQueries({ queryKey: ['favorite', id] });
@@ -763,7 +770,7 @@ const ItemDetailPage = () => {
                   {/* Favorite button */}
                   <button
                     onClick={toggleFavorite}
-                    className="text-2xl focus:outline-none"
+                    className={`text-2xl focus:outline-none transition-transform ${isHeartAnimating ? 'animate-heart' : ''}`}
                     aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                   >
                     {isFavorite ? (
@@ -776,6 +783,14 @@ const ItemDetailPage = () => {
                       </svg>
                     )}
                   </button>
+
+                  {/* Share button */}
+                  <ItemShareButton
+                    itemId={item.id}
+                    itemTitle={item.title}
+                    itemPrice={item.price || item.auctionStartPrice || 0}
+                    userId={user?.id}
+                  />
 
                   {/* Wishlist button */}
                   {user ? (
@@ -1072,6 +1087,18 @@ const ItemDetailPage = () => {
                 <div className="mt-4 text-sm text-center">
                   <Link href="/login" className="text-amber-600 hover:text-amber-800">
                     Log in to hold this item
+                  </Link>
+                </div>
+              )}
+
+              {/* Phase 20: Message seller button — visible to shoppers only */}
+              {user && !isOrganizer && (
+                <div className="mt-4">
+                  <Link
+                    href={`/messages/new?organizerId=${item.sale.organizerId}&saleId=${item.sale.id}`}
+                    className="w-full block text-center py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    💬 Ask seller a question
                   </Link>
                 </div>
               )}

@@ -22,6 +22,7 @@ import { getThumbnailUrl } from '../../lib/imageUtils';
 import ReviewsSection from '../../components/ReviewsSection';
 import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
+import ActivityFeed from '../../components/ActivityFeed';
 
 interface Sale {
   id: string;
@@ -593,6 +594,9 @@ const SaleDetailPage = () => {
                 <span className="font-medium text-warm-900">Address:</span> {sale.organizer.address}
               </p>
             </div>
+
+            {/* Live Activity Feed */}
+            <ActivityFeed saleId={sale.id} />
 
             {/* Pickup Scheduling */}
             {user && <PickupBookingCard saleId={sale.id} />}

@@ -21,6 +21,7 @@ import FlashDealForm from '../../components/FlashDealForm';
 import OnboardingWizard from '../../components/OnboardingWizard'; // Onboarding wizard
 import Head from 'next/head';
 import Link from 'next/link';
+import EmptyState from '../../components/EmptyState';
 
 // Phase 22: Creator Tier benefits (frontend-only display)
 const TIER_BENEFITS: Record<string, string[]> = {
@@ -186,6 +187,12 @@ const OrganizerDashboard = () => {
               className="bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
               Insights
+            </Link>
+            <Link
+              href="/organizer/print-inventory"
+              className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              🖨️ Print Inventory
             </Link>
           </div>
 
@@ -422,15 +429,12 @@ const OrganizerDashboard = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <p className="text-warm-600 mb-4">No sales yet. Create your first one to get started!</p>
-                  <Link
-                    href="/organizer/create-sale"
-                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg"
-                  >
-                    Create Sale
-                  </Link>
-                </div>
+                <EmptyState
+                  icon="🏷️"
+                  heading="You haven't created any sales yet"
+                  subtext="Start by creating your first estate sale. Set up details, add inventory, and go live!"
+                  cta={{ label: 'Create Your First Sale', href: '/organizer/create-sale' }}
+                />
               )}
             </>
           )}

@@ -23,6 +23,9 @@ interface Sale {
   };
   status?: string;
   isAuctionSale?: boolean;
+  isLive?: boolean;
+  isSold?: boolean;
+  isFlashDeal?: boolean;
   tags?: string[];
   favoriteCount?: number;
 }
@@ -110,13 +113,29 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
         ) : null}
 
         {/* Badge overlays — top-left corner */}
-        <div className="absolute top-2 left-2 flex gap-1">
-          {sale.isAuctionSale && (
+        <div className="absolute top-2 left-2 flex gap-1 items-center">
+          {sale.isSold && (
+            <span className="px-2 py-0.5 rounded text-xs font-bold bg-gray-600 text-white shadow">
+              SOLD
+            </span>
+          )}
+          {sale.isLive && !sale.isSold && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-green-500 text-white shadow">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              LIVE
+            </span>
+          )}
+          {sale.isFlashDeal && !sale.isSold && (
+            <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-600 text-white shadow">
+              Flash Deal
+            </span>
+          )}
+          {sale.isAuctionSale && !sale.isSold && (
             <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-600 text-white shadow">
               AUCTION
             </span>
           )}
-          {showToday && (
+          {showToday && !sale.isSold && !sale.isLive && !sale.isFlashDeal && (
             <span className="px-2 py-0.5 rounded text-xs font-bold bg-green-600 text-white shadow">
               TODAY
             </span>

@@ -13,6 +13,8 @@ import api from '../lib/api';
 import SaleCard from '../components/SaleCard';
 import VisualSearchButton from '../components/VisualSearchButton';
 import SearchFilterPanel, { SearchFilters } from '../components/SearchFilterPanel';
+import EmptyState from '../components/EmptyState';
+import { SkeletonGrid } from '../components/SkeletonCards';
 
 type SearchTab = 'all' | 'sales' | 'items';
 
@@ -286,17 +288,7 @@ const SearchPage = () => {
                 </div>
 
                 {isLoading ? (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="bg-white rounded-lg overflow-hidden animate-pulse">
-                        <div className="aspect-square bg-warm-200" />
-                        <div className="p-3 space-y-2">
-                          <div className="h-4 bg-warm-200 rounded w-3/4" />
-                          <div className="h-3 bg-warm-200 rounded w-1/2" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <SkeletonGrid count={6} variant="sale" columns="grid-cols-2 md:grid-cols-3" />
                 ) : (
                   <>
                     {/* Sales */}
@@ -308,7 +300,7 @@ const SearchPage = () => {
                           </h2>
                         )}
                         {salesCount > 0 ? (
-                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             {data!.sales.map((sale: any) => (
                               <SaleCard key={sale.id} sale={sale} />
                             ))}
@@ -341,10 +333,13 @@ const SearchPage = () => {
 
                     {/* All empty */}
                     {salesCount === 0 && itemsCount === 0 && (
-                      <div className="text-center py-16">
-                        <p className="text-warm-600 text-lg mb-2">No results for "{q}".</p>
-                        <p className="text-warm-400 text-sm mb-6">Try a different keyword or browse by category.</p>
-                        <div className="flex flex-wrap justify-center gap-2">
+                      <div>
+                        <EmptyState
+                          icon="🔍"
+                          heading={`No sales found for "${q}"`}
+                          subtext="Try adjusting your filters, using different keywords, or browsing by category."
+                        />
+                        <div className="flex flex-wrap justify-center gap-2 mt-6">
                           {SUGGESTED_CATEGORIES.map((cat) => (
                             <Link
                               key={cat}

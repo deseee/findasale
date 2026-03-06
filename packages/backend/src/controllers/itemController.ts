@@ -181,7 +181,8 @@ export const getItemById = async (req: Request, res: Response) => {
         sale: {
           select: {
             title: true,
-            id: true
+            id: true,
+            organizerId: true
           }
         }
       }

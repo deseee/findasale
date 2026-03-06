@@ -13,6 +13,7 @@ import {
   generateIcal,
   getSalesByNeighborhood,
   cloneSale,
+  getSaleActivity,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
@@ -29,6 +30,7 @@ router.get('/neighborhood/:slug', getSalesByNeighborhood); // U2: SEO landing pa
 router.get('/mine', authenticate, getMySales);
 
 router.get('/:id', getSale);
+router.get('/:id/activity', getSaleActivity); // Real-time activity feed (public)
 router.post('/', authenticate, createSale);
 router.put('/:id', authenticate, updateSale);
 router.patch('/:id/status', authenticate, updateSaleStatus);

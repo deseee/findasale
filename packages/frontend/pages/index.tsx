@@ -284,7 +284,7 @@ const HomePage = () => {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
             </div>
           ) : isError ? (
@@ -296,7 +296,7 @@ const HomePage = () => {
               </button>
             </div>
           ) : filteredSales.length > 0 ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {filteredSales.map((sale) => (
                 <SaleCard key={sale.id} sale={sale} />
               ))}
