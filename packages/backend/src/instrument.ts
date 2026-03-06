@@ -1,3 +1,9 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load env before anything else — modules imported after this will have process.env populated
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 import * as Sentry from '@sentry/node';
 
 // Must be imported as the very first module in index.ts.

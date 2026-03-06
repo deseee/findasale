@@ -31,7 +31,7 @@ export function isCloudAIAvailable(): boolean {
 
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
-export async function getVisionLabels(imageBase64: string): Promise<string[]> {
+async function getVisionLabels(imageBase64: string): Promise<string[]> {
   const response = await axios.post(
     `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
     {
@@ -88,16 +88,7 @@ async function getHaikuAnalysis(
             },
             {
               type: 'text',
-              text: `You are an estate sale pricing assistant.${labelContext}
-
-Look at this item photo and respond with ONLY valid JSON (no markdown, no explanation):
-{
-  "title": "short descriptive item title",
-  "description": "1-2 sentence description mentioning condition and notable features",
-  "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",
-  "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",
-  "suggestedPrice": 12.50
-}`,
+              text: `You are an estate sale pricing assistant.${labelContext}\n\nLook at this item photo and respond with ONLY valid JSON (no markdown, no explanation):\n{\n  "title": "short descriptive item title",\n  "description": "1-2 sentence description mentioning condition and notable features",\n  "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",\n  "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",\n  "suggestedPrice": 12.50\n}`,
             },
           ],
         },
@@ -120,17 +111,6 @@ Look at this item photo and respond with ONLY valid JSON (no markdown, no explan
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/**
- * Analyze an item image using Google Vision + Claude Haiku.
- *
- * Flow:
- *   1. Send image to Google Vision for fast label/object detection.
- *   2. Pass those labels + the raw image to Claude Haiku for
- *      structured estate-sale metadata.
- *
- * Returns null if cloud AI is not configured (caller should fall back to Ollama).
- * Throws on API errors so the caller can handle/log them.
- */
 export async function analyzeItemImage(
   buffer: Buffer,
   mimeType = 'image/jpeg'
@@ -139,7 +119,6 @@ export async function analyzeItemImage(
 
   const imageBase64 = buffer.toString('base64');
 
-  // Vision labels are best-effort — proceed without them if Vision API fails
   let visionLabels: string[] = [];
   try {
     visionLabels = await getVisionLabels(imageBase64);
@@ -150,8 +129,6 @@ export async function analyzeItemImage(
   return getHaikuAnalysis(imageBase64, mimeType, visionLabels);
 }
 
-// ── Price Suggestion API ──────────────────────────────────────────────────────
-
 export interface PriceSuggestion {
   low: number;
   high: number;
@@ -159,12 +136,6 @@ export interface PriceSuggestion {
   reasoning: string;
 }
 
-/**
- * Suggest a price range for an item based on title, category, and condition.
- * Uses Claude Haiku with estate sale pricing expertise.
- *
- * Returns a fallback price if parsing fails or API is unavailable.
- */
 export async function suggestPrice(
   title: string,
   category: string,
@@ -188,16 +159,7 @@ export async function suggestPrice(
         messages: [
           {
             role: 'user',
-            content: `You are an estate sale pricing expert. Based on typical Grand Rapids, Michigan estate sale prices, suggest a fair price for this item.
-
-Item: ${title}
-Category: ${category}
-Condition: ${condition}
-
-Respond with ONLY valid JSON in this exact format:
-{"low": 5, "high": 25, "suggested": 15, "reasoning": "Similar vintage items sell for $10-25 at local estate sales"}
-
-Be realistic and conservative — estate sale prices are typically 20-50% of retail. Condition heavily affects value.`,
+            content: `You are an estate sale pricing expert. Based on typical Grand Rapids, Michigan estate sale prices, suggest a fair price for this item.\n\nItem: ${title}\nCategory: ${category}\nCondition: ${condition}\n\nRespond with ONLY valid JSON in this exact format:\n{"low": 5, "high": 25, "suggested": 15, "reasoning": "Similar vintage items sell for $10-25 at local estate sales"}\n\nBe realistic and conservative — estate sale prices are typically 20-50% of retail. Condition heavily affects value.`,
           },
         ],
       },
@@ -215,7 +177,6 @@ Be realistic and conservative — estate sale prices are typically 20-50% of ret
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as PriceSuggestion;
 
-    // Validate parsed response
     if (
       typeof parsed.low === 'number' &&
       typeof parsed.high === 'number' &&
@@ -232,7 +193,6 @@ Be realistic and conservative — estate sale prices are typically 20-50% of ret
       reasoning: 'Manual pricing recommended (invalid response format)',
     };
   } catch (error) {
-    // Log error but return fallback gracefully
     console.error('Price suggestion API error:', error);
     return {
       low: 1,
