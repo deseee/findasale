@@ -401,7 +401,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       break;
     }
     default:
-      console.log(`Unhandled event type ${event.type}`);
+      console.warn(`[stripe] Unhandled event type: ${event.type}`);
   }
 
   res.json({ received: true });
