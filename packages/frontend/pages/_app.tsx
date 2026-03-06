@@ -1,6 +1,7 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
 import Layout from '../components/Layout';
@@ -10,6 +11,7 @@ import InstallPrompt from '../components/InstallPrompt';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
 import OrganizerOnboardingModal from '../components/OrganizerOnboardingModal';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // SW update notifier — renders a dismissible toast when a new service worker is waiting
 // Registers the user's browser for push notifications once they're logged in
@@ -107,6 +109,7 @@ function OrganizerOnboardingShower() {
 }
 
 function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
+  const router = useRouter();
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -124,9 +127,11 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
       <ToastProvider>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
-            <Layout>
-              <Component {...pageProps} />
-            </Layout>
+            <ErrorBoundary key={router.asPath}>
+              <Layout>
+                <Component {...pageProps} />
+              </Layout>
+            </ErrorBoundary>
             {/* PWA helpers */}
             <ServiceWorkerUpdateNotifier />
             <PushSubscriber />
