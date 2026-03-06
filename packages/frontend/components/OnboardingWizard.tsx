@@ -52,7 +52,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
         phone: phone.trim(),
         bio: bio.trim() || undefined,
       });
-      console.log('Profile update response:', response.data);
+      void response; // Profile update succeeded
       showToast('Profile saved successfully', 'success');
       setCurrentStep(2);
     } catch (error: any) {

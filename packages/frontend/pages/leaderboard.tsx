@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Layout from '../components/Layout';
 import { useAuth } from '../components/AuthContext';
+import api from '../lib/api';
 
 interface ShopperRank {
   rank: number;
@@ -43,19 +44,12 @@ const Leaderboard = () => {
       setError(null);
 
       const [shoppersRes, organizersRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/leaderboard/shoppers`),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/leaderboard/organizers`),
+        api.get('/leaderboard/shoppers'),
+        api.get('/leaderboard/organizers'),
       ]);
 
-      if (!shoppersRes.ok || !organizersRes.ok) {
-        throw new Error('Failed to fetch leaderboard data');
-      }
-
-      const shoppersData = await shoppersRes.json();
-      const organizersData = await organizersRes.json();
-
-      setShoppers(shoppersData);
-      setOrganizers(organizersData);
+      setShoppers(shoppersRes.data);
+      setOrganizers(organizersRes.data);
     } catch (err) {
       console.error('Error fetching leaderboards:', err);
       setError('Failed to load leaderboard data');

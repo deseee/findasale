@@ -221,16 +221,11 @@ const AddItemsDetailPage = () => {
                   download
                   className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-4 rounded-lg text-sm"
                   onClick={(e) => {
-                    // Attach auth token to download request via hidden fetch + blob URL
+                    // Use api instance (handles auth) with blob responseType for CSV download
                     e.preventDefault();
-                    const token = localStorage.getItem('token');
-                    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
-                    fetch(`${apiBase}/api/organizers/me/export/items/${saleId}`, {
-                      headers: token ? { Authorization: `Bearer ${token}` } : {},
-                    })
-                      .then((res) => res.blob())
-                      .then((blob) => {
-                        const url = URL.createObjectURL(blob);
+                    api.get(`/organizers/me/export/items/${saleId}`, { responseType: 'blob' })
+                      .then((res) => {
+                        const url = URL.createObjectURL(res.data as Blob);
                         const a = document.createElement('a');
                         a.href = url;
                         a.download = `items_${saleId}.csv`;
@@ -238,8 +233,7 @@ const AddItemsDetailPage = () => {
                         URL.revokeObjectURL(url);
                       })
                       .catch(() => showToast('Export failed. Please try again.', 'error'));
-                  }
-                  }
+                  }}
                 >
                   Export CSV
                 </a>

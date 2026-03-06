@@ -120,7 +120,7 @@ const AdminDashboard = () => {
         )}
 
         {/* Quick Links */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Link href="/admin/users" className="bg-white shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 transition">
             <h3 className="text-lg font-bold text-warm-900 mb-2">Manage Users</h3>
             <p className="text-warm-600 text-sm">View and manage all users, update roles</p>
@@ -129,6 +129,11 @@ const AdminDashboard = () => {
           <Link href="/admin/sales" className="bg-white shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 transition">
             <h3 className="text-lg font-bold text-warm-900 mb-2">Manage Sales</h3>
             <p className="text-warm-600 text-sm">View and delete sales, monitor activity</p>
+          </Link>
+
+          <Link href="/admin/invites" className="bg-white shadow rounded-lg p-6 hover:shadow-lg hover:bg-amber-50 border border-amber-100 transition">
+            <h3 className="text-lg font-bold text-warm-900 mb-2">Beta Invites</h3>
+            <p className="text-warm-600 text-sm">Generate and manage organizer invite codes</p>
           </Link>
 
           <Link href="/" className="bg-white shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 transition">
