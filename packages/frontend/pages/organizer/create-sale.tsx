@@ -14,6 +14,7 @@ import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import Tooltip from '../../components/Tooltip';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -122,7 +123,10 @@ const CreateSalePage = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-warm-700 mb-2">Sale Title</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label htmlFor="title" className="block text-sm font-medium text-warm-700">Sale Title</label>
+                <Tooltip content="This is the first thing shoppers see. Be specific: 'Johnson Family Estate Sale' beats 'Estate Sale'. Include the neighborhood or street if public." />
+              </div>
               <input
                 id="title"
                 type="text"
@@ -136,7 +140,10 @@ const CreateSalePage = () => {
             </div>
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-warm-700 mb-2">Description</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label htmlFor="description" className="block text-sm font-medium text-warm-700">Description</label>
+                <Tooltip content="Briefly describe what's for sale. Mention standout categories: 'Mid-century furniture, vintage tools, estate jewelry.' 2-3 sentences is enough." />
+              </div>
               <textarea
                 id="description"
                 name="description"
@@ -151,7 +158,10 @@ const CreateSalePage = () => {
             {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="startDate" className="block text-sm font-medium text-warm-700 mb-2">Start Date</label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label htmlFor="startDate" className="block text-sm font-medium text-warm-700">Start Date</label>
+                  <Tooltip content="Set your start date to the first day items are available. Shoppers browse before doors open, so publish 3-5 days early." />
+                </div>
                 <input
                   id="startDate"
                   type="date"
@@ -184,7 +194,10 @@ const CreateSalePage = () => {
 
             {/* Location */}
             <div>
-              <label htmlFor="address" className="block text-sm font-medium text-warm-700 mb-2">Address</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label htmlFor="address" className="block text-sm font-medium text-warm-700">Address</label>
+                <Tooltip content="Your exact address is shown to shoppers after the sale is published. It's used to show your sale on the map." />
+              </div>
               <input
                 id="address"
                 type="text"
