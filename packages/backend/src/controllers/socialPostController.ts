@@ -1,9 +1,8 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import Anthropic from '@anthropic-ai/sdk';
+import axios from 'axios';
 
 const prisma = new PrismaClient();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const generateSocialPost = async (req: Request, res: Response) => {
   try {
@@ -40,7 +39,7 @@ export const generateSocialPost = async (req: Request, res: Response) => {
     const endDate = new Date(sale.endDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
     const topItems = sale.items
-      .map(i => `- ${i.title} ($${i.price.toFixed(2)})`)
+      .map(i => `- ${i.title} ($${(i.price ?? 0).toFixed(2)})`)
       .join('\n');
 
     const prompt = `Generate a social media post for an estate sale. ${platformGuidelines[platform] || platformGuidelines.facebook}
@@ -55,13 +54,23 @@ ${highlights ? `\nOrganizer notes: ${highlights}` : ''}
 
 Write only the post text, no explanations.`;
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: prompt }],
+      },
+      {
+        headers: {
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+      }
+    );
 
-    const postText = (message.content[0] as { type: string; text: string }).text;
+    const postText = (response.data.content[0] as { type: string; text: string }).text;
     res.json({ post: postText, platform });
   } catch (error) {
     console.error('generateSocialPost error:', error);

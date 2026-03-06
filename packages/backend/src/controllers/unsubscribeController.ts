@@ -171,7 +171,7 @@ export async function resubscribe(
   res: Response
 ): Promise<Response> {
   try {
-    const userId = req.userId;
+    const userId = req.user?.id;
     const { type } = req.body;
 
     if (!userId) {
