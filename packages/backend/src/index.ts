@@ -64,6 +64,7 @@ import reservationRoutes from './routes/reservations'; // Phase 21: Item reserva
 import referralRoutes from './routes/referrals'; // Phase 23: Referral program
 import bountyRoutes from './routes/bounties';    // V3: UGC missing-listing bounties
 import webhookRoutes from './routes/webhooks';   // X1: Zapier webhook system
+import treasureHuntRoutes from './routes/treasureHunt'; // CD2 Phase 2: Treasure Hunt Mode
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -182,6 +183,7 @@ app.use('/api/reservations', reservationRoutes); // Phase 21: Item reservations/
 app.use('/api/referrals', referralRoutes);  // Phase 23: Referral program
 app.use('/api/bounties', bountyRoutes);    // V3: UGC missing-listing bounties
 app.use('/api/webhooks', webhookRoutes);   // X1: Zapier webhook system
+app.use('/api/treasure-hunt', treasureHuntRoutes); // CD2 Phase 2: Treasure Hunt Mode
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
