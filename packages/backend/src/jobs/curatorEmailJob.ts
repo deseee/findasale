@@ -135,7 +135,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
       },
     },
     include: {
-      user: { select: { firstName: true, businessName: true } },
+      user: { select: { name: true } },
       followers: {
         where: { notifyEmail: true },
         include: {
@@ -159,9 +159,8 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
     if (!organizer.sales.length || !organizer.followers.length) continue;
 
     const organizerName =
-      organizer.user.businessName ||
-      organizer.user.firstName ||
-      organizer.businessName;
+      organizer.businessName ||
+      organizer.user.name;
 
     for (const follow of organizer.followers) {
       const recipientEmail = follow.user?.email;

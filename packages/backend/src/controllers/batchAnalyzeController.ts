@@ -96,7 +96,8 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           }
 
           // AI analysis (best-effort)
-          let ai: Record<string, unknown> | null = null;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let ai: Record<string, any> | null = null;
 
           if (useCloudAI) {
             try {

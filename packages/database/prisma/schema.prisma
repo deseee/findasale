@@ -44,6 +44,7 @@ model User {
   reservations          ItemReservation[]
   bounties              MissingListingBounty[]
   webhooks              Webhook[]
+  treasureHuntFinds     TreasureHuntFind[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -119,6 +120,14 @@ model Item {
   // W1: Shipping
   shippingAvailable Boolean  @default(false)
   shippingPrice    Float?
+  // CD2: Live Drop — item hidden until liveDropAt time
+  isLiveDrop       Boolean   @default(false)
+  liveDropAt       DateTime?
+  // CD2 Phase 4: Reverse Auction — daily price decline until sold or floor hit
+  reverseAuction   Boolean   @default(false)
+  reverseDailyDrop Int?      // cents per day
+  reverseFloorPrice Int?     // minimum price in cents
+  reverseStartDate DateTime?
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]
@@ -126,6 +135,7 @@ model Item {
   favorites        Favorite[]
   reservation      ItemReservation?
   bountyFulfillments MissingListingBounty[]
+  treasureHuntFinds TreasureHuntFind[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -377,4 +387,36 @@ model Webhook {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+// CD2 Phase 2: Daily Treasure Hunt
+model TreasureHunt {
+  id          Int      @id @default(autoincrement())
+  date        String   @unique // YYYY-MM-DD
+  clue        String
+  category    String
+  keywords    String[]
+  pointReward Int      @default(50)
+  createdAt   DateTime @default(now())
+  finds       TreasureHuntFind[]
+}
+
+model TreasureHuntFind {
+  id      Int          @id @default(autoincrement())
+  userId  String
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  huntId  Int
+  hunt    TreasureHunt @relation(fields: [huntId], references: [id], onDelete: Cascade)
+  itemId  String
+  item    Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  foundAt DateTime     @default(now())
+
+  @@unique([userId, huntId])
+}
+
+// ST4: Stripe webhook event deduplication
+model StripeEvent {
+  id          String   @id
+  processedAt DateTime @default(now())
+
+  @@index([processedAt])
 }

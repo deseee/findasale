@@ -74,7 +74,7 @@ const buildPersonalizedPicks = async (
 
     for (const item of itemsForSale) {
       if (picks.length >= limit) break;
-      const photoUrl = item.photos?.[0]?.url || item.photoUrls?.[0];
+      const photoUrl = item.photoUrls?.[0];
       picks.push({
         id: item.id,
         title: item.title || 'Estate Sale Item',
@@ -228,12 +228,7 @@ export const sendWeeklyEmails = async (): Promise<void> => {
         items: {
           where: { status: 'AVAILABLE' },
           take: 50,
-          include: {
-            photos: {
-              take: 1,
-              select: { url: true },
-            },
-          },
+          select: { id: true, title: true, price: true, category: true, photoUrls: true },
         },
       },
       orderBy: { startDate: 'asc' },

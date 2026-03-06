@@ -14,7 +14,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
       where: { referrerId: userId },
       include: {
         referredUser: {
-          select: { firstName: true, lastName: true, createdAt: true },
+          select: { name: true, createdAt: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -26,7 +26,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
       earnings: '0.00',              // monetary payouts pending payment integration
       referrals: referrals.map((r) => ({
         id: r.id,
-        name: `${r.referredUser.firstName} ${r.referredUser.lastName || ''}`.trim(),
+        name: r.referredUser.name,
         joinedAt: r.createdAt,
       })),
     });

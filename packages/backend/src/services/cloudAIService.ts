@@ -61,7 +61,7 @@ export function isCloudAIAvailable(): boolean {
 
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
-async function getVisionLabels(imageBase64: string): Promise<string[]> {
+export async function getVisionLabels(imageBase64: string): Promise<string[]> {
   const response = await axios.post(
     `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
     {
