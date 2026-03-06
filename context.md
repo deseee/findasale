@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-06T02:19:06.234Z*
+*Generated at 2026-03-06T08:05:35.610Z*
 
 ## Git Status
 - **Branch:** (run git locally)
@@ -8,13 +8,14 @@
 
 ## Last Session
 ### 2026-03-05
-**Worked on:** CB1: `cloudAIService.ts` (Google Vision REST → Claude Haiku chain, Ollama fallback), `uploadController.ts` updated. CA5 medium fixes: message pagination caps (take:200/100), `contactLimiter` (5/15min). CB3: AI suggestions review panel in add-items (Apply/Dismiss/Rescan — no silent pre-fill). CC2: marketing content doc (2 blog posts, social templates, 4 email templates). CA2: schema verified (4 additive migrations pending Railway), migration runbook created. CD1: Fraunces serif font + sage-green palette in Tailwind + `_document.tsx`. CA3: payment stress test doc, 2 Stripe bugs fixed (concurrent purchase auto-refund, $0.50 minimum guard). P6: AI-generated logo — initial SVG + PNG set, then full redesign to clean price tag icon after Patrick rejected phone/Q shape. Five final PNGs: logo-icon-512, logo-oauth-120, logo-primary, business-card-front, business-card-back.
-**Decisions:** Logo concept: amber rounded-square bg, white price tag (pointing left), dark amber price lines inside. No magnifying glass. OAuth consent screen needs 120×120 square PNG — `logo-oauth-120.png` created. Business cards use Vistaprint 3.5×2" @ 300dpi (1050×600px).
-**Next up:** CA4 (user flow audit — full shopper/organizer/creator journey, mobile + a11y), CA6 (feature polish — photo UX, push notifications, onboarding, empty states), CD2 Phase 2 (engagement layer). Patrick: order business cards (business-card-front/back.png in claude_docs/brand/), P2 (Stripe business account, Google Voice, Search Console), P5 OAuth credentials to Vercel.
-**Blockers:** Brand PNGs generated locally but push agent hit token limit — need to verify GitHub has latest logo files. Patrick to confirm 5%/7% flat fee for beta (CC3). Railway migrations (4 pending) — should auto-run on next deploy.
+**Worked on:** 25 roadmap items shipped across 5 parallel sessions. favicon.ico (multi-size ICO). CA4/CA6 remaining audit fixes (profile push toggle, error states, date validation, WCAG labels). CA7 human docs (organizer guide, shopper FAQ, Zapier docs) + in-app tooltips. CB4 AI quality (9 category prompts, title format, tag dedup). CD2 Phase 2 complete: Live Drop Events (CountdownTimer, schema), Personalized Weekly Email (cron), Treasure Hunt Mode (Haiku clues, Hunt Pass points), Smart Inventory Upload (batch photo → AI → items). CD2 Phase 3: Dynamic Pricing (suggestPrice() + PriceSuggestion.tsx), Visual Search (Vision labels → item search + VisualSearchButton). CD2 Phase 4: Reverse Auction (daily price drop cron, push notifications, organizer form). Organizer onboarding walkthrough, manual item add form, creator dashboard real content, global error boundary. Health fixes: SSR guards (3 pages), Prisma pagination (9 queries), contact rate limit, OAuth email dedup. Stripe webhook hardening (idempotency via StripeEvent table, dispute/payout handlers, Sentry). Beta Readiness Audit: CONDITIONAL GO.
+**Decisions:** Beta target March 12–19, 2026. Verdict: CONDITIONAL GO — all tech ready, 4 Patrick actions block launch. Railway CLI migration path: `cd packages\database && railway run -- npx prisma migrate deploy`. Visual Search uses Vision API label matching (no vector DB). Reverse Auction cron at 6AM UTC.
+**Next up:** Patrick: (1) OAuth creds → Vercel, (2) support@finda.sale email, (3) `prisma migrate deploy` (4 pending migrations), (4) STRIPE_WEBHOOK_SECRET in Railway. Then beta recruitment (P4). Claude: post-beta features (AI Discovery Feed, Buyer-to-Sale Matching) or P4 support.
+**Blockers:** 4 pending Railway migrations (Live Drop, Treasure Hunt, Reverse Auction, StripeEvent). OAuth env vars not yet in Vercel. Support email not configured. STRIPE_WEBHOOK_SECRET not set in Railway.
 
 ## Health Status
-No health reports yet — run health-scout skill.
+Last scan: 2026-03-05
+FindA.Sale is in **GREEN** status — excellent health for pre-beta. No critical or high
 
 ## Docker
 ```
@@ -28,8 +29,9 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: ANTHROPIC_MODEL, OLLAMA_URL, OLLAMA_VISION_MODEL
-⚠ 1+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/lucid-dazzling-hawking/mnt/FindaSale/packages/backend/src/controllers/userController.ts:210:          // TODO: Implement notification system when ready
+⚠ 2+ TODO/FIXME markers in source (showing up to 5):
+  C:\Users\desee\ClaudeProjects\FindaSale\packages\backend\src\controllers\tierController.ts:90:    // TODO: add admin check here if needed
+  C:\Users\desee\ClaudeProjects\FindaSale\packages\backend\src\controllers\userController.ts:210:          // TODO: Implement notification system when ready
 
 ## Project File Tree
 ```
@@ -41,7 +43,10 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   └── pre-push
 ├── .gitignore
 ├── CLAUDE.md
+├── EMAIL_TEMPLATE_SYSTEM.md
+├── PRICE_ALERTS_IMPLEMENTATION.md
 ├── README.md
+├── STRIPE_WEBHOOK_HARDENING.md
 ├── ai-config/
 │   └── global-instructions.md
 ├── claude_docs/
@@ -51,6 +56,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   ├── DEVELOPMENT.md
 │   ├── OPS.md
 │   ├── RECOVERY.md
+│   ├── ROADMAP.md
 │   ├── SECURITY.md
 │   ├── SEED_SUMMARY.md
 │   ├── STACK.md
@@ -64,6 +70,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── beta-readiness-audit-2026-03-05.md
 │   │   ├── ca4-ca6-audit-2026-03-05.md
 │   │   ├── migration-runbook.md
+│   │   ├── payment-stress-test.md
 │   │   ├── pre-beta-audit-2026-03-03.md
 │   │   ├── rebrand-audit.md
 │   │   └── workflow-audit-2026-03-03.md
@@ -71,16 +78,25 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── README.md
 │   │   ├── business-card-back.png
 │   │   ├── business-card-front.png
+│   │   ├── logo-dark-bg.svg
 │   │   ├── logo-icon-512.png
+│   │   ├── logo-icon.svg
 │   │   ├── logo-oauth-120.png
-│   │   └── logo-primary.png
+│   │   ├── logo-primary.png
+│   │   └── logo-primary.svg
 │   ├── changelog-tracker/
 │   │   └── .gitkeep
 │   ├── competitor-intel/
 │   │   └── .gitkeep
+│   ├── guides/
+│   │   ├── organizer-guide.md
+│   │   ├── shopper-faq.md
+│   │   └── zapier-webhooks.md
 │   ├── health-reports/
 │   │   ├── .gitkeep
-│   │   └── 2026-03-05-full-scan.md
+│   │   ├── 2026-03-05-full-scan.md
+│   │   └── 2026-03-05.md
+│   ├── migration-runbook.md
 │   ├── model-routing.md
 │   ├── monthly-digests/
 │   │   └── .gitkeep
@@ -88,7 +104,6 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   ├── new 2.txt
 │   ├── next-session-prompt.md
 │   ├── patrick-language-map.md
-│   ├── payment-stress-test.md
 │   ├── pre-commit-check.md
 │   ├── research/
 │   │   ├── branding-brief-2026-03-05.md
@@ -97,20 +112,21 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── growth-channels-2026-03-04.md
 │   │   ├── investor-materials-2026-03-05.md
 │   │   ├── marketing-content-2026-03-05.md
-│   │   ├── parallel-roadmap-2026-03-05.md
 │   │   ├── parallel-roadmap-v2-2026-03-05.md
 │   │   ├── pricing-analysis-2026-03-05.md
 │   │   └── strategic-review-2026-03-05.md
-│   ├── roadmap.md
 │   ├── self_healing_skills.md
 │   ├── session-log.md
 │   ├── session-safeguards.md
 │   ├── test_write
 │   ├── ux-spotchecks/
-│   │   └── .gitkeep
+│   │   ├── .gitkeep
+│   │   └── ca4-ca6-audit-2026-03-05.md
 │   └── workflow-retrospectives/
 │       └── .gitkeep
 ├── docker-compose.yml
+├── docs/
+│   └── CD2_PHASE2_TREASURE_HUNT.md
 ├── next
 ├── package.json
 ├── packages/
@@ -128,14 +144,6 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   └── image-tagger/
 │   │   │       ├── .coverage
 │   │   │       ├── .coverage.claude.pid10229.XQC9qibx.H0CrSzLFxgoh
-│   │   │       ├── .pytest_cache/
-│   │   │       │   ├── .gitignore
-│   │   │       │   ├── CACHEDIR.TAG
-│   │   │       │   ├── README.md
-│   │   │       │   └── v/
-│   │   │       │       └── cache/
-│   │   │       │           ├── lastfailed
-│   │   │       │           └── nodeids
 │   │   │       ├── Dockerfile
 │   │   │       ├── TESTING_PROGRESS.md
 │   │   │       ├── app.py
@@ -144,7 +152,6 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │       │   ├── TAGGER_BENCHMARKS.md
 │   │   │       │   ├── TAGGER_DESIGN.md
 │   │   │       │   └── TAGGER_TROUBLESHOOTING.md
-│   │   │       ├── pytest-cache-files-pv4rszl7/
 │   │   │       ├── requirements-dev.txt
 │   │   │       ├── requirements.txt
 │   │   │       ├── setup.sh
@@ -165,18 +172,27 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   └── weeklyDigest.e2e.ts
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── controllers/
+│   │   │   │   ├── adminController.ts
 │   │   │   │   ├── affiliateController.ts
 │   │   │   │   ├── authController.ts
+│   │   │   │   ├── batchAnalyzeController.ts
 │   │   │   │   ├── bountyController.ts
+│   │   │   │   ├── buyingPoolController.ts
 │   │   │   │   ├── favoriteController.ts
+│   │   │   │   ├── flashDealController.ts
 │   │   │   │   ├── geocodeController.ts
+│   │   │   │   ├── insightsController.ts
 │   │   │   │   ├── itemController.ts
 │   │   │   │   ├── labelController.ts
+│   │   │   │   ├── leaderboardController.ts
 │   │   │   │   ├── lineController.ts
 │   │   │   │   ├── marketingKitController.ts
 │   │   │   │   ├── messageController.ts
 │   │   │   │   ├── notificationController.ts
+│   │   │   │   ├── notificationInboxController.ts
 │   │   │   │   ├── payoutController.ts
+│   │   │   │   ├── pickupController.ts
+│   │   │   │   ├── plannerController.ts
 │   │   │   │   ├── pushController.ts
 │   │   │   │   ├── referralController.ts
 │   │   │   │   ├── reservationController.ts
@@ -184,38 +200,56 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── saleController.ts
 │   │   │   │   ├── stripeController.ts
 │   │   │   │   ├── stripeStatusController.ts
+│   │   │   │   ├── tierController.ts
 │   │   │   │   ├── uploadController.ts
 │   │   │   │   ├── userController.ts
-│   │   │   │   └── webhookController.ts
+│   │   │   │   ├── waitlistController.ts
+│   │   │   │   ├── webhookController.ts
+│   │   │   │   └── wishlistController.ts
 │   │   │   ├── index.ts
 │   │   │   ├── instrument.ts
 │   │   │   ├── jobs/
+│   │   │   │   ├── abandonedCheckoutJob.ts
 │   │   │   │   ├── auctionJob.ts
 │   │   │   │   ├── curatorEmailJob.ts
 │   │   │   │   ├── emailReminderJob.ts
 │   │   │   │   ├── notificationJob.ts
+│   │   │   │   ├── organizerWeeklyDigestJob.ts
 │   │   │   │   ├── reputationJob.ts
-│   │   │   │   └── reservationExpiryJob.ts
+│   │   │   │   ├── reservationExpiryJob.ts
+│   │   │   │   ├── reverseAuctionJob.ts
+│   │   │   │   ├── saleEndingSoonJob.ts
+│   │   │   │   └── weeklyEmailJob.ts
 │   │   │   ├── lib/
 │   │   │   │   ├── prisma.ts
 │   │   │   │   └── socket.ts
 │   │   │   ├── middleware/
+│   │   │   │   ├── adminAuth.ts
 │   │   │   │   └── auth.ts
 │   │   │   ├── models/
 │   │   │   │   └── LineEntry.ts
 │   │   │   ├── routes/
+│   │   │   │   ├── admin.ts
 │   │   │   │   ├── affiliate.ts
 │   │   │   │   ├── auth.ts
 │   │   │   │   ├── bounties.ts
+│   │   │   │   ├── buyingPools.ts
 │   │   │   │   ├── contact.ts
 │   │   │   │   ├── favorites.ts
 │   │   │   │   ├── feed.ts
+│   │   │   │   ├── flashDeals.ts
 │   │   │   │   ├── geocode.ts
+│   │   │   │   ├── insights.ts
 │   │   │   │   ├── items.ts
+│   │   │   │   ├── leaderboard.ts
 │   │   │   │   ├── lines.ts
 │   │   │   │   ├── messages.ts
+│   │   │   │   ├── notificationInbox.ts
 │   │   │   │   ├── notifications.ts
+│   │   │   │   ├── organizerDigest.ts
 │   │   │   │   ├── organizers.ts
+│   │   │   │   ├── pickup.ts
+│   │   │   │   ├── planner.ts
 │   │   │   │   ├── points.ts
 │   │   │   │   ├── push.ts
 │   │   │   │   ├── referrals.ts
@@ -223,16 +257,31 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── reviews.ts
 │   │   │   │   ├── sales.ts
 │   │   │   │   ├── search.ts
+│   │   │   │   ├── streaks.ts
 │   │   │   │   ├── stripe.ts
+│   │   │   │   ├── tiers.ts
+│   │   │   │   ├── treasureHunt.ts
 │   │   │   │   ├── upload.ts
 │   │   │   │   ├── users.ts
-│   │   │   │   └── webhooks.ts
+│   │   │   │   ├── waitlist.ts
+│   │   │   │   ├── webhooks.ts
+│   │   │   │   └── wishlists.ts
 │   │   │   ├── services/
+│   │   │   │   ├── buyerMatchService.ts
 │   │   │   │   ├── cloudAIService.ts
+│   │   │   │   ├── discoveryService.ts
 │   │   │   │   ├── emailReminderService.ts
+│   │   │   │   ├── emailTemplateService.ts
 │   │   │   │   ├── followerNotificationService.ts
+│   │   │   │   ├── notificationService.ts
+│   │   │   │   ├── organizerAnalyticsService.ts
 │   │   │   │   ├── pointsService.ts
-│   │   │   │   └── webhookService.ts
+│   │   │   │   ├── priceDropService.ts
+│   │   │   │   ├── streakService.ts
+│   │   │   │   ├── tierService.ts
+│   │   │   │   ├── treasureHuntService.ts
+│   │   │   │   ├── webhookService.ts
+│   │   │   │   └── weeklyEmailService.ts
 │   │   │   └── utils/
 │   │   │       ├── stripe.ts
 │   │   │       └── webpush.ts
@@ -245,7 +294,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (28 migrations)
+│   │   │   ├── migrations/ (46 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -255,36 +304,64 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── components/
+│   │   │   ├── ActivitySummary.tsx
 │   │   │   ├── AuctionCountdown.tsx
 │   │   │   ├── AuthContext.tsx
 │   │   │   ├── BadgeDisplay.tsx
 │   │   │   ├── BidModal.tsx
 │   │   │   ├── BottomTabNav.tsx
 │   │   │   ├── BountyModal.tsx
+│   │   │   ├── BulkItemToolbar.tsx
+│   │   │   ├── BuyingPoolCard.tsx
 │   │   │   ├── CSVImportModal.tsx
 │   │   │   ├── CheckoutModal.tsx
+│   │   │   ├── CountdownTimer.tsx
+│   │   │   ├── ErrorBoundary.tsx
+│   │   │   ├── FlashDealBanner.tsx
+│   │   │   ├── FlashDealForm.tsx
+│   │   │   ├── FlashDealsBanner.tsx
 │   │   │   ├── FollowButton.tsx
 │   │   │   ├── InstallPrompt.tsx
 │   │   │   ├── ItemCard.tsx
+│   │   │   ├── ItemListWithBulkSelection.tsx
 │   │   │   ├── ItemPhotoManager.tsx
 │   │   │   ├── Layout.tsx
+│   │   │   ├── MyPickupAppointments.tsx
+│   │   │   ├── NotificationBell.tsx
+│   │   │   ├── NotificationPreferences.tsx
 │   │   │   ├── OnboardingModal.tsx
+│   │   │   ├── OnboardingWizard.tsx
+│   │   │   ├── OrganizerOnboardingModal.tsx
+│   │   │   ├── OrganizerTierBadge.tsx
 │   │   │   ├── PhotoLightbox.tsx
+│   │   │   ├── PickupBookingCard.tsx
+│   │   │   ├── PickupSlotManager.tsx
 │   │   │   ├── PointsBadge.tsx
 │   │   │   ├── PriceSuggestion.tsx
 │   │   │   ├── RapidCapture.tsx
+│   │   │   ├── RecentlyViewed.tsx
 │   │   │   ├── ReputationTier.tsx
+│   │   │   ├── ReverseAuctionBadge.tsx
 │   │   │   ├── ReviewsSection.tsx
 │   │   │   ├── SaleCard.tsx
 │   │   │   ├── SaleMap.tsx
 │   │   │   ├── SaleMapInner.tsx
+│   │   │   ├── SaleQRCode.tsx
 │   │   │   ├── SaleShareButton.tsx
 │   │   │   ├── SaleSubscription.tsx
+│   │   │   ├── SalesNearYou.tsx
+│   │   │   ├── SearchFilterPanel.tsx
 │   │   │   ├── Skeleton.tsx
 │   │   │   ├── SkeletonCards.tsx
+│   │   │   ├── SmartInventoryUpload.tsx
 │   │   │   ├── StarRating.tsx
+│   │   │   ├── StreakWidget.tsx
 │   │   │   ├── TierBadge.tsx
-│   │   │   └── ToastContext.tsx
+│   │   │   ├── ToastContext.tsx
+│   │   │   ├── Tooltip.tsx
+│   │   │   ├── TreasureHuntBanner.tsx
+│   │   │   ├── VisualSearchButton.tsx
+│   │   │   └── YourWishlists.tsx
 │   │   ├── contexts/
 │   │   │   └── ToastContext.tsx
 │   │   ├── hooks/
@@ -304,12 +381,17 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   ├── _app.tsx
 │   │   │   ├── _document.tsx
 │   │   │   ├── about.tsx
+│   │   │   ├── admin/
+│   │   │   │   ├── index.tsx
+│   │   │   │   ├── sales.tsx
+│   │   │   │   └── users.tsx
 │   │   │   ├── affiliate/
 │   │   │   │   └── [id].tsx
 │   │   │   ├── api/
 │   │   │   │   ├── auth/
 │   │   │   │   │   └── [...nextauth].ts
 │   │   │   │   └── og.tsx
+│   │   │   ├── calendar.tsx
 │   │   │   ├── categories/
 │   │   │   │   └── [category].tsx
 │   │   │   ├── city/
@@ -320,10 +402,13 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   ├── faq.tsx
 │   │   │   ├── feed.tsx
 │   │   │   ├── forgot-password.tsx
+│   │   │   ├── guide.tsx
 │   │   │   ├── index.tsx
 │   │   │   ├── items/
 │   │   │   │   └── [id].tsx
+│   │   │   ├── leaderboard.tsx
 │   │   │   ├── login.tsx
+│   │   │   ├── map.tsx
 │   │   │   ├── messages/
 │   │   │   │   ├── [id].tsx
 │   │   │   │   ├── index.tsx
@@ -331,6 +416,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   ├── neighborhoods/
 │   │   │   │   ├── [slug].tsx
 │   │   │   │   └── index.tsx
+│   │   │   ├── notifications.tsx
 │   │   │   ├── offline.tsx
 │   │   │   ├── organizer/
 │   │   │   │   ├── add-items/
@@ -344,6 +430,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── edit-sale/
 │   │   │   │   │   └── [id].tsx
 │   │   │   │   ├── holds.tsx
+│   │   │   │   ├── insights.tsx
 │   │   │   │   ├── line-queue/
 │   │   │   │   │   └── [id].tsx
 │   │   │   │   ├── payouts.tsx
@@ -353,6 +440,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   └── webhooks.tsx
 │   │   │   ├── organizers/
 │   │   │   │   └── [id].tsx
+│   │   │   ├── plan.tsx
 │   │   │   ├── privacy.tsx
 │   │   │   ├── profile.tsx
 │   │   │   ├── refer/
@@ -371,7 +459,11 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── favorites.tsx
 │   │   │   │   └── purchases.tsx
 │   │   │   ├── terms.tsx
-│   │   │   └── unsubscribe.tsx
+│   │   │   ├── unsubscribe.tsx
+│   │   │   ├── wishlists/
+│   │   │   │   └── shared/
+│   │   │   │       └── [slug].tsx
+│   │   │   └── wishlists.tsx
 │   │   ├── postcss.config.js
 │   │   ├── public/
 │   │   │   ├── fallback-OI8nXpndPrduP2yucmXrX.js
@@ -410,6 +502,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── tsconfig.json
 │   │   ├── tsconfig.tsbuildinfo
 │   │   └── types/
+│   │       ├── bulk-items.ts
 │   │       └── next-auth.d.ts
 │   └── shared/
 │       ├── CLAUDE.md

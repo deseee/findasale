@@ -202,6 +202,29 @@ git push
 ```
 **Prevention:** After Claude adds any package to `package.json`, explicitly note in session-log: "Patrick must run `pnpm install` and commit `pnpm-lock.yaml` before Vercel deploy."
 
+### 33. MCP File Size Pre-Check Before Push
+**Trigger:** About to push a file via `mcp__github__push_files` that exceeds 25,000 tokens combined content. Large controllers (itemController.ts ~835 lines, saleController.ts) commonly exceed this.
+**Root cause:** CLAUDE.md §5 sets hard limit: ≤5 files AND ≤25k tokens per MCP push. Agents spawned for feature work don't always load CLAUDE.md and miss this constraint.
+**Fix:** Before any MCP push, estimate token count (rough: 1 token ≈ 4 chars). If total ≥ 25k tokens or >5 files, defer to Patrick with PowerShell push instructions.
+**Prevention:** At session start, any agent doing feature work must be told the MCP push limits in its prompt. Never attempt to push large files (>500 lines) via MCP — always hand off to Patrick.
+**Known instance:** Session 79 — itemController.ts (~835 lines, ~30k tokens) failed MCP size check.
+
+### 34. autocrlf + git rebase Conflict on Windows
+**Trigger:** Windows repo with `core.autocrlf=true`. `git pull --rebase` fails with "unstaged changes" on `.md` or `.ts` files that were committed with LF but checked out as CRLF. `git stash`, `git restore .`, and `git reset --hard HEAD` all fail to clear them.
+**Root cause:** autocrlf converts LF→CRLF in working tree on checkout. Git sees the CRLF working-tree file as modified vs the LF index entry. Rebase requires a perfectly clean tree and rejects these phantom modifications.
+**Fix (immediate):** `git pull --no-rebase origin main` — merge doesn't require a clean working tree for non-conflicting files.
+**Fix (alternative):** Commit the CRLF files first (`git add <files> && git commit -m "chore: normalize line endings"`), then rebase succeeds because the tree is clean.
+**Fix (nuclear):** `git stash clear && git reset --hard origin/main` — loses local commits, use only as last resort.
+**Prevention:** Configure `.gitattributes` with `* text=auto eol=lf` for all text files. This prevents the CRLF→LF conversion cycle entirely.
+**Known instance:** Session 79 — image-tagger docs blocked 5+ rebase attempts. Resolved with commit + `git pull --no-rebase`.
+
+### 35. Roadmap Version Regression via Subagent File Overwrite
+**Trigger:** A subagent pushes files to GitHub via MCP that include a stale version of a documentation file. The MCP push overwrites the current version without checking git history.
+**Root cause:** Subagents work in isolation and may read a cached/old version of a file, then include it in a batch push. The batch push overwrites the GitHub version with the stale content.
+**Fix:** After any batch MCP push, verify critical doc files (ROADMAP.md, STATE.md) still contain expected content. Use `mcp__github__get_file_contents` to spot-check.
+**Prevention:** Never include documentation files in feature-batch MCP pushes. Push code files only. Update docs in a separate, deliberate commit.
+**Known instance:** Session 78 — commit 1061965 (CD2-P2/P3 batch) overwrote v11 roadmap with stale v3 compressed version. Not detected until session 79.
+
 ---
 
-Last Updated: 2026-03-05 (session 61 — added entries 30-32: .gitattributes CRLF perpetual dirty, case-sensitivity duplicate index, pnpm frozen lockfile mismatch)
+Last Updated: 2026-03-06 (session 79 — added entries 33-35: MCP size pre-check, autocrlf rebase conflict, roadmap version regression)
