@@ -63,6 +63,10 @@ for routefile in "$ROUTE_DIR"/*.ts; do
   case "$filename" in
     auth.ts|contact.ts|geocode.ts|stripe.ts) continue ;;
   esac
+  # If the file uses router.use(authenticate), all routes are covered — skip line-by-line check
+  if grep -q 'router\.use(authenticate)' "$routefile"; then
+    continue
+  fi
   while IFS= read -r line; do
     if echo "$line" | grep -qE 'router\.(post|put|patch|delete)\s*\('; then
       if ! echo "$line" | grep -q 'authenticate'; then

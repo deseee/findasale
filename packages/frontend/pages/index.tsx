@@ -67,6 +67,14 @@ const HomePage = () => {
         (error) => console.error('Error getting location:', error)
       );
     }
+
+    // Record visit streak silently
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (token) {
+      api
+        .post('/streaks/visit')
+        .catch((err) => console.error('Streak visit recording failed (non-blocking):', err.message));
+    }
   }, []);
 
   // Client-side filtering

@@ -45,6 +45,12 @@ model User {
   bounties              MissingListingBounty[]
   webhooks              Webhook[]
   treasureHuntFinds     TreasureHuntFind[]
+  streakPoints          Int        @default(0)
+  visitStreak           Int        @default(0)
+  lastVisitDate         DateTime?
+  huntPassActive        Boolean    @default(false)
+  huntPassExpiry        DateTime?
+  userStreaks           UserStreak[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -419,4 +425,18 @@ model StripeEvent {
   processedAt DateTime @default(now())
 
   @@index([processedAt])
+}
+
+// CD2 Phase 2: Streak Challenges — tracks daily streaks by type (visit, save, buy)
+model UserStreak {
+  id               Int      @id @default(autoincrement())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type             String   // 'visit' | 'save' | 'buy'
+  currentStreak    Int      @default(0)
+  longestStreak    Int      @default(0)
+  lastActivityDate DateTime?
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, type])
 }

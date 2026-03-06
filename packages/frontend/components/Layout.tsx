@@ -27,6 +27,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const staticNavLinks = [
     { href: '/', label: 'Home' },
     { href: '/about', label: 'About' },
+    { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/contact', label: 'Contact' },
   ];
 
@@ -191,6 +192,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               <ul className="space-y-2">
                 <li><Link href="/" className="text-warm-400 hover:text-white">Home</Link></li>
                 <li><Link href="/about" className="text-warm-400 hover:text-white">About</Link></li>
+                <li><Link href="/leaderboard" className="text-warm-400 hover:text-white">Leaderboard</Link></li>
                 <li><Link href="/contact" className="text-warm-400 hover:text-white">Contact</Link></li>
                 <li><Link href="/faq" className="text-warm-400 hover:text-white">FAQ</Link></li>
                 {isClient && user?.role === 'ORGANIZER' && (

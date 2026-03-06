@@ -115,6 +115,12 @@ const OrganizerDashboard = () => {
             >
               Manage Holds
             </Link>
+            <Link
+              href="/organizer/insights"
+              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              Insights
+            </Link>
           </div>
 
           {/* Tab Navigation */}

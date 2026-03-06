@@ -283,6 +283,11 @@ const ItemDetailPage = () => {
   const handleCheckoutSuccess = () => {
     setCheckoutItemId(null);
     refetch();
+
+    // Record purchase streak
+    api.post('/streaks/purchase').catch((err) => {
+      console.error('Streak purchase recording failed (non-blocking):', err.message);
+    });
   };
 
   const handlePlaceBid = async () => {
@@ -318,6 +323,13 @@ const ItemDetailPage = () => {
       await api.post(`/favorites/item/${item.id}`, { isFavorite: !isFavorite });
       setIsFavorite(!isFavorite);
       queryClient.invalidateQueries({ queryKey: ['favorite', id] });
+
+      // Record save streak if adding to favorites
+      if (!isFavorite) {
+        api.post('/streaks/save').catch((err) => {
+          console.error('Streak save recording failed (non-blocking):', err.message);
+        });
+      }
     } catch (err: any) {
       console.error('Favorite error:', err);
       showToast('Failed to update favorite status', 'error');

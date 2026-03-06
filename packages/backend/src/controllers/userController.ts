@@ -331,3 +331,68 @@ export const handleExplorerBadge = async (userId: string) => {
     console.error('Error handling explorer badge:', error);
   }
 };
+
+// CD2 Phase 3: First Sale badge — awarded when a shopper completes their first purchase
+export const handleFirstSaleBadge = async (userId: string) => {
+  try {
+    // Count user's purchases
+    const purchaseCount = await prisma.purchase.count({
+      where: { userId }
+    });
+
+    // Award badge only on first purchase
+    if (purchaseCount === 1) {
+      await awardBadge(userId, 'first_purchase', 1);
+    }
+  } catch (error) {
+    console.error('Error handling first sale badge:', error);
+  }
+};
+
+// CD2 Phase 3: Explorer badge — awarded when a shopper views 10 distinct sales (via favorites or line entries)
+export const handleSalesViewedBadge = async (userId: string) => {
+  try {
+    // Count distinct sales the user has interacted with (favorited or entered line)
+    const [favoriteCount, lineEntryCount] = await Promise.all([
+      prisma.favorite.findMany({
+        where: { userId, saleId: { not: null } },
+        select: { saleId: true },
+        distinct: ['saleId']
+      }),
+      prisma.lineEntry.findMany({
+        where: { userId },
+        select: { saleId: true },
+        distinct: ['saleId']
+      })
+    ]);
+
+    // Combine and deduplicate
+    const uniqueSales = new Set([
+      ...favoriteCount.map(f => f.saleId).filter(Boolean),
+      ...lineEntryCount.map(l => l.saleId)
+    ]);
+
+    // Award badge when user has viewed 10+ distinct sales
+    if (uniqueSales.size >= 10) {
+      await awardBadge(userId, 'sales_viewed', uniqueSales.size);
+    }
+  } catch (error) {
+    console.error('Error handling sales viewed badge:', error);
+  }
+};
+
+// CD2 Phase 3: Grand Rapids Legend — awarded when user reaches 500 streak points
+export const handleLegendBadge = async (userId: string) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { streakPoints: true }
+    });
+
+    if (user && user.streakPoints >= 500) {
+      await awardBadge(userId, 'grand_rapids_legend', user.streakPoints);
+    }
+  } catch (error) {
+    console.error('Error handling legend badge:', error);
+  }
+};
