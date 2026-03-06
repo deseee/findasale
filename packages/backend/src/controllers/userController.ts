@@ -205,18 +205,17 @@ export const awardBadge = async (userId: string, badgeCriteriaType: string, coun
             }
           });
 
-          console.log(`Awarded badge "${badge.name}" to user ${userId}`);
-          
-          // TODO: Implement notification system when ready
-          // Create notification for user
-          // await prisma.notification.create({
-          //   data: {
-          //     userId,
-          //     title: 'New Badge Earned!',
-          //     message: `Congratulations! You've earned the "${badge.name}" badge.`,
-          //     type: 'BADGE'
-          //   }
-          // });
+          console.info(`Awarded badge "${badge.name}" to user ${userId}`);
+
+          // Notify user of new badge
+          await prisma.notification.create({
+            data: {
+              userId,
+              title: 'New Badge Earned!',
+              body: `Congratulations! You've earned the "${badge.name}" badge.`,
+              type: 'badge'
+            }
+          }).catch(() => {/* non-critical — badge still awarded */});
         }
       }
     }

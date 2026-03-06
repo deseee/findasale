@@ -13,7 +13,7 @@ const initTwilio = () => {
         process.env.TWILIO_ACCOUNT_SID,
         process.env.TWILIO_AUTH_TOKEN
       );
-      console.log('✅ Twilio client initialized for line controller');
+      console.info('✅ Twilio client initialized for line controller');
     } catch (error) {
       console.warn('⚠️ Failed to initialize Twilio client for line controller:', error);
       twilioClient = null;

@@ -1,83 +1,90 @@
 # Next Session Resume Prompt
-*Written: 2026-03-06T17:00:00Z*
-*Session ended: normally (session 82, batches 9–13)*
+*Written: 2026-03-06T19:00:00Z*
+*Session ended: normally (session 82, batches 9–16)*
 
 ## Resume From
 
-**Beta-ready.** All features, health items, and invite flow complete. Session 82 (batches 9–13): health scout GREEN, Virtual Tours, pricing comps, OG tags, plan.tsx fix, beta outreach emails, e2e test checklist, beta invite flow wired end-to-end.
+**Beta-ready. Pre-push hook fully silent.** All features complete, all raw fetch() calls fixed, zero console.log warnings, zero TODO/FIXME in controllers. Badge notifications now live (was commented-out TODO).
 
-Announce: "Session loaded. All features complete. Beta invite flow wired. Entering final beta prep."
+Announce: "Session loaded. All features complete, pre-push hook clean. Entering final beta prep."
 
-## What's Actually Next
+## Patrick's Required Actions Before Beta
 
-### Option A — Go/No-Go Final Pass
-Review `claude_docs/BETA_CHECKLIST.md` Go/No-Go gate. Walk Patrick through the 7-item checklist. Help draft the first beta invite email to send to Grand Rapids organizers.
-
-### Option B — Patrick's Pending Actions Support
-Patrick still needs to:
-1. Confirm 5% / 7% fee decision → update `claude_docs/research/CC3-pricing-analysis.md` if decided
+1. Confirm 5% / 7% fee decision
 2. Set up Stripe business account
-3. Order business cards (files in `claude_docs/brand/`)
+3. Order business cards
 4. Start beta organizer recruitment (emails ready in `claude_docs/beta-launch/organizer-outreach.md`)
 5. Run e2e test checklist (`claude_docs/beta-launch/e2e-test-checklist.md`)
 6. Review `/guide` + `/faq` before sharing with beta users
 
-### Option C — Non-blocking Cleanup (small wins)
-- Check if `image-tagger/` was removed from git tracking: `git ls-files packages/backend/services/image-tagger`
-  If files show, run: `git rm -r packages/backend/services/image-tagger/`
-- Review any Sentry errors that have accumulated since Railway deploy
-- Add `BETA_MODE=true` env var logic if Patrick wants a soft launch (invite-only gate at route level)
+## IMPORTANT: CRLF Push Rule
 
-**Default if Patrick says "keep going":** Do Option C, then help Patrick with Option B.
+**Always run `git add + git commit` FIRST in a separate step, THEN run `.\push.ps1` separately.**
+Do NOT chain them — push.ps1's CRLF normalization step reverts uncommitted changes.
+
+```powershell
+# Correct pattern — two separate steps:
+git add [files] && git commit -m "..."
+.\push.ps1
+```
+
+## What's Next for Claude
+
+### Option A — Go/No-Go Final Pass
+Review `claude_docs/BETA_CHECKLIST.md`. Walk Patrick through the 7 checklist items. Help draft the beta invite email for Grand Rapids organizers.
+
+### Option B — More Cleanup
+- Sentry error review since Railway deploy
+- Add `BETA_MODE=true` env var logic if Patrick wants a hard invite-only gate
+- Check `packages/frontend/pages/` for any other broken patterns
+
+**Default if Patrick says "keep going":** Option B, then Go/No-Go review.
 
 ## Current State Summary
 
-All CA/CB/CC/CD paths complete. CD2 Phases 1–4 complete. Health scout: GREEN (0 critical). Beta invite flow: WIRED. ROADMAP v13. Beta target: 4–6 weeks, gated on Patrick's items.
+All CA/CB/CC/CD paths complete. CD2 Phases 1–4 complete. Health scout: GREEN. Pre-push hook: fully clean (0 warnings). Beta invite flow: wired. Notifications: all 8 broken fetch() fixed. Badge notifications: live. Beta target: 4–6 weeks, gated on Patrick's items.
 
-## Changed Files — Session 82 (Batches 9–13)
-
-```
-packages/backend/src/routes/admin.ts                       ← Beta invite routes wired (batch 13)
-packages/backend/src/routes/index.ts                       ← /api/invites mounted (batch 13)
-packages/backend/src/controllers/authController.ts         ← inviteCode validate + redeem (batch 13)
-packages/frontend/pages/register.tsx                       ← invite code field + ?invite= param (batch 13)
-packages/frontend/pages/plan.tsx                           ← planner fetch → axios api fix (batch 12)
-packages/frontend/pages/index.tsx                          ← OG meta tags (batch 12)
-packages/frontend/pages/about.tsx                          ← OG meta tags (batch 12)
-packages/frontend/pages/map.tsx                            ← OG meta tags (batch 12)
-packages/frontend/pages/trending.tsx                       ← OG meta tags (batch 12)
-packages/frontend/pages/feed.tsx                           ← OG meta tags (batch 12)
-packages/frontend/pages/contact.tsx                        ← OG meta tags (batch 12)
-packages/frontend/components/SaleTourGallery.tsx           ← NEW: Virtual Tours MVP (batch 9)
-packages/frontend/pages/sales/[id].tsx                     ← SaleTourGallery + tourOpen state (batch 9)
-packages/backend/src/services/cloudAIService.ts            ← suggestPrice + DB comps param (batch 9)
-packages/backend/src/routes/items.ts                       ← price-suggest fetches sold comps (batch 9)
-packages/backend/src/controllers/buyingPoolController.ts   ← include→select{email,name,id} (batch 10)
-packages/backend/src/controllers/uploadController.ts       ← unhandled promise .catch (batch 9)
-packages/backend/src/routes/tiers.ts                       ← requireAdmin on sync route (batch 11)
-packages/backend/src/controllers/tierController.ts         ← TODO comment resolved (batch 11)
-packages/frontend/components/FeedbackWidget.tsx            ← alert→showToast (batch 9)
-packages/frontend/pages/organizer/dashboard.tsx            ← alert→showToast (batch 9)
-packages/backend/.env.example                              ← Ollama vars removed (batch 10)
-claude_docs/ROADMAP.md                                     ← v13: Phase 3+4 complete
-claude_docs/BETA_CHECKLIST.md                              ← Updated: invite flow done, admin pagination verified
-claude_docs/beta-launch/organizer-outreach.md              ← NEW: 3 beta outreach emails (batch 11)
-claude_docs/beta-launch/e2e-test-checklist.md              ← NEW: 31-step manual test script (batch 12)
-claude_docs/DEVELOPMENT.md                                 ← Docker/image-tagger refs removed (batch 11)
-claude_docs/model-routing.md                               ← Updated to cloud AI pipeline (batch 11)
-claude_docs/health-reports/2026-03-06.md                   ← Health report
-claude_docs/STATE.md
-claude_docs/session-log.md
-claude_docs/next-session-prompt.md
-```
+## Pending Git Commit (Not Yet Pushed)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/routes/admin.ts packages/backend/src/index.ts packages/backend/src/controllers/authController.ts packages/frontend/pages/register.tsx packages/frontend/pages/plan.tsx packages/frontend/pages/index.tsx packages/frontend/pages/about.tsx packages/frontend/pages/map.tsx packages/frontend/pages/trending.tsx packages/frontend/pages/feed.tsx packages/frontend/pages/contact.tsx packages/frontend/components/SaleTourGallery.tsx packages/frontend/pages/sales/[id].tsx packages/backend/src/services/cloudAIService.ts packages/backend/src/routes/items.ts packages/backend/src/controllers/buyingPoolController.ts packages/backend/src/controllers/uploadController.ts packages/backend/src/routes/tiers.ts packages/backend/src/controllers/tierController.ts packages/frontend/components/FeedbackWidget.tsx packages/frontend/pages/organizer/dashboard.tsx packages/backend/.env.example
-git add claude_docs/ROADMAP.md claude_docs/BETA_CHECKLIST.md claude_docs/STATE.md claude_docs/session-log.md claude_docs/next-session-prompt.md claude_docs/health-reports/2026-03-06.md claude_docs/DEVELOPMENT.md claude_docs/model-routing.md
-git add claude_docs/beta-launch/organizer-outreach.md claude_docs/beta-launch/e2e-test-checklist.md
-git commit -m "Session 82 batches 9-13: Virtual Tours, beta invite flow, OG tags, plan.tsx fix, health fixes, beta prep"
+git add packages/backend/src/controllers/userController.ts packages/backend/src/controllers/lineController.ts claude_docs/next-session-prompt.md claude_docs/STATE.md claude_docs/session-log.md
+git commit -m "Batch 16: badge notifications live, last console.log cleared, pre-push hook fully clean"
 .\push.ps1
+```
+
+## Already Pushed (This Session)
+
+- `fa92874` — image-tagger removed from git (26 files, 3281 deletions)
+- `25c63ee` — Batch 14-15: notification fetch fixes, invite ORGANIZER promotion, console.log cleanup (16 files)
+
+## Full Session 82 Changed Files Reference
+
+```
+packages/backend/src/routes/admin.ts                       ← Beta invite routes (batch 13) ✅ pushed
+packages/backend/src/index.ts                              ← /api/invites mounted (batch 13) ✅ pushed
+packages/backend/src/controllers/authController.ts         ← inviteCode + effectiveRole (batch 13+14) ✅ pushed
+packages/frontend/pages/register.tsx                       ← invite field + ORGANIZER auto (batch 13+14) ✅ pushed
+packages/frontend/components/NotificationBell.tsx          ← 4 fetch → api.* (batch 14) ✅ pushed
+packages/frontend/pages/notifications.tsx                  ← 4 fetch → api.* (batch 14) ✅ pushed
+packages/backend/src/controllers/notificationController.ts ← console.log→info (batch 15) ✅ pushed
+packages/backend/src/controllers/waitlistController.ts     ← console.log→info (batch 15) ✅ pushed
+packages/backend/src/controllers/userController.ts         ← badge notification live, console.info (batch 16) ⏳ pending
+packages/backend/src/controllers/lineController.ts         ← console.log→info (batch 16) ⏳ pending
+packages/frontend/pages/plan.tsx                           ← planner fetch → axios api fix (batch 12) ✅ pushed
+packages/frontend/pages/index.tsx + about/map/trending/feed/contact ← OG tags (batch 12) ✅ pushed
+packages/frontend/components/SaleTourGallery.tsx           ← NEW: Virtual Tours MVP (batch 9) ✅ pushed
+packages/frontend/pages/sales/[id].tsx                     ← SaleTourGallery (batch 9) ✅ pushed
+packages/backend/src/services/cloudAIService.ts            ← pricing comps (batch 9) ✅ pushed
+packages/backend/src/routes/items.ts                       ← price-suggest fetches comps (batch 9) ✅ pushed
+packages/backend/src/controllers/buyingPoolController.ts   ← include→select (batch 10) ✅ pushed
+packages/backend/src/controllers/uploadController.ts       ← unhandled promise (batch 9) ✅ pushed
+packages/backend/src/routes/tiers.ts                       ← requireAdmin (batch 11) ✅ pushed
+packages/frontend/components/FeedbackWidget.tsx            ← alert→toast (batch 9) ✅ pushed
+packages/frontend/pages/organizer/dashboard.tsx            ← alert→toast (batch 9) ✅ pushed
+packages/backend/.env.example                              ← Ollama vars removed (batch 10) ✅ pushed
+claude_docs/ (multiple)                                    ← STATE, session-log, ROADMAP, etc. ✅/⏳
+claude_docs/feature-notes/ (8 files)                       ← moved from repo root ✅ pushed
 ```
 
 ## Continuous Mode Rules
@@ -86,6 +93,6 @@ git commit -m "Session 82 batches 9-13: Virtual Tours, beta invite flow, OG tags
 2. Announce session loaded + current mode
 3. Check BETA_CHECKLIST.md for Patrick's progress before assuming what to work on
 4. Launch tasks as parallel subagents
-5. Give `git add` + `.\push.ps1` at end
+5. Always: `git add + git commit` first, then `.\push.ps1` separately (CRLF rule)
 6. Update STATE.md Last Updated line
 7. Continue without confirmation unless blocked
