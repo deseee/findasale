@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import Tooltip from '../../components/Tooltip';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -76,7 +77,10 @@ const OrganizerSettingsPage = () => {
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <div className="card p-6">
-              <h2 className="text-xl font-semibold text-warm-900 mb-4">Payment Settings</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold text-warm-900">Payment Settings</h2>
+                <Tooltip content="Connect Stripe to receive payouts. FindA.Sale deposits your earnings (minus 5% platform fee) on a weekly schedule." />
+              </div>
               <p className="text-warm-600 mb-6">
                 Connect your Stripe account to receive payouts from your sales.
               </p>
@@ -100,7 +104,10 @@ const OrganizerSettingsPage = () => {
                   <span className="ml-2 text-warm-700">Email me when my sale starts</span>
                 </label>
                 <div className="border-t border-warm-100 pt-4 mt-2">
-                  <p className="text-sm font-medium text-warm-800 mb-3">Push Notifications</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <p className="text-sm font-medium text-warm-800">Push Notifications</p>
+                    <Tooltip content="Enable to get alerts when shoppers message you, place holds, or purchase items. Requires browser permission." />
+                  </div>
                   {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' ? (
                     <div className="flex items-center justify-between">
                       <span className="text-warm-700 text-sm">Push notifications are enabled</span>
@@ -137,7 +144,7 @@ const OrganizerSettingsPage = () => {
                             if (permission === 'granted') {
                               showToast('Push notifications enabled', 'success');
                             } else {
-                              showToast('Permission denied \u2014 check your browser settings', 'error');
+                              showToast('Permission denied — check your browser settings', 'error');
                             }
                           } catch {
                             showToast('Push notifications not supported on this browser', 'error');
