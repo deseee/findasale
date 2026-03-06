@@ -120,9 +120,9 @@ const ShopperDisputesPage = () => {
             </div>
 
             <EmptyState
-              title="No Disputes"
-              message="You haven't reported any issues yet. If you encounter a problem with an item, you can report it here."
-              action={{
+              heading="No Disputes"
+              subtext="You haven't reported any issues yet. If you encounter a problem with an item, you can report it here."
+              cta={{
                 label: 'View My Purchases',
                 href: '/shopper/dashboard',
               }}

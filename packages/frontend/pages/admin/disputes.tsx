@@ -174,8 +174,8 @@ const AdminDisputesPage = () => {
             </div>
 
             <EmptyState
-              title="No Disputes"
-              message="No disputes have been reported yet."
+              heading="No Disputes"
+              subtext="No disputes have been reported yet."
             />
           </div>
         </div>

@@ -76,7 +76,7 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
               <div className="relative w-full aspect-square bg-gray-200 rounded-lg overflow-hidden">
                 {item.photoUrl ? (
                   <img
-                    src={getThumbnailUrl(item.photoUrl, 300)}
+                    src={getThumbnailUrl(item.photoUrl)}
                     alt={item.title}
                     className="w-full h-full object-cover"
                   />
@@ -131,7 +131,7 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
                 <div className="relative w-full aspect-square bg-gray-200 rounded-lg overflow-hidden">
                   {item.photoUrl ? (
                     <img
-                      src={getThumbnailUrl(item.photoUrl, 250)}
+                      src={getThumbnailUrl(item.photoUrl)}
                       alt={item.title}
                       className="w-full h-full object-cover"
                     />
