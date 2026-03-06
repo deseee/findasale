@@ -252,7 +252,7 @@ const PerSaleAnalyticsPage = () => {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value) => `${value} items`} />
+                      <Tooltip formatter={(value: number | string) => `${value} items`} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -277,7 +277,7 @@ const PerSaleAnalyticsPage = () => {
                         label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }}
                       />
                       <Tooltip
-                        formatter={(value) => `$${Number(value).toFixed(2)}`}
+                        formatter={(value: number | string) => `$${Number(value).toFixed(2)}`}
                         contentStyle={{ backgroundColor: '#fff', border: `1px solid ${CHART_COLORS.slate}` }}
                       />
                       <Line
