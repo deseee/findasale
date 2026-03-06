@@ -1,87 +1,61 @@
 # Next Session Resume Prompt
-*Written: 2026-03-05 (Session 75 wrap)*
+*Written: 2026-03-06 (Session 76 wrap)*
 *Session ended: normally*
 
 ## Resume From
 
-GitHub sync — partially complete. Batches 1–3 pushed via MCP. Patrick is completing
-the remainder via PowerShell (manual push — see below). After that, next feature work
-is CA7 (human documentation) or CD2 Phase 2 (engagement layer) on Patrick's signal.
+GitHub sync is **COMPLETE**. All source files are on `main` (commit `a0bee7f`). Next work is CA7 (human documentation) or CD2 Phase 2 feature items — pick one on Patrick's signal.
 
 ---
 
 ## GitHub Sync Status
 
-### Already pushed via MCP (Batches 1–3):
-- `packages/database/prisma/` — schema.prisma + all 26 migrations + seed.ts + migration_lock.toml
-- `packages/backend/src/index.ts`, `instrument.ts`
-- `packages/backend/src/services/` — cloudAIService.ts, emailReminderService.ts, pointsService.ts, webhookService.ts
-- `packages/backend/src/lib/` — prisma.ts, socket.ts
-- `packages/backend/src/middleware/auth.ts`
-- `packages/backend/src/models/LineEntry.ts`
-- `packages/backend/src/utils/` — stripe.ts, webpush.ts
-- `packages/backend/src/controllers/` — all 22 controller files
-
-### Patrick pushes manually from PowerShell:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add packages/backend/src/routes
-git add packages/backend/src/jobs
-git add packages/backend/src/tests
-git add packages/frontend/components
-git add packages/frontend/hooks
-git add packages/frontend/contexts
-git add packages/frontend/lib
-git add packages/frontend/pages
-git add packages/frontend/styles
-git add packages/frontend/types
-git add packages/frontend/public
-git add packages/frontend/*.ts packages/frontend/*.js packages/frontend/*.json
-git add packages/shared/src
-git add packages/database/package.json
-git add packages/backend/package.json packages/backend/tsconfig.json packages/backend/Dockerfile
-git add packages/frontend/Dockerfile
-git add docker-compose.yml package.json pnpm-workspace.yaml railway.toml
-git add claude_docs/
-git add CLAUDE.md README.md context.md
-git commit -m "sync: push all remaining source files from sessions 65-74"
-git push origin main
-```
-**Skip:** `.env` files, `pnpm-lock.yaml`, `node_modules/`, `.next/`, `dist/`, `build/`, `tsconfig.tsbuildinfo`
+✅ **COMPLETE as of 2026-03-06.** All ~200 source files pushed. Last commit: `a0bee7f`.
 
 ---
 
-## Workflow Change (effective this session)
+## Workflow Rule (Effective Session 75)
 
-MCP push is now limited to 1–5 files per session wrap.
-Bulk pushes are always done manually by Patrick from PowerShell.
-CLAUDE.md Section 5 updated to reflect this.
-
----
-
-## What Was Completed Sessions 74–75
-
-- Audited local vs GitHub — flagged ~200 unpushed files
-- Updated ROADMAP.md to v11, pushed (commit `c0597e2`)
-- Pushed Batches 1–3 via MCP (database, backend core, all controllers)
-- Decided bulk push workflow should be manual — updated CLAUDE.md + this file
+MCP push (`mcp__github__push_files`) is limited to **≤5 files AND ≤25,000 tokens total** per session wrap.
+Bulk pushes are always done manually by Patrick from PowerShell. CLAUDE.md Section 5 updated.
 
 ---
 
-## Next Feature Work (Patrick's signal)
+## What Was Completed Session 76
 
-- **CA7** — Human-facing documentation (user guide, organizer guide)
-- **CD2 Phase 2** — Engagement layer (recently viewed, wishlist alerts, scarcity nudges)
-- **P1** — Business cards (PNG logos ready in `claude_docs/brand/`), Google Business Profile
-- **P2** — Stripe business account, Google Voice, Search Console
-- **P5** — OAuth credentials (Google + Facebook) + Railway env var additions
+- Fixed all TypeScript errors in `packages/frontend/pages/sales/[id].tsx` (20 errors → 0)
+  - Added missing `selectedCategory` state + `formatPrice` helper
+  - Fixed `SaleShareButton` (added `saleDate`), `BadgeDisplay` (badges fallback `|| []`)
+  - Fixed `getThumbnailUrl` 2-arg calls → 1-arg
+  - Fixed `SaleMap` old API → `singlePin` pattern
+  - Fixed `ReviewsSection` missing `mode="sale"` (both instances)
+  - Fixed `setLightboxIndex` → `setCurrentPhotoIndex` + `setLightboxOpen`
+  - Fixed `CheckoutModal` `item` → `itemId`/`itemTitle`
+  - Fixed `CSVImportModal` `onComplete` → `onImportComplete`, added `isOpen` prop
+  - Fixed `PhotoLightbox` `currentIndex` → `initialIndex`, removed unknown `onNavigate`
+- Updated CLAUDE.md Section 5 to add 25,000 token limit rule for MCP pushes
 
-## Pending Manual Actions (unchanged)
+---
 
-- Phase 31 OAuth env vars in Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`
-- Railway migrations: verify 4 pending migrations ran on last deploy
-- Support email `support@finda.sale` not configured
+## Next Claude Sprint (5 items — pick order with Patrick)
+
+1. **CA7** — Organizer guide, shopper FAQ, Zapier webhook API docs, in-app help tooltips (2 sessions, sync with Patrick before beta launch)
+2. **CD2-P2a: QR Codes** — Scannable QR codes linking physical sale signage to digital inventory (low effort, high organizer value)
+3. **CD2-P2b: Live Drop Events** — Countdown reveals of premium items with FOMO push notifications (DB migration already staged)
+4. **CB4** — AI tagging quality tuning: measure organizer acceptance rate, prompt engineering for Haiku, feedback loop for rejected suggestions
+5. **CB5** — Legacy cleanup: remove `TAGGER_URL`/`TAGGER_API_KEY` env refs, Gradio UI remnants, unused FastAPI code
+
+---
+
+## Pending Manual Actions (Patrick)
+
+- **P1:** `support@finda.sale` email forwarding not yet configured. Business cards: use PNGs in `claude_docs/brand/` (Vistaprint-ready). Google Business Profile creation.
+- **P2:** Google Voice support line, Google Search Console verification.
+- **P4:** Identify 5 beta organizers + schedule onboarding sessions (CA7 must be done first).
+- **P5:** OAuth credentials → Vercel env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Configure redirect URIs → `https://finda.sale/api/auth/callback/{google,facebook}`.
+- **Railway migrations:** Verify 4 pending migrations ran (Live Drop, Treasure Hunt, Reverse Auction, StripeEvent). Check Railway deploy logs or run `prisma migrate deploy` via Railway CLI.
+
+---
 
 ## Environment Notes
 

@@ -65,10 +65,13 @@ At session start, Claude must check which MCP tools are active. They are injecte
 at session start and not visible in any file — missing them causes wasted fallbacks.
 
 **GitHub MCP (`mcp__github__*`):**
-Use `mcp__github__push_files` for **small targeted changes only** (1–5 files per session wrap).
+Use `mcp__github__push_files` for **small targeted changes only** with two hard limits:
+1. **≤5 files per push**
+2. **Total file content ≤ 25,000 tokens combined** — read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
+
 The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for small batches.
 
-**Bulk pushes (>5 files) must always be done manually by Patrick from PowerShell:**
+**Bulk pushes (>5 files OR >25k tokens) must always be done manually by Patrick from PowerShell:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add [specific files]

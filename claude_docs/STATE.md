@@ -110,4 +110,4 @@ Sessions 68–69 complete: favicon.ico + CA4 + CA6 shipped. Next: CD2 Phase 2 (e
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-05 (session 70 — Stripe webhook ✅, native PostgreSQL migration complete, dev docs updated.)
+Last Updated: 2026-03-06 (session 76 — GitHub sync COMPLETE. All ~200 source files on main. TS errors in sales/[id].tsx fixed. MCP push rule updated: ≤5 files AND ≤25k tokens. Next: CA7 or CD2 Phase 2.)
