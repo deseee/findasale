@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 
@@ -25,8 +25,21 @@ interface Referral {
   createdAt: string;
 }
 
+const SALE_CATEGORIES = [
+  'furniture', 'decor', 'vintage', 'textiles', 'collectibles', 'art',
+  'antiques', 'jewelry', 'books', 'tools', 'electronics', 'clothing', 'home', 'other'
+];
+
 const ProfilePage = () => {
   const { user } = useAuth();
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [successMessage, setSuccessMessage] = useState<string>('');
+
+  useEffect(() => {
+    if (user?.categoryInterests) {
+      setSelectedInterests(user.categoryInterests);
+    }
+  }, [user?.categoryInterests]);
 
   // Fetch user's bids
   const { data: bids = [], isError: bidsError, refetch: refetchBids } = useQuery({
@@ -62,6 +75,22 @@ const ProfilePage = () => {
       const response = await api.get('/points');
       return response.data as { points: number; tier: string; transactions: Array<{ id: string; type: string; points: number; description: string | null; createdAt: string }> };
     },
+  });
+
+  // Mutation for updating sale interests
+  const updateInterestsMutation = useMutation({
+    mutationFn: async (interests: string[]) => {
+      const response = await api.patch('/users/me/interests', { categoryInterests: interests });
+      return response.data;
+    },
+    onSuccess: () => {
+      setSuccessMessage('Interests saved!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    },
+    onError: () => {
+      setSuccessMessage('Failed to save interests');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    }
   });
 
   if (!user) {
@@ -278,6 +307,50 @@ const ProfilePage = () => {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Sale Interests Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-2">Sale Interests</h2>
+          <p className="text-warm-600 text-sm mb-4">Select the item categories you're interested in. We'll notify you when new sales matching your interests go live.</p>
+
+          {successMessage && (
+            <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${
+              successMessage.includes('saved')
+                ? 'bg-green-100 text-green-800'
+                : 'bg-red-100 text-red-800'
+            }`}>
+              {successMessage}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            {SALE_CATEGORIES.map((category) => (
+              <label key={category} className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={selectedInterests.includes(category)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedInterests([...selectedInterests, category]);
+                    } else {
+                      setSelectedInterests(selectedInterests.filter((c) => c !== category));
+                    }
+                  }}
+                  className="w-4 h-4 text-amber-600 rounded border-warm-300 focus:ring-amber-500"
+                />
+                <span className="ml-2 text-sm text-warm-700 capitalize">{category}</span>
+              </label>
+            ))}
+          </div>
+
+          <button
+            onClick={() => updateInterestsMutation.mutate(selectedInterests)}
+            disabled={updateInterestsMutation.isPending}
+            className="bg-amber-600 hover:bg-amber-700 disabled:bg-warm-300 text-white font-semibold py-2 px-6 rounded-lg"
+          >
+            {updateInterestsMutation.isPending ? 'Saving...' : 'Save Interests'}
+          </button>
         </div>
 
         {/* Push Notifications Settings */}

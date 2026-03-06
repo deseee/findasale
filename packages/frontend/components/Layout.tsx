@@ -27,6 +27,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const staticNavLinks = [
     { href: '/', label: 'Home' },
     { href: '/map', label: 'Map' },
+    { href: '/plan', label: 'Plan a Sale' },
     { href: '/about', label: 'About' },
     { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/contact', label: 'Contact' },

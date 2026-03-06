@@ -70,6 +70,9 @@ import streakRoutes from './routes/streaks';     // CD2 Phase 2: Streak Challeng
 import flashDealRoutes from './routes/flashDeals'; // Flash Deals & Promotions
 import wishlistRoutes from './routes/wishlists'; // Wishlist / Registry feature
 import tierRoutes from './routes/tiers'; // Phase 31: Organizer Tier Rewards
+import plannerRoutes from './routes/planner'; // Planning assistant chatbot
+import organizerDigestRoutes from './routes/organizerDigest'; // Organizer weekly digest manual trigger
+import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -78,6 +81,8 @@ import './jobs/emailReminderJob';
 import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier recalculation
 import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 min
 import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
+import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
+import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest — Mondays 8 AM
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -193,6 +198,9 @@ app.use('/api/streaks', streakRoutes);     // CD2 Phase 2: Streak Challenges + H
 app.use('/api/flash-deals', flashDealRoutes); // Flash Deals & Promotions
 app.use('/api/wishlists', wishlistRoutes); // Wishlist / Registry feature
 app.use('/api/tiers', tierRoutes); // Phase 31: Organizer Tier Rewards
+app.use('/api/planner', plannerRoutes); // Planning assistant chatbot
+app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
+app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

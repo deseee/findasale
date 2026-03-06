@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 import { syncOrganizerTier } from '../services/tierService';
+import { notifyMatchedBuyers } from '../services/buyerMatchService';
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
@@ -379,6 +380,9 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
 
     if (status === 'PUBLISHED' && existingSale.status === 'DRAFT') {
       notifyFollowersOfNewSale(updated).catch(() => {});
+      notifyMatchedBuyers(updated.id).catch((err) => {
+        console.error('[buyerMatch] Failed to notify matched buyers:', err);
+      });
     }
 
     // Phase 31: When sale is marked ENDED, recalculate organizer's tier

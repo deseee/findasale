@@ -1,0 +1,239 @@
+import React, { useState, useRef, useEffect } from 'react';
+import Head from 'next/head';
+import Link from 'next/link';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const PlanPage = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const starterPrompts = [
+    'Where do I start with an estate sale?',
+    'How do I price antiques and furniture?',
+    'What are Michigan estate sale laws?',
+    'How do I handle unsold items after the sale?',
+  ];
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim()) return;
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: text,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue('');
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/planner/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            ...messages,
+            userMessage,
+          ].map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: data.reply,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to get response';
+      setError(errorMsg);
+      console.error('Chat error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSend = () => {
+    sendMessage(inputValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  return (
+    <>
+      <Head>
+        <title>Estate Sale Planning Assistant | FindA.Sale</title>
+        <meta
+          name="description"
+          content="Get free guidance from an AI assistant about planning your estate sale in Michigan"
+        />
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b border-warm-200 py-8">
+          <div className="max-w-2xl mx-auto px-4">
+            <h1 className="text-4xl font-bold text-warm-900 mb-2">Estate Sale Planning Assistant</h1>
+            <p className="text-warm-600 text-lg">
+              Free guidance for families and executors in Grand Rapids
+            </p>
+          </div>
+        </div>
+
+        {/* Main chat area */}
+        <div className="flex-grow flex flex-col max-w-2xl mx-auto w-full px-4 py-8">
+          {/* Messages list */}
+          <div className="flex-grow overflow-y-auto mb-6 space-y-4 min-h-96">
+            {messages.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-warm-600 mb-6 text-lg">
+                  Ask anything about planning your estate sale. We're here to help!
+                </p>
+
+                {/* Starter prompts */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {starterPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => sendMessage(prompt)}
+                      disabled={isLoading}
+                      className="px-4 py-3 bg-warm-100 hover:bg-warm-200 text-warm-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left border border-warm-300"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-xs sm:max-w-md lg:max-w-lg px-4 py-3 rounded-lg ${
+                    msg.role === 'user'
+                      ? 'bg-warm-100 text-warm-900 rounded-br-none'
+                      : 'bg-white border border-warm-200 text-warm-900 rounded-bl-none'
+                  }`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="flex items-start gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-full bg-sage-600 text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">
+                        AI
+                      </div>
+                      <span className="text-xs text-warm-500 font-medium">Planning Assistant</span>
+                    </div>
+                  )}
+                  <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white border border-warm-200 px-4 py-3 rounded-lg rounded-bl-none">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-sage-600 text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">
+                      AI
+                    </div>
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-warm-400 rounded-full animate-bounce"></span>
+                      <span className="w-2 h-2 bg-warm-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+                      <span className="w-2 h-2 bg-warm-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="flex justify-center">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm max-w-xs">
+                  {error}
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input area */}
+          <div className="border-t border-warm-200 pt-4 mt-auto">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isLoading}
+                placeholder="Ask about your estate sale..."
+                className="flex-grow px-4 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 disabled:bg-warm-50 text-sm"
+              />
+              <button
+                onClick={handleSend}
+                disabled={isLoading || !inputValue.trim()}
+                className="px-6 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-lg font-medium transition-colors disabled:bg-warm-300 disabled:cursor-not-allowed text-sm"
+              >
+                Send
+              </button>
+            </div>
+            <p className="text-xs text-warm-500 mt-2">
+              You can send up to 20 messages per session
+            </p>
+          </div>
+        </div>
+
+        {/* Footer CTA */}
+        <div className="bg-warm-50 border-t border-warm-200 py-6">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <p className="text-warm-700 mb-3">
+              Ready to list your sale?{' '}
+              <Link href="/guide" className="text-sage-600 hover:text-sage-700 font-medium underline">
+                Read the organizer guide →
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default PlanPage;

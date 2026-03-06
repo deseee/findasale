@@ -25,6 +25,8 @@ model User {
   // Phase 31: OAuth / NextAuth social login
   oauthProvider     String?    // "google", "facebook", null for email/password auth
   oauthId           String?    // Provider's unique user ID
+  // Buyer-to-Sale Matching: user's interest categories
+  categoryInterests String[]   @default([])
   organizer         Organizer?
   purchases     Purchase[]
   favorites     Favorite[]
@@ -52,6 +54,8 @@ model User {
   huntPassExpiry        DateTime?
   userStreaks           UserStreak[]
   wishlists             Wishlist[]
+  createdPools          BuyingPool[]      @relation("CreatedPools")
+  poolParticipations    PoolParticipant[] @relation("PoolParticipations")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -149,6 +153,7 @@ model Item {
   treasureHuntFinds TreasureHuntFind[]
   flashDeals       FlashDeal[]
   wishlistItems    WishlistItem[]
+  buyingPools      BuyingPool[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -485,4 +490,30 @@ model WishlistItem {
   note       String?
   addedAt    DateTime @default(now())
   @@unique([wishlistId, itemId])
+}
+
+// Group Buying Pools — allow shoppers to co-purchase expensive items
+model BuyingPool {
+  id           String            @id @default(cuid())
+  itemId       String
+  item         Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  creatorId    String
+  creator      User              @relation("CreatedPools", fields: [creatorId], references: [id], onDelete: Cascade)
+  targetAmount Int               // total item price in cents
+  status       String            @default("OPEN") // OPEN | FILLED | CANCELLED | COMPLETED
+  expiresAt    DateTime
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  participants PoolParticipant[]
+}
+
+model PoolParticipant {
+  id         String     @id @default(cuid())
+  poolId     String
+  pool       BuyingPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User       @relation("PoolParticipations", fields: [userId], references: [id], onDelete: Cascade)
+  pledgeAmount Int      // in cents
+  joinedAt   DateTime   @default(now())
+  @@unique([poolId, userId])
 }

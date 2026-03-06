@@ -143,4 +143,38 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
   }
 });
 
+// Update user's sale interest categories (for buyer-to-sale matching)
+router.patch('/me/interests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { categoryInterests } = req.body;
+
+    // Validate that categoryInterests is an array of strings
+    if (!Array.isArray(categoryInterests)) {
+      return res.status(400).json({ message: 'categoryInterests must be an array' });
+    }
+
+    // Optionally validate against known categories
+    const knownCategories = [
+      'furniture', 'decor', 'vintage', 'textiles', 'collectibles', 'art',
+      'antiques', 'jewelry', 'books', 'tools', 'electronics', 'clothing', 'home', 'other'
+    ];
+    const validInterests = categoryInterests.filter((cat: string) => knownCategories.includes(cat));
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { categoryInterests: validInterests },
+      select: { id: true, email: true, name: true, categoryInterests: true }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating user interests:', error);
+    res.status(500).json({ message: 'Server error while updating interests' });
+  }
+});
+
 export default router;
