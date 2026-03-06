@@ -38,4 +38,32 @@ router.post('/:saleId/import-items', authenticate, upload.single('csv'), importI
 // W2: Label PDF
 router.get('/:id/label', authenticate, getSingleItemLabel);
 
+// CD2 Phase 3: AI Price suggestions
+router.post('/ai/price-suggest', authenticate, async (req, res) => {
+  try {
+    const { title, category, condition } = req.body;
+
+    if (!title || !category || !condition) {
+      return res.status(400).json({
+        error: 'title, category, and condition are required',
+      });
+    }
+
+    // Import here to avoid circular dependencies
+    const { suggestPrice } = await import('../services/cloudAIService');
+    const suggestion = await suggestPrice(title, category, condition);
+
+    res.json(suggestion);
+  } catch (error) {
+    console.error('Price suggestion error:', error);
+    res.status(500).json({
+      error: 'Failed to generate price suggestion',
+      low: 1,
+      high: 50,
+      suggested: 10,
+      reasoning: 'Manual pricing recommended',
+    });
+  }
+});
+
 export default router;
