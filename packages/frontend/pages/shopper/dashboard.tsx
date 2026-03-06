@@ -25,6 +25,7 @@ import FlashDealsBanner from '../../components/FlashDealsBanner';
 import YourWishlists from '../../components/YourWishlists';
 import NotificationPreferences from '../../components/NotificationPreferences';
 import MyPickupAppointments from '../../components/MyPickupAppointments';
+import EmptyState from '../../components/EmptyState';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -99,26 +100,13 @@ const ShopperDashboard = () => {
 
           {/* Overview Tab */}
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Activity Summary */}
-              <ActivitySummary />
-
-              {/* Sales Near You */}
-              <SalesNearYou />
-
-              {/* Recently Viewed */}
-              <RecentlyViewed />
-
-              {/* Flash Deals Banner */}
-              <FlashDealsBanner />
-
-              {/* Your Wishlists */}
-              <YourWishlists />
-
-              {/* Notification Preferences */}
-              {userData && (
-                <NotificationPreferences userPrefs={userData.notificationPrefs || {}} />
-              )}
+            <div>
+              <EmptyState
+                icon="🎉"
+                heading="Welcome to FindA.Sale!"
+                subtext="Explore nearby estate sales, add your favorite items, and discover unique treasures. Ready to get started?"
+                cta={{ label: 'Browse Upcoming Sales', href: '/' }}
+              />
             </div>
           )}
 

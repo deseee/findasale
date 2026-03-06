@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../components/AuthContext';
 import Layout from '../components/Layout';
+import EmptyState from '../components/EmptyState';
 
 interface Notification {
   id: string;
@@ -253,14 +254,13 @@ const NotificationsPage = () => {
               <p className="text-warm-500">Loading notifications...</p>
             </div>
           ) : displayedNotifications.length === 0 ? (
-            <div className="text-center py-12 bg-warm-50 rounded-lg">
-              <p className="text-3xl mb-2">You're all caught up! 🎉</p>
-              <p className="text-warm-600">
-                {filter === 'unread'
-                  ? 'No unread notifications'
-                  : 'No notifications yet'}
-              </p>
-            </div>
+            <EmptyState
+              icon="✨"
+              heading="You're all caught up!"
+              subtext={filter === 'unread'
+                ? 'No unread notifications. Great job staying on top of things!'
+                : 'No notifications yet. You will see updates about your activity here.'}
+            />
           ) : (
             <div className="space-y-6">
               {Object.entries(groupedNotifications)

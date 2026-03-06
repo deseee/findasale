@@ -13,6 +13,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Layout from '../../components/Layout';
 import { ItemCardSkeleton } from '../../components/SkeletonCards';
+import EmptyState from '../../components/EmptyState';
 
 interface FavoriteItem {
   id: string;
@@ -153,35 +154,29 @@ const FavoritesPage = () => {
 
           {/* Empty state */}
           {!isLoading && !isError && items.length === 0 && (
-            <div className="text-center py-16">
-              <p className="text-5xl mb-4">🏷️</p>
+            <>
               {activeCategory !== ALL_CATEGORY ? (
-                <>
-                  <h2 className="text-xl font-semibold text-warm-900 mb-2">
+                <div className="text-center py-16">
+                  <p className="text-5xl mb-4">🏷️</p>
+                  <h2 className="text-xl font-semibold text-warm-900 mb-4">
                     No {CATEGORY_LABELS[activeCategory] ?? activeCategory} favorites yet
                   </h2>
                   <button
                     onClick={() => setActiveCategory(ALL_CATEGORY)}
-                    className="text-amber-600 hover:underline text-sm"
+                    className="text-amber-600 hover:underline text-sm font-medium"
                   >
                     View all favorites
                   </button>
-                </>
+                </div>
               ) : (
-                <>
-                  <h2 className="text-xl font-semibold text-warm-900 mb-2">No favorites yet</h2>
-                  <p className="text-warm-500 mb-6 text-sm">
-                    Tap the heart on any item to save it here.
-                  </p>
-                  <Link
-                    href="/"
-                    className="inline-block bg-amber-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-amber-700 transition-colors"
-                  >
-                    Browse Sales
-                  </Link>
-                </>
+                <EmptyState
+                  icon="❤️"
+                  heading="No favorites yet"
+                  subtext="Start saving items you love! Tap the heart on any item to add it to your favorites."
+                  cta={{ label: 'Browse Sales', href: '/' }}
+                />
               )}
-            </div>
+            </>
           )}
 
           {/* Item list */}
