@@ -38,4 +38,4 @@ EXPOSE 5000
 
 # Run pending migrations then start the compiled server
 # Use pnpm run (not npx) so pnpm resolves the prisma binary from the workspace install
-CMD ["sh", "-c", "cd /app && pnpm --filter database run db:deploy && node /app/packages/backend/dist/index.js"]
+CMD ["sh", "-c", "pnpm --filter database run db:deploy && node /app/packages/backend/dist/index.js"]
