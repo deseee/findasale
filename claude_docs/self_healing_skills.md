@@ -225,6 +225,12 @@ git push
 **Prevention:** Never include documentation files in feature-batch MCP pushes. Push code files only. Update docs in a separate, deliberate commit.
 **Known instance:** Session 78 — commit 1061965 (CD2-P2/P3 batch) overwrote v11 roadmap with stale v3 compressed version. Not detected until session 79.
 
+### 36. Always Use push.ps1 — Never Raw git push
+**Trigger:** Session wrap or any instruction to Patrick about pushing code
+**Fix:** Always tell Patrick to use `.\push.ps1` instead of `git push origin main`. The script self-heals: clears index.lock, CRLF phantom changes, fetches + merges (NOT rebase — rebase is broken with autocrlf on Windows), auto-retries on rejection.
+**Prevention:** Never give Patrick a raw `git push` command. Never suggest `git pull --rebase`. The push script replaces both.
+**Known instance:** Session 80 — created after 10+ failed manual push attempts caused by autocrlf + rebase conflicts.
+
 ---
 
-Last Updated: 2026-03-06 (session 79 — added entries 33-35: MCP size pre-check, autocrlf rebase conflict, roadmap version regression)
+Last Updated: 2026-03-06 (session 80 — added entry 36: push.ps1 as standard push workflow)
