@@ -427,7 +427,6 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
         if (aiResult?.tags) {
           suggestedTags = aiResult.tags;
         }
-        console.log(`[cloudAI/analyze] analyzed item "${id}" — ${suggestedTags.length} tags`);
       } catch (err: any) {
         console.warn(`[cloudAI/analyze] error for item "${id}": ${err.message} — returning empty tags`);
       }

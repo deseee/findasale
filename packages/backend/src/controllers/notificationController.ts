@@ -126,7 +126,7 @@ export const unsubscribeByEmail = async (req: Request, res: Response) => {
     const result = await prisma.saleSubscriber.deleteMany({
       where: { email }
     });
-    console.log(`Unsubscribed ${result.count} subscription(s) for ${email}`);
+    console.log(`Unsubscribed ${result.count} subscription(s)`);
     res.json({ message: 'Successfully unsubscribed from all sale reminders', count: result.count });
   } catch (error) {
     console.error('Error unsubscribing by email:', error);
