@@ -14,6 +14,7 @@ interface User {
   streakPoints?: number;
   huntPassActive?: boolean;
   organizerTier?: string;
+  notificationPrefs?: Record<string, boolean>;
 }
 
 interface AuthContextType {
