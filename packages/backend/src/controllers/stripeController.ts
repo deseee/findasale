@@ -6,6 +6,7 @@ import { handlePurchaseBadge } from './userController';
 import { awardPoints } from '../services/pointsService';
 import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
+import * as Sentry from '@sentry/node';
 const stripe = getStripe();
 
 let _resend: any = null;
@@ -261,6 +262,26 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// ST4: Check if webhook event has already been processed (idempotency)
+const hasProcessedWebhookEvent = async (eventId: string): Promise<boolean> => {
+  const existing = await prisma.stripeEvent.findUnique({
+    where: { id: eventId }
+  }).catch(() => null);
+  return !!existing;
+};
+
+// ST4: Mark a webhook event as processed
+const markWebhookEventProcessed = async (eventId: string): Promise<void> => {
+  await prisma.stripeEvent.create({
+    data: { id: eventId }
+  }).catch(err => {
+    // Ignore duplicate key errors (race condition — another request processed first)
+    if (!err.message?.includes('Unique constraint')) {
+      throw err;
+    }
+  });
+};
+
 // Webhook handler for Stripe events
 export const webhookHandler = async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'] as string;
@@ -271,139 +292,214 @@ export const webhookHandler = async (req: Request, res: Response) => {
     return res.status(500).send('Webhook Error: STRIPE_WEBHOOK_SECRET not configured');
   }
 
-  let event;
+  let event: any;
 
   try {
+    // A. Signature verification (required by Stripe best practices)
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err: any) {
     console.error('Webhook signature verification failed.', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  switch (event.type) {
-    case 'payment_intent.succeeded': {
-      const paymentIntent = event.data.object;
-      const purchase = await prisma.purchase.findUnique({
-        where: { stripePaymentIntentId: paymentIntent.id },
-        include: {
-          user: { select: { email: true, name: true } },
-          item: { select: { title: true } },
-          sale: {
-            select: {
-              title: true,
-              organizer: { select: { stripeConnectId: true, userId: true } },
+  // ST4: B. Idempotency — check if we've already processed this event
+  if (await hasProcessedWebhookEvent(event.id)) {
+    console.log(`ST4: Webhook event ${event.id} already processed, skipping.`);
+    return res.json({ received: true });
+  }
+
+  try {
+    // Mark as processed at the start to prevent race conditions
+    await markWebhookEventProcessed(event.id);
+
+    // C. Handle critical event types
+    switch (event.type) {
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object;
+        const purchase = await prisma.purchase.findUnique({
+          where: { stripePaymentIntentId: paymentIntent.id },
+          include: {
+            user: { select: { email: true, name: true } },
+            item: { select: { title: true } },
+            sale: {
+              select: {
+                title: true,
+                organizer: { select: { stripeConnectId: true, userId: true } },
+              },
             },
           },
-        },
-      });
-
-      if (purchase) {
-        const expectedConnectId = purchase.sale?.organizer?.stripeConnectId;
-        if (
-          expectedConnectId &&
-          paymentIntent.on_behalf_of &&
-          expectedConnectId !== paymentIntent.on_behalf_of
-        ) {
-          console.error(
-            `ST3 webhook mismatch for PI ${paymentIntent.id}: ` +
-            `expected connectId=${expectedConnectId}, got=${paymentIntent.on_behalf_of}`
-          );
-          break;
-        }
-
-        await prisma.purchase.update({
-          where: { stripePaymentIntentId: paymentIntent.id },
-          data: { status: 'PAID' },
         });
 
-        if (paymentIntent.metadata?.itemId) {
-          // CA3: Concurrent purchase guard — check item status before marking SOLD
-          // If another buyer's PI already marked it SOLD, refund this one automatically
-          const item = await prisma.item.findUnique({
-            where: { id: paymentIntent.metadata.itemId },
-            select: { status: true },
-          });
-
-          if (item && item.status === 'SOLD' && purchase.status !== 'PAID') {
-            // Second buyer won the race — refund silently and stop
-            console.warn(
-              `CA3 concurrent purchase: item ${paymentIntent.metadata.itemId} already SOLD, ` +
-              `refunding PI ${paymentIntent.id}`
+        if (purchase) {
+          const expectedConnectId = purchase.sale?.organizer?.stripeConnectId;
+          if (
+            expectedConnectId &&
+            paymentIntent.on_behalf_of &&
+            expectedConnectId !== paymentIntent.on_behalf_of
+          ) {
+            console.error(
+              `ST3 webhook mismatch for PI ${paymentIntent.id}: ` +
+              `expected connectId=${expectedConnectId}, got=${paymentIntent.on_behalf_of}`
             );
-            await stripe.refunds.create({ payment_intent: paymentIntent.id });
-            await prisma.purchase.update({
-              where: { stripePaymentIntentId: paymentIntent.id },
-              data: { status: 'REFUNDED' },
-            });
             break;
           }
 
-          await prisma.item.update({
-            where: { id: paymentIntent.metadata.itemId },
-            data: { status: 'SOLD' },
+          await prisma.purchase.update({
+            where: { stripePaymentIntentId: paymentIntent.id },
+            data: { status: 'PAID' },
           });
-        }
 
-        if (purchase.affiliateLinkId) {
-          await prisma.affiliateLink.update({
-            where: { id: purchase.affiliateLinkId },
-            data: { conversions: { increment: 1 } }
-          }).catch(err => console.warn('Failed to increment affiliate conversion:', err));
-        }
+          if (paymentIntent.metadata?.itemId) {
+            // CA3: Concurrent purchase guard — check item status before marking SOLD
+            const item = await prisma.item.findUnique({
+              where: { id: paymentIntent.metadata.itemId },
+              select: { status: true },
+            });
 
-        // Award purchase badge
-        await handlePurchaseBadge(purchase.userId);
+            if (item && item.status === 'SOLD' && purchase.status !== 'PAID') {
+              console.warn(
+                `CA3 concurrent purchase: item ${paymentIntent.metadata.itemId} already SOLD, ` +
+                `refunding PI ${paymentIntent.id}`
+              );
+              await stripe.refunds.create({ payment_intent: paymentIntent.id });
+              await prisma.purchase.update({
+                where: { stripePaymentIntentId: paymentIntent.id },
+                data: { status: 'REFUNDED' },
+              });
+              break;
+            }
 
-        // Phase 19: Award 10 points for purchase
-        awardPoints(
-          purchase.userId,
-          'PURCHASE',
-          10,
-          purchase.saleId ?? undefined,
-          paymentIntent.metadata?.itemId,
-          'Purchased an item',
-        ).catch(err => console.warn('[points] Failed to award purchase points:', err));
+            await prisma.item.update({
+              where: { id: paymentIntent.metadata.itemId },
+              data: { status: 'SOLD' },
+            });
+          }
 
-        // Send receipt email
-        if (purchase.user) {
-          await sendReceiptEmail({
-            id: purchase.id,
-            amount: purchase.amount,
-            user: { email: purchase.user.email, name: purchase.user.name },
-            item: purchase.item,
-            sale: purchase.sale,
-          });
-        }
+          if (purchase.affiliateLinkId) {
+            await prisma.affiliateLink.update({
+              where: { id: purchase.affiliateLinkId },
+              data: { conversions: { increment: 1 } }
+            }).catch(err => console.warn('Failed to increment affiliate conversion:', err));
+          }
 
-        // X1: Fire webhooks (non-blocking)
-        const orgUserId = (purchase.sale as any)?.organizer?.userId;
-        if (orgUserId) {
-          setImmediate(() =>
-            fireWebhooks(orgUserId, 'purchase.completed', {
-              purchaseId: purchase.id,
-              itemId: paymentIntent.metadata?.itemId,
-              itemTitle: purchase.item?.title,
+          // Award purchase badge
+          await handlePurchaseBadge(purchase.userId);
+
+          // Phase 19: Award 10 points for purchase
+          awardPoints(
+            purchase.userId,
+            'PURCHASE',
+            10,
+            purchase.saleId ?? undefined,
+            paymentIntent.metadata?.itemId,
+            'Purchased an item',
+          ).catch(err => console.warn('[points] Failed to award purchase points:', err));
+
+          // Send receipt email
+          if (purchase.user) {
+            await sendReceiptEmail({
+              id: purchase.id,
               amount: purchase.amount,
-              buyerEmail: purchase.user?.email,
-            })
-          );
-        }
-      }
-      break;
-    }
-    case 'payment_intent.payment_failed': {
-      const paymentFailedIntent = event.data.object;
-      await prisma.purchase.updateMany({
-        where: { stripePaymentIntentId: paymentFailedIntent.id },
-        data: { status: 'FAILED' },
-      });
-      break;
-    }
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-  }
+              user: { email: purchase.user.email, name: purchase.user.name },
+              item: purchase.item,
+              sale: purchase.sale,
+            });
+          }
 
-  res.json({ received: true });
+          // X1: Fire webhooks (non-blocking)
+          const orgUserId = (purchase.sale as any)?.organizer?.userId;
+          if (orgUserId) {
+            setImmediate(() =>
+              fireWebhooks(orgUserId, 'purchase.completed', {
+                purchaseId: purchase.id,
+                itemId: paymentIntent.metadata?.itemId,
+                itemTitle: purchase.item?.title,
+                amount: purchase.amount,
+                buyerEmail: purchase.user?.email,
+              })
+            );
+          }
+        }
+        break;
+      }
+
+      case 'payment_intent.payment_failed': {
+        const paymentFailedIntent = event.data.object;
+        await prisma.purchase.updateMany({
+          where: { stripePaymentIntentId: paymentFailedIntent.id },
+          data: { status: 'FAILED' },
+        });
+        break;
+      }
+
+      case 'charge.dispute.created': {
+        // ST5: Handle payment disputes — flag purchase and alert organizer
+        const dispute = event.data.object;
+        if (dispute.payment_intent_id) {
+          const purchase = await prisma.purchase.findUnique({
+            where: { stripePaymentIntentId: dispute.payment_intent_id },
+            include: {
+              user: true,
+              item: true,
+              sale: { include: { organizer: { include: { user: true } } } }
+            }
+          });
+
+          if (purchase && purchase.sale?.organizer?.user) {
+            console.warn(`ST5 Dispute created for PI ${dispute.payment_intent_id} (dispute: ${dispute.id})`);
+            // TODO: Send alert email to organizer about dispute
+            // TODO: Log in admin dashboard for manual review
+          }
+        }
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        // Handle subscription cancellation if subscriptions are used
+        // For now, log but don't fail
+        console.log(`Subscription deleted: ${event.data.object.id}`);
+        break;
+      }
+
+      case 'account.updated': {
+        // ST6: Handle Stripe Connect account updates
+        // Log changes to organizer's account status
+        const account = event.data.object;
+        console.log(`ST6 Stripe account updated: ${account.id}`);
+        // TODO: Fetch account status and update organizer profile
+        break;
+      }
+
+      case 'payout.paid': {
+        // Log successful payouts for audit trail
+        const payout = event.data.object;
+        console.log(`Payout processed: ${payout.id} (amount: ${payout.amount / 100})`);
+        // TODO: Log payout event in database for organizer dashboard
+        break;
+      }
+
+      // Default case: log unhandled event types but return 200 (don't fail)
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error: unknown) {
+    // D. Error handling with Sentry
+    console.error('Webhook processing error:', error);
+    
+    // Capture in Sentry for monitoring
+    Sentry.captureException(error, {
+      tags: {
+        webhook_event_id: event.id,
+        event_type: event.type,
+      },
+      level: 'error'
+    });
+
+    // Return 500 so Stripe knows to retry this event
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
 };
 
 // Return the clientSecret for an existing PENDING purchase (used by auction winners)
