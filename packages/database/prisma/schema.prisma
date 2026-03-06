@@ -412,3 +412,11 @@ model TreasureHuntFind {
   item     Item     @relation(fields: [itemId], references: [id])
   @@unique([userId, huntId])
 }
+
+// ST4: Stripe webhook event deduplication — prevents idempotency issues
+model StripeEvent {
+  id        String   @id // Stripe event ID (evt_...)
+  processedAt DateTime @default(now())
+
+  @@index([processedAt]) // For cleanup of old events
+}
