@@ -117,4 +117,4 @@ All CA/CB/CC/CD paths complete. CD2 Phases 1–4 all complete. Session 82 (batch
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-06 (session 82 batches 9–17 — Pre-push hook outputs ZERO warnings: auth allowlist updated, console.log/TODO clean, 0 raw fetch() in frontend, badge notifications live, beta invite flow complete. CRLF rule: git add+commit FIRST, then .\push.ps1 separately.)
+Last Updated: 2026-03-06 (session 82 batches 9–18 — Invite rate limiting: 5/15min on /validate + /redeem. ROADMAP v14. Pre-push hook ZERO warnings. Badge notifications live. Beta invite flow fully wired. CRLF rule: git add+commit FIRST, then .\push.ps1 separately.)

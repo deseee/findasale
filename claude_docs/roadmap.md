@@ -1,7 +1,7 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-06 (v13 — Session 82. CD2 Phase 2+3 complete. Health scout fixes applied. SaleTourGallery.tsx created.)
-**Status:** Production MVP live at finda.sale. 21 phases + post-launch T–X complete. All CA/CB/CC paths complete. CD1–CD4 shipped. CD2 Phases 2–4 substantially complete. 35 Neon migrations applied. Entering beta recruitment.
+**Last Updated:** 2026-03-06 (v14 — Session 82 batches 9–17. All CA/CB/CC/CD complete. Beta invite flow wired. 8 broken fetch() fixed. Pre-push hook silent. Badge notifications live.)
+**Status:** Production MVP live at finda.sale. All phases + CA/CB/CC/CD complete. Beta invite system fully functional. 35 Neon migrations applied. Pre-push hook zero warnings. Beta recruitment ready.
 
 ---
 
