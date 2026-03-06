@@ -119,6 +119,9 @@ model Item {
   // W1: Shipping
   shippingAvailable Boolean  @default(false)
   shippingPrice    Float?
+  // CD2: Live Drop Events
+  isLiveDrop       Boolean   @default(false)
+  liveDropAt       DateTime?
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]
