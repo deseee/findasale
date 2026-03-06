@@ -4,6 +4,7 @@
  * Actual importer:
  * - CSV upload modal
  * - Manual item entry form
+ * - Batch AI upload (CD2 Phase 2)
  * - Item list with edit/delete
  */
 
@@ -12,12 +13,13 @@ import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import CSVImportModal from '../../../components/CSVImportModal';
+import SmartInventoryUpload from '../../../components/SmartInventoryUpload';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 
-type ActiveTab = 'manual' | 'upload';
+type ActiveTab = 'manual' | 'upload' | 'batch';
 
 const CATEGORIES = [
   'Furniture',
@@ -113,15 +115,19 @@ const AddItemsDetailPage = () => {
   ) => {
     const { name, value, type } = e.target as any;
     if (type === 'checkbox') {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: (e.target as HTMLInputElement).checked,
-      }));
+      setFormData((prev) => (
+        {
+          ...prev,
+          [name]: (e.target as HTMLInputElement).checked,
+        }
+      ));
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      setFormData((prev) => (
+        {
+          ...prev,
+          [name]: value,
+        }
+      ));
     }
     setFormError('');
   };
@@ -229,6 +235,16 @@ const AddItemsDetailPage = () => {
                 }`}
               >
                 ✏️ Manual Entry
+              </button>
+              <button
+                onClick={() => setActiveTab('batch')}
+                className={`pb-4 px-2 font-medium transition-colors ${
+                  activeTab === 'batch'
+                    ? 'text-amber-600 border-b-2 border-amber-600'
+                    : 'text-warm-600 hover:text-warm-900'
+                }`}
+              >
+                📦 Batch Upload (AI)
               </button>
               <button
                 onClick={() => setActiveTab('upload')}
@@ -458,6 +474,18 @@ const AddItemsDetailPage = () => {
             </div>
           )}
 
+          {/* Batch Upload Tab (CD2 Phase 2) */}
+          {activeTab === 'batch' && (
+            <div className="mb-8">
+              <SmartInventoryUpload
+                saleId={String(saleId)}
+                onComplete={() => {
+                  refetchItems();
+                }}
+              />
+            </div>
+          )}
+
           {/* Items List */}
           <div className="mt-8">
             <h2 className="text-xl font-semibold text-warm-900 mb-4">
@@ -497,7 +525,7 @@ const AddItemsDetailPage = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-warm-600 text-center py-8">No items added yet. Use the manual entry form or import button above to get started.</p>
+              <p className="text-warm-600 text-center py-8">No items added yet. Use the batch upload, manual entry, or import button above to get started.</p>
             )}
           </div>
         </div>
