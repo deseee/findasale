@@ -16,7 +16,7 @@ export const upload = multer({ storage: multer.memoryStorage() });
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 
-// ── Cloudinary image variants (Phase 14c) ─────────────────────────────────
+// ── Cloudinary image variants (Phase 14c) ────────────────────────────
 // Eager transformations generate optimized variants at upload time.
 // No webhooks needed — all variants are ready when the upload resolves.
 const EAGER_TRANSFORMS = [
@@ -147,7 +147,7 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
         const mimeType = (file.mimetype as string) || 'image/jpeg';
 
         if (useCloudAI) {
-          // ── Cloud AI path (CB1): Google Vision + Claude Haiku ──────────────
+          // ── Cloud AI path (CB1): Google Vision + Claude Haiku ──────────────────────────────
           try {
             ai = await analyzeItemImage(file.buffer, mimeType) as Record<string, unknown> | null;
           } catch {
@@ -156,7 +156,7 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
         }
 
         if (!ai) {
-          // ── Ollama fallback ────────────────────────────────────────────────
+          // ── Ollama fallback ────────────────────────────────────────────────────
           try {
             const base64Image = file.buffer.toString('base64');
             const aiResponse = await axios.post(
@@ -199,7 +199,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
 
     const mimeType = (file.mimetype as string) || 'image/jpeg';
 
-    // ── Cloud AI path (CB1): Google Vision + Claude Haiku ─────────────────────
+    // ── Cloud AI path (CB1): Google Vision + Claude Haiku ────────────────────────────────────────
     if (isCloudAIAvailable()) {
       try {
         const result = await analyzeItemImage(file.buffer, mimeType);
@@ -213,7 +213,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
       }
     }
 
-    // ── Ollama fallback ────────────────────────────────────────────────────────
+    // ── Ollama fallback ───────────────────────────────────────────────────────────────
     const base64Image = file.buffer.toString('base64');
 
     const prompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
