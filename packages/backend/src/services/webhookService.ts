@@ -20,11 +20,6 @@ export interface WebhookPayload {
   data: Record<string, unknown>;
 }
 
-/**
- * Fire all active webhooks registered for the given event by the organizer
- * who owns the affected resource. Non-blocking — awaited internally but never
- * propagates errors back to the caller.
- */
 export async function fireWebhooks(
   userId: string,
   event: WebhookEventType,
@@ -62,7 +57,6 @@ export async function fireWebhooks(
         timeout: 8000,
       });
     } catch (err: any) {
-      // Log and continue — one bad URL must not block others or the main request
       console.error(`[webhook] delivery failed to ${hook.url} (${hook.id}): ${err.message}`);
     }
   }
