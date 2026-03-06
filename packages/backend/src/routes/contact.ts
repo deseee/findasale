@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Resend } from 'resend';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
@@ -11,8 +12,17 @@ const getResend = () => {
   return _resend;
 };
 
+// Rate limiter for contact form — 5 submissions per 15 minutes
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: 'Too many contact requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // POST /api/contact — public contact form submission
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', contactLimiter, async (req: Request, res: Response) => {
   try {
     const { name, email, subject, message } = req.body;
 
