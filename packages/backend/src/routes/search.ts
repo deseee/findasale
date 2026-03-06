@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { getVisionLabels } from '../services/cloudAIService';
+import { upload } from '../controllers/uploadController';
 
 const router = Router();
 
@@ -159,6 +161,85 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('GET /api/search/categories error:', err);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * POST /api/search/visual
+ * CD2 Phase 3: Visual search — upload photo, extract Vision API labels, search items.
+ * Accepts: multipart form data with image file
+ * Returns: { detectedLabels: string[], results: Item[] }
+ */
+router.post('/visual', upload.single('photo'), async (req: Request, res: Response) => {
+  try {
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+
+    // Call Google Vision API to extract labels
+    let labels: string[] = [];
+    try {
+      const allLabels = await getVisionLabels(file.buffer.toString('base64'));
+      // Take top 5 labels with high confidence
+      labels = allLabels.slice(0, 5);
+    } catch (err) {
+      console.error('Vision API error:', err);
+      return res.status(500).json({ error: 'Failed to analyze image' });
+    }
+
+    if (labels.length === 0) {
+      return res.json({ detectedLabels: [], results: [] });
+    }
+
+    // Build search query: OR logic across all detected labels
+    const searchQuery = labels.join(' ');
+
+    // Query items matching any of the detected labels
+    const items = await prisma.item.findMany({
+      where: {
+        OR: [
+          { title: { contains: labels[0], mode: 'insensitive' } },
+          ...(labels.length > 1 ? labels.slice(1).map(label => ({ title: { contains: label, mode: 'insensitive' as const } })) : []),
+          { description: { contains: labels[0], mode: 'insensitive' } },
+          ...(labels.length > 1 ? labels.slice(1).map(label => ({ description: { contains: label, mode: 'insensitive' as const } })) : []),
+        ],
+        status: 'AVAILABLE',
+        sale: { status: 'PUBLISHED' },
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        price: true,
+        photoUrls: true,
+        category: true,
+        condition: true,
+        status: true,
+        sale: {
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            state: true,
+            status: true,
+          },
+        },
+      },
+      take: 20,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({
+      detectedLabels: labels,
+      results: items.map((item: any) => ({
+        ...item,
+        price: item.price != null ? Number(item.price) : null,
+      })),
+    });
+  } catch (err) {
+    console.error('POST /api/search/visual error:', err);
+    res.status(500).json({ error: 'Visual search failed' });
   }
 });
 
