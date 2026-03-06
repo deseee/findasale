@@ -8,7 +8,7 @@ import { notifyFollowersOfNewSale } from '../services/followerNotificationServic
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
-  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})?$/,
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/,
   'Invalid datetime format. Expected ISO 8601 format.'
 );
 
@@ -328,7 +328,7 @@ export const searchSales = async (req: Request, res: Response) => {
         ]
       },
       include: { organizer: { select: { businessName: true } } },
-      take: 50,
+      take: 20
     });
     
     res.json(sales.map((sale: any) => convertDecimalsToNumbers(sale)));
@@ -448,10 +448,10 @@ export const generateIcal = async (req: Request, res: Response) => {
     const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
     const toIcalDate = (d: Date) => d.toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
     const esc = (s: string) =>
-      (s || '').replace(/\\\\/g, '\\\\\\\\').replace(/;/g, '\\\\;').replace(/,/g, '\\\\,').replace(/\\n/g, '\\\\n');
+      (s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 
-    const location = `${sale.address}\\\\, ${sale.city}\\\\, ${sale.state} ${sale.zip}`;
-    const description = esc(sale.description || '') + (sale.description ? '\\\\n\\\\n' : '') + `View items online: ${saleUrl}`;
+    const location = `${sale.address}\\, ${sale.city}\\, ${sale.state} ${sale.zip}`;
+    const description = esc(sale.description || '') + (sale.description ? '\\n\\n' : '') + `View items online: ${saleUrl}`;
 
     const ical = [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FindA.Sale//FindA.Sale//EN',
@@ -463,10 +463,10 @@ export const generateIcal = async (req: Request, res: Response) => {
       `LOCATION:${location}`, `URL:${saleUrl}`,
       `ORGANIZER;CN=${esc(sale.organizer.businessName)}:MAILTO:noreply@finda.sale`,
       'END:VEVENT', 'END:VCALENDAR',
-    ].join('\\r\\n');
+    ].join('\r\n');
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename=\"sale-${id}.ics\"`);
+    res.setHeader('Content-Disposition', `attachment; filename="sale-${id}.ics"`);
     res.send(ical);
   } catch (error) {
     console.error('Error generating iCal:', error);
