@@ -9,6 +9,7 @@ import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import CountdownTimer from '../../components/CountdownTimer'; // CD2: Live Drop
+import ReverseAuctionBadge from '../../components/ReverseAuctionBadge'; // CD2 Phase 4
 import { useToast } from '../../components/ToastContext';
 import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -26,6 +27,10 @@ interface Item {
   photoUrls: string[];
   isLiveDrop: boolean; // CD2
   liveDropAt: string | null; // CD2
+  reverseAuction: boolean; // CD2 Phase 4
+  reverseDailyDrop?: number; // CD2 Phase 4
+  reverseFloorPrice?: number; // CD2 Phase 4
+  reverseStartDate?: string; // CD2 Phase 4
   sale: {
     id: string;
     title: string;
@@ -513,7 +518,7 @@ const ItemDetailPage = () => {
                             loading="lazy"
                           />
                         </button>
-                      ))}
+                      )))}
                     </div>
                   )}
                 </>
@@ -556,6 +561,9 @@ const ItemDetailPage = () => {
                   ← Back to {item.sale.title}
                 </Link>
               </div>
+
+              {/* CD2 Phase 4: Reverse Auction Badge */}
+              {item.reverseAuction && <ReverseAuctionBadge item={item} />}
 
               {isAuctionItem ? (
                 /* Auction Item */
