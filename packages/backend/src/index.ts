@@ -76,6 +76,7 @@ import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import adminRoutes from './routes/admin'; // Admin panel
 import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
 import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
+import pickupRoutes from './routes/pickup'; // Pickup Appointment Scheduling
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -87,6 +88,7 @@ import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mo
 import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
 import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest — Mondays 8 AM
 import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly email
+import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -208,6 +210,7 @@ app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly dig
 app.use('/api/admin', adminRoutes); // Admin panel
 app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
 app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"
+app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

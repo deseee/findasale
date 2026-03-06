@@ -75,6 +75,66 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
+// PATCH /organizers/me — update current organizer's profile (businessName, phone, bio)
+router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { businessName, phone, bio } = req.body;
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const updated = await prisma.organizer.update({
+      where: { userId: req.user.id },
+      data: {
+        ...(businessName && { businessName }),
+        ...(phone && { phone }),
+        ...(bio !== undefined && { bio }),
+      },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating organizer profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /organizers/me/onboarding-complete — mark onboarding as completed
+router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const updated = await prisma.organizer.update({
+      where: { userId: req.user.id },
+      data: { onboardingComplete: true },
+    });
+
+    res.json({ success: true, onboardingComplete: updated.onboardingComplete });
+  } catch (error) {
+    console.error('Error marking onboarding complete:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Authenticated: get current organizer's own profile + tier data (Phase 22)
 // Must be registered before /:id to avoid being swallowed by the wildcard
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
@@ -146,6 +206,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       completedSales: endedSalesCount,
       followerCount,
       progressMessage,
+      onboardingComplete: (organizer as any).onboardingComplete,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);

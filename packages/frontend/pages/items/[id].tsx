@@ -577,11 +577,30 @@ const ItemDetailPage = () => {
   const myHold = reservation && user && reservation.userId === user.id;
   const someoneElseHolds = reservation && user && reservation.userId !== user.id && ['PENDING', 'CONFIRMED'].includes(reservation.status);
 
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'https://findasale.com');
+  const priceDisplay = item.price ? `$${(item.price / 100).toFixed(2)}` : (item.auctionStartPrice ? `$${(item.auctionStartPrice / 100).toFixed(2)}` : 'Price TBD');
+  const ogImageUrl = item.photoUrls?.[0] ? item.photoUrls[0] : `${siteUrl}/api/og?${new URLSearchParams({
+    type: 'item',
+    title: item.title.substring(0, 60),
+    price: priceDisplay,
+    condition: item.status || '',
+    location: item.sale?.title?.substring(0, 30) || '',
+  }).toString()}`;
+
   return (
     <div className="min-h-screen bg-warm-50">
       <Head>
         <title>{item.title} - FindA.Sale</title>
-        <meta name="description" content={item.description} />
+        <meta name="description" content={`${item.title} — ${priceDisplay} | ${item.description?.substring(0, 100) || 'Item at estate sale on FindA.Sale'}`} />
+        <meta property="og:title" content={`${item.title} — ${priceDisplay} | FindA.Sale`} />
+        <meta property="og:description" content={`${item.status || 'Item'} at estate sale. ${item.description?.substring(0, 100) || ''}`} />
+        <meta property="og:image" content={ogImageUrl} />
+        <meta property="og:url" content={`${siteUrl}/items/${item.id}`} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${item.title} — ${priceDisplay} | FindA.Sale`} />
+        <meta name="twitter:description" content={`${item.status || 'Item'} at estate sale. ${item.description?.substring(0, 100) || ''}`} />
+        <meta name="twitter:image" content={ogImageUrl} />
       </Head>
 
       {/* Phase 18: Photo lightbox */}
