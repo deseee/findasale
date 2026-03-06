@@ -29,6 +29,7 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
           _count: { select: { messages: { where: { isRead: false, senderId: { not: userId } } } } },
         },
         orderBy: { lastMessageAt: 'desc' },
+        take: 100, // M2: inbox hard cap — prevents memory spike for high-volume organizers
       });
     } else {
       // Shopper: fetch their conversations directly
@@ -46,6 +47,7 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
           _count: { select: { messages: { where: { isRead: false, senderId: { not: userId } } } } },
         },
         orderBy: { lastMessageAt: 'desc' },
+        take: 100, // M2: inbox hard cap — prevents memory spike for shoppers with many threads
       });
     }
 
@@ -87,6 +89,7 @@ export const getThread = async (req: AuthRequest, res: Response) => {
       where: { conversationId },
       include: { sender: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'asc' },
+      take: 200, // M1: cap thread history — prevents runaway queries on long threads
     });
 
     // Mark unread messages from the other party as read
