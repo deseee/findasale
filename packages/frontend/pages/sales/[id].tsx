@@ -23,6 +23,7 @@ import ReviewsSection from '../../components/ReviewsSection';
 import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import ActivityFeed from '../../components/ActivityFeed';
+import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
 
 interface Sale {
   id: string;
@@ -363,6 +364,14 @@ const SaleDetailPage = () => {
               )}
               <BadgeDisplay badges={sale.organizer.badges || []} />
             </div>
+            {!isOrganizer && (
+              <div className="ml-4 flex-shrink-0">
+                <FollowOrganizerButton
+                  organizerId={sale.organizer.userId}
+                  organizerName={sale.organizer.businessName}
+                />
+              </div>
+            )}
             {isOrganizer && (
               <div className="flex flex-col gap-2">
                 <button

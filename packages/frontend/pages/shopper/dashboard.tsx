@@ -26,6 +26,7 @@ import YourWishlists from '../../components/YourWishlists';
 import NotificationPreferences from '../../components/NotificationPreferences';
 import MyPickupAppointments from '../../components/MyPickupAppointments';
 import EmptyState from '../../components/EmptyState';
+import StreakWidget from '../../components/StreakWidget'; // CD2 Phase 2: Streak Challenges
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -100,13 +101,29 @@ const ShopperDashboard = () => {
 
           {/* Overview Tab */}
           {activeTab === 'overview' && (
-            <div>
-              <EmptyState
-                icon="🎉"
-                heading="Welcome to FindA.Sale!"
-                subtext="Explore nearby estate sales, add your favorite items, and discover unique treasures. Ready to get started?"
-                cta={{ label: 'Browse Upcoming Sales', href: '/' }}
-              />
+            <div className="space-y-6">
+              {/* Streak widget — always visible when logged in */}
+              <StreakWidget />
+
+              <ActivitySummary />
+
+              <SalesNearYou />
+
+              <RecentlyViewed />
+
+              <FlashDealsBanner />
+
+              <YourWishlists />
+
+              {/* Welcome nudge only shown when no purchases yet */}
+              {purchases && purchases.length === 0 && (
+                <EmptyState
+                  icon="🎉"
+                  heading="Welcome to FindA.Sale!"
+                  subtext="Explore nearby estate sales, add your favorite items, and discover unique treasures. Ready to get started?"
+                  cta={{ label: 'Browse Upcoming Sales', href: '/' }}
+                />
+              )}
             </div>
           )}
 

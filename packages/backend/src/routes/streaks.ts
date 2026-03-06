@@ -82,4 +82,82 @@ router.get('/leaderboard', async (_req, res: Response) => {
   }
 });
 
+/**
+ * POST /api/streaks/activate-huntpass
+ * Creates a Stripe PaymentIntent for $4.99 Hunt Pass (30-day subscription).
+ * Returns { clientSecret } for the frontend to confirm with Stripe Elements.
+ */
+router.post('/activate-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const { getStripe } = await import('../utils/stripe');
+    const stripe = getStripe();
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: 499, // $4.99 in cents
+      currency: 'usd',
+      metadata: {
+        type: 'hunt_pass',
+        userId: req.user.id,
+      },
+      description: 'FindA.Sale Hunt Pass — 30 days',
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (err) {
+    console.error('POST /api/streaks/activate-huntpass error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * POST /api/streaks/confirm-huntpass
+ * Called after Stripe payment confirmation succeeds client-side.
+ * Verifies the PaymentIntent succeeded server-side, then activates Hunt Pass for 30 days.
+ */
+router.post('/confirm-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const { paymentIntentId } = req.body as { paymentIntentId: string };
+    if (!paymentIntentId) return res.status(400).json({ message: 'paymentIntentId required' });
+
+    const { getStripe } = await import('../utils/stripe');
+    const stripe = getStripe();
+
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (intent.status !== 'succeeded') {
+      return res.status(400).json({ message: 'Payment not completed' });
+    }
+    if (intent.metadata?.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Payment intent does not belong to this user' });
+    }
+
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        huntPassActive: true,
+        huntPassExpiry: expiry,
+        streakPoints: { increment: 100 }, // Bonus points for upgrading
+      },
+    });
+    await prisma.$disconnect();
+
+    res.json({
+      success: true,
+      huntPassExpiry: expiry.toISOString(),
+      message: 'Hunt Pass activated! +100 bonus points.',
+    });
+  } catch (err) {
+    console.error('POST /api/streaks/confirm-huntpass error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;
