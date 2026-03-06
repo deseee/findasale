@@ -48,6 +48,8 @@ export const register = async (req: Request, res: Response) => {
 
     // Whitelist role — never allow client to self-assign ADMIN
     const safeRole = ['USER', 'ORGANIZER'].includes(role) ? role : 'USER';
+    // Invite codes are issued for organizer beta access — always promote to ORGANIZER
+    const effectiveRole = validatedInvite ? 'ORGANIZER' : safeRole;
 
     // DB2: Wrap user + organizer creation atomically — neither is orphaned on failure
     const user = await prisma.$transaction(async (tx) => {
@@ -55,14 +57,14 @@ export const register = async (req: Request, res: Response) => {
         data: {
           email,
           name,
-          role: safeRole,
+          role: effectiveRole,
           password: hashedPassword,
           referralCode: userReferralCode,
           points: 0
         }
       });
 
-      if (safeRole === 'ORGANIZER') {
+      if (effectiveRole === 'ORGANIZER') {
         await tx.organizer.create({
           data: {
             userId: newUser.id,

@@ -13,7 +13,7 @@ const getTwilioClient = () => {
     if (accountSid && authToken) {
       try {
         _twilioClient = twilio(accountSid, authToken);
-        console.log('✅ Twilio client initialized');
+        console.info('✅ Twilio client initialized');
       } catch (error) {
         console.warn('⚠️ Failed to initialize Twilio client:', error);
         _twilioClient = null;
@@ -126,7 +126,7 @@ export const unsubscribeByEmail = async (req: Request, res: Response) => {
     const result = await prisma.saleSubscriber.deleteMany({
       where: { email }
     });
-    console.log(`Unsubscribed ${result.count} subscription(s)`);
+    console.info(`Unsubscribed ${result.count} subscription(s)`);
     res.json({ message: 'Successfully unsubscribed from all sale reminders', count: result.count });
   } catch (error) {
     console.error('Error unsubscribing by email:', error);
@@ -317,7 +317,7 @@ export const sendWeeklyDigest = async () => {
     });
 
     if (upcomingSales.length === 0) {
-      console.log('Weekly digest: no upcoming published sales — skipping');
+      console.info('Weekly digest: no upcoming published sales — skipping');
       return;
     }
 
@@ -330,7 +330,7 @@ export const sendWeeklyDigest = async () => {
       take: 5000, // cap digest at 5k users per run
     });
 
-    console.log(`Weekly digest: sending to ${users.length} users with ${upcomingSales.length} sales`);
+    console.info(`Weekly digest: sending to ${users.length} users with ${upcomingSales.length} sales`);
 
     let sent = 0;
     let failed = 0;
@@ -356,7 +356,7 @@ export const sendWeeklyDigest = async () => {
       }
     }
 
-    console.log(`Weekly digest complete: ${sent} sent, ${failed} failed`);
+    console.info(`Weekly digest complete: ${sent} sent, ${failed} failed`);
   } catch (error) {
     console.error('Weekly digest job error:', error);
   }
