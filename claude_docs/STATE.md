@@ -25,24 +25,7 @@ Parallel path model active (5 tracks). MVP stable in Grand Rapids. Beta target: 
 
 ## Completed Phases (summary)
 
-Phases 1–13 + pre-beta audit + rebrand + Sprints A–S all verified and shipped (21 phases total).
-Sprints T–X complete 2026-03-05.
-
-Key milestones: JWT auth, sale management, Stripe payments, push notifications,
-creator affiliates, auction UI + cron + 7% item-level fee, QR marketing,
-virtual line scaffold, AI item tagging, Schema.org SEO, PWA hardening,
-warm design system, bottom tab nav, full palette swap, skeleton components,
-follow system + notification delivery, OAuth social login (NextAuth v4),
-listing card redesign (LQIP blur-up + square + badges), social proof + activity feed,
-photo lightbox, Hunt Pass points, creator tier program, shopper onboarding + empty states,
-discovery + full-text search, review + rating system, shopper messaging,
-reservation/hold UI, affiliate + referral program, weekly curator email,
-CSV export, advanced photo pipeline (add/remove/reorder + ItemPhotoManager).
-Post-launch: Ollama semantic search (U1), neighborhood landing pages (U2),
-Socket.io live bidding (V1), instant payouts (V2), UGC bounties (V3),
-shipping workflow (W1), label PDF (W2), Zapier webhooks (X1).
-
-Full detail: `claude_docs/COMPLETED_PHASES.md`
+Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shipped (21 phases total). Full detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
@@ -69,7 +52,7 @@ Parallel path model active. Session 66–67 batches complete.
 
 ---
 
-## Pending Manual Action
+## Pending Manual Action (Blocks Beta Launch)
 
 - **Phase 31 OAuth env vars** — Social login dormant until added to Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Configure redirect URIs → `https://finda.sale/api/auth/callback/{google,facebook}`.
 - **Support email** — `support@finda.sale` not yet configured.
@@ -80,15 +63,19 @@ Parallel path model active. Session 66–67 batches complete.
 
 ---
 
-## Deferred (Long-Term)
+## Deferred (Post-Beta)
 
-- Multi-metro expansion — Grand Rapids first, business decision
-- Video-to-inventory — vision models not ready, revisit late 2026
-- Real-user beta onboarding — human task
+- AI Discovery Feed (ML on browse/buy signals — needs real data)
+- Buyer-to-Sale Matching (ML — needs real data)
+- Treasure Hunt mobile UX improvements
+- Visual Search vector embeddings (upgrade from label matching)
+- Group Buying Pools, White-label MaaS, Consignment Integration
+- Video-to-inventory (vision models not ready)
+- Multi-metro expansion
 
 ---
 
-## Next Strategic Move
+## Beta Launch Target
 
 Sessions 68–69 complete: favicon.ico + CA4 + CA6 shipped. Next: CD2 Phase 2 (engagement layer), CA7 (human documentation). Patrick: P1 business cards (PNG logo ready in claude_docs/brand/), P2 Stripe/Search Console, P5 OAuth credentials, apply Railway migrations (`prisma migrate deploy` runs on deploy — verify in Railway logs). Beta target: 6–8 weeks. Full roadmap: `claude_docs/roadmap.md`.
 

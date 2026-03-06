@@ -49,7 +49,7 @@ const getOrganizerForSale = async (userId: string, saleId: string) => {
   return { organizer, sale };
 };
 
-// ─── ORGANIZER: Start the line for a sale ────────────────────────────────────
+// ─── ORGANIZER: Start the line for a sale ────────────────────
 export const startLine = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -105,7 +105,7 @@ export const startLine = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ─── ORGANIZER: Call the next person in line ─────────────────────────────────
+// ─── ORGANIZER: Call the next person in line ──────────────────
 export const callNext = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -151,7 +151,7 @@ export const callNext = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ─── ORGANIZER: Get full line status ─────────────────────────────────────────
+// ─── ORGANIZER: Get full line status ────────────────────
 export const getLineStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -178,7 +178,7 @@ export const getLineStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ─── ORGANIZER: Mark a person as entered ─────────────────────────────────────
+// ─── ORGANIZER: Mark a person as entered ───────────────────
 export const markAsEntered = async (req: AuthRequest, res: Response) => {
   try {
     const { lineEntryId } = req.params;
@@ -226,7 +226,7 @@ export const markAsEntered = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ─── ORGANIZER: Broadcast SMS position updates to all waiting people ──────────
+// ─── ORGANIZER: Broadcast SMS position updates to all waiting people ──────
 export const broadcastPositionUpdates = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -266,7 +266,7 @@ export const broadcastPositionUpdates = async (req: AuthRequest, res: Response) 
   }
 };
 
-// ─── SHOPPER: Join the line for a sale ───────────────────────────────────────
+// ─── SHOPPER: Join the line for a sale ───────────────────
 export const joinLine = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -332,7 +332,7 @@ export const joinLine = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ─── SHOPPER: Check position in line ─────────────────────────────────────────
+// ─── SHOPPER: Check position in line ───────────────────
 export const getMyPosition = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -362,7 +362,7 @@ export const getMyPosition = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ─── SHOPPER: Leave the line ──────────────────────────────────────────────────
+// ─── SHOPPER: Leave the line ─────────────────────
 export const leaveLine = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;

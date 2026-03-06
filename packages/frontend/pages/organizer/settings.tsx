@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import Tooltip from '../../components/Tooltip';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -76,7 +77,10 @@ const OrganizerSettingsPage = () => {
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <div className="card p-6">
-              <h2 className="text-xl font-semibold text-warm-900 mb-4">Payment Settings</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold text-warm-900">Payment Settings</h2>
+                <Tooltip content="Connect Stripe to receive payouts. FindA.Sale deposits your earnings (minus 5% platform fee) on a weekly schedule." />
+              </div>
               <p className="text-warm-600 mb-6">
                 Connect your Stripe account to receive payouts from your sales.
               </p>

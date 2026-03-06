@@ -110,7 +110,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
           disabled={uploading}
           className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
         >
-          {uploading ? 'Uploading…' : '+ Add Photos'}
+          {uploading ? 'Uploading\u2026' : '+ Add Photos'}
         </button>
         <input
           ref={fileInputRef}
@@ -134,7 +134,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
         >
-          <p className="text-warm-500 text-sm">No photos yet — click to upload</p>
+          <p className="text-warm-500 text-sm">No photos yet \u2014 click to upload</p>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-3">
@@ -154,17 +154,17 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 </span>
               )}
 
-              {/* Delete button — top-right, shows on hover */}
+              {/* Delete button \u2014 top-right, shows on hover */}
               <button
                 type="button"
                 onClick={() => handleDelete(i)}
                 className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
                 aria-label={`Remove photo ${i + 1}`}
               >
-                ×
+                \u00d7
               </button>
 
-              {/* Reorder arrows — bottom, shows on hover */}
+              {/* Reorder arrows \u2014 bottom, shows on hover */}
               <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {i > 0 && (
                   <button
@@ -173,7 +173,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                     className="bg-black/60 hover:bg-black/80 text-white rounded w-6 h-6 flex items-center justify-center text-xs focus:opacity-100"
                     aria-label="Move photo left"
                   >
-                    ←
+                    \u2190
                   </button>
                 )}
                 {i < photos.length - 1 && (
@@ -183,7 +183,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                     className="bg-black/60 hover:bg-black/80 text-white rounded w-6 h-6 flex items-center justify-center text-xs focus:opacity-100"
                     aria-label="Move photo right"
                   >
-                    →
+                    \u2192
                   </button>
                 )}
               </div>

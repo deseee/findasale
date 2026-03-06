@@ -14,6 +14,7 @@ import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import Tooltip from '../../components/Tooltip';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -36,6 +37,7 @@ const CreateSalePage = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -48,10 +50,47 @@ const CreateSalePage = () => {
       ...formData,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     });
+    // Clear error for this field when user starts typing
+    if (validationErrors[name]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateDates = (): boolean => {
+    const errors: { [key: string]: string } = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (formData.startDate) {
+      const startDate = new Date(formData.startDate);
+      if (startDate < today) {
+        errors.startDate = 'Start date must be today or in the future';
+      }
+    }
+
+    if (formData.startDate && formData.endDate) {
+      const startDate = new Date(formData.startDate);
+      const endDate = new Date(formData.endDate);
+      if (endDate <= startDate) {
+        errors.endDate = 'End date must be after start date';
+      }
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateDates()) {
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -84,8 +123,12 @@ const CreateSalePage = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">Sale Title</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label htmlFor="title" className="block text-sm font-medium text-warm-700">Sale Title</label>
+                <Tooltip content="This is the first thing shoppers see. Be specific: 'Johnson Family Estate Sale' beats 'Estate Sale'. Include the neighborhood or street if public." />
+              </div>
               <input
+                id="title"
                 type="text"
                 name="title"
                 value={formData.title}
@@ -97,8 +140,12 @@ const CreateSalePage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">Description</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label htmlFor="description" className="block text-sm font-medium text-warm-700">Description</label>
+                <Tooltip content="Briefly describe what's for sale. Mention standout categories: 'Mid-century furniture, vintage tools, estate jewelry.' 2-3 sentences is enough." />
+              </div>
               <textarea
+                id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
@@ -111,8 +158,12 @@ const CreateSalePage = () => {
             {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">Start Date</label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label htmlFor="startDate" className="block text-sm font-medium text-warm-700">Start Date</label>
+                  <Tooltip content="Set your start date to the first day items are available. Shoppers browse before doors open, so publish 3-5 days early." />
+                </div>
                 <input
+                  id="startDate"
                   type="date"
                   name="startDate"
                   value={formData.startDate}
@@ -120,10 +171,14 @@ const CreateSalePage = () => {
                   required
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
+                {validationErrors.startDate && (
+                  <p className="text-red-500 text-sm mt-1">{validationErrors.startDate}</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">End Date</label>
+                <label htmlFor="endDate" className="block text-sm font-medium text-warm-700 mb-2">End Date</label>
                 <input
+                  id="endDate"
                   type="date"
                   name="endDate"
                   value={formData.endDate}
@@ -131,13 +186,20 @@ const CreateSalePage = () => {
                   required
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
+                {validationErrors.endDate && (
+                  <p className="text-red-500 text-sm mt-1">{validationErrors.endDate}</p>
+                )}
               </div>
             </div>
 
             {/* Location */}
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">Address</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label htmlFor="address" className="block text-sm font-medium text-warm-700">Address</label>
+                <Tooltip content="Your exact address is shown to shoppers after the sale is published. It's used to show your sale on the map." />
+              </div>
               <input
+                id="address"
                 type="text"
                 name="address"
                 value={formData.address}
@@ -150,8 +212,9 @@ const CreateSalePage = () => {
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">City</label>
+                <label htmlFor="city" className="block text-sm font-medium text-warm-700 mb-2">City</label>
                 <input
+                  id="city"
                   type="text"
                   name="city"
                   value={formData.city}
@@ -161,8 +224,9 @@ const CreateSalePage = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">State</label>
+                <label htmlFor="state" className="block text-sm font-medium text-warm-700 mb-2">State</label>
                 <input
+                  id="state"
                   type="text"
                   name="state"
                   value={formData.state}
@@ -173,8 +237,9 @@ const CreateSalePage = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">ZIP</label>
+                <label htmlFor="zip" className="block text-sm font-medium text-warm-700 mb-2">ZIP</label>
                 <input
+                  id="zip"
                   type="text"
                   name="zip"
                   value={formData.zip}
@@ -187,10 +252,11 @@ const CreateSalePage = () => {
 
             {/* Neighborhood — U2 */}
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">
+              <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 mb-2">
                 Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
               </label>
               <select
+                id="neighborhood"
                 name="neighborhood"
                 value={formData.neighborhood}
                 onChange={handleChange}
@@ -216,8 +282,9 @@ const CreateSalePage = () => {
 
             {/* Options */}
             <div>
-              <label className="flex items-center gap-3">
+              <label htmlFor="auctionEnabled" className="flex items-center gap-3">
                 <input
+                  id="auctionEnabled"
                   type="checkbox"
                   name="auctionEnabled"
                   checked={formData.auctionEnabled}

@@ -12,7 +12,6 @@ export interface LineEntry {
 
 export const createLineEntries = async (saleId: string) => {
   try {
-    // Get all subscribers for this sale
     const subscribers = await prisma.saleSubscriber.findMany({
       where: {
         saleId,
@@ -21,13 +20,12 @@ export const createLineEntries = async (saleId: string) => {
       },
     });
 
-    // Create line entries for each subscriber
     const lineEntries = [];
     for (let i = 0; i < subscribers.length; i++) {
       const entry = await prisma.lineEntry.create({
         data: {
           saleId,
-          userId: subscribers[i].userId!, // userId filtered to non-null above
+          userId: subscribers[i].userId!,
           position: i + 1,
           status: 'WAITING'
         }

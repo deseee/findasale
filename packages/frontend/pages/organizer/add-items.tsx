@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
+import Tooltip from '../../components/Tooltip';
 import RapidCapture from '../../components/RapidCapture';
 
 interface Sale {
@@ -22,6 +23,8 @@ interface ItemFormData {
   isAuctionItem: boolean;
   category: string;
   condition: string;
+  isLiveDrop: boolean; // CD2
+  liveDropAt: string; // CD2
 }
 
 interface AIAnalysis {
@@ -43,6 +46,8 @@ const EMPTY_FORM: ItemFormData = {
   isAuctionItem: false,
   category: '',
   condition: '',
+  isLiveDrop: false, // CD2
+  liveDropAt: '', // CD2
 };
 
 const AddItemsPage = () => {
@@ -375,6 +380,8 @@ const AddItemsPage = () => {
         category: formData.category || null,
         condition: formData.condition || null,
         photoUrls: uploadedPhotoUrls,
+        isLiveDrop: formData.isLiveDrop, // CD2
+        liveDropAt: formData.liveDropAt && formData.isLiveDrop ? formData.liveDropAt : null, // CD2
       };
 
       if (formData.isAuctionItem) {
@@ -539,10 +546,13 @@ const AddItemsPage = () => {
 
           {/* ── AI Photo Scan ───────────────────────────────────────── */}
           <div className="mb-8">
-            <p className="text-sm font-semibold text-warm-700 mb-2">
-              ✨ AI Photo Scan{' '}
-              <span className="font-normal text-warm-400">— snap a photo to auto-fill the form</span>
-            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-semibold text-warm-700">
+                ✨ AI Photo Scan
+              </p>
+              <span className="font-normal text-warm-400 text-sm">snap a photo to auto-fill the form</span>
+              <Tooltip content="AI analyzes your photo and suggests a title, description, and tags. Review before applying — you know your items best." />
+            </div>
 
             {!aiPreview ? (
               <div
@@ -684,6 +694,42 @@ const AddItemsPage = () => {
               />
             </div>
 
+            {/* CD2: Live Drop Toggle */}
+            <div className="flex items-center mb-4">
+              <input
+                id="isLiveDrop"
+                name="isLiveDrop"
+                type="checkbox"
+                checked={formData.isLiveDrop}
+                onChange={handleChange}
+                className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded"
+              />
+              <label htmlFor="isLiveDrop" className="ml-2 block text-sm text-warm-900">
+                🔥 Mark as Live Drop
+              </label>
+            </div>
+
+            {/* CD2: Live Drop Reveal Time */}
+            {formData.isLiveDrop && (
+              <div>
+                <label htmlFor="liveDropAt" className="block text-sm font-medium text-warm-700 mb-1">
+                  Reveal Time
+                </label>
+                <input
+                  type="datetime-local"
+                  id="liveDropAt"
+                  name="liveDropAt"
+                  value={formData.liveDropAt}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-warm-900 bg-white"
+                />
+                <p className="text-xs text-warm-500 mt-1">
+                  Item will show teaser until this time, then full details appear
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center mb-4">
               <input
                 id="isAuctionItem"
@@ -700,9 +746,12 @@ const AddItemsPage = () => {
 
             {!formData.isAuctionItem ? (
               <div>
-                <label htmlFor="price" className="block text-sm font-medium text-warm-700 mb-1">
-                  Price ($)
-                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label htmlFor="price" className="block text-sm font-medium text-warm-700">
+                    Price ($)
+                  </label>
+                  <Tooltip content="Set a fair estate sale price — typically 20-50% of retail. Use the 'Suggest Price' button to get an AI estimate based on the item type." />
+                </div>
                 <input
                   type="number"
                   id="price"
@@ -785,9 +834,12 @@ const AddItemsPage = () => {
               </div>
 
               <div>
-                <label htmlFor="category" className="block text-sm font-medium text-warm-700 mb-1">
-                  Category
-                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label htmlFor="category" className="block text-sm font-medium text-warm-700">
+                    Category
+                  </label>
+                  <Tooltip content="Category helps shoppers filter and find your item. Choose the most specific category that fits." />
+                </div>
                 <select
                   id="category"
                   name="category"
@@ -812,9 +864,12 @@ const AddItemsPage = () => {
               </div>
 
               <div>
-                <label htmlFor="condition" className="block text-sm font-medium text-warm-700 mb-1">
-                  Condition
-                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label htmlFor="condition" className="block text-sm font-medium text-warm-700">
+                    Condition
+                  </label>
+                  <Tooltip content="Be honest about condition. 'Good' means functional with minor wear. 'Fair' means shows age but works. Accurate condition builds shopper trust." />
+                </div>
                 <select
                   id="condition"
                   name="condition"

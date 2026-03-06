@@ -18,7 +18,7 @@ const CategoryPage = () => {
   const router = useRouter();
   const { category } = router.query as { category: string };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['category-items', category],
     queryFn: async () => {
       const res = await api.get(`/search/categories/${category}`);
@@ -39,7 +39,7 @@ const CategoryPage = () => {
   return (
     <div className="min-h-screen bg-warm-50">
       <Head>
-        <title>{label} \u2014 Browse by Category \u2014 FindA.Sale</title>
+        <title>{label} — Browse by Category — FindA.Sale</title>
         <meta
           name="description"
           content={`Browse ${label} items at estate sales near you on FindA.Sale`}
@@ -50,7 +50,7 @@ const CategoryPage = () => {
         {/* Breadcrumb */}
         <nav className="text-sm text-warm-400 mb-6 flex items-center gap-2">
           <Link href="/" className="hover:text-amber-600">Home</Link>
-          <span>\u203a</span>
+          <span>›</span>
           <span className="text-warm-900 font-medium">{label}</span>
         </nav>
 
@@ -91,6 +91,11 @@ const CategoryPage = () => {
               </div>
             ))}
           </div>
+        ) : isError ? (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 gap-4">
+            <p className="text-warm-700 text-lg">Failed to load category listings.</p>
+            <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+          </div>
         ) : data && data.items.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {data.items.map((item: any) => (
@@ -108,7 +113,7 @@ const CategoryPage = () => {
                   />
                 ) : (
                   <div className="aspect-square bg-warm-200 flex items-center justify-center">
-                    <span className="text-warm-400 text-3xl">\uD83D\uDCE6</span>
+                    <span className="text-warm-400 text-3xl">📦</span>
                   </div>
                 )}
                 <div className="p-3 flex-1 flex flex-col">
@@ -131,10 +136,10 @@ const CategoryPage = () => {
           </div>
         ) : (
           <div className="text-center py-16">
-            <p className="text-5xl mb-4">\uD83D\uDCE6</p>
+            <p className="text-5xl mb-4">📦</p>
             <h3 className="text-xl font-semibold text-warm-900 mb-2">No {label} items right now</h3>
             <p className="text-warm-600 mb-6">
-              Check back soon \u2014 new sales go live every week.
+              Check back soon — new sales go live every week.
             </p>
             <Link
               href="/"

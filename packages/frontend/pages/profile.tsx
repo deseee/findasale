@@ -29,7 +29,7 @@ const ProfilePage = () => {
   const { user } = useAuth();
 
   // Fetch user's bids
-  const { data: bids = [] } = useQuery({
+  const { data: bids = [], isError: bidsError, refetch: refetchBids } = useQuery({
     queryKey: ['user-bids'],
     queryFn: async () => {
       const response = await api.get('/users/me/bids');
@@ -38,7 +38,7 @@ const ProfilePage = () => {
   });
 
   // Fetch user's referrals
-  const { data: referrals = [] } = useQuery({
+  const { data: referrals = [], isError: referralsError, refetch: refetchReferrals } = useQuery({
     queryKey: ['user-referrals'],
     queryFn: async () => {
       const response = await api.get('/users/me/referrals');
@@ -47,7 +47,7 @@ const ProfilePage = () => {
   });
 
   // Fetch user's badges (legacy endpoint)
-  const { data: badgesData } = useQuery({
+  const { data: badgesData, isError: badgesError, refetch: refetchBadges } = useQuery({
     queryKey: ['user-badges'],
     queryFn: async () => {
       const response = await api.get('/users/me/points');
@@ -56,7 +56,7 @@ const ProfilePage = () => {
   });
 
   // Phase 19: Fetch points, tier, and recent transactions
-  const { data: pointsData } = useQuery({
+  const { data: pointsData, isError: pointsError, refetch: refetchPoints } = useQuery({
     queryKey: ['points'],
     queryFn: async () => {
       const response = await api.get('/points');
@@ -134,6 +134,13 @@ const ProfilePage = () => {
           </div>
         )}
 
+        {pointsError && (
+          <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 gap-4 rounded-lg p-6 mb-8">
+            <p className="text-warm-700 text-lg">Failed to load Hunt Pass.</p>
+            <button onClick={() => refetchPoints()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+          </div>
+        )}
+
         {/* Badges Section */}
         {badgesData?.badges && badgesData.badges.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
@@ -156,11 +163,23 @@ const ProfilePage = () => {
           </div>
         )}
 
+        {badgesError && (
+          <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 gap-4 rounded-lg p-6 mb-8">
+            <p className="text-warm-700 text-lg">Failed to load badges.</p>
+            <button onClick={() => refetchBadges()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+          </div>
+        )}
+
         {/* My Bids Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-2xl font-bold mb-4">My Bids</h2>
           
-          {bids.length === 0 ? (
+          {bidsError ? (
+            <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 gap-4 rounded-lg p-6">
+              <p className="text-warm-700 text-lg">Failed to load your bids.</p>
+              <button onClick={() => refetchBids()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+            </div>
+          ) : bids.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-warm-600 mb-4">You haven't placed any bids yet.</p>
               <Link 
@@ -237,7 +256,12 @@ const ProfilePage = () => {
         {/* Referrals Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-2xl font-bold mb-4">My Referrals</h2>
-          {referrals.length === 0 ? (
+          {referralsError ? (
+            <div className="min-h-32 flex flex-col items-center justify-center bg-warm-50 gap-4 rounded-lg p-6">
+              <p className="text-warm-700 text-lg">Failed to load referrals.</p>
+              <button onClick={() => refetchReferrals()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+            </div>
+          ) : referrals.length === 0 ? (
             <p className="text-warm-600">No referrals yet.</p>
           ) : (
             <div className="space-y-3">
@@ -255,6 +279,30 @@ const ProfilePage = () => {
             </div>
           )}
         </div>
+
+        {/* Push Notifications Settings */}
+        {typeof window !== 'undefined' && 'Notification' in window && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 className="text-warm-800 font-semibold mb-4">Push Notifications</h3>
+            {Notification.permission === 'granted' ? (
+              <div className="flex items-center justify-between">
+                <span className="text-warm-700 text-sm">Push notifications are enabled</span>
+                <button type="button" onClick={async () => {
+                  const reg = await navigator.serviceWorker.ready;
+                  const sub = await reg.pushManager.getSubscription();
+                  if (sub) { await sub.unsubscribe(); }
+                }} className="text-sm text-red-600 hover:underline">Disable</button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-warm-600 text-sm">Push notifications are off</span>
+                <button type="button" onClick={async () => {
+                  await Notification.requestPermission();
+                }} className="text-sm bg-amber-600 hover:bg-amber-700 text-white py-1 px-3 rounded-lg">Enable</button>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

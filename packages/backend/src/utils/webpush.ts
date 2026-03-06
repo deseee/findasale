@@ -24,7 +24,6 @@ const getWebPush = () => {
     return null;
   }
   try {
-    // Lazy-load so the server starts even if web-push isn't installed yet
     const wp = require('web-push');
     wp.setVapidDetails(
       `mailto:${process.env.VAPID_CONTACT_EMAIL || 'admin@finda.sale'}`,

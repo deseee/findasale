@@ -504,7 +504,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ── Phase 16: Advanced photo pipeline ─────────────────────────────────────────────────────────────────────────────
+// -- Phase 16: Advanced photo pipeline
 
 // Helper: fetch item and verify organizer ownership
 const getItemForOrganizer = async (id: string, userId: string) => {
@@ -614,7 +614,7 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// ── End Phase 16 ─────────────────────────────────────────────────────────────────────────────
+// -- End Phase 16 --
 
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
