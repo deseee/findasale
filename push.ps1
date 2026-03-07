@@ -108,18 +108,44 @@ if ($behind -gt 0) {
             Write-Host "  FAILED - Untracked files conflict with remote." -ForegroundColor Red
             Write-Host "  Files listed above exist locally AND on remote." -ForegroundColor DarkGray
             Write-Host "  Delete or rename the local copies, then re-run .\push.ps1" -ForegroundColor DarkGray
+            exit 1
         } elseif ($isConflict) {
-            Write-Host ""
-            Write-Host "  FAILED - Merge conflicts detected." -ForegroundColor Red
-            Write-Host "  Paste this output into Cowork and say: fix the merge conflict" -ForegroundColor Yellow
-            Write-Host "  Claude will resolve the markers using Read + Edit + MCP push." -ForegroundColor DarkGray
-            Write-Host "  No manual file editing needed. Claude handles it." -ForegroundColor DarkGray
+            # Auto-resolve doc file conflicts (claude_docs/, context.md, .last-wrap).
+            # Code file conflicts still require Cowork intervention.
+            $conflictFiles = git diff --name-only --diff-filter=U 2>$null
+            $docConflicts = @()
+            $codeConflicts = @()
+            foreach ($cf in $conflictFiles) {
+                if ($cf -match "^claude_docs/" -or $cf -eq "context.md" -or $cf -match "\.last-wrap$") {
+                    $docConflicts += $cf
+                } else {
+                    $codeConflicts += $cf
+                }
+            }
+            if ($codeConflicts) {
+                Write-Host ""
+                Write-Host "  FAILED - Merge conflicts in code files." -ForegroundColor Red
+                Write-Host "  Paste this output into Cowork and say: fix the merge conflict" -ForegroundColor Yellow
+                $codeConflicts | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+                Write-Host "  Claude handles it - no manual editing needed." -ForegroundColor DarkGray
+                exit 1
+            }
+            if ($docConflicts) {
+                Write-Host "  Auto-resolving $($docConflicts.Count) doc conflict(s)..." -ForegroundColor Yellow
+                foreach ($cf in $docConflicts) {
+                    git checkout --theirs -- "$cf" 2>$null
+                    git add "$cf" 2>$null
+                    Write-Host "    OK - $cf" -ForegroundColor Green
+                }
+                git commit --no-edit 2>$null
+                Write-Host "  OK - Doc conflicts auto-resolved." -ForegroundColor Green
+            }
         } else {
             Write-Host ""
             Write-Host "  FAILED - Merge error. See output above." -ForegroundColor Red
             Write-Host "  To undo: git merge --abort" -ForegroundColor DarkGray
+            exit 1
         }
-        exit 1
     }
     Write-Host "  OK - Merged." -ForegroundColor Green
 } else {
