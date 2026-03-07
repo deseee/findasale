@@ -1,7 +1,7 @@
 import { Response } from 'express';
+import { randomUUID } from 'crypto';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
-import { v4 as uuidv4 } from 'uuid';
 
 // GET /api/wishlists — get all wishlists for authenticated user
 export const getMyWishlists = async (req: AuthRequest, res: Response) => {
@@ -239,7 +239,7 @@ export const generateShareLink = async (req: AuthRequest, res: Response) => {
     let shareSlug: string = '';
     let isUnique = false;
     while (!isUnique) {
-      shareSlug = uuidv4().split('-')[0]; // Use first part of UUID for short slug
+      shareSlug = randomUUID().split('-')[0]; // Use first part of UUID for short slug
       const existing = await prisma.wishlist.findUnique({
         where: { shareSlug },
       });
@@ -297,7 +297,7 @@ export const toggleWishlistPublic = async (req: AuthRequest, res: Response) => {
       let shareSlug: string = '';
       let isUnique = false;
       while (!isUnique) {
-        shareSlug = uuidv4().split('-')[0];
+        shareSlug = randomUUID().split('-')[0];
         const existing = await prisma.wishlist.findUnique({
           where: { shareSlug },
         });
