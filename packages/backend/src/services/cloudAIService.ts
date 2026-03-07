@@ -194,6 +194,67 @@ export async function analyzeItemImage(
   return getHaikuAnalysis(imageBase64, mimeType, visionLabels);
 }
 
+// ── Sale Description Generator ────────────────────────────────────────────────
+
+export interface SaleDescriptionInput {
+  title: string;
+  tags?: string[];
+  city?: string;
+  isAuctionSale?: boolean;
+  startDate?: string;
+  endDate?: string;
+}
+
+/**
+ * Generate a 2–3 sentence sale listing description using Claude Haiku.
+ * Returns null if ANTHROPIC_API_KEY is not configured.
+ * Throws on API errors so the caller can handle/log them.
+ */
+export async function generateSaleDescription(input: SaleDescriptionInput): Promise<string | null> {
+  if (!ANTHROPIC_API_KEY) return null;
+
+  const { title, tags = [], city = 'Grand Rapids', isAuctionSale = false, startDate, endDate } = input;
+
+  const tagContext = tags.length > 0 ? `Featured categories/items: ${tags.join(', ')}.` : '';
+  const dateContext =
+    startDate && endDate
+      ? `Sale runs ${new Date(startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} through ${new Date(endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+      : '';
+  const auctionContext = isAuctionSale ? 'This is an auction-style sale.' : '';
+
+  const response = await axios.post(
+    'https://api.anthropic.com/v1/messages',
+    {
+      model: ANTHROPIC_MODEL,
+      max_tokens: 150,
+      messages: [
+        {
+          role: 'user',
+          content: `You are helping an estate sale organizer in ${city}, Michigan write a compelling 2–3 sentence listing description.
+
+Sale title: "${title}"
+${tagContext}
+${dateContext}
+${auctionContext}
+
+Write a friendly, inviting description that shoppers will see on the listing. Use a warm tone. Mention the city if relevant. Do NOT make up specific items or prices — only reference what's provided. Respond with just the description text, no quotes, no explanation.`,
+        },
+      ],
+    },
+    {
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      timeout: 20000,
+    }
+  );
+
+  const text: string = response.data.content?.[0]?.text ?? '';
+  return text.trim() || null;
+}
+
 // ── Price Suggestion API ──────────────────────────────────────────────────────
 
 export interface PriceSuggestion {

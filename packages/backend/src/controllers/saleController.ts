@@ -7,6 +7,7 @@ import { AuthRequest } from '../middleware/auth';
 import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 import { syncOrganizerTier } from '../services/tierService';
 import { notifyMatchedBuyers } from '../services/buyerMatchService';
+import { generateSaleDescription, isCloudAIAvailable } from '../services/cloudAIService';
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
@@ -653,5 +654,49 @@ export const getSaleActivity = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching sale activity:', error);
     res.status(500).json({ message: 'Server error loading activity feed' });
+  }
+};
+
+// ── AI Sale Description Generator ─────────────────────────────────────────────
+
+export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { title, tags, city, isAuctionSale, startDate, endDate } = req.body as {
+    title?: string;
+    tags?: string[];
+    city?: string;
+    isAuctionSale?: boolean;
+    startDate?: string;
+    endDate?: string;
+  };
+
+  if (!title || typeof title !== 'string' || title.trim() === '') {
+    res.status(400).json({ error: 'title is required' });
+    return;
+  }
+
+  if (!isCloudAIAvailable()) {
+    res.status(503).json({ error: 'AI description service unavailable' });
+    return;
+  }
+
+  try {
+    const description = await generateSaleDescription({
+      title: title.trim(),
+      tags: Array.isArray(tags) ? tags : [],
+      city: typeof city === 'string' ? city : undefined,
+      isAuctionSale: typeof isAuctionSale === 'boolean' ? isAuctionSale : false,
+      startDate: typeof startDate === 'string' ? startDate : undefined,
+      endDate: typeof endDate === 'string' ? endDate : undefined,
+    });
+
+    if (!description) {
+      res.status(503).json({ error: 'AI description service unavailable' });
+      return;
+    }
+
+    res.json({ description });
+  } catch (error) {
+    console.error('Error generating sale description:', error);
+    res.status(500).json({ error: 'Failed to generate description' });
   }
 };
