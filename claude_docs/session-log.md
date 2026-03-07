@@ -8,6 +8,13 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-06 (session 85 — 4 critical code fixes shipped, beta status GO)
+**Worked on:** Records agent: cleaned stale Docker entries from self_healing_skills.md (#9/#13/#18 updated to native dev stack). Updated STATE.md: beta status changed from CONDITIONAL GO to GO, marked C1/C2/C3/C4 as COMPLETE, updated Active Objective. Added session 85 log entry detailing 4 code fixes: (C1) JWT fallback secret removed + startup guard in middleware/auth.ts, (C2) password reset rate limiter (5/hr) in controllers/authController.ts, (C3) ai-feedback-stats admin-only auth in routes/upload.ts, (C4) Stripe webhook rotation plan documented in claude_docs/OPS.md.
+**Files changed:** self_healing_skills.md (entries #9/#13/#18), STATE.md (Active Objective, Beta Launch Target, Last Updated), session-log.md (new entry).
+**Decisions:** Code fixes are shipping — Patrick confirmed via code push review. Docker references fully removed from self-healing docs. Beta readiness is now GO, pending Patrick's 5 manual blocking items.
+**Next up:** Patrick: Stripe business account, business cards, Search Console, beta organizer outreach, Neon credential rotation. Deploy to production when code fixes land on main.
+**Blockers:** None blocking records work. Patrick's manual items are on track.
+
 ### 2026-03-06 (session 84 — workflow fix + 8 audit work paths complete)
 **Worked on:** Workflow agent called to fix session-start behavior — "hello"/"hi" now treated as session start signal. Rule 4 added to conversation-defaults skill (installed), entry added to patrick-language-map.md (pushed to GitHub). All 8 audit work paths executed in parallel: QA (4 critical findings), UX (5 blockers), Legal (5 medium risks, no blockers), Support KB (15 issues), CX onboarding toolkit (4 emails + quick-start guide), Records (RECOVERY.md Docker cleanup, pushed), Marketing (2-week pre-launch calendar), Ops (infra GREEN, VAPID yellow). Audit reports written to claude_docs/beta-launch/ and claude_docs/health-reports/.
 **Decisions:** Beta is CONDITIONAL GO — 4 critical code fixes must ship before real user traffic (JWT fallback secret, password reset rate limit, ai-feedback-stats auth, Stripe rotation plan). UX and Legal findings are non-blocking for initial limited beta.

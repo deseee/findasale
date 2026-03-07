@@ -45,10 +45,10 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 **Fix:** Add to `.env.example`. Validate required vars at startup with fail-fast.
 **Test:** Compare `.env.example` keys vs `.env` keys.
 
-### 9. Docker/pnpm Backend Startup Failure
-**Trigger:** `docker compose up` → backend exits with `nodemon: not found`
+### 9. pnpm Backend Startup Failure
+**Trigger:** Backend process exits with `nodemon: not found` during native dev startup
 **Fix:** Use `pnpm --filter backend run dev` (not `npx nodemon`). Ensure nodemon+tsx in `dependencies`.
-**After change:** `docker compose down && docker compose up --build --no-cache`
+**Test:** `pnpm --filter backend run dev` should start cleanly and watch for changes.
 
 ### 10. Circular Dependency via index.ts Prisma Import
 **Trigger:** Controller imports prisma from `'../index'` → TDZ crash
@@ -65,10 +65,10 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 **Fix:** finda.sale uses Vercel nameservers. Add all DNS records in Vercel DNS panel, NOT Spaceship.
 **Verify:** `curl -s "https://dns.google/resolve?name=finda.sale&type=NS"`
 
-### 13. next.config.js Not Bind-Mounted
-**Trigger:** Config changes (CSP, Workbox, image domains) not taking effect in Docker
-**Fix:** `docker compose build --no-cache frontend && docker compose up -d`. Hard refresh after.
-**Also applies to:** tsconfig.json, tailwind.config.js, postcss.config.js
+### 13. Frontend Config Changes Not Reloading
+**Trigger:** Changes to next.config.js, tsconfig.json, tailwind.config.js, or postcss.config.js are not reflected in the running dev server
+**Fix:** Stop the frontend process (`Ctrl+C` if running via `pnpm --filter frontend run dev`). Restart with `pnpm --filter frontend run dev`. Hard refresh in browser (Ctrl+Shift+R).
+**Also applies to:** CSS, module paths, bundler settings
 
 ### 14. MCP Push + Local Unstaged Files Conflict
 **Trigger:** `git pull --rebase` aborts — untracked files would be overwritten
@@ -88,10 +88,10 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 **Fix:** Remove domain from runtimeCaching + exclude from pages catch-all via negative lookahead regex.
 **Root cause:** SW fetch context + CORS restrictions. NetworkOnly is insufficient — must fully exclude.
 
-### 18. Docker Bind Mount Missing for New Frontend Dir
-**Trigger:** `Module not found` for new dir under `packages/frontend/`
-**Fix:** Add `./packages/frontend/<dir>:/app/packages/frontend/<dir>` to docker-compose.yml volumes.
-**Currently mounted:** pages/, components/, styles/, lib/, public/, hooks/
+### 18. Module Not Found in Frontend Development
+**Trigger:** New directory created under `packages/frontend/` but Next.js dev server doesn't see it (Module not found error)
+**Fix:** Restart the frontend dev process. Next.js watches the entire `packages/frontend/` directory by default. Ensure the directory exists on disk and the import path matches the actual file location.
+**Prevention:** Always test the import path matches the actual file structure before committing.
 
 ### 19. Diff-Only Violation — Full Rewrite Without Permission
 **Trigger:** Claude uses Write tool on existing file without announcing approach

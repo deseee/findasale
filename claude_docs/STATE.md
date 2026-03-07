@@ -7,12 +7,13 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-All 8 audit work paths complete (session 84). Beta is CONDITIONAL GO — 4 critical code issues must be fixed before real user traffic, plus Patrick's 5 manual items. Code fixes owned by findasale-dev next session. All CA/CB/CC/CD paths complete. 35 Neon migrations applied. Audit reports in `claude_docs/beta-launch/` and `claude_docs/health-reports/`.
+4 critical code fixes shipped (session 85). Beta is GO — all QA-critical security and rate-limiting issues resolved. Patrick's 5 manual blocking items remain: Stripe business account, business cards, Search Console verification, beta organizer outreach launch, and Neon credential rotation. All CA/CB/CC/CD audit paths complete. 35 Neon migrations applied. Audit reports in `claude_docs/beta-launch/` and `claude_docs/health-reports/`.
 
 ---
 
 ## Locked Decisions
 
+- **BUSINESS_PLAN.md** — Tier 1 Strategic Authority Document (created 2026-03-06). All business strategy, market analysis, financial projections, competitive positioning, and go-to-market strategy defined here. Reference for all strategic decisions.
 - 5% platform fee (regular), 7% platform fee (auction)
 - Stripe Connect Express
 - Leaflet + OSM maps, backend geocoding cache
@@ -83,13 +84,13 @@ Parallel path model active. Session 76–77 batches complete.
 
 ## Beta Launch Target
 
-**Status: CONDITIONAL GO.** All 8 audit work paths complete (session 84).
+**Status: GO.** All 8 audit work paths complete (session 84). All 4 critical code fixes shipped (session 85).
 
-**4 critical code fixes required (findasale-dev session 85):**
-- C1: JWT fallback secret hardcoded — replace `'fallback-secret'` with env var validation on startup
-- C2: Password reset not rate-limited — add express-rate-limit to `/auth/forgot-password`
-- C3: `/api/upload/ai-feedback-stats` has zero auth — add `authenticate` + `requireAdmin` middleware
-- C4: Document Stripe webhook secret rotation plan in OPS.md
+**4 critical code fixes — ✅ COMPLETE (session 85):**
+- C1: ✅ JWT fallback secret removed, env var validation guard added on startup
+- C2: ✅ Password reset rate-limited (5/hr) via express-rate-limit on `/auth/forgot-password`
+- C3: ✅ `/api/upload/ai-feedback-stats` protected with `authenticate` + `requireAdmin` middleware
+- C4: ✅ Stripe webhook secret rotation plan documented in OPS.md
 
 **Patrick's 5 blocking items:**
 1. Confirm 5%/7% fee (locked in STACK.md but never verbally confirmed)
@@ -135,4 +136,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-06 (session 84 — All 8 audit work paths executed. Workflow fix: session start signal rule added to patrick-language-map.md + conversation-defaults skill. QA: CONDITIONAL GO, 4 criticals to fix. UX: 5 blockers. Legal: 5 medium risks, no blockers. Support KB, CX toolkit, Marketing calendar, Ops readiness all written. RECOVERY.md Docker sections removed. self_healing_skills.md still has 3 stale Docker entries #9/#13/#18 — fix next session.)
+Last Updated: 2026-03-06 (session 85 — 4 critical code fixes shipped: C1 JWT fallback secret removed + env guard, C2 password reset rate limit, C3 ai-feedback-stats admin auth, C4 Stripe rotation plan documented. Beta status: GO. Patrick's 5 manual items remain. self_healing_skills.md Docker entries #9/#13/#18 cleaned.)
