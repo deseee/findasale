@@ -270,7 +270,7 @@ Before ending ANY session, Claude must execute the session wrap protocol:
 2. **Do not end session if check fails.** Fix any findings, re-run check, and confirm all checks pass before closing.
 3. **Minimum wrap steps:**
    - (a) Commit all changed files with descriptive messages: `git add [specific files] && git commit -m "[message]"`
-   - (b) Update `claude_docs/logs/session-log.md` with today's entry (completed work, files changed, notes)
+   - (b) Update `claude_docs/logs/session-log.md` with today's entry (completed work, files changed, notes). If any P-path items were completed or CD sprint features shipped this session, also update `claude_docs/strategy/roadmap.md` in the same commit — roadmap and session-log are always updated together.
    - (c) Update `claude_docs/operations/next-session-prompt.md` with context for the next session
    - (d) Re-run the wrap check to verify all gates pass
    - (e) Provide Patrick with exact commit hashes and push instructions
