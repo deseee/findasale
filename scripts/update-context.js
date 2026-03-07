@@ -78,21 +78,6 @@ const gitBranch = rawBranch.startsWith('[Error') ? '(run git locally)' : rawBran
 const gitCommit = rawCommit.startsWith('[Error') ? '(run git locally)' : rawCommit;
 const gitRemote = rawRemote.startsWith('[Error') ? '(run git locally)' : rawRemote;
 
-// Docker — preserve existing section if docker is not reachable (e.g. nightly VM runs)
-let docker = null;
-if (commandExists('docker')) {
-  const dockerOut = runCmd('docker ps --format "table {{.Names}}\\t{{.Status}}"');
-  if (!dockerOut.startsWith('[Error')) {
-    docker = dockerOut || 'No Docker containers running.';
-  }
-}
-if (docker === null) {
-  // Never preserve stale Docker data — always emit a fresh unavailable message.
-  // Real container state can only be captured by running this script on Windows
-  // where Docker Desktop is accessible. The nightly VM task cannot reach Docker.
-  docker = 'Docker status unavailable — run update-context.js locally (Windows) to capture container state';
-}
-
 // File tree
 const fileTree = getTree(path.join(__dirname, '..'));
 
@@ -169,7 +154,7 @@ function getEnvDrift() {
   return { missing, extra };
 }
 
-// Environment capabilities — GitHub auth, ngrok tunnel, key CLI tools
+// Environment capabilities — key CLI tools
 function getEnvironmentStatus() {
   const lines = [];
 
