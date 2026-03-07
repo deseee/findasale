@@ -193,6 +193,7 @@ Tell Patrick **"please run `.\push.ps1`"** when ANY of the following apply:
 - **STATE.md** — Push **once**, at session wrap only. Never mid-session.
 - **package.json + pnpm-lock.yaml** — Always commit together. Never push a package.json change alone. After any dependency add/remove, run `pnpm install` locally to regenerate the lockfile, then include it in the same commit. (Railway's frozen-lockfile check requires exact sync.)
 - **Large docs not touched this turn** — Do not re-read for the sole purpose of pushing. Flag for PowerShell instead.
+- **Wrap-only docs** (session-log.md, STATE.md, .last-wrap, next-session-prompt.md) — NEVER MCP-push mid-session. These files are committed only via Patrick's push.ps1 at wrap. MCP-pushing them mid-session guarantees merge conflicts at wrap time. See self-healing #52.
 
 ### Build-Error Fix Protocol (Vercel Deploy Budget)
 

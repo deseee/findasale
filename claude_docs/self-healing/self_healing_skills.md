@@ -384,11 +384,19 @@ npx prisma migrate dev --name <name>
 **Trigger:** PowerShell script fails with "The string is missing the terminator" or "Missing closing '}'" at a line far from the actual problem
 **Root cause:** Non-ASCII characters (em dash U+2014, curly quotes, etc.) in `.ps1` string literals. PowerShell reads the UTF-8 file using Windows-1252 encoding in some environments. The UTF-8 byte sequence for em dash is E2 80 94 — byte 0x94 in Windows-1252 is the RIGHT DOUBLE QUOTATION MARK, which terminates the string early. All subsequent code is parsed as inside a string, so braces and quotes are miscounted.
 **Fix:** Replace the non-ASCII character with an ASCII equivalent:
-- Em dash `—` → hyphen `-`
+- Em dash `-` → hyphen `-`
 - Curly quotes `"` `"` → straight quotes `"`
 - Any Unicode in string literals → ASCII only
-Push the fixed file via GitHub MCP, then tell Patrick: `git fetch origin && git merge origin/main --no-edit`
+Push the fixed file via GitHub MCP, then tell Patrick: `git fetch origin ; git merge origin/main --no-edit`
 **Prevention:** Never use non-ASCII characters inside PowerShell string literals. Comments are safer but still risky. ASCII-only is the rule for all `.ps1` files.
-**Known instance:** Session 90 — em dash in push.ps1 line 116 caused parser crash, breaking the whole script.
+**Known instance:** Session 90 - em dash in push.ps1 line 116 caused parser crash, breaking the whole script.
 
-Last Updated: 2026-03-07 (session 90 — added entry #51: non-ASCII characters in PowerShell scripts)
+### 52. Wrap-Only Doc Files MCP-Pushed Mid-Session - Guaranteed Merge Conflict at Wrap
+**Trigger:** git merge origin/main at wrap detects conflicts in STATE.md, session-log.md, .last-wrap, or next-session-prompt.md. push.ps1 blocks because staged files have conflict markers.
+**Root cause:** An agent MCP-pushed a wrap-only doc mid-session. The wrap protocol (or a later local edit) also modifies the same file. When Patrick runs .\push.ps1, the merge pulls the MCP version from GitHub and finds divergence.
+**Fix (push.ps1):** Now automatic. push.ps1 detects conflicts in claude_docs/ and context.md, resolves with --theirs, commits, and continues. No Patrick involvement needed.
+**Fix (agent behavior):** Never MCP-push these four files mid-session: STATE.md, session-log.md, .last-wrap, next-session-prompt.md. All changes to these files must go via Patrick's .\push.ps1 at session end.
+**Prevention:** Before any MCP push, verify the target file is not in the wrap-only list. CORE.md section 10 Standing File Rules enforces this.
+**Known instance:** Session 90 - all four wrap-only doc files MCP-pushed mid-session, then conflicted at wrap commit. Required manual resolution across 4 files before push could succeed.
+
+Last Updated: 2026-03-07 (session 90 - added entry #52: wrap-only doc files causing merge conflicts; resolved entry #51 conflict markers)
