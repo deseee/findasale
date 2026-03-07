@@ -128,7 +128,7 @@ model Sale {
   zip           String
   lat           Float
   lng           Float
-  neighborhood  String?    // U2: Grand Rapids neighborhood slug e.g. "eastown"
+  neighborhood  String?    // Regional neighborhood slug e.g. "downtown"
   photoUrls     String[]
   tags          String[]
   status        String     @default("DRAFT") // DRAFT, PUBLISHED, ENDED
