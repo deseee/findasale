@@ -675,5 +675,9 @@ Read these files only when the task requires them — they are not loaded by def
 - Stack decisions: `claude_docs/STACK.md`
 - Project state: `claude_docs/STATE.md`
 - Security rules: `claude_docs/SECURITY.md`
-- Ops procedures: `claude_docs/OPS.md`
-- Session history: `claude_docs/session-log.md`
+- Ops procedures: `claude_docs/operations/OPS.md`
+- Development guide: `claude_docs/operations/DEVELOPMENT.md`
+- Session history: `claude_docs/logs/session-log.md`
+- Strategy/roadmap: `claude_docs/strategy/roadmap.md`
+- Pricing strategy: `claude_docs/strategy/pricing-strategy.md`
+- Health reports: `claude_docs/archive/health-reports/` (newest = latest)
