@@ -18,8 +18,7 @@ COPY packages/database ./packages/database
 COPY packages/backend ./packages/backend
 
 # Install deps (production + database for migrations)
-# Note: --no-frozen-lockfile required after uuid removal (lockfile/package.json sync lag)
-RUN pnpm install --no-frozen-lockfile --filter backend... --filter database
+RUN pnpm install --frozen-lockfile --filter backend... --filter database
 
 # Generate Prisma client (use run script, not exec — exec has binary resolution issues in monorepos)
 RUN pnpm --filter database run db:generate
