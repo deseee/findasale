@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { upload, uploadSalePhotos, uploadItemPhoto, analyzePhotoWithAI, rapidBatchUpload } from '../controllers/uploadController';
 import { batchAnalyzeImages } from '../controllers/batchAnalyzeController';
 import { authenticate } from '../middleware/auth';
+import { requireAdmin } from '../middleware/adminAuth';
 import { recordAIFeedback, getAIFeedbackStats } from '../services/cloudAIService';
 
 const router = Router();
@@ -37,7 +38,8 @@ router.post('/ai-feedback', (req, res) => {
 });
 
 // CB4: GET /api/upload/ai-feedback-stats — diagnostic: acceptance rates per field (admin use)
-router.get('/ai-feedback-stats', (req, res) => {
+// C3: authenticate is already applied via router.use above; requireAdmin restricts to ADMIN role only
+router.get('/ai-feedback-stats', requireAdmin, (req, res) => {
   res.json(getAIFeedbackStats());
 });
 

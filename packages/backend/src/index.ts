@@ -36,6 +36,12 @@ if (!envLoaded) {
   }
 }
 
+// C1: Fail fast if JWT_SECRET is missing — prevents silent use of fallback secret in production
+if (!process.env.JWT_SECRET) {
+  console.error('❌ FATAL: JWT_SECRET environment variable is not set. Server will not start.');
+  process.exit(1);
+}
+
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';

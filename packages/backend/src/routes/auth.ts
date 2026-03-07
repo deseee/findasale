@@ -5,6 +5,16 @@ import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
 import { Resend } from 'resend';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
+
+// C2: Tight rate limit specifically for password reset — prevents email enumeration abuse and account takeover attempts
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password reset attempts. Please try again in an hour.' },
+});
 
 let _resend: any = null;
 const getResend = () => {
@@ -52,7 +62,7 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
 });
 
 // POST /api/auth/forgot-password — send a reset link
-router.post('/forgot-password', async (req: Request, res: Response) => {
+router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required.' });

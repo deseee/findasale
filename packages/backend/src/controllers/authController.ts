@@ -139,7 +139,7 @@ export const register = async (req: Request, res: Response) => {
         points: user.points,
         referralCode: user.referralCode,
       },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
@@ -205,7 +205,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         points:       user.points,
         referralCode: user.referralCode,
       },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
@@ -252,7 +252,7 @@ export const login = async (req: Request, res: Response) => {
         points: user.points,
         referralCode: user.referralCode,
       },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
