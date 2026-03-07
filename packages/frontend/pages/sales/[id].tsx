@@ -449,109 +449,6 @@ const SaleDetailPage = () => {
                 </button>
               </div>
             )}
-
-            {/* Map */}
-            <SaleMap
-              singlePin={{
-                lat: sale.lat,
-                lng: sale.lng,
-                label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
-              }}
-              height="360px"
-            />
-
-            {/* Description */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-              <h2 className="text-2xl font-bold text-warm-900 mb-4">About</h2>
-              <p className="text-warm-700 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
-            </div>
-
-            {/* Items */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-warm-900 mb-6">Items</h2>
-              {sale.items.length === 0 ? (
-                <p className="text-warm-600">No items listed yet.</p>
-              ) : (
-                <div className="space-y-6">
-                  {sale.items.map((item) => {
-                    const auctionEndTime = parseISO(item.auctionEndTime);
-                    const auctionEnded = now >= auctionEndTime;
-                    return (
-                      <div key={item.id} className="border border-warm-200 rounded-lg p-6">
-                        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-4">
-                          <div className="flex-1">
-                            <h3 className="text-xl font-bold text-warm-900 mb-2">{item.title}</h3>
-                            <p className="text-warm-700 mb-2">{item.description}</p>
-                            {item.category && <p className="text-sm text-warm-600">Category: {item.category}</p>}
-                            {item.condition && <p className="text-sm text-warm-600">Condition: {item.condition}</p>}
-                          </div>
-                        </div>
-
-                        {/* Pricing Display */}
-                        <div className="mb-4 p-4 bg-warm-50 rounded-lg">
-                          {item.status === 'SOLD' ? (
-                            <p className="text-lg font-bold text-red-600">SOLD</p>
-                          ) : sale.isAuctionSale ? (
-                            <>
-                              <p className="text-sm text-warm-600 mb-1">Auction</p>
-                              <p className="text-2xl font-bold text-warm-900">${item.currentBid.toFixed(2)}</p>
-                              <p className="text-xs text-warm-600 mt-1">Start price: ${item.auctionStartPrice.toFixed(2)}</p>
-                              <p className="text-xs text-warm-600">Bid increment: ${item.bidIncrement.toFixed(2)}</p>
-                              {!auctionEnded && user && (
-                                <AuctionCountdown endTime={item.auctionEndTime} />
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm text-warm-600 mb-1">Fixed Price</p>
-                              <p className="text-2xl font-bold text-warm-900">${item.price.toFixed(2)}</p>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 flex-wrap">
-                          {sale.isAuctionSale && !auctionEnded && user ? (
-                            <>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min={item.currentBid + item.bidIncrement}
-                                placeholder="Enter bid"
-                                value={bidAmounts[item.id] || ''}
-                                onChange={(e) => handleBidAmountChange(item.id, e.target.value)}
-                                className="flex-1 px-3 py-2 border border-warm-300 rounded"
-                              />
-                              <button
-                                onClick={() => handlePlaceBid(item.id)}
-                                disabled={biddingItemId === item.id}
-                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium disabled:opacity-50"
-                              >
-                                {biddingItemId === item.id ? 'Placing bid...' : 'Bid'}
-                              </button>
-                            </>
-                          ) : !sale.isAuctionSale && item.status !== 'SOLD' && user ? (
-                            <button
-                              onClick={() => handleBuyNow(item.id, item.title)}
-                              className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium"
-                            >
-                              Buy Now
-                            </button>
-                          ) : !user && item.status !== 'SOLD' ? (
-                            <Link
-                              href="/login"
-                              className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium text-center"
-                            >
-                              Sign in to bid
-                            </Link>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Sidebar */}
@@ -690,6 +587,12 @@ const SaleDetailPage = () => {
             </div>
           </div>
         )}
+
+        {/* Description */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <h2 className="text-2xl font-bold text-warm-900 mb-4">About</h2>
+          <p className="text-warm-700 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
+        </div>
 
         {/* Map Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
