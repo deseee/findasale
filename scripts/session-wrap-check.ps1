@@ -61,7 +61,8 @@ Write-Host "[3/6] Checking for unpushed commits..." -ForegroundColor Yellow
 
 $Behind = (git rev-list --count HEAD..origin/main 2>$null) -as [int]
 if ($null -eq $Behind) {
-  $Behind = (git rev-list --count @{u}..HEAD 2>$null) -as [int]
+  # Fallback: use upstream tracking ref (quoted to avoid PS hash literal parsing)
+  $Behind = (git rev-list --count "HEAD..@{u}" 2>$null) -as [int]
 }
 if ($null -eq $Behind) {
   $Behind = 0
