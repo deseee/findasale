@@ -32,7 +32,7 @@ export default function Document() {
           name="description"
           content="FindA.Sale — discover estate sales and auctions near you. Browse items, favorite sales, and buy online."
         />
-        <meta name="keywords" content="estate sales, auctions, antiques, thrift, Grand Rapids" />
+        <meta name="keywords" content="estate sales, auctions, antiques, thrift, local sales" />
         <meta name="author" content="FindA.Sale" />
 
         {/* Open Graph defaults */}

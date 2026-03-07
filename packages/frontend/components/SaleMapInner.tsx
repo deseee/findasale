@@ -76,7 +76,10 @@ interface SaleMapInnerProps {
 
 const SaleMapInner = ({
   pins = [],
-  center = [42.9634, -85.6681], // Grand Rapids, MI
+  center = [
+    parseFloat(process.env.NEXT_PUBLIC_MAP_CENTER_LAT || '42.9634'),
+    parseFloat(process.env.NEXT_PUBLIC_MAP_CENTER_LNG || '-85.6681'),
+  ],
   zoom = 11,
   singlePin,
   height = '400px',
