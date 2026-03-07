@@ -93,15 +93,15 @@ All CA/CB/CC/CD paths complete. CD2 Phases 1–4 all complete. Session 82 (batch
 - **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. All 35 migrations applied to Neon as of 2026-03-06.
 - **Git push workflow** — Patrick uses `.\push.ps1` (repo root) instead of raw `git push`. Self-heals: index.lock, CRLF phantoms, fetch+merge (never rebase). See self-healing entry #36.
 - **Dev stack is now native** — Docker no longer used at all. `image-tagger/` deleted by Patrick (session 81). Backend/frontend/postgres run natively on Windows. See `claude_docs/DEVELOPMENT.md`.
-- **Production seed:**
+- **Production seed:** DB URLs are in `packages/backend/.env`. Copy them into the commands below:
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-  $env:DATABASE_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-  $env:DIRECT_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+  $env:DATABASE_URL="<from packages/backend/.env>"
+  $env:DIRECT_URL="<from packages/backend/.env>"
   pnpm run db:generate
   npx prisma migrate deploy
   ```
-  ⚠️ Seed clears all data — run intentionally.
+  ⚠️ Seed clears all data — run intentionally. Never commit credentials to docs.
 
 ---
 

@@ -1,21 +1,40 @@
 # Next Session Resume Prompt
-*Written: 2026-03-06T19:00:00Z*
-*Session ended: normally (session 82, batches 9–16)*
+*Written: 2026-03-06*
+*Session ended: session 83 — subagent fleet audit + CRLF root cause fix*
 
 ## Resume From
 
-**Beta-ready. Pre-push hook fully silent.** All features complete, all raw fetch() calls fixed, zero console.log warnings, zero TODO/FIXME in controllers. Badge notifications now live (was commented-out TODO).
+**Subagent fleet audit complete. CRLF root cause fixed.** Full fleet audit produced actionable findings. .gitattributes expanded to all file types (was only *.md). Neon credentials scrubbed from docs. ROADMAP v14 is the correct local version.
 
-Announce: "Session loaded. All features complete, pre-push hook clean. Entering final beta prep."
+Announce: "Session loaded. Fleet audit complete. Executing audit recommendations."
+
+## What Happened Last Session
+
+1. Full subagent fleet audit completed (15 agents reviewed, 7 gaps identified, 8 work paths defined)
+2. .gitattributes expanded from `*.md` only to all text file types — kills CRLF phantoms permanently
+3. Neon credentials removed from STATE.md and self_healing_skills.md (SECURITY fix)
+4. ROADMAP.md v14 confirmed correct (v12 on GitHub was stale)
+5. Opus fleet audit produced detailed agent-by-agent review with concrete recommendations
+
+## Critical Audit Findings (Act On These)
+
+1. **QA agent has never run** — must run pre-beta (payment flows, auth, data writes)
+2. **UX agent never consulted** — audit top 5 user flows before beta
+3. **Legal agent never consulted** — compliance scan needed (ToS, Stripe, Michigan regs)
+4. **Support + CX agents have no content** — bootstrap KB and onboarding materials
+5. **dev-environment skill is stale** — still references Docker (Docker is retired)
+6. **No agent-to-agent handoff protocol** — dispatch protocol needed in CORE.md
 
 ## Patrick's Required Actions Before Beta
 
 1. Confirm 5% / 7% fee decision
 2. Set up Stripe business account
-3. Order business cards
-4. Start beta organizer recruitment (emails ready in `claude_docs/beta-launch/organizer-outreach.md`)
-5. Run e2e test checklist (`claude_docs/beta-launch/e2e-test-checklist.md`)
-6. Review `/guide` + `/faq` before sharing with beta users
+3. Set OAuth env vars in Vercel (GOOGLE_CLIENT_ID/SECRET, FACEBOOK_CLIENT_ID/SECRET)
+4. Set up support@finda.sale email forwarding
+5. Order business cards
+6. Start beta organizer recruitment
+7. Rotate Neon credentials (were exposed in docs — now scrubbed)
+8. Run e2e test checklist
 
 ## IMPORTANT: CRLF Push Rule
 
@@ -30,69 +49,41 @@ git add [files] && git commit -m "..."
 
 ## What's Next for Claude
 
-### Option A — Go/No-Go Final Pass
-Review `claude_docs/BETA_CHECKLIST.md`. Walk Patrick through the 7 checklist items. Help draft the beta invite email for Grand Rapids organizers.
+### Priority 1 — Execute Audit Work Paths
+Run the 8 agent work paths defined in `claude_docs/archive/subagent-fleet-audit-2026-03-06.md` §6:
+- QA audit (payment, auth, data writes)
+- UX audit (top 5 flows)
+- Legal compliance scan
+- Support KB bootstrap
+- CX beta onboarding toolkit
+- Records doc cleanup
+- Marketing content calendar
+- Ops production readiness verification
 
-### Option B — More Cleanup
-- Sentry error review since Railway deploy
-- Add `BETA_MODE=true` env var logic if Patrick wants a hard invite-only gate
-- Check `packages/frontend/pages/` for any other broken patterns
+### Priority 2 — Agent Quick Reference Cheat Sheet
+Create `AGENT_QUICK_REFERENCE.md` — the audit's single most important recommendation.
 
-**Default if Patrick says "keep going":** Option B, then Go/No-Go review.
+### Priority 3 — Remaining Feature Work
+Batch 7 remainder (social sharing, print inventory), batch 8+ (listing card redesign, OAuth UI, social proof feed, empty states).
 
-## Current State Summary
-
-All CA/CB/CC/CD paths complete. CD2 Phases 1–4 complete. Health scout: GREEN. Pre-push hook: fully clean (0 warnings). Beta invite flow: wired. Notifications: all 8 broken fetch() fixed. Badge notifications: live. Beta target: 4–6 weeks, gated on Patrick's items.
-
-## Pending Git Commit (Not Yet Pushed)
+## Pending Git Commit
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/userController.ts packages/backend/src/controllers/lineController.ts claude_docs/next-session-prompt.md claude_docs/STATE.md claude_docs/session-log.md
-git commit -m "Batch 16: badge notifications live, last console.log cleared, pre-push hook fully clean"
+git add .gitattributes
+git commit -m "fix: expand .gitattributes to normalize all text file line endings"
+git add --renormalize .
+git commit -m "chore: normalize CRLF line endings per .gitattributes"
+git add claude_docs/ROADMAP.md claude_docs/STATE.md claude_docs/self_healing_skills.md claude_docs/next-session-prompt.md claude_docs/session-log.md claude_docs/archive/subagent-fleet-audit-2026-03-06.md claude_docs/workflow-retrospectives/opus-fleet-audit-2026-03-06.md
+git commit -m "docs: session 83 — fleet audit, credential scrub, CRLF fix, ROADMAP v14"
 .\push.ps1
-```
-
-## Already Pushed (This Session)
-
-- `fa92874` — image-tagger removed from git (26 files, 3281 deletions)
-- `25c63ee` — Batch 14-15: notification fetch fixes, invite ORGANIZER promotion, console.log cleanup (16 files)
-
-## Full Session 82 Changed Files Reference
-
-```
-packages/backend/src/routes/admin.ts                       ← Beta invite routes (batch 13) ✅ pushed
-packages/backend/src/index.ts                              ← /api/invites mounted (batch 13) ✅ pushed
-packages/backend/src/controllers/authController.ts         ← inviteCode + effectiveRole (batch 13+14) ✅ pushed
-packages/frontend/pages/register.tsx                       ← invite field + ORGANIZER auto (batch 13+14) ✅ pushed
-packages/frontend/components/NotificationBell.tsx          ← 4 fetch → api.* (batch 14) ✅ pushed
-packages/frontend/pages/notifications.tsx                  ← 4 fetch → api.* (batch 14) ✅ pushed
-packages/backend/src/controllers/notificationController.ts ← console.log→info (batch 15) ✅ pushed
-packages/backend/src/controllers/waitlistController.ts     ← console.log→info (batch 15) ✅ pushed
-packages/backend/src/controllers/userController.ts         ← badge notification live, console.info (batch 16) ⏳ pending
-packages/backend/src/controllers/lineController.ts         ← console.log→info (batch 16) ⏳ pending
-packages/frontend/pages/plan.tsx                           ← planner fetch → axios api fix (batch 12) ✅ pushed
-packages/frontend/pages/index.tsx + about/map/trending/feed/contact ← OG tags (batch 12) ✅ pushed
-packages/frontend/components/SaleTourGallery.tsx           ← NEW: Virtual Tours MVP (batch 9) ✅ pushed
-packages/frontend/pages/sales/[id].tsx                     ← SaleTourGallery (batch 9) ✅ pushed
-packages/backend/src/services/cloudAIService.ts            ← pricing comps (batch 9) ✅ pushed
-packages/backend/src/routes/items.ts                       ← price-suggest fetches comps (batch 9) ✅ pushed
-packages/backend/src/controllers/buyingPoolController.ts   ← include→select (batch 10) ✅ pushed
-packages/backend/src/controllers/uploadController.ts       ← unhandled promise (batch 9) ✅ pushed
-packages/backend/src/routes/tiers.ts                       ← requireAdmin (batch 11) ✅ pushed
-packages/frontend/components/FeedbackWidget.tsx            ← alert→toast (batch 9) ✅ pushed
-packages/frontend/pages/organizer/dashboard.tsx            ← alert→toast (batch 9) ✅ pushed
-packages/backend/.env.example                              ← Ollama vars removed (batch 10) ✅ pushed
-claude_docs/ (multiple)                                    ← STATE, session-log, ROADMAP, etc. ✅/⏳
-claude_docs/feature-notes/ (8 files)                       ← moved from repo root ✅ pushed
 ```
 
 ## Continuous Mode Rules
 
 1. Load this file + STATE.md silently
 2. Announce session loaded + current mode
-3. Check BETA_CHECKLIST.md for Patrick's progress before assuming what to work on
-4. Launch tasks as parallel subagents
-5. Always: `git add + git commit` first, then `.\push.ps1` separately (CRLF rule)
-6. Update STATE.md Last Updated line
-7. Continue without confirmation unless blocked
+3. Launch audit work paths as parallel subagents
+4. Always: `git add + git commit` first, then `.\push.ps1` separately (CRLF rule)
+5. Update STATE.md Last Updated line
+6. Continue without confirmation unless blocked

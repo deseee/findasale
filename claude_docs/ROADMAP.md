@@ -1,7 +1,7 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-06 (v12 — Sessions 77–79 completions. CD2 Phases 2–4 shipped (35+ features). CA/CB paths complete. Recovered from v3 regression.)
-**Status:** Production MVP live at finda.sale. 21 core phases + post-launch T–X + 35 CD2 features shipped. All CA/CB/CC paths complete. Entering beta recruitment.
+**Last Updated:** 2026-03-06 (v14 — Session 82 batches 9–17. All CA/CB/CC/CD complete. Beta invite flow wired. 8 broken fetch() fixed. Pre-push hook silent. Badge notifications live.)
+**Status:** Production MVP live at finda.sale. All phases + CA/CB/CC/CD complete. Beta invite system fully functional. 35 Neon migrations applied. Pre-push hook zero warnings. Beta recruitment ready.
 
 ---
 
@@ -17,202 +17,181 @@
 
 **P — Patrick (Human):** Beta recruitment, API keys, branding decisions, Stripe setup, real-world partnerships.
 
-**CA — Claude: Production Readiness:** ✅ ALL COMPLETE. Stress testing, bug fixing, ToS, polish, documentation.
+**CA — Claude: Production Readiness:** Stress testing, bug fixing, ToS implementation, polish. Fully autonomous.
 
-**CB — Claude: AI Image Processing:** ✅ ALL COMPLETE. Google Vision + Claude Haiku pipeline. Legacy tagger retired.
+**CB — Claude: AI Image Processing (Cloud Pipeline):** Google Vision + Claude Haiku shipped. Standalone tagger retired. Quality tuning + legacy cleanup remaining.
 
-**CC — Claude: Business Intel & Content:** ✅ ALL COMPLETE. Investor materials, marketing content, pricing analysis.
+**CC — Claude: Business Intel & Content:** Investor materials, marketing content, pricing analysis. Fully autonomous.
 
-**CD — Claude: Innovation & Experience:** CD1 complete. CD2 Phases 1–4 substantially shipped. Ongoing feature innovation.
+**CD — Claude: Innovation & Experience:** Blue-sky feature development, branding implementation, UX research, cross-industry feature porting.
 
 ---
 
 ## Path P — Patrick
 
-### P1: Business Formation — ✅ COMPLETE
+### P1: Business Formation — IN PROGRESS
 - [x] File Michigan LLC with LARA
 - [x] Get EIN from IRS.gov
 - [x] Open business bank account
-- [x] Set up support@finda.sale email forwarding ✅ 2026-03-06
-- [ ] Order business cards (~$25) — PNG logos ready in `claude_docs/brand/`
+- [ ] Set up support@finda.sale email forwarding
+- [ ] Order business cards (~$25)
 - [ ] Create Google Business Profile for FindA.Sale
 
 ### P2: Legal + Stripe — IN PROGRESS
 - [ ] Open Stripe business account (if easier than personal Connect)
-- [x] ⚡ ToS/Privacy implemented (CA1) ✅
+- [ ] ⚡ **Sync: Claude implements ToS/Privacy into the app (CA1)**
 - [ ] Set up Google Voice for support line
 - [ ] Google Search Console verification (if not done)
 
 ### P3: Field Research — ✅ COMPLETE
+Original project research done. Notes available.
 
-### P4: Beta Recruitment (Week 3–6) ← NEXT PATRICK TRACK
+### P4: Beta Recruitment (Week 3–6)
 - [ ] Identify 5 target beta organizers
-- [x] ⚡ Demo walkthrough + onboarding guide shipped (CA7) ✅
+- [ ] ⚡ **Sync: Claude provides demo walkthrough + onboarding guide (CA7)**
 - [ ] Schedule 1-on-1 onboarding sessions
 - [ ] Hand-hold first 3 sales
 - [ ] Collect structured feedback
 - [ ] ⚡ **Sync: feedback → Claude for iteration**
 
-### P5: API Keys & Services — ✅ COMPLETE
+### P5: API Keys & Services (As Needed)
 - [x] Google Cloud account + Vision API key ✅ 2026-03-05
-- [x] Anthropic API key ✅ 2026-03-05
+- [x] Anthropic API key (for Claude Haiku) ✅ 2026-03-05
 - [x] UptimeRobot monitoring ✅ 2026-03-05
-- [x] OAuth credentials (Google, Facebook) → Vercel env vars ✅ 2026-03-06
-- [x] Redirect URIs configured ✅ 2026-03-06
+- [ ] OAuth credentials (Google, Facebook) → Vercel env vars: GOOGLE_CLIENT_ID/SECRET, FACEBOOK_CLIENT_ID/SECRET
 - [ ] VAPID keys confirmed in production
 
-### P6: Branding — ✅ COMPLETE
-- [x] Branding brief reviewed
-- [x] AI-generated logos (SVG + PNG) ✅ 2026-03-05
-- [x] Color palette + typography applied (CD1) ✅
+### P6: Branding Decisions (Week 2–4)
+- [x] Review branding brief (`claude_docs/research/branding-brief-2026-03-05.md`)
+- [x] Logo generated via AI (SVG) — `claude_docs/brand/logo-primary.svg` ✅ 2026-03-05 — unblocks business cards + CD1
+- [ ] ⚡ **Sync: Claude implements chosen color palette, typography, PWA manifest (CD1)**
 
 ---
 
-## Path CA — Claude: Production Readiness — ✅ ALL COMPLETE
+## Path CA — Claude: Production Readiness
 
-| Task | Status |
-|------|--------|
-| CA1: ToS & Privacy Policy | ✅ Session 66 |
-| CA2: Database & Migration Health | ✅ Session 68 |
-| CA3: Payment Flow Stress Test | ✅ Session 69 |
-| CA4: User Flow Audit | ✅ Session 70 |
-| CA5: Performance & Security | ✅ Session 67 |
-| CA6: Feature Polish | ✅ Session 70 |
-| CA7: Human Documentation | ✅ Session 77 — /guide page, FAQ (shopper+organizer tabs), footer links |
+### CA1: ToS & Privacy Policy Implementation — ✅ COMPLETE (Session 66)
+`/terms` and `/privacy` pages live. Footer links + checkout consent checkbox shipped.
 
----
+### CA2: Database & Migration Health — ✅ COMPLETE (Session 68)
+Prisma schema validated. Production migration runbook documented. All 35 migrations applied to Neon production (2026-03-06).
 
-## Path CB — Claude: AI Image Processing — ✅ ALL COMPLETE
+### CA3: Payment Flow Stress Test — ✅ COMPLETE (Session 69)
+All Stripe paths tested. 2 bugs found and fixed. 5%/7% fee logic verified.
 
-> Standalone image tagger retired. Google Vision + Claude Haiku is production pipeline.
+### CA4: User Flow Audit — ✅ COMPLETE (Session 70)
+Shopper + organizer journeys audited. 5 polish fixes shipped (merged with CA6).
 
-| Task | Status |
-|------|--------|
-| CB1: Research & Architecture | ✅ Session 68 |
-| CB2: Backend Integration | ✅ Session 69 — cloudAIService.ts |
-| CB3: Frontend Integration | ✅ Session 69 — AI suggestions panel |
-| CB4: Quality Tuning | ✅ Session 77 — Haiku prompt improved, tags field, feedback endpoint |
-| CB5: Legacy Cleanup | ✅ Session 77 — TAGGER_URL removed, Ollama fallback updated |
+### CA5: Performance & Security — ✅ COMPLETE (Session 67)
+Health-scout GREEN. All critical issues resolved.
 
-**Remaining:** Delete `packages/backend/services/image-tagger/` directory (Patrick manual — FastAPI legacy).
+### CA6: Feature Polish — ✅ COMPLETE (Session 70)
+5 fixes shipped across photo upload UX, empty states, and error handling.
+
+### CA7: Human Documentation — ✅ COMPLETE (Session 77)
+`/guide` organizer page, expanded `/faq` (shopper + organizer tabs), footer guide link, webhook Zapier guide link. ⚡ **Sync: Patrick reviews before beta launch.**
 
 ---
 
-## Path CC — Claude: Business Intel & Content — ✅ ALL COMPLETE
+## Path CB — Claude: AI Image Processing (Cloud Pipeline)
 
-| Task | Status |
-|------|--------|
-| CC1: Investor Materials | ✅ Session 68 |
-| CC2: Marketing Content | ✅ Session 69 |
-| CC3: Pricing Model Analysis | ✅ Session 68 — Recommends flat 5%/7%. ⚡ Patrick confirms? |
-| CC4: Automated Intelligence | ✅ Running — 7 scheduled tasks active |
+> **Standalone image tagger retired.** Google Vision + Claude Haiku is the production pipeline. Ollama remains as optional local dev fallback only. The `TAGGER_URL`/`TAGGER_API_KEY` env vars and RAM++ references can be removed in a future cleanup pass.
+
+### CB1: Research & Architecture — ✅ COMPLETE (Session 68)
+Google Vision (labels) + Claude Haiku (structured analysis). Cost at beta: $10–50/month. Spec + cost model documented.
+
+### CB2: Backend Integration — ✅ COMPLETE (Session 69)
+`cloudAIService.ts` shipped. Fallback chain: Vision → Haiku → Ollama → manual. Rate limiting and cache in place.
+
+### CB3: Frontend Integration — ✅ COMPLETE (Session 69)
+AI suggestions review panel on add-items page. Accept/edit/reject per suggestion. Rapid-batch upload endpoint live.
+
+### CB4: Quality Tuning — ✅ COMPLETE (Session 77)
+Tags field added to AITagResult. Haiku prompt improved (estate-sale context, category guidance, condition guidelines). Feedback endpoints `/upload/ai-feedback` + stats. Tags shown as pill badges in add-items panel.
+
+### CB5: Legacy Cleanup — ✅ COMPLETE (Session 77)
+TAGGER_URL/TAGGER_API_KEY removed from itemController. analyzeItemTags uses cloudAIService. .env vars deprecated. Ollama fallback prompt updated. Note: `packages/backend/services/image-tagger/` directory still needs manual deletion by Patrick.
+
+---
+
+## Path CC — Claude: Business Intel & Content
+
+### CC1: Investor Materials — ✅ COMPLETE (Session 68)
+Executive summary, 12-slide pitch deck, 3-year financial model, TAM/SAM/SOM, competitive landscape. All in `claude_docs/research/`.
+
+### CC2: Marketing Content — ✅ COMPLETE (Session 69)
+Blog posts, social templates, email templates shipped. See `claude_docs/research/marketing-content-2026-03-05.md`.
+
+### CC3: Pricing Model Analysis — ✅ COMPLETE (Session 68)
+Recommends flat 5%/7% for beta. Full analysis in `claude_docs/research/pricing-analysis-2026-03-05.md`. ⚡ **Sync: Patrick confirms launch pricing.**
+
+### CC4: Automated Intelligence (running)
+7 scheduled tasks covering competitor monitoring, industry intel, changelog, UX spots, health, monthly digest, workflow retrospective.
 
 ---
 
 ## Path CD — Claude: Innovation & Experience
 
 ### CD1: Branding Implementation — ✅ COMPLETE (Session 70)
-Fraunces serif + sage-green palette. PWA manifest, favicon, app icons. Brand voice in microcopy.
+Fraunces serif + sage-green palette applied. PWA manifest, favicon, app icons updated. Brand voice in microcopy shipped.
 
-### CD2: Feature Innovation Pipeline
+### CD2: Feature Innovation Pipeline (ongoing)
 
 **Phase 1 — Quick Wins: ✅ COMPLETE (Session 69)**
 
 | Feature | Status |
 |---------|--------|
-| Live Scarcity Counter | ✅ Shipped |
-| Social Proof Live Feed | ✅ Shipped |
+| Live Scarcity Counter | ✅ Shipped — "3 left" / "5 bought in last hour" badges |
+| Social Proof Live Feed | ✅ Shipped — "X people viewing" / "Y just bought" stats bar |
+| Streak Challenges | Deferred to Phase 2 (needs Hunt Pass system first) |
 
-**Phase 2 — Engagement Layer: ✅ COMPLETE (Sessions 77–78)**
+**Phase 2 — Engagement Layer (Weeks 5–12):** ← NEXT CD TRACK
 
-| Feature | Status |
-|---------|--------|
-| Smart Inventory Upload | ✅ Shipped (CB leverages cloudAIService) |
-| Treasure Hunt Mode | ✅ Shipped + verified (Session 77) |
-| Live Drop Events | ✅ Shipped + verified (Session 77) |
-| Personalized Weekly Email | ✅ Shipped (weeklyEmailService) |
-| Streak Challenges + Hunt Pass | ✅ Shipped (Session 78 — streakService, StreakWidget) |
-| QR Codes for Physical Sales | ✅ Shipped (Session 77 — SaleQRCode component) |
+| Feature | What It Does | Claude Path |
+|---------|-------------|-------------|
+| Smart Inventory Upload | Bulk photo → AI tags → listings in one batch | ✅ COMPLETE (SmartInventoryUpload.tsx, rapid-batch endpoint) |
+| Treasure Hunt Mode | Daily discovery challenges with AI-generated clues | ✅ COMPLETE (TreasureHuntBanner, service, routes, items/[id] integration) |
+| Live Drop Events | Countdown reveals of premium items, FOMO-driven | ✅ COMPLETE (isLiveDrop/liveDropAt in items/[id].tsx + add-items.tsx) |
+| Personalized Weekly Email | Curated items based on shopper browse/buy history | ✅ COMPLETE (weeklyEmailService personalized picks + weeklyEmailJob.ts) |
+| Streak Challenges + Hunt Pass | Visit/save/buy streaks with point bonuses, $4.99 Hunt Pass Stripe flow | ✅ COMPLETE (StreakWidget.tsx + HuntPassModal.tsx, backend activate/confirm routes, Session 81) |
+| QR Codes for Physical Sales | Scannable codes linking to digital inventory at sale location | ✅ COMPLETE (SaleQRCode.tsx, Session 77) |
 
-**Phase 3 — Moat Features: ✅ SUBSTANTIALLY COMPLETE (Session 78)**
+**Phase 3 — Moat Features (Months 4–6):**
 
-| Feature | Status |
-|---------|--------|
-| AI Discovery Feed | ✅ Shipped (discoveryService — personalized scoring) |
-| Buyer-to-Sale Matching | ✅ Shipped (buyerMatchService — notifyMatchedBuyers on publish) |
-| Dynamic Pricing | ✅ Shipped (PriceSuggestion component, prior session) |
-| Visual Search | ✅ Shipped (Google Vision + label matching, prior session) |
-| City Leaderboards & Badges | ✅ Shipped (Session 78 — /leaderboard page) |
-| Sale Near Me Heat Map | ✅ Shipped (Session 78 — /map page, Leaflet) |
-| Organizer Insights Dashboard | ✅ Shipped (Session 78 — /organizer/insights) |
-| Virtual Tours (360°) | Deferred — needs 360° camera integration |
+| Feature | What It Does | Claude Path |
+|---------|-------------|-------------|
+| AI Discovery Feed | Personalized item feed using ML on browse/buy signals | ✅ COMPLETE (discoveryService.ts, /api/feed route, index.tsx personalized feed, Session 80+) |
+| Buyer-to-Sale Matching | ML matches shoppers to sales based on preference history | ✅ COMPLETE (buyerMatchService.ts, triggered on sale publish, Session 80+) |
+| Dynamic Pricing | AI suggests prices based on comps, condition, demand | ✅ COMPLETE (PriceSuggestion.tsx + /items/ai/price-suggest + DB comps, Session 81) |
+| Visual Search | Photo → find similar items across all active sales | ✅ COMPLETE (VisualSearchButton.tsx + /api/search/visual, Session 80+) |
+| Virtual Tours (360°) | Walkable preview of sale space before visiting | ✅ COMPLETE (SaleTourGallery.tsx — full-screen tour with swipe/keyboard/filmstrip, Session 82) |
+| City Leaderboards & Badges | Gamification layer for repeat buyers/organizers | ✅ COMPLETE (leaderboard.tsx page + leaderboardController.ts, Session 80+) |
+| Sale Near Me Heat Map | Geo-visual discovery of active/upcoming sales | ✅ COMPLETE (map.tsx — Leaflet map with date filters and geolocation, Session 80+) |
+| Organizer Insights Dashboard | Analytics on views, conversions, popular items | ✅ COMPLETE (organizer/insights.tsx, Session 80+) |
 
-**Phase 4 — Market Expansion: ✅ SUBSTANTIALLY COMPLETE (Sessions 78–79)**
+**Phase 4 — Market Expansion (Months 7–12):**
 
-| Feature | Status |
-|---------|--------|
-| Reverse Auction | ✅ Shipped (reverseAuctionJob daily cron, organizer controls) |
-| Group Buying Pools | ✅ Shipped (buyingPoolController, /buying-pools) |
-| Estate Sale Planning Assistant | ✅ Shipped (/plan chatbot via Haiku) |
-| Wishlist/Registry | ✅ Shipped (occasion-based, share links) |
-| Flash Deals & Promotions | ✅ Shipped (flashDealController, time-limited, in-app notifications) |
-| Organizer Tier Rewards | ✅ Shipped (Bronze/Silver/Gold tiers, tierService) |
-| White-label MaaS | Deferred — post-beta business decision |
-| Consignment Integration | Deferred — needs partner POS systems |
-| AR Furniture Preview | Deferred — long-term R&D |
-
-**Additional Features Shipped (Sessions 78–79):**
-
-| Feature | What It Does |
-|---------|-------------|
-| Admin Panel | /admin with user management, sale oversight, suspensions |
-| In-app Notification Inbox | NotificationBell + /notifications page, mark-read, delete |
-| Abandoned Checkout Recovery | Hourly cron, 2h recovery email via emailTemplateService |
-| Item Waitlist / Notify Me | waitlistController — email when item becomes available |
-| Bulk Item Management | BulkItemToolbar + ItemListWithBulkSelection — multi-select actions |
-| Sale Ending Soon | Hourly job, 24h push + email to followers |
-| Pickup Appointment Scheduling | PickupSlotManager (organizer) + PickupBookingCard (shopper) |
-| Organizer Onboarding Wizard | 4-step guided setup (profile → first sale → items → publish) |
-| Sale Calendar | /calendar — month grid of upcoming sales |
-| OG Social Preview Cards | Dynamic Open Graph images for sales, items, homepage |
-| JSON-LD Structured Data | Event (sales), Product (items), Organization+WebSite (homepage) |
-| Sale Cloning | One-click duplicate from organizer dashboard |
-| Advanced Search Filters | Price range, condition, category, sort — URL-synced |
-| Shopper Dashboard | Activity stats, recently viewed, flash deals banner, notification prefs |
-| Email Design System | emailTemplateService.ts — buildEmail() + buildItemCard() centralized |
-| Price Drop Alerts | Detects price changes on favorited items, emails users |
-| Accessibility | ARIA labels, keyboard nav, skip-to-content, screen reader support |
-| Sale Countdown Timer | CountdownTimer component on sale cards + detail pages |
+| Feature | What It Does | Status |
+|---------|-------------|--------|
+| Reverse Auction | Declining price on slow inventory — daily auto price drop | ✅ COMPLETE (ReverseAuctionBadge.tsx + reverseAuctionJob.ts, Session 80+) |
+| Group Buying Pools | Co-buy expensive items (antique sets, furniture collections) | ✅ COMPLETE (BuyingPoolCard.tsx + buyingPoolController.ts, Session 80+) |
+| Wishlist/Registry | Occasion-based wishlists (moving, downsizing, decorating) | ✅ COMPLETE (wishlists.tsx, Session 80+) |
+| Flash Deals & Promotions | Time-limited organizer promotions with push notifications | ✅ COMPLETE (FlashDealForm.tsx + FlashDealBanner.tsx, Session 80+) |
+| Organizer Tier Rewards | Bronze/Silver/Gold tiers with reduced fees + priority features | ✅ COMPLETE (OrganizerTierBadge.tsx + tierController.ts, Session 80+) |
+| White-label MaaS | Marketplace-as-a-Service for thrift chains and antique dealers | Deferred post-beta |
+| Estate Sale Planning Assistant | AI chatbot guiding executors through the entire process | ✅ COMPLETE (plan.tsx AI chat, Session 80+) |
+| Consignment Integration | Connect thrift store POS systems to FindA.Sale listings | Deferred post-beta |
+| AR Furniture Preview | See items in your space before buying (long-term R&D) | Deferred — hardware not ready |
 
 ### CD3: Cross-Industry Research (ongoing)
 Weekly feature-innovation-scan monitors: real estate, social commerce, gaming, food delivery, dating apps, fitness apps, auction houses.
 
 ### CD4: UX & Workflow Review System (bi-weekly)
-Scheduled bi-weekly review of session logs, skill effectiveness, doc freshness, and workflow bottlenecks. ✅ COMPLETE (Session 69).
+Scheduled bi-weekly review of session logs, skill effectiveness, doc freshness, and workflow bottlenecks.
 
 ---
 
-## What's Next
-
-### Remaining CD2 Features (batch 7 incomplete)
-- [ ] Social sharing for items/sales (Web Share API + fallbacks)
-- [ ] Organizer print inventory list (print CSS + formatted view)
-
-### Sprint E: Phase 26 — Listing Card Redesign
-1:1 square photo, 60/40 image/content split, badge overlay, 2-column mobile / 3-column desktop. Three-tier image loading: LQIP base64 blur → skeleton → lazy high-quality WebP.
-
-### Sprint F: Phase 31 — OAuth Social Login
-NextAuth.js v5, Google + Facebook. OAuthProvider + oauthId fields on User. Apple as fast follow. ⚡ P5 OAuth credentials now done.
-
-### Sprint G: Phase 28 — Social Proof + Activity Feed
-Real-time activity feed, social sharing integrations, community engagement.
-
-### Sprint H: Phase 27 — Onboarding + Empty States + Microinteractions
-Empty states for every screen. Heart animation, confetti on first publish. (Onboarding wizard already shipped — this is the polish pass.)
-
----
-
-## Sync Point Calendar
+## Sync Point Calendar (Updated)
 
 | Week | Sync | What Converges | Status |
 |------|------|----------------|--------|
@@ -220,9 +199,9 @@ Empty states for every screen. Heart animation, confetti on first publish. (Onbo
 | 1 | ⚡ Branding direction | Patrick chooses path → CD1 implements | ✅ Done |
 | 2 | ⚡ AI tagging approach | CB1 spec → Patrick approves + API keys | ✅ Done |
 | 3 | ⚡ Payment test results | CA3 report → go/no-go | ✅ Done |
-| 4 | ⚡ Documentation review | CA7 guides → Patrick reviews | ✅ Done |
+| 4 | ⚡ Documentation review | CA7 guides → Patrick reviews | ← NEXT |
 | 4 | ⚡ Launch pricing confirmation | CC3 analysis → Patrick decides 5%/7% | Pending Patrick |
-| 5 | ⚡ Beta readiness check | All paths → go/no-go for beta | ← NEXT |
+| 5 | ⚡ Beta readiness check | All paths → go/no-go for beta | Pending |
 | 6–8 | ⚡ Beta feedback loops | P4 feedback → CA/CB/CD iterate | Pending |
 
 ---
@@ -230,19 +209,16 @@ Empty states for every screen. Heart animation, confetti on first publish. (Onbo
 ## Long-Term Hold
 
 | Item | Reason | Revisit |
-|------|--------|----------|
-| Video-to-inventory | Vision models can't segment rooms | Late 2026+ |
-| Multi-metro expansion | Grand Rapids validation first | After beta data |
-| White-label MaaS | Business decision | Post-beta revenue signal |
-| AR Furniture Preview | Long-term R&D | When WebXR matures |
-| Virtual Tours (360°) | Needs 360° camera integration | Post-beta demand signal |
+|------|--------|---------|
+| Video-to-inventory | Vision models can't segment rooms reliably yet | Late 2026+ |
+| Multi-metro expansion | Business decision — Grand Rapids validation first | After beta data |
 
 ---
 
 ## Infrastructure (All Done)
 
-Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon, frontend on Vercel (`finda.sale`). Dockerfile.production auto-runs `prisma migrate deploy` on each deploy. Session safeguards, model routing, scheduled tasks, self-healing skills all active.
+Backend on Railway (`backend-production-153c9.up.railway.app`), PostgreSQL on Neon (all 35 migrations applied as of 2026-03-06), frontend on Vercel (`finda.sale`). Session safeguards, model routing, scheduled tasks, self-healing skills all active. Git workflow: `.\push.ps1` replaces raw `git push` — handles index.lock, CRLF phantoms, fetch+merge (not rebase). Pre-push hook validates TS, Prisma schema, controller stubs, auth coverage. See `claude_docs/CORE.md` and `claude_docs/self_healing_skills.md`.
 
 ---
 
-*v12 updated 2026-03-06. Recovered from v3 regression (commit 1061965 overwrote v11). Sessions 77–79: CA7/CB4/CB5 complete, CD2 Phases 2–4 shipped (35+ features across 7 batches). All CA/CB/CC paths now fully complete. Source: git show daa399d:claude_docs/roadmap.md (v11 base).*
+*v13 updated 2026-03-06 (Session 82). CD2 Phase 2+3 complete. CD2 Phase 4 substantially complete (Reverse Auction, Group Buying, Wishlists, Flash Deals, Tier Rewards, Planning Assistant). Remaining deferred: White-label MaaS, Consignment, AR Preview. Health scout: GREEN. SaleTourGallery created. Dynamic pricing with DB comps.*

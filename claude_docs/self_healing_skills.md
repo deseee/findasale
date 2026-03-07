@@ -145,10 +145,8 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 ### 28. Zero-Friction DB Commands — Pre-Fill Neon URLs from .env
 **Trigger:** Claude gives Patrick a production DB command with placeholder `<neon-pooled-url>` or similar
 **Pattern:** Patrick prefers automation and copy-paste-ready commands with no manual lookup required. DB URLs are in `packages/backend/.env` and are stable — always read them and inline them before presenting any migration/seed/deploy command.
-**Fix:** Read `packages/backend/.env` (or from the VM path `/sessions/.../mnt/FindaSale/packages/backend/.env`) and substitute real values into the command block before presenting it. Never use `<placeholder>` syntax for values Claude can fetch.
-**Neon URLs (current):**
-- `DATABASE_URL`: `postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require`
-- `DIRECT_URL`: `postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require`
+**Fix:** Read `packages/backend/.env` at session start and substitute real values into the command block before presenting it. Never use `<placeholder>` syntax for values Claude can fetch. Never hardcode credentials in documentation — always read from .env at runtime.
+**Neon URLs location:** `packages/backend/.env` (DATABASE_URL and DIRECT_URL)
 **Test:** Patrick can copy-paste command block without editing anything.
 
 ### 29. Local/GitHub Drift — git pull --rebase Blocked by Unstaged Changes
