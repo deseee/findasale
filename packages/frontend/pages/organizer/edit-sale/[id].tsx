@@ -25,6 +25,7 @@ const EditSalePage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const [isCloning, setIsCloning] = useState(false);
+  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -82,6 +83,24 @@ const EditSalePage = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
+  };
+
+  const handleGenerateDescription = async () => {
+    if (!formData.title.trim()) return;
+    setIsGeneratingDesc(true);
+    try {
+      const response = await api.post('/sales/generate-description', {
+        title: formData.title,
+        city: formData.city || undefined,
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
+      });
+      setFormData(prev => ({ ...prev, description: response.data.description }));
+    } catch {
+      showToast("Couldn't generate description — try again", 'error');
+    } finally {
+      setIsGeneratingDesc(false);
+    }
   };
 
   const handleCloneSale = async () => {
@@ -156,7 +175,17 @@ const EditSalePage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">Description</label>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label className="block text-sm font-medium text-warm-700">Description</label>
+                <button
+                  type="button"
+                  onClick={handleGenerateDescription}
+                  disabled={!formData.title.trim() || isGeneratingDesc}
+                  className="text-xs bg-sage-600 hover:bg-sage-700 text-white py-1 px-3 rounded-full disabled:opacity-40 transition-colors flex items-center gap-1"
+                >
+                  {isGeneratingDesc ? 'Generating…' : '✨ Generate'}
+                </button>
+              </div>
               <textarea
                 name="description"
                 value={formData.description}

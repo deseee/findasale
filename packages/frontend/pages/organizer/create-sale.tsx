@@ -37,6 +37,7 @@ const CreateSalePage = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -82,6 +83,25 @@ const CreateSalePage = () => {
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const handleGenerateDescription = async () => {
+    if (!formData.title.trim()) return;
+    setIsGeneratingDesc(true);
+    try {
+      const response = await api.post('/sales/generate-description', {
+        title: formData.title,
+        city: formData.city || undefined,
+        isAuctionSale: formData.auctionEnabled,
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
+      });
+      setFormData(prev => ({ ...prev, description: response.data.description }));
+    } catch {
+      showToast("Couldn't generate description — try again", 'error');
+    } finally {
+      setIsGeneratingDesc(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,9 +160,19 @@ const CreateSalePage = () => {
             </div>
 
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <label htmlFor="description" className="block text-sm font-medium text-warm-700">Description</label>
-                <Tooltip content="Briefly describe what's for sale. Mention standout categories: 'Mid-century furniture, vintage tools, estate jewelry.' 2-3 sentences is enough." />
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="description" className="block text-sm font-medium text-warm-700">Description</label>
+                  <Tooltip content="Briefly describe what's for sale. Mention standout categories: 'Mid-century furniture, vintage tools, estate jewelry.' 2-3 sentences is enough." />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGenerateDescription}
+                  disabled={!formData.title.trim() || isGeneratingDesc}
+                  className="text-xs bg-sage-600 hover:bg-sage-700 text-white py-1 px-3 rounded-full disabled:opacity-40 transition-colors flex items-center gap-1"
+                >
+                  {isGeneratingDesc ? 'Generating…' : '✨ Generate'}
+                </button>
               </div>
               <textarea
                 id="description"

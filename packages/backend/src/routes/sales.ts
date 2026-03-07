@@ -14,6 +14,7 @@ import {
   getSalesByNeighborhood,
   cloneSale,
   getSaleActivity,
+  generateSaleDescriptionHandler,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
@@ -38,6 +39,7 @@ router.delete('/:id', authenticate, deleteSale);
 router.post('/:id/clone', authenticate, cloneSale);
 router.post('/:id/generate-qr', authenticate, generateQRCode);
 router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);
+router.post('/generate-description', authenticate, generateSaleDescriptionHandler); // AI sale description generator
 router.post('/:id/track-scan', trackQrScan); // public, no auth needed
 router.get('/:id/calendar.ics', generateIcal); // public, no auth needed
 router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
