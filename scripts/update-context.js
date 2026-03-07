@@ -23,10 +23,24 @@ function commandExists(cmd) {
 const TREE_EXCLUDE = new Set([
   'node_modules', '.git', 'context.md', '.next', 'venv',
   'aider', 'pnpm-lock.yaml', '__pycache__', 'uploads',
+  'tsconfig.tsbuildinfo', 'output.css',
 ]);
 
-// Directories shown with item count but not expanded
-const TREE_COLLAPSE = new Set(['migrations', '.cache', '.aider.tags.cache.v4']);
+// Directories shown with item count but not expanded (avoids token bloat)
+const TREE_COLLAPSE = new Set([
+  // Build / tooling
+  'migrations', '.cache', '.aider.tags.cache.v4',
+  // Backend source — collapse leaf directories, keep package structure visible
+  'controllers', 'routes', 'services', 'jobs', 'middleware', 'models', 'utils', 'lib',
+  // Frontend source
+  'components', 'pages', 'hooks', 'styles', 'types', 'context', 'contexts',
+  // Frontend public assets
+  'icons', 'images', 'public',
+  // claude_docs subdirectories — show dir name + count, not every file
+  'archive', 'beta-launch', 'brand', 'competitor-intel', 'feature-notes', 'guides',
+  'health-reports', 'improvement-memos', 'logs', 'operations', 'research',
+  'self-healing', 'skills-package', 'strategy', 'workflow-retrospectives',
+]);
 
 function getTree(dir = '.', prefix = '') {
   let tree = '';
@@ -43,7 +57,8 @@ function getTree(dir = '.', prefix = '') {
 
     if (isDir && TREE_COLLAPSE.has(file)) {
       const count = fs.readdirSync(fullPath).length;
-      tree += `${prefix}${isLast ? '└── ' : '├── '}${file}/ (${count} migrations)\n`;
+      const label = file === 'migrations' ? 'migrations' : 'files';
+      tree += `${prefix}${isLast ? '└── ' : '├── '}${file}/ (${count} ${label})\n`;
     } else {
       tree += `${prefix}${isLast ? '└── ' : '├── '}${file}${isDir ? '/' : ''}\n`;
       if (isDir) {
@@ -63,27 +78,12 @@ const gitBranch = rawBranch.startsWith('[Error') ? '(run git locally)' : rawBran
 const gitCommit = rawCommit.startsWith('[Error') ? '(run git locally)' : rawCommit;
 const gitRemote = rawRemote.startsWith('[Error') ? '(run git locally)' : rawRemote;
 
-// Docker — preserve existing section if docker is not reachable (e.g. nightly VM runs)
-let docker = null;
-if (commandExists('docker')) {
-  const dockerOut = runCmd('docker ps --format "table {{.Names}}\\t{{.Status}}"');
-  if (!dockerOut.startsWith('[Error')) {
-    docker = dockerOut || 'No Docker containers running.';
-  }
-}
-if (docker === null) {
-  // Never preserve stale Docker data — always emit a fresh unavailable message.
-  // Real container state can only be captured by running this script on Windows
-  // where Docker Desktop is accessible. The nightly VM task cannot reach Docker.
-  docker = 'Docker status unavailable — run update-context.js locally (Windows) to capture container state';
-}
-
 // File tree
 const fileTree = getTree(path.join(__dirname, '..'));
 
 // Session log — extract most recent entry for inline context
 function getLastSessionSummary() {
-  const logPath = path.join(__dirname, '..', 'claude_docs', 'session-log.md');
+  const logPath = path.join(__dirname, '..', 'claude_docs', 'logs', 'session-log.md');
   if (!fs.existsSync(logPath)) return 'No session log found.';
   // Normalize CRLF → LF (file lives on Windows-mounted drive)
   const content = fs.readFileSync(logPath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -102,7 +102,7 @@ function getHealthStatus() {
   const reportsDir = path.join(__dirname, '..', 'claude_docs', 'health-reports');
   if (!fs.existsSync(reportsDir)) return 'No health reports yet — run health-scout skill.';
   const reports = fs.readdirSync(reportsDir)
-    .filter(f => f.match(/^\d{4}-\d{2}-\d{2}\.md$/))
+    .filter(f => f.endsWith('.md'))
     .sort()
     .reverse();
   if (!reports.length) return 'No health reports yet — run health-scout skill.';
@@ -154,7 +154,7 @@ function getEnvDrift() {
   return { missing, extra };
 }
 
-// Environment capabilities — GitHub auth, ngrok tunnel, key CLI tools
+// Environment capabilities — key CLI tools
 function getEnvironmentStatus() {
   const lines = [];
 
@@ -166,14 +166,6 @@ function getEnvironmentStatus() {
     const accountMatch = ghStatus.match(/Logged in to [^\s]+ account ([^\s]+)/);
     const account = accountMatch ? accountMatch[1] : 'authenticated';
     lines.push(`- GitHub CLI: ✓ ${account}`);
-  }
-
-  // ngrok tunnel — check running containers for the tunnel URL
-  const ngrokLog = runCmd('docker logs findasale-ngrok-1 2>&1 | grep -o "https://[^ ]*ngrok[^ ]*" | tail -1');
-  if (ngrokLog && !ngrokLog.startsWith('[Error') && ngrokLog.startsWith('https://')) {
-    lines.push(`- ngrok tunnel: ✓ ${ngrokLog}`);
-  } else {
-    lines.push('- ngrok tunnel: unknown (check Docker Desktop logs for findasale-ngrok-1)');
   }
 
   // Key CLI tools
@@ -196,11 +188,7 @@ const envStatus = getEnvironmentStatus();
 
 const markdown = `# Dynamic Project Context
 *Generated at ${new Date().toISOString()}*
-
-## Git Status
-- **Branch:** ${gitBranch}
-- **Commit:** ${gitCommit}
-- **Remote:** ${gitRemote}
+*Run \`node scripts/update-context.js\` on Windows to refresh.*
 
 ## Last Session
 ${lastSession}
@@ -208,13 +196,9 @@ ${lastSession}
 ## Health Status
 ${healthStatus}
 
-## Docker
-\`\`\`
-${docker}
-\`\`\`
-
 ## Environment
 ${envStatus}
+- Dev stack: native (backend/frontend/postgres run natively on Windows — no Docker)
 
 ## Signals
 ${envDrift ? `⚠ Env drift — in .env.example but missing from .env: ${envDrift.missing.join(', ')}` : '✓ Env: no drift detected'}
@@ -231,23 +215,22 @@ MCP tools are injected at session start — check active tools before assuming a
 MCP Connectors (check at session start):
 ├── mcp__github__*          — GitHub file push, PR, issues (repo: deseee/findasale)
 ├── mcp__Claude_in_Chrome__ — Browser automation, screenshots, form filling
-├── mcp__MCP_DOCKER__       — Playwright browser, code execution
 ├── mcp__scheduled-tasks__  — Cron scheduling for recurring tasks
 ├── mcp__cowork__           — File access, directory requests, file presentation
+├── mcp__afd283e9__*        — Stripe (payments, subscriptions, customers)
 └── mcp__mcp-registry__     — Search/suggest additional connectors
 
-Skills (loaded on demand):
-├── conversation-defaults   — AskUserQuestion workaround + diff-only gate (ALWAYS ACTIVE)
-├── dev-environment         — Docker/DB/Prisma reference (load before shell commands)
+Skills (loaded on demand — full fleet in Cowork sidebar):
+├── conversation-defaults   — Session behavior rules (always active)
+├── dev-environment         — Env/DB/Prisma reference (load before shell commands)
 ├── context-maintenance     — Session wrap protocol (load at session end)
-├── health-scout            — Proactive code scanning (load before deploys)
-├── findasale-deploy        — Deploy checklist (load before production push)
-├── skill-creator           — Create/edit/eval skills
-├── docx / xlsx / pptx / pdf — Document creation skills
-└── schedule                — Create scheduled tasks
+├── health-scout            — Code scanning (load before deploys)
+├── findasale-{dev,architect,qa,ops,deploy,records,workflow} — Core dev fleet
+├── findasale-{marketing,cx,support,legal,ux,rd} — Business fleet
+├── skill-creator / cowork-power-user — Meta skills
+└── docx / xlsx / pptx / pdf / schedule — Document + task skills
 
-Self-Healing Skills: 19 entries in claude_docs/self_healing_skills.md
-Docker Containers: findasale-backend-1, findasale-frontend-1, findasale-postgres-1, findasale-image-tagger-1
+Self-Healing Skills: see \`claude_docs/self-healing/self_healing_skills.md\`
 \`\`\`
 
 ## On-Demand References
@@ -258,8 +241,9 @@ Read these files only when the task requires them — they are not loaded by def
 - Stack decisions: \`claude_docs/STACK.md\`
 - Project state: \`claude_docs/STATE.md\`
 - Security rules: \`claude_docs/SECURITY.md\`
-- Ops procedures: \`claude_docs/OPS.md\`
-- Session history: \`claude_docs/session-log.md\`
+- Ops procedures: \`claude_docs/operations/OPS.md\`
+- Session history: \`claude_docs/logs/session-log.md\`
+- Self-healing: \`claude_docs/self-healing/self_healing_skills.md\`
 `;
 
 fs.writeFileSync(path.join(__dirname, '..', 'context.md'), markdown);
