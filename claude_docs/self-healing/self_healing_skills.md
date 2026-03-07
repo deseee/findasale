@@ -8,7 +8,7 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 ### 1. SSR Window/Document Guard
 **Trigger:** Next.js page uses `window`/`document`/`navigator`/`location` outside `useEffect`
 **Fix:** Move to `useEffect` + `useState`. Dynamic import with `{ ssr: false }` for libs like Leaflet.
-**Test:** `docker compose restart frontend && curl -s http://localhost:3000/<page> | grep -i "error\|500"`
+**Test:** Restart frontend natively (`pnpm dev` from repo root or restart the frontend process in PowerShell), then open `http://localhost:3000/<page>` in browser and confirm no 500/error.
 
 ### 2. JWT Payload Staleness
 **Trigger:** New field on User model or AuthContext reads undefined field

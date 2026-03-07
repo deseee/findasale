@@ -25,7 +25,7 @@ At the start of every session, before any task work:
 
 1. Check active MCP tools in session context — note GitHub, Slack, Notion, etc. availability
 2. Load `claude_docs/CORE.md` — verify behavior rules haven't drifted
-3. Load `context.md` — filetree, Docker status, last session summary
+3. Load `context.md` — filetree, last session summary, env signals
 4. Load `claude_docs/STATE.md` — current sprint and blockers. After loading, **extract the sprint queue line and hold it for the session.** Before announcing "next up" at any milestone, re-confirm against STATE.md — do not rely on memory.
 5. Skim `claude_docs/logs/session-log.md` — last 1–2 entries for recent decisions
 6. **GitHub sync check** — read local `STATE.md` `Last Updated` line, then fetch GitHub version via `mcp__github__get_file_contents` (`deseee/findasale`, `claude_docs/STATE.md`). If the `Last Updated` lines differ, stop immediately and tell Patrick:
@@ -134,7 +134,7 @@ After fixing any bug:
 ## 9. Proactive Health Scanning
 
 Before production deploys or after large sprints, run the health-scout skill.
-Recent scan results: `claude_docs/archive/health-reports/` (newest file = latest report).
+Recent scan results: `claude_docs/health-reports/` (newest file = latest report).
 Weekly scan runs automatically Sunday 11pm via `findasale-health-scout` task.
 
 ---

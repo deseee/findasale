@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 92 complete. Legal ToS updates shipped (terms.tsx + privacy.tsx). Health scout findings routed: 2 high already resolved, 5 of 6 mediums deferred to post-beta, 1 medium (coupon rate limiting) fixed. Sprint 4a (PostgreSQL FTS search) backend fully implemented: migration, itemSearchService.ts, searchController.ts, items.ts route. Sprint queue: 4b (frontend search UI) → 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
+Session 93 complete. Sprint 4b (frontend search UI) fully shipped: useItemSearch.ts, FilterSidebar.tsx, ItemSearchResults.tsx, ItemSearch.tsx, search.tsx integrated. MailerLite backend wire-up complete (mailerliteService.ts + saleController.ts + .env.example). MailerLite onboarding spec rewritten for current UI (API v2, Custom Field exit condition). TypeScript passes clean on both packages. Sprint queue: 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
 
 ---
 
@@ -32,7 +32,7 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-Sprint 4b — frontend search UI (ItemSearch.tsx, FilterSidebar.tsx, ItemSearchResults.tsx, hooks/useItemSearch.ts, pages/search.tsx). Backend is fully complete (Sprint 4a shipped session 92). Neon migration `20260310000001_add_item_fulltext_search_indexes` needs `prisma migrate deploy` on production before Sprint 4b frontend can be tested end-to-end. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
+Sprint 5 — Seller Performance Dashboard (not yet started). Sprint 4b shipped session 93. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production before Sprint 4b frontend can be tested end-to-end. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
@@ -40,7 +40,8 @@ Sprint 4b — frontend search UI (ItemSearch.tsx, FilterSidebar.tsx, ItemSearchR
 
 - **Phase 31 OAuth env vars** — ✅ DONE (2026-03-06). GOOGLE_CLIENT_ID/SECRET + FACEBOOK_CLIENT_ID/SECRET added to Vercel. Redirect URIs configured.
 - **Support email** — ✅ DONE (2026-03-06). support@finda.sale email forwarding configured.
-- **Neon migrations** — ✅ 63 migrations applied to Neon production (last: 20260307153530_add_coupon_model). No pending migrations.
+- **Neon migrations** — ✅ 63 migrations applied to Neon production (last: 20260307153530_add_coupon_model). Pending: `20260310000001_add_item_fulltext_search_indexes` (Sprint 4a — run before Sprint 4b end-to-end testing).
+- **MAILERLITE_API_KEY** — ⏳ Must be added to Railway env vars (MailerLite → Integrations → MailerLite API) before MailerLite automation triggers on sale publish.
 - **Uptime monitoring** — ✅ UptimeRobot done (Patrick confirmed 2026-03-05).
 - **Sentry** — ✅ Fully deployed. DSNs set in Railway + Vercel.
 - **STRIPE_WEBHOOK_SECRET** — ✅ Set in Railway (2026-03-05).
@@ -106,4 +107,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-07 (session 92 — Legal ToS shipped, coupon rate limiting fixed, Sprint 4a FTS backend complete, health scout high findings confirmed already resolved.)
+Last Updated: 2026-03-07 (session 93 — Sprint 4b frontend search UI shipped, MailerLite backend wire-up complete, MailerLite spec rewritten for current UI, TypeScript clean on both packages.)
