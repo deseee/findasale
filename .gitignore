@@ -78,3 +78,4 @@ packages/backend/services/image-tagger/.coverage*
 # npm lockfile (pnpm workspace)
 # =========================
 packages/database/package-lock.json
+*.skill
