@@ -6,6 +6,8 @@
  * consistent branding, accessibility, and responsive design.
  */
 
+import { regionConfig } from '../config/regionConfig';
+
 export interface EmailOptions {
   preheader?: string;          // Preview text shown in email clients (50-100 chars recommended)
   headline: string;            // Large heading inside email
@@ -113,7 +115,7 @@ export function buildEmail(options: EmailOptions): string {
           <tr>
             <td style="padding: 20px 32px; background-color: #f9f7f4; border-top: 1px solid #e5e7eb; text-align: center;">
               <p style="font-size: 12px; color: #9ca3af; margin: 0; line-height: 1.6;">
-                © 2026 FindA.Sale · Grand Rapids, MI<br />
+                © 2026 FindA.Sale · ${regionConfig.city}, ${regionConfig.stateAbbrev}<br />
                 <a href="[UNSUBSCRIBE_URL]" style="color: #9ca3af; text-decoration: none;">Manage preferences</a> ·
                 <a href="[UNSUBSCRIBE_URL]" style="color: #9ca3af; text-decoration: none;">Unsubscribe</a>
               </p>
