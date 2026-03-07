@@ -1,78 +1,49 @@
 # Next Session Resume Prompt
-*Written: 2026-03-06T22:30:00Z*
-*Session ended: session 85 — normal completion*
-
----
-
-## ⚠️ FIRST ACTION — VERIFY THIS FILE IS CURRENT
-
-Check this file's header. If it says "session 84" or earlier — the wrap failed. Load RECOVERY.md and execute recovery protocol.
-
-If it correctly says "session 85" — proceed normally.
-
----
+*Written: 2026-03-07T05:30:00Z*
+*Session ended: normally*
 
 ## Resume From
 
-**Session 86 loaded. Status: beta GO — no code blockers.**
+Restore `--frozen-lockfile` in Dockerfile.production: run `pnpm install` locally to regenerate a clean lockfile, commit both `Dockerfile.production` and `pnpm-lock.yaml`, push via `.\push.ps1`.
 
-Patrick has 5 manual blocking items remaining. Check which are done, then proceed to AI sale description writer feature development.
+## What Was In Progress
 
----
+- **Dockerfile.production** — still on `--no-frozen-lockfile` (emergency escape hatch). Must be reverted. Steps:
+  1. Patrick runs `pnpm install` from monorepo root
+  2. `git add packages/backend/Dockerfile.production pnpm-lock.yaml`
+  3. `git commit -m "fix: restore --frozen-lockfile after uuid removal cleanup"`
+  4. `.\push.ps1`
 
-## What Was Completed This Session (85)
+## What Was Completed This Session (86)
 
-- **4 critical security fixes shipped and verified:**
-  - C1: JWT fallback secret removed + startup guard in index.ts
-  - C2: forgot-password rate limited (5/hr) via express-rate-limit
-  - C3: ai-feedback-stats protected with authenticate + requireAdmin
-  - C4: Stripe webhook secret rotation plan documented in OPS.md
-- **Comprehensive UX audit:** 34 issues identified, 19 fixes shipped across 6 frontend pages
-- **Competitive analysis:** 11+ platforms analyzed (AuctionZip, Heritage, Invaluable, etc.)
-- **SCORE business plan:** Created at `claude_docs/strategy/BUSINESS_PLAN.md`
-- **Feature research:** 7 ideas evaluated; AI description writer + branded social templates identified as highest-ROI
-- **Documentation restructure:** claude_docs/ reorganized into strategy/, operations/, logs/, archive/ subfolders; 28 junk files deleted
-- **Competitive actions shipped:** support@finda.sale prominent in footer/404/contact, route optimization, pricing transparency in checkout
+- Production outage resolved: ERR_REQUIRE_ESM from `uuid@13.0.0` → `crypto.randomUUID()` in wishlistController + userController
+- Railway lockfile unblocked via `--no-frozen-lockfile` Dockerfile change (commit d77dcbd)
+- Organizer.website schema drift fixed: migration `20260307000038_add_organizer_website` applied to Neon (62 total)
+- Workflow audit: 8 recoverable wasted turns documented, 5 root causes identified
+- Self-healing entries #41–45 added (commit aec2521b)
+- CORE.md lockfile co-commit rule (commit 9ce4a620)
+- session-safeguards.md Production Startup Failures section (commit a2c152de)
 
-**Beta status:** GO — all 4 code criticals resolved. Docs restructured. No code blockers.
+## Patrick's Manual Items (Unchanged — Still Block Beta Launch)
 
----
+1. Confirm 5%/7% fee
+2. Set up Stripe business account
+3. Google Search Console verification
+4. Order business cards (files in `claude_docs/brand/`)
+5. Start beta organizer outreach (`claude_docs/beta-launch/organizer-outreach.md`)
+6. Rotate Neon credentials (recommended since session 83)
 
-## Patrick's 5 Manual Blocking Items (CHECK STATUS AT SESSION START)
+## Environment Notes
 
-1. **Confirm 5%/7% fee** — still pending verbal confirmation
-2. **Set up Stripe business account** — needed for live payouts
-3. **Google Search Console verification** — SEO preparation
-4. **Order business cards** — design files ready at `claude_docs/brand/business-card-*.png`
-5. **Start beta organizer outreach** — scripts in `claude_docs/beta-launch/organizer-outreach.md`, calendar in `marketing-calendar-2026-03-06.md`
-6. **Rotate Neon credentials** — precaution after historical plaintext commit
+- **Neon:** 62 migrations applied. No pending migrations.
+- **Railway:** Online and healthy on port 5000.
+- **Patrick's local repo is behind GitHub** — run `git fetch origin` then `git merge origin/main --no-edit` before any local commits (or just `.\push.ps1`).
+- **GitHub commits this session (all MCP):** 74797533, d77dcbd, dbc812d, 9ce4a620, a2c152de, aec2521b, ee380ff1
+- **context.md** — 690 lines, over 500-line threshold. Flag for trim at next maintenance session.
 
----
+## Next Features (After Dockerfile Fix)
 
-## Next Features (Priority Order from R&D Research)
-
-1. **AI sale description writer** — 80% infrastructure exists in cloudAIService.ts. Est: 1–2 sprints.
-2. **Branded social sharing templates** — branded IG/FB/GBP cards. Est: 1 sprint.
-3. **Stripe Terminal POS** — in-person payments. Est: 2 sprints.
+1. AI sale description writer (80% infra in cloudAIService.ts, est. 1–2 sprints)
+2. Branded social sharing templates (1 sprint)
 
 Full research: `claude_docs/research/feature-research-2026-03-06.md`
-
----
-
-## Repo State
-
-- Working tree clean. All session 85 work committed and pushed to main.
-- AGENT_QUICK_REFERENCE.md still untracked — should be git added + committed (Patrick can do in next session start)
-- context.md refreshed (681 lines — slightly over 500-line threshold, monitor for trim in session 86)
-- .gitignore updated to exclude *.skill files
-
----
-
-## Continuous Mode Rules
-
-1. Load this file + STATE.md silently at session start
-2. Announce session loaded + check Patrick's 5 manual items status
-3. If 5 items are done: spawn findasale-dev for AI sale description writer feature
-4. If items remain: confirm Patrick's priority (finish items vs. start code work in parallel)
-5. Commit work incrementally — never end session with dirty tree
-6. End every session with session wrap protocol

@@ -1,10 +1,10 @@
 # Dynamic Project Context
-*Generated at 2026-03-07T03:24:36.219Z*
+*Generated at 2026-03-07T07:06:45.080Z*
 
 ## Git Status
-- **Branch:** main
-- **Commit:** b1b99e0
-- **Remote:** https://github.com/deseee/findasale.git
+- **Branch:** (run git locally)
+- **Commit:** (run git locally)
+- **Remote:** (run git locally)
 
 ## Last Session
 No session log found.
@@ -42,6 +42,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 ├── ai-config/
 │   └── global-instructions.md
 ├── claude_docs/
+│   ├── .last-wrap
 │   ├── CORE.md
 │   ├── RECOVERY.md
 │   ├── SECURITY.md
@@ -56,7 +57,9 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── 2026-03-05-health-check.json
 │   │   ├── 2026-03-05.md
 │   │   ├── README.md
+│   │   ├── ROADMAP-REVIEW-SYNTHESIS-2026-03-06.md
 │   │   ├── VERIFICATION_SCRIPT_SPEC.md
+│   │   ├── architect-roadmap-review-2026-03-06.md
 │   │   ├── audit-reports/
 │   │   │   ├── beta-readiness-audit-2026-03-05.md
 │   │   │   ├── ca4-ca6-audit-2026-03-05.md
@@ -67,6 +70,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   ├── ux-full-audit-2026-03-06.md
 │   │   │   ├── ux-pre-beta-audit-2026-03-06.md
 │   │   │   └── ux-verification-2026-03-06.md
+│   │   ├── dev-phase2-readiness-2026-03-06.md
 │   │   ├── docs-content-audit-2026-03-06.md
 │   │   ├── docs-restructure-handoff-2026-03-06.md
 │   │   ├── docs-restructure-plan-2026-03-06.md
@@ -87,14 +91,16 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   ├── SESSION_WRAP_PROTOCOL_INDEX.md
 │   │   │   ├── WRAP_PROTOCOL_EXECUTIVE_SUMMARY.md
 │   │   │   └── WRAP_PROTOCOL_INTEGRATION.md
-│   │   └── session-retrospectives/
-│   │       ├── opus-fleet-audit-2026-03-06.md
-│   │       ├── pre-beta-audit-2026-03-03.md
-│   │       ├── records-audit-2026-03-06.md
-│   │       ├── session-84-proposed-diffs.md
-│   │       ├── session-84-wrap-analysis.md
-│   │       ├── subagent-fleet-audit-2026-03-06.md
-│   │       └── workflow-audit-2026-03-03.md
+│   │   ├── records-roadmap-audit-2026-03-06.md
+│   │   ├── session-retrospectives/
+│   │   │   ├── opus-fleet-audit-2026-03-06.md
+│   │   │   ├── pre-beta-audit-2026-03-03.md
+│   │   │   ├── records-audit-2026-03-06.md
+│   │   │   ├── session-84-proposed-diffs.md
+│   │   │   ├── session-84-wrap-analysis.md
+│   │   │   ├── subagent-fleet-audit-2026-03-06.md
+│   │   │   └── workflow-audit-2026-03-03.md
+│   │   └── workflow-roadmap-review-2026-03-06.md
 │   ├── beta-launch/
 │   │   ├── LEGAL_EXEC_SUMMARY.md
 │   │   ├── beta-status.md
@@ -146,6 +152,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── BETA_CHECKLIST.md
 │   │   ├── README.md
 │   │   ├── SEED_SUMMARY.md
+│   │   ├── WORKFLOW-SESSION-86-SUMMARY.md
 │   │   ├── scheduled-task-log.md
 │   │   └── session-log.md
 │   ├── operations/
@@ -170,12 +177,14 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   ├── self-healing/
 │   │   └── self_healing_skills.md
 │   ├── skills-package/
-│   └── strategy/
-│       ├── BUSINESS_PLAN.md
-│       ├── COMPLETED_PHASES.md
-│       ├── README.md
-│       ├── pricing-strategy.md
-│       └── roadmap.md
+│   ├── strategy/
+│   │   ├── BUSINESS_PLAN.md
+│   │   ├── COMPLETED_PHASES.md
+│   │   ├── README.md
+│   │   ├── pricing-strategy.md
+│   │   └── roadmap.md
+│   └── workflow-retrospectives/
+│       └── session-86-workflow-audit-2026-03-07.md
 ├── docker-compose.yml
 ├── docs/
 │   └── CD2_PHASE2_TREASURE_HUNT.md
@@ -354,7 +363,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (63 migrations)
+│   │   │   ├── migrations/ (64 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json

@@ -283,6 +283,48 @@ git merge origin/main --no-edit
 **Prevention:** Load dev-environment skill before giving shell commands. The skill includes target OS and shell syntax rules. Patrick uses PowerShell exclusively.
 **Test:** Before sending command block, mentally execute it in PowerShell — does every statement parse?
 
+### 41. ESM-Only npm Package in CJS Backend
+**Trigger:** Backend crashes at startup with `Error [ERR_REQUIRE_ESM]: require() of ES Module ... not supported`. Typically happens after a major version bump of a package that dropped CommonJS support (e.g., `uuid@13+`, `node-fetch@3+`, `chalk@5+`).
+**Root cause:** The backend compiles to CJS (`"module": "commonjs"` in tsconfig). When a dependency is ESM-only, Node.js can't `require()` it at runtime even though TypeScript compiled fine.
+**Fix:** Replace the offending package with a Node built-in or a CJS-compatible alternative:
+- `uuid` → `import { randomUUID } from 'crypto'` (Node built-in, no dependency needed)
+- `node-fetch` → use native `fetch` (Node 18+) or `axios`
+- Remove the package from `package.json` and `devDependencies` entirely
+**Test:** `grep -r "from 'uuid'\|require.*uuid" packages/backend/src/ --include="*.ts"` → should return nothing after fix.
+**Prevention:** Before upgrading any package to a major version, check if it dropped CJS support. Check the package's changelog or `package.json` `"type": "module"` field.
+
+### 42. package.json + pnpm-lock.yaml Out of Sync in Railway Build
+**Trigger:** Railway build fails with `ERR_PNPM_OUTDATED_LOCKFILE — Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with packages/backend/package.json`. The lockfile has specifiers that don't match the current package.json.
+**Root cause:** package.json was changed (dependency added or removed) but `pnpm install` was not run locally, so pnpm-lock.yaml wasn't regenerated and pushed along with it. Railway uses `--frozen-lockfile` which strictly enforces that lockfile and package.json agree.
+**Fix:**
+1. Run `pnpm install` from the monorepo root to regenerate pnpm-lock.yaml
+2. Commit BOTH package.json and pnpm-lock.yaml together: `git add packages/backend/package.json pnpm-lock.yaml`
+3. Push via `.\push.ps1`
+**Escape hatch (if lockfile is too stale to reconcile):** Temporarily change Dockerfile line to `--no-frozen-lockfile`, push via MCP to unblock Railway, then fix properly.
+**Prevention:** The rule is absolute — **any change to package.json must be accompanied by a pnpm-lock.yaml update in the same commit.** Never push a package.json change alone.
+
+### 43. Schema Field Added Without Migration (Schema Drift → P2022)
+**Trigger:** Backend logs `PrismaClientKnownRequestError: The column 'Model.field' does not exist in the current database. code: 'P2022'`. Usually appears in repeated polling errors (e.g., `getUnreadCount`, cron jobs).
+**Root cause:** A field was added to `schema.prisma` but `prisma migrate dev --name add_field` was never run. The Prisma client was generated from the updated schema and tries to query the column, but Neon doesn't have it because no migration was ever applied.
+**Fix:**
+1. Create migration manually: `mkdir packages/database/prisma/migrations/YYYYMMDDNNNNNN_add_field && echo 'ALTER TABLE "Model" ADD COLUMN IF NOT EXISTS "field" TEXT;' > .../migration.sql`
+2. Apply to Neon: `DATABASE_URL=... DIRECT_URL=... prisma migrate deploy` (can run from VM using credentials in `packages/backend/.env`)
+3. Push migration file to GitHub via MCP
+**Prevention:** After any schema.prisma change, immediately run `prisma migrate dev`. Never add fields to schema without a corresponding migration. The deploy checklist should include `prisma migrate status` to catch drift.
+
+### 44. Railway Not Triggering New Build After Consecutive Pushes
+**Trigger:** After pushing to main, Railway does not start a new deployment. Push.ps1 shows commits landing on GitHub but Railway stays on the old failed build. Empty commits (`git commit --allow-empty`) also don't help.
+**Root cause:** Railway's GitHub webhook may be rate-limiting or throttling after rapid successive commits. Also: Railway's "Redeploy" button reruns the *same* existing deployment — it does NOT pull new code from GitHub.
+**Fix:** Push a **real file change** via MCP to force a new webhook event. Changing a line in `Dockerfile.production` (e.g., adding a comment) reliably triggers a fresh Railway build. Use `mcp__github__create_or_update_file` directly.
+**Prevention:** For Railway webhook unstick, always use a meaningful file change (not empty commit). Dockerfile is the lowest-risk target. After Railway is green, revert the comment if desired.
+
+### 45. Read Credentials from .env Before Asking Patrick
+**Trigger:** During deploy/migration task, Claude asks Patrick for DATABASE_URL, JWT_SECRET, or other env vars instead of reading them from the VM.
+**Root cause:** Claude has access to `packages/backend/.env` from the VM and it contains all production credentials. Asking Patrick to "set" or "provide" credentials wastes a turn and breaks flow when Claude could read them directly.
+**Fix:** At task start, read `packages/backend/.env` into context. Before any command requiring credentials, substitute actual values from the file into the command block. Never use `<placeholder>` syntax for values that exist in .env.
+**Example:** For `prisma migrate deploy`, read the file and inline: `DATABASE_URL="postgresql://..." DIRECT_URL="postgresql://..." pnpm run db:deploy` (no placeholders).
+**Prevention:** When giving Patrick any database or deploy command, it must be copy-paste-ready with no manual credential lookup required. If you're about to write `[set YOUR_DATABASE_URL here]`, read .env first instead.
+
 ---
 
-Last Updated: 2026-03-06 (session 85-86 — added entry 40: PowerShell && syntax error pattern; updated entry 21 cross-ref)
+Last Updated: 2026-03-07 (session 86 — added entries 41–45: ESM-only package crash, lockfile sync, schema drift P2022, Railway webhook unstick, .env credential pattern)

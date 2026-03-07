@@ -191,6 +191,7 @@ Tell Patrick **"please run `.\push.ps1`"** when ANY of the following apply:
 
 - **ROADMAP.md** — Only push in the **same turn** it was edited. Never re-read and re-push across turns.
 - **STATE.md** — Push **once**, at session wrap only. Never mid-session.
+- **package.json + pnpm-lock.yaml** — Always commit together. Never push a package.json change alone. After any dependency add/remove, run `pnpm install` locally to regenerate the lockfile, then include it in the same commit. (Railway's frozen-lockfile check requires exact sync.)
 - **Large docs not touched this turn** — Do not re-read for the sole purpose of pushing. Flag for PowerShell instead.
 
 ### Build-Error Fix Protocol (Vercel Deploy Budget)

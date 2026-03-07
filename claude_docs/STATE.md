@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 85 complete. 4 critical code fixes shipped (JWT, rate limit, admin auth, Stripe rotation). Comprehensive UX audit completed (34 issues found, 19 fixes shipped). Competitive analysis of 11+ platforms completed. SCORE business plan created. Feature R&D on 7 ideas completed. Claude_docs restructured into strategy/operations/logs/archive. Beta is GO — all QA-critical security and rate-limiting issues resolved. Patrick's 5 manual blocking items remain: Stripe business account, business cards, Search Console verification, beta organizer outreach launch, and Neon credential rotation. All CA/CB/CC/CD audit paths complete. 35 Neon migrations applied.
+Session 86 complete. Production outage recovered (ERR_REQUIRE_ESM from uuid@13 → crypto.randomUUID, Dockerfile --no-frozen-lockfile escape hatch for Railway). Organizer.website schema drift fixed (P2022 → manual migration applied, 62 Neon migrations total). Workflow audit completed (8 recovered turns documented, 5 self-healing entries #41–45 added). CORE.md lockfile rule + session-safeguards Production Startup Failures section added. Dockerfile.production still on --no-frozen-lockfile (temporary escape hatch — restore next session). Beta GO status unchanged.
 
 ---
 
@@ -109,7 +109,8 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 ## Known Gotchas (Production)
 
 - **Railway PORT mismatch** — `PORT=5000` locked in Railway Variables. Must match `EXPOSE 5000` in Dockerfile. Do not remove.
-- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. All 35 migrations applied to Neon as of 2026-03-06.
+- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. 62 migrations applied to Neon as of 2026-03-07. Last: `20260307000038_add_organizer_website`.
+- **Dockerfile.production** — Currently using `--no-frozen-lockfile` (emergency escape hatch from session 86). Restore to `--frozen-lockfile` after running `pnpm install` and pushing a clean lockfile.
 - **Git push workflow** — Patrick uses `.\push.ps1` (repo root) instead of raw `git push`. Self-heals: index.lock, CRLF phantoms, fetch+merge (never rebase). See self-healing entry #36.
 - **Dev stack is now native** — Docker no longer used at all. `image-tagger/` deleted by Patrick (session 81). Backend/frontend/postgres run natively on Windows. See `claude_docs/DEVELOPMENT.md`.
 - **Production seed:** DB URLs are in `packages/backend/.env`. Copy them into the commands below:
@@ -136,4 +137,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-06 (session 85 — 4 critical security fixes, comprehensive UX audit + 19 fixes shipped, competitive analysis of 11 platforms, SCORE business plan, feature R&D on 7 ideas, docs restructured into strategy/operations/logs/archive, 28 junk files deleted. Beta status: GO. Patrick's 5 manual items block launch only.)
+Last Updated: 2026-03-07 (session 86 — production outage recovery: uuid→crypto.randomUUID, Dockerfile --no-frozen-lockfile, Organizer.website migration. Workflow audit: 5 self-healing entries, CORE.md lockfile rule, session-safeguards updated. Beta status: GO.)
