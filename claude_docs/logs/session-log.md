@@ -59,4 +59,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Decisions:** Never speculate on env vars or startup config — ask for logs first. Always read packages/backend/.env before asking Patrick for credentials. package.json changes always require pnpm-lock.yaml in same commit.
 **Next up:** Restore `--frozen-lockfile` in Dockerfile.production (run `pnpm install`, commit clean lockfile, push). Patrick: rotate Neon credentials. Continue beta launch prep (Patrick's 5 manual items unchanged).
 **Blockers:** Dockerfile.production still on --no-frozen-lockfile (temporary). Patrick's 5 manual beta items unchanged.
-
