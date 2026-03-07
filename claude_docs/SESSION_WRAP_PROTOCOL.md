@@ -275,6 +275,8 @@ Action required:
 
 **Verification:** Paste the session-log entry into your response so Patrick can see it before the session ends.
 
+**Roadmap check:** If any Path P items were completed or CD sprint features shipped this session, update `claude_docs/strategy/roadmap.md` in the same commit as session-log.md. The two files are always updated together — never one without the other after meaningful work.
+
 ### Step 3: Report File Changes Explicitly
 
 **Format:** For every commit made this session, list the files:
