@@ -10,7 +10,7 @@ const TermsPage = () => {
     <>
       <Head>
         <title>Terms of Service – FindA.Sale</title>
-        <meta name="description" content={`Terms of Service for FindA.Sale — the estate sale marketplace for ${defaultCity} and beyond.`} />
+        <meta name="description" content={`Terms of Service for FindA.Sale — the marketplace for estate sales, yard sales, auctions, and flea markets in ${defaultCity} and beyond.`} />
       </Head>
       <div className="min-h-screen bg-white">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -34,8 +34,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">2. Description of Service</h2>
             <p className="text-warm-700 leading-relaxed">
-              FindA.Sale is an online marketplace that connects estate sale organizers ("Organizers") with shoppers
-              ("Buyers"). The Company facilitates transactions but is not a party to any sale between Organizer and Buyer.
+              FindA.Sale is an online marketplace that connects organizers of estate sales, yard sales, auctions, and flea markets ("Organizers") with shoppers ("Buyers"). The Company facilitates transactions but is not a party to any sale between Organizer and Buyer.
               We do not own, inspect, or guarantee any items listed on the Platform.
             </p>
           </section>
@@ -54,12 +53,26 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">4. Organizer Terms</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
-              Organizers may list estate sale items for fixed-price purchase or auction. By listing items you represent
+              Organizers may list items from estate sales, yard sales, auctions, or flea markets for fixed-price purchase or auction. By listing items you represent
               that you have the legal right to sell those items and that all listing information is accurate.
             </p>
             <p className="text-warm-700 leading-relaxed mb-3">
               <strong>Prohibited listings:</strong> You may not list stolen property, items requiring special licenses
               (e.g., regulated firearms, hazardous materials), counterfeit goods, or items that violate any applicable law.
+            </p>
+            <p className="text-warm-700 leading-relaxed mb-3">
+              <strong>Legal Authority to Sell:</strong> By listing items on FindA.Sale, you represent that you have the
+              legal right to sell those items. This right may arise from ownership, a valid consignment agreement, power
+              of attorney, or other lawful authority. You are solely responsible for securing and maintaining that
+              authority.
+            </p>
+            <p className="text-warm-700 leading-relaxed mb-3">
+              <strong>FindA.Sale's Limited Role:</strong> FindA.Sale is a marketplace platform only. We do not enter into
+              consignment agreements with estate owners, sellers, or any third parties. If you list items on consignment,
+              the consignment relationship exists solely between you (the Organizer) and the item owner. FindA.Sale
+              assumes no liability for disputes between you and your consignors, and we cannot resolve ownership or
+              consignment disputes. You must handle all such disputes directly with your consignor and seek legal counsel
+              if necessary.
             </p>
             <p className="text-warm-700 leading-relaxed mb-3">
               <strong>Payouts:</strong> Organizers receive proceeds via Stripe Connect Express after the platform fee is
@@ -68,20 +81,55 @@ const TermsPage = () => {
                 Stripe Connected Account Agreement
               </a>. Instant payouts, where enabled, are subject to Stripe's instant payout policies.
             </p>
+            <p className="text-warm-700 leading-relaxed mb-3">
+              <strong>Fulfillment and Cancellation Obligations:</strong> Organizers may cancel a sale before any
+              purchases are made. Once a Buyer has completed checkout, the Organizer is bound to fulfill. Specifically:
+            </p>
+            <ul className="list-disc list-inside text-warm-700 space-y-2 mb-3">
+              <li>Organizers must acknowledge receipt of the purchase order within 24 hours of checkout completion.</li>
+              <li>Pickup or delivery must occur within 30 days of the sale closing, unless the Organizer and Buyer agree to a different timeline in writing.</li>
+              <li>If an Organizer fails to acknowledge, communicate, or fulfill within 30 days, the Buyer may file a dispute with FindA.Sale support at support@finda.sale.</li>
+              <li>Organizers may only cancel after purchase if the item is no longer available due to circumstances beyond their control. Cancellation must be communicated immediately to the Buyer with a full refund offered.</li>
+            </ul>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 mb-4">4a. Sales Tax Obligations</h2>
+            <p className="text-warm-700 leading-relaxed mb-3">
+              <strong>Organizer Responsibility:</strong> FindA.Sale does not calculate, collect, or remit sales tax on
+              behalf of organizers. Organizers are solely responsible for determining whether their sales are subject to
+              sales tax under Michigan state law and applicable local ordinances, and for registering with the appropriate
+              tax authorities and remitting tax as required.
+            </p>
             <p className="text-warm-700 leading-relaxed">
-              <strong>Cancellations:</strong> Organizers may cancel a sale before any purchases are made. Once a Buyer
-              has completed checkout, the Organizer must fulfill the item or arrange a mutually agreed refund.
+              <strong>Buyer Responsibility:</strong> Buyers should be aware that they may owe sales tax or use tax on
+              items purchased, depending on their location and the applicable jurisdiction. Buyers are responsible for
+              understanding their own tax obligations.
             </p>
           </section>
 
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">5. Buyer Terms</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
-              <strong>All sales are final.</strong> Because estate sale items are second-hand goods sold by individual
-              Organizers, we do not accept returns or issue refunds except where required by law or where the item was
-              materially misdescribed. If you believe a listing is fraudulent or significantly misdescribed, contact{' '}
+              <strong>All sales are final.</strong> Because items are second-hand or bulk goods sold by individual
+              Organizers (from estate sales, yard sales, auctions, or flea markets), we do not accept returns or issue
+              refunds except where required by law or where the item was materially misdescribed.
+            </p>
+            <p className="text-warm-700 leading-relaxed mb-3">
+              <strong>Disputes and Refunds:</strong> If you believe a listing is fraudulent, the item is significantly
+              misdescribed, or the Organizer failed to deliver, you must report the issue to{' '}
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
-              within 48 hours of your purchase.
+              <strong>within 48 hours of your purchase</strong>. Include a description of the issue, photos if available,
+              and your order confirmation. FindA.Sale will investigate and contact the Organizer for their response. If
+              fraud is confirmed or the Organizer cannot resolve the issue, FindA.Sale will facilitate a refund. All
+              disputes are reviewed and resolved within 7 days. If resolution cannot be reached, either party may
+              escalate to Stripe for chargeback review.
+            </p>
+            <p className="text-warm-700 leading-relaxed mb-3">
+              <strong>Contact Support:</strong> Submit disputes via email to{' '}
+              <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
+              or use our{' '}
+              <a href="/contact" className="text-amber-600 hover:underline">contact form</a>.
             </p>
             <p className="text-warm-700 leading-relaxed mb-3">
               <strong>Auctions:</strong> Placing a bid is a binding commitment to purchase at that price if you win.
