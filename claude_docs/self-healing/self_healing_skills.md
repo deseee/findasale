@@ -249,6 +249,16 @@ git commit --no-edit
 ```
 **Known instance:** Session 84 — Records agent MCP-pushed `patrick-language-map.md` and `claude_docs/archive/records-audit-2026-03-06.md` early. Wrap protocol locally edited `patrick-language-map.md` + `context.md` later. Patrick had to run `git checkout --theirs` on both files.
 
+### 39. JWT_SECRET Missing at Startup
+**Trigger:** Backend crashes at boot with "JWT_SECRET is not set" error, or all auth endpoints return 401 Unauthorized with valid credentials
+**Root cause:** The `JWT_SECRET` environment variable is missing in Railway / local .env file. The startup guard in `packages/backend/src/index.ts` validates this and fails fast if not present.
+**Fix:** Verify JWT_SECRET is set in:
+- **Production (Railway):** Add `JWT_SECRET` to Railway Variables with a strong random string (min 32 chars)
+- **Local dev:** Add `JWT_SECRET=<random-string>` to `packages/backend/.env`
+- **Local test:** Verify with `echo $JWT_SECRET` (or `$env:JWT_SECRET` in PowerShell)
+**Test:** Start backend cleanly: `pnpm --filter backend run dev` should log "Server running on..." without "JWT_SECRET" errors. Login with valid credentials should return 200 (not 401).
+**Prevention:** JWT_SECRET is non-negotiable for startup — it gates all token signing/verification. Never remove the startup guard in index.ts.
+
 ---
 
-Last Updated: 2026-03-06 (session 84 — added entry 38: MCP push + local edit merge conflict pattern)
+Last Updated: 2026-03-06 (session 85 — added entry 39: JWT_SECRET missing at startup pattern)

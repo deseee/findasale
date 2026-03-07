@@ -1,23 +1,16 @@
 # Dynamic Project Context
-*Generated at 2026-03-07T02:06:11.155Z*
+*Generated at 2026-03-07T03:24:36.219Z*
 
 ## Git Status
 - **Branch:** main
-- **Commit:** 2d21865
+- **Commit:** b1b99e0
 - **Remote:** https://github.com/deseee/findasale.git
 
 ## Last Session
-### 2026-03-06
-**Worked on:** Workflow agent called to fix session-start behavior — "hello"/"hi" now treated as session start signal. Rule 4 added to conversation-defaults skill (installed), entry added to patrick-language-map.md (pushed to GitHub). All 8 audit work paths executed in parallel: QA (4 critical findings), UX (5 blockers), Legal (5 medium risks, no blockers), Support KB (15 issues), CX onboarding toolkit (4 emails + quick-start guide), Records (RECOVERY.md Docker cleanup, pushed), Marketing (2-week pre-launch calendar), Ops (infra GREEN, VAPID yellow). Audit reports written to claude_docs/beta-launch/ and claude_docs/health-reports/.
-**Decisions:** Beta is CONDITIONAL GO — 4 critical code fixes must ship before real user traffic (JWT fallback secret, password reset rate limit, ai-feedback-stats auth, Stripe rotation plan). UX and Legal findings are non-blocking for initial limited beta.
-**Next up:** findasale-dev to fix 4 QA critical issues. Patrick: confirm fee, Stripe account, Search Console, business cards, beta outreach, Neon credential rotation. Fix self_healing_skills.md Docker entries #9/#13/#18.
-**Blockers:** Patrick's 7 manual items (see STATE.md Beta Launch Target). QA criticals must be fixed before inviting real users.
-
-*Re-wrap addendum:* Workflow fixes applied — entry #38 added to self_healing_skills.md, Rule 4 (fetch-at-wrap) added to SESSION_WRAP_PROTOCOL.md + WRAP_PROTOCOL_QUICK_REFERENCE.md, CORE.md §10 updated with MCP coordination warning.
+No session log found.
 
 ## Health Status
-Last scan: 2026-03-06
-Overall codebase health is **GOOD** — no secrets exposed, CORS properly locked down, all write routes are authenticated, JWT has no bypass, and admin endpoints are protected with `requireAdmin`. The app is beta-ready from a security standpoint. Top 3 concerns to resolve before launch: (1) `alert()` dialogs in 4 places breaking UX polish, (2) 8 `<img>` tags missing `alt` text (accessibility/SEO), (3) one unhandled promise in `uploadController` that could silently swallow upload errors. The `buyingPoolController` nested `include: { user: true }` pattern is worth cleaning up but doesn't currently expose user data in API responses.
+No health reports yet — run health-scout skill.
 
 ## Docker
 ```
@@ -49,15 +42,9 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 ├── ai-config/
 │   └── global-instructions.md
 ├── claude_docs/
-│   ├── .last-wrap
-│   ├── BETA_CHECKLIST.md
-│   ├── COMPLETED_PHASES.md
 │   ├── CORE.md
-│   ├── DEVELOPMENT.md
-│   ├── OPS.md
 │   ├── RECOVERY.md
 │   ├── SECURITY.md
-│   ├── SEED_SUMMARY.md
 │   ├── SESSION_WRAP_PROTOCOL.md
 │   ├── STACK.md
 │   ├── STATE.md
@@ -68,23 +55,46 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── 2026-03-03.md
 │   │   ├── 2026-03-05-health-check.json
 │   │   ├── 2026-03-05.md
-│   │   ├── SESSION_WRAP_PROTOCOL_INDEX.md
+│   │   ├── README.md
 │   │   ├── VERIFICATION_SCRIPT_SPEC.md
-│   │   ├── WRAP_PROTOCOL_EXECUTIVE_SUMMARY.md
-│   │   ├── WRAP_PROTOCOL_INTEGRATION.md
-│   │   ├── beta-readiness-audit-2026-03-05.md
-│   │   ├── ca4-ca6-audit-2026-03-05.md
-│   │   ├── dev-environment-skill-update.md
-│   │   ├── migration-runbook.md
-│   │   ├── new 1.txt
-│   │   ├── new 2.txt
-│   │   ├── payment-stress-test.md
-│   │   ├── pre-beta-audit-2026-03-03.md
-│   │   ├── pre-commit-check.md
-│   │   ├── rebrand-audit.md
-│   │   ├── records-audit-2026-03-06.md
-│   │   ├── subagent-fleet-audit-2026-03-06.md
-│   │   └── workflow-audit-2026-03-03.md
+│   │   ├── audit-reports/
+│   │   │   ├── beta-readiness-audit-2026-03-05.md
+│   │   │   ├── ca4-ca6-audit-2026-03-05.md
+│   │   │   ├── payment-stress-test.md
+│   │   │   ├── pre-commit-check.md
+│   │   │   ├── rebrand-audit.md
+│   │   │   ├── ux-comprehensive-audit-2026-03-06.md
+│   │   │   ├── ux-full-audit-2026-03-06.md
+│   │   │   ├── ux-pre-beta-audit-2026-03-06.md
+│   │   │   └── ux-verification-2026-03-06.md
+│   │   ├── docs-content-audit-2026-03-06.md
+│   │   ├── docs-restructure-handoff-2026-03-06.md
+│   │   ├── docs-restructure-plan-2026-03-06.md
+│   │   ├── health-reports/
+│   │   │   ├── 2026-03-05-full-scan.md
+│   │   │   ├── 2026-03-05.md
+│   │   │   ├── 2026-03-06.md
+│   │   │   ├── competitive-actions-dev-handoff-2026-03-06.md
+│   │   │   ├── qa-c1-c4-verification-2026-03-06.md
+│   │   │   ├── qa-pre-beta-audit-2026-03-06.md
+│   │   │   ├── ux-fixes-dev-handoff-2026-03-06.md
+│   │   │   └── ux-fixes-rerun-2026-03-06.md
+│   │   ├── migration-and-procedures/
+│   │   │   ├── dev-environment-skill-update.md
+│   │   │   └── migration-runbook.md
+│   │   ├── protocol-drafts/
+│   │   │   ├── .last-wrap
+│   │   │   ├── SESSION_WRAP_PROTOCOL_INDEX.md
+│   │   │   ├── WRAP_PROTOCOL_EXECUTIVE_SUMMARY.md
+│   │   │   └── WRAP_PROTOCOL_INTEGRATION.md
+│   │   └── session-retrospectives/
+│   │       ├── opus-fleet-audit-2026-03-06.md
+│   │       ├── pre-beta-audit-2026-03-03.md
+│   │       ├── records-audit-2026-03-06.md
+│   │       ├── session-84-proposed-diffs.md
+│   │       ├── session-84-wrap-analysis.md
+│   │       ├── subagent-fleet-audit-2026-03-06.md
+│   │       └── workflow-audit-2026-03-03.md
 │   ├── beta-launch/
 │   │   ├── LEGAL_EXEC_SUMMARY.md
 │   │   ├── beta-status.md
@@ -92,16 +102,17 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── cx-onboarding-toolkit-2026-03-06.md
 │   │   ├── e2e-test-checklist.md
 │   │   ├── launch-announcement.md
+│   │   ├── launch-content-ready-2026-03-06.md
 │   │   ├── legal-compliance-scan-2026-03-06.md
 │   │   ├── legal-recommendations-for-dev.md
 │   │   ├── marketing-calendar-2026-03-06.md
 │   │   ├── onboarding-emails.md
+│   │   ├── onboarding-final-2026-03-06.md
 │   │   ├── ops-readiness-2026-03-06.md
 │   │   ├── organizer-outreach.md
 │   │   ├── success-criteria.md
 │   │   ├── success-tracking.md
 │   │   └── support-kb-2026-03-06.md
-│   ├── beta-readiness-audit-2026-03-05.md
 │   ├── brand/
 │   │   ├── README.md
 │   │   ├── business-card-back.png
@@ -112,10 +123,9 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── logo-oauth-120.png
 │   │   ├── logo-primary.png
 │   │   └── logo-primary.svg
-│   ├── changelog-tracker/
-│   │   └── .gitkeep
 │   ├── competitor-intel/
-│   │   └── .gitkeep
+│   │   ├── .gitkeep
+│   │   └── competitive-analysis-2026-03-06.md
 │   ├── feature-notes/
 │   │   ├── BETA_INVITE_SYSTEM.md
 │   │   ├── EMAIL_TEMPLATE_SYSTEM.md
@@ -132,48 +142,40 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── shopper-faq.md
 │   │   ├── support-kb.md
 │   │   └── zapier-webhooks.md
-│   ├── health-reports/
-│   │   ├── .gitkeep
-│   │   ├── 2026-03-05-full-scan.md
-│   │   ├── 2026-03-05.md
-│   │   ├── 2026-03-06.md
-│   │   └── qa-pre-beta-audit-2026-03-06.md
-│   ├── migration-runbook.md
-│   ├── model-routing.md
-│   ├── monthly-digests/
-│   │   └── .gitkeep
-│   ├── new 1.txt
-│   ├── new 2.txt
-│   ├── next-session-prompt.md
-│   ├── patrick-language-map.md
-│   ├── payment-stress-test.md
-│   ├── pre-commit-check.md
+│   ├── logs/
+│   │   ├── BETA_CHECKLIST.md
+│   │   ├── README.md
+│   │   ├── SEED_SUMMARY.md
+│   │   ├── scheduled-task-log.md
+│   │   └── session-log.md
+│   ├── operations/
+│   │   ├── DEVELOPMENT.md
+│   │   ├── OPS.md
+│   │   ├── README.md
+│   │   ├── model-routing.md
+│   │   ├── next-session-prompt.md
+│   │   ├── patrick-language-map.md
+│   │   └── session-safeguards.md
 │   ├── research/
 │   │   ├── branding-brief-2026-03-05.md
 │   │   ├── competitor-intel-2026-03-04.md
 │   │   ├── feature-brainstorm-2026-03-05.md
+│   │   ├── feature-research-2026-03-06.md
 │   │   ├── growth-channels-2026-03-04.md
 │   │   ├── investor-materials-2026-03-05.md
 │   │   ├── marketing-content-2026-03-05.md
 │   │   ├── parallel-roadmap-v2-2026-03-05.md
 │   │   ├── pricing-analysis-2026-03-05.md
 │   │   └── strategic-review-2026-03-05.md
-│   ├── roadmap.md
-│   ├── scheduled-task-log.md
-│   ├── self_healing_skills.md
-│   ├── session-log.md
-│   ├── session-safeguards.md
+│   ├── self-healing/
+│   │   └── self_healing_skills.md
 │   ├── skills-package/
-│   ├── test_write
-│   ├── ux-spotchecks/
-│   │   ├── .gitkeep
-│   │   ├── ca4-ca6-audit-2026-03-05.md
-│   │   └── ux-pre-beta-audit-2026-03-06.md
-│   └── workflow-retrospectives/
-│       ├── .gitkeep
-│       ├── opus-fleet-audit-2026-03-06.md
-│       ├── session-84-proposed-diffs.md
-│       └── session-84-wrap-analysis.md
+│   └── strategy/
+│       ├── BUSINESS_PLAN.md
+│       ├── COMPLETED_PHASES.md
+│       ├── README.md
+│       ├── pricing-strategy.md
+│       └── roadmap.md
 ├── docker-compose.yml
 ├── docs/
 │   └── CD2_PHASE2_TREASURE_HUNT.md
@@ -675,9 +677,5 @@ Read these files only when the task requires them — they are not loaded by def
 - Stack decisions: `claude_docs/STACK.md`
 - Project state: `claude_docs/STATE.md`
 - Security rules: `claude_docs/SECURITY.md`
-- Ops procedures: `claude_docs/operations/OPS.md`
-- Development guide: `claude_docs/operations/DEVELOPMENT.md`
-- Session history: `claude_docs/logs/session-log.md`
-- Strategy/roadmap: `claude_docs/strategy/roadmap.md`
-- Pricing strategy: `claude_docs/strategy/pricing-strategy.md`
-- Health reports: `claude_docs/archive/health-reports/` (newest = latest)
+- Ops procedures: `claude_docs/OPS.md`
+- Session history: `claude_docs/session-log.md`

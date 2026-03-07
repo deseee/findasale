@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-4 critical code fixes shipped (session 85). Beta is GO — all QA-critical security and rate-limiting issues resolved. Patrick's 5 manual blocking items remain: Stripe business account, business cards, Search Console verification, beta organizer outreach launch, and Neon credential rotation. All CA/CB/CC/CD audit paths complete. 35 Neon migrations applied. Audit reports in `claude_docs/beta-launch/` and `claude_docs/health-reports/`.
+Session 85 complete. 4 critical code fixes shipped (JWT, rate limit, admin auth, Stripe rotation). Comprehensive UX audit completed (34 issues found, 19 fixes shipped). Competitive analysis of 11+ platforms completed. SCORE business plan created. Feature R&D on 7 ideas completed. Claude_docs restructured into strategy/operations/logs/archive. Beta is GO — all QA-critical security and rate-limiting issues resolved. Patrick's 5 manual blocking items remain: Stripe business account, business cards, Search Console verification, beta organizer outreach launch, and Neon credential rotation. All CA/CB/CC/CD audit paths complete. 35 Neon migrations applied.
 
 ---
 
@@ -136,4 +136,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-06 (session 85 — 4 critical code fixes shipped: C1 JWT fallback secret removed + env guard, C2 password reset rate limit, C3 ai-feedback-stats admin auth, C4 Stripe rotation plan documented. Beta status: GO. Patrick's 5 manual items remain. self_healing_skills.md Docker entries #9/#13/#18 cleaned.)
+Last Updated: 2026-03-06 (session 85 — 4 critical security fixes, comprehensive UX audit + 19 fixes shipped, competitive analysis of 11 platforms, SCORE business plan, feature R&D on 7 ideas, docs restructured into strategy/operations/logs/archive, 28 junk files deleted. Beta status: GO. Patrick's 5 manual items block launch only.)

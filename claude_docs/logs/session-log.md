@@ -8,12 +8,17 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
-### 2026-03-06 (session 85 — 4 critical code fixes shipped, beta status GO)
-**Worked on:** Records agent: cleaned stale Docker entries from self_healing_skills.md (#9/#13/#18 updated to native dev stack). Updated STATE.md: beta status changed from CONDITIONAL GO to GO, marked C1/C2/C3/C4 as COMPLETE, updated Active Objective. Added session 85 log entry detailing 4 code fixes: (C1) JWT fallback secret removed + startup guard in middleware/auth.ts, (C2) password reset rate limiter (5/hr) in controllers/authController.ts, (C3) ai-feedback-stats admin-only auth in routes/upload.ts, (C4) Stripe webhook rotation plan documented in claude_docs/OPS.md.
-**Files changed:** self_healing_skills.md (entries #9/#13/#18), STATE.md (Active Objective, Beta Launch Target, Last Updated), session-log.md (new entry).
-**Decisions:** Code fixes are shipping — Patrick confirmed via code push review. Docker references fully removed from self-healing docs. Beta readiness is now GO, pending Patrick's 5 manual blocking items.
-**Next up:** Patrick: Stripe business account, business cards, Search Console, beta organizer outreach, Neon credential rotation. Deploy to production when code fixes land on main.
-**Blockers:** None blocking records work. Patrick's manual items are on track.
+### 2026-03-06 (session 85 — comprehensive session: 4 security fixes, UX audit + 19 fixes, competitive analysis, SCORE business plan, feature R&D, docs restructure)
+**Worked on:**
+- **4 critical security fixes shipped:** (C1) JWT fallback secret removed + startup guard in index.ts, (C2) forgot-password rate limited (5/hr) via express-rate-limit, (C3) ai-feedback-stats protected with authenticate + requireAdmin, (C4) Stripe webhook rotation plan documented in OPS.md
+- **Comprehensive UX audit:** 34 issues identified across organizer dashboard, item photos, checkout, email templates, map CORS, metrics display, loading states. 19 fixes shipped: dashboard sale links, item photo optimization (getOptimizedUrl), Firefox map CORS (crossOrigin:true), email preview links, checkout ToS enforcement, dashboard metrics display, loading state standardization across 6 pages
+- **Competitive analysis:** 11+ platforms analyzed (AuctionZip, EstateBazaar, Facebook Marketplace, eBay, Craigslist, Heritage, Bonanza, Ruby Lane, 1stDibs, Invaluable, Catawiki), SCORE business plan created (claude_docs/strategy/BUSINESS_PLAN.md)
+- **Feature research:** 7 ideas evaluated (AI sale description writer, branded social templates, Stripe Terminal POS, inventory video import, group buying pools, white-label MaaS, mobile app) — highest-ROI: AI description writer (80% infrastructure exists in cloudAIService.ts)
+- **Documentation restructure:** claude_docs/ reorganized into strategy/, operations/, logs/, archive/ subfolders. 28 junk files deleted. STACK.md Docker reference fixed. .gitignore updated for *.skill files
+- **Competitive actions shipped:** support@finda.sale prominent in footer/404/contact. Route optimization on sale+search pages. Pricing transparency in checkout
+**Decisions:** Beta status upgraded from CONDITIONAL GO to GO — all 4 code criticals resolved. Docs reorganized by tier and purpose. AI sale description writer + branded social templates identified as next sprint work.
+**Next up:** Patrick's 5 manual blocking items: confirm 5%/7% fee, Stripe business account, Search Console verification, business cards, beta organizer outreach, Neon credential rotation. Then: AI sale description writer feature (findasale-dev, 1-2 sprints).
+**Blockers:** Patrick's manual items only. No code blockers.
 
 ### 2026-03-06 (session 84 — workflow fix + 8 audit work paths complete)
 **Worked on:** Workflow agent called to fix session-start behavior — "hello"/"hi" now treated as session start signal. Rule 4 added to conversation-defaults skill (installed), entry added to patrick-language-map.md (pushed to GitHub). All 8 audit work paths executed in parallel: QA (4 critical findings), UX (5 blockers), Legal (5 medium risks, no blockers), Support KB (15 issues), CX onboarding toolkit (4 emails + quick-start guide), Records (RECOVERY.md Docker cleanup, pushed), Marketing (2-week pre-launch calendar), Ops (infra GREEN, VAPID yellow). Audit reports written to claude_docs/beta-launch/ and claude_docs/health-reports/.
@@ -41,8 +46,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Next up:** Batch 7 remainder (social sharing, print inventory), then batch 8 (listing card redesign, OAuth, social proof feed, empty states, shopper messaging). Patrick: P4 beta recruitment, delete image-tagger directory, confirm 5%/7% fee, order business cards.
 **Blockers:** image-tagger FastAPI directory still needs manual delete by Patrick. VAPID keys production confirm still pending. context.md over 500-line threshold — needs trim.
 
-### 2026-03-06 (session 80 — TS fixes, batches 7–17 pushed, push.ps1, Neon migrations)
-**Worked on:** Fixed 15 TS errors blocking push. Resolved git push loop caused by `core.autocrlf=true` + rebase conflict on Windows. Created `push.ps1` — self-healing PowerShell push script. Optimized `.githooks/pre-push`. Committed + pushed batches 9–17 (81 files, 7,471 insertions). Ran all 35 Neon production migrations.
-**Decisions:** `git rebase` permanently banned on Windows with `core.autocrlf=true`. `.\push.ps1` replaces raw `git push` for all future pushes.
-**Next up:** Batch 7 remainder, then batch 8+.
-**Blockers:** VAPID keys production confirm still pending.
