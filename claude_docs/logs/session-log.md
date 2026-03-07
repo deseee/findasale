@@ -8,6 +8,16 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-07 (session 87 — Dockerfile restore + sprints 1+2 shipped)
+**Worked on:**
+- **Dockerfile.production restored:** `--frozen-lockfile` back in (MCP push, commit b82180d). Lockfile was already clean.
+- **Sprint 1 — AI Sale Description Writer:** `generateSaleDescription()` + `isAnthropicAvailable()` added to cloudAIService.ts. `generateSaleDescriptionHandler` in saleController.ts (title required, max 300 chars, Anthropic guard → 503). `POST /api/sales/generate-description` route (before `/:id`). ✨ Generate button on create-sale.tsx + edit-sale/[id].tsx. QA patches: `isAnthropicAvailable()` separates Anthropic-only from Vision+Anthropic check. Commit 7b1b71d.
+- **Sprint 2 — Social Post Generator wire-up:** Discovered feature was fully built but route never registered + component never used. Fixed: socialPostController.ts (prisma singleton, AuthRequest type, ANTHROPIC_MODEL env var, API key guard → 503). index.ts: registered `/api/social-post` route. dashboard.tsx: imported SocialPostGenerator, added 📣 Share button + modal. Commit 982dd6e.
+- **Session wrap triggered early:** Cowork environment does NOT support custom subagent types (findasale-architect, findasale-dev, etc. all return "agent type not found"). Used general-purpose agents as workaround in previous context window — error discovered before further work.
+**Decisions:** Phase 2 features 1+2 complete. Custom subagent skills (findasale-*) must be invoked via the `Skill` tool, NOT the `Agent` tool — they are skills, not agent types.
+**Next up:** Phase 2 features 3–5: Shopper Loyalty Program → Search by Item Type → Seller Performance Dashboard. Use `Skill` tool to invoke findasale-architect, findasale-dev, findasale-qa in sequence. Schema: no Coupon model exists yet — migration needed for Loyalty Program.
+**Blockers:** Patrick's 5 manual beta items unchanged. No code blockers.
+
 ### 2026-03-07 (session 86 — production outage recovery + workflow hardening)
 **Worked on:**
 - **Production outage recovered:** ERR_REQUIRE_ESM from `uuid@13.0.0` (CJS backend can't require ESM-only package). Fix: replaced with `crypto.randomUUID()` in wishlistController.ts + userController.ts, removed uuid from package.json.
@@ -46,9 +56,4 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Next up:** Execute 8 audit work paths (QA, UX, Legal, Support KB, CX onboarding, Records cleanup, Marketing calendar, Ops verification). Create Agent Quick Reference cheat sheet. Patrick: rotate Neon credentials, push pending commits.
 **Blockers:** Pending commits must be pushed before any further work. Patrick should rotate Neon credentials.
 
-### 2026-03-06 (session 82 batches 9–18 — beta invite flow, fetch fixes, hook silent, rate limiting)
-**Worked on:** Beta invite flow fully wired (admin.ts routes, index.ts mount, register.tsx ?invite= param + ORGANIZER auto-set, authController.ts validateCode + redeemInvite + effectiveRole). 8 raw fetch() calls fixed in NotificationBell.tsx + notifications.tsx → api.*. Badge notification activated in userController.ts (was commented-out TODO). All console.log → console.info in notificationController, waitlistController, lineController, userController. Pre-push hook silent: auth allowlist added (abTest.ts, feedback.ts, invites.ts, planner.ts), router.use grep fixed to match authenticate with extra middleware, // public comment filter added. search.ts visual endpoint comment added. Invite rate limiting: 5 attempts/15min per IP on /validate + /redeem (express-rate-limit). 8 orphan root-level docs moved to claude_docs/feature-notes/. ROADMAP v14.
-**Decisions:** CRLF rule established: always run `git add + git commit` in a separate step BEFORE `.\push.ps1`. Never chain them. push.ps1 CRLF normalization step reverts uncommitted working tree changes. effectiveRole pattern: server-side guarantee invite users get ORGANIZER regardless of client role field.
-**Next up:** Continue beta-readiness hardening. Patrick: confirm 5%/7% fee, Stripe business account, business cards, beta organizer recruitment, run e2e test checklist, review /guide + /faq.
-**Blockers:** VAPID keys production confirm still pending. Patrick hasn't confirmed 5%/7% fee yet.
 

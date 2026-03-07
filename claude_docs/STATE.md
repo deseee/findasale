@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 86 complete. Production outage recovered (ERR_REQUIRE_ESM from uuid@13 → crypto.randomUUID, Dockerfile --no-frozen-lockfile escape hatch for Railway). Organizer.website schema drift fixed (P2022 → manual migration applied, 62 Neon migrations total). Workflow audit completed (8 recovered turns documented, 5 self-healing entries #41–45 added). CORE.md lockfile rule + session-safeguards Production Startup Failures section added. Dockerfile.production still on --no-frozen-lockfile (temporary escape hatch — restore next session). Beta GO status unchanged.
+Session 87 complete. Dockerfile.production `--frozen-lockfile` restored (commit b82180d via MCP). Sprint 1: AI Sale Description Writer shipped — `generateSaleDescription()` + `isAnthropicAvailable()` in cloudAIService.ts, `generateSaleDescriptionHandler` in saleController.ts, `POST /generate-description` route, ✨ Generate button on create-sale.tsx + edit-sale/[id].tsx (commit 7b1b71d). Sprint 2: Social Post Generator wired — orphaned route registered in index.ts, 4 code quality fixes in socialPostController.ts (prisma singleton, AuthRequest, ANTHROPIC_MODEL env var, API key guard), SocialPostGenerator integrated into dashboard.tsx with 📣 Share button + modal (commit 982dd6e). Phase 2 features 1 + 2 complete. Next: Phase 2 features 3–5 (Shopper Loyalty Program, Search by Item Type, Seller Performance Dashboard) + Phase 3 features 6–7. NOTE: Cowork environment does NOT support custom subagent types — use `general-purpose` agent type only.
 
 ---
 
@@ -110,7 +110,7 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 
 - **Railway PORT mismatch** — `PORT=5000` locked in Railway Variables. Must match `EXPOSE 5000` in Dockerfile. Do not remove.
 - **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. 62 migrations applied to Neon as of 2026-03-07. Last: `20260307000038_add_organizer_website`.
-- **Dockerfile.production** — Currently using `--no-frozen-lockfile` (emergency escape hatch from session 86). Restore to `--frozen-lockfile` after running `pnpm install` and pushing a clean lockfile.
+- **Dockerfile.production** — ✅ Restored to `--frozen-lockfile` (session 87, commit b82180d). Lockfile is clean.
 - **Git push workflow** — Patrick uses `.\push.ps1` (repo root) instead of raw `git push`. Self-heals: index.lock, CRLF phantoms, fetch+merge (never rebase). See self-healing entry #36.
 - **Dev stack is now native** — Docker no longer used at all. `image-tagger/` deleted by Patrick (session 81). Backend/frontend/postgres run natively on Windows. See `claude_docs/DEVELOPMENT.md`.
 - **Production seed:** DB URLs are in `packages/backend/.env`. Copy them into the commands below:

@@ -1,10 +1,10 @@
 # Dynamic Project Context
-*Generated at 2026-03-07T07:06:45.080Z*
+*Generated at 2026-03-07T13:48:20.161Z*
 
 ## Git Status
-- **Branch:** (run git locally)
-- **Commit:** (run git locally)
-- **Remote:** (run git locally)
+- **Branch:** main
+- **Commit:** 982dd6e
+- **Remote:** https://github.com/deseee/findasale.git
 
 ## Last Session
 No session log found.
@@ -155,6 +155,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── WORKFLOW-SESSION-86-SUMMARY.md
 │   │   ├── scheduled-task-log.md
 │   │   └── session-log.md
+│   ├── next-session-prompt.md
 │   ├── operations/
 │   │   ├── DEVELOPMENT.md
 │   │   ├── OPS.md

@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-06 (v16 — Full feature pipeline added from feature-research-2026-03-06.md)
+**Last Updated:** 2026-03-07 (v17 — Phase 2 features 1+2 shipped in session 87)
 **Status:** Production MVP live at finda.sale. Beta: GO. All phases + CA/CB/CC/CD complete. Full history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
 ---
@@ -54,8 +54,8 @@
 ### Phase 2 — Post-Beta Stabilization (Next 6–8 Weeks)
 | # | Feature | Est. | Notes |
 |---|---------|------|-------|
-| 1 | AI Sale Description Writer | 1–2 sprints | Extend `cloudAIService.ts`. Free vs. MaxSold’s paid tier. |
-| 2 | Branded Social Templates | 1 sprint | Cloudinary watermarking + QR. Puts FindA.Sale on competitor sites. |
+| 1 | ✅ AI Sale Description Writer | done | Shipped session 87 (commit 7b1b71d). generateSaleDescription() + ✨ button on create/edit sale. |
+| 2 | ✅ Branded Social Templates | done | Shipped session 87 (commit 982dd6e). Route wired, dashboard integrated, code quality fixed. |
 | 3 | Shopper Loyalty Program | 1 sprint | Thank-you coupons, coupon tracking, email integration. |
 | 4 | Search by Item Type | 2 sprints | Index items, search UI, result optimization. |
 
