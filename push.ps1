@@ -37,6 +37,32 @@ if ($staged) {
 # normalisation even when content is identical. These block merge/rebase.
 $phantomFiles = git diff --name-only 2>$null
 if ($phantomFiles) {
+    # SAFETY CHECK: Before running checkout, verify these are only line-ending changes
+    # If there are real content changes, warn and abort to prevent data loss.
+    $hasRealChanges = $false
+    foreach ($file in $phantomFiles) {
+        # Count non-whitespace-only diffs. If any line has actual code changes, flag it.
+        $diff = git diff -- "$file" 2>$null | Where-Object { $_ -match "^[+\-]" -and $_ -notmatch "^[+\-][\s]*$" }
+        if ($diff) {
+            $hasRealChanges = $true
+            break
+        }
+    }
+
+    if ($hasRealChanges) {
+        Write-Host ""
+        Write-Host "[!] WARNING: Uncommitted changes detected" -ForegroundColor Red
+        Write-Host "    Running checkout would destroy your work. Modified files:" -ForegroundColor Yellow
+        $phantomFiles | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
+        Write-Host ""
+        Write-Host "    Commit or stash these changes first:" -ForegroundColor Yellow
+        Write-Host "      git add <files>" -ForegroundColor DarkGray
+        Write-Host "      git commit -m 'your message'" -ForegroundColor DarkGray
+        Write-Host "    Then re-run .\push.ps1" -ForegroundColor DarkGray
+        Write-Host ""
+        exit 1
+    }
+
     Write-Host "[2/5] Clearing CRLF phantom changes..." -ForegroundColor Yellow
     git checkout -- . 2>$null
     Write-Host "  OK - Working tree normalised." -ForegroundColor Green
