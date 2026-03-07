@@ -36,6 +36,16 @@ Reduces clarification round-trips. Updated as new patterns emerge.
 - Flag errors immediately, don't bury them in paragraphs.
 - When Patrick gives a thumbs-up or short "ok" — that means keep going, don't wait.
 
+## Shell & Environment Specifics
+
+Patrick uses Windows PowerShell exclusively. Never give bash syntax. Key rules:
+- Use `;` (semicolon) to chain commands on one line: `git fetch origin; git merge origin/main --no-edit`
+- Or use separate lines (safer): put each command on its own line
+- **NEVER use `&&`** — that's bash only. PowerShell parser rejects it with "token is not a valid statement separator"
+- For line continuation in PowerShell, use backtick: `` `command `` (not backslash `\`)
+- Always check context before giving git/pnpm commands. When in doubt, load dev-environment skill.
+See self_healing_skills.md entry 40 for detailed examples.
+
 ## Session Patterns
 
 - Patrick often batches 3–5 sprints in a single long session.

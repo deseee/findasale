@@ -105,7 +105,7 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 
 ### 21. PowerShell vs Bash Syntax Confusion
 **Trigger:** Claude gives Patrick a shell command with `&&` (bash-only) or misuses backticks
-**Fix:** Always specify the target terminal. PowerShell: use `;` to chain, backtick (`` ` ``) for line continuation. Docker exec / Linux: use `&&` to chain, `\` for continuation. Load dev-environment skill before giving ANY shell command.
+**Fix:** Always specify the target terminal. PowerShell: use `;` to chain, backtick (`` ` ``) for line continuation. Docker exec / Linux: use `&&` to chain, `\` for continuation. Load dev-environment skill before giving ANY shell command. See entry 40 for detailed PowerShell/bash distinction and examples.
 **Test:** Review command before sending — does it match the target terminal?
 
 ### 22. Prisma Migrate in Non-Interactive Container
@@ -259,6 +259,30 @@ git commit --no-edit
 **Test:** Start backend cleanly: `pnpm --filter backend run dev` should log "Server running on..." without "JWT_SECRET" errors. Login with valid credentials should return 200 (not 401).
 **Prevention:** JWT_SECRET is non-negotiable for startup — it gates all token signing/verification. Never remove the startup guard in index.ts.
 
+### 40. Never Use && in PowerShell Commands
+**Trigger:** Claude gives Patrick shell commands with `&&` (bash syntax) instead of PowerShell syntax. PowerShell parser fails with error: "The token '&&' is not a valid statement separator in this version."
+**Root cause:** `&&` is Unix/bash syntax for command chaining. PowerShell uses `;` (same-line) or separate lines. When git commands or multi-step tasks are given to Patrick, Claude must always use PowerShell syntax.
+**Pattern:** The problem occurred in session 85 when Claude provided:
+```
+git checkout -- claude_docs/CORE.md claude_docs/strategy/roadmap.md
+git fetch origin && git merge origin/main --no-edit
+.\push.ps1
+```
+The `&&` on line 2 caused parse error. Correct syntax:
+```powershell
+git checkout -- claude_docs/CORE.md claude_docs/strategy/roadmap.md
+git fetch origin
+git merge origin/main --no-edit
+.\push.ps1
+```
+**Fix:** Before giving Patrick ANY shell command, check the environment context. If Patrick is on Windows (which he is — he uses PowerShell and `.\push.ps1`), use PowerShell syntax:
+- Chain on same line with `;` (semicolon)
+- Or use separate lines (safer, more readable)
+- Never use `&&` (bash only)
+- Never use `\` for line continuation (bash only — use backtick `` ` `` in PowerShell)
+**Prevention:** Load dev-environment skill before giving shell commands. The skill includes target OS and shell syntax rules. Patrick uses PowerShell exclusively.
+**Test:** Before sending command block, mentally execute it in PowerShell — does every statement parse?
+
 ---
 
-Last Updated: 2026-03-06 (session 85 — added entry 39: JWT_SECRET missing at startup pattern)
+Last Updated: 2026-03-06 (session 85-86 — added entry 40: PowerShell && syntax error pattern; updated entry 21 cross-ref)
