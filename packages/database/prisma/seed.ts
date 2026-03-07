@@ -394,6 +394,7 @@ async function main() {
             : [
                 itemPhotoPool[itemCount % itemPhotoPool.length],
               ],
+          embedding: [],
         },
       });
       items.push(item);

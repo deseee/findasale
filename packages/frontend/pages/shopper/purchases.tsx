@@ -32,6 +32,16 @@ const ShopperPurchasesPage = () => {
     enabled: !!user?.id,
   });
 
+  // Sprint 3: Shopper loyalty coupons
+  const { data: coupons } = useQuery({
+    queryKey: ['my-coupons'],
+    queryFn: async () => {
+      const res = await api.get('/coupons');
+      return res.data.coupons as any[];
+    },
+    enabled: !!user?.id,
+  });
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-white py-8">
@@ -55,6 +65,31 @@ const ShopperPurchasesPage = () => {
       <div className="min-h-screen bg-white">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <h1 className="text-3xl font-bold text-warm-900 mb-8">My Purchases</h1>
+
+          {/* Sprint 3: Shopper loyalty coupons */}
+          {coupons && coupons.length > 0 && (
+            <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-xl">
+              <h2 className="text-lg font-semibold text-green-800 mb-3">🎟️ My Coupons</h2>
+              <div className="flex flex-wrap gap-3">
+                {coupons.map((c: any) => (
+                  <div key={c.id} className="bg-white border border-green-300 rounded-lg px-4 py-3 flex items-center gap-3">
+                    <div>
+                      <p className="font-mono font-bold text-green-700 text-lg tracking-widest">{c.code}</p>
+                      <p className="text-xs text-warm-500">
+                        ${c.discountValue} off · Expires {new Date(c.expiresAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(c.code).catch(() => {})}
+                      className="text-xs text-green-600 hover:text-green-800 font-medium border border-green-300 rounded px-2 py-1"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mb-6 flex justify-between items-center">
             <p className="text-warm-600">{purchases?.length || 0} items purchased</p>

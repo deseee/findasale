@@ -77,6 +77,7 @@ model User {
   messageTemplates      MessageTemplate[]   @relation("OrganizerTemplates")
   shopperCredits    Float      @default(0)   // Batch 17: shopper referral store credit
   saleWaitlist      SaleWaitlist[]
+  coupons           Coupon[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -813,6 +814,28 @@ model ItemPriceHistory {
   createdAt DateTime @default(now())
 
   @@index([itemId])
+}
+
+// Sprint 3: Shopper Loyalty Coupons — issued after each completed purchase
+model Coupon {
+  id                 String    @id @default(cuid())
+  code               String    @unique
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discountType       String    // "PERCENT" | "FIXED"
+  discountValue      Float     // 5.00 = $5 off; 10 = 10% off
+  minPurchaseAmount  Float?    // null = no minimum
+  maxDiscountAmount  Float?    // cap for PERCENT coupons; null = uncapped
+  status             String    @default("ACTIVE") // "ACTIVE" | "USED" | "EXPIRED"
+  sourcePurchaseId   String?   // which purchase earned this coupon
+  redeemedPurchaseId String?   // which purchase this was applied to
+  expiresAt          DateTime
+  usedAt             DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([code])
 }
 
 // Batch 17: Sale Waitlist — notify shoppers when new items added to a sale

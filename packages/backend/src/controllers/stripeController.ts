@@ -8,6 +8,7 @@ import { createNotification } from '../services/notificationService';
 import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { buildEmail } from '../services/emailTemplateService';
+import { issueLoyaltyCoupon, markCouponUsed } from './couponController';
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -152,7 +153,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { itemId, affiliateLinkId, shippingRequested } = req.body;
+    const { itemId, affiliateLinkId, shippingRequested, couponCode } = req.body;
 
     if (!itemId) {
       return res.status(400).json({ message: 'Item ID is required' });
@@ -216,11 +217,34 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const priceCents = Math.round((price + shippingCost) * 100);
     const platformFeeAmount = Math.round(priceCents * feePercent);
 
-    const idempotencyKey = `pi-${itemId}-${req.user.id}`;
+    // Sprint 3: Coupon redemption — validate and apply discount before creating PI
+    let couponId: string | undefined;
+    let discountAmount = 0;
+    if (couponCode) {
+      const coupon = await prisma.coupon.findUnique({ where: { code: (couponCode as string).trim().toUpperCase() } });
+      if (!coupon || coupon.userId !== req.user.id || coupon.status !== 'ACTIVE' || coupon.expiresAt < new Date()) {
+        return res.status(400).json({ message: 'Invalid or expired coupon code' });
+      }
+      if (coupon.discountType === 'FIXED') {
+        discountAmount = Math.min(Math.round(coupon.discountValue * 100), priceCents - 50);
+      } else {
+        const pct = Math.round(priceCents * (coupon.discountValue / 100));
+        const raw = coupon.maxDiscountAmount
+          ? Math.min(pct, Math.round(coupon.maxDiscountAmount * 100))
+          : pct;
+        discountAmount = Math.min(raw, priceCents - 50);
+      }
+      couponId = coupon.id;
+    }
+    const finalPriceCents = priceCents - discountAmount;
+
+    // Include coupon context in idempotency key — different coupon = different PI
+    const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
+    const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;
 
     const paymentIntent = await stripe().paymentIntents.create(
       {
-        amount: priceCents,
+        amount: finalPriceCents,
         currency: 'usd',
         metadata: {
           itemId: item.id,
@@ -228,6 +252,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           userId: req.user.id,
           ...(affiliateLinkId ? { affiliateLinkId } : {}),
           ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
+          ...(couponId ? { couponId } : {}),
         },
         application_fee_amount: platformFeeAmount,
         on_behalf_of: item.sale.organizer.stripeConnectId,
@@ -243,7 +268,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         userId: req.user.id,
         itemId: item.id,
         saleId: item.sale.id,
-        amount: price,
+        amount: finalPriceCents / 100, // actual charged amount (post-discount)
         platformFeeAmount: platformFeeAmount / 100,
         stripePaymentIntentId: paymentIntent.id,
         status: 'PENDING',
@@ -266,7 +291,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       clientSecret: paymentIntent.client_secret,
       purchaseId: purchase.id,
       platformFee: platformFeeAmount / 100,
-      totalAmount: price
+      totalAmount: finalPriceCents / 100, // post-discount price (what Stripe charges)
+      originalAmount: price,              // pre-discount item price (for display reference)
+      discountApplied: discountAmount / 100,
+      ...(couponCode ? { couponCode } : {}),
     });
   } catch (error: unknown) {
     console.error('Payment Intent creation error:', error);
@@ -392,6 +420,16 @@ export const webhookHandler = async (req: Request, res: Response) => {
             item: purchase.item,
             sale: purchase.sale,
           });
+        }
+
+        // Sprint 3: Issue loyalty coupon (fire-and-forget)
+        issueLoyaltyCoupon(purchase.userId, purchase.id)
+          .catch(err => console.warn('[coupon] Failed to issue loyalty coupon:', err));
+
+        // Sprint 3: Mark applied coupon as used if one was redeemed
+        if (paymentIntent.metadata?.couponId) {
+          markCouponUsed(paymentIntent.metadata.couponId, purchase.id)
+            .catch(err => console.warn('[coupon] Failed to mark coupon used:', err));
         }
 
         // Create in-app notification for purchase confirmation (fire-and-forget)
