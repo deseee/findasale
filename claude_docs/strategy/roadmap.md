@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-06 (v15 — Lean restructure. Beta status: GO. Maintenance rules added.)
+**Last Updated:** 2026-03-06 (v16 — Full feature pipeline added from feature-research-2026-03-06.md)
 **Status:** Production MVP live at finda.sale. Beta: GO. All phases + CA/CB/CC/CD complete. Full history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
 ---
@@ -49,20 +49,41 @@
 
 ---
 
-## Path CD — Active Sprint + Deferred
+## Path CD — Feature Pipeline
 
-### Next Sprint
-| Feature | Status | Notes |
-|---------|--------|-------|
-| AI Sale Description Writer | ⬜ Ready to build | 80% infra exists in `cloudAIService.ts`. Highest-ROI next feature. |
-| Branded Social Templates | ⬜ Ready to build | Auto-generate shareable sale images for organizers. |
+### Phase 2 — Post-Beta Stabilization (Next 6–8 Weeks)
+| # | Feature | Est. | Notes |
+|---|---------|------|-------|
+| 1 | AI Sale Description Writer | 1–2 sprints | Extend `cloudAIService.ts`. Free vs. MaxSold’s paid tier. |
+| 2 | Branded Social Templates | 1 sprint | Cloudinary watermarking + QR. Puts FindA.Sale on competitor sites. |
+| 3 | Shopper Loyalty Program | 1 sprint | Thank-you coupons, coupon tracking, email integration. |
+| 4 | Search by Item Type | 2 sprints | Index items, search UI, result optimization. |
 
-### Deferred (Post-Beta)
+### Phase 3 — Weeks 8–16
+| # | Feature | Est. | Notes |
+|---|---------|------|-------|
+| 5 | Stripe Terminal POS | 2 sprints | In-person checkout. No monthly fees. Works with existing Stripe Connect. |
+| 6 | Seller Performance Dashboard | 2 sprints | Analytics, benchmarks, pricing recommendations. |
+| 7 | Shopper Referral Rewards | 1–2 sprints | Referral tracking, rewards distribution, email notifications. |
+| 8 | Batch Operations Toolkit | 1 sprint | Bulk pricing, status updates, photo uploads. |
+
+### Phase 4 — Post-16 Weeks
+| # | Feature | Est. | Notes |
+|---|---------|------|-------|
+| 9 | Premium Organizer Tier | 2 sprints | Feature gating + billing integration. |
+| 10 | Real-Time Status Updates | 1 sprint | Organizer mobile widget, SMS/email alerts. |
+| 11 | Shopper Referral Rewards expansion | 1 sprint | Viral growth loop. |
+| 12 | Verified Organizer Badge | 1–2 sprints | Professional differentiation, trust signal. |
+
+### Deprecated / Deferred Indefinitely
 | Feature | Reason |
 |---------|--------|
 | White-label MaaS | Business decision — Grand Rapids validation first |
 | Consignment Integration | Thrift store POS — post-beta complexity |
 | AR Furniture Preview | Hardware not ready — long-term R&D |
+| Co-Branded Yard Signs | High operational overhead; low revenue; deprecated per research |
+| QuickBooks Integration | CSV export covers 80% of need; defer until organizer demand |
+| Multi-Format Marketing Kit | Current PDF implementation sufficient |
 
 ---
 
@@ -80,7 +101,7 @@
 
 | Item | Reason | Revisit |
 |------|--------|---------|
-| Video-to-inventory | Vision models can't reliably segment rooms yet | Late 2026+ |
+| Video-to-inventory | Vision models can’t reliably segment rooms yet | Late 2026+ |
 | Multi-metro expansion | Grand Rapids validation first | After beta data |
 
 ---
