@@ -27,7 +27,7 @@ At the start of every session, before any task work:
 2. Load `claude_docs/CORE.md` — verify behavior rules haven't drifted
 3. Load `context.md` — filetree, Docker status, last session summary
 4. Load `claude_docs/STATE.md` — current sprint and blockers
-5. Skim `claude_docs/session-log.md` — last 1–2 entries for recent decisions
+5. Skim `claude_docs/logs/session-log.md` — last 1–2 entries for recent decisions
 6. **GitHub sync check** — read local `STATE.md` `Last Updated` line, then fetch GitHub version via `mcp__github__get_file_contents` (`deseee/findasale`, `claude_docs/STATE.md`). If the `Last Updated` lines differ, stop immediately and tell Patrick:
    > "Local docs are behind GitHub. Run this before we start: `git fetch origin && git merge origin/main --no-edit` (or just `.\push.ps1` which handles this automatically)"
    Do not make any file edits until Patrick confirms local is synced.
@@ -118,14 +118,14 @@ Higher layer prevails. Skills override lower layers when pattern confidence ≥ 
 ## 8. Self-Healing Skills
 
 Before debugging recurring errors, check:
-`claude_docs/self_healing_skills.md`
+`claude_docs/self-healing/self_healing_skills.md`
 
 Covers: SSR crashes, JWT payload staleness, unwired frontend stubs, missing Prisma
 relation fields, unhandled async failures, unprotected routes, unbounded queries,
 missing env vars, Docker/pnpm monorepo startup failures (nodemon not found).
 
 After fixing any bug:
-- Check if the pattern exists in `self_healing_skills.md`
+- Check if the pattern exists in `claude_docs/self-healing/self_healing_skills.md`
 - If not, and the pattern has been seen ≥2 times OR is structurally certain to recur,
   add a new entry immediately — do not wait for session wrap
 
@@ -134,7 +134,7 @@ After fixing any bug:
 ## 9. Proactive Health Scanning
 
 Before production deploys or after large sprints, run the health-scout skill.
-Recent scan results: `claude_docs/health-reports/` (newest file = latest report).
+Recent scan results: `claude_docs/archive/health-reports/` (newest file = latest report).
 Weekly scan runs automatically Sunday 11pm via `findasale-health-scout` task.
 
 ---
@@ -172,7 +172,7 @@ to Patrick's tree until `git fetch`. Pattern:
 3. At wrap time, run `git fetch origin main` **before** staging wrap files
 4. If conflicts appear, resolve with `git checkout --theirs [file]`
 
-See entry #38 in `self_healing_skills.md` for details and examples.
+See entry #38 in `claude_docs/self-healing/self_healing_skills.md` for details and examples.
 
 ### MCP vs PowerShell Decision Rule
 
@@ -215,7 +215,7 @@ This rule is enforced by `claude_docs/SECURITY.md` Section 9.
 ## 11. Model Routing
 
 Before selecting session model or sub-agent model, consult:
-`claude_docs/model-routing.md`
+`claude_docs/operations/model-routing.md`
 
 Default: Sonnet. Haiku for read-only sub-agents. Opus for novel architecture only.
 Sub-agents accept `model: "haiku"` parameter in the Task tool for cost savings.
@@ -225,7 +225,7 @@ Sub-agents accept `model: "haiku"` parameter in the Task tool for cost savings.
 ## 12. Session Safeguards
 
 Before debugging recurring errors or when stuck in a loop, consult:
-`claude_docs/session-safeguards.md`
+`claude_docs/operations/session-safeguards.md`
 
 Hard limits: 3 fix attempts per error, 2 rewrites per file per turn.
 Escalate to Patrick after hitting limits — do not continue silently.
@@ -235,7 +235,7 @@ Escalate to Patrick after hitting limits — do not continue silently.
 ## 13. Patrick's Language Map
 
 When interpreting Patrick's short commands ("check", "note", "ok", "wrap", etc.), consult:
-`claude_docs/patrick-language-map.md`
+`claude_docs/operations/patrick-language-map.md`
 
 Key rule: Patrick's short affirmations ("ok", "that worked") mean proceed — don't re-explain.
 
@@ -248,7 +248,7 @@ Every file in `claude_docs/` has a tier. Assign it when creating the file.
 **Tier 1 — Hot (always loaded at session start):** CORE.md, STATE.md, context.md, root CLAUDE.md.
 Target: ≤2,000 tokens combined. If you're adding something "just in case", it belongs in Tier 2.
 
-**Tier 2 — Deep store (load on demand):** session-log.md, self_healing_skills.md, STACK.md, SECURITY.md, RECOVERY.md, roadmap.md, model-routing.md, session-safeguards.md, patrick-language-map.md, next-session-prompt.md, DEVELOPMENT.md, health-reports/, research/.
+**Tier 2 — Deep store (load on demand):** `logs/session-log.md`, `self-healing/self_healing_skills.md`, STACK.md, SECURITY.md, RECOVERY.md, `strategy/roadmap.md`, `operations/model-routing.md`, `operations/session-safeguards.md`, `operations/patrick-language-map.md`, `operations/next-session-prompt.md`, `operations/DEVELOPMENT.md`, `archive/health-reports/`, research/.
 Load only when the task requires it. Never preload the whole directory.
 
 **Tier 3 — One-time artifacts (archive on creation):** Audit reports, migration checklists, rebrand tables, any file whose purpose ends when the work ends.
@@ -270,14 +270,14 @@ Before ending ANY session, Claude must execute the session wrap protocol:
 2. **Do not end session if check fails.** Fix any findings, re-run check, and confirm all checks pass before closing.
 3. **Minimum wrap steps:**
    - (a) Commit all changed files with descriptive messages: `git add [specific files] && git commit -m "[message]"`
-   - (b) Update `claude_docs/session-log.md` with today's entry (completed work, files changed, notes)
-   - (c) Update `claude_docs/next-session-prompt.md` with context for the next session
+   - (b) Update `claude_docs/logs/session-log.md` with today's entry (completed work, files changed, notes)
+   - (c) Update `claude_docs/operations/next-session-prompt.md` with context for the next session
    - (d) Re-run the wrap check to verify all gates pass
    - (e) Provide Patrick with exact commit hashes and push instructions
 
 4. **Subagent discipline:** Any spawned subagent must follow the same protocol. Before handoff completes, subagent reports "Working tree clean" and lists all changed files.
 
-5. **Documentation push rule:** Never include documentation files in feature-batch MCP pushes. Code changes and doc changes use separate commits to prevent documentation overwriting. See `self_healing_skills.md` entry #35.
+5. **Documentation push rule:** Never include documentation files in feature-batch MCP pushes. Code changes and doc changes use separate commits to prevent documentation overwriting. See `claude_docs/self-healing/self_healing_skills.md` entry #35.
 
 For detailed protocol steps and edge cases, consult: `claude_docs/WRAP_PROTOCOL_QUICK_REFERENCE.md` and `claude_docs/SESSION_WRAP_PROTOCOL.md`.
 

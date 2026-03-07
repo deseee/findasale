@@ -61,7 +61,7 @@ No silent library substitutions.
 ## Infrastructure
 
 - Monorepo: pnpm workspaces
-- Containerization: Docker (local dev)
+- Containerization: Docker (production Railway only; local dev is native Windows)
 - Version Control: GitHub
 - Frontend Deployment: Vercel (finda.sale)
 - Backend Deployment: Railway (backend-production-153c9.up.railway.app)
