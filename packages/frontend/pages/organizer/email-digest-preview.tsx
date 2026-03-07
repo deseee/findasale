@@ -246,7 +246,7 @@ export default function EmailDigestPreview() {
                       FindA.Sale
                     </a>
                     .<br />
-                    <a href="/organizer/email-digest-preview" className="text-gray-600 hover:text-gray-900">
+                    <a href="/organizer/settings" className="text-gray-600 hover:text-gray-900">
                       Manage email preferences
                     </a>
                     {' '}·{' '}
