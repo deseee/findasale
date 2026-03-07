@@ -7,6 +7,7 @@ import { AuthRequest } from '../middleware/auth';
 import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 import { syncOrganizerTier } from '../services/tierService';
 import { notifyMatchedBuyers } from '../services/buyerMatchService';
+import { markSalePublished } from '../services/mailerliteService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
@@ -384,6 +385,18 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       notifyMatchedBuyers(updated.id).catch((err) => {
         console.error('[buyerMatch] Failed to notify matched buyers:', err);
       });
+
+      // MailerLite: set sale_published custom field so onboarding automation exits
+      prisma.organizer.findUnique({
+        where: { id: updated.organizerId },
+        include: { user: { select: { email: true } } },
+      }).then((org) => {
+        if (org?.user?.email) {
+          markSalePublished(org.user.email).catch((err) => {
+            console.error('[mailerlite] markSalePublished failed:', err);
+          });
+        }
+      }).catch(() => {});
     }
 
     // Phase 31: When sale is marked ENDED, recalculate organizer's tier

@@ -15,6 +15,16 @@ import VisualSearchButton from '../components/VisualSearchButton';
 import SearchFilterPanel, { SearchFilters } from '../components/SearchFilterPanel';
 import EmptyState from '../components/EmptyState';
 import { SkeletonGrid } from '../components/SkeletonCards';
+// Sprint 4b — FTS item search
+import ItemSearch from '../components/ItemSearch';
+import FilterSidebar from '../components/FilterSidebar';
+import ItemSearchResults from '../components/ItemSearchResults';
+import {
+  useItemSearch,
+  useFilterSync,
+  filtersFromQuery,
+  type ItemSearchFilters,
+} from '../hooks/useItemSearch';
 
 type SearchTab = 'all' | 'sales' | 'items';
 
@@ -143,6 +153,36 @@ const SearchPage = () => {
     setVisualResults(data);
   };
 
+  // Sprint 4b: FTS item search state (active when tab === 'items')
+  const [itemFilters, setItemFilters] = useState<ItemSearchFilters>(() =>
+    filtersFromQuery(router.isReady ? (router.query as any) : {})
+  );
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Sync item filters from URL on mount
+  useEffect(() => {
+    if (!router.isReady) return;
+    setItemFilters(filtersFromQuery(router.query as any));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady]);
+
+  const updateItemFilters = (next: Partial<ItemSearchFilters>) =>
+    setItemFilters((prev) => ({ ...prev, ...next }));
+
+  const clearItemFilters = () =>
+    setItemFilters((prev) => ({ ...prev, category: '', condition: '', priceMin: '', priceMax: '', offset: 0 }));
+
+  const {
+    data: itemData,
+    isLoading: itemLoading,
+    isError: itemError,
+    refetch: itemRefetch,
+  } = useItemSearch(itemFilters);
+
+  useFilterSync(itemFilters, tab === 'items');
+
+  const itemHasActiveFilters = !!(itemFilters.category || itemFilters.condition || itemFilters.priceMin || itemFilters.priceMax);
+
   const isShowingVisualResults = visualResults && visualResults.results.length > 0;
   const salesCount = data?.sales?.length ?? 0;
   const itemsCount = data?.items?.length ?? 0;
@@ -176,8 +216,8 @@ const SearchPage = () => {
           </div>
         </form>
 
-        {/* Mobile filter panel */}
-        {q && q.length >= 2 && isMobile && (
+        {/* Mobile filter panel — hidden on items tab (uses FilterSidebar drawer instead) */}
+        {q && q.length >= 2 && isMobile && tab !== 'items' && (
           <SearchFilterPanel
             filters={filters}
             onFiltersChange={handleFiltersChange}
@@ -255,8 +295,15 @@ const SearchPage = () => {
         {q && q.length >= 2 && (
           <>
             <div className="flex gap-6">
-              {/* Desktop filter sidebar */}
-              {!isMobile && (
+              {/* Desktop filter sidebar — FTS facets on items tab, generic panel elsewhere */}
+              {!isMobile && tab === 'items' ? (
+                <FilterSidebar
+                  filters={itemFilters}
+                  facets={itemData?.facets ?? null}
+                  onChange={updateItemFilters}
+                  onClear={clearItemFilters}
+                />
+              ) : !isMobile ? (
                 <SearchFilterPanel
                   filters={filters}
                   onFiltersChange={handleFiltersChange}
@@ -264,7 +311,7 @@ const SearchPage = () => {
                   resultCount={data?.items?.length}
                   isMobile={false}
                 />
-              )}
+              ) : null}
 
               {/* Main content area */}
               <div className="flex-1 min-w-0">
@@ -337,14 +384,12 @@ const SearchPage = () => {
                       </section>
                     )}
 
-                    {/* Items */}
-                    {(tab === 'all' || tab === 'items') && (
+                    {/* Items — Sprint 4b: FTS-powered on items tab, generic on all tab */}
+                    {tab === 'all' && (
                       <section>
-                        {tab === 'all' && (
-                          <h2 className="text-lg font-semibold text-warm-900 mb-4">
-                            Items <span className="text-warm-400 font-normal">({itemsCount})</span>
-                          </h2>
-                        )}
+                        <h2 className="text-lg font-semibold text-warm-900 mb-4">
+                          Items <span className="text-warm-400 font-normal">({itemsCount})</span>
+                        </h2>
                         {itemsCount > 0 ? (
                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                             {data!.items.map((item: any) => (
@@ -352,8 +397,47 @@ const SearchPage = () => {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-warm-400 text-sm py-4">No items found for "{q}".</p>
+                          <p className="text-warm-400 text-sm py-4">No items found for &ldquo;{q}&rdquo;.</p>
                         )}
+                      </section>
+                    )}
+
+                    {tab === 'items' && (
+                      <section>
+                        {/* FTS search bar + mobile filter toggle */}
+                        <div className="mb-4">
+                          <ItemSearch
+                            value={itemFilters.q}
+                            onChange={(v) => updateItemFilters({ q: v })}
+                            onDebouncedChange={(v) => updateItemFilters({ q: v, offset: 0 })}
+                            onFilterToggle={() => setMobileFiltersOpen(true)}
+                            hasActiveFilters={itemHasActiveFilters}
+                            placeholder="Search items… (chair, vintage, lamp)"
+                          />
+                        </div>
+
+                        {/* Mobile filter drawer */}
+                        <FilterSidebar
+                          filters={itemFilters}
+                          facets={itemData?.facets ?? null}
+                          onChange={updateItemFilters}
+                          onClear={clearItemFilters}
+                          mobileOpen={mobileFiltersOpen}
+                          onMobileClose={() => setMobileFiltersOpen(false)}
+                        />
+
+                        {/* FTS results */}
+                        <ItemSearchResults
+                          items={itemData?.data ?? []}
+                          total={itemData?.total ?? 0}
+                          limit={itemData?.limit ?? 20}
+                          offset={itemData?.offset ?? 0}
+                          isLoading={itemLoading}
+                          isError={itemError}
+                          query={itemFilters.q}
+                          onPageChange={(newOffset) => updateItemFilters({ offset: newOffset })}
+                          onRetry={() => itemRefetch()}
+                        />
                       </section>
                     )}
 
