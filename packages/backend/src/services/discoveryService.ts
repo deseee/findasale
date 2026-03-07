@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { regionConfig } from '../config/regionConfig';
 
 export interface SaleWithScore {
   id: string;
@@ -28,9 +29,6 @@ export interface SaleWithScore {
   favoriteCount: number;
   score: number;
 }
-
-const GRAND_RAPIDS_LAT = 42.9619;
-const GRAND_RAPIDS_LNG = -85.6789;
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3959; // Earth radius in miles
@@ -72,10 +70,10 @@ export async function getPersonalizedFeed(
     score: 0,
   }));
 
-  // If no user logged in, return geo-sorted results (by default GR coords)
+  // If no user logged in, return geo-sorted results (by default region center coords)
   if (!userId) {
-    const userLat = lat ?? GRAND_RAPIDS_LAT;
-    const userLng = lng ?? GRAND_RAPIDS_LNG;
+    const userLat = lat ?? regionConfig.centerLat;
+    const userLng = lng ?? regionConfig.centerLng;
 
     const scored = serializedSales.map((sale) => {
       const distance = haversineDistance(userLat, userLng, sale.lat, sale.lng);

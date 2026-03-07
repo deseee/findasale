@@ -1,6 +1,7 @@
 import { Router, Response, Request } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getPersonalizedFeed } from '../services/discoveryService';
+import { regionConfig } from '../config/regionConfig';
 
 const router = Router();
 
@@ -10,7 +11,7 @@ const router = Router();
  * Returns personalized sales ranked by relevance to the authenticated user's
  * browse/buy history. Supports optional geolocation (?lat=42.96&lng=-85.67).
  *
- * Anonymous users get geo-sorted popular feed (defaults to Grand Rapids).
+ * Anonymous users get geo-sorted popular feed (defaults to configured region).
  * Authenticated users get scored by:
  * - Followed organizers (+30 pts)
  * - Matching item categories from purchase history (+20 pts each)
@@ -34,7 +35,7 @@ router.get('/', async (req: AuthRequest | Request, res: Response) => {
       personalized,
       reason: personalized
         ? 'Ranked by your browsing history and followed organizers'
-        : 'Sorted by date and proximity to Grand Rapids',
+        : `Sorted by date and proximity to ${regionConfig.city}`,
     });
   } catch (error) {
     console.error('Feed error:', error instanceof Error ? error.message : 'Unknown error');
