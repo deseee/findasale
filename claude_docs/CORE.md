@@ -284,4 +284,19 @@ For detailed protocol steps and edge cases, consult: `claude_docs/WRAP_PROTOCOL_
 
 ---
 
+## 16. Environment Command Hard Gate
+
+Before writing any shell command, PowerShell command, Prisma command,
+migration instruction, or environment variable guidance:
+
+1. Verify the dev-environment skill has been loaded this session.
+2. If not loaded — load it now, then issue the command.
+3. If already loaded — apply its rules without reloading.
+
+No exceptions. This applies mid-sprint, in follow-up corrections,
+and in subagent handoffs. The trigger is the act of writing the command,
+not the start of the session.
+
+---
+
 Status: Behavioral Authority

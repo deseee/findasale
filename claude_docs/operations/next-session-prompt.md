@@ -1,30 +1,120 @@
 # Next Session Resume Prompt
-*Written: 2026-03-07T05:30:00Z*
+*Written: 2026-03-07 (session 88 — end of session)*
 *Session ended: normally*
 
 ## Resume From
 
-Restore `--frozen-lockfile` in Dockerfile.production: run `pnpm install` locally to regenerate a clean lockfile, commit both `Dockerfile.production` and `pnpm-lock.yaml`, push via `.\push.ps1`.
+Patrick completes pre-work items below, then run **Sprint 3.5** (Grand Rapids
+code deGR-ification, ~10 files, no schema changes) via findasale-dev → findasale-qa.
+After that: Sprint 4 (Search by Item Type) → Sprint 5 (Seller Performance Dashboard).
 
-## What Was In Progress
+## Patrick's Pre-Work (Complete Before Next Session)
 
-- **Dockerfile.production** — still on `--no-frozen-lockfile` (emergency escape hatch). Must be reverted. Steps:
-  1. Patrick runs `pnpm install` from monorepo root
-  2. `git add packages/backend/Dockerfile.production pnpm-lock.yaml`
-  3. `git commit -m "fix: restore --frozen-lockfile after uuid removal cleanup"`
-  4. `.\push.ps1`
+### 1. Replace global CLAUDE.md entirely
+Replace the full content of `C:\Users\desee\OneDrive\Documents\Claude\CLAUDE.md`
+with the approved final version:
 
-## What Was Completed This Session (86)
+```
+# Global Cowork Instructions — Patrick / FindA.Sale
 
-- Production outage resolved: ERR_REQUIRE_ESM from `uuid@13.0.0` → `crypto.randomUUID()` in wishlistController + userController
-- Railway lockfile unblocked via `--no-frozen-lockfile` Dockerfile change (commit d77dcbd)
-- Organizer.website schema drift fixed: migration `20260307000038_add_organizer_website` applied to Neon (62 total)
-- Workflow audit: 8 recoverable wasted turns documented, 5 root causes identified
-- Self-healing entries #41–45 added (commit aec2521b)
-- CORE.md lockfile co-commit rule (commit 9ce4a620)
-- session-safeguards.md Production Startup Failures section (commit a2c152de)
+## Communication
+- Be concise and direct. Minimal explanation unless asked.
+- Professional but friendly tone.
+- Report completion status clearly. Flag errors immediately.
+- Do not use bullet points or headers in conversational replies — plain prose only.
 
-## Patrick's Manual Items (Unchanged — Still Block Beta Launch)
+## Output
+- When producing code changes: diff-only. No full file rewrites unless requested.
+- When creating files: save to the selected project folder so Patrick can access them.
+- Confirm destructive operations before executing. Never use `git add -A`.
+
+## Repair Loop Prevention
+- Stale documentation causes wasted sessions. Treat a stale fact as a bug.
+- After completing any meaningful work batch, update STATE.md and session-log.md.
+- Before giving database or environment commands, load the dev-environment skill.
+- Before any production deploy, load the findasale-deploy skill.
+
+## Session Start
+- Load context.md and STATE.md before starting work.
+- If context.md is older than 24 hours, regenerate it: `node scripts/update-context.js`
+- Run the session warmup task when environment health is unclear.
+
+## Project Context
+- Project: FindA.Sale — PWA for estate sales, yard sales, auctions, and flea market organizers.
+- Stack: Next.js 14 / Express / Prisma / PostgreSQL (Neon) / pnpm workspaces. Native Windows — no Docker.
+- Patrick is a non-technical project manager. Skip implementation rationale unless asked.
+- Primary goal (product): Reduce organizer manual work. Every feature suggestion should serve that.
+- Primary goal (process): Use the subagent fleet to reduce friction, reduce token usage, and maintain context across sessions.
+- Agent fleet: invoke findasale-* skills for architecture, dev, QA, ops, and deploy — do not handle these directly.
+
+## Safety
+- Always ask before deleting files.
+- Never commit .env files or secrets.
+- Never use `prisma db push` in production — use `prisma migrate deploy`.
+- Full safety rules: claude_docs/SECURITY.md in the project folder.
+```
+
+### 2. Install 5 updated .skill packages
+In your FindaSale workspace folder you'll find 5 `.skill` files. Click each → "Copy to your skills":
+- `dev-environment.skill` — self-correction clause added
+- `findasale-architect.skill` — env command hard gate added
+- `findasale-dev.skill` — env command hard gate added
+- `findasale-deploy.skill` — 4 stale Docker commands replaced with Railway/PowerShell workflow
+- `findasale-marketing.skill` — Grand Rapids scope corrected; now covers all sale types
+
+### 3. Commit and push Sprint 3 + doc changes
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/database/prisma/schema.prisma
+git add packages/backend/src/controllers/couponController.ts
+git add packages/backend/src/routes/coupons.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/index.ts
+git add packages/frontend/components/CheckoutModal.tsx
+git add packages/frontend/pages/shopper/purchases.tsx
+git add claude_docs/CORE.md
+git add claude_docs/STATE.md
+git add claude_docs/strategy/BUSINESS_PLAN.md
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/logs/session-log.md
+git add claude_docs/operations/next-session-prompt.md
+git commit -m "feat: Sprint 3 — Shopper Loyalty Program; scope expanded; workflow hardening"
+.\push.ps1
+```
+
+### 4. Run the Coupon migration
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+# Local first (creates migration file):
+$env:DATABASE_URL="postgresql://findasale:findasale@localhost:5432/findasale"
+npx prisma migrate dev --name add_coupon_model
+# Then Neon production:
+$env:DATABASE_URL="[pooled neon url from packages/backend/.env]"
+$env:DIRECT_URL="[direct neon url from packages/backend/.env]"
+npx prisma migrate deploy
+```
+Migration #63. After it runs: update STATE.md Known Gotchas count from 62 → 63.
+
+## What Was Completed This Session (88)
+
+- Sprint 3 — Shopper Loyalty Program (full pipeline, 7 files, QA passed)
+- CORE.md §16 — Environment Command Hard Gate
+- 5 .skill packages updated (see #2 above)
+- Scope expanded: estate + yard + auction + flea market, GR = beta geography only
+- BUSINESS_PLAN.md (6 edits), STATE.md Constraints, roadmap.md (2 edits) updated
+- Global CLAUDE.md final version approved by records + workflow
+- File naming convention documented: authority docs ALL-CAPS, everything else kebab-case
+
+## Sprint Queue
+
+- **Sprint 3.5** — Grand Rapids code deGR-ification (~10 files, no schema change)
+  Files: cloudAIService.ts, plannerController.ts, feed.ts, index.tsx, about.tsx,
+  contact.tsx, map.tsx, leaderboard.tsx, plan.tsx, terms.tsx, trending.tsx,
+  emailTemplateService.ts (footer review), curatorEmailJob.ts
+- **Sprint 4** — Search by Item Type
+- **Sprint 5** — Seller Performance Dashboard
+
+## Patrick's Manual Beta Items (Unchanged)
 
 1. Confirm 5%/7% fee
 2. Set up Stripe business account
@@ -35,15 +125,7 @@ Restore `--frozen-lockfile` in Dockerfile.production: run `pnpm install` locally
 
 ## Environment Notes
 
-- **Neon:** 62 migrations applied. No pending migrations.
-- **Railway:** Online and healthy on port 5000.
-- **Patrick's local repo is behind GitHub** — run `git fetch origin` then `git merge origin/main --no-edit` before any local commits (or just `.\push.ps1`).
-- **GitHub commits this session (all MCP):** 74797533, d77dcbd, dbc812d, 9ce4a620, a2c152de, aec2521b, ee380ff1
-- **context.md** — 690 lines, over 500-line threshold. Flag for trim at next maintenance session.
-
-## Next Features (After Dockerfile Fix)
-
-1. AI sale description writer (80% infra in cloudAIService.ts, est. 1–2 sprints)
-2. Branded social sharing templates (1 sprint)
-
-Full research: `claude_docs/research/feature-research-2026-03-06.md`
+- **Neon:** 62 migrations applied. Migration #63 (`add_coupon_model`) pending (see #4 above).
+- **Railway:** Healthy.
+- **Sprint 3 code:** Not yet committed/pushed — Patrick runs git commands in #3 above.
+- **Skills:** Use `Skill` tool for findasale-* agents — NOT `Agent` tool (returns "agent type not found").

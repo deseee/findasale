@@ -14,11 +14,11 @@
 **Business Structure:** Michigan LLC (filed)
 **Website:** finda.sale
 
-**Mission Statement:** To empower estate sale organizers and shoppers with transparent, AI-powered tools that simplify the estate sale experience, eliminate outdated workflows, and create a thriving secondhand marketplace.
+**Mission Statement:** To empower sale organizers and shoppers with transparent, AI-powered tools that simplify the resale experience, eliminate outdated workflows, and create a thriving secondhand marketplace.
 
-**Products and Services Offered:** FindA.Sale is a mobile-first Progressive Web App (PWA) connecting estate sale organizers (sellers) with shoppers (buyers). The platform offers organizers AI-powered inventory management, real-time auctions with live bidding, instant payment processing, and virtual queue management. Shoppers get discovery tools, item-level search, favorites, messaging, and online purchasing.
+**Products and Services Offered:** FindA.Sale is a mobile-first Progressive Web App (PWA) connecting sale organizers (sellers) with shoppers (buyers) across estate sales, yard sales, auctions, and flea markets. The platform offers organizers AI-powered inventory management, real-time auctions with live bidding, instant payment processing, and virtual queue management. Shoppers get discovery tools, item-level search, favorites, messaging, and online purchasing.
 
-**Target Market:** Primary—estate sale organizers (professional and semi-professional) in Michigan, expanding regionally. Secondary—estate sale shoppers nationwide seeking inventory discovery and online purchasing.
+**Target Market:** Primary—sale organizers (estate, yard, auction, flea market) starting with Michigan, expanding regionally. Secondary—secondhand shoppers nationwide seeking inventory discovery and online purchasing.
 
 **Competitive Advantage:** The only unified platform serving both organizers and shoppers; AI-powered item tagging; transparent 5%–7% platform fees (versus competitors' 13%–20%); mobile-first PWA architecture; real-time auction capabilities; and responsive customer support.
 
@@ -290,7 +290,7 @@ FindA.Sale is a unified estate sale marketplace serving two distinct user groups
 - **Antique Dealers & Consignment Stores:** Liquidating inventory through multi-lot sales
 
 *Geographic Focus:*
-- **Phase 1 (Now–Q2 2026):** Grand Rapids, Michigan metro area (~200,000 people; ~1,200 estate sales/year estimated)
+- **Phase 1 (Now–Q2 2026):** Beta launch in Grand Rapids, Michigan metro — initial organizer outreach and validation. Platform accepts organizers of all sale types (estate, yard, auction, flea market) from day one; GR is the beta geography, not a scope ceiling.
 - **Phase 2 (Q3–Q4 2026):** Midwest (Detroit, Lansing, Ann Arbor; ~15,000 sales/year estimated)
 - **Phase 3 (2027):** National (all US markets; 150,000+ sales/year)
 
@@ -311,8 +311,9 @@ FindA.Sale is a unified estate sale marketplace serving two distinct user groups
 - **Casual Browsers:** Exploring for fun (weekend activity)
 
 *Geographic Focus:*
-- Initial 100-mile radius around Grand Rapids
-- Expand nationally as inventory density increases
+- Initial beta: Grand Rapids metro organizer recruitment
+- Platform is not geography-locked; shoppers search nationally from day one
+- Expand actively as organizer density grows in new markets
 
 *Why They Choose FindA.Sale:*
 1. **Discovery:** Map view, keyword search, neighborhood filters make finding sales easy
@@ -334,7 +335,7 @@ FindA.Sale is a unified estate sale marketplace serving two distinct user groups
 - EstateSales.NET processes an estimated 40,000–60,000 organizer sales annually (based on 7.1M monthly visits ÷ 1.8M unique estate sale shoppers = ~125 shopper visits per organizer-month; 60K organizers × 12 months × 30% active = ~216K sales estimated)
 - At FindA.Sale's 5% fee ($250 per $5K sale) vs. EstateSales.NET's 13–20% ($650–$1K), the switching incentive is $400–$750 per sale
 - Network effects compound: more organizers → more inventory → more shoppers → organizers earn more → migration acceleration
-- Geographic moat: Grand Rapids/Michigan expertise creates first-mover advantage in region before national platforms adapt
+- Category moat: unified platform serving all resale formats (estate sales, yard sales, auctions, flea markets) creates defensibility that single-category platforms cannot match; no competitor currently spans all formats
 
 ### Customer Personas
 
@@ -784,8 +785,8 @@ The estate sale and auction marketplace is highly fragmented, with no single dom
 
 ### Geographic Expansion Plan
 
-**Phase 1: Grand Rapids (Months 1–3)**
-- Focus: 200,000 metro area, ~1,200 estate sales/year
+**Phase 1: Beta Launch — Grand Rapids (Months 1–3)**
+- Focus: Grand Rapids metro as initial organizer recruitment ground; platform supports all sale types (estate, yard, auction, flea market) from day one
 - Target: 5–10 organizers, 100–500 shoppers
 - Method: Direct outreach, local partnerships, in-person networking
 
@@ -977,7 +978,7 @@ $7,407 ÷ $5,000 (avg sale) = 1.48 sales/month
 
 **Strategic Metrics:**
 - **TAM Expansion:** Percent of addressable market captured (regional, then national)
-- **Market Share:** Estimated % of Grand Rapids / Michigan estate sale volume
+- **Market Share:** Estimated % of US estate/yard sale/auction volume (beta measured regionally, then nationally)
 - **NPS (Net Promoter Score):** Organizer and shopper satisfaction (target: 50+)
 - **Support Response Time:** Average first-response time (target: <4 hours)
 

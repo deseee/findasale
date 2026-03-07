@@ -78,7 +78,7 @@
 ### Deprecated / Deferred Indefinitely
 | Feature | Reason |
 |---------|--------|
-| White-label MaaS | Business decision — Grand Rapids validation first |
+| White-label MaaS | Business decision — beta validation first |
 | Consignment Integration | Thrift store POS — post-beta complexity |
 | AR Furniture Preview | Hardware not ready — long-term R&D |
 | Co-Branded Yard Signs | High operational overhead; low revenue; deprecated per research |
@@ -102,7 +102,7 @@
 | Item | Reason | Revisit |
 |------|--------|---------|
 | Video-to-inventory | Vision models can’t reliably segment rooms yet | Late 2026+ |
-| Multi-metro expansion | Grand Rapids validation first | After beta data |
+| Multi-metro expansion | Beta validation first | After beta data |
 
 ---
 

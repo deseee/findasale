@@ -8,6 +8,16 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-07 (session 88 — Sprint 3 + workflow hardening + scope expansion)
+**Worked on:**
+- **Sprint 3 — Shopper Loyalty Program:** Full Architect → Dev → QA pipeline. Coupon model in schema.prisma, couponController.ts (new), routes/coupons.ts (new), stripeController.ts (coupon validation + idempotency fix + webhook), index.ts, CheckoutModal.tsx, purchases.tsx. 4 QA warnings found and fixed.
+- **Workflow hardening:** CORE.md §16 added (Environment Command Hard Gate). 5 .skill packages created (dev-environment, findasale-architect, findasale-dev, findasale-deploy, findasale-marketing). Global CLAUDE.md reviewed by records + workflow — approved final version provided to Patrick.
+- **Scope expansion:** FindA.Sale now officially supports yard sales, auctions, flea markets alongside estate sales. Grand Rapids is beta launch location only — no longer drives product scope. BUSINESS_PLAN.md (6 edits), STATE.md Constraints, roadmap.md (2 lines) all updated. Doc naming convention established: authority docs = ALL_CAPS.md, all others = kebab-case.md. Code deGR-ification queued as Sprint 3.5.
+- **File naming convention locked:** Stale ROADMAP.MD reference in global CLAUDE.md corrected to roadmap.md. Top-level authority docs (CLAUDE.md, CORE.md, STATE.md, STACK.md, SECURITY.md) use ALL-CAPS; everything else lowercase kebab-case.
+**Decisions:** Scope = estate sales, yard sales, auctions, flea markets nationwide. Grand Rapids = beta geography only. Category moat (multi-format) replaces geographic moat in business strategy.
+**Next up:** Patrick: install 5 .skill packages, apply final global CLAUDE.md, run Coupon migration, commit/push Sprint 3. Then: Sprint 3.5 (code deGR-ification, ~10 files) → Sprint 4 (Search by Item Type) → Sprint 5 (Seller Performance Dashboard).
+**Blockers:** Sprint 3 code not yet committed/pushed. Coupon migration not yet run. .skill packages not yet installed. Global CLAUDE.md not yet applied.
+
 ### 2026-03-07 (session 87 — Dockerfile restore + sprints 1+2 shipped)
 **Worked on:**
 - **Dockerfile.production restored:** `--frozen-lockfile` back in (MCP push, commit b82180d). Lockfile was already clean.
@@ -49,11 +59,5 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Blockers:** Patrick's 7 manual items (see STATE.md Beta Launch Target). QA criticals must be fixed before inviting real users.
 
 *Re-wrap addendum:* Workflow fixes applied — entry #38 added to self_healing_skills.md, Rule 4 (fetch-at-wrap) added to SESSION_WRAP_PROTOCOL.md + WRAP_PROTOCOL_QUICK_REFERENCE.md, CORE.md §10 updated with MCP coordination warning.
-
-### 2026-03-06 (session 83 — subagent fleet audit + CRLF root cause fix)
-**Worked on:** Full subagent fleet audit (15 agents reviewed). Opus fleet audit produced detailed agent-by-agent review. Identified 7 critical gaps: no agent handoff protocol, QA never run, UX never consulted, Legal never consulted, Support+CX have no content, dev-environment still references Docker, no e2e test automation. Expanded .gitattributes from `*.md` only to all text file types (kills 397-file CRLF phantom diff permanently). Scrubbed plaintext Neon credentials from STATE.md entry #28 and self_healing_skills.md (SECURITY violation). Confirmed ROADMAP.md v14 is correct (v12 on GitHub was stale). Diagnosed that push.ps1 reported "Everything up-to-date" because audit work was never committed.
-**Decisions:** .gitattributes must cover all text file types, not just *.md. Credentials must never appear in docs — reference .env location instead. Fleet audit recommendations are the new priority queue before beta launch. Neon credentials should be rotated as precaution.
-**Next up:** Execute 8 audit work paths (QA, UX, Legal, Support KB, CX onboarding, Records cleanup, Marketing calendar, Ops verification). Create Agent Quick Reference cheat sheet. Patrick: rotate Neon credentials, push pending commits.
-**Blockers:** Pending commits must be pushed before any further work. Patrick should rotate Neon credentials.
 
 

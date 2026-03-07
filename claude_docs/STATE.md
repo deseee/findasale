@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 87 complete. Dockerfile.production `--frozen-lockfile` restored (commit b82180d via MCP). Sprint 1: AI Sale Description Writer shipped — `generateSaleDescription()` + `isAnthropicAvailable()` in cloudAIService.ts, `generateSaleDescriptionHandler` in saleController.ts, `POST /generate-description` route, ✨ Generate button on create-sale.tsx + edit-sale/[id].tsx (commit 7b1b71d). Sprint 2: Social Post Generator wired — orphaned route registered in index.ts, 4 code quality fixes in socialPostController.ts (prisma singleton, AuthRequest, ANTHROPIC_MODEL env var, API key guard), SocialPostGenerator integrated into dashboard.tsx with 📣 Share button + modal (commit 982dd6e). Phase 2 features 1 + 2 complete. Next: Phase 2 features 3–5 (Shopper Loyalty Program, Search by Item Type, Seller Performance Dashboard) + Phase 3 features 6–7. NOTE: Cowork environment does NOT support custom subagent types — use `general-purpose` agent type only.
+Session 88 complete. Sprint 3 (Shopper Loyalty Program) shipped — 7 files, QA passed. **Coupon migration NOT YET run.** **Sprint 3 files NOT YET committed/pushed.** Workflow hardening done: CORE.md §16, 5 .skill packages (dev-environment, findasale-architect, findasale-dev, findasale-deploy, findasale-marketing) awaiting Patrick install. Global CLAUDE.md final version provided — Patrick must apply. Scope expansion: estate sales + yard sales + auctions + flea markets now in scope; Grand Rapids = beta geography only. BUSINESS_PLAN.md, STATE.md, roadmap.md all updated. Sprint queue: 3.5 (code deGR-ification, ~10 files) → 4 (Search by Item Type) → 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
 
 ---
 
@@ -109,7 +109,7 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 ## Known Gotchas (Production)
 
 - **Railway PORT mismatch** — `PORT=5000` locked in Railway Variables. Must match `EXPOSE 5000` in Dockerfile. Do not remove.
-- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. 62 migrations applied to Neon as of 2026-03-07. Last: `20260307000038_add_organizer_website`.
+- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. 62 migrations applied to Neon as of 2026-03-07. Last: `20260307000038_add_organizer_website`. ⚠️ Pending: `add_coupon_model` migration (Sprint 3) — run `migrate dev` local first, then `migrate deploy` to Neon. Will be migration #63.
 - **Dockerfile.production** — ✅ Restored to `--frozen-lockfile` (session 87, commit b82180d). Lockfile is clean.
 - **Git push workflow** — Patrick uses `.\push.ps1` (repo root) instead of raw `git push`. Self-heals: index.lock, CRLF phantoms, fetch+merge (never rebase). See self-healing entry #36.
 - **Dev stack is now native** — Docker no longer used at all. `image-tagger/` deleted by Patrick (session 81). Backend/frontend/postgres run natively on Windows. See `claude_docs/DEVELOPMENT.md`.
@@ -129,7 +129,7 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 
 - Token efficiency required — keep Tier 1 docs lean
 - Diff-only updates
-- Grand Rapids launch first
+- Grand Rapids beta first — scope is not geography-limited; yard sales, auctions, and flea markets are in scope
 
 ---
 
@@ -137,4 +137,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-07 (session 86 — production outage recovery: uuid→crypto.randomUUID, Dockerfile --no-frozen-lockfile, Organizer.website migration. Workflow audit: 5 self-healing entries, CORE.md lockfile rule, session-safeguards updated. Beta status: GO.)
+Last Updated: 2026-03-07 (session 88 — Sprint 3 Shopper Loyalty Program shipped. CORE.md §16 added. 4 .skill packages created. Coupon migration pending. Sprint 3 files pending commit.)

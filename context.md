@@ -1,10 +1,10 @@
 # Dynamic Project Context
-*Generated at 2026-03-07T13:48:20.161Z*
+*Generated at 2026-03-07T15:08:55.948Z*
 
 ## Git Status
-- **Branch:** main
-- **Commit:** 982dd6e
-- **Remote:** https://github.com/deseee/findasale.git
+- **Branch:** (run git locally)
+- **Commit:** (run git locally)
+- **Remote:** (run git locally)
 
 ## Last Session
 No session log found.
@@ -218,6 +218,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── bountyController.ts
 │   │   │   │   ├── buyingPoolController.ts
 │   │   │   │   ├── checklistController.ts
+│   │   │   │   ├── couponController.ts
 │   │   │   │   ├── disputeController.ts
 │   │   │   │   ├── earningsPdfController.ts
 │   │   │   │   ├── favoriteController.ts
@@ -290,6 +291,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── buyingPools.ts
 │   │   │   │   ├── checklist.ts
 │   │   │   │   ├── contact.ts
+│   │   │   │   ├── coupons.ts
 │   │   │   │   ├── disputes.ts
 │   │   │   │   ├── earningsPdf.ts
 │   │   │   │   ├── favorites.ts
@@ -645,12 +647,13 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 ├── pnpm-workspace.yaml
 ├── push.ps1
 ├── railway.toml
-└── scripts/
-    ├── health-check.ts
-    ├── session-wrap-check.ps1
-    ├── session-wrap-check.sh
-    ├── stress-test.js
-    └── update-context.js
+├── scripts/
+│   ├── health-check.ts
+│   ├── session-wrap-check.ps1
+│   ├── session-wrap-check.sh
+│   ├── stress-test.js
+│   └── update-context.js
+└── ziR1PxfV
 
 ```
 
