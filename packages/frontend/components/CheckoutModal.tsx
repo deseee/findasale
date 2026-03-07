@@ -13,19 +13,23 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 // Inner form rendered inside the Elements provider
 interface PaymentFormProps {
   itemTitle: string;
-  itemPrice: number;
+  itemPrice: number;      // post-discount price (what Stripe charges)
+  originalAmount?: number; // pre-discount item price (for strikethrough display)
   platformFee: number;
+  discountApplied?: number;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, onClose, onSuccess }: PaymentFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tosAgreed, setTosAgreed] = useState(false);
 
+  // itemPrice is already post-discount (server returns finalPriceCents/100)
+  // total = discounted item price + platform fee
   const total = itemPrice + platformFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,7 +66,16 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
       <div className="mb-4 space-y-1 text-sm">
         <div className="flex justify-between text-warm-600">
           <span>Item price</span>
-          <span>${itemPrice.toFixed(2)}</span>
+          <span>
+            {discountApplied > 0 && originalAmount != null ? (
+              <>
+                <span className="line-through text-warm-400 mr-1">${originalAmount.toFixed(2)}</span>
+                <span className="text-green-600 font-medium">${itemPrice.toFixed(2)}</span>
+              </>
+            ) : (
+              `$${itemPrice.toFixed(2)}`
+            )}
+          </span>
         </div>
         <div className="flex justify-between items-center text-warm-600">
           <div className="flex items-center gap-1">
@@ -77,6 +90,12 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
           </div>
           <span>${platformFee.toFixed(2)}</span>
         </div>
+        {discountApplied > 0 && (
+          <div className="flex justify-between text-green-600 font-medium">
+            <span>🎟️ Coupon discount</span>
+            <span>−${discountApplied.toFixed(2)}</span>
+          </div>
+        )}
         <div className="flex justify-between font-bold text-warm-900 border-t border-warm-300 pt-2 mt-2">
           <span>Total Due</span>
           <span>${total.toFixed(2)}</span>
@@ -156,11 +175,19 @@ interface CheckoutModalProps {
 const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: CheckoutModalProps) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [itemPrice, setItemPrice] = useState(0);
+  const [originalAmount, setOriginalAmount] = useState<number | undefined>(undefined);
   const [platformFee, setPlatformFee] = useState(0);
+  const [discountApplied, setDiscountApplied] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [resolvedTitle, setResolvedTitle] = useState(itemTitle);
 
+  // Sprint 3: Coupon entry phase — shown before calling create-payment-intent
+  const [started, setStarted] = useState(!!purchaseId); // auction resumption skips coupon step
+  const [couponInput, setCouponInput] = useState('');
+
   useEffect(() => {
+    if (!started) return; // wait until user clicks "Continue to Pay"
+
     const loadIntent = async () => {
       try {
         let data: any;
@@ -170,15 +197,21 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
           data = response.data;
           if (data.itemTitle) setResolvedTitle(data.itemTitle);
         } else if (itemId) {
-          // Create a new payment intent (include affiliate attribution if present)
+          // Create a new payment intent (include affiliate attribution + coupon if present)
           const affiliateLinkId = typeof window !== 'undefined'
             ? sessionStorage.getItem('affiliateRef') ?? undefined
             : undefined;
+          const trimmedCoupon = couponInput.trim().toUpperCase();
           const response = await api.post('/stripe/create-payment-intent', {
             itemId,
-            ...(affiliateLinkId ? { affiliateLinkId } : {})
+            ...(affiliateLinkId ? { affiliateLinkId } : {}),
+            ...(trimmedCoupon ? { couponCode: trimmedCoupon } : {}),
           });
           data = response.data;
+          if (data.discountApplied > 0) {
+            setDiscountApplied(data.discountApplied);
+            setOriginalAmount(data.originalAmount);
+          }
         } else {
           setLoadError('Invalid checkout configuration.');
           return;
@@ -194,7 +227,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
     };
 
     loadIntent();
-  }, [itemId, purchaseId]);
+  }, [started, itemId, purchaseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSuccess = () => {
     onSuccess();
@@ -218,26 +251,80 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
           </button>
         </div>
 
-        {loadError && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-            {loadError}
+        {/* Sprint 3: Coupon entry step — shown before payment form loads */}
+        {!started && !purchaseId && (
+          <div>
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-warm-700 mb-1">
+                Have a coupon code? <span className="text-warm-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                placeholder="e.g. A3F2C891"
+                maxLength={8}
+                className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
+              />
+              <p className="text-xs text-warm-400 mt-1">
+                Coupons are issued after each completed purchase.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setStarted(true)}
+                className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
+              >
+                Continue to Pay
+              </button>
+            </div>
           </div>
         )}
 
-        {!loadError && !clientSecret && (
-          <div className="py-8 text-center text-warm-500">Loading payment form...</div>
-        )}
+        {/* Payment intent loading / error / form */}
+        {started && (
+          <>
+            {loadError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
+                {loadError}
+                {/* Allow user to retry without coupon if coupon was the issue */}
+                {couponInput && loadError.toLowerCase().includes('coupon') && (
+                  <button
+                    className="block mt-2 text-xs underline text-red-600 hover:text-red-800"
+                    onClick={() => { setCouponInput(''); setLoadError(null); setStarted(false); }}
+                  >
+                    Remove coupon and try again
+                  </button>
+                )}
+              </div>
+            )}
 
-        {clientSecret && (
-          <Elements stripe={stripePromise} options={{ clientSecret }}>
-            <PaymentForm
-              itemTitle={resolvedTitle}
-              itemPrice={itemPrice}
-              platformFee={platformFee}
-              onClose={onClose}
-              onSuccess={handleSuccess}
-            />
-          </Elements>
+            {!loadError && !clientSecret && (
+              <div className="py-8 text-center text-warm-500">Loading payment form...</div>
+            )}
+
+            {clientSecret && (
+              <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <PaymentForm
+                  itemTitle={resolvedTitle}
+                  itemPrice={itemPrice}
+                  originalAmount={originalAmount}
+                  platformFee={platformFee}
+                  discountApplied={discountApplied}
+                  onClose={onClose}
+                  onSuccess={handleSuccess}
+                />
+              </Elements>
+            )}
+          </>
         )}
       </div>
     </div>
