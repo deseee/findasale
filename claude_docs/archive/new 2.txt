@@ -1,0 +1,24 @@
+Now that all these sprints are done let's reflect from a big picture standpoint. for this exerecise we will remove all locked project decisions, tech stack decisions, etc.. and the grand rapids launch focus restraints found in STATE.md 
+given our current position and limited budget and plan our next moves.
+Stress test and bug fix what we have built so far including user flow and edge cases?
+Polish the features we already have?
+More research on users and preferences of other markets?  ebay, amazon, walmart, fleamarkets and yard sales, thrift shops, antique dealers, etc..
+More research on user preferences and their various journey's through the pwa?
+More automations to workflows for organizers?
+More user engagement?
+What other features are we missing that users are clamoring for?
+preparing the human side of things?
+Marketing research fit and launch prep?
+Creating documentation to present to potential investors?
+I'd really like at least rudimentary ai tagging working before we bring in beta testers.  
+I also did some research and there are some public githubs and private companies with photo API's that do similar to what we are building with the ai tagging.
+Should we start taking any "we're a real business now steps" in the human world?
+is all our documentation up to snuff?  concise and inline with our workflow?
+Is our tech stack workable for now? should we get off the local docker setup entirely? would that help solve our recurring git issues between docker desktop and github?  or do we need to keep docker because of the limitation with github mcp?
+Customer service after we start getting users?
+Should we charge different amounts for different tiers of organizers?  for instance one package for people planning a single garage sale, others for estate sale organizers of various sizes, ala carte image processing? what costs do we have to eat and what can we pass through?  are our fees sufficient?  
+
+Use subagents, skills, the web search tool, file search tool, research you've already done and other .md files while doing this exercise. 
+this should be comprehensive as the decisions we make now will form the basis of the roadmap going forward 
+
+ok i read the strategic review... i've decided we need at least 2 (maybe more) distinct paths on the roadmap working in parallels, one for Patrick and one for Claude at least.  There's no reason Claude can't continuously work on, expand and research those areas of the project that don't require specific human intervention and even then many of those decisions can be made while Patrick is taking care of the Human side of things.   Claude has the distinct advantage of being able to work autonomously and create subagents, routines, skills, etc... to accomplish everything we've outlined and more... It's simply a matter of getting the workflow processes right and pointing towards the same goals regardless of how far along any particular path we are.

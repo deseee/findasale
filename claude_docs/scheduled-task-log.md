@@ -1,0 +1,50 @@
+# Scheduled Task Log
+
+Tracks pass/fail status for each automated task. Updated by each task run.
+Review at session start — any FAIL entries need investigation.
+
+---
+
+## Active Tasks
+
+| Task ID | Schedule | Status | Last Run | Notes |
+|---|---|---|---|---|
+| findasale-nightly-context | Daily 2am | — | — | Refreshes context.md |
+| context-freshness-check | Daily 8am | — | — | Flags stale STATE.md/context.md |
+| findasale-health-scout | Weekly Sun 11pm | — | — | Security + code quality scan |
+| findasale-competitor-monitor | Weekly Mon 8am | — | — | Competitor + industry intel (merged) |
+| findasale-ux-spotcheck | Weekly Wed 9am | — | — | Rotating organizer/shopper flow review |
+| findasale-monthly-digest | Monthly 1st 9am | — | — | Feature digest + changelog |
+| findasale-workflow-retrospective | Monthly 8th 9am | — | — | Meta workflow audit (merged from bi-weekly) |
+
+## Manual-Only Tasks
+
+| Task ID | Purpose |
+|---|---|
+| findasale-session-warmup | Pre-session environment health check |
+| findasale-session-wrap | Session end: STATE.md, session-log, next-session-prompt, context |
+
+## Disabled Tasks
+
+| Task ID | Reason |
+|---|---|
+| findasale-workflow-review | Merged into findasale-workflow-retrospective (monthly) |
+| findasale-changelog-tracker | On-demand via findasale-rd — "check for library updates" |
+| weekly-industry-intel | Merged into findasale-competitor-monitor (Mon 8am) |
+
+---
+
+## Run History
+
+*Tasks append entries here on each run. Most recent at top.*
+
+<!-- FORMAT: | TASK-ID | DATE | PASS/WARN/FAIL | Summary | -->
+
+| Task | Date | Result | Notes |
+|---|---|---|---|
+| — | — | — | No runs logged yet |
+
+---
+
+*File owned by: context-maintenance (SESSION START PROTOCOL checks this file)*
+*Last Updated: 2026-03-06 (session 85 — created after Opus fleet audit)*
