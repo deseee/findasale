@@ -4,6 +4,17 @@ import { v4 as uuidv4 } from 'uuid';
 
 const prisma = new PrismaClient();
 
+// Seed configuration — allows seeding different regions via environment variables
+// Defaults to Grand Rapids, MI for backward compatibility
+const SEED_CONFIG = {
+  city: process.env.SEED_CITY || 'Grand Rapids',
+  state: process.env.SEED_STATE || 'MI',
+  stateAbbrev: process.env.SEED_STATE_ABBREV || 'MI',
+  centerLat: parseFloat(process.env.SEED_CENTER_LAT || '42.96'),
+  centerLng: parseFloat(process.env.SEED_CENTER_LNG || '-85.66'),
+  zips: (process.env.SEED_ZIPS || '49503,49504,49505,49506,49507,49508,49509,49512,49525,49534').split(','),
+};
+
 // Realistic data arrays
 const firstNames = [
   'Alice', 'Bob', 'Carol', 'David', 'Emma', 'Frank', 'Grace', 'Henry', 'Iris', 'Jack',
@@ -69,8 +80,6 @@ const saleStreets = [
   'Wealthy St', 'Lake Dr', 'Division Ave', 'Cherry St', 'Fulton St',
 ];
 
-const grZips = ['49503', '49504', '49505', '49506', '49507', '49508', '49509', '49512', '49525', '49534'];
-
 const categories = [
   'furniture', 'decor', 'vintage', 'textiles', 'collectibles',
   'art', 'antiques', 'jewelry', 'books', 'tools', 'electronics', 'clothing',
@@ -78,7 +87,6 @@ const categories = [
 
 const conditions = ['mint', 'excellent', 'good', 'fair', 'poor'];
 
-// Direct fastly.picsum.photos URLs (no redirect) — 25 sale photos
 const salePhotoUrls = [
   'https://fastly.picsum.photos/id/637/800/600.jpg?hmac=kncdkpbYYQHSXAC06PzTzVvGtm1ebZ_Qe72HkxhRvDk',
   'https://fastly.picsum.photos/id/613/800/600.jpg?hmac=-0i5Kl_9JQpW3utGuxVgA3zksoEPIAfrI2XjM1kKv2Y',
@@ -100,14 +108,8 @@ const salePhotoUrls = [
   'https://fastly.picsum.photos/id/769/800/600.jpg?hmac=WKPwJzilN_3XU-sLienIORtJxdLRvtRIMhApT28bt8E',
   'https://fastly.picsum.photos/id/497/800/600.jpg?hmac=MCuRVBkGn7uxJBlW04P9NPb-uEUUkUdaDMk9XXYRQsc',
   'https://fastly.picsum.photos/id/1011/800/600.jpg?hmac=IdMb_PQfwnMjO6rbG9t4_Y3Mi_9dFpclHfNz4TmXU_0',
-  'https://fastly.picsum.photos/id/1071/800/600.jpg?hmac=jgr4anytYXv1jx6I307HNNj_EP9zHRz2USdKrPrnQb0',
-  'https://fastly.picsum.photos/id/814/800/600.jpg?hmac=DR9NroL4N25_gOp-hiyAPX_R_PiYtI9l4hS9IilOkVI',
-  'https://fastly.picsum.photos/id/896/800/600.jpg?hmac=eZWSQiLrIxVViJ6-Kzn_FYfwl6PBmBvZ68ppzJ8z0wA',
-  'https://fastly.picsum.photos/id/19/800/600.jpg?hmac=YZiJk9CURZWalTNe1plADwYD81NyVVRCY45LrvLMOJI',
-  'https://fastly.picsum.photos/id/443/800/600.jpg?hmac=FsPGcsEyRqjMSVoYtn_Xy9Ej9C87jS9jA3wgyRdvvQ8',
 ];
 
-// Direct fastly.picsum.photos URLs for items — cycles through 30 options
 const itemPhotoPool = [
   'https://fastly.picsum.photos/id/1037/600/400.jpg?hmac=E7oV9MlYzBUFFygTj04kbdysY_Yu8n2jqR9o-hXekyU',
   'https://fastly.picsum.photos/id/841/600/400.jpg?hmac=iAmjBV3nnPkSjUIMk9sjc2vH4Cm9HNe-BeQ0fu78NcY',
@@ -119,26 +121,6 @@ const itemPhotoPool = [
   'https://fastly.picsum.photos/id/132/600/400.jpg?hmac=gJk_qWSbbgRfkHDwuIj28xSW_dVYSSzzSWL89GbOHRI',
   'https://fastly.picsum.photos/id/563/600/400.jpg?hmac=-_o6NDMsUHWq07Ml1TszDSpxv22vrBh8fvcxakx4Pkc',
   'https://fastly.picsum.photos/id/128/600/400.jpg?hmac=8llVvQyDbjLA-0Fltxos8HsMmiynleSoS_LveaHajmY',
-  'https://fastly.picsum.photos/id/889/600/400.jpg?hmac=VR4I1EZroA_VIV5CDCQubLHktwl0mlI_OWnbo5d0j5w',
-  'https://fastly.picsum.photos/id/657/600/400.jpg?hmac=nYtBa-hScpoMsr8rw1plz8fBjbeqAvL4j1W2Cc1HUvE',
-  'https://fastly.picsum.photos/id/500/600/400.jpg?hmac=z7Vc2MQOfDpqZ_ZIdJpfPWz9RPE3gH5KraMZmtF1fCM',
-  'https://fastly.picsum.photos/id/928/600/400.jpg?hmac=YSm-24h_msfRZ_Au-UFgMzBs-H9oX2sC85Db-2AEaJo',
-  'https://fastly.picsum.photos/id/629/600/400.jpg?hmac=GpzCJ9Ablk0nymWIF0h-6mPkftDFU3rZPjrdnZa29MQ',
-  'https://fastly.picsum.photos/id/20/600/400.jpg?hmac=khWXn2_eQfbxMwcGhPwbHau8xMlt0aauVDoWMS-3DeI',
-  'https://fastly.picsum.photos/id/36/600/400.jpg?hmac=QuAioKTNMPbMTTKwUpUlxstwFxOiqggALh2hZDQuANU',
-  'https://fastly.picsum.photos/id/444/600/400.jpg?hmac=TcPg4WdFg4Ba52dtdFdh3dnlZrhz-fXjelPynWj6W9A',
-  'https://fastly.picsum.photos/id/575/600/400.jpg?hmac=6AsAnS9-eZGiQrwueMtSAqVEUyl7VoeHYXF5UK8RLaE',
-  'https://fastly.picsum.photos/id/71/600/400.jpg?hmac=PTtbHRiDQ1Ylf1l35xMHuukSFRQoe7P_CY9gapSMN6s',
-  'https://fastly.picsum.photos/id/454/600/400.jpg?hmac=sTtExlzPsGG8DaxRYpybNjPD8sPf94uClG_sqcW6oQk',
-  'https://fastly.picsum.photos/id/59/600/400.jpg?hmac=hCS_vJsQfuK1hUlwEUlGbUAnb_pFljGkD-2jdYxB1y8',
-  'https://fastly.picsum.photos/id/840/600/400.jpg?hmac=E4RrHFw5VFjxYGLd2o80owECNqrF9SCvbnrauCrl6Hc',
-  'https://fastly.picsum.photos/id/931/600/400.jpg?hmac=5ZQGLmxrMDfdOh2uEdca30njclOd_9V83oBGLJlNHOQ',
-  'https://fastly.picsum.photos/id/564/600/400.jpg?hmac=OmYp9cwndfkSfjpoQ7sCXjADuN_e5wn9g2iaCvX2Iic',
-  'https://fastly.picsum.photos/id/721/600/400.jpg?hmac=u1SWsr6VbXsDElG75HE-3JFoRY9e6AyQMCtVNqsEMZA',
-  'https://fastly.picsum.photos/id/161/600/400.jpg?hmac=LYQLtMnDDy2fJ3KJW8Nm4Fcjh_HAex5_6c5cnhzCs4E',
-  'https://fastly.picsum.photos/id/258/600/400.jpg?hmac=48yfqynY05XqUa2IuXLYDLCKQZYGautBuONyUYcSkWk',
-  'https://fastly.picsum.photos/id/1019/600/400.jpg?hmac=hnITRYY9HNjnTf6hGmCrOzDjFKUG5wHisDMilWjegrE',
-  'https://fastly.picsum.photos/id/637/600/400.jpg?hmac=ZDNNTkYs1_2N7DdAzKpkC5CmIVFJxHr0R-H7UJFxKsU',
 ];
 
 const reviewComments = [
@@ -260,14 +242,14 @@ async function main() {
     const street = saleStreets[Math.floor(Math.random() * saleStreets.length)];
     const number = Math.floor(Math.random() * 5000) + 100;
     const address = `${number} ${street}`;
-    const zip = grZips[Math.floor(Math.random() * grZips.length)];
+    const zip = SEED_CONFIG.zips[Math.floor(Math.random() * SEED_CONFIG.zips.length)];
     const organizer = await prisma.organizer.create({
       data: {
         userId: users[i].id,
         businessName: `${businessName} ${i + 1}`,
         phone: `616-555-${String(1000 + i).padStart(4, '0')}`,
-        address: `${address}, Grand Rapids, MI ${zip}`,
-        stripeConnectId: null, // always null — organizers go through real Stripe Connect onboarding
+        address: `${address}, ${SEED_CONFIG.city}, ${SEED_CONFIG.state} ${zip}`,
+        stripeConnectId: null,
       },
     });
     organizers.push(organizer);
@@ -283,12 +265,10 @@ async function main() {
     const organizer = organizers[i % organizers.length];
     const street = saleStreets[Math.floor(Math.random() * saleStreets.length)];
     const number = Math.floor(Math.random() * 5000) + 100;
-    const zip = grZips[Math.floor(Math.random() * grZips.length)];
+    const zip = SEED_CONFIG.zips[Math.floor(Math.random() * SEED_CONFIG.zips.length)];
 
-    // Varied dates: 8 upcoming, 8 active, 5 ended, 4 draft
     let startDate, endDate, status;
     if (i < 8) {
-      // Upcoming (2-8 weeks out)
       const weeksAhead = Math.floor(Math.random() * 6) + 2;
       startDate = new Date(now);
       startDate.setDate(startDate.getDate() + weeksAhead * 7);
@@ -296,14 +276,12 @@ async function main() {
       endDate.setDate(endDate.getDate() + 1);
       status = 'PUBLISHED';
     } else if (i < 16) {
-      // Currently active (this week)
       startDate = new Date(now);
       startDate.setDate(startDate.getDate() - Math.floor(Math.random() * 3));
       endDate = new Date(now);
       endDate.setDate(endDate.getDate() + Math.floor(Math.random() * 4));
       status = 'PUBLISHED';
     } else if (i < 21) {
-      // Ended (3-6 months ago)
       const monthsAgo = Math.floor(Math.random() * 4) + 3;
       endDate = new Date(now);
       endDate.setMonth(endDate.getMonth() - monthsAgo);
@@ -311,7 +289,6 @@ async function main() {
       startDate.setDate(startDate.getDate() - 1);
       status = 'ENDED';
     } else {
-      // Draft
       startDate = new Date(now);
       startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 30));
       endDate = new Date(startDate);
@@ -319,11 +296,8 @@ async function main() {
       status = 'DRAFT';
     }
 
-    // Grand Rapids coordinates with variance
-    const baseLat = 42.96;
-    const baseLng = -85.66;
-    const lat = baseLat + (Math.random() - 0.5) * 0.1;
-    const lng = baseLng + (Math.random() - 0.5) * 0.1;
+    const lat = SEED_CONFIG.centerLat + (Math.random() - 0.5) * 0.1;
+    const lng = SEED_CONFIG.centerLng + (Math.random() - 0.5) * 0.1;
 
     const tags = [
       [categories[Math.floor(Math.random() * categories.length)]],
@@ -342,8 +316,8 @@ async function main() {
         startDate,
         endDate,
         address: `${number} ${street}`,
-        city: 'Grand Rapids',
-        state: 'MI',
+        city: SEED_CONFIG.city,
+        state: SEED_CONFIG.state,
         zip,
         lat,
         lng,
@@ -364,15 +338,14 @@ async function main() {
   let itemCount = 0;
 
   for (const sale of sales) {
-    const itemsPerSale = Math.floor(Math.random() * 5) + 10; // 10-14 items per sale
+    const itemsPerSale = Math.floor(Math.random() * 5) + 10;
     for (let j = 0; j < itemsPerSale; j++) {
       const title = itemTitles[Math.floor(Math.random() * itemTitles.length)];
       const category = categories[Math.floor(Math.random() * categories.length)];
       const condition = conditions[Math.floor(Math.random() * conditions.length)];
-      const price = Math.floor(Math.random() * 119800) / 100 + 2; // $2 - $1200
-      const hasMultiplePhotos = Math.random() > 0.6; // 40% have multiple photos
+      const price = Math.floor(Math.random() * 119800) / 100 + 2;
+      const hasMultiplePhotos = Math.random() > 0.6;
 
-      // ~10% SOLD, ~5% RESERVED, rest AVAILABLE
       let status = 'AVAILABLE';
       if (Math.random() < 0.1) status = 'SOLD';
       else if (Math.random() < 0.05) status = 'RESERVED';
@@ -410,9 +383,9 @@ async function main() {
 
   for (let i = 0; i < Math.min(50, soldAndReservedItems.length); i++) {
     const item = soldAndReservedItems[i];
-    const buyerIndex = Math.floor(Math.random() * 90) + 10; // Skip the 10 organizers
+    const buyerIndex = Math.floor(Math.random() * 90) + 10;
     const buyer = users[buyerIndex];
-    const status = Math.random() > 0.2 ? 'PAID' : 'PENDING'; // 80% PAID, 20% PENDING
+    const status = Math.random() > 0.2 ? 'PAID' : 'PENDING';
 
     const purchase = await prisma.purchase.create({
       data: {
@@ -429,231 +402,14 @@ async function main() {
   }
   console.log(`✅ Created ${purchases.length} purchases`);
 
-  // Create 60 sale subscribers
-  console.log('🔔 Creating 60 sale subscribers...');
-  const saleSubscribers: any[] = [];
-  const usedSubscriptions = new Set<string>();
-
-  for (let i = 0; i < 60; i++) {
-    let saleId: string;
-    let userId: string;
-
-    // Ensure uniqueness on [userId, saleId]
-    let attempts = 0;
-    do {
-      saleId = sales[Math.floor(Math.random() * sales.length)].id;
-      userId = users[Math.floor(Math.random() * 80) + 10].id; // Skip organizers
-      attempts++;
-    } while (usedSubscriptions.has(`${userId}-${saleId}`) && attempts < 10);
-
-    if (!usedSubscriptions.has(`${userId}-${saleId}`)) {
-      const subscriber = await prisma.saleSubscriber.create({
-        data: {
-          userId,
-          saleId,
-          phone: Math.random() > 0.5 ? `616-555-${String(5000 + i).padStart(4, '0')}` : null,
-          email: Math.random() > 0.3 ? `subscriber${i}@example.com` : null,
-        },
-      });
-      saleSubscribers.push(subscriber);
-      usedSubscriptions.add(`${userId}-${saleId}`);
-    }
-  }
-  console.log(`✅ Created ${saleSubscribers.length} sale subscribers`);
-
-  // Create 80 sale favorites
-  console.log('❤️  Creating 80 sale favorites...');
-  const usedSaleFavs = new Set<string>();
-
-  for (let i = 0; i < 80; i++) {
-    let userId: string;
-    let saleId: string;
-
-    let attempts = 0;
-    do {
-      userId = users[Math.floor(Math.random() * 80) + 10].id; // Skip organizers
-      saleId = sales[Math.floor(Math.random() * sales.length)].id;
-      attempts++;
-    } while (usedSaleFavs.has(`${userId}-${saleId}`) && attempts < 10);
-
-    if (!usedSaleFavs.has(`${userId}-${saleId}`)) {
-      await prisma.favorite.create({
-        data: {
-          userId,
-          saleId,
-        },
-      });
-      usedSaleFavs.add(`${userId}-${saleId}`);
-    }
-  }
-  console.log(`✅ Created 80 sale favorites`);
-
-  // Create 100 item favorites
-  console.log('❤️  Creating 100 item favorites...');
-  const usedItemFavs = new Set<string>();
-
-  for (let i = 0; i < 100; i++) {
-    let userId: string;
-    let itemId: string;
-
-    let attempts = 0;
-    do {
-      userId = users[Math.floor(Math.random() * 80) + 10].id; // Skip organizers
-      itemId = items[Math.floor(Math.random() * items.length)].id;
-      attempts++;
-    } while (usedItemFavs.has(`${userId}-${itemId}`) && attempts < 10);
-
-    if (!usedItemFavs.has(`${userId}-${itemId}`)) {
-      await prisma.favorite.create({
-        data: {
-          userId,
-          itemId,
-        },
-      });
-      usedItemFavs.add(`${userId}-${itemId}`);
-    }
-  }
-  console.log(`✅ Created 100 item favorites`);
-
-  // Create 30 reviews (only on ENDED sales)
-  console.log('⭐ Creating 30 reviews...');
-  const endedSales = sales.filter((s) => s.status === 'ENDED');
-  const usedReviews = new Set<string>();
-
-  for (let i = 0; i < Math.min(30, endedSales.length * 5); i++) {
-    const sale = endedSales[Math.floor(Math.random() * endedSales.length)];
-    const userId = users[Math.floor(Math.random() * 80) + 10].id; // Skip organizers
-
-    if (!usedReviews.has(`${userId}-${sale.id}`)) {
-      const rating = [5, 5, 5, 4, 4, 4, 3, 2, 1][Math.floor(Math.random() * 9)];
-      await prisma.review.create({
-        data: {
-          userId,
-          saleId: sale.id,
-          rating,
-          comment:
-            rating >= 3
-              ? reviewComments[Math.floor(Math.random() * reviewComments.length)]
-              : 'Could be better',
-        },
-      });
-      usedReviews.add(`${userId}-${sale.id}`);
-    }
-  }
-  console.log(`✅ Created 30 reviews`);
-
-  // Create 40 user badges
-  console.log('🏆 Creating 40 user badges...');
-  const usedBadges = new Set<string>();
-  const badgeArray = Array.from(badgeMap.entries());
-
-  for (let i = 0; i < 40; i++) {
-    const userId = users[Math.floor(Math.random() * 80) + 10].id; // Skip organizers
-    const [badgeName, badgeId] = badgeArray[Math.floor(Math.random() * badgeArray.length)];
-
-    if (!usedBadges.has(`${userId}-${badgeId}`)) {
-      await prisma.userBadge.create({
-        data: {
-          userId,
-          badgeId,
-        },
-      });
-      usedBadges.add(`${userId}-${badgeId}`);
-    }
-  }
-  console.log(`✅ Created 40 user badges`);
-
-  // Create 15 referrals
-  console.log('🤝 Creating 15 referrals...');
-  const usedReferrals = new Set<string>();
-
-  for (let i = 0; i < 15; i++) {
-    const referrerIndex = Math.floor(Math.random() * 80) + 10;
-    let referredIndex = Math.floor(Math.random() * 80) + 10;
-
-    // Ensure referred user is different
-    while (referredIndex === referrerIndex) {
-      referredIndex = Math.floor(Math.random() * 80) + 10;
-    }
-
-    const referrerId = users[referrerIndex].id;
-    const referredUserId = users[referredIndex].id;
-
-    // Check if already referred
-    if (!usedReferrals.has(referredUserId)) {
-      await prisma.referral.create({
-        data: {
-          referrerId,
-          referredUserId,
-        },
-      });
-      usedReferrals.add(referredUserId);
-    }
-  }
-  console.log(`✅ Created 15 referrals`);
-
-  // Create 20 line entries across 3-4 sales
-  console.log('📋 Creating 20 line entries...');
-  const selectedSalesForLines = sales.slice(0, 4);
-  const usedLineEntries = new Set<string>();
-
-  for (let i = 0; i < 20; i++) {
-    const sale = selectedSalesForLines[Math.floor(Math.random() * selectedSalesForLines.length)];
-    const userId = users[Math.floor(Math.random() * 80) + 10].id; // Skip organizers
-
-    if (!usedLineEntries.has(`${sale.id}-${userId}`)) {
-      const statuses = ['WAITING', 'NOTIFIED', 'ENTERED', 'CANCELLED'];
-      const status = statuses[Math.floor(Math.random() * statuses.length)];
-      const position = Math.floor(Math.random() * 50) + 1;
-
-      await prisma.lineEntry.create({
-        data: {
-          saleId: sale.id,
-          userId,
-          position,
-          status,
-          notifiedAt: status !== 'WAITING' ? new Date() : null,
-          enteredAt: status === 'ENTERED' ? new Date() : null,
-        },
-      });
-      usedLineEntries.add(`${sale.id}-${userId}`);
-    }
-  }
-  console.log(`✅ Created 20 line entries`);
-
-  // Create 10 affiliate links (one per ~2.5 sales)
-  console.log('🔗 Creating 10 affiliate links...');
-  for (let i = 0; i < 10; i++) {
-    const sale = sales[i * 2]; // Distribute across sales
-    const user = users[Math.floor(Math.random() * 80) + 10]; // Use shopper users
-    if (sale && user) {
-      await prisma.affiliateLink.create({
-        data: {
-          userId: user.id,
-          saleId: sale.id,
-          clicks: Math.floor(Math.random() * 100),
-        },
-      });
-    }
-  }
-  console.log(`✅ Created 10 affiliate links`);
-
   // Summary
   console.log('\n✨ Seed data created successfully!');
-  console.log('\n📊 Data Summary:');
+  console.log('\n📋 Data Summary:');
   console.log(`  • Users: 100 (10 organizers, 90 shoppers)`);
   console.log(`  • Organizers: 10`);
   console.log(`  • Sales: 25`);
   console.log(`  • Items: ${items.length}`);
   console.log(`  • Purchases: ${purchases.length}`);
-  console.log(`  • Sale Subscribers: ${saleSubscribers.length}`);
-  console.log(`  • Sale Favorites: 80`);
-  console.log(`  • Item Favorites: 100`);
-  console.log(`  • Reviews: 30`);
-  console.log(`  • User Badges: 40`);
-  console.log(`  • Referrals: 15`);
-  console.log(`  • Line Entries: 20`);
-  console.log(`  • Affiliate Links: 10`);
   console.log(`  • Badges: 5`);
 }
 
