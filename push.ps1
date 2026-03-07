@@ -41,8 +41,10 @@ if ($phantomFiles) {
     # If there are real content changes, warn and abort to prevent data loss.
     $hasRealChanges = $false
     foreach ($file in $phantomFiles) {
-        # Count non-whitespace-only diffs. If any line has actual code changes, flag it.
-        $diff = git diff -- "$file" 2>$null | Where-Object { $_ -match "^[+\-]" -and $_ -notmatch "^[+\-][\s]*$" }
+        # Count non-whitespace-only diffs. --ignore-cr-at-eol excludes CRLF-only changes
+        # so files that differ only in line endings (common after git reset --hard on Windows)
+        # are not flagged as real changes and can be safely cleaned up by checkout.
+        $diff = git diff --ignore-cr-at-eol -- "$file" 2>$null | Where-Object { $_ -match "^[+\-]" -and $_ -notmatch "^[+\-][\s]*$" }
         if ($diff) {
             $hasRealChanges = $true
             break
@@ -109,10 +111,9 @@ if ($behind -gt 0) {
         } elseif ($isConflict) {
             Write-Host ""
             Write-Host "  FAILED - Merge conflicts detected." -ForegroundColor Red
-            Write-Host "  1. Open conflicting files and resolve <<<<<<< markers" -ForegroundColor DarkGray
-            Write-Host "  2. git add <resolved files>" -ForegroundColor DarkGray
-            Write-Host "  3. git commit --no-edit" -ForegroundColor DarkGray
-            Write-Host "  4. Re-run .\push.ps1" -ForegroundColor DarkGray
+            Write-Host "  Paste this output into Cowork and say: 'fix the merge conflict'" -ForegroundColor Yellow
+            Write-Host "  Claude will resolve the markers using Read + Edit + MCP push." -ForegroundColor DarkGray
+            Write-Host "  No manual file editing needed — Claude handles it." -ForegroundColor DarkGray
         } else {
             Write-Host ""
             Write-Host "  FAILED - Merge error. See output above." -ForegroundColor Red
