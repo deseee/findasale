@@ -1,10 +1,10 @@
 # Dynamic Project Context
-*Generated at 2026-03-07T15:08:55.948Z*
+*Generated at 2026-03-07T18:21:01.470Z*
 
 ## Git Status
-- **Branch:** (run git locally)
-- **Commit:** (run git locally)
-- **Remote:** (run git locally)
+- **Branch:** main
+- **Commit:** 0604157
+- **Remote:** https://github.com/deseee/findasale.git
 
 ## Last Session
 No session log found.
@@ -23,7 +23,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 - CLI tools: node
 
 ## Signals
-✓ Env: no drift detected
+⚠ Env drift — in .env.example but missing from .env: DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
 ✓ TODOs: none found
 
 ## Project File Tree
@@ -140,7 +140,8 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── PRICE_ALERTS_IMPLEMENTATION.md
 │   │   ├── SEO_IMPROVEMENTS_SUMMARY.md
 │   │   ├── SHOPPER_PROFILE_IMPLEMENTATION.md
-│   │   └── STRIPE_WEBHOOK_HARDENING.md
+│   │   ├── STRIPE_WEBHOOK_HARDENING.md
+│   │   └── sprint-3.5-scope-degr.md
 │   ├── guides/
 │   │   ├── feedback-to-feature.md
 │   │   ├── incident-response.md
@@ -148,6 +149,9 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── shopper-faq.md
 │   │   ├── support-kb.md
 │   │   └── zapier-webhooks.md
+│   ├── improvement-memos/
+│   │   ├── skill-audit-2026-03-07.md
+│   │   └── workflow-failure-2026-03-07-merge-conflict.md
 │   ├── logs/
 │   │   ├── BETA_CHECKLIST.md
 │   │   ├── README.md
@@ -155,7 +159,6 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── WORKFLOW-SESSION-86-SUMMARY.md
 │   │   ├── scheduled-task-log.md
 │   │   └── session-log.md
-│   ├── next-session-prompt.md
 │   ├── operations/
 │   │   ├── DEVELOPMENT.md
 │   │   ├── OPS.md
@@ -178,6 +181,14 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   ├── self-healing/
 │   │   └── self_healing_skills.md
 │   ├── skills-package/
+│   │   ├── conversation-defaults/
+│   │   │   └── SKILL.md
+│   │   ├── dev-environment/
+│   │   │   └── SKILL.md
+│   │   ├── findasale-dev/
+│   │   │   └── SKILL.md
+│   │   └── findasale-ops/
+│   │       └── SKILL.md
 │   ├── strategy/
 │   │   ├── BUSINESS_PLAN.md
 │   │   ├── COMPLETED_PHASES.md
@@ -208,6 +219,8 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   │   │   ├── stripe.e2e.ts
 │   │   │   │   └── weeklyDigest.e2e.ts
 │   │   │   ├── _triggerDigest.ts
+│   │   │   ├── config/
+│   │   │   │   └── regionConfig.ts
 │   │   │   ├── controllers/
 │   │   │   │   ├── abTestController.ts
 │   │   │   │   ├── adminController.ts
@@ -366,7 +379,7 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (64 migrations)
+│   │   │   ├── migrations/ (65 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -653,7 +666,8 @@ Docker status unavailable — run update-context.js locally (Windows) to capture
 │   ├── session-wrap-check.sh
 │   ├── stress-test.js
 │   └── update-context.js
-└── ziR1PxfV
+├── ziR1PxfV
+└── ziTnO8qK
 
 ```
 

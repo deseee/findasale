@@ -367,4 +367,17 @@ npx prisma migrate dev --name <name>
 2. Claude inlines the actual URL directly into the command — no PowerShell extraction (see entry #28)
 3. Verify expected migration folder exists in `prisma/migrations/` before running
 
-Last Updated: 2026-03-07 (session 89 — updated entries 28+45 for commented Neon URL pattern; added entries 46–49: CREATEDB fix, session env var override, git status before commit, migration pre-flight checklist)
+### 50. Merge Conflict Auto-Resolution — Never Hand Off to Patrick
+**Trigger:** Conflict markers (`<<<<<<< HEAD` / `=======` / `>>>>>>>`) appear in any file during wrap, push, or mid-session merge
+**Root cause:** MCP pushed file X mid-session, then local wrap edits the same file. Or two agents touched the same doc. Patrick is non-technical — he cannot and should not resolve git conflicts manually.
+**Correct behavior:**
+1. Read the conflicted file with Read tool
+2. Identify conflict markers and understand both sides
+3. Decide which version is correct (usually: remote/origin version for docs, or merge both if compatible)
+4. Use Edit tool to remove markers and keep correct content
+5. Push fixed file via GitHub MCP (`mcp__github__push_files`) with message "chore: resolve merge conflict in [file]"
+**Never say:** "Manually resolve the conflict" or "Remove the markers and re-run push.ps1"
+**Always do:** Read → Edit → Push. All three steps happen in the VM with no Patrick involvement.
+**Why this exists:** Session 89 — Claude told Patrick to manually fix conflict markers in session-log.md. Patrick: "I shouldn't have to manually fix your mistakes." This is the highest-priority self-healing pattern because it directly violates the non-technical PM principle.
+
+Last Updated: 2026-03-07 (session 89 continued — added entry #50: merge conflict auto-resolution)

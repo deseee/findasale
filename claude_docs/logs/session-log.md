@@ -8,6 +8,17 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-07 (session 89 continued — Sprint 3.5 + Power User + roadmap redesign + workflow hardening)
+**Worked on:**
+- **Sprint 3.5 (code deGR-ification):** 51 hardcoded Grand Rapids references found across 13 files. All replaced with env var-driven `regionConfig.ts` (backend) and `NEXT_PUBLIC_*` env vars (frontend). 26 code files modified, `regionConfig.ts` created. QA caught 2 bugs: hardcoded "Michigan" in cloudAIService.ts line 239, hardcoded map coordinates in map.tsx line 247 — both fixed. All 30 files (code + docs) pushed to GitHub via MCP in batched commits.
+- **Cowork Power User skill:** New skill created with 7 responsibilities: ecosystem research, skill optimization, autonomous work discovery (reads roadmap.md + research docs), cross-agent coordination, proactive change proposals, connector/plugin scouting, Cowork config optimization. Packaged as .skill and installed.
+- **Roadmap v18 simplified:** Removed CA/CB/CC/CD parallel path encoding. Plain English sections: Patrick's Checklist → Running Automations → Connectors → Feature Pipeline → Sync Points → Deferred & Long-Term Hold → Infrastructure → Maintenance Rules.
+- **Connectors:** Stripe MCP connected. MailerLite MCP connected. Close CRM deferred (requires paid trial).
+- **Workflow failure hardened:** Claude told Patrick to manually fix merge conflict (session-log.md) — Patrick escalated. Self-healing entry #50 added (merge conflict auto-resolution). Conversation-defaults Rule 6 added (never hand off git issues). Workflow failure memo written and pushed.
+**Decisions:** Roadmap uses plain English section names (no more CA/CB/CC/CD). CRM connector deferred until beta scale warrants paid trial. Merge conflicts always resolved by Claude using Read → Edit → MCP push — never handed to Patrick.
+**Next up:** Sprint 4 (Search by Item Type) → Sprint 5 (Seller Performance Dashboard). Weekly Power User scheduled task proposed but not yet created.
+**Blockers:** Patrick needs to run `git merge --abort` then `git reset --hard origin/main` to sync local with MCP pushes. Patrick's 5 manual beta items unchanged.
+
 ### 2026-03-07 (session 89 — Sprint 3 shipped + workflow hardening)
 **Worked on:**
 - **Sprint 3 completion:** Fixed P1012 (session env var $env:DATABASE_URL override), P3014 (CREATEDB privilege on native Postgres), P2011 (seed null constraint on embedding — added `embedding: []`). Ran `prisma migrate dev` locally (migration 20260307153530_add_coupon_model), committed Sprint 3 in 3 commits (7eef1a0, 09955b3, b61f394), deployed Neon migration (63 total applied).
@@ -49,14 +60,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Next up:** Restore `--frozen-lockfile` in Dockerfile.production (run `pnpm install`, commit clean lockfile, push). Patrick: rotate Neon credentials. Continue beta launch prep (Patrick's 5 manual items unchanged).
 **Blockers:** Dockerfile.production still on --no-frozen-lockfile (temporary). Patrick's 5 manual beta items unchanged.
 
-### 2026-03-06 (session 85 — comprehensive session: 4 security fixes, UX audit + 19 fixes, competitive analysis, SCORE business plan, feature R&D, docs restructure)
-**Worked on:**
-- **4 critical security fixes shipped:** (C1) JWT fallback secret removed + startup guard in index.ts, (C2) forgot-password rate limited (5/hr) via express-rate-limit, (C3) ai-feedback-stats protected with authenticate + requireAdmin, (C4) Stripe webhook rotation plan documented in OPS.md
-- **Comprehensive UX audit:** 34 issues identified across organizer dashboard, item photos, checkout, email templates, map CORS, metrics display, loading states. 19 fixes shipped: dashboard sale links, item photo optimization (getOptimizedUrl), Firefox map CORS (crossOrigin:true), email preview links, checkout ToS enforcement, dashboard metrics display, loading state standardization across 6 pages
-- **Competitive analysis:** 11+ platforms analyzed (AuctionZip, EstateBazaar, Facebook Marketplace, eBay, Craigslist, Heritage, Bonanza, Ruby Lane, 1stDibs, Invaluable, Catawiki), SCORE business plan created (claude_docs/strategy/BUSINESS_PLAN.md)
-- **Feature research:** 7 ideas evaluated (AI sale description writer, branded social templates, Stripe Terminal POS, inventory video import, group buying pools, white-label MaaS, mobile app) — highest-ROI: AI description writer (80% infrastructure exists in cloudAIService.ts)
-- **Documentation restructure:** claude_docs/ reorganized into strategy/, operations/, logs/, archive/ subfolders. 28 junk files deleted. STACK.md Docker reference fixed. .gitignore updated for *.skill files
-- **Competitive actions shipped:** support@finda.sale prominent in footer/404/contact. Route optimization on sale+search pages. Pricing transparency in checkout
-**Decisions:** Beta status upgraded from CONDITIONAL GO to GO — all 4 code criticals resolved. Docs reorganized by tier and purpose. AI sale description writer + branded social templates identified as next sprint work.
-**Next up:** Patrick's 5 manual blocking items: confirm 5%/7% fee, Stripe business account, Search Console verification, business cards, beta organizer outreach, Neon credential rotation. Then: AI sale description writer feature (findasale-dev, 1-2 sprints).
-**Blockers:** Patrick's manual items only. No code blockers.

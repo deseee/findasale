@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 89 complete. Sprint 3 (Shopper Loyalty Program) committed, pushed, and Neon migration deployed (63 migrations total). Workflow hardened: CORE.md §2 sprint queue hold rule added, self-healing entries #46–49 added (CREATEDB, session env var, git status discipline, migration pre-flight), 4 skills updated (conversation-defaults, findasale-dev, findasale-ops, dev-environment) with pre-flight checklists. All doc placeholders eradicated. Sprint queue: 3.5 (code deGR-ification, ~10 files) → 4 (Search by Item Type) → 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
+Session 89 (continued) complete. Sprint 3.5 (code deGR-ification) shipped — 26 code files + regionConfig.ts pushed to GitHub via MCP. Cowork Power User skill created and installed. Roadmap v18 simplified (removed CA/CB/CC/CD encoding, plain English sections). Connectors: Stripe + MailerLite connected. Workflow failure hardened: self-healing entry #50 (merge conflict auto-resolution), conversation-defaults Rule 6 (never hand off git issues to Patrick). Sprint queue: 4 (Search by Item Type) → 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
 
 ---
 
@@ -129,4 +129,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-07 (session 89 — Sprint 3 committed + pushed + Neon migration deployed. Workflow hardened: CORE.md §2 sprint queue rule, self-healing entries 46-49, 4 skills updated.)
+Last Updated: 2026-03-07 (session 89 continued — Sprint 3.5 shipped via MCP. Power User skill created. Roadmap v18 simplified. Connectors connected. Self-healing #50 + conversation-defaults Rule 6 added.)
