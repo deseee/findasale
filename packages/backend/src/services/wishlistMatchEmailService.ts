@@ -4,6 +4,7 @@
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { buildEmail, buildItemCard, ItemCardData } from './emailTemplateService';
+import { regionConfig } from '../config/regionConfig';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -134,7 +135,7 @@ export async function notifyWishlistMatches(itemId: string): Promise<void> {
             photoUrls: item.photoUrls,
           },
           saleName: item.sale.title,
-          saleCity: item.sale.city || 'Grand Rapids',
+          saleCity: item.sale.city || regionConfig.city,
         }).catch((err: unknown) => {
           console.error(`[wishlistMatch] Failed to notify ${wishlist.user.email}:`, err);
         })

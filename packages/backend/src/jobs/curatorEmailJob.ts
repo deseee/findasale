@@ -5,12 +5,13 @@
 import cron from 'node-cron';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { regionConfig } from '../config/regionConfig';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL   = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
 
-// ─── Email template ──────────────────────────────────────────────────────────────────────
+// ─── Email template ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 interface UpcomingSale {
   id: string;
@@ -89,7 +90,7 @@ const buildDigestHtml = (
               </table>
 
               <p style="margin:28px 0 0; font-size:14px; color:#6b5f52;">
-                Want to see all sales in Grand Rapids?
+                Want to see all sales in ${regionConfig.city}?
                 <a href="${FRONTEND_URL}"
                    style="color:#d97706; text-decoration:underline;">Browse FindA.Sale →</a>
               </p>
@@ -115,7 +116,7 @@ const buildDigestHtml = (
 </html>`;
 };
 
-// ─── Core logic ──────────────────────────────────────────────────────────────────────
+// ─── Core logic ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const sendWeeklyCuratorDigest = async (): Promise<void> => {
   const now = new Date();
@@ -185,7 +186,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
   console.log(`✓ Weekly curator digest: sent ${sentCount} emails across ${organizers.length} organizers`);
 };
 
-// ─── Schedule: every Monday at 8 AM ─────────────────────────────────────────────────────
+// ─── Schedule: every Monday at 8 AM ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 cron.schedule('0 8 * * 1', async () => {
   console.log('📧 Running weekly curator email digest…');

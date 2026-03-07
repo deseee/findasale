@@ -3,6 +3,7 @@
 
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { regionConfig } from '../config/regionConfig';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -83,7 +84,7 @@ const buildPersonalizedPicks = async (
         photoUrls: photoUrl ? [photoUrl] : undefined,
         saleName: sale.title || 'Estate Sale',
         saleStartDate: new Date(sale.startDate),
-        saleCity: sale.city || 'Grand Rapids',
+        saleCity: sale.city || regionConfig.city,
         saleId: sale.id,
       });
     }
