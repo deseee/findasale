@@ -146,7 +146,7 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 **Trigger:** Claude gives Patrick a production DB command with placeholder `<neon-pooled-url>` or similar
 **Pattern:** Patrick prefers automation and copy-paste-ready commands with no manual lookup required. DB URLs are in `packages/backend/.env` and are stable — always read them and inline them before presenting any migration/seed/deploy command.
 **Fix:** Read `packages/backend/.env` at session start and substitute real values into the command block before presenting it. Never use `<placeholder>` syntax for values Claude can fetch. Never hardcode credentials in documentation — always read from .env at runtime.
-**Neon URLs location:** `packages/backend/.env` (DATABASE_URL and DIRECT_URL)
+**Neon URLs location:** `packages/backend/.env` lines 24–25 — ⚠️ COMMENTED OUT with `#`. The active `DATABASE_URL=` (line 28) is the LOCAL url. `Select-String "^DATABASE_URL="` always returns local. Claude must read the file from the VM directly, strip the leading `# `, and inline the real Neon values — never use PowerShell extraction for this.
 **Test:** Patrick can copy-paste command block without editing anything.
 
 ### 29. Local/GitHub Drift — git pull --rebase Blocked by Unstaged Changes
@@ -322,9 +322,49 @@ git merge origin/main --no-edit
 **Trigger:** During deploy/migration task, Claude asks Patrick for DATABASE_URL, JWT_SECRET, or other env vars instead of reading them from the VM.
 **Root cause:** Claude has access to `packages/backend/.env` from the VM and it contains all production credentials. Asking Patrick to "set" or "provide" credentials wastes a turn and breaks flow when Claude could read them directly.
 **Fix:** At task start, read `packages/backend/.env` into context. Before any command requiring credentials, substitute actual values from the file into the command block. Never use `<placeholder>` syntax for values that exist in .env.
-**Example:** For `prisma migrate deploy`, read the file and inline: `DATABASE_URL="postgresql://..." DIRECT_URL="postgresql://..." pnpm run db:deploy` (no placeholders).
+**Example:** For `prisma migrate deploy`, read the file and inline the real Neon URL directly — no placeholders.
+**⚠️ Neon URL caveat:** Neon URLs are on commented lines (`# DATABASE_URL=`, `# DIRECT_URL=`). Read the file from the VM and strip the `# ` prefix. Do NOT use `Get-Content | Select-String "^DATABASE_URL="` — it returns the local url, not Neon.
 **Prevention:** When giving Patrick any database or deploy command, it must be copy-paste-ready with no manual credential lookup required. If you're about to write `[set YOUR_DATABASE_URL here]`, read .env first instead.
 
 ---
 
-Last Updated: 2026-03-07 (session 86 — added entries 41–45: ESM-only package crash, lockfile sync, schema drift P2022, Railway webhook unstick, .env credential pattern)
+### 46. Prisma migrate dev — P3014 Shadow Database CREATEDB Permission Denied
+**Trigger:** `P3014 permission denied to create database` during `prisma migrate dev` on native Windows Postgres
+**Root cause:** `findasale` user lacks CREATEDB privilege. `prisma migrate dev` requires creating a shadow database and will fail without it.
+**One-time fix:**
+```powershell
+psql -U postgres -c "ALTER USER findasale CREATEDB;"
+```
+Permanent — survives Postgres restarts. Only needs to be re-run after a full Postgres reinstall.
+
+### 47. Session-Level $env:DATABASE_URL Silently Overrides .env (Prisma on Windows)
+**Trigger:** "URL must start with postgresql://" Prisma validation error even though `.env` is correct, OR `prisma migrate dev` connects to the wrong database
+**Root cause:** `$env:DATABASE_URL` set in the current PowerShell session takes precedence over `.env`. Prisma does NOT warn — it silently ignores `.env` when a shell env var exists.
+**Diagnosis:** Run `$env:DATABASE_URL` in PowerShell. If it returns anything unexpected, that's the culprit.
+**Fix:** Explicitly set the correct value before the Prisma command:
+```powershell
+$env:DATABASE_URL="postgresql://findasale:findasale@localhost:5432/findasale"
+$env:DIRECT_URL="postgresql://findasale:findasale@localhost:5432/findasale"
+npx prisma migrate dev --name <name>
+```
+
+### 48. git status Before Every git add List — Never Compile from Memory
+**Trigger:** `push.ps1` reports "Uncommitted changes detected" after a commit that seemed complete
+**Root cause:** Claude compiled the `git add` list from memory, not `git status`. Files modified during the sprint outside Claude's direct edits get missed. Also: VM-level `rm` does not stage a deletion in git — tracked file deletions require `git rm`.
+**Fix:** Before giving Patrick any `git add` list, Claude runs `git status` from the VM and uses that output as the authoritative list.
+**Deletion rule:** Always `git rm <file>` for tracked file removals, never `rm <file>`.
+**Commit grouping:** Feature/code files in one commit, doc/wrap files in a separate commit.
+
+### 49. Migration Pre-Flight Checklist
+**Trigger:** Any `prisma migrate dev` or `prisma migrate deploy` command about to be issued
+**Pre-flight for `migrate dev` (local):**
+1. Run `$env:DATABASE_URL` in PowerShell — if set to anything other than localhost, clear or override it (see entry #47)
+2. Confirm `findasale` user has CREATEDB — one-time fix in entry #46
+3. Confirm the new model/field exists in schema.prisma before running
+
+**Pre-flight for `migrate deploy` (Neon):**
+1. Claude reads `packages/backend/.env` from VM — finds the commented `# DATABASE_URL=` Neon line
+2. Claude inlines the actual URL directly into the command — no PowerShell extraction (see entry #28)
+3. Verify expected migration folder exists in `prisma/migrations/` before running
+
+Last Updated: 2026-03-07 (session 89 — updated entries 28+45 for commented Neon URL pattern; added entries 46–49: CREATEDB fix, session env var override, git status before commit, migration pre-flight checklist)

@@ -95,8 +95,7 @@ Two SQL files in migrations folder do not follow the timestamped naming conventi
 **Action:** Patrick should confirm in Neon dashboard that these are applied. If not, run:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[pooled neon url]"
-$env:DIRECT_URL="[direct neon url]"
+# Claude reads packages/backend/.env from VM — Neon URLs on commented lines 24-25. See self-healing entry #28.
 npx prisma migrate deploy
 ```
 

@@ -89,8 +89,8 @@ cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://findasale:findasale@localhost:5432/findasale"
 npx prisma migrate dev --name add_coupon_model
 # Then Neon production:
-$env:DATABASE_URL="[pooled neon url from packages/backend/.env]"
-$env:DIRECT_URL="[direct neon url from packages/backend/.env]"
+# Claude reads packages/backend/.env from VM — Neon URLs are commented lines 24-25
+# Claude inlines real values here. See self-healing entry #28.
 npx prisma migrate deploy
 ```
 Migration #63. After it runs: update STATE.md Known Gotchas count from 62 → 63.
