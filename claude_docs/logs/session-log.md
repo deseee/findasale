@@ -8,6 +8,20 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-07 (session 92 — Legal ToS + health scout triage + Sprint 4a FTS backend)
+**Worked on:**
+- **Legal ToS (terms.tsx):** 7 targeted edits — meta description, Section 2 scope, Section 4 opener, INSERT consignment disclaimer (Legal Authority to Sell + FindA.Sale's Limited Role), expanded Cancellations → Fulfillment and Cancellation Obligations (24-hr ack, 30-day pickup, dispute escalation), INSERT Section 4a Sales Tax Obligations, expanded Buyer Terms dispute resolution (7-day timeline, Stripe escalation, Contact Support).
+- **Legal (privacy.tsx):** 2 edits — meta description + Location Information subsection updated to reference all sale types.
+- **Health scout triage:** 2 HIGH findings confirmed already resolved (.env.example already had all 8 region vars; frontend .env.local.example had NEXT_PUBLIC_DEFAULT_CITY). Admin findMany finding also false alarm — all 5 queries have `take` limits. 5 of 6 mediums deferred post-beta. 1 medium (coupon rate limiting) → pre-beta critical.
+- **Coupon rate limiting (coupons.ts):** Added `express-rate-limit` on POST /api/coupons/validate. User-ID-keyed (10 attempts/min). Prevents brute-force coupon guessing.
+- **Sprint 4a FTS backend:** Migration SQL (pg_trgm, tsvector generated column, 4 GIN/composite indexes), `itemSearchService.ts` (FTS + ILIKE fallback + filteredSearch, facets, categories), `searchController.ts` (searchItemsHandler + getItemCategoriesHandler), `items.ts` route updated (/search and /categories added before /:id).
+- **Skill files verified:** health-scout-improved.skill and findasale-dev-improved.skill confirmed installed.
+- **MailerLite spec summarized:** 3-email sequence, 15-minute setup, all Patrick manual actions.
+- **Marketing output reviewed:** Week 1 social posts presented.
+**Decisions:** All 4 Sprint 4a files follow existing import patterns. TypeScript check blocked by Cowork pnpm environment — Patrick to run `pnpm tsc --noEmit` in packages/backend from PowerShell to verify.
+**Next up:** Sprint 4b frontend search UI. Run Neon migration 20260310000001 before testing end-to-end.
+**Blockers:** Patrick needs to run `.\push.ps1` to push all session 92 changes. Neon migration pending deployment.
+
 ### 2026-03-07 (session 91 — Health Scout pre-beta scan)
 **Worked on:**
 - **Pre-beta health scan:** Comprehensive security and code quality audit using health-scout skill across three areas: (1) Sprint 3 coupon logic (validation, Stripe integration, edge cases); (2) Sprint 3.5 regionConfig completeness and env var fallback behavior; (3) General pre-beta sweep for secrets, console logging, auth gaps, SSR risks, Prisma safety.

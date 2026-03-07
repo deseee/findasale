@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 91 complete. Power User sweep finished (CA/CB/CC/CD paths). Sprint 4 (Search by Item Type) architecture ADR + UX spec produced. All agents dispatched and tasks completed. Session 91 also discovered empirical parallel agent dispatch limit (max 3 per call) — documented in CORE.md §11. Sprint queue: 4 (Search by Item Type) → 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
+Session 92 complete. Legal ToS updates shipped (terms.tsx + privacy.tsx). Health scout findings routed: 2 high already resolved, 5 of 6 mediums deferred to post-beta, 1 medium (coupon rate limiting) fixed. Sprint 4a (PostgreSQL FTS search) backend fully implemented: migration, itemSearchService.ts, searchController.ts, items.ts route. Sprint queue: 4b (frontend search UI) → 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
 
 ---
 
@@ -32,7 +32,7 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-All CA/CB/CC/CD parallel path tasks complete (sessions 76–89). Sprint 3 (Shopper Loyalty Program) and Sprint 3.5 (Code deGR-ification) complete. Sprint 4 (Search by Item Type) is next — architecture ADR and UX spec both produced in session 91. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
+Sprint 4b — frontend search UI (ItemSearch.tsx, FilterSidebar.tsx, ItemSearchResults.tsx, hooks/useItemSearch.ts, pages/search.tsx). Backend is fully complete (Sprint 4a shipped session 92). Neon migration `20260310000001_add_item_fulltext_search_indexes` needs `prisma migrate deploy` on production before Sprint 4b frontend can be tested end-to-end. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
@@ -106,4 +106,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-07 (session 90 — push.ps1 fully hardened: CRLF fix, encoding fix, doc-conflict auto-resolution. Self-healing #51 + #52. CORE.md wrap-only docs rule added.)
+Last Updated: 2026-03-07 (session 92 — Legal ToS shipped, coupon rate limiting fixed, Sprint 4a FTS backend complete, health scout high findings confirmed already resolved.)

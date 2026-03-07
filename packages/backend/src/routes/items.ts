@@ -15,9 +15,14 @@ import {
 } from '../controllers/itemController';
 import { authenticate } from '../middleware/auth';
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
+import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Sprint 4a: FTS search endpoints — MUST be declared before /:id to avoid param capture
+router.get('/search', searchItemsHandler);           // GET /api/items/search?q=...
+router.get('/categories', getItemCategoriesHandler); // GET /api/items/categories
 
 router.get('/:id', getItemById);
 router.get('/', getItemsBySaleId);
