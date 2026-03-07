@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
+import { regionConfig } from '../config/regionConfig';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -13,10 +14,10 @@ export interface PlannerChatRequest {
   messages: ChatMessage[];
 }
 
-const SYSTEM_PROMPT = `You are an estate sale planning assistant for FindA.Sale, a platform in Grand Rapids, Michigan.
+const SYSTEM_PROMPT = `You are an estate sale planning assistant for FindA.Sale, a platform in ${regionConfig.city}, ${regionConfig.state}.
 
 You help families, executors, and individuals plan and execute estate sales. You are knowledgeable about:
-- Michigan estate sale regulations and legal requirements
+- ${regionConfig.state} estate sale regulations and legal requirements
 - Pricing antiques, furniture, and household goods
 - Organizing and staging items
 - Advertising and promoting sales

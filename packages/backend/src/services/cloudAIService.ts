@@ -11,6 +11,7 @@
  */
 
 import axios from 'axios';
+import { regionConfig } from '../config/regionConfig';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -123,7 +124,7 @@ async function getHaikuAnalysis(
             },
             {
               type: 'text',
-              text: `You are an expert estate sale cataloger for a Grand Rapids, Michigan marketplace.${labelContext}
+              text: `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
@@ -131,7 +132,7 @@ Title guidelines: Be specific. Include material, era, or maker if visible. Examp
 Description: 1–2 sentences. Note condition details and standout features. Mention any maker marks, damage, or signs of age.
 Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
 Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
-Price: Realistic Grand Rapids estate sale price (typically 20–50% of retail). Consider condition heavily.
+Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
 Tags: 3–6 short tags collectors search for. Examples: "Mid-Century Modern", "Vintage", "Cast Iron", "Hand-painted", "Art Deco", "Set of 4".
 
 {
@@ -218,7 +219,7 @@ export interface SaleDescriptionInput {
 export async function generateSaleDescription(input: SaleDescriptionInput): Promise<string | null> {
   if (!ANTHROPIC_API_KEY) return null;
 
-  const { title, tags = [], city = 'Grand Rapids', isAuctionSale = false, startDate, endDate } = input;
+  const { title, tags = [], city = regionConfig.city, isAuctionSale = false, startDate, endDate } = input;
 
   const tagContext = tags.length > 0 ? `Featured categories/items: ${tags.join(', ')}.` : '';
   const dateContext =
@@ -235,7 +236,7 @@ export async function generateSaleDescription(input: SaleDescriptionInput): Prom
       messages: [
         {
           role: 'user',
-          content: `You are helping an estate sale organizer in ${city}, Michigan write a compelling 2–3 sentence listing description.
+          content: `You are helping an estate sale organizer in ${city}, ${regionConfig.state} write a compelling 2–3 sentence listing description.
 
 Sale title: "${title}"
 ${tagContext}
@@ -311,7 +312,7 @@ export async function suggestPrice(
         messages: [
           {
             role: 'user',
-            content: `You are an estate sale pricing expert. Based on typical Grand Rapids, Michigan estate sale prices, suggest a fair price for this item.
+            content: `You are an estate sale pricing expert. Based on typical ${regionConfig.city}, ${regionConfig.state} estate sale prices, suggest a fair price for this item.
 
 Item: ${title}
 Category: ${category}
