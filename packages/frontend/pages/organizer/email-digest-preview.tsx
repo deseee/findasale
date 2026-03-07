@@ -230,7 +230,7 @@ export default function EmailDigestPreview() {
                   {/* CTA Button */}
                   <div className="text-center py-6 border-t border-gray-200">
                     <a
-                      href="#"
+                      href="/organizer/dashboard"
                       className="inline-block px-7 py-3 bg-teal-700 text-white rounded-lg font-semibold text-sm hover:bg-teal-800"
                     >
                       View Your Dashboard →
@@ -242,15 +242,15 @@ export default function EmailDigestPreview() {
                 <div className="bg-gray-50 px-8 py-5 border-t border-gray-200 text-center">
                   <p className="text-xs text-gray-600">
                     You're receiving this because you're an organizer on{' '}
-                    <a href="#" className="text-teal-700">
+                    <a href="/" className="text-teal-700">
                       FindA.Sale
                     </a>
                     .<br />
-                    <a href="#" className="text-gray-600 hover:text-gray-900">
+                    <a href="/organizer/email-digest-preview" className="text-gray-600 hover:text-gray-900">
                       Manage email preferences
                     </a>
                     {' '}·{' '}
-                    <a href="#" className="text-gray-600 hover:text-gray-900">
+                    <a href="/unsubscribe" className="text-gray-600 hover:text-gray-900">
                       Unsubscribe
                     </a>
                   </p>

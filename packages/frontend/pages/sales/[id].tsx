@@ -19,7 +19,7 @@ import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 3
 import AuctionCountdown from '../../components/AuctionCountdown';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import SaleTourGallery from '../../components/SaleTourGallery';
-import { getThumbnailUrl } from '../../lib/imageUtils';
+import { getThumbnailUrl, getOptimizedUrl, getLqipUrl } from '../../lib/imageUtils';
 import ReviewsSection from '../../components/ReviewsSection';
 import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
@@ -805,9 +805,9 @@ const SaleDetailPage = () => {
                 <div key={item.id} className="border rounded-lg overflow-hidden bg-white">
                   <Link href={`/items/${item.id}`} className="block">
                     {item.photoUrls.length > 0 ? (
-                      <img 
-                        src={item.photoUrls[0]} 
-                        alt={item.title} 
+                      <img
+                        src={getOptimizedUrl(item.photoUrls[0])}
+                        alt={item.title}
                         className="w-full h-48 object-cover"
                        loading="lazy"/>
                     ) : (

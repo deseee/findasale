@@ -18,6 +18,7 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
+import Skeleton from '../../../components/Skeleton';
 
 type ActiveTab = 'manual' | 'upload' | 'batch';
 
@@ -198,7 +199,21 @@ const AddItemsDetailPage = () => {
     createItemMutation.mutate(payload);
   };
 
-  if (isLoading || !saleId) return <div>Loading...</div>;
+  if (isLoading || !saleId) {
+    return (
+      <div className="min-h-screen bg-white py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <Skeleton className="h-10 w-48 mb-8" />
+          <Skeleton className="h-12 w-96 mb-6" />
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-20" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -590,7 +605,11 @@ const AddItemsDetailPage = () => {
             </h2>
 
             {itemsLoading ? (
-              <p>Loading items...</p>
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-24" />
+                ))}
+              </div>
             ) : items && items.length > 0 ? (
               <div className="space-y-4">
                 {items.map((item: any) => (

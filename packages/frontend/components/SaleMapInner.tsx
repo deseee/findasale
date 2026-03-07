@@ -22,6 +22,7 @@ const orangeIcon = new L.Icon({
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
+  crossOrigin: true,
 });
 
 // Status-based colored markers
@@ -32,6 +33,7 @@ const greenIcon = new L.Icon({
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
+  crossOrigin: true,
 });
 
 const amberIcon = new L.Icon({
@@ -41,6 +43,7 @@ const amberIcon = new L.Icon({
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
+  crossOrigin: true,
 });
 
 const grayIcon = new L.Icon({
@@ -50,6 +53,7 @@ const grayIcon = new L.Icon({
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
+  crossOrigin: true,
 });
 
 // Helper: fly to user location
@@ -94,7 +98,7 @@ const SaleMapInner = ({
       <MapContainer
         center={singlePin ? [singlePin.lat, singlePin.lng] : center}
         zoom={singlePin ? 15 : zoom}
-        style={{ height, width: '100%', borderRadius: '8px' }}
+        style={{ height, width: '100%', borderRadius: '8px', zIndex: 10 }}
         scrollWheelZoom={false}
       >
         <TileLayer

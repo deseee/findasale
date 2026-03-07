@@ -17,6 +17,7 @@ import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 import PickupSlotManager from '../../../components/PickupSlotManager';
+import Skeleton from '../../../components/Skeleton';
 
 const EditSalePage = () => {
   const router = useRouter();
@@ -100,7 +101,22 @@ const EditSalePage = () => {
     }
   };
 
-  if (authLoading || isLoading) return <div>Loading...</div>;
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-white py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          <Skeleton className="h-10 w-48 mb-8" />
+          <div className="space-y-4">
+            <Skeleton className="h-12" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

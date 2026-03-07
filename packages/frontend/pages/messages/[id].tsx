@@ -78,7 +78,10 @@ const MessageThreadPage = () => {
     return (
       <div className="min-h-screen bg-warm-50 flex items-center justify-center">
         <Head><title>Messages – FindA.Sale</title></Head>
-        <div className="animate-spin w-8 h-8 rounded-full border-2 border-amber-600 border-t-transparent" />
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 rounded-full border-2 border-amber-600 border-t-transparent mx-auto mb-4" />
+          <p className="text-warm-600">Loading conversation...</p>
+        </div>
       </div>
     );
   }
@@ -88,8 +91,10 @@ const MessageThreadPage = () => {
       <div className="min-h-screen bg-warm-50 flex items-center justify-center p-8">
         <Head><title>Messages – FindA.Sale</title></Head>
         <div className="text-center">
-          <p className="text-warm-600 mb-4">Conversation not found.</p>
-          <Link href="/messages" className="text-amber-600 hover:underline">Back to messages</Link>
+          <p className="text-warm-600 mb-6">Conversation not found.</p>
+          <Link href="/messages" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors">
+            Back to messages
+          </Link>
         </div>
       </div>
     );

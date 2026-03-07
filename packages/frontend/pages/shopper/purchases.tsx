@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
+import Skeleton from '../../components/Skeleton';
 
 const ShopperPurchasesPage = () => {
   const router = useRouter();
@@ -31,7 +32,20 @@ const ShopperPurchasesPage = () => {
     enabled: !!user?.id,
   });
 
-  if (authLoading) return <div>Loading...</div>;
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-white py-8">
+        <div className="max-w-6xl mx-auto px-4">
+          <Skeleton className="h-10 w-64 mb-8" />
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-20" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -56,7 +70,11 @@ const ShopperPurchasesPage = () => {
           </div>
 
           {isLoading ? (
-            <p>Loading purchases...</p>
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-24" />
+              ))}
+            </div>
           ) : isError ? (
             <div className="text-center py-12">
               <p className="text-warm-600 mb-4">Failed to load purchases. Please try again.</p>

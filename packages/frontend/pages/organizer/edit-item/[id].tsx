@@ -17,6 +17,7 @@ import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
 import Head from 'next/head';
 import Link from 'next/link';
+import Skeleton from '../../../components/Skeleton';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -73,7 +74,21 @@ const EditItemPage = () => {
     },
   });
 
-  if (authLoading || isLoading) return <div>Loading...</div>;
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-white py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          <Skeleton className="h-10 w-48 mb-8" />
+          <div className="space-y-4">
+            <Skeleton className="h-12" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

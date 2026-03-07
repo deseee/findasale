@@ -43,7 +43,7 @@ const ChecklistPage = () => {
       <div className="min-h-screen bg-warm-50 p-4">
         <div className="max-w-4xl mx-auto">
           <Skeleton className="h-10 w-64 mb-8" />
-          <Skeleton className="h-screen w-full" />
+          <Skeleton className="h-96 w-full" />
         </div>
       </div>
     );

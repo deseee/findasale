@@ -16,6 +16,7 @@ import ItemShareButton from '../../components/ItemShareButton';
 import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useHeartAnimation } from '../../hooks/useHeartAnimation';
+import Skeleton from '../../components/Skeleton';
 
 interface Item {
   id: string;
@@ -499,7 +500,23 @@ const ItemDetailPage = () => {
     }
   }, [wishlistDropdownOpen]);
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-warm-50">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-warm-50 py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Skeleton className="h-96" />
+            <div className="space-y-4">
+              <Skeleton className="h-10" />
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-20" />
+              <Skeleton className="h-12 w-48" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (isError) return (
   <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 gap-4">
     <p className="text-warm-700 text-lg">Failed to load item details.</p>

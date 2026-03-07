@@ -23,6 +23,7 @@ import OnboardingWizard from '../../components/OnboardingWizard'; // Onboarding 
 import Head from 'next/head';
 import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
+import Skeleton from '../../components/Skeleton';
 
 // Phase 22: Creator Tier benefits (frontend-only display)
 const TIER_BENEFITS: Record<string, string[]> = {
@@ -65,7 +66,17 @@ const OrganizerDashboard = () => {
   const { data: salesData, isLoading: salesLoading } = useQuery({
     queryKey: ['organizer-sales', user?.id],
     queryFn: async () => {
-      const response = await api.get('/organizer/sales');
+      const response = await api.get('/sales/mine');
+      return response.data.sales;
+    },
+    enabled: !!user?.id,
+  });
+
+  // Fetch organizer analytics (total items, revenue)
+  const { data: analyticsData } = useQuery({
+    queryKey: ['organizer-analytics', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/organizers/me/analytics');
       return response.data;
     },
     enabled: !!user?.id,
@@ -138,7 +149,19 @@ const OrganizerDashboard = () => {
   });
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-warm-50 py-8">
+        <div className="max-w-6xl mx-auto px-4">
+          <Skeleton className="h-10 w-64 mb-4" />
+          <Skeleton className="h-6 w-96 mb-8" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -225,11 +248,11 @@ const OrganizerDashboard = () => {
                 </div>
                 <div className="card p-6">
                   <p className="text-warm-600 text-sm">Total Items</p>
-                  <p className="text-3xl font-bold text-warm-900">—</p>
+                  <p className="text-3xl font-bold text-warm-900">{analyticsData?.itemsSold + analyticsData?.itemsUnsold || 0}</p>
                 </div>
                 <div className="card p-6">
-                  <p className="text-warm-600 text-sm">Earnings (30d)</p>
-                  <p className="text-3xl font-bold text-warm-900">—</p>
+                  <p className="text-warm-600 text-sm">Total Revenue</p>
+                  <p className="text-3xl font-bold text-warm-900">${(analyticsData?.totalRevenue || 0).toFixed(2)}</p>
                 </div>
               </div>
 
@@ -377,6 +400,12 @@ const OrganizerDashboard = () => {
                           <p className="text-sm text-warm-600 mb-4">{sale.city}, {sale.state}</p>
                           <div className="flex gap-2 flex-wrap items-center">
                             <Link
+                              href={`/sales/${sale.id}`}
+                              className="text-sm text-amber-600 hover:underline font-semibold"
+                            >
+                              View Sale
+                            </Link>
+                            <Link
                               href={`/organizer/edit-sale/${sale.id}`}
                               className="text-sm text-amber-600 hover:underline"
                             >
@@ -441,7 +470,12 @@ const OrganizerDashboard = () => {
             </>
           )}
 
-          {activeTab === 'analytics' && <div className="text-warm-600">Analytics coming soon...</div>}
+          {activeTab === 'analytics' && (
+            <div className="text-center py-16">
+              <p className="text-warm-600 text-lg mb-4">Advanced analytics dashboard coming soon</p>
+              <p className="text-warm-500 text-sm">Check back soon for detailed insights and performance metrics</p>
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -27,6 +27,7 @@ import NotificationPreferences from '../../components/NotificationPreferences';
 import MyPickupAppointments from '../../components/MyPickupAppointments';
 import EmptyState from '../../components/EmptyState';
 import StreakWidget from '../../components/StreakWidget'; // CD2 Phase 2: Streak Challenges
+import Skeleton from '../../components/Skeleton';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -65,7 +66,20 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-warm-50 py-8">
+        <div className="max-w-6xl mx-auto px-4">
+          <Skeleton className="h-10 w-64 mb-8" />
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-40" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
