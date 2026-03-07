@@ -609,9 +609,37 @@ const SaleDetailPage = () => {
               <p className="text-sm text-warm-600 mb-2">
                 <span className="font-medium text-warm-900">Phone:</span> {sale.organizer.phone}
               </p>
-              <p className="text-sm text-warm-600">
+              <p className="text-sm text-warm-600 mb-4">
                 <span className="font-medium text-warm-900">Address:</span> {sale.organizer.address}
               </p>
+
+              {/* Route Planning Button */}
+              {sale.address && sale.city && sale.state && (
+                <button
+                  onClick={() => {
+                    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                      `${sale.address}, ${sale.city}, ${sale.state}`
+                    )}`;
+                    window.open(mapsUrl, '_blank');
+                  }}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6m-6-10l3-3m0 0l3 3m-3-3v10"
+                    />
+                  </svg>
+                  Plan My Route in Maps
+                </button>
+              )}
             </div>
 
             {/* Live Activity Feed */}

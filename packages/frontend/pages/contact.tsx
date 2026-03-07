@@ -30,27 +30,51 @@ const ContactPage = () => {
   return (
     <>
       <Head>
-        <title>Contact Us</title>
+        <title>Contact Support | FindA.Sale</title>
         <meta property="og:title" content="Contact FindA.Sale" />
-        <meta property="og:description" content="Get in touch with the FindA.Sale team. We're here to help organizers and shoppers in Grand Rapids, Michigan." />
+        <meta property="og:description" content="Get in touch with the FindA.Sale support team. We're here to help organizers and shoppers in Grand Rapids, Michigan." />
         <meta property="og:url" content="https://finda.sale/contact" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
       </Head>
-      <div className="min-h-screen bg-white">
-        <div className="max-w-2xl mx-auto px-4 py-12">
-          <h1 className="text-3xl font-bold text-warm-900 mb-4">Contact Us</h1>
-          <p className="text-warm-600 mb-8">
-            Have a question or feedback? We'd love to hear from you.
+      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white">
+        <div className="max-w-3xl mx-auto px-4 py-12">
+          <h1 className="text-4xl font-bold text-warm-900 mb-4">Contact Support</h1>
+          <p className="text-warm-600 mb-8 text-lg">
+            We're here to help organizers and shoppers. Reach out with any questions or feedback.
           </p>
 
+          {/* Quick contact options */}
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            <div className="bg-white border border-warm-200 rounded-lg p-6">
+              <div className="text-2xl mb-2">📧</div>
+              <h2 className="text-lg font-bold text-warm-900 mb-2">Email Support</h2>
+              <a href="mailto:support@finda.sale" className="text-amber-600 hover:text-amber-700 font-medium">
+                support@finda.sale
+              </a>
+              <p className="text-sm text-warm-600 mt-3">
+                We typically respond within 4 hours during business hours.
+              </p>
+            </div>
+
+            <div className="bg-white border border-warm-200 rounded-lg p-6">
+              <div className="text-2xl mb-2">📋</div>
+              <h2 className="text-lg font-bold text-warm-900 mb-2">Use This Form</h2>
+              <p className="text-sm text-warm-600">
+                Fill out the contact form below and we'll respond promptly to your inquiry.
+              </p>
+            </div>
+          </div>
+
           {submitted && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded text-green-800">
-              Thanks for reaching out! We'll get back to you soon.
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 font-medium">
+              ✓ Thanks for reaching out! We'll get back to you within 4 hours.
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-white border border-warm-200 rounded-lg p-8">
+            <h2 className="text-2xl font-bold text-warm-900 mb-6">Send us a Message</h2>
+            <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-warm-700 mb-1">
                 Name
@@ -96,11 +120,12 @@ const ContactPage = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg disabled:opacity-50 transition-colors"
             >
               {isSubmitting ? 'Sending...' : 'Send Message'}
             </button>
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </>

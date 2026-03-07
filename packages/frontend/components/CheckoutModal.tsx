@@ -64,14 +64,26 @@ const PaymentForm = ({ itemTitle, itemPrice, platformFee, onClose, onSuccess }: 
           <span>Item price</span>
           <span>${itemPrice.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between text-warm-600">
-          <span>Platform fee</span>
+        <div className="flex justify-between items-center text-warm-600">
+          <div className="flex items-center gap-1">
+            <span>Platform fee (5%)</span>
+            <button
+              type="button"
+              className="text-xs text-warm-400 hover:text-warm-600 cursor-help"
+              title="FindA.Sale's 5% service fee helps us maintain the platform, provide customer support, and improve features for organizers and shoppers."
+            >
+              ℹ️
+            </button>
+          </div>
           <span>${platformFee.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between font-bold text-warm-900 border-t pt-1 mt-1">
-          <span>Total</span>
+        <div className="flex justify-between font-bold text-warm-900 border-t border-warm-300 pt-2 mt-2">
+          <span>Total Due</span>
           <span>${total.toFixed(2)}</span>
         </div>
+        <p className="text-xs text-warm-500 mt-2">
+          No hidden fees. What you see is what you pay.
+        </p>
       </div>
 
       <div className="mb-5">

@@ -200,9 +200,19 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <h3 className="text-lg font-bold mb-4">FindA.Sale</h3>
-              <p className="text-warm-400">
+              <p className="text-warm-400 mb-4">
                 Helping you find the best estate sales and auctions in Grand Rapids and beyond.
               </p>
+              <div className="bg-warm-700 rounded-lg p-4">
+                <p className="text-xs text-warm-300 font-semibold mb-2">Need Help?</p>
+                <a
+                  href="mailto:support@finda.sale"
+                  className="text-amber-300 hover:text-amber-200 font-medium block"
+                >
+                  support@finda.sale
+                </a>
+                <p className="text-xs text-warm-400 mt-2">We're here to help organizers and shoppers</p>
+              </div>
             </div>
             <div>
               <h3 className="text-lg font-bold mb-4">Links</h3>
