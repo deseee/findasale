@@ -1,13 +1,18 @@
-import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Response } from 'express';
 import axios from 'axios';
+import { prisma } from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth';
 
-const prisma = new PrismaClient();
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
-export const generateSocialPost = async (req: Request, res: Response) => {
+export const generateSocialPost = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId, platform, highlights } = req.body;
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ error: 'AI service unavailable' });
+    }
 
     if (!saleId || !platform) {
       return res.status(400).json({ error: 'saleId and platform are required' });
@@ -57,7 +62,7 @@ Write only the post text, no explanations.`;
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
-        model: 'claude-haiku-4-5-20251001',
+        model: ANTHROPIC_MODEL,
         max_tokens: 400,
         messages: [{ role: 'user', content: prompt }],
       },

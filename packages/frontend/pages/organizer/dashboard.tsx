@@ -19,6 +19,7 @@ import ReputationTier from '../../components/ReputationTier'; // Phase 22
 import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
 import SaleQRCode from '../../components/SaleQRCode'; // CD2-P2
 import FlashDealForm from '../../components/FlashDealForm';
+import SocialPostGenerator from '../../components/SocialPostGenerator';
 import OnboardingWizard from '../../components/OnboardingWizard'; // Onboarding wizard
 import Head from 'next/head';
 import Link from 'next/link';
@@ -53,6 +54,7 @@ const OrganizerDashboard = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'analytics'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null); // CD2-P2
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
+  const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [cloningId, setCloningId] = useState<string | null>(null);
 
@@ -176,6 +178,15 @@ const OrganizerDashboard = () => {
           onComplete={() => {
             setShowWizard(false);
           }}
+        />
+      )}
+
+      {/* Social Post Generator modal */}
+      {socialPostSale && (
+        <SocialPostGenerator
+          saleId={socialPostSale.id}
+          saleTitle={socialPostSale.title}
+          onClose={() => setSocialPostSale(null)}
         />
       )}
 
@@ -435,6 +446,12 @@ const OrganizerDashboard = () => {
                               className="text-sm text-red-600 hover:underline font-semibold"
                             >
                               {flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}
+                            </button>
+                            <button
+                              onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })}
+                              className="text-sm text-sage-600 hover:underline font-semibold"
+                            >
+                              📣 Share
                             </button>
                           </div>
                           {openQRSale === sale.id && (

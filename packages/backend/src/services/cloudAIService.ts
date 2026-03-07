@@ -59,6 +59,11 @@ export function isCloudAIAvailable(): boolean {
   return !!(GOOGLE_VISION_API_KEY && ANTHROPIC_API_KEY);
 }
 
+/** Returns true when the Anthropic API key is present (sufficient for text-only AI features). */
+export function isAnthropicAvailable(): boolean {
+  return !!ANTHROPIC_API_KEY;
+}
+
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
 export async function getVisionLabels(imageBase64: string): Promise<string[]> {

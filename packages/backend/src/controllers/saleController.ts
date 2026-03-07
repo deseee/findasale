@@ -7,7 +7,7 @@ import { AuthRequest } from '../middleware/auth';
 import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 import { syncOrganizerTier } from '../services/tierService';
 import { notifyMatchedBuyers } from '../services/buyerMatchService';
-import { generateSaleDescription, isCloudAIAvailable } from '../services/cloudAIService';
+import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
@@ -674,7 +674,12 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
     return;
   }
 
-  if (!isCloudAIAvailable()) {
+  if (title.trim().length > 300) {
+    res.status(400).json({ error: 'title must be 300 characters or fewer' });
+    return;
+  }
+
+  if (!isAnthropicAvailable()) {
     res.status(503).json({ error: 'AI description service unavailable' });
     return;
   }
