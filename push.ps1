@@ -111,9 +111,9 @@ if ($behind -gt 0) {
         } elseif ($isConflict) {
             Write-Host ""
             Write-Host "  FAILED - Merge conflicts detected." -ForegroundColor Red
-            Write-Host "  Paste this output into Cowork and say: 'fix the merge conflict'" -ForegroundColor Yellow
+            Write-Host "  Paste this output into Cowork and say: fix the merge conflict" -ForegroundColor Yellow
             Write-Host "  Claude will resolve the markers using Read + Edit + MCP push." -ForegroundColor DarkGray
-            Write-Host "  No manual file editing needed — Claude handles it." -ForegroundColor DarkGray
+            Write-Host "  No manual file editing needed. Claude handles it." -ForegroundColor DarkGray
         } else {
             Write-Host ""
             Write-Host "  FAILED - Merge error. See output above." -ForegroundColor Red
