@@ -10,6 +10,9 @@ interface Message {
 }
 
 const PlanPage = () => {
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -27,7 +30,7 @@ const PlanPage = () => {
   const starterPrompts = [
     'Where do I start with an estate sale?',
     'How do I price antiques and furniture?',
-    'What are Michigan estate sale laws?',
+    `What are ${defaultState} estate sale laws?`,
     'How do I handle unsold items after the sale?',
   ];
 
@@ -90,7 +93,7 @@ const PlanPage = () => {
         <title>Estate Sale Planning Assistant | FindA.Sale</title>
         <meta
           name="description"
-          content="Get free guidance from an AI assistant about planning your estate sale in Michigan"
+          content={`Get free guidance from an AI assistant about planning your estate sale in ${defaultState}`}
         />
       </Head>
 
@@ -100,7 +103,7 @@ const PlanPage = () => {
           <div className="max-w-2xl mx-auto px-4">
             <h1 className="text-4xl font-bold text-warm-900 mb-2">Estate Sale Planning Assistant</h1>
             <p className="text-warm-600 text-lg">
-              Free guidance for families and executors in Grand Rapids
+              Free guidance for families and executors in {defaultCity}
             </p>
           </div>
         </div>
