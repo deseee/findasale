@@ -2,13 +2,16 @@ import React from 'react';
 import Head from 'next/head';
 
 const AboutPage = () => {
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+
   return (
     <>
       <Head>
         <title>About FindA.Sale</title>
         <meta name="description" content="Learn about FindA.Sale and our mission to simplify estate sales." />
         <meta property="og:title" content="About FindA.Sale" />
-        <meta property="og:description" content="FindA.Sale is a digital platform for estate sale organizers and shoppers in Grand Rapids, Michigan." />
+        <meta property="og:description" content={`FindA.Sale is a digital platform for estate sale organizers and shoppers in ${defaultCity}, ${defaultState}.`} />
         <meta property="og:url" content="https://finda.sale/about" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />

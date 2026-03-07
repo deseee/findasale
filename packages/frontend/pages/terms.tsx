@@ -3,13 +3,14 @@ import Head from 'next/head';
 import Link from 'next/link';
 
 const TermsPage = () => {
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
   const effectiveDate = 'March 5, 2026';
 
   return (
     <>
       <Head>
         <title>Terms of Service – FindA.Sale</title>
-        <meta name="description" content="Terms of Service for FindA.Sale — the estate sale marketplace for Grand Rapids and beyond." />
+        <meta name="description" content={`Terms of Service for FindA.Sale — the estate sale marketplace for ${defaultCity} and beyond.`} />
       </Head>
       <div className="min-h-screen bg-white">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -22,7 +23,6 @@ const TermsPage = () => {
             "Platform"), you agree to be bound by these Terms. If you do not agree, do not use the Platform.
           </p>
 
-          {/* 1 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">1. Eligibility</h2>
             <p className="text-warm-700 leading-relaxed">
@@ -31,7 +31,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 2 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">2. Description of Service</h2>
             <p className="text-warm-700 leading-relaxed">
@@ -41,7 +40,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 3 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">3. Accounts</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
@@ -53,7 +51,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 4 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">4. Organizer Terms</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
@@ -77,7 +74,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 5 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">5. Buyer Terms</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
@@ -97,7 +93,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 6 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">6. Platform Fees</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
@@ -114,7 +109,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 7 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">7. Payment Processing</h2>
             <p className="text-warm-700 leading-relaxed">
@@ -131,7 +125,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 8 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">8. Prohibited Conduct</h2>
             <p className="text-warm-700 leading-relaxed mb-3">You agree not to:</p>
@@ -146,7 +139,6 @@ const TermsPage = () => {
             </ul>
           </section>
 
-          {/* 9 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">9. Intellectual Property</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
@@ -159,7 +151,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 10 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">10. Disclaimers</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
@@ -174,7 +165,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 11 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">11. Limitation of Liability</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
@@ -189,7 +179,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 12 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">12. Indemnification</h2>
             <p className="text-warm-700 leading-relaxed">
@@ -199,7 +188,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 13 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">13. Governing Law & Disputes</h2>
             <p className="text-warm-700 leading-relaxed">
@@ -209,7 +197,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 14 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">14. Changes to These Terms</h2>
             <p className="text-warm-700 leading-relaxed">
@@ -219,7 +206,6 @@ const TermsPage = () => {
             </p>
           </section>
 
-          {/* 15 */}
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">15. Contact</h2>
             <p className="text-warm-700 leading-relaxed">

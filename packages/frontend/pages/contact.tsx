@@ -3,6 +3,9 @@ import api from '../lib/api';
 import Head from 'next/head';
 
 const ContactPage = () => {
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -32,7 +35,7 @@ const ContactPage = () => {
       <Head>
         <title>Contact Support | FindA.Sale</title>
         <meta property="og:title" content="Contact FindA.Sale" />
-        <meta property="og:description" content="Get in touch with the FindA.Sale support team. We're here to help organizers and shoppers in Grand Rapids, Michigan." />
+        <meta property="og:description" content={`Get in touch with the FindA.Sale support team. We're here to help organizers and shoppers in ${defaultCity}, ${defaultState}.`} />
         <meta property="og:url" content="https://finda.sale/contact" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
