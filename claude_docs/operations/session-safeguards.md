@@ -84,10 +84,20 @@ Before any GitHub push, verify:
 
 ---
 
+## Production Startup Failures
+
+**Never speculate on env vars or config.** When the backend crashes on startup:
+1. Ask Patrick for the actual Railway/Docker logs immediately
+2. Do not guess PORT, JWT_SECRET, or other env vars
+3. One turn of evidence is worth more than five turns of guessing
+
+---
+
 ## Escalation Protocol
 
 | Situation | Action |
 |-----------|--------|
+| Backend startup crash | Ask for actual logs before diagnosing |
 | 3 failed fix attempts | Stop, report to Patrick, suggest alternatives |
 | Security issue found | Flag immediately, do not continue feature work |
 | Schema change needed | Confirm with Patrick before migration |
@@ -97,4 +107,4 @@ Before any GitHub push, verify:
 
 ---
 
-Last Updated: 2026-03-05 (Opus research session)
+Last Updated: 2026-03-07 (session 86 — added Production Startup Failures guardrail)
