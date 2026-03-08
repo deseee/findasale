@@ -60,7 +60,10 @@ const grayIcon = new L.Icon({
 const FlyToUser = ({ lat, lng }: { lat: number; lng: number }) => {
   const map = useMap();
   useEffect(() => {
-    map.flyTo([lat, lng], 12, { animate: true, duration: 1.2 });
+    // Guard: only fly if map is fully initialized
+    if (map?.flyTo) {
+      map.flyTo([lat, lng], 12, { animate: true, duration: 1.2 });
+    }
   }, [lat, lng, map]);
   return null;
 };
