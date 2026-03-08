@@ -116,6 +116,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000,
+            gcTime: 5 * 60 * 1000, // Garbage collect after 5 min to prevent quota exceeded on mobile
             retry: 1,
           },
         },
