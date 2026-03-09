@@ -32,7 +32,7 @@ At the start of every session, before any task work:
    > "Local docs are behind GitHub. Run this before we start: `git fetch origin && git merge origin/main --no-edit` (or just `.\push.ps1` which handles this automatically)"
    Do not make any file edits until Patrick confirms local is synced.
 
-Skip silently if Patrick has already given a task and context was loaded this session.
+Skip silently **on subsequent turns** if Patrick has already given a task **and** context was loaded in the same session. This skip condition never applies to the first message of any session — conversation-defaults Rule 3 governs first-message handling unconditionally and cannot be bypassed.
 Do not narrate the load unless asked.
 
 ---
