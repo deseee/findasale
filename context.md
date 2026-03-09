@@ -1,17 +1,14 @@
 # Dynamic Project Context
-*Generated at 2026-03-09T06:05:10.296Z*
+*Generated at 2026-03-09T06:31:44.740Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
-### 2026-03-07
-**Worked on:**
-- **Sprint 4b frontend (5 files):** `hooks/useItemSearch.ts` (React Query hook, `filtersFromQuery`, `useFilterSync` with shallow URL routing), `components/FilterSidebar.tsx` (desktop sticky sidebar + mobile full-screen drawer, 14 categories, 5 conditions, price range, sort, facet counts), `components/ItemSearchResults.tsx` (results grid, 8-card skeleton, empty/error states, pagination up to 7 page buttons), `components/ItemSearch.tsx` (300ms debounce, clear button, mobile filter toggle), `pages/search.tsx` (5 targeted edits integrating FTS into items tab — other tabs unchanged).
-- **MailerLite spec rewrite:** Old spec used Tags tab (doesn't exist), Custom Event condition (doesn't exist), API v1. Rewrote `mailerlite-onboarding-automation-2026-03-07.md` for current UI: drag-and-drop builder, "Joins a group" trigger, Custom Field `sale_published` (not a Tag), exit condition via "Condition → Custom fields → Is set", API v2 endpoint `POST https://connect.mailerlite.com/api/subscribers`.
-- **MailerLite backend wire-up:** Created `packages/backend/src/services/mailerliteService.ts` (upsert subscriber with `fields: { sale_published: "yes" }`, graceful no-op if key not set). Wired into `saleController.ts` PUBLISHED transition block (fire-and-forget `.then()`). Added `MAILERLITE_API_KEY` to `.env.example`.
-- **TypeScript fix (`itemSearchService.ts`):** `ftsSearch` and `ilikeSearch` signatures used `Required<Omit<SearchQuery, 'q'>>` making optional filter fields required. Fixed to `Omit<SearchQuery, 'q'> & Required<Pick<SearchQuery, 'limit' | 'offset' | 'sort'>>`. `pnpm tsc --noEmit` passes clean on both packages.
-**Decisions:** Sprint 4b items tab uses `/api/items/search` (FTS); all/sales tabs keep existing `/api/search` endpoint. No breaking changes to existing search behavior.
-**Next up:** Sprint 5 — Seller Performance Dashboard. Patrick must add `MAILERLITE_API_KEY` to Railway and run `.\push.ps1` before testing.
-**Blockers:** `MAILERLITE_API_KEY` not yet in Railway. Neon migration `20260310000001_add_item_fulltext_search_indexes` not yet deployed (needed for Sprint 4b end-to-end testing). Patrick to run `.\push.ps1`.
+### 2026-03-09
+**Worked on:** All 10 Session 95 tasks from BACKLOG_2026-03-08.md §K completed. CORE.md updated with batch continuation rule (E1), subagent file tracking (E3), proactive tool suggestion §15 (E13), pre-command syntax validation §18 (E9), audit coverage ref §9 (E8), skill routing priority (E15), subagent MCP awareness §11 (G8). conversation-defaults Rule 6 added (E11: "etc." interpretation). Session-log and wrap protocol templates updated with token efficiency field (E12). CLAUDE.md file limit aligned from ≤5 to ≤3 (G8). Four new ops docs created: audit-coverage-checklist.md, skill-roster-recommendation.md, file-naming-audit.md, github-mcp-subagent-audit.md.
+**Decisions:** FindA.Sale custom skills always preferred over generic plugin equivalents. MCP push limit is ≤3 files everywhere (CORE.md + CLAUDE.md now aligned). "etc." treated as precise — ask if scope matters. Audit coverage checklist required; <80% = incomplete.
+**Token efficiency:** 10 tasks, 0 subagent calls, all direct edits — low burn for output volume.
+**Next up:** Session 96 — Inter-Agent Communication Foundation: E4 (message board design + prototype), E5 (task dependency state machine), heartbeat monitoring, E16 (worktrees research).
+**Blockers:** Session 93 files still not pushed (Patrick). MAILERLITE_API_KEY pending on Railway. Neon migration 20260310000001 pending on production.
 
 ## Health Status
 Last scan: health-scout-pre-beta-2026-03-07
@@ -60,7 +57,7 @@ Overall health is **STRONG** with no critical blockers identified. Sprint 3 (Sho
 │   ├── health-reports/ (2 files)
 │   ├── improvement-memos/ (5 files)
 │   ├── logs/ (6 files)
-│   ├── operations/ (7 files)
+│   ├── operations/ (11 files)
 │   ├── research/ (13 files)
 │   ├── self-healing/ (1 files)
 │   ├── skills-package/ (21 files)

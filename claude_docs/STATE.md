@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 93 complete. Sprint 4b (frontend search UI) fully shipped: useItemSearch.ts, FilterSidebar.tsx, ItemSearchResults.tsx, ItemSearch.tsx, search.tsx integrated. MailerLite backend wire-up complete (mailerliteService.ts + saleController.ts + .env.example). MailerLite onboarding spec rewritten for current UI (API v2, Custom Field exit condition). TypeScript passes clean on both packages. Sprint queue: 5 (Seller Performance Dashboard). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
+Session 95 complete. Self-improvement loop Session 95 (Workflow Quick Wins) fully shipped: 10 behavioral rules added/updated across CORE.md, conversation-defaults, session-log template, and WRAP_PROTOCOL. 4 new operations docs created. No code changes. Sprint queue: Sprint 5 (Seller Performance Dashboard) — deferred until self-improvement loop (sessions 95–103) completes. Session 96 next: Inter-Agent Communication Foundation (E4 message board, E5 state machine, E16 worktrees research). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
 
 ---
 
@@ -32,7 +32,7 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-Sprint 5 — Seller Performance Dashboard (not yet started). Sprint 4b shipped session 93. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production before Sprint 4b frontend can be tested end-to-end. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
+Session 96 — Inter-Agent Communication Foundation (not yet started). Session 95 workflow quick wins shipped. Sprint 5 (Seller Performance Dashboard) intentionally deferred until self-improvement loop (sessions 95–103) completes per BACKLOG_2026-03-08.md §K. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
@@ -107,4 +107,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-07 (session 93 — Sprint 4b frontend search UI shipped, MailerLite backend wire-up complete, MailerLite spec rewritten for current UI, TypeScript clean on both packages.)
+Last Updated: 2026-03-09 (session 95 — Workflow Quick Wins shipped: 10 behavioral rules (E1/E3/E8/E9/E11/E12/E13/E15/E17/G8), 4 new ops docs, CORE.md §§3/9/11/15/18 updated, conversation-defaults Rule 6 added, session-log token efficiency field added, CLAUDE.md file limit aligned to ≤3.)
