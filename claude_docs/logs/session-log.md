@@ -15,6 +15,13 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-09 (session 95 — Workflow Quick Wins)
+**Worked on:** All 10 Session 95 tasks from BACKLOG_2026-03-08.md §K completed. CORE.md updated with batch continuation rule (E1), subagent file tracking (E3), proactive tool suggestion §15 (E13), pre-command syntax validation §18 (E9), audit coverage ref §9 (E8), skill routing priority (E15), subagent MCP awareness §11 (G8). conversation-defaults Rule 6 added (E11: "etc." interpretation). Session-log and wrap protocol templates updated with token efficiency field (E12). CLAUDE.md file limit aligned from ≤5 to ≤3 (G8). Four new ops docs created: audit-coverage-checklist.md, skill-roster-recommendation.md, file-naming-audit.md, github-mcp-subagent-audit.md.
+**Decisions:** FindA.Sale custom skills always preferred over generic plugin equivalents. MCP push limit is ≤3 files everywhere (CORE.md + CLAUDE.md now aligned). "etc." treated as precise — ask if scope matters. Audit coverage checklist required; <80% = incomplete.
+**Token efficiency:** 10 tasks, 0 subagent calls, all direct edits — low burn for output volume.
+**Next up:** Session 96 — Inter-Agent Communication Foundation: E4 (message board design + prototype), E5 (task dependency state machine), heartbeat monitoring, E16 (worktrees research).
+**Blockers:** Session 93 files still not pushed (Patrick). MAILERLITE_API_KEY pending on Railway. Neon migration 20260310000001 pending on production.
+
 ### 2026-03-09 (session 94 — Master backlog creation + fleet review + self-improvement loop planning)
 **Worked on:**
 - **Master backlog:** Parsed Patrick's raw notes into `claude_docs/BACKLOG_2026-03-08.md` — 80+ items across 11 sections (A–K), tagged by type, agent-owned, prioritized P0–P3. Verification pass confirmed zero items dropped.
@@ -62,24 +69,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Next up:** Implement express-rate-limit on /api/coupons/validate (findasale-dev). Update .env.example with DEFAULT_* vars (findasale-ops). Add coupon redemption audit fields to schema if dispute resolution needed (findasale-qa).
 **Blockers:** None identified. Pre-beta ready.
 
-### 2026-03-07 (session 90 — push.ps1 hardening + git workflow audit)
-**Worked on:**
-- **push.ps1 Bug 1 (CRLF false-positive):** `git diff` without `--ignore-cr-at-eol` flagged CRLF-only changes as real content changes. Windows autocrlf caused perpetual "uncommitted changes" warnings. Fixed by adding `--ignore-cr-at-eol` to the diff command.
-- **push.ps1 Bug 2 (em dash encoding crash):** Em dash U+2014 in a string literal caused PowerShell parse failure ("string missing terminator"). Byte 0x94 in Windows-1252 = RIGHT DOUBLE QUOTATION MARK. Fixed by replacing with ASCII hyphen. Self-healing entry #51 added.
-- **push.ps1 Bug 3 (doc conflict auto-resolution):** After git merge origin/main, conflicts in claude_docs/ and context.md files now auto-resolve with --theirs strategy. Code file conflicts still route to Cowork. Patrick no longer blocked by doc merge conflicts.
-- **Root cause hardened:** CORE.md section 10 now prohibits MCP-pushing wrap-only docs (STATE.md, session-log.md, .last-wrap, next-session-prompt.md) mid-session. Self-healing entry #52 added.
-- **4 merge conflicts resolved:** .last-wrap, STATE.md, session-log.md, next-session-prompt.md all had conflict markers from session 89/90 MCP vs local drift. Resolved via Read + Edit.
-**Decisions:** Wrap-only docs are never MCP-pushed mid-session. Push.ps1 is now fully self-healing for doc conflicts.
-**Next up:** Sprint 4 (Search by Item Type) — consult findasale-architect for schema/API design first.
-**Blockers:** None. Patrick's 5 manual beta items unchanged.
-
-### 2026-03-07 (session 89 continued — Sprint 3.5 + Power User + roadmap redesign + workflow hardening)
-**Worked on:**
-- **Sprint 3.5 (code deGR-ification):** 51 hardcoded Grand Rapids references found across 13 files. All replaced with env var-driven `regionConfig.ts` (backend) and `NEXT_PUBLIC_*` env vars (frontend). 26 code files modified, `regionConfig.ts` created. QA caught 2 bugs: hardcoded "Michigan" in cloudAIService.ts line 239, hardcoded map coordinates in map.tsx line 247 — both fixed. All 30 files (code + docs) pushed to GitHub via MCP in batched commits.
-- **Cowork Power User skill:** New skill created with 7 responsibilities: ecosystem research, skill optimization, autonomous work discovery (reads roadmap.md + research docs), cross-agent coordination, proactive change proposals, connector/plugin scouting, Cowork config optimization. Packaged as .skill and installed.
-- **Roadmap v18 simplified:** Removed CA/CB/CC/CD parallel path encoding. Plain English sections: Patrick's Checklist → Running Automations → Connectors → Feature Pipeline → Sync Points → Deferred & Long-Term Hold → Infrastructure → Maintenance Rules.
-- **Connectors:** Stripe MCP connected. MailerLite MCP connected. Close CRM deferred (requires paid trial).
-- **Workflow failure hardened:** Claude told Patrick to manually fix merge conflict (session-log.md) — Patrick escalated. Self-healing entry #50 added (merge conflict auto-resolution). Conversation-defaults Rule 6 added (never hand off git issues). Workflow failure memo written and pushed.
-**Decisions:** Roadmap uses plain English section names (no more CA/CB/CC/CD). CRM connector deferred until beta scale warrants paid trial. Merge conflicts always resolved by Claude using Read → Edit → MCP push — never handed to Patrick.
-**Next up:** Sprint 4 (Search by Item Type) → Sprint 5 (Seller Performance Dashboard). Weekly Power User scheduled task proposed but not yet created.
-**Blockers:** Patrick needs to run `git merge --abort` then `git reset --hard origin/main` to sync local with MCP pushes. Patrick's 5 manual beta items unchanged.
