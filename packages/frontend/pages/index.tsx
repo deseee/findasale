@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import SaleMap, { SalePin } from '../components/SaleMap';
@@ -45,9 +46,17 @@ const HomePage = () => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
   const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
 
+  const router = useRouter();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+
+  // Initialize search from ?q= URL param (set by header search bar)
+  useEffect(() => {
+    if (router.isReady && router.query.q) {
+      setSearchQuery(String(router.query.q));
+    }
+  }, [router.isReady, router.query.q]);
 
   const { data: feedData, isLoading, isError, refetch } = useQuery({
     queryKey: ['feed', userLocation?.lat, userLocation?.lng],
