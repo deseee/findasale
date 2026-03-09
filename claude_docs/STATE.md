@@ -9,18 +9,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 implementation COMPLETE. Session 109 skill packaging COMPLETE. Session 110 P1 bug blitz COMPLETE. Full detail: `claude_docs/COMPLETED_PHASES.md`.
 
-**Session 111 COMPLETE (2026-03-09):** Build fixes + fleet research + credential rotation + workflow improvements.
-- Fixed Railway TS2322 (itemSearchService.ts intersection types) and Vercel form reset (add-items/[saleId].tsx)
-- Scrubbed live Neon credentials from next-session-prompt.md (Session 110 wrap error) — pushed immediately
-- Added CORE.md §17.3(c) credential hard gate — next-session-prompt.md must NEVER contain credentials
-- Fixed coupons.ts ERR_ERL_KEY_GEN_IPV6: `ipKeyGenerator(ip)` with proper import (3 iterations to get signature right)
-- Rotated Neon credentials (Patrick completed in console)
-- Fleet dispatched: B2 ✓ (AI disclosure copy), H1 ✓ (UX inspiration research), D3 ✓ (route planning ADR → Option B approved), G-batch ✓ (rerun: only Vercel MCP actionable, rest CLI-only)
-- conversation-defaults skill updated to v2 (8 rules, AskUserQuestion restored, blocked-task handling)
-- Vercel MCP connected
-- 3 Neon migrations still pending deploy (Patrick ran command but hit wrong package path — not yet deployed)
+**Session 112 COMPLETE (2026-03-09):** Security fix + workflow audit + H1 quick win.
+- Scrubbed live Neon credentials from STATE.md "In Progress" section (P0 security fix)
+- Ran findasale-workflow audit on 4 session-111 problems → root cause: doc contradiction (STATE.md vs dev-environment skill on .env reading)
+- Applied 3 systemic fixes: CORE.md §5 Operational Anchors (compression), CORE.md §10 Pre-Push Type Verification (Railway budget), STATE.md .env gotcha corrected
+- Wrote workflow retrospective: `claude_docs/workflow-retrospectives/session-111-workflow-audit-2026-03-09.md`
+- Confirmed 3 Neon migrations DEPLOYED (66 total)
+- B2 scoped: needs `isAiTagged Boolean @default(false)` added to Item schema before UI wiring — deferred to dedicated session
+- **H1 "How It Works" card SHIPPED** — 4-step onboarding card on organizer dashboard overview tab (Create Sale → Add Items → Attract Buyers → Complete Sale)
+- docker-compose.yml: already deleted, no file to commit (not an error)
 
-**Remaining open:** A3.6 single-item 500 (needs production logs). B2 (copy written, needs UI wiring). D3 (ADR approved, ready for dev). H1 quick wins (How It Works card + compact header). B3/B7/D1/C1/C2 (deferred/attorney). Vercel MCP connected but not yet leveraged.
+**Remaining open:** A3.6 single-item 500 (needs production logs). B2 (copy written, needs schema migration + UI wiring). D3 (ADR approved, ready for dev). H1 compact mobile header (pending). B3/B7/D1/C1/C2 (deferred/attorney). Vercel MCP connected but not yet leveraged.
 
 ---
 
@@ -107,7 +106,7 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **Dockerfile.production** — ✅ Restored to `--frozen-lockfile` (session 87, commit b82180d). Lockfile is clean.
 - **Git push workflow** — Patrick uses `.\push.ps1` (repo root) instead of raw `git push`. Self-heals: index.lock, CRLF phantoms (--ignore-cr-at-eol), fetch+merge (never rebase), doc-file merge conflicts (--theirs auto-resolve). See self-healing entries #36, #51, #52.
 - **Dev stack is now native** — Docker no longer used at all. `image-tagger/` deleted by Patrick (session 81). Backend/frontend/postgres run natively on Windows. See `claude_docs/DEVELOPMENT.md`.
-- **Production migration deploy (Neon):** Before running `migrate deploy`, Claude must read `packages/backend/.env` directly to confirm the Neon URLs are present (commented-out `# DATABASE_URL=` and `# DIRECT_URL=` lines pointing to `neon.tech`). Claude provides the migration command template only — Patrick reads credentials directly from `packages/backend/.env`. Never embed credentials in any committed file. See SECURITY.md §3.
+- **Production migration deploy (Neon):** Claude reads `packages/backend/.env` from the VM, extracts the commented-out Neon URLs, and provides a ready-to-paste command with real credentials in chat output (ephemeral — never committed). Never embed credentials in any committed file. See SECURITY.md §3 and CORE.md §17.3(c).
 
 ---
 
@@ -123,4 +122,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-09 (session 112 — scrubbed credentials from STATE.md, migrations confirmed deployed)
+Last Updated: 2026-03-09 (session 112 — credentials scrub, workflow audit + fixes, H1 How It Works card shipped)

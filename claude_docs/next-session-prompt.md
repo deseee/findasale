@@ -1,52 +1,53 @@
 # Next Session Resume Prompt
 *Written: 2026-03-09*
-*Session ended: normally*
+*Session ended: normally (session 112)*
 
 ## Resume From
-1. Deploy 3 pending Neon migrations (command in STATE.md "In Progress" section — run from `packages/database`).
-2. Dispatch fleet on remaining backlog items.
-3. Run findasale-workflow to analyze Session 111 problems (see Workflow Audit below).
+1. Run session init per conversation-defaults Rule 3.
+2. Pick up from priority queue below.
 
-## What Was Completed This Session (111)
-- Fixed Railway TS2322 build failure (itemSearchService.ts intersection types)
-- Fixed Vercel build failure (add-items/[saleId].tsx form reset missing fields)
-- Scrubbed live Neon credentials from next-session-prompt.md — pushed immediately
-- Added CORE.md §17.3(c) credential hard gate
-- Fixed coupons.ts ERR_ERL_KEY_GEN_IPV6 (`ipKeyGenerator(ip)` — took 3 iterations)
-- Rotated Neon credentials (Patrick completed in Neon console)
-- Fleet dispatched: B2 ✓, H1 ✓, D3 ✓, G-batch ✓ (rerun)
-- conversation-defaults skill updated v1→v2 and reinstalled
-- Vercel MCP connected
-- STATE.md cleaned up (removed stale completed items, added migration command)
+## What Was Completed This Session (112)
+- **P0 security fix:** Scrubbed live Neon credentials from STATE.md "In Progress" section
+- **Workflow audit:** Dispatched findasale-workflow on 4 session-111 problems. Root cause found: STATE.md and dev-environment skill contradicted each other on .env reading. Fixed.
+- **CORE.md §5:** Added "Operational Anchors" to compression format (prevents losing operational knowledge on context reset)
+- **CORE.md §10:** Added "Pre-Push Type Verification" subsection (read function signatures before pushing TS fixes — saves Railway rebuild budget)
+- **STATE.md .env gotcha:** Fixed contradiction — Claude reads .env and builds ready-to-paste commands (not "Patrick reads credentials himself")
+- **Workflow retrospective:** `claude_docs/workflow-retrospectives/session-111-workflow-audit-2026-03-09.md`
+- **3 Neon migrations confirmed DEPLOYED** (66 total)
+- **B2 scoped:** Needs `isAiTagged Boolean @default(false)` on Item model before UI wiring — deferred
+- **H1 "How It Works" card SHIPPED:** 4-step onboarding card on organizer dashboard overview tab
+- **docker-compose.yml:** Already deleted from disk — no commit needed (git couldn't find it)
 
 ## What Was NOT Completed
-- **3 Neon migrations not deployed** — Patrick ran command but it targeted wrong package (`packages/backend` instead of `packages/database`). Correct command is in STATE.md.
-- **docker-compose.yml deletion** — still uncommitted. Run: `git add docker-compose.yml && git commit -m "chore: remove docker-compose.yml (Docker retired session 81)" && .\push.ps1`
+- **H1 compact mobile header** — next H1 quick win, not started
+- **B2 AI disclosure UI wiring** — blocked on schema migration (isAiTagged field)
+- **D3 route planning backend** — ADR approved (Option B: OSRM), not started
+- **A3.6 single-item 500** — needs Railway production logs to diagnose
 
-## Workflow Audit — Session 111 Problems for findasale-workflow to Analyze
+## MCP Commits This Session (5 total — Patrick needs to sync)
+Run these commands in PowerShell:
+```powershell
+git fetch origin
+git reset --hard origin/main
+```
+This syncs all MCP commits. Untracked files (competitor-intel/, marketing/, skills-package/) are not affected.
 
-**Problem 1: Context loss on compression.** Session continued from a previous context window via summary. The summary was comprehensive but Claude still lost operational knowledge — specifically, that Prisma schema lives in `packages/database` not `packages/backend`, and that the package.json uses `db:generate`/`db:deploy` script names (not raw `prisma` commands). This is the SAME class of error the conversation-defaults skill and context-maintenance workflow are supposed to prevent. Root cause: compression summaries don't preserve operational muscle memory.
-
-**Problem 2: Refusing to read .env and provide ready-to-paste commands.** Claude had direct access to `packages/backend/.env` and could read the commented-out Neon production URLs, but instead told Patrick to "go get the credentials himself" THREE TIMES before finally reading the file and building the command. This violates the core principle of reducing organizer manual work. Patrick should never have to manually extract values from files that Claude can read.
-
-**Problem 3: coupons.ts ipKeyGenerator took 3 pushes to get right.** Each push triggered a Railway rebuild cycle (~2-3 min each). The sequence: (1) removed import entirely and used inline regex — passed TS but failed runtime validation, (2) imported ipKeyGenerator and called it with Request object — failed TS because signature is `(ip: string)` not `(req: Request)`, (3) finally read the TS error and passed `req.ip` string to `ipKeyGenerator`. Should have checked the function signature BEFORE the first push by reading the express-rate-limit type definitions or docs.
-
-**Problem 4: Token burn from iterative fix pushes.** 3 MCP pushes for one file = 3 Railway rebuilds + 3 full read-edit-push cycles in context. Each cycle consumed ~500-800 tokens of context. Combined with the migration command iterations (wrong package, wrong script name, then correct), this session burned significant context on preventable errors.
-
-**Recommendation for findasale-workflow:** Propose a pre-push verification step — before any MCP push of a TypeScript file, Claude should verify the fix compiles locally (or at minimum, check type signatures of any imported functions). Also propose a "ready-to-paste" rule: when Claude has file access and can read credentials/config values, ALWAYS build the complete command. Never tell Patrick to "go read the file himself."
+Commits:
+1. `security: scrub Neon credentials from STATE.md, mark 3 migrations as deployed`
+2. `workflow: session 111 audit + fix STATE.md .env credential contradiction`
+3. `CORE.md: add Operational Anchors to compression (§5) + Pre-Push Type Verification (§10)`
+4. `feat(H1): add 'How It Works' 4-step onboarding card to organizer dashboard`
+5. Session wrap docs (STATE.md + next-session-prompt.md + session-log.md) — pushed at wrap
 
 ## Next Priorities (in order)
-1. **Deploy 3 Neon migrations** (command ready in STATE.md)
-2. **docker-compose.yml cleanup** (one commit + push)
-3. **A3.6** — Railway logs → diagnose → fix (findasale-dev)
-4. **B2 implementation** — wire AI disclosure copy into UI (findasale-dev)
-5. **H1 quick wins** — "How It Works" 4-step card + mobile compact header (findasale-dev)
-6. **D3 implementation** — route planning backend API via OSRM (findasale-architect → findasale-dev)
-7. **Workflow audit** — run findasale-workflow on the 4 problems above
+1. **H1 compact mobile header** — 48px fixed header + persistent search (Low effort per research doc)
+2. **B2 implementation** — schema migration (isAiTagged) → backend → frontend (3+ files, dedicated session)
+3. **A3.6** — Railway logs → diagnose single-item 500 → fix (findasale-dev)
+4. **D3 implementation** — route planning backend API via OSRM (findasale-architect → findasale-dev)
+5. **Backlog:** B3/B7 (deferred), D1 (deferred), C1/C2 (attorney needed)
 
 ## Environment Notes
-- Railway: GREEN (build passing, backend running on port 5000)
-- Neon: credentials rotated, 3 migrations pending
-- Vercel MCP: connected
-- coupons.ts on GitHub matches local (commit 45d76b4)
-- docker-compose.yml: deleted locally but not committed
+- Railway: GREEN (build passing)
+- Neon: 66 migrations applied, credentials rotated (session 111)
+- Vercel: MCP connected, not yet leveraged
+- docker-compose.yml: gone (already deleted, no git action needed)
