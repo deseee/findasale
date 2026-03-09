@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { getVisionLabels } from '../services/cloudAIService';
 import { upload } from '../controllers/uploadController';
@@ -247,6 +248,115 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('GET /api/search/categories error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/search/random?lat=&lng=&radiusMiles=&maxPrice=&category=&limit=12
+ * Feature #10: Serendipity Search — returns random available items from active sales.
+ * All query params are optional. If lat/lng/radiusMiles provided, filters by proximity.
+ * Uses ORDER BY RANDOM() for genuine serendipity on every request.
+ */
+router.get('/random', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(24, Math.max(1, parseInt(req.query.limit as string) || 12));
+    const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice as string) : null;
+    const category = (req.query.category as string)?.trim() || null;
+    const lat = req.query.lat ? parseFloat(req.query.lat as string) : null;
+    const lng = req.query.lng ? parseFloat(req.query.lng as string) : null;
+    const radiusMiles = req.query.radiusMiles ? parseFloat(req.query.radiusMiles as string) : null;
+
+    type RawItem = {
+      id: string;
+      title: string;
+      description: string | null;
+      price: number | null;
+      photo_urls: string[];
+      category: string | null;
+      condition: string | null;
+      sale_id: string;
+      sale_title: string;
+      sale_city: string;
+      sale_state: string;
+      sale_start_date: Date;
+      sale_end_date: Date;
+    };
+
+    // Build optional SQL fragments using Prisma.sql for safe parameterization
+    const priceCondition = maxPrice !== null && !isNaN(maxPrice)
+      ? Prisma.sql`AND i.price <= ${maxPrice}`
+      : Prisma.empty;
+
+    const categoryCondition = category
+      ? Prisma.sql`AND LOWER(i.category) = LOWER(${category})`
+      : Prisma.empty;
+
+    // If location filter requested, add haversine distance condition
+    const useLocation = lat !== null && lng !== null && radiusMiles !== null
+      && !isNaN(lat!) && !isNaN(lng!) && !isNaN(radiusMiles!);
+
+    const radiusKm = useLocation ? radiusMiles! * 1.60934 : 0;
+
+    const locationCondition = useLocation
+      ? Prisma.sql`AND (
+          6371 * acos(
+            LEAST(1.0, cos(radians(${lat})) * cos(radians(s.lat)) *
+            cos(radians(s.lng) - radians(${lng})) +
+            sin(radians(${lat})) * sin(radians(s.lat)))
+          )
+        ) <= ${radiusKm}`
+      : Prisma.empty;
+
+    const rows = await prisma.$queryRaw<RawItem[]>`
+      SELECT
+        i.id,
+        i.title,
+        i.description,
+        i.price,
+        i."photoUrls" AS photo_urls,
+        i.category,
+        i.condition,
+        s.id AS sale_id,
+        s.title AS sale_title,
+        s.city AS sale_city,
+        s.state AS sale_state,
+        s."startDate" AS sale_start_date,
+        s."endDate" AS sale_end_date
+      FROM "Item" i
+      JOIN "Sale" s ON i."saleId" = s.id
+      WHERE
+        i.status = 'AVAILABLE'
+        AND s.status = 'PUBLISHED'
+        AND s."endDate" >= NOW()
+        ${priceCondition}
+        ${categoryCondition}
+        ${locationCondition}
+      ORDER BY RANDOM()
+      LIMIT ${limit}
+    `;
+
+    const items = rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      price: row.price != null ? Number(row.price) : null,
+      photoUrls: row.photo_urls,
+      category: row.category,
+      condition: row.condition,
+      sale: {
+        id: row.sale_id,
+        title: row.sale_title,
+        city: row.sale_city,
+        state: row.sale_state,
+        startDate: row.sale_start_date,
+        endDate: row.sale_end_date,
+      },
+    }));
+
+    return res.json({ items, count: items.length });
+  } catch (err) {
+    console.error('GET /api/search/random error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
