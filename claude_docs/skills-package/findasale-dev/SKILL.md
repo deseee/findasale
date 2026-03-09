@@ -1,4 +1,6 @@
 ---
+version: 1
+last_updated: 2026-03-09 (Session 108)
 name: findasale-dev
 description: >
   FindA.Sale Senior Developer subagent. Implements features, fixes bugs, and

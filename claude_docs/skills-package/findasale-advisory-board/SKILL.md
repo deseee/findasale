@@ -1,4 +1,6 @@
 ---
+version: 1
+last_updated: 2026-03-09 (Session 108)
 name: findasale-advisory-board
 description: >
   FindA.Sale Advisory Board Ensemble. Role-plays multiple expert perspectives

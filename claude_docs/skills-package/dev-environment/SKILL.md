@@ -1,4 +1,6 @@
 ---
+version: 1
+last_updated: 2026-03-09 (Session 108)
 name: dev-environment
 description: >
   Patrick's FindA.Sale development environment reference. Critical for avoiding
