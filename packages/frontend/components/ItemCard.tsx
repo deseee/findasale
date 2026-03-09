@@ -12,6 +12,7 @@ interface Item {
   status: string;
   auctionEndTime?: string;
   photoUrl?: string;
+  isAiTagged?: boolean;
 }
 
 interface ItemCardProps {
@@ -101,6 +102,16 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
               className={`absolute top-2 left-2 px-2 py-0.5 rounded text-xs font-bold shadow ${badge.className}`}
             >
               {badge.label}
+            </span>
+          )}
+
+          {/* B2: AI tagging disclosure badge — bottom-right */}
+          {item.isAiTagged && (
+            <span
+              className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-semibold leading-none"
+              title="This tag was auto-suggested by our system. Check it before listing — you know your items best."
+            >
+              AI
             </span>
           )}
         </div>

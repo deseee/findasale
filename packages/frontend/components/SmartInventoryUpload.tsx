@@ -109,6 +109,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       category: string;
       condition: string;
       photoUrls: string[];
+      isAiTagged: boolean;
     }>) => {
       const created = [];
       for (let i = 0; i < items.length; i++) {
@@ -225,6 +226,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
         category: a.suggestedCategory,
         condition: a.suggestedCondition,
         photoUrls: [a.photoUrl],
+        isAiTagged: true,
       }));
 
     if (itemsToCreate.length === 0) {
