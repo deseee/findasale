@@ -109,6 +109,8 @@ const AddItemsDetailPage = () => {
         reservePrice: '',
         reverseDailyDrop: '',
         reverseFloorPrice: '',
+        isAuction: false,
+        reverseAuction: false,
       });
       setFormError('');
       queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });

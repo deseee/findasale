@@ -106,7 +106,17 @@ export async function searchItems(query: SearchQuery): Promise<SearchResponse> {
 // ---------------------------------------------------------------------------
 // ftsSearch — uses searchVector @@ plainto_tsquery
 // ---------------------------------------------------------------------------
-async function ftsSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<SearchQuery, 'limit' | 'offset' | 'sort'>> & { q: string }) {
+async function ftsSearch(params: {
+  q: string;
+  category?: string | undefined;
+  condition?: string | undefined;
+  saleId?: string | undefined;
+  priceMin?: number | undefined;
+  priceMax?: number | undefined;
+  sort: NonNullable<SearchQuery['sort']>;
+  limit: number;
+  offset: number;
+}) {
   const { q, category, condition, saleId, priceMin, priceMax, sort, limit, offset } = params;
 
   const sqlParts: string[] = [];
@@ -161,7 +171,17 @@ async function ftsSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<SearchQu
 // ---------------------------------------------------------------------------
 // ilikeSearch — ILIKE fallback (slower but always available)
 // ---------------------------------------------------------------------------
-async function ilikeSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<SearchQuery, 'limit' | 'offset' | 'sort'>> & { q: string }) {
+async function ilikeSearch(params: {
+  q: string;
+  category?: string | undefined;
+  condition?: string | undefined;
+  saleId?: string | undefined;
+  priceMin?: number | undefined;
+  priceMax?: number | undefined;
+  sort: NonNullable<SearchQuery['sort']>;
+  limit: number;
+  offset: number;
+}) {
   const { q, category, condition, saleId, priceMin, priceMax, sort, limit, offset } = params;
 
   const sqlParts: string[] = [];
