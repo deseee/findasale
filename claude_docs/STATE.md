@@ -7,13 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 105 Bug Blitz COMPLETE (2026-03-09). 7 P0 bugs fixed, QA PASS. **Patrick must push 6 files** (see next-session-prompt.md for exact git commands before testing in production).
+Session 105 Bug Blitz COMPLETE (2026-03-09). 7 P0 bugs fixed, QA PASS.
 
 **Session 106 COMPLETE (2026-03-10):** B1 ADR written and approved. Fee structure locked at 10% flat. Dev sequence planned across 107A/B/C.
 
-**Next: Session 107A — B1 Schema.** Write migration `20260311000001`, add `FeeStructure` table, shared types. See `claude_docs/feature-notes/b1-sale-type-item-type-adr-2026-03-10.md` for full dev sequence. Prerequisite: Patrick pushes Session 105+106 files first.
+**Session 107 COMPLETE (2026-03-11):** B1 full implementation DONE. 107A/B/C continuous run: schema + FeeStructure model, backend controllers (saleController/itemController/stripeController/auctionJob all reading FeeStructure at fee time), frontend forms (saleType selector + listingType selector). QA found P0 blocker (auctionJob.ts hardcoded 0.07), dev fixed. All code staged and ready for Patrick's push. **Patrick must push 10 files** (see push block below). Prisma migration still pending.
 
-**Remaining P1 bugs (Session 107):** A1.3 (my-location button), A1.4 (search scope), A2.2 (SaleScout logo in PWA banner), A5.1/A5.2 (leaderboard), A6.1 (hardcoded city), A3.6 single-item 500 (needs Railway production logs).
+**Next: Session 108 — Power User + Workflow Joint Audit.** Dispatch findasale-cowork-power-user AND findasale-workflow in same session to audit sessions 95–107 for init/wrap pattern failures, propose comprehensive fix plan. After audit: P1 bugs (A1.3, A1.4, A2.2, A5.1/A5.2, A6.1) then B4 (auction reserves, now unblocked).
+
+**Remaining P1 bugs (Session 108 onwards):** A1.3 (my-location button), A1.4 (search scope), A2.2 (SaleScout logo in PWA banner), A5.1/A5.2 (leaderboard), A6.1 (hardcoded city), A3.6 single-item 500 (needs Railway production logs).
 
 ---
 
@@ -46,11 +48,13 @@ Sessions 95–105 complete. Self-improvement loop DONE. Fleet Self-Audit DONE. B
 
 - **Phase 31 OAuth env vars** — ✅ DONE (2026-03-06). GOOGLE_CLIENT_ID/SECRET + FACEBOOK_CLIENT_ID/SECRET added to Vercel. Redirect URIs configured.
 - **Support email** — ✅ DONE (2026-03-06). support@finda.sale email forwarding configured.
-- **Neon migrations** — ✅ 63 migrations applied to Neon production (last: 20260307153530_add_coupon_model). Pending: `20260310000001_add_item_fulltext_search_indexes` (Sprint 4a — run before Sprint 4b end-to-end testing).
+- **Neon migrations** — ✅ 63 migrations applied to Neon production (last: 20260307153530_add_coupon_model). Pending: `20260310000001_add_item_fulltext_search_indexes` (Sprint 4a — run before Sprint 4b end-to-end testing). NEW: Migration `20260311000001_add_sale_type_item_listing_type` (Session 107 schema) pending `prisma migrate deploy`.
 - **MAILERLITE_API_KEY** — ✅ DONE (2026-03-09). Added to Railway env vars by Patrick. MailerLite automation active on sale publish.
 - **Uptime monitoring** — ✅ UptimeRobot done (Patrick confirmed 2026-03-05).
 - **Sentry** — ✅ Fully deployed. DSNs set in Railway + Vercel.
 - **STRIPE_WEBHOOK_SECRET** — ✅ Set in Railway (2026-03-05).
+- **Prisma migration deploy (Session 107)** — Patrick must run `prisma generate && prisma migrate deploy` for migration `20260311000001_add_sale_type_item_listing_type` on Neon production.
+- **conversation-defaults skill reinstall (Session 107)** — Patrick must reinstall from `claude_docs/skill-updates-2026-03-09/conversation-defaults-updated.skill/conversation-defaults-edit.skill` (Rule 3 expanded to cover ALL first-message types, not just ≤5 word openers).
 
 ---
 
@@ -113,4 +117,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-09 (session 105 — Bug Blitz complete. 7 P0 fixes: map pins, install banner, photo upload, bulk route, camera permission, QR codes, tier API. QA PASS. Patrick must push 6 files before testing.)
+Last Updated: 2026-03-11 (session 107 — B1 implementation complete: schema + FeeStructure + backend + frontend. 10 files staged for push. Session 108: Power User + Workflow audit of sessions 95–107 init/wrap patterns.)
