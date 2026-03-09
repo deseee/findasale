@@ -15,6 +15,13 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### 2026-03-09 (session 109 — Skill Reinstall + Session Wrap)
+**Worked on:** Skill update install for Session 108 version-tracking changes. Packaged findasale-advisory-board, findasale-hacker, findasale-pitchman source directories (skills-package/) as flat .skill archives (SKILL.md at root, not nested). Fixed path nesting bug from first packaging attempt. Presented all 8 updated skills via Cowork UI. Patrick confirmed all installed.
+**Decisions:** .skill packaging must use `zip -j` (junk paths) run from inside the source directory to avoid nested paths. Confirmed canonical packaging method for advisory-board, hacker, pitchman going forward.
+**Token efficiency:** No subagents, no code changes. Pure housekeeping. TER estimate: high (minimal token burn, task complete).
+**Next up:** Session 110 — multi-agent P1 bug blitz. Dispatch findasale-qa (scoping) + findasale-dev (parallel fixes) for A1.3, A1.4, A2.2, A5.1/A5.2, A6.1.
+**Blockers:** Session 107 push still pending (10 files — see session 107 push block). Neon migration 20260311000001 still needs `prisma migrate deploy`. Wrap-only docs need Patrick push (session-log.md, next-session-prompt.md, STATE.md).
+
 ### 2026-03-09 (session 108 — Init/Wrap Audit + Fix Plan + Fleet Hardening)
 **Worked on:** (1) Audited sessions 95–107 for init/wrap failure patterns — session log for 103–107 + fleet-optimization-evaluation-2026-03-09.md for 95–102. (2) Produced `claude_docs/operations/session-init-wrap-fix-plan.md` documenting 8 failure patterns (3 init, 5 wrap). (3) Dispatched findasale-records to apply all fixes in single pass. Fixes applied: CORE.md §2 skip condition clarified (AND not OR, subsequent-turns-only); WRAP_PROTOCOL_QUICK_REFERENCE.md — 3 insertions (Step 2a subagent reconciliation, Rule 4a git-status-first gate, checklist next-session-prompt line); findasale-records SKILL.md source directory created with Skill Update Protocol section; version/last_updated frontmatter added to 9 skill source SKILL.md files. (4) All 9 skill source pushes + CORE.md + WRAP_PROTOCOL_QUICK_REFERENCE.md + fix plan pushed to GitHub (12 MCP commits total).
 **Decisions:** CORE.md §2 now explicitly states skip condition = subsequent turns only, cannot bypass first-message init. Skill version tracking is now mandatory — every source SKILL.md must have version/last_updated in YAML frontmatter. findasale-records now has a canonical source directory in git (was previously only a .skill archive). Wrap protocol now has a hard gate for next-session-prompt.md and subagent file reconciliation.
@@ -43,51 +50,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Next up:** Session 106 — B1 Linchpin. Dispatch findasale-architect to produce ADR on Sale Type → Item Type decision. Patrick must push Session 105 files first.
 **Blockers:** Patrick must push 6 changed files (see next-session-prompt push block). Neon migration 20260310000001 still pending. MAILERLITE_API_KEY pending in Railway. 18 skill files pending install.
 
-### 2026-03-09 (session 104 — Fleet Self-Audit + Steelmanned Improvements + Roadmap Expansion)
-**Worked on:**
-- **Fleet Self-Audit:** Read all 17 SKILL.md files + 10 scheduled tasks + cross-agent contracts. Identified 3 P0 bugs (MCP limit wrong ≤5→≤3, session-log path stale, migration count 35→63), 15/17 agents missing MESSAGE_BOARD wiring, 17/17 missing BUSINESS_PLAN.md references, 4 agents missing Setup sections.
-- **QW/PI patches (9 quick wins + 2 proposals approved):** Applied QW1–QW9 (MCP limit, session-log paths, migration count, setup sections for hacker/pitchman/advisory-board, support bug routing fix, deploy env var cleanup, deploy step 8A push.ps1, records task registry, marketing MailerLite/BUSINESS_PLAN). Applied PI1 (BUSINESS_PLAN.md to architect/legal/rd/hacker/pitchman/advisory-board) + PI2 (MESSAGE_BOARD to architect/marketing/legal/rd/support/advisory-board).
-- **R&D — OpenTelemetry:** Verdict MONITOR. Enterprise-gated, requires admin config + external OTLP collector. Not usable for solo operators. Stick with /cost + /context for TER tracking.
-- **Pitchman sweep:** 104 improvement ideas across 20 skills + 5 shipped features. Top steelmanned: automated migration rollback plan, canary deploy + auto-rollback, payout transparency dashboard, self-healing code patterns, serendipity search.
-- **Steelmanned improvements (18 skills):** Applied one targeted "Steelmanned Improvement" section to every agent in the fleet — dev (JSDoc pass), qa (payment fuzzer), architect (rollback plan format), records (behavior rule audit trail), ops (incident playbook decision tree), deploy (risk matrix), health-scout (self-healing pattern refs), marketing (organic content loop), cx (video/hint system), support (refund predictor), legal (ToS impact mapping), ux (a11y auto-audit), rd (market timing), workflow (session metadata log), hacker (dependency vuln scoring), pitchman (robustness score), advisory-board (strategy variance review), cowork-power-user (connector matrix).
-- **Roadmap v20:** Added 15 product features to Phase 3/4 from pitchman sweep (payout transparency, serendipity, referral reciprocal, SEO descriptions, bid bot detector, post analytics, passkeys, proactive degradation, Sentry impact scoring, low-bandwidth mode, unsubscribe-to-snooze). Added 3 infra items to Deferred. Added new Agent Task Queue section (12 proactive tasks with P0/P1/P2 priorities).
-- **Packaging:** 18 .skill files in `claude_docs/skill-updates-2026-03-09/`. 3 errored installs (hacker/pitchman/advisory-board) re-packaged fresh.
-- **Skill files that need install:** All 18 in `claude_docs/skill-updates-2026-03-09/`. Previously installed (legal, architect, marketing, deploy, support, ops, records, workflow, rd) need reinstall to get steelmanned additions. Previously errored (hacker, pitchman, advisory-board) need fresh install.
-**Decisions:** OpenTelemetry → MONITOR (enterprise-gated). All 18 agent steelmanned improvements approved by Patrick. 15 roadmap features from pitchman sweep added. 12 agent queue tasks added to roadmap.
-**Token efficiency:** Session continued from context summary. ~18 skill files patched, 18 packaged, roadmap updated, STATE.md + session-log wrapped. Significant file reads + Python scripts. TER estimate: 0.06–0.10 tasks/k-token (heavy file I/O session).
-**Next up:** Session 105 — Bug Blitz. Load: BACKLOG_2026-03-08.md §A (P0 bugs), roadmap Agent Task Queue (Bug Blitz Scoping P0). Patrick actions: install all 18 .skill files, run `npx prisma migrate deploy` for migration 20260310000001, add MAILERLITE_API_KEY to Railway, run `.\push.ps1` for all changed files this session.
-**Blockers:** 18 .skill files need Patrick install. Neon migration 20260310000001 pending. MAILERLITE_API_KEY pending in Railway.
-**CORE.md §17 push block:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/logs/session-log.md
-git add claude_docs/improvement-memos/fleet-self-audit-2026-03-09.md
-git add claude_docs/improvement-memos/pitchman-sweep-2026-03-09.md
-git add claude_docs/research/rd-opentelemetry-2026-03-09.md
-git add claude_docs/next-session-prompt.md
-git add claude_docs/CORE.md
-git add claude_docs/SESSION_WRAP_PROTOCOL.md
-git add claude_docs/WRAP_PROTOCOL_QUICK_REFERENCE.md
-git add claude_docs/skill-updates-2026-03-09/findasale-dev.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-qa.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-architect.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-records.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-ops.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-deploy.skill
-git add claude_docs/skill-updates-2026-03-09/health-scout.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-marketing.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-cx.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-support.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-legal.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-ux.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-rd.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-workflow.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-hacker.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-pitchman.skill
-git add claude_docs/skill-updates-2026-03-09/findasale-advisory-board.skill
-git add claude_docs/skill-updates-2026-03-09/cowork-power-user.skill
-git commit -m "Session 104: fleet self-audit, 18 skill updates, roadmap v20, agent task queue, push protocol hardened"
-.\push.ps1
-```
