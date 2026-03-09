@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-09 (v20 — Session 104 fleet self-audit; 15 new feature pipeline items from pitchman sweep added)
+**Last Updated:** 2026-03-09 (v21 — Session 114 sync: completed checklist items marked, migration count updated)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
 ---
@@ -8,7 +8,7 @@
 ## Patrick's Checklist
 
 ### Business Formation + Legal
-- [ ] Set up support@finda.sale email forwarding
+- [x] Set up support@finda.sale email forwarding ✅ Done (2026-03-06)
 - [ ] Order business cards (~$25) — files in `claude_docs/brand/`
 - [ ] Create Google Business Profile for FindA.Sale
 - [ ] Open Stripe business account
@@ -16,10 +16,10 @@
 - [ ] Set up Google Voice for support line
 
 ### Credentials + Services
-- [ ] Rotate Neon database credentials (exposed in git history — precaution)
-- [ ] OAuth credentials (Google, Facebook) → Vercel env vars: GOOGLE_CLIENT_ID/SECRET, FACEBOOK_CLIENT_ID/SECRET
+- [x] Rotate Neon database credentials ✅ Done (2026-03-09, session 111)
+- [x] OAuth credentials (Google, Facebook) → Vercel env vars ✅ Done (2026-03-06)
 - [ ] VAPID keys confirmed in production
-- [ ] ⚡ **Sync: Confirm 5%/7% platform fee (pricing analysis complete — Patrick decision pending)**
+- [x] ~~Confirm 5%/7% platform fee~~ ✅ Locked at **10% flat** (session 106)
 
 ### Beta Recruitment
 - [ ] Identify 5 target beta organizers (`claude_docs/beta-launch/organizer-outreach.md` ready)
@@ -115,7 +115,7 @@ Proactive tasks assigned to the fleet. Not product features — operational work
 
 | Sync | What's Needed | Status |
 |------|---------------|--------|
-| ⚡ Confirm 5%/7% fee | Pricing analysis done — Patrick decides | Pending Patrick |
+| ✅ Platform fee | Locked at 10% flat — session 106 | Complete |
 | ⚡ Beta readiness | Patrick's checklist above → first real user | Waiting on Patrick items |
 | ⚡ Beta feedback loops | Beta feedback → Claude iterates on features | Pending beta launch |
 
@@ -142,7 +142,7 @@ Proactive tasks assigned to the fleet. Not product features — operational work
 
 ## Infrastructure
 
-All infra complete. Backend: Railway. DB: Neon (63 migrations applied as of 2026-03-07). Frontend: Vercel (`finda.sale`). Git: `.\push.ps1` replaces `git push`. See `claude_docs/CORE.md` and `claude_docs/STACK.md`.
+All infra complete. Backend: Railway. DB: Neon (66 migrations applied as of 2026-03-09). Frontend: Vercel (`finda.sale`). Git: `.\push.ps1` replaces `git push`. See `claude_docs/CORE.md` and `claude_docs/STACK.md`.
 
 ---
 

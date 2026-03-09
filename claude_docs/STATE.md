@@ -117,8 +117,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 
 ---
 
-- **favicon.ico** — ✅ COMPLETE. Multi-size ICO (16/32/48px) from logo-icon-512.png. `_document.tsx` updated with shortcut/icon links. Pushed 2026-03-05.
-- **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
-- **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
-
-Last Updated: 2026-03-09 (session 113 — fleet audit, CORE.md v2, 188 archived docs removed)
+Last Updated: 2026-03-09 (session 114 — stale entries pruned)
