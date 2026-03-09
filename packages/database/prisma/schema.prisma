@@ -163,6 +163,7 @@ model Item {
   description      String?
   price            Float?
   auctionStartPrice Float?
+  auctionReservePrice Float?
   currentBid       Float?
   bidIncrement     Float?    @default(1)
   auctionEndTime   DateTime?

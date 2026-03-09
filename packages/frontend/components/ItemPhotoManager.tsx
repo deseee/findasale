@@ -156,14 +156,14 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 </span>
               )}
 
-              {/* Delete button \u2014 top-right, shows on hover */}
+              {/* Delete button — top-right, shows on hover */}
               <button
                 type="button"
                 onClick={() => handleDelete(i)}
                 className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
                 aria-label={`Remove photo ${i + 1}`}
               >
-                \u00d7
+                ×
               </button>
 
               {/* Reorder arrows \u2014 bottom, shows on hover */}

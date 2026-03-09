@@ -15,9 +15,9 @@ Session 105 Bug Blitz COMPLETE (2026-03-09). 7 P0 bugs fixed, QA PASS.
 
 **Session 109 COMPLETE (2026-03-09):** Housekeeping only. Packaged and reinstalled 8 updated skill archives (Session 108 version tracking). advisory-board, hacker, pitchman newly packaged as flat .skill archives. All 8 installed by Patrick.
 
-**Next: Session 110 — Multi-Agent P1 Bug Blitz.** Dispatch findasale-qa (scoping) + findasale-dev (parallel fixes) for A1.3, A1.4, A2.2, A5.1/A5.2, A6.1.
+**Session 110 COMPLETE (2026-03-09):** Multi-agent P1 bug blitz. QA scoped + dev fixed: A1.3 (geo toast), A1.4 (FTS merged into main search), A2.2 (all 13 PWA icons regenerated from FindA.Sale brand source), A5.1 (double layout removed), A5.2 (organizer profile links), A6.1 (hardcoded city → env vars). Then continuous fleet deployment: fixed A4.1 (dashboard Add Items gating + analytics NaN), A3.3 (× unicode), A3.4 (edit-item error handling), A3.8 (removed orphan upload tab), A5.3 (backend badge fetch), B4 (auctionReservePrice field + migration + frontend), B8 (webhook UI surfaced in dashboard). Architect decisions: B5 DEFERRED (email reply parsing post-beta, trigger at 500 organizers), B8 GO (webhooks already built — UI only). B6 no typo found.
 
-**Remaining P1 bugs (Session 108 onwards):** A1.3 (my-location button), A1.4 (search scope), A2.2 (SaleScout logo in PWA banner), A5.1/A5.2 (leaderboard), A6.1 (hardcoded city), A3.6 single-item 500 (needs Railway production logs).
+**Remaining open:** A3.6 single-item 500 (needs Railway production logs — blocked). B2 (AI tagging disclosure copy). B3 (holds/reservations — deferred). B7 (referral safeguards — attorney required). D1 (quasi-POS — attorney required). D3 (map route planning). H1 (UX inspiration research). C1/C2 (legal terms — no action for beta). G-batch (Cowork platform research).
 
 ---
 
@@ -119,4 +119,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-09 (session 109 — skill housekeeping complete. Session 110: multi-agent P1 bug blitz.)
+Last Updated: 2026-03-09 (session 110 complete — P1 bug blitz + A4.1 dashboard + A3.x upload fixes + B4 auction reserves + B8 webhook UI)
