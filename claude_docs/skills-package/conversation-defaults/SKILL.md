@@ -1,4 +1,6 @@
 ---
+version: 2
+last_updated: 2026-03-09 (Session 108)
 name: conversation-defaults
 description: >
   Always-active conversation behavior defaults for Patrick's Cowork sessions.
