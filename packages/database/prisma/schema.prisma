@@ -181,6 +181,8 @@ model Item {
   // CD2: Live Drop — item hidden until liveDropAt time
   isLiveDrop       Boolean   @default(false) // Deprecated: use listingType instead
   liveDropAt       DateTime?
+  // B2: AI tagging disclosure — true when AI (Vision + Haiku) generated this item's fields
+  isAiTagged       Boolean   @default(false)
   // CD2 Phase 4: Reverse Auction — daily price decline until sold or floor hit
   reverseAuction   Boolean   @default(false) // Deprecated: use listingType instead
   reverseDailyDrop Int?      // cents per day
