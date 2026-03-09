@@ -53,7 +53,9 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
       for (const file of Array.from(files)) {
         // Step 1: Upload to Cloudinary via the existing upload endpoint
         const formData = new FormData();
-        formData.append('image', file);
+        // Field name must match upload.single('photo') on POST /api/upload/item-photo.
+        // 'image' caused Multer "Unexpected field" error — backend expects 'photo'.
+        formData.append('photo', file);
         const uploadRes = await api.post('/upload/item-photo', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });

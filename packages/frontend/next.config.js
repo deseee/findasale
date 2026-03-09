@@ -154,7 +154,9 @@ const nextConfig = {
           // Permissions policy
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self), payment=(self)',
+            // camera=(self): RapidCapture uses getUserMedia() — camera=() blocks it entirely.
+            // microphone=(): No audio features in FindA.Sale — block by policy.
+            value: 'camera=(self), microphone=(), geolocation=(self), payment=(self)',
           },
           // Content Security Policy
           {
@@ -164,8 +166,13 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
               "font-src 'self' https://fonts.gstatic.com https://unpkg.com",
-              "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com https://picsum.photos https://fastly.picsum.photos",
-              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io`,
+              // raw.githubusercontent.com: Leaflet colored marker icons (green/amber/gray/orange)
+              // These are used in SaleMapInner.tsx for status-based pin coloring.
+              // Blocked by CSP → all pins invisible. Must be alongside unpkg.com (default icons).
+              // api.qrserver.com: SaleQRCode component fetches QR images and downloads via fetch().
+              // Missing from img-src → blank QR on dashboard. Missing from connect-src → download fails.
+              "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com https://raw.githubusercontent.com https://picsum.photos https://fastly.picsum.photos https://api.qrserver.com",
+              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
               "frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network",
               "worker-src 'self' blob:",
               "manifest-src 'self'",

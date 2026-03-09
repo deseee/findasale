@@ -153,7 +153,9 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
       orderBy: { startDate: 'asc' },
       include: {
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
-        items: { select: { id: true, status: true } }
+        // title + price required by FlashDealForm dropdown on organizer dashboard.
+        // status kept for item count badges. Avoiding full item select — too heavy for list view.
+        items: { select: { id: true, title: true, price: true, status: true } }
       },
       take: 50
     });

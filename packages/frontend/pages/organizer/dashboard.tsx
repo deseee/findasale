@@ -128,7 +128,8 @@ const OrganizerDashboard = () => {
   const { data: tierData } = useQuery({
     queryKey: ['my-tier', user?.id],
     queryFn: async () => {
-      const response = await api.get('/api/tiers/mine');
+      // Note: api baseURL already includes /api — do NOT double-prefix with /api/tiers.
+      const response = await api.get('/tiers/mine');
       return response.data as {
         tier: 'BRONZE' | 'SILVER' | 'GOLD';
         benefits: {
