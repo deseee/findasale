@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Self-improvement loop sessions 96–102 complete (all in single session). 29 backlog items shipped across 7 planned sessions: E4 message board, E5 state machine, heartbeat protocol, E16 worktrees research, E2 token monitoring, E10 session baselines, E12.5 token-per-goal metric, E6 steelman method, E1.5 continuous batch rule, E9.5 syntax pre-filter, E17 file schema, E15 skill roster, F2 Hacker agent, F1 Pitchman agent, F3 Advisory Board, G-batch platform research, E7 PM design, E14 model routing. Sprint queue: Session 103 (Fleet Optimization Evaluation — BACKLOG §K) → then production bugs (A-section). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool.
+Self-improvement loop COMPLETE (sessions 95–103). Session 103 evaluation done: Option C verdict (loop partially working, proceed to bug blitz). Key finding: E1.5 batch continuation confirmed successful (29 items, single session). Gaps fixed this session: conversation-defaults Rules 6–8 deployed to source SKILL.md + repackaged, TASK_REGISTRY.json reconciled, session-log updated. Sprint queue: Session 104 Fleet Self-Audit (each subagent audits itself + whole fleet — skills, plugins, routines, cross-agent contracts) → Session 105 Bug Blitz → Session 106 Architecture Decisions (B1 linchpin). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool. Patrick must reinstall conversation-defaults-updated.skill before Session 104.
 
 ---
 
@@ -32,7 +32,7 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-Sessions 96–102 complete. Self-improvement loop nearly done — Session 103 (Fleet Optimization Evaluation) remains. Sprint 5 (Seller Performance Dashboard) intentionally deferred until evaluation completes per BACKLOG §K. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
+Sessions 95–103 complete. Self-improvement loop DONE. Session 103 evaluation complete — verdict Option C, proceed to Bug Blitz. Sprint 5 (Seller Performance Dashboard) still deferred until after Bug Blitz. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
@@ -107,4 +107,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-09 (sessions 96–102 — Self-improvement loop: 29 items shipped. New infrastructure: message board, task state machine, heartbeat protocol. New agents: Hacker, Pitchman, Advisory Board. Research: worktrees, token monitoring, GSD framework, Sentry MCP, GitHub Actions, model routing. CORE.md §3 strengthened with E1.5/E9.5. conversation-defaults Rules 7-8 added. CLAUDE.md §7 skill roster added. 18 new files created in claude_docs/.)
+Last Updated: 2026-03-09 (session 103 — Fleet optimization evaluation complete. Option C verdict. 3 gaps fixed: conversation-defaults Rules 6–8 deployed to source, TASK_REGISTRY.json reconciled, session-log 96–102 entry added. Self-improvement loop fully closed.)

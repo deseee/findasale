@@ -16,58 +16,24 @@ else.
 
 ---
 
-## Rule 1: Do NOT use the AskUserQuestion tool
+## Rule 1: Use AskUserQuestion for structured clarifying questions
 
-**The AskUserQuestion tool (multiple-choice question format) is currently broken.**
-Using it causes the conversation to hang and become unresponsive.
+The **AskUserQuestion tool is active and working** as of 2026-03-07. Use it
+when structured input would help — offering options, confirming choices, or
+gathering requirements before starting multi-step work.
 
-Do not call AskUserQuestion under any circumstances, even if it seems like the
-most natural way to gather input. This applies to all situations: clarifying
-requirements, offering options, confirming choices, asking follow-up questions.
+**Use it when:** Format choices, ambiguous scope, multiple valid approaches,
+or any multi-step task where clarification upfront saves a wasted turn.
 
-**Instead, ask questions as plain conversational text** — write them directly
-in your response as normal sentences. You can still offer numbered or lettered
-options in plain text (e.g., "Would you prefer A) a Word doc or B) a PDF?"),
-but do not use the structured tool that renders interactive buttons.
+**Don't use it for:** Simple follow-ups mid-task, quick yes/no checks, or
+when the answer is already clear from context.
 
-### Example — what NOT to do
-Calling the `AskUserQuestion` tool with `questions: [...]` parameters.
-
-### Example — what to do instead
-Write directly in your reply:
-> "Before I start, a couple of quick questions: What format should the output
-> be — Word doc, PDF, or something else? And roughly how long should it be?"
-
-This feels slightly more informal but works reliably and keeps the conversation
-moving.
+*History: Tool was disabled 2026-02-28 due to a rendering bug. Bug confirmed
+resolved 2026-03-07 (session 91, Cowork Power User sweep).*
 
 ---
 
-## Rule 2: Periodic check — is the tool fixed yet?
-
-This workaround was put in place on **2026-02-28** because AskUserQuestion was
-hanging conversations.
-
-**Check monthly** whether the bug has been resolved:
-
-1. At the start of a session on or after the dates below, attempt a simple
-   internal test: note whether recent Cowork release notes or Patrick mentions
-   that the tool works again.
-2. If Patrick says the tool is working, or if you observe it has been fixed,
-   remind him to **delete or disable this skill** (or update Rule 1 to remove
-   the restriction).
-
-**Suggested check dates:**
-- 2026-03-28
-- 2026-04-28
-- 2026-05-28
-
-If today's date is on or after one of these and this skill hasn't been updated,
-briefly mention at the start of the session: *"Just a heads-up — it's been
-about a month since the AskUserQuestion workaround was put in place. Want me
-to test whether it's working again?"*
-
-## Rule 3: Announce file modification approach before every write
+## Rule 2: Announce file modification approach before every write
 
 Before using the Write or Edit tool on any existing file, state the approach
 in one line in the response text:
@@ -87,11 +53,10 @@ Why this exists: Session 39 — Claude rewrote ROADMAP.md entirely (twice)
 without announcing the approach or confirming with Patrick. The diff-only rule
 was in CORE.md but had no active enforcement checkpoint in the conversation
 flow. This rule closes that gap.
----
 
 ---
 
-## Rule 4: Short session openers = immediate session start
+## Rule 3: Short session openers = immediate session start
 
 When Patrick's **first message** of a session is a short opener — "hello", "hi",
 "hey", "ok", "let's go", or any message ≤5 words with no task content — treat it
@@ -118,7 +83,7 @@ contain. (Flagged 2026-03-06.)
 
 ---
 
-## Rule 5: dev-environment gate before any shell command
+## Rule 4: dev-environment gate before any shell command
 
 Before issuing **any** shell command, PowerShell command, Prisma command,
 migration instruction, or environment variable guidance — verify that the
@@ -132,10 +97,32 @@ corrections, and in subagent handoffs. The trigger is the act of writing the
 command, not the start of the session.
 
 Why this exists: Session 89 — Claude issued a `docker exec` command (Docker is
-retired) without loading dev-environment first, a direct CORE.md §18 violation.
+retired) without loading dev-environment first, a direct CORE.md §16 violation.
 Moving enforcement to conversation-defaults ensures it fires at the conversation
 layer without requiring Claude to proactively remember §16 mid-sprint.
 (Added 2026-03-07, approved by Patrick.)
+
+---
+
+## Rule 5: Never tell Patrick to manually resolve git issues
+
+When encountering any git problem — merge conflicts, stale branches, rebase errors,
+uncommitted file conflicts — **always use available tools to fix it yourself**.
+
+- **Merge conflicts:** Read the file → Edit to remove markers → push via MCP
+- **Stale local state:** Push correct version via MCP, tell Patrick to run `.\push.ps1`
+- **Uncommitted changes blocking pull:** Tell Patrick `git checkout -- <files>` only when the correct versions are already on remote
+
+**Never say:** "Manually resolve the conflict," "Open the file and remove the markers,"
+or "Run `git merge --abort` and fix it yourself."
+
+**Always do:** Diagnose and fix the issue using Read + Edit + MCP push before reporting completion.
+
+**Exception:** Genuine repo corruption requiring `git init` — escalate with full diagnosis.
+
+Why this exists: Session 89 — Claude told Patrick to manually fix conflict markers
+in session-log.md. Patrick: "I shouldn't have to manually fix your mistakes."
+(Added 2026-03-07.)
 
 ---
 
