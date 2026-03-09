@@ -12,7 +12,7 @@ Review at session start — any FAIL entries need investigation.
 | findasale-nightly-context | Daily 2am | — | — | Refreshes context.md |
 | context-freshness-check | Daily 8am | — | — | Flags stale STATE.md/context.md |
 | findasale-health-scout | Weekly Sun 11pm | — | — | Security + code quality scan |
-| findasale-competitor-monitor | Weekly Mon 8am | — | — | Competitor + industry intel (merged) |
+| findasale-competitor-monitor | Weekly Mon 8am | PASS | 2026-03-09 | Competitor + industry intel (merged) |
 | findasale-ux-spotcheck | Weekly Wed 9am | — | — | Rotating organizer/shopper flow review |
 | findasale-monthly-digest | Monthly 1st 9am | — | — | Feature digest + changelog |
 | findasale-workflow-retrospective | Monthly 8th 9am | — | — | Meta workflow audit (merged from bi-weekly) |
@@ -42,7 +42,7 @@ Review at session start — any FAIL entries need investigation.
 
 | Task | Date | Result | Notes |
 |---|---|---|---|
-| — | — | — | No runs logged yet |
+| findasale-competitor-monitor | 2026-03-09 | PASS | Blue Moon/Valuable AI threat identified; 3 content pieces generated; intel saved to competitor-intel/intel-2026-03-09.md |
 
 ---
 
