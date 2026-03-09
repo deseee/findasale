@@ -4,6 +4,7 @@
  * Displays available + pending Stripe balance, lets organizers:
  * - Change their automatic payout schedule (daily / weekly / monthly / manual)
  * - Trigger an on-demand payout (standard or instant)
+ * Feature #9: Earnings Breakdown — item-level fee transparency
  */
 
 import React, { useState, useEffect } from 'react';
@@ -57,6 +58,34 @@ const OrganizerPayoutsPage = () => {
       return res.data as { interval: Interval; weeklyAnchor: string | null; monthlyAnchor: number | null };
     },
     enabled: !!user?.id,
+  });
+
+  // Feature #9: Item-level earnings breakdown
+  interface EarningsItem {
+    purchaseId: string;
+    itemTitle: string;
+    saleTitle: string;
+    purchaseDate: string;
+    salePrice: number;
+    platformFee: number;
+    stripeFee: number;
+    netPayout: number;
+  }
+  interface EarningsTotals {
+    grossRevenue: number;
+    totalPlatformFees: number;
+    totalStripeFees: number;
+    totalNetPayout: number;
+  }
+
+  const { data: earnings, isLoading: earningsLoading } = useQuery({
+    queryKey: ['earnings-breakdown'],
+    queryFn: async () => {
+      const res = await api.get('/stripe/earnings');
+      return res.data as { items: EarningsItem[]; totals: EarningsTotals; count: number; note: string };
+    },
+    enabled: !!user?.id,
+    staleTime: 2 * 60_000,
   });
 
   useEffect(() => {
@@ -281,6 +310,97 @@ const OrganizerPayoutsPage = () => {
                 {createPayoutMutation.isPending ? 'Initiating payout…' : 'Request payout'}
               </button>
             </form>
+          </div>
+
+          {/* Earnings Breakdown — Feature #9 */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                Earnings Breakdown
+              </h2>
+              <a
+                href={`/api/earnings/pdf?year=${new Date().getFullYear()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Download {new Date().getFullYear()} PDF
+              </a>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">
+              Item-level breakdown of your sold items. Stripe fee is estimated at 2.9% + $0.30.
+            </p>
+
+            {earningsLoading ? (
+              <p className="text-gray-400 text-sm">Loading earnings…</p>
+            ) : !earnings || earnings.count === 0 ? (
+              <p className="text-gray-400 text-sm">No completed sales yet.</p>
+            ) : (
+              <>
+                {/* Summary totals */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-5">
+                  {[
+                    { label: 'Gross Revenue', value: earnings.totals.grossRevenue, color: 'text-gray-900' },
+                    { label: 'Platform Fees', value: -earnings.totals.totalPlatformFees, color: 'text-red-600' },
+                    { label: 'Est. Stripe Fees', value: -earnings.totals.totalStripeFees, color: 'text-orange-500' },
+                    { label: 'Est. Net Payout', value: earnings.totals.totalNetPayout, color: 'text-green-600' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-center">
+                      <p className={`text-lg font-bold ${color}`}>
+                        {value < 0 ? '-' : ''}${Math.abs(value).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Item table */}
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left text-xs font-medium text-gray-400 pb-2 pr-3">Item</th>
+                        <th className="text-left text-xs font-medium text-gray-400 pb-2 pr-3 hidden sm:table-cell">Sale</th>
+                        <th className="text-left text-xs font-medium text-gray-400 pb-2 pr-3 hidden md:table-cell">Date</th>
+                        <th className="text-right text-xs font-medium text-gray-400 pb-2 pr-3">Price</th>
+                        <th className="text-right text-xs font-medium text-gray-400 pb-2 pr-3 hidden sm:table-cell">Platform</th>
+                        <th className="text-right text-xs font-medium text-gray-400 pb-2 pr-3 hidden md:table-cell">Stripe</th>
+                        <th className="text-right text-xs font-medium text-gray-400 pb-2">Net</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {earnings.items.map((item) => (
+                        <tr key={item.purchaseId} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                          <td className="py-2 pr-3 text-gray-800 max-w-[140px] truncate">{item.itemTitle}</td>
+                          <td className="py-2 pr-3 text-gray-500 hidden sm:table-cell max-w-[120px] truncate">{item.saleTitle}</td>
+                          <td className="py-2 pr-3 text-gray-400 text-xs hidden md:table-cell whitespace-nowrap">
+                            {new Date(item.purchaseDate).toLocaleDateString()}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-800 font-medium whitespace-nowrap">
+                            ${item.salePrice.toFixed(2)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-red-500 text-xs hidden sm:table-cell whitespace-nowrap">
+                            −${item.platformFee.toFixed(2)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-orange-400 text-xs hidden md:table-cell whitespace-nowrap">
+                            ~−${item.stripeFee.toFixed(2)}
+                          </td>
+                          <td className="py-2 text-right text-green-600 font-semibold whitespace-nowrap">
+                            ${item.netPayout.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {earnings.count >= 100 && (
+                  <p className="text-xs text-gray-400 mt-3 text-center">
+                    Showing most recent 100 items. Download the PDF for full history.
+                  </p>
+                )}
+              </>
+            )}
           </div>
 
         </div>
