@@ -14,7 +14,8 @@ const couponValidateLimiter = rateLimit({
     const userId = (req as AuthRequest).user?.id;
     if (userId) return userId;
     // Use ipKeyGenerator helper for proper IPv6 handling (validates against ERR_ERL_KEY_GEN_IPV6)
-    return (ipKeyGenerator as (req: Request) => string)(req);
+    const ip = req.ip ?? req.socket?.remoteAddress ?? 'unknown';
+    return ipKeyGenerator(ip);
   },
   message: { message: 'Too many validation attempts. Please wait before trying again.' },
 });
