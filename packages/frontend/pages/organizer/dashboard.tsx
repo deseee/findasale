@@ -280,6 +280,41 @@ const OrganizerDashboard = () => {
                 </div>
               </div>
 
+              {/* H1: How It Works onboarding card */}
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 className="text-lg font-semibold text-warm-900 mb-4">How It Works</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-xl">📋</span>
+                    </div>
+                    <p className="font-semibold text-warm-900 text-sm mb-1">1. Create a Sale</p>
+                    <p className="text-xs text-warm-600">Set your date, location, and sale details to get started.</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-xl">📷</span>
+                    </div>
+                    <p className="font-semibold text-warm-900 text-sm mb-1">2. Add Your Items</p>
+                    <p className="text-xs text-warm-600">Snap photos and set prices. AI helps tag and describe items.</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-xl">🛒</span>
+                    </div>
+                    <p className="font-semibold text-warm-900 text-sm mb-1">3. Attract Buyers</p>
+                    <p className="text-xs text-warm-600">Your sale goes live on the map. Buyers browse, search, and save items.</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-xl">💰</span>
+                    </div>
+                    <p className="font-semibold text-warm-900 text-sm mb-1">4. Complete the Sale</p>
+                    <p className="text-xs text-warm-600">Accept offers, process payments, and track your earnings.</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Phase 31: Organizer Tier Rewards card */}
               {tierData && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
