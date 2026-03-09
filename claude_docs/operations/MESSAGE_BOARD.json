@@ -90,5 +90,29 @@
       "claude_docs/feature-notes/advisory-board-fee-structure-stress-test-2026-03-10.md"
     ]
   }
+  ,{
+    "id": "msg-007",
+    "timestamp": "2026-03-11T06:00:00Z",
+    "from": "findasale-qa",
+    "to": "findasale-dev, orchestrator, patrick",
+    "type": "blocker",
+    "subject": "BLOCKER: Session 107A/B/C QA FAIL — auctionJob.ts hardcoded fees",
+    "body": "QA VERDICT: FAIL — DO NOT PUSH. Critical issue found in auctionJob.ts: Fee calculation still hardcodes 0.07 (7%) on lines 59 and 76 instead of reading from FeeStructure table. This violates the B1 requirement (10% flat rate) and creates revenue loss + fee inconsistency (Stripe payments use 10%, auctions use 7%). All other changes PASS: schema + types correct, migration backfill logic correct, stripeController correctly implements FeeStructure lookup, frontend forms validated. Root cause: auctionJob.ts was not updated during 107B dev phase. Fix: Fetch feeRate from FeeStructure in auctionJob.ts before calculating platformFeeAmount, matching stripeController pattern (lines 216-220). All other files safe to ship once auctionJob.ts is fixed.",
+    "status": "blocker",
+    "refs": ["B1", "SESSION_107"],
+    "blocking_issue": "auctionJob.ts lines 59, 76 hardcoded 0.07 fee rate",
+    "files_reviewed": [
+      "packages/shared/src/index.ts",
+      "packages/database/prisma/schema.prisma",
+      "packages/database/prisma/migrations/20260311000001_add_sale_type_item_listing_type/migration.sql",
+      "packages/database/prisma/seed.ts",
+      "packages/backend/src/controllers/stripeController.ts",
+      "packages/backend/src/controllers/saleController.ts",
+      "packages/backend/src/controllers/itemController.ts",
+      "packages/backend/src/jobs/auctionJob.ts",
+      "packages/frontend/pages/organizer/create-sale.tsx",
+      "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+    ]
+  }
   ]
 }
