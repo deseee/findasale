@@ -201,11 +201,20 @@ CLAUDE.md rules. You own them with the same rigor as Tier 1 files.
 
 Review with: list all scheduled tasks via the `mcp__scheduled-tasks__list_scheduled_tasks` tool.
 
-Known tasks as of last audit:
-- `findasale-nightly-context` — regenerates context.md nightly at 2am
-- `findasale-session-wrap` — on-demand session wrap
-- `findasale-health-scout` — weekly health scan (if registered)
-- `findasale-workflow-review` — bi-weekly workflow review (1st + 15th, 9am)
+Known tasks as of last audit (2026-03-09 — 10 registered, 1 disabled):
+- `findasale-health-scout` — weekly health scan (Sunday 11pm)
+- `findasale-competitor-monitor` — weekly competitive intel pipeline (Monday 8am)
+- `findasale-ux-spotcheck` — weekly rotating UX code review (Wednesday 9am)
+- `findasale-monthly-digest` — monthly changelog + STATE.md drift check (1st of month, 9am)
+- `findasale-session-warmup` — on-demand environment health check (manual only)
+- `findasale-session-wrap` — on-demand session wrap (manual only)
+- `findasale-workflow-retrospective` — monthly meta-audit of AI workflow (8th of month, 9am)
+- `context-freshness-check` — daily STATE.md + context.md staleness check (8am daily)
+- `findasale-power-user-sweep` — weekly improvement sweep (Sunday 10pm)
+- `weekly-industry-intel` — DISABLED (merged into findasale-competitor-monitor)
+
+Note: `findasale-nightly-context` is NOT registered (may have been merged into context-freshness-check).
+`findasale-workflow-review` has been superseded by `findasale-workflow-retrospective`.
 
 ### Scheduled Task Audit Protocol
 
@@ -254,7 +263,7 @@ Patrick approved: [yes / pending]
 
 At the end of any meaningful work session, run these steps in order:
 
-1. **Session log update**: Append to `claude_docs/session-log.md`:
+1. **Session log update**: Append to `claude_docs/logs/session-log.md`:
    ```
    ## Session [N] — [date]
    ### Completed
