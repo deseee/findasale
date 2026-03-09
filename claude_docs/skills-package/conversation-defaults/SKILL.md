@@ -56,30 +56,28 @@ flow. This rule closes that gap.
 
 ---
 
-## Rule 3: Short session openers = immediate session start
+## Rule 3: First message of any session = immediate session start
 
-When Patrick's **first message** of a session is a short opener — "hello", "hi",
-"hey", "ok", "let's go", or any message ≤5 words with no task content — treat it
-as a **session start signal**, not a standalone conversational exchange.
+**Any first message** — short opener, status report, completion update, or task assignment — is a session start signal. Load context unconditionally on the first message of every session.
 
-**Correct response pattern:**
+**Response pattern varies by message type:**
 
+**Short opener** (≤5 words, no task content — "hello", "hi", "ok", "let's go"):
 1. Reply with one brief, warm greeting sentence.
-2. Immediately load session context (silently — do not narrate the loads):
-   - `claude_docs/STATE.md`
-   - `claude_docs/logs/session-log.md` (last 2 entries)
-   - `claude_docs/operations/next-session-prompt.md`
-3. Relay the next-session-prompt: announce the session number, what was done
-   last session, and the priority queue for this session.
-4. Begin working on the first priority task — no permission needed.
+2. Load context silently (STATE.md, session-log last 2 entries, next-session-prompt.md). Do not narrate the loads.
+3. Announce session number, last session summary, and priority queue.
+4. Begin the first priority task — no permission needed.
 
-**Do NOT ask:** "What would you like to work on today?" or "What are we doing
-this session?" — read the docs and start.
+**Status/completion report or task assignment** (long message, contains work context):
+1. Load context silently (STATE.md, session-log last 2 entries, next-session-prompt.md). Do not narrate the loads.
+2. Acknowledge the update in one sentence.
+3. Begin the next priority task from the loaded docs immediately.
 
-Why this exists: Patrick uses short openers to start sessions. He expects Claude
-to immediately orient and begin work. Treating the opener as casual conversation
-wastes a full turn and forces Patrick to re-ask for context that the docs already
-contain. (Flagged 2026-03-06.)
+**Never ask:** "What would you like to work on today?" — the docs answer that.
+
+**Skip condition (CORE.md §2):** "Skip silently if Patrick has already given a task and context was loaded this session" means skip *re-loading* on subsequent messages after init has already run — it is never a reason to skip init on the first message of a session.
+
+Why this exists: Rule 3 originally only covered short openers (≤5 words). This left a gap: when Patrick's first message was a status report or task assignment, session init was skipped and Claude responded conversationally instead of loading docs and beginning work. Flagged twice in 5 sessions (2026-03-09). Merged to cover all first-message types.
 
 ---
 
@@ -181,7 +179,7 @@ Why this exists: E4 inter-agent communication foundation (session 96). (Added 20
 |------|--------|
 | AskUserQuestion tool | Active and working (bug resolved 2026-03-07) |
 | Announce file modification approach | Active |
-| Short opener = session start signal | Active (added 2026-03-06) |
+| First message (any type) = session start signal | Active (added 2026-03-06, merged 2026-03-09) |
 | dev-environment gate before shell commands | Active (added 2026-03-07) |
 | Never hand off git issues to Patrick | Active (added 2026-03-07) |
 | Treat abbreviated language as precise | Active (added 2026-03-09) |
