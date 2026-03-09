@@ -1,148 +1,245 @@
-# G-Batch: Cowork Platform Research Sweep
+# G-Batch Cowork Platform Research — Rerun
+**Date:** 2026-03-09
+**Audience:** Patrick (Cowork desktop user)
+**Scope:** Evaluating Cowork desktop capabilities vs. Claude Code CLI features
 
-Created: Session 96 (2026-03-09)
-Status: Complete
-Backlog refs: G1, G2, G3, G4, G5, G7, G9, G10, G11, G12, G13
-
----
-
-## G1: Sentry MCP Connector — EXISTS
-
-Official Sentry MCP server at `https://mcp.sentry.dev/mcp`. Uses remote OAuth —
-nothing to install locally. Can pull errors, search across projects, retrieve
-root cause analysis. Works with Claude Code and Cowork.
-
-**Recommendation:** Connect this. When Sentry fires on a production error, Claude
-can pull the issue details and start debugging immediately.
-
-**Setup:** Add to MCP config, authenticate via OAuth when prompted.
+**CRITICAL DISTINCTION:** Patrick uses **Cowork desktop app**, not Claude Code CLI. This research focuses on what's available in Cowork, not CLI-only features.
 
 ---
 
-## G2: Claude Code GitHub Actions — EXISTS
+## G2: GitHub Actions CI Integration via `anthropics/claude-code-action`
 
-Official action: `anthropics/claude-code-action`. Triggers on @claude mentions in
-PR comments, issue assignments, PR open/update events, or manual dispatch.
-Can auto-review PRs, generate code from issues, update docs.
+**Cowork-compatible: CLI-only**
 
-**Recommendation:** High value. Set up auto-PR-review on the findasale repo.
-Requires `ANTHROPIC_API_KEY` in GitHub repo secrets.
+### What It Does
+The `anthropics/claude-code-action` is a GitHub Actions workflow that integrates Claude into CI pipelines. It enables:
+- Responding to `@claude` mentions in PRs and issues
+- Auto-fixing linting/test failures
+- Scheduled code generation and reporting
+- Full MCP support in workflows
 
-**Setup:** Run `/install-github-app` in Claude Code, or add workflow YAML manually.
+### How to Access
+This feature is **Claude Code CLI only**. It requires:
+1. Running `claude /install-github-app` (CLI command)
+2. Setting `ANTHROPIC_API_KEY` as a GitHub secret
+3. Writing `.github/workflows/*.yml` files
 
----
+**Not available in Cowork desktop.**
 
-## G3: Claude Code Remote Control — EXISTS
+### Assessment for FindA.Sale
+- Sentry is already connected from a prior session (confirmed in CLAUDE.md).
+- GitHub MCP (`mcp__github__*`) is active and lets Claude read/write files and manage branches.
+- GitHub Actions CI would **add** automated code review/generation in workflows, but:
+  - Requires CLI setup (not Cowork)
+  - Adds API token cost (each workflow run = Claude API call)
+  - Needs careful cost controls to prevent runaway spending
 
-Two methods:
-1. **Remote Control:** `claude remote-control` — control a local session from
-   phone/tablet via session URL or QR code. Requires Pro+ plan.
-2. **Headless Mode:** `claude -p "prompt" --format=json` — run programmatically
-   for CI/CD, batch processing, scheduled tasks. Returns structured output.
-
-**Recommendation:** Headless mode is the key to scheduled autonomous work.
-Could power GitHub Actions and cron-triggered tasks.
-
----
-
-## G4: /rewind Command
-
-Not specifically researched in this batch. Based on Claude Code docs, `/rewind`
-likely rolls back conversation to a previous state. Test in next session.
-
----
-
-## G5: /context Command
-
-Already verified working in session 91. Shows context window breakdown:
-system prompts, tools, memory, messages. Use regularly for health monitoring.
+### Recommended Action
+**Skip for now.** FindA.Sale doesn't currently use automated code generation in CI. If future sprints require this, Patrick would need to switch to Claude Code CLI or use a separate CI runner. Focus on deployment monitoring (Vercel, Railway) instead.
 
 ---
 
-## G7: Status Line for Context
+## G3: /rewind (Checkpointing)
 
-Configurable via `/statusline` command. Can show context usage %, session cost,
-git status. Custom shell scripts receive JSON session data. See E2 research
-for full details.
+**Cowork-compatible: No**
 
----
+### What It Does in Claude Code CLI
+`/rewind` (or Escape-Escape) is a checkpointing system that lets you:
+- Roll back to any earlier conversation state
+- Undo file changes selectively
+- Compress conversation history
+- Try alternative paths without losing the main thread
 
-## G9: Visual Explainer — USEFUL
+### How to Access
+This is **Claude Code CLI only**. The Cowork desktop app does **not** expose `/rewind` as a slash command, keyboard shortcut, or UI button.
 
-GitHub: nicobailon/visual-explainer. Converts terminal output into interactive
-HTML: styled tables, Mermaid diagrams, dashboards. Has commands for generating
-web diagrams and project recaps.
+### What Cowork Offers Instead
+- **Git history:** Full git commit history via GitHub MCP. Check out any previous commit.
+- **File versioning:** Create branches, experiment, revert via git if needed.
+- **Session recovery:** Follow RECOVERY.md protocol to reload STATE.md and resume.
 
-**Recommendation:** Could visualize our agent fleet topology, skill connections,
-and data flow. Medium priority — nice-to-have for documentation.
-
----
-
-## G10: Zapier MCP — EXISTS
-
-Available in MCP registry. Can automate workflows across thousands of apps
-via conversation. Would enable email notifications, Slack updates, task routing
-without custom code.
-
-**Recommendation:** Connect when we have specific automation needs (e.g., new
-organizer signup → Slack notification → onboarding email sequence).
+### Recommended Action
+**Not applicable.** For rollback, rely on git. Cowork does not support session-level checkpointing. If this becomes a workflow bottleneck, Patrick can switch to Claude Code CLI, but it's not necessary now.
 
 ---
 
-## G11: Boris Cherney's Workflows — KEY INSIGHTS
+## G4: /context Diagnostic
 
-Boris Cherney (Head of Claude Code at Anthropic) published practices:
+**Cowork-compatible: No equivalent**
 
-1. **Parallel execution:** 5-10 simultaneous agent threads via iTerm2.
-2. **Single CLAUDE.md:** Encode all learned anti-patterns in one file in git.
-   "Anytime Claude does something wrong, add it to CLAUDE.md."
-3. **Specialized sub-agents:** Code-simplifier agents post-refactor,
-   verify-app agents for E2E testing before shipping.
-4. **Verification loops:** Use Chrome extension to test every change in
-   real UI before commit — improves quality "2-3x".
-5. **Model choice:** Exclusively Opus with extended thinking for quality.
+### What It Does in Claude Code CLI
+`/context` is a slash command that shows:
+- Total context fill rate (%) and warning if >80%
+- Which skills are excluded due to space
+- Conversation size breakdown
 
-**Recommendation:** We're already doing #2 (CLAUDE.md + CORE.md anti-patterns).
-Adopt #3 (specialized verify agents) and #4 (Chrome verification) more formally.
+### How to Access in Cowork
+The Cowork desktop app does **not** expose a `/context` command or detailed diagnostic UI.
 
----
+### What Cowork Offers Instead
+- **Context indicator:** Top-right corner shows a rough percentage bar of remaining context.
+- **No per-item breakdown:** You cannot see which files/skills consume the most tokens.
+- **Manual estimation:** Read file sizes and estimate token usage yourself.
 
-## G12: Cozempic — RELEVANT
+### Workaround for Patrick
+Before large batches:
+1. Note the context percentage in the Cowork UI.
+2. Read critical files to estimate tokens (large files = ~4 tokens per 1 character).
+3. If approaching 80%, document state in STATE.md and wrap the session.
 
-GitHub: Ruya-AI/cozempic. Context management tool for Claude Code sessions.
-Identifies and removes bloat from session history (progress messages, stale reads,
-thinking blocks). Implements five-layer safeguards against "lead agent amnesia."
-Reduces 8-46MB sessions to usable sizes.
-
-**Recommendation:** Evaluate for our long sessions. Could help with E1/E10
-(context management during continuous work). Patrick would install locally.
-
----
-
-## G13: GSD Framework — HIGHLY RELEVANT
-
-GitHub: gsd-build/get-shit-done. Meta-prompting system for autonomous agent work:
-
-1. Idea → Roadmap → Phase Plan → Atomic Execution
-2. Each phase = 2-3 sub-tasks consuming ~50% of 200k token budget
-3. Fresh context per sub-agent (no context rot)
-4. Includes `/gsd:verify-work` for visual confirmation
-5. Used at Amazon, Google, Shopify
-
-**Recommendation:** This is exactly what E1/E6 are trying to solve. Evaluate
-adopting GSD's phase-plan pattern for our sprint execution. Could replace or
-complement our steelman method (E6).
+### Recommended Action
+**Cowork limitation, not addressable.** Patrick should wrap sessions proactively when context drops below 20%. Already documented in SESSION SAFEGUARDS.
 
 ---
 
-## Priority Actions
+## G5: Status Line / Session Cost Visibility
 
-| Item | Priority | Next Step |
-|------|----------|-----------|
-| G1 Sentry MCP | P1 | Patrick connects in Cowork MCP settings |
-| G2 GitHub Actions | P1 | Patrick sets up API key + workflow YAML |
-| G3 Headless mode | P2 | Test with scheduled tasks |
-| G13 GSD framework | P1 | Evaluate for sprint execution pattern |
-| G12 Cozempic | P2 | Patrick installs, test on next long session |
-| G10 Zapier MCP | P3 | Connect when automation needs arise |
-| G9 Visual Explainer | P3 | Nice-to-have for fleet visualization |
+**Cowork-compatible: No**
+
+### What It Does in Claude Code CLI
+`~/.claude/settings.json` configures the CLI terminal status bar to display:
+- Context usage (% and tokens)
+- Session cost ($)
+- Model name
+- Git branch
+- Custom metrics (via scripts)
+
+### How to Access in Cowork
+The Cowork desktop app does **not** read `~/.claude/settings.json`. Settings are managed entirely within the Cowork UI.
+
+### What Cowork Offers
+- **Session indicator:** Top-right percentage bar.
+- **No cost tracking:** Cowork does not show per-session token cost or spend alerts.
+- **No customization:** Cannot add custom status items or scripts.
+
+### Recommended Action
+**Not applicable.** Cowork has no CLI-based settings file and no cost dashboard. Patrick should monitor context visually and be aware that Cowork lacks cost-per-session visibility. (This is a Cowork limitation, not an improvement opportunity.)
+
+---
+
+## G6: MCP Registry — Deployment & Database Coverage
+
+Active in **this Cowork session:** `mcp__github__*`, `mcp__afd283e9__*` (Stripe), `mcp__Claude_in_Chrome__*`, `mcp__scheduled-tasks__*`, `mcp__cowork__*`.
+
+### Vercel (Frontend Deployment)
+
+**Cowork-compatible: Yes**
+
+**Status:** Vercel MCP exists in registry; **not currently connected**.
+
+**What it does:**
+- `list_projects`, `get_project` — View project details
+- `list_deployments`, `get_deployment` — Check deployment status and history
+- `get_deployment_events` — Trace build logs and deployment events
+- `search_vercel_documentation` — Search Vercel docs in context
+
+**Value for FindA.Sale:**
+FindA.Sale frontend deploys to Vercel. Vercel MCP would enable:
+- "Is the latest frontend deploy live?"
+- "What's the build status?"
+- "Show me deployment logs for the last 3 hours"
+
+**Effort:** 2 minutes (connect MCP in Cowork UI, authorize with Vercel API token).
+
+**Recommended action:** **Connect Vercel MCP.** High value, minimal friction. Would eliminate context-switching to vercel.com dashboard during debugging.
+
+---
+
+### Railway (Backend Deployment)
+
+**Cowork-compatible: No native MCP**
+
+**Status:** No dedicated Railway MCP found in registry.
+
+**Workaround:** Railway.app dashboard is available in browser. Claude in Chrome could theoretically navigate Railway UI, but no structured MCP exists.
+
+**Value for FindA.Sale:**
+Limited. Patrick would need to open railway.app manually to check backend build status or logs. Not worth the effort to implement a workaround.
+
+**Recommended action:** **Skip.** Continue using railway.app dashboard directly. No MCP available.
+
+---
+
+### Neon (Production PostgreSQL)
+
+**Cowork-compatible: No native Neon MCP**
+
+**Status:** No dedicated Neon MCP in registry.
+
+**Related options found:**
+- **PlanetScale MCP** — Authenticated Postgres/MySQL access, run read queries, check schema
+- **Supabase MCP** — Full database management
+- **MotherDuck MCP** — Analyze data with natural language
+
+**Why no Neon MCP:** Neon is a managed Postgres service, not a full platform. The ecosystem hasn't published a Neon-specific connector.
+
+**Value for FindA.Sale:**
+Neon DB access via Claude could enable schema inspection and diagnostic queries. But FindA.Sale uses Prisma for migrations, which is already integrated in the codebase.
+
+**Recommended action:** **Not needed.** Prisma schema is in-repo and readable via GitHub MCP. Avoid direct DB access in development (unnecessary risk). Rely on:
+- Prisma schema (in codebase, readable)
+- Neon dashboard for production queries (manual, safer)
+- Backend logs for migration status (Railway + Sentry)
+
+---
+
+### PostgreSQL (Generic)
+
+**Cowork-compatible: No robust MCP**
+
+**Status:** PlanetScale offers Postgres support, but is a managed platform, not generic access.
+
+**Value for FindA.Sale:** Minimal. Direct Postgres access adds risk without benefit. Prisma schema is already in-repo.
+
+**Recommended action:** **Skip.** Use Prisma definitions as the source of truth for schema.
+
+---
+
+## Summary: Deployment & Database MCPs
+
+| Service | MCP Available | Connected | Value for FindA.Sale | Recommendation |
+|---------|---|---|---|---|
+| **Vercel** | Yes | No | High (frontend status) | **Connect** |
+| **Railway** | No | N/A | Medium (but no MCP) | Use dashboard |
+| **Neon** | No | N/A | Low (Prisma already in-repo) | Skip |
+| **Postgres** | Partial (PlanetScale) | No | Low | Skip |
+| **Sentry** | Yes | Yes (confirmed) | High | Already done |
+
+---
+
+## Top 2 Actions for Patrick
+
+### 1. **Connect Vercel MCP** (Immediate Value)
+**What:** Link Vercel account to this Cowork session via MCP registry.
+**Why:** Eliminates context-switching to vercel.com for frontend deployment status. Takes 2 minutes. High-value for debugging production issues.
+**How:** In Cowork, find the MCP registry sidebar, search "Vercel", click Connect, authorize with Vercel API token.
+
+### 2. **Clarify Cowork Limitations in Documentation** (Operational)
+**What:** Update SESSION SAFEGUARDS to note that Cowork desktop lacks:
+- `/rewind` checkpointing
+- `/context` diagnostics
+- Cost-per-session visibility
+- Status line customization
+
+**Why:** Prevents confusion when Patrick compares Cowork to Claude Code CLI docs. Sets expectations.
+**Where:** Add a "Cowork Desktop Limitations" section to `claude_docs/operations/session-safeguards.md`.
+
+---
+
+## Summary Table
+
+| Item | Cowork-compatible | Status | Recommendation |
+|------|---|---|---|
+| G2: GitHub Actions CI | CLI-only | N/A | Skip (requires CLI) |
+| G3: /rewind | No equivalent | N/A | Use git instead |
+| G4: /context | No equivalent | N/A | Wrap at 20% context |
+| G5: Status line config | No equivalent | N/A | Monitor via UI |
+| G6a: Vercel MCP | Yes | Not connected | **Connect now** |
+| G6b: Railway MCP | No native MCP | N/A | Use dashboard |
+| G6c: Neon MCP | No native MCP | N/A | Use Prisma schema |
+| G6d: Postgres MCP | Partial | N/A | Skip |
+| Sentry MCP | Yes | Connected | Already done |
+
+---
+
+**Status:** G-batch research complete. Findings reflect Cowork desktop UI and MCP registry as of 2026-03-09.

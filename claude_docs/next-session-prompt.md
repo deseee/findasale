@@ -26,14 +26,12 @@ Pull Railway production logs for the single-item server error (A3.6), paste them
 - SW fix — `packages/frontend/.gitignore` created, next-pwa build artifacts removed from git (sw.js had stale icon hashes causing Sentry AbortError on SW registration)
 
 ## Environment Notes
-- Neon migration `20260309_add_auction_reserve_price` **NOT YET deployed to production**. Full command:
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-  $env:DATABASE_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-  $env:DIRECT_URL="postgresql://neondb_owner:npg_6CVGh8YvPSHg@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-  npx prisma migrate deploy
-  ```
-- Session 107 Neon migration `20260311000001_add_sale_type_item_listing_type` — verify this was deployed. If not, run it first (same command — `prisma migrate deploy` applies all pending in order).
+- Neon migrations NOT YET deployed to production (run both, in order):
+  1. `20260311000001_add_sale_type_item_listing_type` (Session 107)
+  2. `20260309_add_auction_reserve_price` (Session 110)
+  - Get credentials from `packages/backend/.env` (commented-out Neon lines).
+  - Command: `cd packages/database` → set `$env:DATABASE_URL` + `$env:DIRECT_URL` from .env → `npx prisma migrate deploy`
+  - **Do NOT embed credentials here** — see SECURITY.md §3.
 - Railway Metal outage was active at end of session 110 — verify backend is healthy before testing anything on production.
 
 ## Next Priorities (in order)

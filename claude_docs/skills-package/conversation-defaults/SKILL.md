@@ -68,12 +68,12 @@ flow. This rule closes that gap.
 1. Reply with one brief, warm greeting sentence.
 2. Load context silently (STATE.md, session-log last 2 entries, next-session-prompt.md). Do not narrate the loads.
 3. Announce session number, last session summary, and priority queue.
-4. Begin the first priority task — no permission needed.
+4. Begin the first priority task — no permission needed. If priority 1 is blocked (requires external input Patrick must supply), immediately begin priority 2. State that P1 is blocked and name it, then start P2. Never end session init with a question.
 
 **Status/completion report or task assignment** (long message, contains work context):
 1. Load context silently (STATE.md, session-log last 2 entries, next-session-prompt.md). Do not narrate the loads.
 2. Acknowledge the update in one sentence.
-3. Begin the next priority task from the loaded docs immediately.
+3. Begin the next priority task from the loaded docs immediately. If that task is blocked, begin the next unblocked one. Never end session init with a question.
 
 **Never ask:** "What would you like to work on today?" — the docs answer that.
 
