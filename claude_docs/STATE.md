@@ -9,15 +9,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 implementation COMPLETE. Session 109 skill packaging COMPLETE. Session 110 P1 bug blitz COMPLETE. Full detail: `claude_docs/COMPLETED_PHASES.md`.
 
+**Session 113 COMPLETE (2026-03-09):** Fleet audit + governance overhaul.
+- 11-subagent management audit. Fleet grade: D+. Root causes confirmed: honor-system rules, no enforcement gates, no token visibility, 6 of 7 Session 108 fixes never implemented.
+- CORE.md v2: consolidated 19 rules → 5 (compression logging + read-before-write hard rule added). ~427 → 107 lines.
+- 188 stale docs removed from git (archive-for-removal). Repo: 255 → 67 doc files.
+- session-scoreboard-template.json added. session-digest scheduled task (8am daily) created.
+- Unused plugins disabled by Patrick.
+
 **Session 112 COMPLETE (2026-03-09):** Security fix + workflow audit + H1 quick win.
-- Scrubbed live Neon credentials from STATE.md "In Progress" section (P0 security fix)
-- Ran findasale-workflow audit on 4 session-111 problems → root cause: doc contradiction (STATE.md vs dev-environment skill on .env reading)
-- Applied 3 systemic fixes: CORE.md §5 Operational Anchors (compression), CORE.md §10 Pre-Push Type Verification (Railway budget), STATE.md .env gotcha corrected
-- Wrote workflow retrospective: `claude_docs/workflow-retrospectives/session-111-workflow-audit-2026-03-09.md`
-- Confirmed 3 Neon migrations DEPLOYED (66 total)
-- B2 scoped: needs `isAiTagged Boolean @default(false)` added to Item schema before UI wiring — deferred to dedicated session
-- **H1 "How It Works" card SHIPPED** — 4-step onboarding card on organizer dashboard overview tab (Create Sale → Add Items → Attract Buyers → Complete Sale)
-- docker-compose.yml: already deleted, no file to commit (not an error)
+- Scrubbed live Neon credentials, workflow audit + 3 CORE.md fixes, H1 "How It Works" card shipped.
 
 **Remaining open:** A3.6 single-item 500 (needs production logs). B2 (copy written, needs schema migration + UI wiring). D3 (ADR approved, ready for dev). H1 compact mobile header (pending). B3/B7/D1/C1/C2 (deferred/attorney). Vercel MCP connected but not yet leveraged.
 
@@ -90,12 +90,11 @@ For future migration deploys, see `claude_docs/DEVELOPMENT.md` and `packages/bac
 2. Set up Stripe business account
 3. Google Search Console verification
 4. Order business cards (design ready in `claude_docs/brand/`)
-5. Start beta organizer outreach (`claude_docs/beta-launch/organizer-outreach.md` + `marketing-calendar-2026-03-06.md`)
+5. Start beta organizer outreach (materials archived — rebuild fresh from strategy/roadmap.md)
 6. ~~Rotate Neon credentials~~ — ✅ DONE (Session 111).
 7. Optional: consult Michigan attorney re estate sale permit (~$300–500)
 
-Full audit reports: `claude_docs/health-reports/qa-pre-beta-audit-2026-03-06.md`, `claude_docs/beta-launch/ops-readiness-2026-03-06.md`
-Beta checklist: `claude_docs/BETA_CHECKLIST.md`
+Full audit reports: archived (git history, sessions 84–85). Beta checklist: archived.
 
 ---
 
@@ -122,4 +121,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-09 (session 112 — credentials scrub, workflow audit + fixes, H1 How It Works card shipped)
+Last Updated: 2026-03-09 (session 113 — fleet audit, CORE.md v2, 188 archived docs removed)
