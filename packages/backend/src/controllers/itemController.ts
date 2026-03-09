@@ -236,7 +236,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -278,6 +278,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         description: description || '',
         price: price ? parseFloat(price) : null,
         auctionStartPrice: auctionStartPrice ? parseFloat(auctionStartPrice) : null,
+        auctionReservePrice: auctionReservePrice ? parseFloat(auctionReservePrice) : null,
         bidIncrement: bidIncrement ? parseFloat(bidIncrement) : null,
         auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
         status: status || 'AVAILABLE',
@@ -318,7 +319,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -342,6 +343,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         description: description || '',
         price: price !== undefined ? (price ? parseFloat(price) : null) : undefined,
         auctionStartPrice: auctionStartPrice !== undefined ? (auctionStartPrice ? parseFloat(auctionStartPrice) : null) : undefined,
+        auctionReservePrice: auctionReservePrice !== undefined ? (auctionReservePrice ? parseFloat(auctionReservePrice) : null) : undefined,
         bidIncrement: bidIncrement !== undefined ? (bidIncrement ? parseFloat(bidIncrement) : null) : undefined,
         auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
         status,

@@ -16,6 +16,18 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
         name: true,
         streakPoints: true,
         points: true,
+        userBadges: {
+          select: {
+            badge: {
+              select: {
+                id: true,
+                name: true,
+                iconUrl: true,
+              },
+            },
+            awardedAt: true,
+          },
+        },
       },
       orderBy: {
         streakPoints: 'desc',
@@ -29,7 +41,12 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       userId: user.id.slice(0, 4), // Mask user ID for privacy
       name: user.name.split(' ')[0] || 'Shopper', // First name only
       score: (user.streakPoints ?? 0) > 0 ? user.streakPoints : user.points,
-      badges: [] as { id: string; name: string; iconUrl: string | null; awardedAt: Date }[],
+      badges: user.userBadges.map((ub) => ({
+        id: ub.badge.id,
+        name: ub.badge.name,
+        iconUrl: ub.badge.iconUrl,
+        awardedAt: ub.awardedAt.toISOString(),
+      })),
     }));
 
     res.json(leaderboard);

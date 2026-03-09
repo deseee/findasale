@@ -207,12 +207,18 @@ const OrganizerDashboard = () => {
             >
               + Create New Sale
             </Link>
-            <Link
-              href="/organizer/add-items"
+            <button
+              onClick={() => {
+                if (salesData && salesData.length > 0) {
+                  router.push(`/organizer/add-items/${salesData[0].id}`);
+                } else {
+                  showToast('Please create a sale first', 'error');
+                }
+              }}
               className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
               Add Items
-            </Link>
+            </button>
             <Link
               href="/organizer/holds"
               className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
@@ -230,6 +236,12 @@ const OrganizerDashboard = () => {
               className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
               🖨️ Print Inventory
+            </Link>
+            <Link
+              href="/organizer/webhooks"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              🔗 Webhooks
             </Link>
           </div>
 
@@ -260,7 +272,7 @@ const OrganizerDashboard = () => {
                 </div>
                 <div className="card p-6">
                   <p className="text-warm-600 text-sm">Total Items</p>
-                  <p className="text-3xl font-bold text-warm-900">{analyticsData?.itemsSold + analyticsData?.itemsUnsold || 0}</p>
+                  <p className="text-3xl font-bold text-warm-900">{(analyticsData?.itemsSold ?? 0) + (analyticsData?.itemsUnsold ?? 0)}</p>
                 </div>
                 <div className="card p-6">
                   <p className="text-warm-600 text-sm">Total Revenue</p>

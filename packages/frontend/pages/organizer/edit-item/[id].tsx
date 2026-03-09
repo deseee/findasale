@@ -70,7 +70,20 @@ const EditItemPage = () => {
       router.push(`/organizer/dashboard`);
     },
     onError: (error: any) => {
-      showToast(error.response?.data?.message || 'Failed to update item', 'error');
+      const status = error.response?.status;
+      let message = 'Failed to update item';
+      if (status === 400) {
+        message = error.response?.data?.message || 'Validation error: please check your input';
+      } else if (status === 401) {
+        message = 'You are not authorized to update this item';
+      } else if (status === 404) {
+        message = 'Item not found';
+      } else if (status === 500) {
+        message = 'Server error: please try again later';
+      } else {
+        message = error.response?.data?.message || message;
+      }
+      showToast(message, 'error');
     },
   });
 
@@ -103,7 +116,14 @@ const EditItemPage = () => {
 
           <h1 className="text-3xl font-bold text-warm-900 mb-8">Edit Item</h1>
 
-          <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-6">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (!formData.title.trim()) {
+              showToast('Title is required', 'error');
+              return;
+            }
+            updateMutation.mutate();
+          }} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-warm-700 mb-2">Title</label>
               <input

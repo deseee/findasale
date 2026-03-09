@@ -20,7 +20,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 
-type ActiveTab = 'manual' | 'upload' | 'batch';
+type ActiveTab = 'manual' | 'batch';
 
 const CATEGORIES = [
   'Furniture',
@@ -57,6 +57,7 @@ const AddItemsDetailPage = () => {
     // B1: Listing type selector
     listingType: 'FIXED',
     startingBid: '',
+    reservePrice: '',
     reverseDailyDrop: '',
     reverseFloorPrice: '',
   });
@@ -103,6 +104,7 @@ const AddItemsDetailPage = () => {
         quantity: '1',
         listingType: 'FIXED',
         startingBid: '',
+        reservePrice: '',
         reverseDailyDrop: '',
         reverseFloorPrice: '',
       });
@@ -187,6 +189,9 @@ const AddItemsDetailPage = () => {
     // Set price or auction fields based on listingType
     if (formData.listingType === 'AUCTION') {
       payload.auctionStartPrice = parseFloat(formData.startingBid);
+      if (formData.reservePrice) {
+        payload.auctionReservePrice = parseFloat(formData.reservePrice);
+      }
     } else if (formData.listingType === 'REVERSE_AUCTION') {
       payload.price = parseFloat(formData.price);
       payload.reverseAuction = true;
@@ -286,16 +291,6 @@ const AddItemsDetailPage = () => {
                 }`}
               >
                 📦 Batch Upload (AI)
-              </button>
-              <button
-                onClick={() => setActiveTab('upload')}
-                className={`pb-4 px-2 font-medium transition-colors ${
-                  activeTab === 'upload'
-                    ? 'text-amber-600 border-b-2 border-amber-600'
-                    : 'text-warm-600 hover:text-warm-900'
-                }`}
-              >
-                📸 Photo Upload
               </button>
             </div>
           </div>
@@ -409,15 +404,25 @@ const AddItemsDetailPage = () => {
                               />
                             </div>
                           </div>
-                          <div className="opacity-50">
+                          <div>
                             <label className="block text-sm font-medium text-warm-900 mb-1">
-                              Price (N/A)
+                              Reserve Price (optional)
                             </label>
-                            <input
-                              type="text"
-                              disabled
-                              className="w-full px-4 py-2 border border-warm-200 rounded-lg bg-warm-100"
-                            />
+                            <div className="relative">
+                              <span className="absolute left-4 top-2.5 text-warm-600">$</span>
+                              <input
+                                type="number"
+                                name="reservePrice"
+                                value={formData.reservePrice}
+                                onChange={handleFormChange}
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                disabled={createItemMutation.isPending}
+                              />
+                            </div>
+                            <p className="text-xs text-warm-600 mt-1">Bid must meet or exceed this to win</p>
                           </div>
                         </>
                       ) : (
