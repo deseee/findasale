@@ -1,6 +1,6 @@
 ---
 version: 2
-last_updated: 2026-03-09 (Session 108)
+last_updated: 2026-03-09 (Session 111)
 name: conversation-defaults
 description: >
   Always-active conversation behavior defaults for Patrick's Cowork sessions.
@@ -79,7 +79,7 @@ flow. This rule closes that gap.
 
 **Skip condition (CORE.md §2):** "Skip silently if Patrick has already given a task and context was loaded this session" means skip *re-loading* on subsequent messages after init has already run — it is never a reason to skip init on the first message of a session.
 
-Why this exists: Rule 3 originally only covered short openers (≤5 words). This left a gap: when Patrick's first message was a status report or task assignment, session init was skipped and Claude responded conversationally instead of loading docs and beginning work. Flagged twice in 5 sessions (2026-03-09). Merged to cover all first-message types.
+Why this exists: Rule 3 originally only covered short openers (≤5 words). This left a gap: when Patrick's first message was a status report or task assignment, session init was skipped and Claude responded conversationally instead of loading docs and beginning work. Flagged twice in 5 sessions (2026-03-09). Merged to cover all first-message types. Blocked-task handling added 2026-03-09 (Session 111) after init ended with "Where do you want to start?" when P1 was blocked.
 
 ---
 
