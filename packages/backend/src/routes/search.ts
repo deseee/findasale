@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { getVisionLabels } from '../services/cloudAIService';
 import { upload } from '../controllers/uploadController';
+import { searchItems } from '../services/itemSearchService';
 
 const router = Router();
 
@@ -85,7 +86,7 @@ router.get('/', async (req: Request, res: Response) => {
       itemOrderBy = { 'sale.endDate': 'asc' };
     }
 
-    const [salesResult, itemsResult] = await Promise.all([
+    const [salesResult, itemsResult, itemSearchResult] = await Promise.all([
       type !== 'items'
         ? prisma.sale.findMany({
             where: { ...textWhere, status: 'PUBLISHED' },
@@ -135,11 +136,45 @@ router.get('/', async (req: Request, res: Response) => {
             orderBy: itemOrderBy,
           })
         : Promise.resolve([]),
+      // Search items by FTS to find sale IDs that have matching items
+      type !== 'items' && q
+        ? searchItems({ q, limit: 100, offset: 0 })
+        : Promise.resolve(null),
     ]);
+
+    // If searching sales, merge in sale IDs from items that match the query
+    let finalSalesResult = salesResult;
+    if (type !== 'items' && itemSearchResult && q.length >= 2) {
+      // Get unique sale IDs from items
+      const saleIdsFromItems = new Set(itemSearchResult.data.map((item) => item.saleId));
+      // Get those sales
+      const salesFromItems = await prisma.sale.findMany({
+        where: {
+          id: { in: Array.from(saleIdsFromItems) },
+          status: 'PUBLISHED',
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          city: true,
+          state: true,
+          startDate: true,
+          endDate: true,
+          photoUrls: true,
+          isAuctionSale: true,
+          organizer: { select: { id: true, businessName: true, reputationTier: true } },
+        },
+      });
+      // Merge: deduplicate by ID, keep the original sale results and add any new ones from items
+      const saleIdSet = new Set(finalSalesResult.map((s: any) => s.id));
+      const newSales = salesFromItems.filter((s: any) => !saleIdSet.has(s.id));
+      finalSalesResult = [...finalSalesResult, ...newSales].slice(0, limit);
+    }
 
     res.json({
       query: q,
-      sales: salesResult,
+      sales: finalSalesResult,
       items: itemsResult.map((item: any) => ({
         ...item,
         price: item.price != null ? Number(item.price) : null,

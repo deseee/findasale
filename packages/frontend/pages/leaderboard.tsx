@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
-import Layout from '../components/Layout';
+import Link from 'next/link';
 import { useAuth } from '../components/AuthContext';
 import api from '../lib/api';
 
@@ -33,6 +33,9 @@ const Leaderboard = () => {
   const [organizers, setOrganizers] = useState<OrganizerRank[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
 
   useEffect(() => {
     fetchLeaderboards();
@@ -73,10 +76,10 @@ const Leaderboard = () => {
   };
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>City Leaderboards - FindA.Sale</title>
-        <meta name="description" content="Top shoppers and organizers in Grand Rapids" />
+        <meta name="description" content={`Top shoppers and organizers in ${defaultCity}`} />
       </Head>
 
       <main id="main-content" className="min-h-screen bg-gradient-to-b from-warm-50 to-white py-8">
@@ -85,7 +88,7 @@ const Leaderboard = () => {
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-warm-900 mb-2">City Leaderboards</h1>
             <p className="text-lg text-warm-600">
-              Celebrating the top shoppers and organizers in Grand Rapids
+              Celebrating the top shoppers and organizers in {defaultCity}
             </p>
           </div>
 
@@ -211,7 +214,12 @@ const Leaderboard = () => {
                           {getMedalEmoji(org.rank)}
                         </div>
                         <div>
-                          <p className="text-warm-900 font-semibold text-lg">{org.organizerName}</p>
+                          <Link
+                            href={`/organizers/${org.organizerId}`}
+                            className="text-warm-900 font-semibold text-lg hover:text-amber-600 transition-colors"
+                          >
+                            {org.organizerName}
+                          </Link>
                           <p className="text-sm text-warm-600">
                             {org.completedSales} sale{org.completedSales !== 1 ? 's' : ''}
                           </p>
@@ -238,7 +246,7 @@ const Leaderboard = () => {
           </div>
         </div>
       </main>
-    </Layout>
+    </>
   );
 };
 

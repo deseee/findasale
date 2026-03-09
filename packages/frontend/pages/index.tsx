@@ -42,6 +42,9 @@ const SaleCardSkeleton = () => (
 );
 
 const HomePage = () => {
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -141,14 +144,14 @@ const HomePage = () => {
       <Head>
         <title>FindA.Sale - Find Estate Sales Near You</title>
         <meta name="description" content="Find estate sales and auctions near you" />
-        <meta property="og:title" content="FindA.Sale — Estate Sales in Grand Rapids, MI" />
-        <meta property="og:description" content="Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales in Grand Rapids, Michigan." />
+        <meta property="og:title" content={`FindA.Sale — Estate Sales in ${defaultCity}, ${defaultState}`} />
+        <meta property="og:description" content={`Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales in ${defaultCity}, ${defaultState}.`} />
         <meta property="og:url" content="https://finda.sale" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="FindA.Sale — Estate Sales in Grand Rapids, MI" />
-        <meta name="twitter:description" content="Browse estate sales and auctions near you in Grand Rapids, Michigan." />
+        <meta name="twitter:title" content={`FindA.Sale — Estate Sales in ${defaultCity}, ${defaultState}`} />
+        <meta name="twitter:description" content={`Browse estate sales and auctions near you in ${defaultCity}, ${defaultState}.`} />
         {/* Structured data — Organization + WebSite schema for Google */}
         <script
           type="application/ld+json"
@@ -159,12 +162,11 @@ const HomePage = () => {
               name: 'FindA.Sale',
               url: 'https://finda.sale',
               logo: 'https://finda.sale/icons/icon-512x512.png',
-              description:
-                'Grand Rapids estate sale marketplace — browse, buy, and sell estate sale items online',
+              description: `${defaultCity} estate sale marketplace — browse, buy, and sell estate sale items online`,
               address: {
                 '@type': 'PostalAddress',
-                addressLocality: 'Grand Rapids',
-                addressRegion: 'MI',
+                addressLocality: defaultCity,
+                addressRegion: defaultState,
                 addressCountry: 'US',
               },
             }),
@@ -279,7 +281,7 @@ const HomePage = () => {
               )}
               {!feedData?.personalized && sales && (
                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs font-medium text-blue-700">
-                  📍 Near Grand Rapids
+                  📍 Near {defaultCity}
                 </span>
               )}
               <h2 className="text-3xl font-bold text-warm-900">Featured Sales</h2>
