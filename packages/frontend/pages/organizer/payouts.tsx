@@ -4,7 +4,6 @@
  * Displays available + pending Stripe balance, lets organizers:
  * - Change their automatic payout schedule (daily / weekly / monthly / manual)
  * - Trigger an on-demand payout (standard or instant)
- * Feature #9: Earnings Breakdown — item-level fee transparency
  */
 
 import React, { useState, useEffect } from 'react';
@@ -86,6 +85,17 @@ const OrganizerPayoutsPage = () => {
     },
     enabled: !!user?.id,
     staleTime: 2 * 60_000,
+  });
+
+  // Feature #11: Referral discount status
+  const { data: organizerProfile } = useQuery({
+    queryKey: ['organizer-me'],
+    queryFn: async () => {
+      const res = await api.get('/organizers/me');
+      return res.data as { referralDiscountActive: boolean; referralDiscountExpiry: string | null };
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60_000,
   });
 
   useEffect(() => {
@@ -173,6 +183,21 @@ const OrganizerPayoutsPage = () => {
         </div>
 
         <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+
+          {/* Feature #11: Referral discount banner */}
+          {organizerProfile?.referralDiscountActive && organizerProfile.referralDiscountExpiry && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
+              <span className="text-green-600 text-lg mt-0.5">🎉</span>
+              <div>
+                <p className="text-sm font-semibold text-green-800">Referral discount active — 0% platform fee</p>
+                <p className="text-xs text-green-700 mt-0.5">
+                  Your platform fee is waived until{' '}
+                  <strong>{new Date(organizerProfile.referralDiscountExpiry).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>
+                  {' '}as a thank-you for the organizer referral.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Balance card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
