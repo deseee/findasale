@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
@@ -12,19 +12,39 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const { user, logout } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState('');
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Close mobile menu on route change
+  // Close drawer on route change
   useEffect(() => {
     setMenuOpen(false);
   }, [router.pathname]);
 
+  // Trap focus and lock scroll when drawer is open
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = 'hidden';
+      drawerRef.current?.focus();
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [menuOpen]);
+
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  const handleHeaderSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (headerSearch.trim()) {
+      router.push(`/?q=${encodeURIComponent(headerSearch.trim())}`);
+    }
   };
 
   const staticNavLinks = [
@@ -104,11 +124,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         Skip to main content
       </a>
 
-      {/* Header */}
-      <header className="bg-white shadow-header">
+      {/* ── HEADER ── fixed, 48px mobile / 64px desktop */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-header">
         <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="text-2xl font-bold text-amber-600 font-heading flex-shrink-0">
+          <div className="flex justify-between items-center h-12 md:h-16">
+            <Link href="/" className="text-xl md:text-2xl font-bold text-amber-600 font-heading flex-shrink-0">
               FindA.Sale
             </Link>
 
@@ -150,46 +170,117 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               )}
             </nav>
 
-            {/* Mobile hamburger button */}
-            <button
-              className="md:hidden p-2 rounded-md text-warm-500 hover:text-amber-600 hover:bg-warm-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              onClick={() => setMenuOpen(!menuOpen)}
-              aria-expanded={menuOpen}
-              aria-controls="mobile-menu"
-              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-            >
-              {menuOpen ? (
-                // X icon
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                // Hamburger icon
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        {menuOpen && (
-          <div id="mobile-menu" className="md:hidden border-t border-warm-300 bg-white px-4 py-3 space-y-1">
-            {staticNavLinks.map(({ href, label }) => (
-              <Link key={href} href={href} className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-                {label}
-              </Link>
-            ))}
-            <div className="border-t border-warm-200 pt-3 mt-1 space-y-1">
-              {authLinks}
+            {/* Mobile: notification bell (if logged in) + hamburger */}
+            <div className="md:hidden flex items-center gap-1">
+              {isClient && user && <NotificationBell />}
+              <button
+                className="p-2 rounded-md text-warm-500 hover:text-amber-600 hover:bg-warm-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                onClick={() => setMenuOpen(!menuOpen)}
+                aria-expanded={menuOpen}
+                aria-controls="mobile-drawer"
+                aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              >
+                {menuOpen ? (
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
-        )}
+        </div>
       </header>
 
-      {/* Main Content — pb-15 on mobile for bottom nav clearance */}
-      <main id="main-content" className="flex-grow pb-15 md:pb-0" tabIndex={-1}>
+      {/* ── MOBILE PERSISTENT SEARCH BAR ── fixed below header, mobile only */}
+      <div className="md:hidden fixed top-12 left-0 right-0 z-40 bg-white border-b border-warm-200 px-3 py-2">
+        <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 pointer-events-none" aria-hidden="true">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+            <input
+              type="search"
+              value={headerSearch}
+              onChange={(e) => setHeaderSearch(e.target.value)}
+              placeholder="Search sales &amp; items…"
+              aria-label="Search sales and items"
+              className="w-full pl-9 pr-4 py-2 text-sm border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50"
+            />
+          </div>
+        </form>
+      </div>
+
+      {/* ── MOBILE DRAWER BACKDROP ── */}
+      {menuOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/40"
+          aria-hidden="true"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
+      {/* ── MOBILE SLIDE-IN DRAWER ── right side, full height */}
+      <div
+        id="mobile-drawer"
+        ref={drawerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+        className={`md:hidden fixed top-0 right-0 bottom-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col ${
+          menuOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Drawer header */}
+        <div className="flex items-center justify-between px-4 h-12 border-b border-warm-200">
+          <span className="font-bold text-amber-600 font-heading text-lg">FindA.Sale</span>
+          <button
+            onClick={() => setMenuOpen(false)}
+            aria-label="Close menu"
+            className="p-2 rounded-md text-warm-500 hover:text-amber-600 hover:bg-warm-100"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Drawer nav links */}
+        <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-1" aria-label="Mobile navigation">
+          {staticNavLinks.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                router.pathname === href
+                  ? 'bg-amber-50 text-amber-600'
+                  : 'text-warm-900 hover:text-amber-600 hover:bg-warm-100'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+          <div className="border-t border-warm-200 pt-3 mt-2 space-y-1">
+            {authLinks}
+          </div>
+        </nav>
+      </div>
+
+      {/* Main Content
+          Mobile: pt accounts for fixed header (48px) + fixed search bar (~52px) = 100px
+          Desktop: no top padding (header is not fixed on desktop... actually it is fixed, so md needs pt-16)
+      */}
+      <main
+        id="main-content"
+        className="flex-grow pt-[100px] md:pt-16 pb-15 md:pb-0"
+        tabIndex={-1}
+      >
         {children}
       </main>
 
@@ -213,7 +304,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 >
                   support@finda.sale
                 </a>
-                <p className="text-xs text-warm-400 mt-2">We're here to help organizers and shoppers</p>
+                <p className="text-xs text-warm-400 mt-2">We&apos;re here to help organizers and shoppers</p>
               </div>
             </div>
             <div>
