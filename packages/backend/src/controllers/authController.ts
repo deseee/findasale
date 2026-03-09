@@ -5,6 +5,26 @@ import { prisma } from '../index';
 import { randomUUID } from 'crypto';
 import { handleReferralBadge, handlePointsBadge } from './userController';
 
+// SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
+const ALLOWED_REDIRECT_URIS = () => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  return [
+    frontendUrl,
+    `${frontendUrl}/organizer/dashboard`,
+    `${frontendUrl}/browse`,
+  ];
+};
+
+// Validate redirect URI against allowlist — returns true if valid
+const isValidRedirectUri = (uri: string | null | undefined): boolean => {
+  if (!uri) return true; // null/undefined is valid (no redirect requested)
+
+  const allowed = ALLOWED_REDIRECT_URIS();
+
+  // Only allow URLs that start with one of the allowed prefixes
+  return allowed.some(allowedUri => uri.startsWith(allowedUri));
+};
+
 export const register = async (req: Request, res: Response) => {
   try {
     const { email: rawEmail, password, name: rawName, role, referralCode, inviteCode, businessName, phone, businessAddress } = req.body;
@@ -81,7 +101,8 @@ export const register = async (req: Request, res: Response) => {
     // Handle referral if provided
     if (referralCode) {
       const referrer = await prisma.user.findUnique({
-        where: { referralCode }
+        where: { referralCode },
+        include: { organizer: true }
       });
 
       if (referrer) {
@@ -111,9 +132,42 @@ export const register = async (req: Request, res: Response) => {
         const updatedReferrer = await prisma.user.findUnique({
           where: { id: referrer.id }
         });
-        
+
         if (updatedReferrer) {
           await handlePointsBadge(referrer.id, updatedReferrer.points);
+        }
+
+        // Feature #11: Organizer Referral Reciprocal
+        // If both referrer and new user are organizers, grant 3-month fee discount to both
+        if (referrer.organizer && effectiveRole === 'ORGANIZER') {
+          const discountExpiry = new Date();
+          discountExpiry.setMonth(discountExpiry.getMonth() + 3);
+
+          // Look up new user's Organizer record (just created in transaction above)
+          const newOrganizer = await prisma.organizer.findUnique({ where: { userId: user.id } });
+
+          if (newOrganizer) {
+            // Create OrganizerReferral record
+            await prisma.organizerReferral.create({
+              data: {
+                referrerId: referrer.id,
+                refereeId: user.id,
+                status: 'PENDING'
+              }
+            });
+
+            // Grant discount to referee (new organizer)
+            await prisma.organizer.update({
+              where: { id: newOrganizer.id },
+              data: { referralDiscountExpiry: discountExpiry }
+            });
+
+            // Grant reciprocal discount to referrer organizer
+            await prisma.organizer.update({
+              where: { id: referrer.organizer.id },
+              data: { referralDiscountExpiry: discountExpiry }
+            });
+          }
         }
       }
     }
@@ -138,6 +192,7 @@ export const register = async (req: Request, res: Response) => {
         role: user.role,
         points: user.points,
         referralCode: user.referralCode,
+        tokenVersion: user.tokenVersion,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -155,7 +210,7 @@ export const register = async (req: Request, res: Response) => {
 // Phase 31: OAuth social login — find-or-create user by provider identity, return JWT
 export const oauthLogin = async (req: Request, res: Response) => {
   try {
-    const { provider, providerId, email: rawEmail, name: rawName } = req.body;
+    const { provider, providerId, email: rawEmail, name: rawName, returnTo } = req.body;
 
     if (!provider || !providerId) {
       return res.status(400).json({ message: 'provider and providerId are required' });
@@ -169,13 +224,14 @@ export const oauthLogin = async (req: Request, res: Response) => {
       where: { oauthProvider: provider, oauthId: providerId },
     });
 
-    // 2. Link OAuth to an existing email account
+    // 2. SECURITY FIX P0: Reject auto-link — existing non-OAuth accounts cannot be silently linked
+    // If email exists and has a password (non-OAuth account), reject the login to prevent account takeover
     if (!user && email) {
       const emailUser = await prisma.user.findUnique({ where: { email } });
       if (emailUser) {
-        user = await prisma.user.update({
-          where: { id: emailUser.id },
-          data: { oauthProvider: provider, oauthId: providerId },
+        // Existing account with this email — do not auto-link. User must sign in with password.
+        return res.status(400).json({
+          message: 'An account with this email already exists. Please sign in with your email and password.'
         });
       }
     }
@@ -204,13 +260,19 @@ export const oauthLogin = async (req: Request, res: Response) => {
         role:         user.role,
         points:       user.points,
         referralCode: user.referralCode,
+        tokenVersion: user.tokenVersion,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 
     const { password: _, ...userWithoutPassword } = user;
-    res.json({ user: userWithoutPassword, token });
+
+    // SECURITY FIX P0: Validate returnTo against allowlist to prevent open redirect attacks
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const validatedReturnTo = isValidRedirectUri(returnTo) ? returnTo : null;
+
+    res.json({ user: userWithoutPassword, token, returnTo: validatedReturnTo });
   } catch (error) {
     console.error('OAuth login error:', error);
     res.status(500).json({ message: 'Server error during OAuth login' });
@@ -251,6 +313,7 @@ export const login = async (req: Request, res: Response) => {
         role: user.role,
         points: user.points,
         referralCode: user.referralCode,
+        tokenVersion: user.tokenVersion,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
