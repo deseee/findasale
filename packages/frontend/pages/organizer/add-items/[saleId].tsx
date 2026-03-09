@@ -60,6 +60,8 @@ const AddItemsDetailPage = () => {
     reservePrice: '',
     reverseDailyDrop: '',
     reverseFloorPrice: '',
+    isAuction: false,
+    reverseAuction: false,
   });
 
   const [formError, setFormError] = useState('');
