@@ -19,7 +19,14 @@ Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 impl
 **Session 112 COMPLETE (2026-03-09):** Security fix + workflow audit + H1 quick win.
 - Scrubbed live Neon credentials, workflow audit + 3 CORE.md fixes, H1 "How It Works" card shipped.
 
-**Remaining open:** A3.6 single-item 500 (needs production logs). B2 (copy written, needs schema migration + UI wiring). D3 (ADR approved, ready for dev). H1 compact mobile header (pending). B3/B7/D1/C1/C2 (deferred/attorney). Vercel MCP connected but not yet leveraged.
+**Session 114 COMPLETE (2026-03-09):** D3 + B2 + H1 shipped. Agent fleet (6 workers) completed.
+- D3: Map route planning — OSRM backend controller, routes.ts, routeApi.ts, RouteBuilder.tsx, wired into map.tsx
+- B2: AI tagging disclosure — items/[id].tsx, organizer/add-items/[saleId].tsx, organizer/settings.tsx updated with approved copy
+- H1: Compact mobile header — search bar py-1.5, main content pt-[92px]
+- Track 3: roadmap.md v21, STATE.md stale entries pruned
+- Security/QA fleet: OAuth red-team (2 P0s), Payment QA (4 P0 blockers), Migration rollback plan, Support KB, RECOVERY.md decision trees, Spring 2026 marketing content
+
+**Remaining open:** A3.6 single-item 500 (needs production logs). P0 security fixes (OAuth account-takeover, redirect_uri allowlist, chargeback webhook, buyer-own-item purchase prevention). B3/B7/D1/C1/C2 (deferred/attorney). VAPID keys confirm in prod. Vercel MCP not yet leveraged.
 
 ---
 
@@ -117,4 +124,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 
 ---
 
-Last Updated: 2026-03-09 (session 114 — stale entries pruned)
+Last Updated: 2026-03-09 (session 114 — D3/B2/H1 shipped, agent fleet complete)
