@@ -52,11 +52,15 @@ export const endAuctions = async () => {
           data: { status: 'AUCTION_ENDED', currentBid: price },
         });
 
+        // QA: Fee rate now read from FeeStructure table at transaction time
+        const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
+        const feePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
+
         let stripePaymentIntentId: string | null = null;
 
         if (item.sale.organizer.stripeConnectId) {
           try {
-            const feeAmount = Math.round(price * 100 * 0.07);
+            const feeAmount = Math.round(price * 100 * feePercent);
             const paymentIntent = await stripe().paymentIntents.create({
               amount: Math.round(price * 100),
               currency: 'usd',
@@ -73,7 +77,7 @@ export const endAuctions = async () => {
           console.warn(`Organizer for item ${item.id} has no Stripe account \u2014 skipping payment intent`);
         }
 
-        const platformFeeAmount = Math.round(price * 100 * 0.07) / 100;
+        const platformFeeAmount = Math.round(price * 100 * feePercent) / 100;
         await prisma.purchase.create({
           data: {
             userId: highestBid.userId,
