@@ -236,7 +236,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -295,6 +295,8 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null,
         reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null,
         reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null,
+        // B2: AI tagging disclosure
+        isAiTagged: isAiTagged === true || isAiTagged === 'true',
       }
     });
 
@@ -319,7 +321,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -360,6 +362,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         ...(reverseDailyDrop !== undefined && { reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null }),
         ...(reverseFloorPrice !== undefined && { reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null }),
         ...(reverseStartDate !== undefined && { reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null }),
+        // B2: AI tagging disclosure
+        ...(isAiTagged !== undefined && { isAiTagged: isAiTagged === true || isAiTagged === 'true' }),
       }
     });
 
