@@ -1,5 +1,5 @@
 import { Router, Request } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getUserCoupons, validateCoupon } from '../controllers/couponController';
 
@@ -10,7 +10,7 @@ const couponValidateLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => (req as AuthRequest).user?.id ?? req.ip ?? 'unknown',
+  keyGenerator: (req: Request) => (req as AuthRequest).user?.id ?? ipKeyGenerator(req),
   message: { message: 'Too many validation attempts. Please wait before trying again.' },
 });
 
