@@ -86,6 +86,7 @@ import pickupRoutes from './routes/pickup'; // Pickup Appointment Scheduling
 import inviteRoutes from './routes/invites'; // Beta invite code validation
 import socialPostRoutes from './routes/socialPost'; // Social media post generator
 import couponsRouter from './routes/coupons';          // Sprint 3: Shopper Loyalty Coupons
+import routeRoutes from './routes/routes';             // D3: Map route planning
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -223,6 +224,7 @@ app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling
 app.use('/api/invites', inviteRoutes); // Beta invite code validation (public)
 app.use('/api/social-post', socialPostRoutes); // Social media post generator
 app.use('/api/coupons', couponsRouter);         // Sprint 3: Shopper Loyalty Coupons
+app.use('/api/routes', routeRoutes);            // D3: Map route planning
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

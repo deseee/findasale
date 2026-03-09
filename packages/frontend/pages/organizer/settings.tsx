@@ -175,6 +175,14 @@ const OrganizerSettingsPage = () => {
                     </div>
                   )}
                 </div>
+
+                {/* B2: AI Assistance description */}
+                <div className="border-t border-warm-100 pt-4 mt-2">
+                  <p className="text-sm font-medium text-warm-800 mb-1">AI Assistance</p>
+                  <p className="text-sm text-warm-600">
+                    Let our system auto-suggest tags and descriptions when you add items. We&apos;ll always flag what&apos;s auto-suggested so you can review and change it. You can turn this off anytime.
+                  </p>
+                </div>
               </div>
             </div>
           )}

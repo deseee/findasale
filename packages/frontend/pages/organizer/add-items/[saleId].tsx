@@ -600,6 +600,10 @@ const AddItemsDetailPage = () => {
           {/* Batch Upload Tab (CD2 Phase 2) */}
           {activeTab === 'batch' && (
             <div className="mb-8">
+              {/* B2: AI tagging first-use disclosure */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 text-sm text-amber-900">
+                ✨ We can auto-suggest categories, tags, and descriptions for your items — it&apos;s a quick way to get started. Just review what we suggest before you publish. You&apos;re always in control of what shows on your listings, and you can edit or remove anything.
+              </div>
               <SmartInventoryUpload
                 saleId={String(saleId)}
                 onComplete={() => {

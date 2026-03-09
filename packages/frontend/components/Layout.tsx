@@ -196,7 +196,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       </header>
 
       {/* ── MOBILE PERSISTENT SEARCH BAR ── fixed below header, mobile only */}
-      <div className="md:hidden fixed top-12 left-0 right-0 z-40 bg-white border-b border-warm-200 px-3 py-2">
+      <div className="md:hidden fixed top-12 left-0 right-0 z-40 bg-white border-b border-warm-200 px-3 py-1.5">
         <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 pointer-events-none" aria-hidden="true">
@@ -210,7 +210,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               onChange={(e) => setHeaderSearch(e.target.value)}
               placeholder="Search sales &amp; items…"
               aria-label="Search sales and items"
-              className="w-full pl-9 pr-4 py-2 text-sm border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50"
+              className="w-full pl-9 pr-4 py-1.5 text-sm border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50"
             />
           </div>
         </form>
@@ -273,12 +273,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       </div>
 
       {/* Main Content
-          Mobile: pt accounts for fixed header (48px) + fixed search bar (~52px) = 100px
-          Desktop: no top padding (header is not fixed on desktop... actually it is fixed, so md needs pt-16)
+          Mobile: pt accounts for fixed header (48px) + fixed search bar (~44px) = 92px
+          Desktop: pt-16 for fixed header (64px)
       */}
       <main
         id="main-content"
-        className="flex-grow pt-[100px] md:pt-16 pb-15 md:pb-0"
+        className="flex-grow pt-[92px] md:pt-16 pb-15 md:pb-0"
         tabIndex={-1}
       >
         {children}

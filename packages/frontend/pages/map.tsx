@@ -5,6 +5,7 @@ import api from '../lib/api';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import Skeleton from '../components/Skeleton';
 import { useToast } from '../components/ToastContext';
+import RouteBuilder from '../components/RouteBuilder';
 
 interface Sale {
   id: string;
@@ -250,6 +251,11 @@ const MapPage = () => {
           />
         )}
       </section>
+
+      {/* D3: Route Builder — collapsible panel below map */}
+      {!isLoading && !isError && (
+        <RouteBuilder sales={filteredSales} />
+      )}
     </div>
   );
 };
