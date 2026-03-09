@@ -7,17 +7,20 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Session 105 Bug Blitz COMPLETE (2026-03-09). 7 P0 bugs fixed, QA PASS.
+Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 implementation COMPLETE. Session 109 skill packaging COMPLETE. Session 110 P1 bug blitz COMPLETE. Full detail: `claude_docs/COMPLETED_PHASES.md`.
 
-**Session 106 COMPLETE (2026-03-10):** B1 ADR written and approved. Fee structure locked at 10% flat. Dev sequence planned across 107A/B/C.
+**Session 111 COMPLETE (2026-03-09):** Build fixes + fleet research + credential rotation + workflow improvements.
+- Fixed Railway TS2322 (itemSearchService.ts intersection types) and Vercel form reset (add-items/[saleId].tsx)
+- Scrubbed live Neon credentials from next-session-prompt.md (Session 110 wrap error) — pushed immediately
+- Added CORE.md §17.3(c) credential hard gate — next-session-prompt.md must NEVER contain credentials
+- Fixed coupons.ts ERR_ERL_KEY_GEN_IPV6: `ipKeyGenerator(ip)` with proper import (3 iterations to get signature right)
+- Rotated Neon credentials (Patrick completed in console)
+- Fleet dispatched: B2 ✓ (AI disclosure copy), H1 ✓ (UX inspiration research), D3 ✓ (route planning ADR → Option B approved), G-batch ✓ (rerun: only Vercel MCP actionable, rest CLI-only)
+- conversation-defaults skill updated to v2 (8 rules, AskUserQuestion restored, blocked-task handling)
+- Vercel MCP connected
+- 3 Neon migrations still pending deploy (Patrick ran command but hit wrong package path — not yet deployed)
 
-**Session 107 COMPLETE (2026-03-11):** B1 full implementation DONE. 107A/B/C continuous run: schema + FeeStructure model, backend controllers (saleController/itemController/stripeController/auctionJob all reading FeeStructure at fee time), frontend forms (saleType selector + listingType selector). QA found P0 blocker (auctionJob.ts hardcoded 0.07), dev fixed. All code staged and ready for Patrick's push. **Patrick must push 10 files** (see push block below). Prisma migration still pending.
-
-**Session 109 COMPLETE (2026-03-09):** Housekeeping only. Packaged and reinstalled 8 updated skill archives (Session 108 version tracking). advisory-board, hacker, pitchman newly packaged as flat .skill archives. All 8 installed by Patrick.
-
-**Session 110 COMPLETE (2026-03-09):** Multi-agent P1 bug blitz. QA scoped + dev fixed: A1.3 (geo toast), A1.4 (FTS merged into main search), A2.2 (all 13 PWA icons regenerated from FindA.Sale brand source), A5.1 (double layout removed), A5.2 (organizer profile links), A6.1 (hardcoded city → env vars). Then continuous fleet deployment: fixed A4.1 (dashboard Add Items gating + analytics NaN), A3.3 (× unicode), A3.4 (edit-item error handling), A3.8 (removed orphan upload tab), A5.3 (backend badge fetch), B4 (auctionReservePrice field + migration + frontend), B8 (webhook UI surfaced in dashboard). Architect decisions: B5 DEFERRED (email reply parsing post-beta, trigger at 500 organizers), B8 GO (webhooks already built — UI only). B6 no typo found.
-
-**Remaining open:** A3.6 single-item 500 (needs Railway production logs — blocked). B2 (AI tagging disclosure copy). B3 (holds/reservations — deferred). B7 (referral safeguards — attorney required). D1 (quasi-POS — attorney required). D3 (map route planning). H1 (UX inspiration research). C1/C2 (legal terms — no action for beta). G-batch (Cowork platform research).
+**Remaining open:** A3.6 single-item 500 (needs production logs). B2 (copy written, needs UI wiring). D3 (ADR approved, ready for dev). H1 quick wins (How It Works card + compact header). B3/B7/D1/C1/C2 (deferred/attorney). Vercel MCP connected but not yet leveraged.
 
 ---
 
@@ -42,7 +45,19 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-Sessions 95–105 complete. Self-improvement loop DONE. Fleet Self-Audit DONE. Bug Blitz (Session 105) DONE. Next: Session 106 Architecture Decisions (B1 linchpin). Sprint 5 (Seller Performance Dashboard) deferred to after B1 decision. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production. 18 skill files queued for Patrick to install: `claude_docs/skill-updates-2026-03-09/`. Full history: `claude_docs/COMPLETED_PHASES.md`
+**3 Neon migrations pending deploy** (run from `packages/database` directory):
+1. `20260309_add_auction_reserve_price`
+2. `20260310000001_add_item_fulltext_search_indexes`
+3. `20260311000001_add_sale_type_item_listing_type`
+
+Command (PowerShell from repo root):
+```
+cd packages/database
+$env:DATABASE_URL = "postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+$env:DIRECT_URL = "postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+pnpm run db:generate
+pnpm run db:deploy
+```
 
 ---
 
@@ -50,13 +65,9 @@ Sessions 95–105 complete. Self-improvement loop DONE. Fleet Self-Audit DONE. B
 
 - **Phase 31 OAuth env vars** — ✅ DONE (2026-03-06). GOOGLE_CLIENT_ID/SECRET + FACEBOOK_CLIENT_ID/SECRET added to Vercel. Redirect URIs configured.
 - **Support email** — ✅ DONE (2026-03-06). support@finda.sale email forwarding configured.
-- **Neon migrations** — ✅ 63 migrations applied to Neon production (last: 20260307153530_add_coupon_model). Pending: `20260310000001_add_item_fulltext_search_indexes` (Sprint 4a — run before Sprint 4b end-to-end testing). NEW: Migration `20260311000001_add_sale_type_item_listing_type` (Session 107 schema) pending `prisma migrate deploy`.
-- **MAILERLITE_API_KEY** — ✅ DONE (2026-03-09). Added to Railway env vars by Patrick. MailerLite automation active on sale publish.
-- **Uptime monitoring** — ✅ UptimeRobot done (Patrick confirmed 2026-03-05).
-- **Sentry** — ✅ Fully deployed. DSNs set in Railway + Vercel.
-- **STRIPE_WEBHOOK_SECRET** — ✅ Set in Railway (2026-03-05).
-- **Prisma migration deploy (Session 107)** — Patrick must run `prisma generate && prisma migrate deploy` for migration `20260311000001_add_sale_type_item_listing_type` on Neon production.
-- **conversation-defaults skill reinstall (Session 107)** — Patrick must reinstall from `claude_docs/skill-updates-2026-03-09/conversation-defaults-updated.skill/conversation-defaults-edit.skill` (Rule 3 expanded to cover ALL first-message types, not just ≤5 word openers).
+- **Neon migrations** — 63 applied. 3 pending (see "In Progress" above for command).
+- **Neon credentials** — ✅ Rotated (Session 111). Old exposed password scrubbed from git history.
+- **conversation-defaults skill** — ✅ v2 installed (Session 111).
 
 ---
 
@@ -83,12 +94,12 @@ Sessions 95–105 complete. Self-improvement loop DONE. Fleet Self-Audit DONE. B
 - C4: ✅ Stripe webhook secret rotation plan documented in OPS.md
 
 **Patrick's 5 blocking items:**
-1. Confirm 5%/7% fee (locked in STACK.md but never verbally confirmed)
+1. ~~Confirm 5%/7% fee~~ — ✅ DONE. Locked at 10% flat (Session 106).
 2. Set up Stripe business account
 3. Google Search Console verification
 4. Order business cards (design ready in `claude_docs/brand/`)
 5. Start beta organizer outreach (`claude_docs/beta-launch/organizer-outreach.md` + `marketing-calendar-2026-03-06.md`)
-6. Rotate Neon credentials (were in committed history — scrubbed but should be rotated)
+6. ~~Rotate Neon credentials~~ — ✅ DONE (Session 111).
 7. Optional: consult Michigan attorney re estate sale permit (~$300–500)
 
 Full audit reports: `claude_docs/health-reports/qa-pre-beta-audit-2026-03-06.md`, `claude_docs/beta-launch/ops-readiness-2026-03-06.md`
@@ -99,7 +110,7 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 ## Known Gotchas (Production)
 
 - **Railway PORT mismatch** — `PORT=5000` locked in Railway Variables. Must match `EXPOSE 5000` in Dockerfile. Do not remove.
-- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. 63 migrations applied as of 2026-03-07. Pending: `20260310000001_add_item_fulltext_search_indexes` — run before Sprint 4b end-to-end testing.
+- **Neon production DB** — `prisma migrate deploy` must be run manually after any new migration. 63 applied as of 2026-03-07. 3 pending (see "In Progress"). Run from `packages/database` (NOT `packages/backend`).
 - **Dockerfile.production** — ✅ Restored to `--frozen-lockfile` (session 87, commit b82180d). Lockfile is clean.
 - **Git push workflow** — Patrick uses `.\push.ps1` (repo root) instead of raw `git push`. Self-heals: index.lock, CRLF phantoms (--ignore-cr-at-eol), fetch+merge (never rebase), doc-file merge conflicts (--theirs auto-resolve). See self-healing entries #36, #51, #52.
 - **Dev stack is now native** — Docker no longer used at all. `image-tagger/` deleted by Patrick (session 81). Backend/frontend/postgres run natively on Windows. See `claude_docs/DEVELOPMENT.md`.
@@ -119,4 +130,4 @@ Beta checklist: `claude_docs/BETA_CHECKLIST.md`
 - **CA4** — ✅ COMPLETE. User flow audit (shopper/organizer/creator). 10 fixes shipped: search aria-label, purchases error handling, index refetch(), items/[id] retry, referral copy feedback. Open items logged in `claude_docs/ux-spotchecks/ca4-ca6-audit-2026-03-05.md`.
 - **CA6** — ✅ COMPLETE. Feature polish: 5MB photo validation + server error surfacing, push notification toggle in organizer settings, onboarding step 3 copy improved, empty referrals state. Pushed 2026-03-05.
 
-Last Updated: 2026-03-09 (session 110 complete — P1 bug blitz + A4.1 dashboard + A3.x upload fixes + B4 auction reserves + B8 webhook UI)
+Last Updated: 2026-03-09 (session 111 complete — build fixes + fleet research + credential rotation + Vercel MCP connected)
