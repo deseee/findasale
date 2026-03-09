@@ -336,7 +336,7 @@ Before ending ANY session, Claude must execute the session wrap protocol:
    - (b) Update `claude_docs/logs/session-log.md` with today's entry (completed work, files changed, notes). If any P-path items were completed or CD sprint features shipped this session, also update `claude_docs/strategy/roadmap.md` in the same commit — roadmap and session-log are always updated together.
    - (c) Update `claude_docs/operations/next-session-prompt.md` with context for the next session
    - (d) Re-run the wrap check to verify all gates pass
-   - (e) Provide Patrick with exact commit hashes and push instructions
+   - (e) Provide Patrick with the complete `.\push.ps1` block — every changed file listed as an explicit `git add [file]` line, never `git add -A` or `git add .`. The block must be copy-paste ready with no files omitted. Maintain a running changed-files list throughout the session; never reconstruct from memory at wrap time.
 
 4. **Subagent discipline:** Any spawned subagent must follow the same protocol. Before handoff completes, subagent reports "Working tree clean" and lists all changed files.
 

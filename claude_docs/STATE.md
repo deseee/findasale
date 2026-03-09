@@ -7,7 +7,11 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-Self-improvement loop COMPLETE (sessions 95–103). Session 103 evaluation done: Option C verdict (loop partially working, proceed to bug blitz). Key finding: E1.5 batch continuation confirmed successful (29 items, single session). Gaps fixed this session: conversation-defaults Rules 6–8 deployed to source SKILL.md + repackaged, TASK_REGISTRY.json reconciled, session-log updated. Sprint queue: Session 104 Fleet Self-Audit (each subagent audits itself + whole fleet — skills, plugins, routines, cross-agent contracts) → Session 105 Bug Blitz → Session 106 Architecture Decisions (B1 linchpin). NOTE: Use `Skill` tool to invoke findasale-* agents — NOT the `Agent` tool. Patrick must reinstall conversation-defaults-updated.skill before Session 104.
+Session 104 Fleet Self-Audit COMPLETE (2026-03-09). Full fleet audited: 17 skills + 10 scheduled tasks + cross-agent contracts. 18 .skill files re-packaged with QW/PI patches + steelmanned improvements (Patrick must install all 18). 15 product features added to roadmap. 12 agent tasks added to roadmap Agent Task Queue. R&D: OpenTelemetry → MONITOR. Pitchman sweep: 104 ideas, top picks routed to roadmap + skills. Fleet now has BUSINESS_PLAN.md references, MESSAGE_BOARD wiring, and steelmanned improvement sections in all 18 skills.
+
+**Next session (105): Bug Blitz.** Start with Bug Blitz Scoping (findasale-qa + health-scout produce P0/P1/P2 list), then findasale-dev executes. P0 bugs: map pins (A1.1/A1.2), mobile menu (A2.1), photo upload (A3.1/A3.2), manual item entry server error (A3.6), Rapid Capture camera (A3.7), Dashboard audit (A4.1). Also: run Neon migration 20260310000001, verify MAILERLITE_API_KEY in Railway.
+
+**Session 106: Architecture Decisions.** B1 linchpin (Sale Type → Item Type) is the gate for B4/D1/B7. Architect goes first.
 
 ---
 
@@ -32,7 +36,7 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-Sessions 95–103 complete. Self-improvement loop DONE. Session 103 evaluation complete — verdict Option C, proceed to Bug Blitz. Sprint 5 (Seller Performance Dashboard) still deferred until after Bug Blitz. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production. Full completed task history: `claude_docs/COMPLETED_PHASES.md`
+Sessions 95–104 complete. Self-improvement loop DONE. Session 104 Fleet Self-Audit DONE. Next: Session 105 Bug Blitz (see Active Objective). Sprint 5 (Seller Performance Dashboard) deferred until after Bug Blitz. Neon migration `20260310000001_add_item_fulltext_search_indexes` still needs `prisma migrate deploy` on production. 18 skill files queued for Patrick to install: `claude_docs/skill-updates-2026-03-09/`. Full history: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 

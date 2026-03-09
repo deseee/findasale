@@ -143,7 +143,7 @@ git add [file]
 **Trigger:** After committing a batch, decide: MCP push or manual push?
 
 **MCP is OK if:**
-- ≤5 files changed in this commit
+- ≤3 files changed in this commit (hard limit per CORE.md §10)
 - Total token count of changed files ≤25,000 (rough: 1 token ≈ 4 chars)
 - Files are code/config only (no documentation rewrites)
 
@@ -155,21 +155,25 @@ Files: searchController.ts (1.8kb), search.tsx (2.4kb) → Total ≤5k chars ✓
 ```
 
 **Defer to Patrick's push.ps1 if:**
-- >5 files changed
+- >3 files changed
 - >25k tokens combined
-- Changes include documentation overwrites
+- Changes include documentation rewrites
 - Files are >1MB
 - Uncertainty about token count
 
-**Example hand-off:**
-```
-Changes ready to push — 8 files, 31KB total content.
-Too large for MCP. Patrick: run from PowerShell:
+**REQUIRED when deferring to push.ps1 — provide the FULL block:**
+Every `.\push.ps1` mention must include a complete, copy-paste-ready block with every changed file as its own explicit `git add [file]` line. Never `git add -A` or `git add .`. Never omit files or say "and the rest" — list every file individually.
 
+```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git status  # verify these 8 files are listed
+git add [file1]
+git add [file2]
+git add [file3]
+git commit -m "[descriptive message]"
 .\push.ps1
 ```
+
+Maintain a running changed-files list from the first edit of the session. Never reconstruct at wrap time — you will miss files.
 
 **Verification:** After MCP push, verify the commit is on GitHub:
 ```bash

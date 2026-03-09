@@ -98,8 +98,20 @@ git status --short
 If anything shows up, decide: commit or discard?
 
 ### Rule 4: Decide MCP vs Manual Push
-- **If ≤5 files AND ≤25k tokens:** Use MCP push
-- **If >5 files OR >25k tokens:** Tell Patrick to use `.\push.ps1`
+- **If ≤3 files AND ≤25k tokens:** Use MCP push
+- **If >3 files OR >25k tokens:** Tell Patrick to use `.\push.ps1`
+
+### Rule 4a: Full Push Instructions Are Required
+Whenever `.\push.ps1` is mentioned, provide the complete copy-paste block — every changed file as its own explicit `git add [file]` line. Never `git add -A` or `git add .`. Never reconstruct from memory at wrap time; maintain a running changed-files list throughout the session.
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add [file1]
+git add [file2]
+git add [file3]
+git commit -m "[descriptive message]"
+.\push.ps1
+```
 
 ### Rule 5: Subagents Also Commit
 When spawning a subagent, tell it:
