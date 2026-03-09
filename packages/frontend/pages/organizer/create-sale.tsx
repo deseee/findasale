@@ -33,7 +33,8 @@ const CreateSalePage = () => {
     state: '',
     zip: '',
     neighborhood: '',
-    auctionEnabled: false,
+    // B1: Sale type selector
+    saleType: 'ESTATE',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,7 +93,8 @@ const CreateSalePage = () => {
       const response = await api.post('/sales/generate-description', {
         title: formData.title,
         city: formData.city || undefined,
-        isAuctionSale: formData.auctionEnabled,
+        // B1: Send saleType instead of isAuctionSale
+        saleType: formData.saleType,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
       });
@@ -310,19 +312,23 @@ const CreateSalePage = () => {
               </select>
             </div>
 
-            {/* Options */}
+            {/* B1: Sale Type Selector */}
             <div>
-              <label htmlFor="auctionEnabled" className="flex items-center gap-3">
-                <input
-                  id="auctionEnabled"
-                  type="checkbox"
-                  name="auctionEnabled"
-                  checked={formData.auctionEnabled}
-                  onChange={handleChange}
-                  className="w-4 h-4 rounded border-warm-300 focus:ring-2 focus:ring-amber-500"
-                />
-                <span className="text-sm font-medium text-warm-700">Enable auctions for this sale</span>
+              <label htmlFor="saleType" className="block text-sm font-medium text-warm-700 mb-2">
+                Sale Type
               </label>
+              <select
+                id="saleType"
+                name="saleType"
+                value={formData.saleType}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              >
+                <option value="ESTATE">Estate Sale</option>
+                <option value="YARD">Yard Sale</option>
+                <option value="AUCTION">Auction</option>
+                <option value="FLEA_MARKET">Flea Market</option>
+              </select>
             </div>
 
             {/* Submit */}

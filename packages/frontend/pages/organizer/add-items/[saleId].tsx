@@ -54,9 +54,9 @@ const AddItemsDetailPage = () => {
     category: '',
     condition: '',
     quantity: '1',
-    isAuction: false,
+    // B1: Listing type selector
+    listingType: 'FIXED',
     startingBid: '',
-    reverseAuction: false,
     reverseDailyDrop: '',
     reverseFloorPrice: '',
   });
@@ -101,9 +101,8 @@ const AddItemsDetailPage = () => {
         category: '',
         condition: '',
         quantity: '1',
-        isAuction: false,
+        listingType: 'FIXED',
         startingBid: '',
-        reverseAuction: false,
         reverseDailyDrop: '',
         reverseFloorPrice: '',
       });
@@ -148,27 +147,28 @@ const AddItemsDetailPage = () => {
       return;
     }
 
-    if (formData.isAuction && !formData.startingBid) {
+    // B1: Validate based on listingType
+    if (formData.listingType === 'AUCTION' && !formData.startingBid) {
       setFormError('Starting bid is required for auction items');
       return;
     }
 
-    if (!formData.isAuction && !formData.price) {
-      setFormError('Price is required for regular items');
+    if (formData.listingType === 'FIXED' && !formData.price) {
+      setFormError('Price is required for fixed-price items');
       return;
     }
 
-    if (formData.reverseAuction && !formData.price) {
+    if (formData.listingType === 'REVERSE_AUCTION' && !formData.price) {
       setFormError('Original price is required for reverse auction items');
       return;
     }
 
-    if (formData.reverseAuction && !formData.reverseDailyDrop) {
+    if (formData.listingType === 'REVERSE_AUCTION' && !formData.reverseDailyDrop) {
       setFormError('Daily drop amount is required for reverse auction items');
       return;
     }
 
-    if (formData.reverseAuction && !formData.reverseFloorPrice) {
+    if (formData.listingType === 'REVERSE_AUCTION' && !formData.reverseFloorPrice) {
       setFormError('Floor price is required for reverse auction items');
       return;
     }
@@ -180,20 +180,22 @@ const AddItemsDetailPage = () => {
       category: formData.category || null,
       condition: formData.condition || null,
       quantity: parseInt(formData.quantity, 10) || 1,
+      // B1: Send listingType
+      listingType: formData.listingType,
     };
 
-    if (formData.isAuction) {
+    // Set price or auction fields based on listingType
+    if (formData.listingType === 'AUCTION') {
       payload.auctionStartPrice = parseFloat(formData.startingBid);
-    } else {
+    } else if (formData.listingType === 'REVERSE_AUCTION') {
       payload.price = parseFloat(formData.price);
-    }
-
-    // CD2 Phase 4: Reverse Auction fields
-    if (formData.reverseAuction) {
       payload.reverseAuction = true;
       payload.reverseDailyDrop = Math.round(parseFloat(formData.reverseDailyDrop) * 100); // convert dollars to cents
       payload.reverseFloorPrice = Math.round(parseFloat(formData.reverseFloorPrice) * 100); // convert dollars to cents
       payload.reverseStartDate = new Date().toISOString(); // start immediately
+    } else {
+      // FIXED or other types
+      payload.price = parseFloat(formData.price);
     }
 
     createItemMutation.mutate(payload);

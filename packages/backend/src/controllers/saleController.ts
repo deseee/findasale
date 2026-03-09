@@ -42,7 +42,9 @@ const saleCreateSchema = z.object({
   lng: z.number(),
   photoUrls: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
-  isAuctionSale: z.boolean().optional().default(false),
+  isAuctionSale: z.boolean().optional().default(false), // Deprecated: use saleType instead
+  // B1: Sale type — ESTATE | YARD | AUCTION | FLEA_MARKET
+  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET']).optional().default('ESTATE'),
   neighborhood: z.string().optional(), // U2
 });
 

@@ -213,7 +213,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       shippingCost = item.shippingPrice;
     }
 
-    const feePercent = isAuctionItem ? 0.07 : 0.05;
+    // QA: payment flow — B1: Fee now read from FeeStructure table at transaction time
+    const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
+    const feePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
     const priceCents = Math.round((price + shippingCost) * 100);
     const platformFeeAmount = Math.round(priceCents * feePercent);
 

@@ -132,7 +132,8 @@ model Sale {
   photoUrls     String[]
   tags          String[]
   status        String     @default("DRAFT") // DRAFT, PUBLISHED, ENDED
-  isAuctionSale Boolean    @default(false)
+  isAuctionSale Boolean    @default(false) // Deprecated: use saleType instead
+  saleType      String     @default("ESTATE") // B1: ESTATE | YARD | AUCTION | FLEA_MARKET
   qrScanCount   Int        @default(0)
   endingSoonNotified Boolean @default(false) // Track if "Sale Ending Soon" notification has been sent
   organizerId   String
@@ -174,11 +175,13 @@ model Item {
   // W1: Shipping
   shippingAvailable Boolean  @default(false)
   shippingPrice    Float?
+  // B1: Item listing/transaction type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
+  listingType      String    @default("FIXED")
   // CD2: Live Drop — item hidden until liveDropAt time
-  isLiveDrop       Boolean   @default(false)
+  isLiveDrop       Boolean   @default(false) // Deprecated: use listingType instead
   liveDropAt       DateTime?
   // CD2 Phase 4: Reverse Auction — daily price decline until sold or floor hit
-  reverseAuction   Boolean   @default(false)
+  reverseAuction   Boolean   @default(false) // Deprecated: use listingType instead
   reverseDailyDrop Int?      // cents per day
   reverseFloorPrice Int?     // minimum price in cents
   reverseStartDate DateTime?
@@ -850,4 +853,12 @@ model SaleWaitlist {
 
   @@unique([saleId, userId])
   @@index([saleId])
+}
+
+// B1 ADR: Fee Structure — configurable platform fees by listing type (or global default)
+model FeeStructure {
+  id           Int      @id @default(autoincrement())
+  listingType  String   @default("*") // "*" = global default; "AUCTION", "FIXED", etc. for type-specific rates
+  feeRate      Float    @default(0.10) // e.g. 0.10 = 10%
+  updatedAt    DateTime @updatedAt
 }

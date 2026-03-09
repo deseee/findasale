@@ -1,4 +1,22 @@
 // Shared types and utilities will go here
+
+// B1 ADR: Sale type categories
+export enum SaleType {
+  ESTATE = 'ESTATE',
+  YARD = 'YARD',
+  AUCTION = 'AUCTION',
+  FLEA_MARKET = 'FLEA_MARKET',
+}
+
+// B1 ADR: Item listing/transaction types
+export enum ListingType {
+  FIXED = 'FIXED',
+  AUCTION = 'AUCTION',
+  REVERSE_AUCTION = 'REVERSE_AUCTION',
+  LIVE_DROP = 'LIVE_DROP',
+  POS = 'POS',
+}
+
 export type Sale = {
   id: string;
   title: string;

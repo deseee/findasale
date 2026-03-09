@@ -236,7 +236,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -287,7 +287,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
         shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,
-        // CD2 Phase 4: Reverse Auction
+        // B1: Listing type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
+        listingType: listingType || 'FIXED',
+        // CD2 Phase 4: Reverse Auction — deprecated, maintained for backwards compat
         reverseAuction: reverseAuction === true || reverseAuction === 'true',
         reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null,
         reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null,
@@ -316,7 +318,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate } = req.body;
+    const { title, description, price, auctionStartPrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType } = req.body;
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -349,7 +351,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         ...(shippingAvailable !== undefined && { shippingAvailable: shippingAvailable === true || shippingAvailable === 'true' }),
         ...(shippingPrice !== undefined && { shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null }),
-        // CD2 Phase 4: Reverse Auction
+        // B1: Listing type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
+        ...(listingType !== undefined && { listingType }),
+        // CD2 Phase 4: Reverse Auction — deprecated, maintained for backwards compat
         ...(reverseAuction !== undefined && { reverseAuction: reverseAuction === true || reverseAuction === 'true' }),
         ...(reverseDailyDrop !== undefined && { reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null }),
         ...(reverseFloorPrice !== undefined && { reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null }),

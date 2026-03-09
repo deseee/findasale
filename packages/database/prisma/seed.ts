@@ -163,6 +163,7 @@ async function main() {
     prisma.organizer.deleteMany(),
     prisma.user.deleteMany(),
     prisma.badge.deleteMany(),
+    prisma.feeStructure.deleteMany(),
   ]);
 
   // Create badges (5 total)
@@ -202,6 +203,15 @@ async function main() {
 
   const badges = await prisma.badge.createMany({ data: badgesData });
   console.log(`✅ Created ${badges.count} badges`);
+
+  // B1: Seed FeeStructure with default 10% global rate
+  console.log('💰 Seeding FeeStructure...');
+  await prisma.feeStructure.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { listingType: '*', feeRate: 0.10 }
+  });
+  console.log('✅ FeeStructure seeded (10% global rate)');
 
   // Get badge IDs for later use
   const allBadges = await prisma.badge.findMany();
