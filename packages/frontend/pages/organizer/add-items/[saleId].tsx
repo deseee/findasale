@@ -37,6 +37,14 @@ const CATEGORIES = [
 
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 
+// Helper function for Bug 2: normalize AI data values to array
+const normalizeToArray = (value: string | undefined, arr: string[]): string => {
+  if (!value) return '';
+  const lowerValue = value.toLowerCase();
+  const match = arr.find(item => item.toLowerCase() === lowerValue);
+  return match || '';
+};
+
 const AddItemsDetailPage = () => {
   const router = useRouter();
   const { saleId, method } = router.query;
@@ -75,6 +83,17 @@ const AddItemsDetailPage = () => {
   const [capturedImage, setCapturedImage] = useState<Blob | null>(null);
   const [capturedImageURL, setCapturedImageURL] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Manual photo upload state (Bug 1)
+  const [manualPhotoFile, setManualPhotoFile] = useState<File | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Camera photo pre-fill state (Bug 2)
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
+  const [hasAiData, setHasAiData] = useState(false);
+
+  // Form ref for "Save Now" button (Bug 2)
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Cleanup camera stream on unmount
   useEffect(() => {
@@ -145,14 +164,35 @@ const AddItemsDetailPage = () => {
       return;
     }
     try {
-      const formData = new FormData();
-      formData.append('photos', capturedImage, 'camera-capture.jpg');
-      const response = await api.post('/upload/rapid-batch', formData, {
+      const uploadFormData = new FormData();
+      uploadFormData.append('photos', capturedImage, 'camera-capture.jpg');
+      const response = await api.post('/upload/rapid-batch', uploadFormData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      showToast('Photo uploaded and analyzed!', 'success');
-      clearCapture();
-      queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
+
+      // Bug 2: Extract cloudinaryUrl and ai data from response
+      const result = response.data.results[0];
+      if (result && result.cloudinaryUrl) {
+        setPendingPhotoUrl(result.cloudinaryUrl);
+
+        // Pre-fill form with AI data if available
+        if (result.ai) {
+          setHasAiData(true);
+          setFormData(prev => ({
+            ...prev,
+            title: result.ai.title || '',
+            description: result.ai.description || '',
+            category: normalizeToArray(result.ai.category, CATEGORIES),
+            condition: normalizeToArray(result.ai.condition, CONDITIONS),
+            price: result.ai.suggestedPrice?.toString() || '',
+          }));
+        }
+
+        // Clear capture and switch to manual tab
+        clearCapture();
+        setActiveTab('manual');
+        showToast('Photo analyzed! Review the details below and save.', 'success');
+      }
     } catch (error) {
       showToast('Failed to upload photo', 'error');
       console.error('Upload error:', error);
@@ -246,12 +286,19 @@ const AddItemsDetailPage = () => {
         reverseFloorPrice: '',
       });
       setFormError('');
+      // Bug 1: Clear manual photo state
+      setManualPhotoFile(null);
+      setIsUploadingPhoto(false);
+      // Bug 2: Clear camera photo state
+      setPendingPhotoUrl(null);
+      setHasAiData(false);
       queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
     },
     onError: (error: any) => {
       const message = error.validationMessage || error.response?.data?.message || 'Failed to add item';
       setFormError(message);
       showToast(message, 'error');
+      setIsUploadingPhoto(false);
     },
   });
 
@@ -308,6 +355,28 @@ const AddItemsDetailPage = () => {
       return;
     }
 
+    // Bug 1 + Bug 2: Handle photo upload
+    if (manualPhotoFile) {
+      setIsUploadingPhoto(true);
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('photos', manualPhotoFile, manualPhotoFile.name);
+        const uploadResponse = await api.post('/upload/rapid-batch', uploadFormData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const cloudinaryUrl = uploadResponse.data.results[0]?.cloudinaryUrl;
+        if (cloudinaryUrl) {
+          // Manual photo upload takes priority over pending camera photo
+          setPendingPhotoUrl(cloudinaryUrl);
+        }
+      } catch (error) {
+        setIsUploadingPhoto(false);
+        showToast('Failed to upload photo', 'error');
+        console.error('Photo upload error:', error);
+        return;
+      }
+    }
+
     const payload: any = {
       saleId,
       title: formData.title,
@@ -334,6 +403,14 @@ const AddItemsDetailPage = () => {
     } else {
       // FIXED pricing
       payload.price = parseFloat(formData.price);
+    }
+
+    // Bug 2: Include photo from camera or manual upload
+    if (manualPhotoFile && pendingPhotoUrl) {
+      // Manual file upload takes priority
+      payload.photoUrls = [pendingPhotoUrl];
+    } else if (pendingPhotoUrl) {
+      payload.photoUrls = [pendingPhotoUrl];
     }
 
     createItemMutation.mutate(payload);
@@ -444,13 +521,30 @@ const AddItemsDetailPage = () => {
               <div className="bg-warm-50 border border-warm-200 rounded-lg p-6">
                 <h2 className="text-xl font-semibold text-warm-900 mb-6">Add Single Item</h2>
 
+                {/* Bug 2: Pending photo banner */}
+                {pendingPhotoUrl && (
+                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+                    <span className="text-sm text-amber-800">📷 Photo attached from camera — ready to save</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingPhotoUrl(null);
+                        setHasAiData(false);
+                      }}
+                      className="text-xs text-amber-600 underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+
                 {formError && (
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
                     {formError}
                   </div>
                 )}
 
-                <form onSubmit={handleSubmitManualItem} className="space-y-4">
+                <form ref={formRef} onSubmit={handleSubmitManualItem} className="space-y-4">
                   {/* Title */}
                   <div>
                     <label className="block text-sm font-medium text-warm-900 mb-1">
@@ -464,7 +558,7 @@ const AddItemsDetailPage = () => {
                       maxLength={100}
                       placeholder="e.g., Vintage Oak Dining Table"
                       className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      disabled={createItemMutation.isPending}
+                      disabled={createItemMutation.isPending || isUploadingPhoto}
                     />
                     <p className="text-xs text-warm-600 mt-1">
                       {formData.title.length}/100 characters
@@ -484,7 +578,7 @@ const AddItemsDetailPage = () => {
                       rows={3}
                       placeholder="Add any details about the item..."
                       className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      disabled={createItemMutation.isPending}
+                      disabled={createItemMutation.isPending || isUploadingPhoto}
                     />
                     <p className="text-xs text-warm-600 mt-1">
                       {formData.description.length}/500 characters
@@ -502,7 +596,7 @@ const AddItemsDetailPage = () => {
                         value={formData.listingType}
                         onChange={handleFormChange}
                         className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        disabled={createItemMutation.isPending}
+                        disabled={createItemMutation.isPending || isUploadingPhoto}
                       >
                         <option value="FIXED">Fixed Price</option>
                         <option value="AUCTION">Auction / Bidding</option>
@@ -529,7 +623,7 @@ const AddItemsDetailPage = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                disabled={createItemMutation.isPending}
+                                disabled={createItemMutation.isPending || isUploadingPhoto}
                               />
                             </div>
                           </div>
@@ -554,7 +648,7 @@ const AddItemsDetailPage = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                disabled={createItemMutation.isPending}
+                                disabled={createItemMutation.isPending || isUploadingPhoto}
                               />
                             </div>
                           </div>
@@ -573,7 +667,7 @@ const AddItemsDetailPage = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                disabled={createItemMutation.isPending}
+                                disabled={createItemMutation.isPending || isUploadingPhoto}
                               />
                             </div>
                             <p className="text-xs text-warm-600 mt-1">Bid must meet or exceed this to win</p>
@@ -598,7 +692,7 @@ const AddItemsDetailPage = () => {
                                 step="0.01"
                                 placeholder="0.00"
                                 className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                disabled={createItemMutation.isPending}
+                                disabled={createItemMutation.isPending || isUploadingPhoto}
                               />
                             </div>
                           </div>
@@ -630,7 +724,7 @@ const AddItemsDetailPage = () => {
                                 step="0.01"
                                 placeholder="5.00"
                                 className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                disabled={createItemMutation.isPending}
+                                disabled={createItemMutation.isPending || isUploadingPhoto}
                               />
                             </div>
                             <p className="text-xs text-warm-600 mt-1">e.g., $5 per day</p>
@@ -651,7 +745,7 @@ const AddItemsDetailPage = () => {
                                 step="0.01"
                                 placeholder="10.00"
                                 className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                disabled={createItemMutation.isPending}
+                                disabled={createItemMutation.isPending || isUploadingPhoto}
                               />
                             </div>
                             <p className="text-xs text-warm-600 mt-1">Won't drop below this</p>
@@ -676,7 +770,7 @@ const AddItemsDetailPage = () => {
                         value={formData.category}
                         onChange={handleFormChange}
                         className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        disabled={createItemMutation.isPending}
+                        disabled={createItemMutation.isPending || isUploadingPhoto}
                       >
                         <option value="">Select category...</option>
                         {CATEGORIES.map((cat) => (
@@ -696,7 +790,7 @@ const AddItemsDetailPage = () => {
                         value={formData.condition}
                         onChange={handleFormChange}
                         className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        disabled={createItemMutation.isPending}
+                        disabled={createItemMutation.isPending || isUploadingPhoto}
                       >
                         <option value="">Select condition...</option>
                         {CONDITIONS.map((cond) => (
@@ -721,19 +815,55 @@ const AddItemsDetailPage = () => {
                       min="1"
                       step="1"
                       className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      disabled={createItemMutation.isPending}
+                      disabled={createItemMutation.isPending || isUploadingPhoto}
                     />
                   </div>
 
-                  {/* Submit Button */}
-                  <div className="pt-4">
+                  {/* Bug 1: Photo Upload Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-warm-900 mb-1">
+                      Photo (optional)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setManualPhotoFile(file);
+                      }}
+                      className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      disabled={createItemMutation.isPending || isUploadingPhoto}
+                    />
+                    {manualPhotoFile && (
+                      <p className="text-xs text-warm-600 mt-1">Selected: {manualPhotoFile.name}</p>
+                    )}
+                  </div>
+
+                  {/* Submit Buttons */}
+                  <div className="pt-4 flex gap-3">
                     <button
                       type="submit"
-                      disabled={createItemMutation.isPending}
-                      className="w-full bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                      disabled={createItemMutation.isPending || isUploadingPhoto}
+                      className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors"
                     >
-                      {createItemMutation.isPending ? 'Adding...' : 'Add Item'}
+                      {isUploadingPhoto ? 'Uploading...' : createItemMutation.isPending ? 'Adding...' : 'Add Item'}
                     </button>
+
+                    {/* Bug 2: Save Now button (only show when AI data is available) */}
+                    {pendingPhotoUrl && hasAiData && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (formRef.current) {
+                            formRef.current.requestSubmit();
+                          }
+                        }}
+                        disabled={createItemMutation.isPending || isUploadingPhoto}
+                        className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed border border-amber-600 text-amber-700 font-bold py-3 px-4 rounded-lg transition-colors"
+                      >
+                        ⚡ Save Now
+                      </button>
+                    )}
                   </div>
                 </form>
               </div>
