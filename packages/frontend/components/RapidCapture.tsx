@@ -1,11 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * RapidCapture — Phase 14a full-screen camera overlay
+ * RapidCapture — Phase 14a camera overlay
  *
  * Opens rear camera via WebRTC getUserMedia.
  * One-handed shutter button, filmstrip carousel of local blob captures.
  * No network calls — all photos stay as blobs until the organizer taps "Done".
+ *
+ * Layout: fullscreen on mobile, centered modal on desktop (md+).
  */
 
 interface CapturedPhoto {
@@ -164,7 +166,9 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   }, [photos, onCancel]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black md:bg-black/70 md:p-8">
+      {/* Inner container: fullscreen mobile, modal desktop */}
+      <div className="w-full h-full md:max-w-2xl md:max-h-[85vh] md:rounded-2xl md:overflow-hidden md:shadow-2xl bg-black flex flex-col relative">
       {/* Hidden canvas for frame capture */}
       <canvas ref={canvasRef} className="hidden" />
 
@@ -343,6 +347,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </div>
         </div>
       )}
+      </div>{/* end modal container */}
     </div>
   );
 };
