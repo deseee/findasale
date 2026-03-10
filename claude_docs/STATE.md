@@ -57,6 +57,21 @@ Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 impl
 - Print Inventory fixed: was calling `/organizer/sales` (404) → corrected to `/sales/mine`.
 - ⚠️ Add-items page: two versions exist. Old single-form version at `/organizer/add-items` (no saleId). New tabbed version (Rapid Capture, Camera, CSV Import) at `/organizer/add-items/[saleId]`. Camera tab shows "coming soon" — needs audit next session.
 
+**Session 131 COMPLETE (2026-03-10):** Print inventory fix + per-sale insights filter. Verified live.
+- Print Inventory 500 error fixed: `getItemsBySaleId` was returning `embedding Float[]` (thousands of floats per item), crashing JSON serialization. Added `select` clause excluding embedding. Commit 10c66a5.
+- Per-sale insights: `insightsController.ts` now accepts optional `?saleId` query param + returns `salesList` for dropdown. `insights.tsx` has sale selector dropdown, scoped metrics, dynamic subtitle. Commit 3cfc1ad.
+- Both fixes verified live in Chrome: print inventory loads all 43 items; insights dropdown filters correctly (tested "Downtown Downsizing" → 1 sale, 17 items, $1,629.22 revenue).
+- Minor data quality note: "Collectibles" appears twice in insights category breakdown (capitalization variant from seed data).
+- Scoped AI branding audit for next session: 6 user-facing locations reference "Google Vision", "Claude Haiku", or "Anthropic" by name → should say "AI" generically.
+
+**Session 130 COMPLETE (2026-03-10):** Session 129 compression damage audit + fixes.
+- Audited all session 129 claimed fixes against live site + GitHub code
+- Found stale 5%/7% fee copy in 3 customer-facing pages missed by session 129: terms.tsx (Section 6), faq.tsx (2 locations), guide.tsx (4 locations)
+- All 3 pages fixed and pushed to GitHub (commits 926a2d7 + 726146f). Vercel deployed — confirmed live via Chrome.
+- Old `add-items.tsx` (48KB static page, no saleId) replaced with redirect to `/organizer/dashboard` — eliminates routing conflict with `add-items/[saleId].tsx`
+- Backend tierService.ts perks text confirmed correct on GitHub ("10% flat") — Railway deploy pending (stale instance still shows 5%/7% in dashboard tier perks card)
+- ⚠️ Carry-forward: Camera tab "coming soon" regression on add-items/[saleId].tsx not yet investigated
+
 **Session 126 COMPLETE (2026-03-10):** Docs correction + session 125 fix verification + item list audit.
 - Session 125 fixes verified live in Chrome: BUG-1 (PUT fix) ✅, BUG-2 (organizer null crash) ✅, BUG-3 (dropdown case) ✅
 - Organizer item list audit: all bulk actions pass (hide, show, set price, checkboxes). Per-item edit + delete pass.
@@ -199,4 +214,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-10 (session 128 — Chrome audit PASS; CSV import 500 fixed; FINDING-3 resolved; 3 commits pushed)
+Last Updated: 2026-03-10 (session 131 — print inventory fix, per-sale insights filter, AI branding audit scoped)
