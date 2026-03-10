@@ -45,14 +45,15 @@ Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 impl
 - A3.6 single-item 500: ✅ RESOLVED — no errors in latest Railway deploy (confirmed by Patrick, session 119).
 - New migration: `20260312000001_add_organizer_referral_discount` — adds `referralDiscountExpiry DateTime?` to Organizer. Patrick must deploy.
 
-**Session 125 COMPLETE (2026-03-10):** Edit-item + photo management flow audit via Chrome MCP. 4 critical bugs found + fixed, audit report written.
-- P0: Save Changes broken (api.patch → api.put mismatch in edit-item/[id].tsx). Fixed.
-- P0: Shopper item detail page crashes on every item (TypeError: Cannot read properties of undefined (reading 'name') — organizer null in API response). Fixed with optional chaining + fallback.
-- P1: Category/Condition dropdowns blank on edit page (case mismatch: API returns lowercase, option values Title Case/UPPERCASE). Fixed by normalizing on form load.
-- P2: No error state when item not found on edit page. Fixed by adding 404 guard.
-- Photo ops verified: upload, reorder, delete all working correctly. Cloudinary 503s on new uploads expected (CDN propagation).
+**Session 125 (2026-03-10) — FIXES PUSHED, NOT YET FULLY TESTED:** Edit-item + photo management flow audit via Chrome MCP. 4 critical bugs found + fixed. Code pushed (b2ac5c7). End-to-end verification not completed before session ended.
+- P0: Save Changes broken (api.patch → api.put mismatch in edit-item/[id].tsx). Fixed — pushed, untested.
+- P0: Shopper item detail page crashes on every item (TypeError: Cannot read properties of undefined (reading 'name') — organizer null in API response). Fixed with optional chaining + fallback — pushed, untested.
+- P1: Category/Condition dropdowns blank on edit page (case mismatch). Fixed — pushed, untested.
+- P2: No error state when item not found on edit page. Fixed — pushed, untested.
+- Photo ops verified in audit: upload, reorder, delete all working correctly.
+- ⚠️ Two remaining issues NOT fixed: (1) backend `getItemById` omits `organizer` from Prisma select (should be fixed in backend); (2) edit page uses public endpoint that filters ENDED/DRAFT items (organizer can't edit items on closed sales).
 - Files: `packages/frontend/pages/organizer/edit-item/[id].tsx`, `packages/frontend/pages/items/[id].tsx`.
-- Commit: b2ac5c7 (3 files, audit report in claude_docs/audits/).
+- Commit: b2ac5c7. Audit report: `claude_docs/audits/session-125-edit-item-photo-audit.md`.
 
 **Session 124 COMPLETE (2026-03-10):** Chrome audit of organizer item listings + single-item edit flow. Identified PATCH/PUT mismatch and organizer null crash — detailed in audit report.
 
@@ -162,4 +163,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 
 ---
 
-Last Updated: 2026-03-10 (session 120 — beta dry run friction blitz, Vercel build cascade fixed, QA P2)
+Last Updated: 2026-03-10 (session 126 — corrected session 125 audit status; edit-item fixes pushed but NOT fully tested)

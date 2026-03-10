@@ -2,11 +2,17 @@
 
 ## Recent Sessions
 
+### 2026-03-10 · Session 126
+**Worked on:** Docs correction from session 125 (STATE.md, session-log). Corrected edit-item audit status — marked fixes as pushed but untested, not complete. Continuing Chrome audit of organizer backend.
+**Decisions:** Do not mark edit-item/photo flow complete until end-to-end verification runs in Chrome this session.
+**Next up:** Chrome audit — verify session 125 fixes live on production, then continue to organizer dashboard item list view.
+**Blockers:** None.
+
 ### 2026-03-10 · Session 125
-**Worked on:** Edit-item + photo management flow audit via Chrome MCP. Identified 4 critical bugs in edit-item page (HTTP method mismatch) and shopper item detail (organizer null crash). All fixed and pushed to main.
+**Worked on:** Edit-item + photo management flow audit via Chrome MCP. Identified 4 critical bugs in edit-item page (HTTP method mismatch) and shopper item detail (organizer null crash). All fixed and pushed to main. Session ended before end-to-end verification.
 **Decisions:** API method standardization: use PUT for single-item updates (not PATCH). Optional chaining for nullable organizer on public API endpoints. Normalize form dropdown values on load for case-mismatched API responses.
-**Next up:** Continue Chrome audit of remaining flows (add-item, dashboard, checkout). Deferred friction items #7 and #13. Beta organizer outreach materials ready in claude_docs/beta-launch/.
-**Blockers:** None — all fixes merged.
+**Next up:** Verify fixes live in Chrome (Session 126 P1). Two backend issues still open: organizer omitted from public item API, edit page uses public endpoint (blocks editing items on closed sales).
+**Blockers:** Fixes pushed but unverified in production.
 
 ### 2026-03-10 · Session 124
 **Worked on:** Chrome audit of organizer item listings and single-item edit flow. Discovered PATCH/PUT mismatch breaking Save Changes. Public API endpoint blocking item fetch on ENDED/DRAFT sales.
