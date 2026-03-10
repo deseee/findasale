@@ -8,8 +8,8 @@ const PrivacyPage = () => {
   return (
     <>
       <Head>
-        <title>Privacy Policy – FindA.Sale</title>
-        <meta name="description" content="Privacy Policy for FindA.Sale — estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
+        <title>Privacy Policy \u2013 FindA.Sale</title>
+        <meta name="description" content="Privacy Policy for FindA.Sale \u2014 estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
       </Head>
       <div className="min-h-screen bg-white">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -35,7 +35,7 @@ const PrivacyPage = () => {
             <h3 className="text-lg font-semibold text-warm-700 mb-2">Transaction Information</h3>
             <p className="text-warm-700 leading-relaxed mb-4">
               We record purchase history, bid history, and payout records. Payment card details are never stored on our
-              servers — they are transmitted directly to Stripe and handled under their PCI-compliant infrastructure.
+              servers \u2014 they are transmitted directly to Stripe and handled under their PCI-compliant infrastructure.
             </p>
 
             <h3 className="text-lg font-semibold text-warm-700 mb-2">Location Information</h3>
@@ -47,8 +47,8 @@ const PrivacyPage = () => {
 
             <h3 className="text-lg font-semibold text-warm-700 mb-2">Content You Upload</h3>
             <p className="text-warm-700 leading-relaxed mb-4">
-              Organizers upload item photos, which we store via Cloudinary. We may pass uploaded images through an
-              AI tagging service (Google Cloud Vision and/or Claude) to generate suggested item descriptions; those
+              Organizers upload item photos, which we store via Cloudinary. We may pass uploaded images through
+              third-party AI services to generate suggested item descriptions; those
               descriptions are saved only if the Organizer accepts them.
             </p>
 
@@ -103,8 +103,8 @@ const PrivacyPage = () => {
                 sent to Sentry for monitoring.
               </li>
               <li>
-                <strong>Google Cloud / Anthropic:</strong> If AI tagging is enabled, item photos may be sent to Google
-                Cloud Vision or Anthropic's API for label generation. No personally identifiable information is included
+                <strong>AI Services:</strong> If AI tagging is enabled, item photos may be sent to third-party AI
+                services for label generation. No personally identifiable information is included
                 in these requests.
               </li>
               <li>
