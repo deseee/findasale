@@ -282,9 +282,9 @@ const ItemDetail: React.FC = () => {
   if (isItemLoading) {
     return (
       <div className="p-6">
-        <Skeleton height="400px" className="mb-6" />
-        <Skeleton height="50px" className="mb-4" />
-        <Skeleton height="30px" className="w-1/3" />
+        <Skeleton className="h-96 mb-6" />
+        <Skeleton className="h-12 mb-4" />
+        <Skeleton className="h-8 w-1/3" />
       </div>
     );
   }
