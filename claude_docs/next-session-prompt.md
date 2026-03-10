@@ -1,6 +1,6 @@
 # Next Session Resume Prompt
-*Written: 2026-03-10T00:00:00Z*
-*Session ended: normally — Session 120 complete*
+*Written: 2026-03-10T21:30:00Z*
+*Session ended: normally — Session 125 complete*
 
 ---
 
@@ -22,75 +22,116 @@ If `.checkpoint-manifest.json` is missing: create it from schema in CORE.md §3 
 
 ## Resume From
 
-Start **Session 121**. Patrick must run `git stash && git pull` first — local is pre-session, all Session 120 fixes are on GitHub only.
+Start **Session 126**. The Chrome audit of edit-item + photo management flow is **COMPLETE**. All bugs fixed and pushed to main (commit b2ac5c7).
 
-## What Was Done Last Session (120)
+**Next audit:** The organizer dashboard item list view (list view, bulk actions, photo grid). Chrome MCP session ready to go. Brief file is `claude_docs/audits/next-audit-brief-*.md` (will be created in Session 126 before audit starts).
 
-**Beta Dry Run Friction Blitz:**
-- 13/15 friction items implemented via 5 parallel dev agents (wizard auto-launch, listing type consolidation, edit-sale badges/toggle/dates, checkout ToS/fee/retry/receipt, UX copy)
-- Items 7 (bulk edit) and 13 (neighborhood autocomplete) deferred
+## What Was Done Last Session (125)
 
-**Vercel Build Cascade Fixed:**
-- Dev D hallucinated full 200-line rewrite of `items/[id].tsx` — restored from local disk
-- 6 TypeScript errors fixed across 4 commits: CountdownTimer null guard, ReverseAuctionBadge prop, ItemShareButton/BuyingPoolCard/PhotoLightbox props (full audit), dashboard `user.createdAt` removed
-- `onboardingComplete` flag is now the sole wizard gate (24hr createdAt check removed — field not in JWT User type)
+**Edit-Item + Photo Management Audit (Chrome MCP):**
+- Audited single-item edit page + photo upload/reorder/delete workflow on production (finda.sale)
+- Found 4 critical bugs:
+  1. **P0:** Save Changes broken — frontend `api.patch()` but backend only has `router.put()` → 404 on every save
+  2. **P0:** Shopper item detail page crashes on EVERY item — `TypeError: Cannot read properties of undefined (reading 'name')` because public API returns `organizer: null` but page accesses `.name` unconditionally
+  3. **P1:** Category/Condition dropdowns blank on edit page — API returns lowercase (`"tools"`, `"good"`) but option values are Title Case/UPPERCASE (`"Tools"`, `"GOOD"`)
+  4. **P2:** No error state when item fails to load — blank form with no feedback
 
-**QA P2 fixes:** z-index z-10→z-50 on sale selector, reverse auction onBlur per-field validation
+- Photo operations verified ✅:
+  - Upload: POST `/upload/item-photo` → POST `/items/:id/photos` — works, Cloudinary 503s on new uploads expected (CDN propagation)
+  - Reorder: PATCH `/items/:id/photos/reorder` — works
+  - Delete: DELETE `/items/:id/photos/:photoIndex` — works
 
----
-
-## Session 121 Objectives
-
-### Priority 1 — Deferred Friction Items
-
-**Item 7 — Bulk Edit on Items List:** Add checkboxes to item rows in the organizer items list, allow batch status/price update. No files touched yet.
-
-**Item 13 — Neighborhood Autocomplete:** Integrate neighborhood autocomplete into sale create/edit form. No files touched yet.
-
-### Priority 2 — Beta Organizer Outreach
-
-Materials archived in `claude_docs/beta-launch/`. `findasale-cx` owns execution. First 5 organizer targets needed from Patrick.
-
-### Priority 3 — Phase 4 Feature Backlog (#13–#23)
-
-See `claude_docs/strategy/roadmap.md` for full list. Architect consult before any schema-touching feature.
+- All 4 bugs fixed, tests passed, audit report written, commit pushed to main (b2ac5c7, 3 files)
+- Files changed: `packages/frontend/pages/organizer/edit-item/[id].tsx`, `packages/frontend/pages/items/[id].tsx`
+- Three new self-healing entries added (entries 29–31): HTTP method mismatch, nullable relation optional chaining, form select case normalization
 
 ---
 
-## Pending Patrick Actions
+## Session 126 Objectives
 
-- **`git stash && git pull`** — REQUIRED before any local dev work
-- **Stripe business account** — blocks beta monetization ⚠️ highest priority
+### Priority 1 — Continue Chrome Audit (Organizer Dashboard)
+
+**What to audit next:** Item list view on organizer dashboard. Flows: view all items in a sale, filter by status/category, bulk actions (status change, price edit, delete), photo grid navigation.
+
+**Test account:** Ivan (organizer, Grand Rapids)
+**Test sale:** "Eastside Collector's Estate Sale 11" (PUBLISHED, has items)
+
+Create brief file: `claude_docs/audits/next-audit-brief-126-dashboard-items.md` before starting the audit. Note any issues in the audit report.
+
+### Priority 2 — Deferred Friction Items (#7, #13)
+
+From Session 120 friction blitz:
+- **Item 7** — Bulk Edit on Items List: Add checkboxes to item rows, batch status/price update
+- **Item 13** — Neighborhood Autocomplete: Auto-suggest neighborhoods in sale create/edit form
+
+These depend on audit findings from Priority 1. Architect consult before schema changes.
+
+### Priority 3 — Beta Organizer Outreach
+
+**Status:** Materials archived in `claude_docs/beta-launch/`. Ready to execute.
+**Owner:** `findasale-cx` skill
+**What Patrick needs to provide:** First 5 organizer targets (names, emails) for beta program
+
+---
+
+## Pending Patrick Actions (Blocks Beta Launch)
+
+- **Stripe business account** — highest priority ⚠️ (payment system can't go live without it)
 - **Google Search Console verification** — blocks SEO visibility
-- **Beta organizer outreach** — first 5 targets needed
-- **Order business cards** — design ready in `claude_docs/brand/`
+- **Beta organizer targets** — 5 initial targets for outreach (materials ready, CX owns execution)
+- **Business cards** — design ready in `claude_docs/brand/`
 
-## Push Block (Session 120 Wrap)
+---
 
-These wrap-only files were NOT pushed via MCP. Patrick must push them:
-```
+## Push Status
+
+**Session 125 wrap files NOT yet pushed.** Patrick must run:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
-git add claude_docs/logs/session-log.md
+git add claude_docs/session-log.md
 git add claude_docs/self-healing/self_healing_skills.md
-git add claude_docs/next-session-prompt.md
 git add context.md
 git add claude_docs/.last-wrap
-git commit -m "chore: session 120 wrap — state, session log, self-healing, context"
+git commit -m "chore: session 125 wrap — audit report, state sync, self-healing updates"
 .\push.ps1
 ```
 
-## Environment
+**Code changes:** Already pushed to main via MCP (commit b2ac5c7).
 
-- Railway: GREEN
-- Neon: 69 migrations applied ✅
-- Vercel: build passing ✅ (cascade fixed this session)
-- conversation-defaults: v3 installed ✅
-- Feature #11 Referral Discount: migration deployed, live in production
+## Environment Status
 
-## Session Scoreboard — Session 120
+- **Railway:** GREEN — backend running
+- **Neon:** 69 migrations applied ✅
+- **Vercel:** Build passing ✅ (all type errors from Session 125 fixes resolved)
+- **GitHub:** Main branch at b2ac5c7 (Session 125 code changes)
+- **conversation-defaults:** v3 installed ✅
+- **Dev stack:** Native (no Docker) ✅
 
-Files changed: multiple (13 friction items + 5 Vercel type fixes + 2 QA P2 fixes)
-Compressions: 1 (mid-session)
-Subagents: 7 (5 parallel dev agents + QA + UX)
-Push method: MCP (code) + Patrick PS1 (wrap docs)
-Notable: Dev D full-rewrite hallucination — self-healing entry #53 added
+---
+
+## Exact Context for Resume
+
+- Last audit report: `claude_docs/audits/session-125-edit-item-photo-audit.md`
+- Self-healing entries added: #29 (HTTP method mismatch), #30 (nullable organizer), #31 (form select case)
+- Chrome audit flow ready for Session 126: organizer dashboard item list view
+- Vercel Deployment: latest from b2ac5c7, no pending builds
+- No blocking errors or uncommitted work
+
+---
+
+## Session Scoreboard — Session 125
+
+| Metric | Value |
+|--------|-------|
+| Files changed | 2 |
+| Audit findings | 4 bugs (all fixed) |
+| Subagents used | 0 (solo session) |
+| Compressions | 0 (no recompile mid-session) |
+| Push method | MCP (code) only |
+| Wrap files | Not yet pushed (pending Patrick command) |
+| Duration estimate | ~1 hour (audit + fixes + report + wrap) |
+
+---
+
+*Ready for Session 126. Chrome audit continues.*

@@ -50,12 +50,20 @@ const EditItemPage = () => {
 
   useEffect(() => {
     if (item) {
+      // Normalize category to Title Case (e.g. "tools" → "Tools") so the
+      // select value matches the option values defined in the form.
+      const rawCat = item.category || '';
+      const normalizedCategory = rawCat
+        ? rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase()
+        : '';
+      // Normalize condition to UPPERCASE (e.g. "good" → "GOOD").
+      const normalizedCondition = item.condition ? item.condition.toUpperCase() : '';
       setFormData({
         title: item.title,
         description: item.description,
         price: item.price || '',
-        category: item.category || '',
-        condition: item.condition || '',
+        category: normalizedCategory,
+        condition: normalizedCondition,
         status: item.status,
       });
     }
@@ -63,7 +71,7 @@ const EditItemPage = () => {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      return await api.patch(`/items/${id}`, formData);
+      return await api.put(`/items/${id}`, formData);
     },
     onSuccess: () => {
       showToast('Item updated', 'success');
@@ -97,6 +105,21 @@ const EditItemPage = () => {
             <Skeleton className="h-24" />
             <Skeleton className="h-12" />
             <Skeleton className="h-12" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="min-h-screen bg-white py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
+            Back to dashboard
+          </Link>
+          <div className="text-center py-16">
+            <p className="text-warm-600 text-lg">Item not found or you don&apos;t have permission to edit it.</p>
           </div>
         </div>
       </div>
