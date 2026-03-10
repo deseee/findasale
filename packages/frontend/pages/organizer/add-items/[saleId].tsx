@@ -5,7 +5,7 @@
  * - CSV upload modal
  * - Manual item entry form
  * - Batch AI upload (CD2 Phase 2)
- * - Item list with edit/delete
+ * - Item list with edit/delete/bulk actions
  */
 
 import React, { useState } from 'react';
@@ -45,6 +45,10 @@ const AddItemsDetailPage = () => {
   const queryClient = useQueryClient();
   const [showCSVModal, setShowCSVModal] = useState(method === 'csv');
   const [activeTab, setActiveTab] = useState<ActiveTab>('manual');
+
+  // Bulk edit state
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [bulkPrice, setBulkPrice] = useState('');
 
   // Manual entry form state
   const [formData, setFormData] = useState({
@@ -86,6 +90,46 @@ const AddItemsDetailPage = () => {
     },
     onError: () => showToast('Failed to delete item', 'error'),
   });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (payload: { itemIds: string[]; operation: string; value: any }) =>
+      api.post('/items/bulk', payload),
+    onSuccess: (_, variables) => {
+      const op = variables.operation;
+      const count = variables.itemIds.length;
+      const message =
+        op === 'isActive'
+          ? `Hidden ${count} item${count !== 1 ? 's' : ''}`
+          : op === 'price'
+          ? `Price updated for ${count} item${count !== 1 ? 's' : ''}`
+          : '';
+      if (message) showToast(message, 'success');
+      setSelectedItems(new Set());
+      setBulkPrice('');
+      queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
+    },
+    onError: () => showToast('Bulk update failed', 'error'),
+  });
+
+  const handleToggleItemSelection = (itemId: string) => {
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedItems.size === (items?.length ?? 0) && items?.length > 0) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set((items || []).map((item: any) => item.id)));
+    }
+  };
 
   const createItemMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -617,7 +661,76 @@ const AddItemsDetailPage = () => {
           <div className="mt-8">
             <h2 className="text-xl font-semibold text-warm-900 mb-4">
               {items?.length || 0} Item{items?.length !== 1 ? 's' : ''}
+              {selectedItems.size > 0 && (
+                <span className="ml-2 text-base font-normal text-amber-600">({selectedItems.size} selected)</span>
+              )}
             </h2>
+
+            {/* Bulk Action Toolbar — visible when items are selected */}
+            {selectedItems.size > 0 && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex flex-wrap gap-3 items-center">
+                  {/* Hide Selected */}
+                  <button
+                    onClick={() => {
+                      bulkUpdateMutation.mutate({
+                        itemIds: Array.from(selectedItems),
+                        operation: 'isActive',
+                        value: false,
+                      });
+                    }}
+                    disabled={bulkUpdateMutation.isPending}
+                    className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg text-sm"
+                  >
+                    {bulkUpdateMutation.isPending ? 'Updating...' : 'Hide Selected'}
+                  </button>
+
+                  {/* Set Price */}
+                  <div className="flex gap-2 items-center">
+                    <span className="text-sm font-medium text-warm-900">Set Price:</span>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-warm-600 text-sm">$</span>
+                      <input
+                        type="number"
+                        value={bulkPrice}
+                        onChange={(e) => setBulkPrice(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        className="pl-7 pr-3 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm w-24"
+                        disabled={bulkUpdateMutation.isPending}
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const price = parseFloat(bulkPrice);
+                        if (isNaN(price) || price < 0) {
+                          showToast('Enter a valid price', 'error');
+                          return;
+                        }
+                        bulkUpdateMutation.mutate({
+                          itemIds: Array.from(selectedItems),
+                          operation: 'price',
+                          value: price,
+                        });
+                      }}
+                      disabled={bulkUpdateMutation.isPending || !bulkPrice}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg text-sm"
+                    >
+                      Apply
+                    </button>
+                  </div>
+
+                  {/* Clear selection */}
+                  <button
+                    onClick={() => setSelectedItems(new Set())}
+                    className="text-sm text-warm-500 hover:text-warm-900 underline ml-auto"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </div>
+            )}
 
             {itemsLoading ? (
               <div className="space-y-3">
@@ -627,16 +740,50 @@ const AddItemsDetailPage = () => {
               </div>
             ) : items && items.length > 0 ? (
               <div className="space-y-4">
+                {/* Select All header */}
+                <div className="flex items-center gap-3 px-4 py-2 bg-warm-100 rounded-lg border border-warm-200">
+                  <input
+                    type="checkbox"
+                    checked={selectedItems.size === items.length && items.length > 0}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectedItems.size > 0 && selectedItems.size < items.length;
+                    }}
+                    onChange={handleSelectAll}
+                    className="w-5 h-5 cursor-pointer accent-amber-600"
+                  />
+                  <span className="text-sm font-medium text-warm-900 select-none">
+                    {selectedItems.size === items.length && items.length > 0 ? 'Deselect All' : 'Select All'}
+                  </span>
+                </div>
+
                 {items.map((item: any) => (
-                  <div key={item.id} className="card p-4 flex justify-between items-center">
-                    <div>
-                      <h3 className="font-semibold text-warm-900">{item.title}</h3>
-                      <p className="text-sm text-warm-600">{item.description}</p>
-                      {item.reverseAuction && (
-                        <p className="text-xs text-amber-600 mt-1">⬇️ Daily price drop enabled</p>
-                      )}
+                  <div
+                    key={item.id}
+                    className={`card p-4 flex justify-between items-center transition-colors ${
+                      selectedItems.has(item.id) ? 'bg-amber-50 border-amber-300' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.has(item.id)}
+                        onChange={() => handleToggleItemSelection(item.id)}
+                        className="w-5 h-5 cursor-pointer accent-amber-600 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-warm-900">{item.title}</h3>
+                          {item.isActive === false && (
+                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Hidden</span>
+                          )}
+                          {item.reverseAuction && (
+                            <span className="text-xs text-amber-600">⬇️ Daily drop</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-warm-600 truncate">{item.description}</p>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 ml-4 flex-shrink-0">
                       <Link
                         href={`/organizer/edit-item/${item.id}`}
                         className="text-amber-600 hover:underline text-sm"
