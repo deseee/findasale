@@ -1,111 +1,56 @@
 # Next Session Resume Prompt
-*Written: 2026-03-10 (Session 126)*
-*Session ended: normally — session 126 complete*
-
----
-
-## ⛔ SESSION INIT HARD GATE — Complete before any work
-
-Claude must complete ALL of these before touching any task:
-
-- [ ] Load STATE.md
-- [ ] Load session-log.md (last 2 entries)
-- [ ] Load next-session-prompt.md (this file)
-- [ ] Read `.checkpoint-manifest.json` — restore session history, write new `currentSession`
-- [ ] Announce: session number, token budget, last session summary, priority queue
-
-**Budget:** ~200k context. ~5k init overhead. ~195k available. **WARN at 170k. STOP at 190k.**
-
-If `.checkpoint-manifest.json` is missing: create it from schema in CORE.md §3 before proceeding.
+*Written: 2026-03-10T20:45:00Z*
+*Session ended: normally — session 129 complete*
 
 ---
 
 ## Resume From
+Audit session 129's dashboard/UX changes live in Chrome AND investigate the add-items page version conflict — two different versions exist at different URLs, and the camera tab shows "coming soon."
 
-Start **Session 127**.
+## What Was In Progress
 
-## What Was Done Last Session (126)
+**Add-items page version conflict (UNRESOLVED — P1):**
+- `/organizer/add-items` (no saleId) → loads old single-form version with Rapid Capture orange button but no saleId in URL → title reads "Add Items to ''"
+- `/organizer/add-items/[saleId]` → loads new tabbed version (Manual Entry | Batch Upload | Camera | CSV Import)
+- Camera tab on the new tabbed version shows "coming soon" — this regressed at some point
+- Root cause: likely `pages/organizer/add-items.tsx` (no dynamic segment) still exists alongside `pages/organizer/add-items/[saleId].tsx`. The static page is served when no saleId is in the URL.
+- **First action:** Check if `packages/frontend/pages/organizer/add-items.tsx` exists. If yes, that's the old page — audit and delete or redirect.
+- **Second:** Find where Camera tab shows "coming soon" in `add-items/[saleId].tsx` and restore the real camera implementation.
 
-**Docs correction + session 125 fix verification + item list audit:**
-- STATE.md + session-log corrected from session 125 (fixes marked as pushed-but-untested)
-- Session 125 fixes all verified live in Chrome: BUG-1 (PUT fix), BUG-2 (organizer null), BUG-3 (dropdown case) — all ✅
-- Item list + bulk actions audited: hide, show, set price, delete all working
-- 3 new P2 findings logged in `claude_docs/audits/session-126-dashboard-items-audit.md`
-- schema.prisma has uncommitted `tags String[]` field — migration needed (see alert below)
+**BUG-3 deferred:** `/organizer/items` route 404. Manage Holds button already removed from dashboard as interim. Patrick hasn't decided on full path yet.
 
----
+**Schema drift carry-forward:** `tags String[] @default([])` on Item model — no migration. Low urgency.
 
-## Session 127 Objectives
+**`quantity` field:** Frontend forms have it, controller accepts it, but schema has no `quantity` field. Needs `Int @default(1)` in schema + migration before it persists.
 
-### Priority 1 — Fix FINDING-3: Stale fee copy on dashboard
+## What Was Completed This Session
 
-**What:** Tier Rewards card on organizer dashboard still shows "5% | 7%" — should reflect 10% flat fee (locked session 106).
-**File:** `packages/frontend/pages/organizer/dashboard.tsx` — find Tier Rewards card copy and update.
-**Scope:** Copy-only change, no logic. Small MCP push after fix.
+- BUG-1 (P1): Edit Sale 404 fixed — route corrected to `/organizer/edit-sale/${id}`
+- BUG-2 (P2): Stale fee copy fixed — all tiers `feePct: 10.0`, dashboard shows "10% flat"
+- CSVImportModal props fixed: `onSuccess` → `onImportComplete`, added `isOpen` prop
+- Backend TypeScript: `quantity` removed from Prisma `item.update()` data; `bulkUpdateItems` extended with `isActive` + `price` operations
+- `sales/[id].tsx` restored — was truncated to 100 lines on GitHub by prior MCP push; full 923-line file restored (commit `baeff5a`)
+- Dashboard Analytics tab removed — was "coming soon" placeholder duplicating the Insights page
+- Tier Rewards card: renamed "Your Tier", removed fee sub-card, removed "better rates" copy, added per-tier descriptions
+- Progress to Next Tier: "get better rates!" → "Keep completing sales to reach [NEXT_TIER]"
+- Print Inventory: fixed endpoint `/organizer/sales` (404) → `/sales/mine`
 
-### Priority 2 — Continue Chrome Audit (CSV Export/Import + Batch Upload AI tab)
+## Environment Notes
 
-**What to audit:**
-1. Export CSV — does it download a file? Does it contain correct item data?
-2. Import CSV — does the upload flow work? What happens with bad data?
-3. Batch Upload (AI) tab — photo batch flow, AI analysis, item pre-fill
+- Vercel: clean build after `baeff5a`. Two additional commits pushed this session (`a816698`, `8bd257e`) — should be deploying.
+- Railway: back online. All backend build errors resolved.
+- All changes pushed via GitHub MCP. No local-only commits.
+- Patrick runs `.\ push.ps1` from PowerShell for any local git pushes.
 
-**Test account:** Ivan (organizer, Grand Rapids)
-**Test sale:** Eastside Collector's Estate Sale 11 (PUBLISHED, now 11 items after session 126 delete test)
+## Exact Context
 
-### Priority 3 — Deferred Friction Items (#7, #13)
+Files to check for add-items conflict:
+- `packages/frontend/pages/organizer/add-items.tsx` — old static version (may still exist)
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — correct tabbed version; camera tab has "coming soon" somewhere
 
-From Session 120 friction blitz:
-- **Item 7** — Bulk Edit on Items List: Add checkboxes to item rows, batch status/price update
-- **Item 13** — Neighborhood Autocomplete: Auto-suggest neighborhoods in sale create/edit form
-
-Architect consult before schema changes.
-
-### Priority 4 — Beta Organizer Outreach
-
-**Status:** Materials archived in `claude_docs/beta-launch/`. Ready to execute.
-**Owner:** `findasale-cx` skill
-**What Patrick needs to provide:** First 5 organizer targets (names, emails) for beta program
-
----
-
-## Pending Patrick Actions (Blocks Beta Launch)
-
-- **Stripe business account** — highest priority ⚠️ (payment system can't go live without it)
-- **Google Search Console verification** — blocks SEO visibility
-- **Beta organizer targets** — 5 initial targets for outreach (materials ready, CX owns execution)
-- **Business cards** — design ready in `claude_docs/brand/`
-
----
-
-## ⚠️ Schema Drift Alert
-
-`packages/database/prisma/schema.prisma` has a `tags String[] @default([])` field on Item that exists locally but has no corresponding migration. At session 127 start, check migrations folder for `add_item_tags`. If missing:
-```powershell
-# Check for env var override first
-$env:DATABASE_URL
-# Clear if needed: $env:DATABASE_URL=""
-
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-npx prisma migrate dev --name add_item_tags
-```
-Then deploy to Neon after verifying locally.
-
----
-
-## Push Status
-
-**All session 126 files pushed.** No pending Patrick action required.
-
-## Environment Status
-
-- **Railway:** GREEN — backend running
-- **Neon:** 69 migrations applied ✅ (tags field migration may be needed — see schema alert)
-- **Vercel:** Build passing ✅
-- **GitHub:** Main at session 126 wrap commit
-- **conversation-defaults:** v3 installed ✅
-- **Dev stack:** Native (no Docker) ✅
-
----
-
-*Ready for Session 127. Fix stale fee copy first (small), then continue Chrome audit.*
+Session 129 GitHub commits:
+1. `b63a12a` — CSVImportModal props fix
+2. `44077ce` — remove quantity from Prisma update, fix bulkUpdateItems
+3. `baeff5a` — restore full sales/[id].tsx
+4. `a816698` — print-inventory endpoint fix
+5. `8bd257e` — dashboard Analytics tab removal + Tier Rewards cleanup

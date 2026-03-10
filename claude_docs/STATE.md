@@ -45,6 +45,18 @@ Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 impl
 - A3.6 single-item 500: ✅ RESOLVED — no errors in latest Railway deploy (confirmed by Patrick, session 119).
 - New migration: `20260312000001_add_organizer_referral_discount` — adds `referralDiscountExpiry DateTime?` to Organizer. Patrick must deploy.
 
+**Session 129 COMPLETE (2026-03-10):** Dashboard/UX polish + build error chain resolved.
+- BUG-1 (P1): Edit Sale 404 fixed — route corrected to `/organizer/edit-sale/${id}`
+- BUG-2 (P2): Stale fee copy fixed across dashboard + tierService (all tiers → 10% flat)
+- CSVImportModal prop mismatch fixed (`onSuccess` → `onImportComplete`, added `isOpen`)
+- Backend TypeScript error: removed `quantity` from Prisma `item.update()` (field not in schema); `bulkUpdateItems` extended to support `isActive` and `price` operations
+- `sales/[id].tsx` restored (was truncated to 100 lines by prior MCP push — restored full 923-line file)
+- BUG-3 (/organizer/items 404): Advisory Board + Pitchman consulted. Manage Holds button removed from dashboard as interim. Full feature deferred.
+- Dashboard Analytics tab removed (duplicate of Insights page). Tabs reduced to Overview + Sales.
+- Tier Rewards card cleaned up: removed fee sub-card, removed "better rates" copy, added tier descriptions.
+- Print Inventory fixed: was calling `/organizer/sales` (404) → corrected to `/sales/mine`.
+- ⚠️ Add-items page: two versions exist. Old single-form version at `/organizer/add-items` (no saleId). New tabbed version (Rapid Capture, Camera, CSV Import) at `/organizer/add-items/[saleId]`. Camera tab shows "coming soon" — needs audit next session.
+
 **Session 126 COMPLETE (2026-03-10):** Docs correction + session 125 fix verification + item list audit.
 - Session 125 fixes verified live in Chrome: BUG-1 (PUT fix) ✅, BUG-2 (organizer null crash) ✅, BUG-3 (dropdown case) ✅
 - Organizer item list audit: all bulk actions pass (hide, show, set price, checkboxes). Per-item edit + delete pass.
@@ -60,8 +72,6 @@ Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 impl
 - ⚠️ Two remaining issues NOT fixed: (1) backend `getItemById` omits `organizer` from Prisma select (should be fixed in backend); (2) edit page uses public endpoint that filters ENDED/DRAFT items (organizer can't edit items on closed sales).
 - Files: `packages/frontend/pages/organizer/edit-item/[id].tsx`, `packages/frontend/pages/items/[id].tsx`.
 - Commit: b2ac5c7. Audit report: `claude_docs/audits/session-125-edit-item-photo-audit.md`.
-
-**Session 124 COMPLETE (2026-03-10):** Chrome audit of organizer item listings + single-item edit flow. Identified PATCH/PUT mismatch and organizer null crash — detailed in audit report.
 
 **Session 120 COMPLETE (2026-03-10):** Beta dry run friction blitz. 13/15 items implemented (items 7 + 13 deferred). Vercel build cascade fixed (6 type errors in items/[id].tsx after agent full-file rewrite). QA P2 fixes: z-index, per-field validation. Docs: migration rollback plan, beta organizer email, spring content, dry run friction log.
 
@@ -169,4 +179,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 
 ---
 
-Last Updated: 2026-03-10 (session 126 — session 125 fixes verified ✅; item list audit complete; 3 new P2 findings)
+Last Updated: 2026-03-10 (session 129 — dashboard/UX polish; build error chain resolved; add-items page conflict flagged)
