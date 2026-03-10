@@ -125,6 +125,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       category: string;
       condition: string;
       photoUrls: string[];
+      tags: string[];
       isAiTagged: boolean;
     }>) => {
       const created = [];
@@ -277,6 +278,8 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
           category: a.suggestedCategory,
           condition: a.suggestedCondition,
           photoUrls: [a.photoUrl],
+          // CB5-fix: pass AI-generated tags so they are stored on the item
+          tags: a.suggestedTags || [],
           // P0-4: Only mark as AI-tagged if no error and valid URL
           isAiTagged: Boolean(!a.error && a.photoUrl && a.photoUrl !== '(unknown)'),
         };
