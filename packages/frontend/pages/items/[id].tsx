@@ -325,7 +325,7 @@ const ItemDetail: React.FC = () => {
                 className="relative w-full bg-gray-200 rounded-lg overflow-hidden cursor-pointer group"
               >
                 <img
-                  src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex], 'xl')}
+                  src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
                   alt={item.title}
                   className="w-full h-96 object-cover group-hover:opacity-90 transition"
                 />
