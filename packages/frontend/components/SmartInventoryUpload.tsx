@@ -498,11 +498,21 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                     No Photo
                   </div>
                 ) : (
-                  <img
-                    src={item.photoUrl}
-                    alt="Item preview"
-                    className={`w-full h-32 object-cover rounded ${item.error ? 'opacity-50' : ''}`}
-                  />
+                  <>
+                    <img
+                      src={item.photoUrl}
+                      alt="Item preview"
+                      className={`w-full h-32 object-cover rounded ${item.error ? 'opacity-50' : ''}`}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
+                        if (placeholder) placeholder.style.display = 'flex';
+                      }}
+                    />
+                    <div className="w-full h-32 bg-warm-100 rounded items-center justify-center text-warm-400 text-sm hidden">
+                      📷 Preview unavailable
+                    </div>
+                  </>
                 )}
               </div>
 
