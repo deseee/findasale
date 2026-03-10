@@ -358,7 +358,7 @@ const ItemDetail: React.FC = () => {
               {/* Header */}
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  {item.reverseAuction && <ReverseAuctionBadge />}
+                  {item.reverseAuction && <ReverseAuctionBadge item={item} />}
                   <h1 className="text-3xl font-bold text-gray-900">{item.title}</h1>
                 </div>
                 <div className="text-sm text-gray-500 mb-2">
