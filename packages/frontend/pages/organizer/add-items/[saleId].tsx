@@ -27,6 +27,7 @@ import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
+import RapidCapture from '../../../components/RapidCapture';
 
 type ActiveTab = 'manual' | 'batch' | 'camera';
 
@@ -82,6 +83,8 @@ const AddItemsDetailPage = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [bulkPrice, setBulkPrice] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraAnalyzing, setCameraAnalyzing] = useState(false);
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -165,6 +168,75 @@ const AddItemsDetailPage = () => {
       ...prev,
       photoUrls: prev.photoUrls.filter((_, i) => i !== index),
     }));
+  };
+
+  const handleCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
+    setCameraOpen(false);
+    if (photos.length === 0) return;
+
+    setCameraAnalyzing(true);
+    try {
+      // Upload first photo and get AI analysis
+      const formData = new FormData();
+      formData.append('photo', photos[0].blob, 'camera-capture.jpg');
+
+      const response = await api.post('/upload/analyze-photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const ai = response.data;
+
+      // Upload all photos to get Cloudinary URLs
+      const photoFormData = new FormData();
+      photos.forEach((p, i) => {
+        photoFormData.append('photos', p.blob, `capture-${i}.jpg`);
+      });
+
+      const uploadRes = await api.post('/upload/sale-photos', photoFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const uploadedUrls: string[] = (uploadRes.data?.urls || uploadRes.data || []);
+
+      // Pre-fill manual form with AI results
+      setFormData({
+        ...emptyForm,
+        title: ai.title || '',
+        description: ai.description || '',
+        category: normalizeToArray(ai.category, CATEGORIES),
+        condition: normalizeToArray(ai.condition, CONDITIONS),
+        price: ai.suggestedPrice ? String(ai.suggestedPrice) : '',
+        photoUrls: uploadedUrls,
+      });
+
+      // Switch to manual tab so organizer can review & submit
+      setActiveTab('manual');
+      showToast(`AI identified: "${ai.title || 'item'}". Review and save below.`, 'success');
+    } catch (err: any) {
+      console.error('Camera AI analysis error:', err);
+      showToast('Photo captured but AI analysis failed. You can add details manually.', 'error');
+
+      // Still upload photos even if AI fails
+      try {
+        const photoFormData = new FormData();
+        photos.forEach((p, i) => {
+          photoFormData.append('photos', p.blob, `capture-${i}.jpg`);
+        });
+        const uploadRes = await api.post('/upload/sale-photos', photoFormData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const uploadedUrls: string[] = (uploadRes.data?.urls || uploadRes.data || []);
+        setFormData((prev) => ({ ...prev, photoUrls: uploadedUrls }));
+      } catch {
+        // Photo upload also failed — user can still add manually
+      }
+
+      setActiveTab('manual');
+    } finally {
+      setCameraAnalyzing(false);
+      // Clean up blob URLs
+      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    }
   };
 
   const handleCategoryChange = (newCategory: string) => {
@@ -386,8 +458,39 @@ const AddItemsDetailPage = () => {
           {activeTab === 'camera' && (
             <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
               <h2 className="text-xl font-bold text-warm-900 mb-6">Capture with Camera</h2>
-              <p className="text-warm-600 mb-4">Camera feature coming soon. Use Manual or Batch tabs for now.</p>
+              {cameraAnalyzing ? (
+                <div className="text-center py-12">
+                  <div className="inline-block w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4" />
+                  <p className="text-warm-700 font-medium">Analyzing photo with AI...</p>
+                  <p className="text-warm-500 text-sm mt-1">This may take a few seconds</p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-warm-600 mb-4">
+                    Take a photo of an item. AI will identify it and pre-fill the details for you to review.
+                  </p>
+                  <button
+                    onClick={() => setCameraOpen(true)}
+                    className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Open Camera
+                  </button>
+                </div>
+              )}
             </div>
+          )}
+
+          {/* RapidCapture fullscreen overlay */}
+          {cameraOpen && (
+            <RapidCapture
+              onComplete={handleCameraComplete}
+              onCancel={() => setCameraOpen(false)}
+              maxPhotos={5}
+            />
           )}
 
           {/* Items List */}
