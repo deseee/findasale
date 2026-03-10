@@ -105,26 +105,27 @@ async function getHaikuAnalysis(
       ? `\n\nVision API detected these objects/labels: ${visionLabels.join(', ')}.`
       : '';
 
-  const response = await axios.post(
-    'https://api.anthropic.com/v1/messages',
-    {
-      model: ANTHROPIC_MODEL,
-      max_tokens: 400,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-                data: imageBase64,
+  try {
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 400,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                  data: imageBase64,
+                },
               },
-            },
-            {
-              type: 'text',
-              text: `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
+              {
+                type: 'text',
+                text: `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
@@ -143,29 +144,55 @@ Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: materi
   "suggestedPrice": 12.50,
   "tags": ["Tag1", "Tag2", "Tag3"]
 }`,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY as string,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
+              },
+            ],
+          },
+        ],
       },
-      timeout: 30000,
-    }
-  );
+      {
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY as string,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        timeout: 30000,
+      }
+    );
 
-  const content: string = response.data.content?.[0]?.text ?? '';
-  const raw = content.replace(/```json\n?|\n?```/g, '').trim();
-  const parsed = JSON.parse(raw) as AITagResult;
-  // Ensure tags is always an array even if Haiku omits the field
-  if (!Array.isArray(parsed.tags)) {
-    parsed.tags = [];
+    const content: string = response.data.content?.[0]?.text ?? '';
+    const raw = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(raw) as AITagResult;
+    // Ensure tags is always an array even if Haiku omits the field
+    if (!Array.isArray(parsed.tags)) {
+      parsed.tags = [];
+    }
+    return parsed;
+  } catch (error: any) {
+    // P0-3: Capture specific error context and re-throw with context for caller
+    if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {
+      const err = new Error('AI_TIMEOUT: AI service connection failed');
+      (err as any).errorCode = 'AI_TIMEOUT';
+      throw err;
+    }
+    if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+      const err = new Error('AI_TIMEOUT: AI service timed out');
+      (err as any).errorCode = 'AI_TIMEOUT';
+      throw err;
+    }
+    if (error.response?.status === 429) {
+      const err = new Error('AI_RATE_LIMIT: AI service busy — try again shortly');
+      (err as any).errorCode = 'AI_RATE_LIMIT';
+      throw err;
+    }
+    if (error instanceof SyntaxError || error.message?.includes('JSON')) {
+      const err = new Error('AI_PARSE_ERROR: AI returned invalid data');
+      (err as any).errorCode = 'AI_PARSE_ERROR';
+      throw err;
+    }
+    const err = new Error('AI_ERROR: AI analysis unavailable');
+    (err as any).errorCode = 'AI_ERROR';
+    throw err;
   }
-  return parsed;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
