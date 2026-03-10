@@ -334,7 +334,7 @@ const ItemDetail: React.FC = () => {
                     <span className="text-white text-2xl font-bold">SOLD</span>
                   </div>
                 )}
-                {item.isLiveDrop && <CountdownTimer targetDate={item.liveDropAt} />}
+                {item.isLiveDrop && item.liveDropAt && <CountdownTimer targetDate={item.liveDropAt} />}
               </div>
 
               {/* Photo Thumbnails */}
