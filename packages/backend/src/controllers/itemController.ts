@@ -302,6 +302,8 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null,
         // B2: AI tagging disclosure
         isAiTagged: isAiTagged === true || isAiTagged === 'true',
+        // U1: satisfies NOT NULL constraint; scheduleItemEmbedding fills it async
+        embedding: [],
       }
     });
 
