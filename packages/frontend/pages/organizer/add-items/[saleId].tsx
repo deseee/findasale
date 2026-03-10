@@ -89,15 +89,20 @@ const AddItemsDetailPage = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setCameraActive(true);
-      }
+      // Set active first so the <video> element renders, then attach stream via useEffect
+      setCameraActive(true);
     } catch (err) {
       showToast('Failed to access camera. Check permissions.', 'error');
       console.error('Camera error:', err);
     }
   };
+
+  // Attach camera stream once the <video> element is in the DOM
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraActive]);
 
   const stopCamera = () => {
     if (streamRef.current) {
