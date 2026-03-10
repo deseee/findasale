@@ -446,7 +446,12 @@ const ItemDetail: React.FC = () => {
                 >
                   {isUserLiked ? '❤️ Liked' : '🤍 Like'}
                 </button>
-                <ItemShareButton />
+                <ItemShareButton
+                  itemId={item.id}
+                  itemTitle={item.title}
+                  itemPrice={currentPrice}
+                  userId={user?.id}
+                />
               </div>
 
               {/* Bid/Cart Section */}
@@ -530,7 +535,14 @@ const ItemDetail: React.FC = () => {
           )}
 
           {/* Buying Pool */}
-          {item.buyingPool && <BuyingPoolCard pool={item.buyingPool} itemId={item.id} />}
+          {item.buyingPool && (
+            <BuyingPoolCard
+              itemId={item.id}
+              itemPrice={item.price}
+              itemStatus={item.status}
+              userId={user?.id}
+            />
+          )}
         </div>
       </div>
 
@@ -550,7 +562,7 @@ const ItemDetail: React.FC = () => {
       {isLightboxOpen && (
         <PhotoLightbox
           photos={item.photoUrls}
-          startIndex={currentLightboxIndex}
+          initialIndex={currentLightboxIndex}
           onClose={() => setIsLightboxOpen(false)}
         />
       )}
