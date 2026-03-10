@@ -7,6 +7,26 @@ export interface AuthRequest extends Request {
   user?: any;
 }
 
+export const optionalAuthenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next(); // No token — proceed as unauthenticated
+    }
+
+    const token = authHeader.split(' ')[1];
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) return next();
+    const decoded = jwt.verify(token, jwtSecret) as { id: string };
+
+    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+    if (user) req.user = user;
+  } catch {
+    // Invalid/expired token — proceed as unauthenticated, do not block
+  }
+  next();
+};
+
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;

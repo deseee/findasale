@@ -174,6 +174,8 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
 export const getItemById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const authReq = req as AuthRequest;
+
     const item = await prisma.item.findUnique({
       where: { id },
       include: {
@@ -182,7 +184,10 @@ export const getItemById = async (req: Request, res: Response) => {
             title: true,
             id: true,
             organizerId: true,
-            status: true
+            status: true,
+            organizer: {
+              select: { userId: true }
+            }
           }
         }
       }
@@ -192,8 +197,11 @@ export const getItemById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // For public-facing access, verify item is active and sale is published
-    if (!item.isActive || item.sale.status !== 'PUBLISHED') {
+    // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
+    const isOwner = authReq.user?.id === item.sale.organizer.userId;
+
+    // For everyone else, enforce public visibility rules
+    if (!isOwner && (!item.isActive || item.sale.status !== 'PUBLISHED')) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
