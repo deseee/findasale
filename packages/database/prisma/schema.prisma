@@ -192,6 +192,8 @@ model Item {
   reverseDailyDrop Int?      // cents per day
   reverseFloorPrice Int?     // minimum price in cents
   reverseStartDate DateTime?
+  // Bulk operations: hide/show item from sale listing
+  isActive         Boolean   @default(true)
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]

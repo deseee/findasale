@@ -500,8 +500,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
       // Find the purchase by looking up the payment intent from the charge
       try {
-        const charge = await stripe().charges.retrieve(dispute.charge);
-        const paymentIntentId = charge.payment_intent;
+        // dispute.charge may be a string ID or an expanded Charge object — normalize to string
+        const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
+        const charge = await stripe().charges.retrieve(chargeId);
+        // charge.payment_intent may be a string ID or an expanded PaymentIntent object — normalize
+        const paymentIntentId = typeof charge.payment_intent === 'string'
+          ? charge.payment_intent
+          : charge.payment_intent?.id ?? null;
         if (paymentIntentId) {
           const purchase = await prisma.purchase.findUnique({
             where: { stripePaymentIntentId: paymentIntentId }
