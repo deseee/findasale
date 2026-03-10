@@ -66,7 +66,7 @@ const sections: Section[] = [
           </li>
           <li>
             <strong>Sale Type</strong> — Choose Regular (fixed price) or Auction (competitive bidding).
-            Auction items carry a 7% platform fee vs. 5% for regular sales.
+            All items carry a 10% flat platform fee regardless of sale type.
           </li>
         </ul>
         <p className="text-warm-700 leading-relaxed">
@@ -100,7 +100,7 @@ const sections: Section[] = [
         <p className="text-warm-700 leading-relaxed">
           Price items competitively. Estate sale pricing is typically 20–50% of retail value. Research
           comparable items online if you're unsure. You can adjust prices any time before or during the sale.
-          For auction items, set a starting bid price; the platform fee is 7% on the final bid.
+          For auction items, set a starting bid price; the 10% platform fee applies to the final bid.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 mt-6">Tags and Categories</h3>
@@ -147,8 +147,8 @@ const sections: Section[] = [
           is collected automatically.
         </p>
         <p className="text-warm-700 leading-relaxed">
-          Auction items carry a <strong>7% platform fee</strong> on the final sale price, deducted from
-          your payout. Regular items carry a 5% fee. Both fees are shown transparently to buyers at checkout.
+          All items carry a <strong>10% flat platform fee</strong> on the final sale price, deducted from
+          your payout. The fee is shown transparently to buyers at checkout.
         </p>
         <p className="text-warm-700 leading-relaxed">
           After the auction ends, we notify winners and process payments. Payouts arrive within 2–3
@@ -182,7 +182,7 @@ const sections: Section[] = [
         <p className="text-warm-700 leading-relaxed">
           Once Stripe Connect is configured, payouts happen automatically. Your share of each completed
           sale is deposited to your connected bank account within 2–3 business days of each purchase.
-          The platform fee (5% regular / 7% auction) is deducted before payout.
+          The 10% platform fee is deducted before payout.
         </p>
         <p className="text-warm-700 leading-relaxed">
           <strong>Instant Payouts</strong> — Need funds sooner? Stripe's instant payout option lets
