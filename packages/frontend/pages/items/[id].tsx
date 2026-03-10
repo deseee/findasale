@@ -382,6 +382,14 @@ const ItemDetail: React.FC = () => {
                 <div className="text-4xl font-bold text-gray-900 mb-2">
                   ${currentPrice.toFixed(2)}
                 </div>
+                {!isAuction && (
+                  <div className="text-xs text-gray-500 mb-2">
+                    <div>+ ${(currentPrice * 0.05).toFixed(2)} platform fee</div>
+                    <div className="text-sm font-semibold text-gray-900 mt-1">
+                      ${(currentPrice + currentPrice * 0.05).toFixed(2)} total
+                    </div>
+                  </div>
+                )}
                 {isAuction && (
                   <div className="text-sm text-gray-600">
                     Starting Price: ${item.auctionStartPrice.toFixed(2)}
@@ -527,8 +535,16 @@ const ItemDetail: React.FC = () => {
       </div>
 
       {/* Modals */}
-      {showCheckoutModal && (
-        <CheckoutModal onClose={() => setShowCheckoutModal(false)} />
+      {showCheckoutModal && item && (
+        <CheckoutModal
+          itemId={item.id}
+          itemTitle={item.title}
+          onClose={() => setShowCheckoutModal(false)}
+          onSuccess={() => {
+            setShowCheckoutModal(false);
+            showToast('Purchase complete! Check your purchases page for details.', 'success');
+          }}
+        />
       )}
 
       {isLightboxOpen && (
