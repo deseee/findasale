@@ -12,6 +12,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
   const { showToast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
 
   // Step 1 - Profile
   const [businessName, setBusinessName] = useState('');
@@ -30,13 +31,16 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
     if (onComplete) onComplete();
   };
 
-  const markOnboardingComplete = async () => {
+  const markOnboardingComplete = async (): Promise<boolean> => {
     try {
+      setCompletionError(null);
       await api.post('/organizers/me/onboarding-complete');
-    } catch (error) {
+      return true;
+    } catch (error: any) {
       console.error('Error marking onboarding complete:', error);
+      setCompletionError('Something went wrong — please try again');
+      return false;
     }
-    if (onComplete) onComplete();
   };
 
   const handleNextFromStep1 = async () => {
@@ -90,13 +94,21 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
   const handleCreateSale = async () => {
     // Mark onboarding as complete and navigate to create sale
     // This allows users to come back and complete onboarding later if needed
-    await markOnboardingComplete();
-    router.push('/organizer/create-sale');
+    setIsLoading(true);
+    const success = await markOnboardingComplete();
+    setIsLoading(false);
+    if (success) {
+      router.push('/organizer/create-sale');
+    }
   };
 
   const handleGoToDashboard = async () => {
-    await markOnboardingComplete();
-    router.push('/organizer/dashboard');
+    setIsLoading(true);
+    const success = await markOnboardingComplete();
+    setIsLoading(false);
+    if (success) {
+      router.push('/organizer/dashboard');
+    }
   };
 
   return (
@@ -273,9 +285,10 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                 </button>
                 <button
                   onClick={handleCreateSale}
-                  className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition-colors"
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
                 >
-                  Create Sale
+                  {isLoading ? 'Creating...' : 'Create Sale'}
                 </button>
               </div>
             </div>
@@ -295,6 +308,12 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                 </p>
               </div>
 
+              {completionError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-left">
+                  <p className="text-sm text-red-700 font-medium">{completionError}</p>
+                </div>
+              )}
+
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-left">
                 <h3 className="font-semibold text-green-900 mb-2">You're ready to:</h3>
                 <ul className="text-sm text-green-800 space-y-1">
@@ -307,9 +326,10 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
 
               <button
                 onClick={handleGoToDashboard}
-                className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
               >
-                Go to Dashboard
+                {isLoading ? 'Completing...' : 'Go to Dashboard'}
               </button>
             </div>
           )}
