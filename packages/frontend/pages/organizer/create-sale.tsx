@@ -92,7 +92,7 @@ const CreateSalePage = () => {
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name } = e.target;
-    setTouchedFields(prev => new Set([...prev, name]));
+    setTouchedFields(prev => { const next = new Set(prev); next.add(name); return next; });
 
     // For date fields, validate on blur
     if (name === 'startDate' || name === 'endDate') {

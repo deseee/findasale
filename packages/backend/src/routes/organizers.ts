@@ -262,7 +262,7 @@ router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, re
       if (v == null) return '';
       const s = String(v);
       if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}";
+        return `"${s.replace(/"/g, '""')}"`;
       }
       return s;
     };
