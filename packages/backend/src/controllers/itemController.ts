@@ -249,7 +249,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, tags } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Check if sale exists and belongs to organizer
@@ -310,6 +310,8 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null,
         // B2: AI tagging disclosure
         isAiTagged: isAiTagged === true || isAiTagged === 'true',
+        // CB5-fix: store AI-generated tags from batch upload
+        tags: Array.isArray(tags) ? tags : [],
         // U1: satisfies NOT NULL constraint; scheduleItemEmbedding fills it async
         embedding: [],
       }
