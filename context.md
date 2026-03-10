@@ -1,15 +1,15 @@
 # Dynamic Project Context
-*Generated at 2026-03-10T02:11:51.991Z*
+*Generated at 2026-03-10T05:18:08.524Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
 ### 2026-03-10
-**Worked on:** (1) Parallel P1–P4 dispatch: migration rollback plan, beta organizer email sequence, spring content pipeline, beta dry run friction log (15 items catalogued). P5 VAPID confirmed done by Patrick. (2) 13/15 friction items implemented via 5 parallel agents: dashboard wizard auto-launch + add-items sale selector (Dev A), add-items listing type consolidated to single select (Dev B), edit-sale DRAFT/LIVE badge + publish toggle + date TZ normalization (Dev C), checkout ToS/fee display/retry/receipt (Dev D), UX copy spec (UX). Items 7 (bulk edit) and 13 (neighborhood autocomplete) deferred. (3) Vercel build cascade: Dev D hallucinated a full 200-line rewrite of items/[id].tsx replacing 563-line file with non-existent imports (`@findasale/shared`, `@/lib/apiClient`). Restored from local disk, then resolved 6 cascading TypeScript errors across 4 commits (Skeleton height prop, getOptimizedUrl arity, CountdownTimer null guard, ReverseAuctionBadge/ItemShareButton/BuyingPoolCard missing/wrong props, PhotoLightbox startIndex→initialIndex, dashboard user.createdAt non-existent on JWT User). (4) QA P2: sale selector dropdown z-10→z-50, reverse auction validation onBlur per-field.
-**Decisions:** Dev agents require explicit "diff-only, no full rewrites" in every dispatch prompt — Dev D violation proved this is mandatory. onboardingComplete flag is the sole wizard gate (dropped 24hr `user.createdAt` check — field not in JWT User). Self-healing entry #53 added.
-**Token efficiency:** 5 parallel agent dispatches (friction items) + 7 sequential hotfix commits. High output but 6 Vercel build cycles consumed significant overhead due to agent hallucination. No repair loops after restore.
-**Token burn:** ~150k tokens (est.), 2 checkpoints logged.
-**Next up:** Patrick `git stash && git pull` to sync local. Deferred friction items 7 (bulk edit) + 13 (neighborhood autocomplete). Beta organizer outreach. Stripe business account setup.
-**Blockers:** Patrick git sync needed (local is pre-session, all fixes on GitHub). Stripe business account still pending. Google Search Console still pending.
+**Worked on:** (Session 121) Friction items 7 (bulk edit) + 13 (neighborhood autocomplete): backend `/bulk` endpoint extended for isActive/price ops, `add-items/[saleId].tsx` bulk UI (Select All, per-item checkboxes, amber highlight, Hide/Price toolbar), `create-sale.tsx` + `edit-sale/[id].tsx` neighborhood input+datalist. New schema field `isActive Boolean @default(true)` + migration `20260309000003_add_item_is_active`. Build fixes: template literal + Set spread errors, dashboard.tsx newline corruption (literal `\n` sequences). (Session 122) AI tagging architecture review documented (`claude_docs/feature-notes/ai-tagging-architecture.md`). Webcam capture added to add-items page (MediaDevices API, canvas JPEG, rapid-batch upload). Public item listing now filters `isActive=true` across all search paths (FTS, ILIKE, filtered, counts, getItemById, getItemsBySaleId). Upload pipeline P0/P1 fixes: Cloudinary URL validation, Haiku timeout/parse/rate-limit error capture, `isAiTagged` only set on AI success, feedback endpoint wired (CB4), retry button for failed analysis. **Overwrite incident:** dev agent replaced `itemController.ts` with stub (build broken) — restored via commit `7f6f2ebd`. (Session 123) Two follow-on fixes: `SmartInventoryUpload` isAiTagged Boolean() cast, `embedding: []` added to `createItem` (fixes P2011 null constraint on `Float[]` field).
+**Decisions:** `isActive` added to Item schema to support hide/show without deletion. Webcam capture uses canvas JPEG compression before Cloudinary upload. Haiku error types distinguished (timeout vs parse vs rate-limit) for better retry UX. `embedding: []` is the correct default — `scheduleItemEmbedding` fills async after record creation.
+**Token efficiency:** Sessions 121–123 used parallel agents. Overwrite incident in session 122 required restore + hotfix cycle. Session wrap docs not pushed — records gap for sessions 121–123.
+**Token burn:** ~60k (121) + ~90k (122) + ~20k (123) est. Session wrap logs missing from GitHub.
+**Next up:** Session 124 — Chrome audit of AI tagging + add-item flow (continuation). Deploy `20260309000003_add_item_is_active` migration to Neon. Session wrap docs push (STATE.md, session-log.md, next-session-prompt.md for sessions 121–123).
+**Blockers:** Neon migration `20260309000003_add_item_is_active` not deployed. Session 122–123 wrap docs not pushed to GitHub.
 
 ## Health Status
 Last scan: records-audit-sessions-110-118-2026-03-09
@@ -52,7 +52,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── beta-launch/ (4 files)
 │   ├── brand/ (8 files)
 │   ├── competitor-intel/ (1 files)
-│   ├── feature-notes/ (6 files)
+│   ├── feature-notes/ (7 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (1 files)
 │   ├── improvement-memos/ (0 files)
@@ -114,7 +114,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (72 migrations)
+│   │   │   ├── migrations/ (73 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
