@@ -43,10 +43,10 @@ interface Item {
     startDate: string;
     endDate: string;
     zipCode: string;
-    organizer: {
+    organizer?: {
       name: string;
       rating?: number;
-    };
+    } | null;
     location?: string;
   };
   category: string;
@@ -363,7 +363,7 @@ const ItemDetail: React.FC = () => {
                 </div>
                 <div className="text-sm text-gray-500 mb-2">
                   <span>{item.cartCount} in cart</span> • <span>{item.views} views</span> •
-                  Sale by {item.sale.organizer.name}
+                  Sale by {item.sale.organizer?.name ?? 'Organizer'}
                 </div>
               </div>
 
