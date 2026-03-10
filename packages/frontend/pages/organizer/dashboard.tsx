@@ -346,7 +346,7 @@ const OrganizerDashboard = () => {
                     <div className="bg-amber-50 rounded p-3 mb-4">
                       <p className="text-sm text-warm-900 font-semibold mb-2">Platform Fees</p>
                       <p className="text-sm text-warm-700">
-                        Standard: {tierData.benefits.feePct}% | Auction: {tierData.benefits.auctionFeePct}%
+                        10% flat across all item types
                       </p>
                     </div>
                     <div>

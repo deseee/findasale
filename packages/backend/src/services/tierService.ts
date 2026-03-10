@@ -11,9 +11,9 @@ interface TierBenefits {
 
 /**
  * Tier thresholds and benefits:
- * - BRONZE: 1+ completed sales | 5%/7% platform fee
- * - SILVER: 5+ completed sales OR 50+ items sold | 4.5%/6.5% platform fee
- * - GOLD: 15+ completed sales OR 200+ items sold | 4%/6% platform fee
+ * - BRONZE: 1+ completed sales | 10% platform fee (flat)
+ * - SILVER: 5+ completed sales OR 50+ items sold | 10% platform fee (flat)
+ * - GOLD: 15+ completed sales OR 200+ items sold | 10% platform fee (flat)
  */
 
 export async function calculateOrganizerTier(organizerId: string): Promise<OrganizerTier> {
@@ -61,35 +61,35 @@ export async function syncOrganizerTier(organizerId: string): Promise<void> {
 export function getTierBenefits(tier: OrganizerTier): TierBenefits {
   const benefits: Record<OrganizerTier, TierBenefits> = {
     BRONZE: {
-      feePct: 5.0,
-      auctionFeePct: 7.0,
+      feePct: 10.0,
+      auctionFeePct: 10.0,
       label: 'Verified Organizer',
       perks: [
         'Verified Organizer badge on all listings',
-        'Standard platform fee (5% for sales, 7% for auctions)',
+        'Standard platform fee (10% flat)',
         'Basic organizer profile page',
       ],
     },
     SILVER: {
-      feePct: 4.5,
-      auctionFeePct: 6.5,
+      feePct: 10.0,
+      auctionFeePct: 10.0,
       label: 'Silver Organizer',
       perks: [
         'Silver Organizer badge on all listings',
         'Priority placement in search results',
-        'Reduced platform fee (4.5% for sales, 6.5% for auctions)',
+        'Standard platform fee (10% flat)',
         'Enhanced organizer profile page',
         'Access to advanced analytics',
       ],
     },
     GOLD: {
-      feePct: 4.0,
-      auctionFeePct: 6.0,
+      feePct: 10.0,
+      auctionFeePct: 10.0,
       label: 'Gold Organizer',
       perks: [
         'Gold Organizer badge on all listings',
         'Featured on homepage',
-        'Lowest platform fee (4% for sales, 6% for auctions)',
+        'Standard platform fee (10% flat)',
         'Premium organizer profile page',
         'Early access to new features',
         'Dedicated seller support',

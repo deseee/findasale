@@ -377,7 +377,7 @@ const SaleDetailPage = () => {
             {isOrganizer && (
               <div className="flex flex-col gap-2">
                 <button
-                  onClick={() => router.push(`/organizer/sales/${sale.id}/edit`)}
+                  onClick={() => router.push(`/organizer/edit-sale/${sale.id}`)}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium"
                 >
                   Edit Sale
