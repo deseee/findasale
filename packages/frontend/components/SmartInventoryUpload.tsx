@@ -23,11 +23,13 @@ interface AIAnalysis {
   suggestedTags: string[];
   confidence: 'high' | 'medium' | 'low';
   error?: string;
+  errorCode?: 'AI_TIMEOUT' | 'AI_PARSE_ERROR' | 'AI_RATE_LIMIT' | 'AI_ERROR';
 }
 
 interface AnalysisItem extends AIAnalysis {
   include: boolean;
   photoFile: File;
+  isRetrying?: boolean;
 }
 
 type WizardStep = 'upload' | 'review' | 'complete';
@@ -77,11 +79,22 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       const response = await api.post('/upload/sale-photos', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      // P0-1: Check for partial errors from Cloudinary upload
+      if (response.data.partialErrors && response.data.partialErrors.length > 0) {
+        const err = new Error(`Upload failed: ${response.data.partialErrors.join(', ')}`);
+        (err as any).isTransient = false;
+        throw err;
+      }
+
       return response.data.urls || response.data.imageVariants?.map((v: any) => v.original) || [];
     },
-    onError: () => {
-      showToast('Failed to upload photos', 'error');
+    onError: (error: any) => {
+      const isTransient = error.code === 'ECONNREFUSED' || error.message?.includes('timeout') || error.response?.status === 503;
+      const message = isTransient ? 'Upload failed — network issue' : 'Failed to upload photos';
+      showToast(message, 'error');
       setUploadProgress(0);
+      (uploadPhotosMutation as any).isTransient = isTransient;
     },
   });
 
@@ -93,9 +106,12 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       });
       return response.data.results;
     },
-    onError: () => {
-      showToast('Failed to analyze photos', 'error');
+    onError: (error: any) => {
+      const isTransient = error.code === 'ECONNREFUSED' || error.message?.includes('timeout') || error.response?.status === 503;
+      const message = isTransient ? 'Analysis failed — try again shortly' : 'Failed to analyze photos';
+      showToast(message, 'error');
       setUploadProgress(0);
+      (batchAnalyzeMutation as any).isTransient = isTransient;
     },
   });
 
@@ -207,27 +223,64 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     const updated = [...analyses];
     updated[idx] = { ...updated[idx], ...updates };
     setAnalyses(updated);
+
+    // P1-1: Record feedback for field edits
+    const item = updated[idx];
+    if (updates.suggestedTitle && updates.suggestedTitle !== analyses[idx].suggestedTitle) {
+      recordFeedback('title', 'edited');
+    }
+    if (updates.suggestedDescription && updates.suggestedDescription !== analyses[idx].suggestedDescription) {
+      recordFeedback('description', 'edited');
+    }
+    if (updates.suggestedCategory && updates.suggestedCategory !== analyses[idx].suggestedCategory) {
+      recordFeedback('category', 'edited');
+    }
+    if (updates.suggestedCondition && updates.suggestedCondition !== analyses[idx].suggestedCondition) {
+      recordFeedback('condition', 'edited');
+    }
+    if (updates.suggestedPrice && updates.suggestedPrice !== analyses[idx].suggestedPrice) {
+      recordFeedback('price', 'edited');
+    }
+  };
+
+  // P1-1: Fire-and-forget feedback to CB4
+  const recordFeedback = async (field: string, action: 'accepted' | 'dismissed' | 'edited') => {
+    try {
+      await api.post('/upload/ai-feedback', { field, action });
+    } catch (err) {
+      // Silently fail — don't block user workflow for feedback
+    }
   };
 
   // Remove analysis item
   const removeAnalysisItem = (idx: number) => {
+    // P1-1: Record dismiss feedback when organizer removes an item
+    const item = analyses[idx];
+    recordFeedback('overall', 'dismissed');
     setAnalyses(analyses.filter((_, i) => i !== idx));
   };
 
   // Save all checked items
   const handleSaveAllItems = async () => {
+    const skippedCount = analyses.filter((a) => a.include && a.error).length;
+
     const itemsToCreate = analyses
-      .filter((a) => a.include && !a.error)
-      .map((a) => ({
-        saleId,
-        title: a.suggestedTitle,
-        description: a.suggestedDescription,
-        price: a.suggestedPrice,
-        category: a.suggestedCategory,
-        condition: a.suggestedCondition,
-        photoUrls: [a.photoUrl],
-        isAiTagged: true,
-      }));
+      .filter((a) => a.include && !a.error && a.photoUrl && a.photoUrl !== '(unknown)')
+      .map((a) => {
+        // P1-1: Record acceptance feedback for items that were not edited
+        recordFeedback('overall', 'accepted');
+        return {
+          saleId,
+          title: a.suggestedTitle,
+          description: a.suggestedDescription,
+          price: a.suggestedPrice,
+          category: a.suggestedCategory,
+          condition: a.suggestedCondition,
+          photoUrls: [a.photoUrl],
+          // P0-4: Only mark as AI-tagged if no error and valid URL
+          isAiTagged: !a.error && a.photoUrl && a.photoUrl !== '(unknown)',
+        };
+      });
 
     if (itemsToCreate.length === 0) {
       showToast('Select at least one item to save', 'error');
@@ -235,9 +288,52 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     }
 
     await createItemsMutation.mutateAsync(itemsToCreate);
+
+    // P1-2: Show summary of what was saved and what was skipped
+    if (skippedCount > 0) {
+      setTimeout(() => {
+        showToast(
+          `✓ ${itemsToCreate.length} items saved. ${skippedCount} items skipped (analysis failed).`,
+          'success'
+        );
+      }, 500);
+    }
   };
 
-  // ─── STEP 1: Upload ───────────────────────────────────────────────────────
+  // P1-3: Retry analysis for failed items
+  const handleRetryFailedItems = async () => {
+    const failedUrls = analyses
+      .filter((a) => a.error && a.photoUrl && a.photoUrl !== '(unknown)')
+      .map((a) => a.photoUrl);
+
+    if (failedUrls.length === 0) {
+      showToast('No items to retry', 'info');
+      return;
+    }
+
+    setUploadProgress(50);
+    try {
+      const aiResults = await batchAnalyzeMutation.mutateAsync(failedUrls);
+
+      // Update failed items with new results
+      const updated = [...analyses];
+      let resultIdx = 0;
+      for (let i = 0; i < updated.length; i++) {
+        if (updated[i].error && updated[i].photoUrl && updated[i].photoUrl !== '(unknown)') {
+          updated[i] = { ...updated[i], ...aiResults[resultIdx++] };
+        }
+      }
+      setAnalyses(updated);
+      setUploadProgress(100);
+      setTimeout(() => setUploadProgress(0), 500);
+      showToast(`Retried ${failedUrls.length} items`, 'success');
+    } catch (err) {
+      showToast('Retry failed — try again later', 'error');
+      setUploadProgress(0);
+    }
+  };
+
+  // ─── STEP 1: Upload ────────────────────────────────────────────
   if (step === 'upload') {
     return (
       <div className="space-y-6">
@@ -327,6 +423,14 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
             >
               Clear
             </button>
+            {uploadPhotosMutation.isError || batchAnalyzeMutation.isError ? (
+              <button
+                onClick={handleAnalyzePhotos}
+                className="px-8 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg"
+              >
+                Retry Upload
+              </button>
+            ) : null}
             <button
               onClick={handleAnalyzePhotos}
               disabled={
@@ -346,19 +450,33 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     );
   }
 
-  // ─── STEP 2: Review ───────────────────────────────────────────────────────
+  // ─── STEP 2: Review ────────────────────────────────────────────
   if (step === 'review') {
-    const checkedCount = analyses.filter((a) => a.include).length;
+    const checkedCount = analyses.filter((a) => a.include && !a.error).length;
+    const errorCount = analyses.filter((a) => a.error).length;
 
     return (
       <div className="space-y-6">
         <div>
           <h3 className="text-lg font-semibold text-warm-900 mb-4">
-            Review & Edit Suggestions ({checkedCount} selected)
+            Review & Edit Suggestions ({checkedCount} analyzed{errorCount > 0 ? ` · ${errorCount} failed` : ''})
           </h3>
           <p className="text-warm-600 text-sm mb-4">
             Edit any field inline. Uncheck items to skip them.
           </p>
+          {errorCount > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-red-700 text-sm">
+                {errorCount} item{errorCount !== 1 ? 's' : ''} failed to analyze.
+                <button
+                  onClick={handleRetryFailedItems}
+                  className="ml-2 text-red-900 font-semibold hover:underline"
+                >
+                  Retry Failed Items
+                </button>
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -375,16 +493,36 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
             >
               {/* Photo */}
               <div className="mb-4">
-                <img
-                  src={item.photoUrl}
-                  alt="Item preview"
-                  className="w-full h-32 object-cover rounded"
-                />
+                {item.error && (!item.photoUrl || item.photoUrl === '(unknown)') ? (
+                  <div className="w-full h-32 bg-red-200 rounded flex items-center justify-center text-red-600 font-semibold">
+                    No Photo
+                  </div>
+                ) : (
+                  <img
+                    src={item.photoUrl}
+                    alt="Item preview"
+                    className={`w-full h-32 object-cover rounded ${item.error ? 'opacity-50' : ''}`}
+                  />
+                )}
               </div>
 
               {item.error ? (
-                <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm mb-4">
-                  {item.error}
+                <div className="space-y-2">
+                  <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">
+                    <strong>Analysis Failed</strong>
+                    <p className="text-xs mt-1">
+                      {item.errorCode === 'AI_TIMEOUT' && 'AI service timed out'}
+                      {item.errorCode === 'AI_RATE_LIMIT' && 'AI service busy — try again later'}
+                      {item.errorCode === 'AI_PARSE_ERROR' && 'AI returned invalid data'}
+                      {!item.errorCode && (item.error || 'Unable to analyze this image')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeAnalysisItem(idx)}
+                    className="w-full text-red-600 hover:text-red-700 text-sm font-medium"
+                  >
+                    Remove
+                  </button>
                 </div>
               ) : (
                 <>
@@ -480,9 +618,13 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                     <input
                       type="checkbox"
                       checked={item.include}
-                      onChange={(e) =>
-                        updateAnalysisItem(idx, { include: e.target.checked })
-                      }
+                      onChange={(e) => {
+                        // P1-1: Record feedback when unchecking
+                        if (item.include && !e.target.checked) {
+                          recordFeedback('overall', 'dismissed');
+                        }
+                        updateAnalysisItem(idx, { include: e.target.checked });
+                      }}
                       className="w-4 h-4"
                     />
                     <span className="text-sm font-medium text-warm-900">
@@ -541,7 +683,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     );
   }
 
-  // ─── STEP 3: Complete ─────────────────────────────────────────────────────
+  // ─── STEP 3: Complete ───────────────────────────────────────────
   if (step === 'complete') {
     return (
       <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
