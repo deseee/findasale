@@ -37,6 +37,7 @@ const EditSalePage = () => {
     city: '',
     state: '',
     zip: '',
+    neighborhood: '',
   });
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -64,6 +65,7 @@ const EditSalePage = () => {
         city: sale.city,
         state: sale.state,
         zip: sale.zip,
+        neighborhood: sale.neighborhood ?? '',
       });
     }
   }, [sale]);
@@ -98,7 +100,7 @@ const EditSalePage = () => {
       });
       setFormData(prev => ({ ...prev, description: response.data.description }));
     } catch {
-      showToast("Couldn't generate description — try again", 'error');
+      showToast("Couldn't generate description \u2014 try again", 'error');
     } finally {
       setIsGeneratingDesc(false);
     }
@@ -184,11 +186,11 @@ const EditSalePage = () => {
               <div className="flex items-center gap-3">
                 {sale.status === 'PUBLISHED' ? (
                   <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-3 py-1 text-sm font-semibold">
-                    ● LIVE
+                    \u25cf LIVE
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-full px-3 py-1 text-sm font-semibold">
-                    ◌ DRAFT
+                    \u25cc DRAFT
                   </span>
                 )}
                 <button
@@ -236,7 +238,7 @@ const EditSalePage = () => {
                   disabled={!formData.title.trim() || isGeneratingDesc}
                   className="text-xs bg-sage-600 hover:bg-sage-700 text-white py-1 px-3 rounded-full disabled:opacity-40 transition-colors flex items-center gap-1"
                 >
-                  {isGeneratingDesc ? 'Generating…' : '✨ Generate'}
+                  {isGeneratingDesc ? 'Generating\u2026' : '\u2728 Generate'}
                 </button>
               </div>
               <textarea
@@ -313,6 +315,40 @@ const EditSalePage = () => {
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
+            </div>
+
+            {/* Neighborhood \u2014 autocomplete input */}
+            <div>
+              <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 mb-2">
+                Neighborhood <span className="text-warm-400 font-normal">(optional \u2014 helps shoppers find you)</span>
+              </label>
+              <input
+                id="neighborhood"
+                type="text"
+                name="neighborhood"
+                list="neighborhood-list"
+                value={formData.neighborhood}
+                onChange={handleChange}
+                placeholder="Start typing or select..."
+                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                autoComplete="off"
+              />
+              <datalist id="neighborhood-list">
+                <option value="Downtown" />
+                <option value="Eastown" />
+                <option value="East Hills" />
+                <option value="Heritage Hill" />
+                <option value="Creston" />
+                <option value="Westside" />
+                <option value="Midtown" />
+                <option value="Fulton Heights" />
+                <option value="Alger Heights" />
+                <option value="Ada Township" />
+                <option value="Cascade" />
+                <option value="Kentwood" />
+                <option value="Wyoming" />
+                <option value="Grandville" />
+              </datalist>
             </div>
 
             <button

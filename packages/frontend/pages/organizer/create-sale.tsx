@@ -122,7 +122,7 @@ const CreateSalePage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateDateFields()) {
       return;
     }
@@ -188,7 +188,7 @@ const CreateSalePage = () => {
                   disabled={!formData.title.trim() || isGeneratingDesc}
                   className="text-xs bg-sage-600 hover:bg-sage-700 text-white py-1 px-3 rounded-full disabled:opacity-40 transition-colors flex items-center gap-1"
                 >
-                  {isGeneratingDesc ? 'Generating…' : '✨ Generate'}
+                  {isGeneratingDesc ? 'Generating\u2026' : '\u2728 Generate'}
                 </button>
               </div>
               <textarea
@@ -305,35 +305,39 @@ const CreateSalePage = () => {
               </div>
             </div>
 
-            {/* Neighborhood — U2 */}
+            {/* Neighborhood — U2 (autocomplete input, replaces scrolling dropdown) */}
             <div>
               <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 mb-2">
-                Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
+                Neighborhood <span className="text-warm-400 font-normal">(optional \u2014 helps shoppers find you)</span>
               </label>
-              <select
+              <input
                 id="neighborhood"
+                type="text"
                 name="neighborhood"
+                list="neighborhood-list"
                 value={formData.neighborhood}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white"
-              >
-                <option value="">— Select neighborhood —</option>
-                <option value="downtown">Downtown</option>
-                <option value="eastown">Eastown</option>
-                <option value="east-hills">East Hills</option>
-                <option value="heritage-hill">Heritage Hill</option>
-                <option value="creston">Creston</option>
-                <option value="westside">Westside</option>
-                <option value="midtown">Midtown</option>
-                <option value="fulton-heights">Fulton Heights</option>
-                <option value="alger-heights">Alger Heights</option>
-                <option value="ada">Ada Township</option>
-                <option value="cascade">Cascade</option>
-                <option value="kentwood">Kentwood</option>
-                <option value="wyoming">Wyoming</option>
-                <option value="grandville">Grandville</option>
-              </select>
+                placeholder="Start typing or select..."
+                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                autoComplete="off"
+              />
+              <datalist id="neighborhood-list">
+                <option value="Downtown" />
+                <option value="Eastown" />
+                <option value="East Hills" />
+                <option value="Heritage Hill" />
+                <option value="Creston" />
+                <option value="Westside" />
+                <option value="Midtown" />
+                <option value="Fulton Heights" />
+                <option value="Alger Heights" />
+                <option value="Ada Township" />
+                <option value="Cascade" />
+                <option value="Kentwood" />
+                <option value="Wyoming" />
+                <option value="Grandville" />
+              </datalist>
             </div>
 
             {/* B1: Sale Type Selector */}

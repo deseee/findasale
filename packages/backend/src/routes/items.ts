@@ -25,7 +25,7 @@ router.get('/search', searchItemsHandler);           // GET /api/items/search?q=
 router.get('/categories', getItemCategoriesHandler); // GET /api/items/categories
 
 // Bulk operations — declared before /:id to prevent 'bulk' being captured as an item ID.
-// Frontend (add-items.tsx) uses this for delete / status / category / price_adjust.
+// Frontend (add-items.tsx) uses this for delete / status / category / price_adjust / isActive / price.
 // All operations verify organizer ownership before mutating.
 router.post('/bulk', authenticate, async (req, res) => {
   try {
@@ -117,6 +117,28 @@ router.post('/bulk', authenticate, async (req, res) => {
           );
         await Promise.all(updates);
         return res.json({ message: `Adjusted prices for ${updates.length} item(s) by ${pct}%.` });
+      }
+
+      case 'isActive': {
+        const isActive = typeof value === 'boolean' ? value : value === 'true' || value === true;
+        await prisma.item.updateMany({
+          where: { id: { in: confirmedIds } },
+          data: { isActive },
+        });
+        const action = isActive ? 'activated' : 'hidden';
+        return res.json({ message: `${action.charAt(0).toUpperCase() + action.slice(1)} ${confirmedIds.length} item(s).` });
+      }
+
+      case 'price': {
+        const price = typeof value === 'number' ? value : parseFloat(value as string);
+        if (isNaN(price) || price < 0) {
+          return res.status(400).json({ message: 'price value must be a non-negative number.' });
+        }
+        await prisma.item.updateMany({
+          where: { id: { in: confirmedIds } },
+          data: { price: Math.max(0, parseFloat(price.toFixed(2))) },
+        });
+        return res.json({ message: `Updated price to $${price.toFixed(2)} for ${confirmedIds.length} item(s).` });
       }
 
       default:
