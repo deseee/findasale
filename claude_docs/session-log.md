@@ -3,9 +3,9 @@
 ## Recent Sessions
 
 ### 2026-03-10 · Session 126
-**Worked on:** Docs correction from session 125 (STATE.md, session-log). Corrected edit-item audit status — marked fixes as pushed but untested, not complete. Continuing Chrome audit of organizer backend.
-**Decisions:** Do not mark edit-item/photo flow complete until end-to-end verification runs in Chrome this session.
-**Next up:** Chrome audit — verify session 125 fixes live on production, then continue to organizer dashboard item list view.
+**Worked on:** Docs correction (STATE.md, session-log). Verified session 125 fixes live in Chrome (all 3 pass ✅). Continued Chrome audit — organizer item list + bulk actions on add-items/[saleId] page.
+**Decisions:** Session 125 fixes confirmed complete. Three new findings logged (filter/sort gap, native confirm on delete, stale fee copy on dashboard).
+**Next up:** Fix FINDING-3 (stale fee copy), consider FINDING-1/2 for post-beta backlog. Continue Chrome audit — CSV export/import, batch upload (AI) tab, deferred friction items #7 and #13.
 **Blockers:** None.
 
 ### 2026-03-10 · Session 125
@@ -27,5 +27,3 @@
 **Blockers:** None — all 13 items shipped and tested.
 
 ---
-
-*Maintaining 3 most recent entries. Full archive: see git history and COMPLETED_PHASES.md*

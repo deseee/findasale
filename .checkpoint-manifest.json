@@ -4,17 +4,17 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": 124,
+    "sessionId": 126,
     "startedAt": "2026-03-10T00:00:00Z",
-    "estimatedTokensUsed": 15,
+    "estimatedTokensUsed": 35,
     "turnCount": 3,
-    "fileReadsCount": 8,
-    "toolCallsCount": 12,
+    "fileReadsCount": 12,
+    "toolCallsCount": 20,
     "subagentDispatches": 0,
-    "githubApiCalls": 0,
+    "githubApiCalls": 3,
     "lastCheckpointAt": "2026-03-10T00:00:00Z",
     "compressionOccurred": false,
-    "notes": "Session 124 start. Sessions 121-123 undocumented locally (docs not pushed). Continuing Chrome audit — awaiting Patrick context brief."
+    "notes": "Session 126. Docs corrected (session 125 audit status fixed). schema.prisma has uncommitted tags field — migration needed before pushing. Chrome audit continuing."
   },
   "checkpoints": [
     {

@@ -1,6 +1,6 @@
 # Next Session Resume Prompt
-*Written: 2026-03-10T21:30:00Z*
-*Session ended: normally — Session 125 complete*
+*Written: 2026-03-10 (Session 126)*
+*Session ended: normally — session 126 complete*
 
 ---
 
@@ -22,51 +22,46 @@ If `.checkpoint-manifest.json` is missing: create it from schema in CORE.md §3 
 
 ## Resume From
 
-Start **Session 126**. The Chrome audit of edit-item + photo management flow is **COMPLETE**. All bugs fixed and pushed to main (commit b2ac5c7).
+Start **Session 127**.
 
-**Next audit:** The organizer dashboard item list view (list view, bulk actions, photo grid). Chrome MCP session ready to go. Brief file is `claude_docs/audits/next-audit-brief-*.md` (will be created in Session 126 before audit starts).
+## What Was Done Last Session (126)
 
-## What Was Done Last Session (125)
-
-**Edit-Item + Photo Management Audit (Chrome MCP):**
-- Audited single-item edit page + photo upload/reorder/delete workflow on production (finda.sale)
-- Found 4 critical bugs:
-  1. **P0:** Save Changes broken — frontend `api.patch()` but backend only has `router.put()` → 404 on every save
-  2. **P0:** Shopper item detail page crashes on EVERY item — `TypeError: Cannot read properties of undefined (reading 'name')` because public API returns `organizer: null` but page accesses `.name` unconditionally
-  3. **P1:** Category/Condition dropdowns blank on edit page — API returns lowercase (`"tools"`, `"good"`) but option values are Title Case/UPPERCASE (`"Tools"`, `"GOOD"`)
-  4. **P2:** No error state when item fails to load — blank form with no feedback
-
-- Photo operations verified ✅:
-  - Upload: POST `/upload/item-photo` → POST `/items/:id/photos` — works, Cloudinary 503s on new uploads expected (CDN propagation)
-  - Reorder: PATCH `/items/:id/photos/reorder` — works
-  - Delete: DELETE `/items/:id/photos/:photoIndex` — works
-
-- All 4 bugs fixed, tests passed, audit report written, commit pushed to main (b2ac5c7, 3 files)
-- Files changed: `packages/frontend/pages/organizer/edit-item/[id].tsx`, `packages/frontend/pages/items/[id].tsx`
-- Three new self-healing entries added (entries 29–31): HTTP method mismatch, nullable relation optional chaining, form select case normalization
+**Docs correction + session 125 fix verification + item list audit:**
+- STATE.md + session-log corrected from session 125 (fixes marked as pushed-but-untested)
+- Session 125 fixes all verified live in Chrome: BUG-1 (PUT fix), BUG-2 (organizer null), BUG-3 (dropdown case) — all ✅
+- Item list + bulk actions audited: hide, show, set price, delete all working
+- 3 new P2 findings logged in `claude_docs/audits/session-126-dashboard-items-audit.md`
+- schema.prisma has uncommitted `tags String[]` field — migration needed (see alert below)
 
 ---
 
-## Session 126 Objectives
+## Session 127 Objectives
 
-### Priority 1 — Continue Chrome Audit (Organizer Dashboard)
+### Priority 1 — Fix FINDING-3: Stale fee copy on dashboard
 
-**What to audit next:** Item list view on organizer dashboard. Flows: view all items in a sale, filter by status/category, bulk actions (status change, price edit, delete), photo grid navigation.
+**What:** Tier Rewards card on organizer dashboard still shows "5% | 7%" — should reflect 10% flat fee (locked session 106).
+**File:** `packages/frontend/pages/organizer/dashboard.tsx` — find Tier Rewards card copy and update.
+**Scope:** Copy-only change, no logic. Small MCP push after fix.
+
+### Priority 2 — Continue Chrome Audit (CSV Export/Import + Batch Upload AI tab)
+
+**What to audit:**
+1. Export CSV — does it download a file? Does it contain correct item data?
+2. Import CSV — does the upload flow work? What happens with bad data?
+3. Batch Upload (AI) tab — photo batch flow, AI analysis, item pre-fill
 
 **Test account:** Ivan (organizer, Grand Rapids)
-**Test sale:** "Eastside Collector's Estate Sale 11" (PUBLISHED, has items)
+**Test sale:** Eastside Collector's Estate Sale 11 (PUBLISHED, now 11 items after session 126 delete test)
 
-Create brief file: `claude_docs/audits/next-audit-brief-126-dashboard-items.md` before starting the audit. Note any issues in the audit report.
-
-### Priority 2 — Deferred Friction Items (#7, #13)
+### Priority 3 — Deferred Friction Items (#7, #13)
 
 From Session 120 friction blitz:
 - **Item 7** — Bulk Edit on Items List: Add checkboxes to item rows, batch status/price update
 - **Item 13** — Neighborhood Autocomplete: Auto-suggest neighborhoods in sale create/edit form
 
-These depend on audit findings from Priority 1. Architect consult before schema changes.
+Architect consult before schema changes.
 
-### Priority 3 — Beta Organizer Outreach
+### Priority 4 — Beta Organizer Outreach
 
 **Status:** Materials archived in `claude_docs/beta-launch/`. Ready to execute.
 **Owner:** `findasale-cx` skill
@@ -83,55 +78,34 @@ These depend on audit findings from Priority 1. Architect consult before schema 
 
 ---
 
+## ⚠️ Schema Drift Alert
+
+`packages/database/prisma/schema.prisma` has a `tags String[] @default([])` field on Item that exists locally but has no corresponding migration. At session 127 start, check migrations folder for `add_item_tags`. If missing:
+```powershell
+# Check for env var override first
+$env:DATABASE_URL
+# Clear if needed: $env:DATABASE_URL=""
+
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+npx prisma migrate dev --name add_item_tags
+```
+Then deploy to Neon after verifying locally.
+
+---
+
 ## Push Status
 
-**Session 125 wrap files NOT yet pushed.** Patrick must run:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/session-log.md
-git add claude_docs/self-healing/self_healing_skills.md
-git add context.md
-git add claude_docs/.last-wrap
-git commit -m "chore: session 125 wrap — audit report, state sync, self-healing updates"
-.\push.ps1
-```
-
-**Code changes:** Already pushed to main via MCP (commit b2ac5c7).
+**All session 126 files pushed.** No pending Patrick action required.
 
 ## Environment Status
 
 - **Railway:** GREEN — backend running
-- **Neon:** 69 migrations applied ✅
-- **Vercel:** Build passing ✅ (all type errors from Session 125 fixes resolved)
-- **GitHub:** Main branch at b2ac5c7 (Session 125 code changes)
+- **Neon:** 69 migrations applied ✅ (tags field migration may be needed — see schema alert)
+- **Vercel:** Build passing ✅
+- **GitHub:** Main at session 126 wrap commit
 - **conversation-defaults:** v3 installed ✅
 - **Dev stack:** Native (no Docker) ✅
 
 ---
 
-## Exact Context for Resume
-
-- Last audit report: `claude_docs/audits/session-125-edit-item-photo-audit.md`
-- Self-healing entries added: #29 (HTTP method mismatch), #30 (nullable organizer), #31 (form select case)
-- Chrome audit flow ready for Session 126: organizer dashboard item list view
-- Vercel Deployment: latest from b2ac5c7, no pending builds
-- No blocking errors or uncommitted work
-
----
-
-## Session Scoreboard — Session 125
-
-| Metric | Value |
-|--------|-------|
-| Files changed | 2 |
-| Audit findings | 4 bugs (all fixed) |
-| Subagents used | 0 (solo session) |
-| Compressions | 0 (no recompile mid-session) |
-| Push method | MCP (code) only |
-| Wrap files | Not yet pushed (pending Patrick command) |
-| Duration estimate | ~1 hour (audit + fixes + report + wrap) |
-
----
-
-*Ready for Session 126. Chrome audit continues.*
+*Ready for Session 127. Fix stale fee copy first (small), then continue Chrome audit.*
