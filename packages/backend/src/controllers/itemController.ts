@@ -337,7 +337,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, quantity, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+    // Note: quantity is accepted in req.body but not yet persisted — schema migration pending
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -360,7 +361,6 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         title,
         description: description || '',
         price: price !== undefined ? (price ? parseFloat(price) : null) : undefined,
-        quantity: quantity !== undefined ? (quantity ? parseInt(quantity, 10) : undefined) : undefined,
         auctionStartPrice: auctionStartPrice !== undefined ? (auctionStartPrice ? parseFloat(auctionStartPrice) : null) : undefined,
         auctionReservePrice: auctionReservePrice !== undefined ? (auctionReservePrice ? parseFloat(auctionReservePrice) : null) : undefined,
         bidIncrement: bidIncrement !== undefined ? (bidIncrement ? parseFloat(bidIncrement) : null) : undefined,
@@ -632,7 +632,7 @@ export const bulkUpdateItems = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'itemIds must be a non-empty array' });
     }
 
-    if (!['delete', 'status', 'category', 'price_adjust'].includes(operation)) {
+    if (!['delete', 'status', 'category', 'price_adjust', 'isActive', 'price'].includes(operation)) {
       return res.status(400).json({ message: 'Invalid operation' });
     }
 
@@ -656,6 +656,22 @@ export const bulkUpdateItems = async (req: AuthRequest, res: Response) => {
       if (operation === 'delete') {
         const result = await prisma.item.deleteMany({
           where: { id: { in: ownedItems.map(i => i.id) } }
+        });
+        updated = result.count;
+      } else if (operation === 'isActive') {
+        const result = await prisma.item.updateMany({
+          where: { id: { in: ownedItems.map(i => i.id) } },
+          data: { isActive: Boolean(value) }
+        });
+        updated = result.count;
+      } else if (operation === 'price') {
+        const newPrice = parseFloat(value);
+        if (isNaN(newPrice) || newPrice < 0) {
+          return res.status(400).json({ message: 'Invalid price value' });
+        }
+        const result = await prisma.item.updateMany({
+          where: { id: { in: ownedItems.map(i => i.id) } },
+          data: { price: newPrice }
         });
         updated = result.count;
       } else if (operation === 'status') {
