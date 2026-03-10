@@ -238,12 +238,6 @@ const OrganizerDashboard = () => {
               )}
             </div>
             <Link
-              href="/organizer/holds"
-              className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              Manage Holds
-            </Link>
-            <Link
               href="/organizer/insights"
               className="bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
@@ -346,7 +340,7 @@ const OrganizerDashboard = () => {
                     <div className="bg-amber-50 rounded p-3 mb-4">
                       <p className="text-sm text-warm-900 font-semibold mb-2">Platform Fees</p>
                       <p className="text-sm text-warm-700">
-                        Standard: {tierData.benefits.feePct}% | Auction: {tierData.benefits.auctionFeePct}%
+                        10% flat across all item types
                       </p>
                     </div>
                     <div>
