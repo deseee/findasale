@@ -54,14 +54,12 @@ const AddItemsDetailPage = () => {
     category: '',
     condition: '',
     quantity: '1',
-    // B1: Listing type selector
+    // B1: Consolidated listing type selector (single source of truth)
     listingType: 'FIXED',
     startingBid: '',
     reservePrice: '',
     reverseDailyDrop: '',
     reverseFloorPrice: '',
-    isAuction: false,
-    reverseAuction: false,
   });
 
   const [formError, setFormError] = useState('');
@@ -109,8 +107,6 @@ const AddItemsDetailPage = () => {
         reservePrice: '',
         reverseDailyDrop: '',
         reverseFloorPrice: '',
-        isAuction: false,
-        reverseAuction: false,
       });
       setFormError('');
       queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
@@ -203,7 +199,7 @@ const AddItemsDetailPage = () => {
       payload.reverseFloorPrice = Math.round(parseFloat(formData.reverseFloorPrice) * 100); // convert dollars to cents
       payload.reverseStartDate = new Date().toISOString(); // start immediately
     } else {
-      // FIXED or other types
+      // FIXED pricing
       payload.price = parseFloat(formData.price);
     }
 
@@ -352,42 +348,53 @@ const AddItemsDetailPage = () => {
                     </p>
                   </div>
 
-                  {/* Row: Price vs Starting Bid vs Reverse Auction */}
+                  {/* Listing Type Selector */}
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="isAuction"
-                          checked={formData.isAuction}
-                          onChange={handleFormChange}
-                          className="w-4 h-4"
-                          disabled={createItemMutation.isPending}
-                        />
-                        <span className="text-sm font-medium text-warm-900">
-                          This is an auction item
-                        </span>
+                    <div>
+                      <label className="block text-sm font-medium text-warm-900 mb-1">
+                        Listing Type <span className="text-red-600">*</span>
                       </label>
+                      <select
+                        name="listingType"
+                        value={formData.listingType}
+                        onChange={handleFormChange}
+                        className="w-full px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        disabled={createItemMutation.isPending}
+                      >
+                        <option value="FIXED">Fixed Price</option>
+                        <option value="AUCTION">Auction / Bidding</option>
+                        <option value="REVERSE_AUCTION">Reverse Auction (Price Drops Daily)</option>
+                      </select>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="reverseAuction"
-                          checked={formData.reverseAuction}
-                          onChange={handleFormChange}
-                          className="w-4 h-4"
-                          disabled={createItemMutation.isPending || formData.isAuction}
-                        />
-                        <span className="text-sm font-medium text-warm-900">
-                          Enable daily price drop (⬇️)
-                        </span>
-                      </label>
-                    </div>
-
+                    {/* Price Fields by Listing Type */}
                     <div className="grid grid-cols-2 gap-4">
-                      {formData.isAuction ? (
+                      {formData.listingType === 'FIXED' && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-warm-900 mb-1">
+                              Price <span className="text-red-600">*</span>
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-4 top-2.5 text-warm-600">$</span>
+                              <input
+                                type="number"
+                                name="price"
+                                value={formData.price}
+                                onChange={handleFormChange}
+                                min="0"
+                                step="0.01"
+                                placeholder="0.00"
+                                className="w-full pl-7 pr-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                disabled={createItemMutation.isPending}
+                              />
+                            </div>
+                          </div>
+                          <div />
+                        </>
+                      )}
+
+                      {formData.listingType === 'AUCTION' && (
                         <>
                           <div>
                             <label className="block text-sm font-medium text-warm-900 mb-1">
@@ -429,11 +436,13 @@ const AddItemsDetailPage = () => {
                             <p className="text-xs text-warm-600 mt-1">Bid must meet or exceed this to win</p>
                           </div>
                         </>
-                      ) : (
+                      )}
+
+                      {formData.listingType === 'REVERSE_AUCTION' && (
                         <>
                           <div>
                             <label className="block text-sm font-medium text-warm-900 mb-1">
-                              Price <span className="text-red-600">*</span>
+                              Starting Price <span className="text-red-600">*</span>
                             </label>
                             <div className="relative">
                               <span className="absolute left-4 top-2.5 text-warm-600">$</span>
@@ -450,22 +459,13 @@ const AddItemsDetailPage = () => {
                               />
                             </div>
                           </div>
-                          <div className="opacity-50">
-                            <label className="block text-sm font-medium text-warm-900 mb-1">
-                              Starting Bid (N/A)
-                            </label>
-                            <input
-                              type="text"
-                              disabled
-                              className="w-full px-4 py-2 border border-warm-200 rounded-lg bg-warm-100"
-                            />
-                          </div>
+                          <div />
                         </>
                       )}
                     </div>
 
                     {/* Reverse Auction Controls */}
-                    {formData.reverseAuction && (
+                    {formData.listingType === 'REVERSE_AUCTION' && (
                       <div className="bg-amber-50 border-l-4 border-amber-600 p-4 rounded space-y-4">
                         <div className="text-sm font-medium text-amber-900">
                           ⬇️ Daily Price Drop Settings
@@ -602,7 +602,7 @@ const AddItemsDetailPage = () => {
             <div className="mb-8">
               {/* B2: AI tagging first-use disclosure */}
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 text-sm text-amber-900">
-                ✨ We can auto-suggest categories, tags, and descriptions for your items — it&apos;s a quick way to get started. Just review what we suggest before you publish. You&apos;re always in control of what shows on your listings, and you can edit or remove anything.
+                ✨ We can auto-suggest categories, tags, and descriptions for your items — it's a quick way to get started. Just review what we suggest before you publish. You're always in control of what shows on your listings, and you can edit or remove anything.
               </div>
               <SmartInventoryUpload
                 saleId={String(saleId)}
