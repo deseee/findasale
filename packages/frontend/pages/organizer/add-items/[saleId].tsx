@@ -184,8 +184,10 @@ const AddItemsDetailPage = () => {
       const op = variables.operation;
       const count = variables.itemIds.length;
       const message =
-        op === 'isActive'
+        op === 'isActive' && variables.value === false
           ? `Hidden ${count} item${count !== 1 ? 's' : ''}`
+          : op === 'isActive' && variables.value === true
+          ? `Shown ${count} item${count !== 1 ? 's' : ''}`
           : op === 'price'
           ? `Price updated for ${count} item${count !== 1 ? 's' : ''}`
           : '';
@@ -852,6 +854,21 @@ const AddItemsDetailPage = () => {
                     className="bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg text-sm"
                   >
                     {bulkUpdateMutation.isPending ? 'Updating...' : 'Hide Selected'}
+                  </button>
+
+                  {/* Show Selected */}
+                  <button
+                    onClick={() => {
+                      bulkUpdateMutation.mutate({
+                        itemIds: Array.from(selectedItems),
+                        operation: 'isActive',
+                        value: true,
+                      });
+                    }}
+                    disabled={bulkUpdateMutation.isPending}
+                    className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg text-sm"
+                  >
+                    {bulkUpdateMutation.isPending ? 'Updating...' : 'Show Selected'}
                   </button>
 
                   {/* Set Price */}
