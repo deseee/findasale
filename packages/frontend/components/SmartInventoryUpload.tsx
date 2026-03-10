@@ -278,7 +278,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
           condition: a.suggestedCondition,
           photoUrls: [a.photoUrl],
           // P0-4: Only mark as AI-tagged if no error and valid URL
-          isAiTagged: !a.error && a.photoUrl && a.photoUrl !== '(unknown)',
+          isAiTagged: Boolean(!a.error && a.photoUrl && a.photoUrl !== '(unknown)'),
         };
       });
 
