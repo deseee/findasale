@@ -57,6 +57,7 @@ const OrganizerDashboard = () => {
   const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [showSaleSelector, setShowSaleSelector] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -101,12 +102,19 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id,
   });
 
-  // Show wizard if onboarding not complete and not dismissed
+  // Show wizard if onboarding not complete and user is within 24 hours of account creation
   useEffect(() => {
-    if (orgProfile && !orgProfile.onboardingComplete && localStorage.getItem('onboardingDismissed') !== 'true') {
-      setShowWizard(true);
+    if (orgProfile && !orgProfile.onboardingComplete && user) {
+      const createdAt = new Date(user.createdAt);
+      const now = new Date();
+      const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+
+      // Show wizard only if account created within last 24 hours
+      if (hoursSinceCreation < 24) {
+        setShowWizard(true);
+      }
     }
-  }, [orgProfile]);
+  }, [orgProfile, user]);
 
   // Handle sale cloning
   const handleCloneSale = async (saleId: string) => {
@@ -207,18 +215,40 @@ const OrganizerDashboard = () => {
             >
               + Create New Sale
             </Link>
-            <button
-              onClick={() => {
-                if (salesData && salesData.length > 0) {
-                  router.push(`/organizer/add-items/${salesData[0].id}`);
-                } else {
-                  showToast('Please create a sale first', 'error');
-                }
-              }}
-              className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              Add Items
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (salesData && salesData.length > 0) {
+                    if (salesData.length === 1) {
+                      router.push(`/organizer/add-items/${salesData[0].id}`);
+                    } else {
+                      setShowSaleSelector(!showSaleSelector);
+                    }
+                  } else {
+                    showToast('Please create a sale first', 'error');
+                  }
+                }}
+                className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                Add Items
+              </button>
+              {showSaleSelector && salesData && salesData.length > 1 && (
+                <div className="absolute top-full left-0 mt-2 bg-white border border-warm-300 rounded-lg shadow-lg z-10">
+                  {salesData.map((sale: any) => (
+                    <button
+                      key={sale.id}
+                      onClick={() => {
+                        router.push(`/organizer/add-items/${sale.id}`);
+                        setShowSaleSelector(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 hover:bg-warm-50 text-warm-900 text-sm border-b border-warm-100 last:border-b-0 transition-colors"
+                    >
+                      {sale.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Link
               href="/organizer/holds"
               className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"

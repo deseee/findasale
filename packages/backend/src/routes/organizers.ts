@@ -75,14 +75,14 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
-// PATCH /organizers/me — update current organizer's profile (businessName, phone, bio)
+// PATCH /organizers/me — update current organizer's profile (businessName, phone, bio, onboardingComplete)
 router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user || req.user.role !== 'ORGANIZER') {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
-    const { businessName, phone, bio } = req.body;
+    const { businessName, phone, bio, onboardingComplete } = req.body;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -98,6 +98,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(businessName && { businessName }),
         ...(phone && { phone }),
         ...(bio !== undefined && { bio }),
+        ...(onboardingComplete !== undefined && { onboardingComplete }),
       },
     });
 
@@ -261,7 +262,7 @@ router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, re
       if (v == null) return '';
       const s = String(v);
       if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`;
+        return `"${s.replace(/"/g, '""')}";
       }
       return s;
     };

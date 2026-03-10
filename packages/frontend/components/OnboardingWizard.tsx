@@ -25,8 +25,9 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
   const [saleCreated, setSaleCreated] = useState(false);
 
   const handleDismiss = () => {
-    localStorage.setItem('onboardingDismissed', 'true');
-    markOnboardingComplete();
+    // First visit: just close the modal (don't persist dismissal)
+    // Only mark complete when the user finishes the wizard
+    if (onComplete) onComplete();
   };
 
   const markOnboardingComplete = async () => {
@@ -185,7 +186,9 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
 
               <div className="flex gap-3 pt-4">
                 <button
-                  onClick={handleDismiss}
+                  onClick={() => {
+                    if (onComplete) onComplete();
+                  }}
                   className="flex-1 px-4 py-2 border border-warm-300 text-warm-700 font-medium rounded-lg hover:bg-warm-50 transition-colors"
                 >
                   Remind Me Later
