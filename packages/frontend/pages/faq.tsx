@@ -80,7 +80,7 @@ const shopperFAQs: FAQItem[] = [
       <>
         Hunt Pass is our loyalty rewards program. Every purchase earns points based on your spending.
         Accumulate points to unlock discounts on future purchases. View your balance and redemption
-        options in <strong>Account → Hunt Pass</strong>.
+        options in <strong>Account \u2192 Hunt Pass</strong>.
       </>
     ),
   },
@@ -166,12 +166,9 @@ const organizerFAQs: FAQItem[] = [
     question: 'What is the platform fee?',
     answer: (
       <>
-        FindA.Sale charges a small platform fee on each completed purchase:
-        <ul className="list-disc pl-5 mt-2 space-y-1">
-          <li><strong>5%</strong> for regular (fixed-price) sales</li>
-          <li><strong>7%</strong> for auction sales</li>
-        </ul>
-        The fee is shown transparently in the checkout modal before the buyer confirms payment.
+        FindA.Sale charges a <strong>10% flat platform fee</strong> on each completed purchase, regardless of sale
+        type (fixed-price or auction). The fee is shown transparently in the checkout modal before the buyer
+        confirms payment.
       </>
     ),
   },
@@ -202,7 +199,7 @@ const organizerFAQs: FAQItem[] = [
         When creating your sale, enable the <strong>Auction</strong> option. Then, for each item you
         want to auction, mark it as an auction item and set a starting bid. Bidding is live — shoppers
         see real-time bids. At the end time you set, the highest bidder wins and payment is processed
-        automatically. Note: auction items carry a 7% platform fee.
+        automatically. The standard 10% platform fee applies.
       </>
     ),
   },
@@ -221,7 +218,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'Can I connect FindA.Sale to Zapier or other apps?',
     answer: (
       <>
-        Yes. Go to <strong>Settings → Integrations → Webhooks</strong> and add your Zapier webhook URL.
+        Yes. Go to <strong>Settings \u2192 Integrations \u2192 Webhooks</strong> and add your Zapier webhook URL.
         Select which events should trigger your Zap (purchase completed, sale published, auction won, etc.).
         Use Zapier to log sales to Google Sheets, send emails, post to Facebook, and more. See the full
         guide on your{' '}
@@ -278,7 +275,7 @@ const FAQAccordion = ({ faqs }: FAQAccordionProps) => {
               }`}
               aria-hidden
             >
-              ▼
+              \u25BC
             </span>
           </button>
           {expandedIndex === index && (
@@ -300,8 +297,8 @@ const FAQPage = () => {
   return (
     <>
       <Head>
-        <title>FAQ – FindA.Sale</title>
-        <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale — the estate sale marketplace." />
+        <title>FAQ \u2013 FindA.Sale</title>
+        <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the estate sale marketplace." />
       </Head>
 
       <div className="min-h-screen bg-white">
@@ -344,12 +341,12 @@ const FAQPage = () => {
             {tab === 'organizer' ? (
               <>
                 Looking for the full walkthrough?{' '}
-                <Link href="/guide" className="text-amber-600 hover:underline font-medium">Read the Organizer Guide →</Link>
+                <Link href="/guide" className="text-amber-600 hover:underline font-medium">Read the Organizer Guide \u2192</Link>
               </>
             ) : (
               <>
                 Still have questions?{' '}
-                <Link href="/contact" className="text-amber-600 hover:underline font-medium">Contact our support team →</Link>
+                <Link href="/contact" className="text-amber-600 hover:underline font-medium">Contact our support team \u2192</Link>
               </>
             )}
           </div>
