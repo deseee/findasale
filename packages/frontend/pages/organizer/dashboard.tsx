@@ -102,19 +102,12 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id,
   });
 
-  // Show wizard if onboarding not complete and user is within 24 hours of account creation
+  // Show wizard if onboarding not complete
   useEffect(() => {
-    if (orgProfile && !orgProfile.onboardingComplete && user) {
-      const createdAt = new Date(user.createdAt);
-      const now = new Date();
-      const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-
-      // Show wizard only if account created within last 24 hours
-      if (hoursSinceCreation < 24) {
-        setShowWizard(true);
-      }
+    if (orgProfile && !orgProfile.onboardingComplete) {
+      setShowWizard(true);
     }
-  }, [orgProfile, user]);
+  }, [orgProfile]);
 
   // Handle sale cloning
   const handleCloneSale = async (saleId: string) => {
