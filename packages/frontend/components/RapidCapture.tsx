@@ -40,16 +40,27 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [flashEffect, setFlashEffect] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
 
-  // Start camera on mount
+  // Start camera on mount and when facingMode changes
   useEffect(() => {
     let mounted = true;
 
     const startCamera = async () => {
+      // Stop existing stream before switching
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      setCameraReady(false);
+      setTorchOn(false);
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: 'environment' },
+            facingMode: { ideal: facingMode },
             width: { ideal: 1920 },
             height: { ideal: 1440 },
           },
@@ -62,6 +73,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         }
 
         streamRef.current = stream;
+
+        // Check torch support on the video track
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          const capabilities = videoTrack.getCapabilities?.() as any;
+          setTorchSupported(!!capabilities?.torch);
+        } else {
+          setTorchSupported(false);
+        }
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
@@ -87,7 +108,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
-  }, []);
+  }, [facingMode]);
 
   // Capture a photo from the video stream
   const capturePhoto = useCallback(() => {
@@ -146,6 +167,25 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     setSelectedIndex(null);
   }, []);
 
+  // Toggle torch (phone LED flash)
+  const toggleTorch = useCallback(async () => {
+    if (!streamRef.current) return;
+    const videoTrack = streamRef.current.getVideoTracks()[0];
+    if (!videoTrack) return;
+    const newTorch = !torchOn;
+    try {
+      await videoTrack.applyConstraints({ advanced: [{ torch: newTorch } as any] });
+      setTorchOn(newTorch);
+    } catch {
+      // Torch not supported on this track — silently fail
+    }
+  }, [torchOn]);
+
+  // Switch front/back camera
+  const switchCamera = useCallback(() => {
+    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
+  }, []);
+
   // Done — stop camera, return photos
   const handleDone = useCallback(() => {
     if (streamRef.current) {
@@ -184,8 +224,36 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </svg>
         </button>
 
-        <div className="text-white text-sm font-medium">
-          {photos.length} / {maxPhotos} photos
+        <div className="flex items-center gap-3">
+          {/* Torch toggle — only shown when hardware supports it */}
+          {torchSupported && (
+            <button
+              onClick={toggleTorch}
+              className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+                torchOn ? 'bg-amber-500 text-white' : 'bg-white/20 text-white'
+              }`}
+              aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </button>
+          )}
+
+          {/* Camera switch (front/back) */}
+          <button
+            onClick={switchCamera}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
+            aria-label="Switch camera"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+
+          <span className="text-white text-sm font-medium">
+            {photos.length} / {maxPhotos}
+          </span>
         </div>
 
         <button
