@@ -186,7 +186,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How does the AI auto-tagging work?',
     answer: (
       <>
-        After you upload a photo, our AI (Google Vision + Claude Haiku) analyzes the image and suggests
+        After you upload a photo, our AI analyzes the image and suggests
         a title, description, category, and tags. You review each suggestion and apply, edit, or dismiss
         as you see fit. The AI saves time on the first draft — you stay in control of the final listing.
       </>
