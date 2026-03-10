@@ -165,9 +165,9 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     console.error('CSV import error:', error);
-    res.status(500).json({ 
-      message: 'Failed to import items from CSV', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Failed to import items from CSV',
+      error: error.message
     });
   }
 };
@@ -218,6 +218,30 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     const { saleId } = req.query;
     const items = await prisma.item.findMany({
       where: { saleId: saleId as string },
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        description: true,
+        price: true,
+        auctionStartPrice: true,
+        auctionReservePrice: true,
+        bidIncrement: true,
+        auctionEndTime: true,
+        currentBid: true,
+        status: true,
+        category: true,
+        condition: true,
+        photoUrls: true,
+        shippingAvailable: true,
+        shippingPrice: true,
+        listingType: true,
+        isAiTagged: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        // embedding intentionally excluded — large Float[] crashes serialization
+      },
       orderBy: { createdAt: 'desc' },
       take: 100
     });
