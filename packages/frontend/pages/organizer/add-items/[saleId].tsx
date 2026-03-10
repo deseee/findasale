@@ -589,16 +589,15 @@ const AddItemsDetailPage = () => {
       </main>
 
       {/* CSV Import Modal */}
-      {csvModalOpen && (
-        <CSVImportModal
-          saleId={saleId as string}
-          onClose={() => setCsvModalOpen(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-            setCsvModalOpen(false);
-          }}
-        />
-      )}
+      <CSVImportModal
+        isOpen={csvModalOpen}
+        saleId={saleId as string}
+        onClose={() => setCsvModalOpen(false)}
+        onImportComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+          setCsvModalOpen(false);
+        }}
+      />
     </>
   );
 };
