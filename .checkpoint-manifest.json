@@ -5,18 +5,27 @@
   "created": "2026-03-09",
   "currentSession": {
     "sessionId": 119,
-    "startedAt": null,
-    "estimatedTokensUsed": 0,
-    "turnCount": 0,
-    "fileReadsCount": 0,
-    "toolCallsCount": 0,
+    "startedAt": "2026-03-09T00:00:00Z",
+    "estimatedTokensUsed": 40,
+    "turnCount": 5,
+    "fileReadsCount": 11,
+    "toolCallsCount": 22,
     "subagentDispatches": 0,
     "githubApiCalls": 0,
-    "lastCheckpointAt": null,
+    "lastCheckpointAt": "2026-03-09T01:00:00Z",
     "compressionOccurred": false,
-    "notes": "Ready for Session 119. Read this file at init and write currentSession.startedAt."
+    "notes": "Session 119 complete. Records audit sessions 110-118. 4 drift items corrected. Manifest test PASS. Patrick confirmed: 3 migrations deployed, wrap docs pushed, v3 skill reinstalled, A3.6 resolved, VAPID done."
   },
-  "checkpoints": [],
+  "checkpoints": [
+    {
+      "turn": 5,
+      "timestamp": "2026-03-09T01:00:00Z",
+      "estimatedSessionTokens": 40,
+      "filesRead": 11,
+      "toolCalls": 22,
+      "note": "Records audit complete. Tier 2 corrections applied. Manifest test PASS."
+    }
+  ],
   "compressionEvents": [],
   "sessionHistory": [
     {
