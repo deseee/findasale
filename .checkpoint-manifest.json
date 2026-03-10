@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "schema": "checkpoint-manifest",
+  "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
+  "created": "2026-03-09",
+  "currentSession": {
+    "sessionId": null,
+    "startedAt": null,
+    "estimatedTokensUsed": 0,
+    "turnCount": 0,
+    "fileReadsCount": 0,
+    "toolCallsCount": 0,
+    "subagentDispatches": 0,
+    "githubApiCalls": 0,
+    "lastCheckpointAt": null,
+    "compressionOccurred": false,
+    "notes": ""
+  },
+  "checkpoints": [],
+  "compressionEvents": [],
+  "sessionHistory": [
+    {
+      "sessionId": 118,
+      "date": "2026-03-09",
+      "tokensBurned": "~90k (est)",
+      "checkpointsLogged": 0,
+      "compressions": 0,
+      "notes": "Context audit session. Manifest created. 5 fixes implemented."
+    }
+  ],
+  "predictionHeuristics": {
+    "warningThreshold_k": 170,
+    "hardStopThreshold_k": 190,
+    "riskSignals": {
+      "turnCount_danger": 50,
+      "fileReads_danger": 150,
+      "githubApiCalls_danger": 4,
+      "parallelAgentBatch_danger": 2
+    },
+    "estimationFormulas": {
+      "fileRead_per100lines": 15,
+      "grepResult_perMatch": 5,
+      "githubApiResponse_min": 2000,
+      "subagentOutput_baseline": 5000,
+      "systemOverhead_constant": 5000
+    }
+  }
+}
