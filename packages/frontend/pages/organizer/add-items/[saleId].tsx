@@ -167,10 +167,6 @@ const AddItemsDetailPage = () => {
     }));
   };
 
-  const handleAddItemFromBatch = (newItem: typeof emptyForm) => {
-    setFormData(newItem);
-  };
-
   const handleCategoryChange = (newCategory: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -377,7 +373,12 @@ const AddItemsDetailPage = () => {
           {activeTab === 'batch' && (
             <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
               <h2 className="text-xl font-bold text-warm-900 mb-6">Batch Upload Photos</h2>
-              <SmartInventoryUpload saleId={saleId as string} onAddItem={handleAddItemFromBatch} />
+              <SmartInventoryUpload
+                saleId={saleId as string}
+                onComplete={() => {
+                  queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+                }}
+              />
             </div>
           )}
 
