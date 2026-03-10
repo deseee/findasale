@@ -197,6 +197,10 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       progressMessage = "You've reached the highest tier!";
     }
 
+    // Feature #11: Include referral discount expiry so frontend can display active discount banner
+    const discountExpiry = (organizer as any).referralDiscountExpiry as Date | null;
+    const referralDiscountActive = discountExpiry != null && discountExpiry > new Date();
+
     res.json({
       id: organizer.id,
       businessName: organizer.businessName,
@@ -207,6 +211,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       followerCount,
       progressMessage,
       onboardingComplete: (organizer as any).onboardingComplete,
+      referralDiscountActive,
+      referralDiscountExpiry: discountExpiry ? discountExpiry.toISOString() : null,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);

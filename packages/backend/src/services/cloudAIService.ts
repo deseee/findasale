@@ -128,12 +128,12 @@ async function getHaikuAnalysis(
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
-Title guidelines: Be specific. Include material, era, or maker if visible. Examples: "Vintage Brass Floor Lamp", "Oak Dining Chair Set", "McCoy Pottery Planter".
-Description: 1–2 sentences. Note condition details and standout features. Mention any maker marks, damage, or signs of age.
+Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include decade if identifiable (1950s, 1960s, Victorian). Avoid vague words like "Beautiful" or "Nice".
+Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
 Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
 Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
-Tags: 3–6 short tags collectors search for. Examples: "Mid-Century Modern", "Vintage", "Cast Iron", "Hand-painted", "Art Deco", "Set of 4".
+Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 
 {
   "title": "short specific title",

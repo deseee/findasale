@@ -22,6 +22,8 @@ model User {
   referralCode      String?    @unique
   resetToken        String?    @unique
   resetTokenExpiry  DateTime?
+  // SECURITY FIX P1: Token version for invalidating old JWTs on password change
+  tokenVersion      Int        @default(0)    // Increment on password change to invalidate old tokens
   // Phase 31: OAuth / NextAuth social login
   oauthProvider     String?    // "google", "facebook", null for email/password auth
   oauthId           String?    // Provider's unique user ID
@@ -112,6 +114,8 @@ model Organizer {
   tierUpdatedAt   DateTime?
   // Onboarding wizard
   onboardingComplete Boolean @default(false)
+  // Feature #11: Referral discount — fee waived for 3 months when referred by/referring another organizer
+  referralDiscountExpiry DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -864,4 +868,12 @@ model FeeStructure {
   listingType  String   @default("*") // "*" = global default; "AUCTION", "FIXED", etc. for type-specific rates
   feeRate      Float    @default(0.10) // e.g. 0.10 = 10%
   updatedAt    DateTime @updatedAt
+}
+
+// P0 Fix 2: Idempotency table for Stripe webhook deduplication (replaces StripeEvent)
+model ProcessedWebhookEvent {
+  eventId     String   @id
+  processedAt DateTime @default(now())
+
+  @@index([processedAt])
 }

@@ -166,8 +166,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             isAuctionSale: true,
+            organizerId: true,
             organizer: {
-              select: { stripeConnectId: true }
+              select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true }
             }
           }
         }
@@ -180,6 +181,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 
     if (!item.sale.organizer.stripeConnectId) {
       return res.status(400).json({ message: 'Organizer has not set up payment processing' });
+    }
+
+    // P0 Fix 4: Prevent organizer from purchasing their own items
+    if (item.sale.organizer.userId === req.user.id) {
+      return res.status(400).json({ message: 'You cannot purchase items from your own sale' });
     }
 
     const isAuctionItem = !!item.auctionStartPrice;
@@ -215,7 +221,13 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 
     // QA: payment flow — B1: Fee now read from FeeStructure table at transaction time
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const feePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
+    const baseFeePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
+
+    // Feature #11: Waive platform fee if organizer has an active referral discount
+    const discountExpiry = item.sale.organizer.referralDiscountExpiry;
+    const hasReferralDiscount = discountExpiry != null && discountExpiry > new Date();
+    const feePercent = hasReferralDiscount ? 0 : baseFeePercent;
+
     const priceCents = Math.round((price + shippingCost) * 100);
     const platformFeeAmount = Math.round(priceCents * feePercent);
 
@@ -321,6 +333,20 @@ export const webhookHandler = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Webhook signature verification failed.', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // P0 Fix 2: Webhook Retry Idempotency — check if this event was already processed
+  try {
+    const existingEvent = await prisma.processedWebhookEvent.findUnique({
+      where: { eventId: event.id }
+    });
+    if (existingEvent) {
+      console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) — skipping reprocessing`);
+      return res.json({ received: true, duplicate: true });
+    }
+  } catch (err) {
+    console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, err);
+    // Continue anyway — better to process twice than to lose an event
   }
 
   switch (event.type) {
@@ -467,8 +493,44 @@ export const webhookHandler = async (req: Request, res: Response) => {
       });
       break;
     }
+    case 'charge.dispute.created': {
+      // P0 Fix 1: Handle chargeback/dispute events
+      const dispute = event.data.object;
+      console.log(`[stripe] Chargeback initiated: dispute_id=${dispute.id}, charge_id=${dispute.charge}`);
+
+      // Find the purchase by looking up the payment intent from the charge
+      try {
+        const charge = await stripe().charges.retrieve(dispute.charge);
+        const paymentIntentId = charge.payment_intent;
+        if (paymentIntentId) {
+          const purchase = await prisma.purchase.findUnique({
+            where: { stripePaymentIntentId: paymentIntentId }
+          });
+          if (purchase) {
+            await prisma.purchase.update({
+              where: { id: purchase.id },
+              data: { status: 'DISPUTED' }
+            });
+            console.log(`[stripe] Purchase marked DISPUTED: purchase_id=${purchase.id}, dispute_id=${dispute.id}`);
+          }
+        }
+      } catch (err) {
+        console.error(`[stripe] Failed to process dispute ${dispute.id}:`, err);
+      }
+      break;
+    }
     default:
       console.warn(`[stripe] Unhandled event type: ${event.type}`);
+  }
+
+  // P0 Fix 2: Record this event as processed (idempotency)
+  try {
+    await prisma.processedWebhookEvent.create({
+      data: { eventId: event.id }
+    });
+  } catch (err) {
+    console.warn(`[webhook] Failed to record processed event ${event.id}:`, err);
+    // Don't fail the webhook response if we can't record it
   }
 
   res.json({ received: true });

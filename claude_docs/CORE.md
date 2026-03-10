@@ -58,6 +58,11 @@ Cowork VM = bash on Linux. Never mix them.
 Include this in session-log.md at wrap. Preserve Operational Anchors
 (package paths, script names, shell syntax) through compression.
 
+**Token checkpoints:** At natural pauses (after file read batch, after subagent
+dispatch, before wrap), log:
+`[CHECKPOINT — Turn N] Files read: X (est. Yk) | Tools: Z (est. Wk) | Session: ~Vk / 200k (P%)`
+Warn at 170k used (85%) — pause and plan wrap. Hard stop at 190k (95%).
+
 ---
 
 ## 4. Push Rules

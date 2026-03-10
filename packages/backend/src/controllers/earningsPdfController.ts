@@ -122,7 +122,7 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
 
 <div class="footer">
   <p>This report is provided for informational purposes only. Consult a tax professional for advice on reporting requirements.</p>
-  <p>Platform fee rate: 5% standard / 7% auction. All amounts in USD.</p>
+  <p>Platform fee: 10% flat. All amounts in USD.</p>
 </div>
 </body>
 </html>`;

@@ -90,7 +90,7 @@ const ItemDetail: React.FC = () => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
-  const { triggerToast } = useToast();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   // State
@@ -151,7 +151,7 @@ const ItemDetail: React.FC = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      triggerToast('Bid placed successfully!', 'success');
+      showToast('Bid placed successfully!', 'success');
       refetchItem();
       refetchBids();
       setBidAmount(null);
@@ -186,11 +186,11 @@ const ItemDetail: React.FC = () => {
       return response.data;
     },
     onSuccess: () => {
-      triggerToast('Added to cart!', 'success');
+      showToast('Added to cart!', 'success');
       setShowCheckoutModal(true);
     },
     onError: () => {
-      triggerToast('Failed to add to cart', 'error');
+      showToast('Failed to add to cart', 'error');
     },
   });
 
@@ -251,7 +251,7 @@ const ItemDetail: React.FC = () => {
 
   const handleAddToCart = async () => {
     if (!user) {
-      triggerToast('Please log in to add items to cart', 'warning');
+      showToast('Please log in to add items to cart', 'warning');
       router.push('/auth/login');
       return;
     }
@@ -260,7 +260,7 @@ const ItemDetail: React.FC = () => {
 
   const handleLike = () => {
     if (!user) {
-      triggerToast('Please log in to like items', 'warning');
+      showToast('Please log in to like items', 'warning');
       router.push('/auth/login');
       return;
     }
