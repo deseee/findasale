@@ -187,6 +187,8 @@ model Item {
   liveDropAt       DateTime?
   // B2: AI tagging disclosure — true when AI (Vision + Haiku) generated this item's fields
   isAiTagged       Boolean   @default(false)
+  // CB5: AI-generated search tags from batchAnalyzeController
+  tags             String[]  @default([])
   // CD2 Phase 4: Reverse Auction — daily price decline until sold or floor hit
   reverseAuction   Boolean   @default(false) // Deprecated: use listingType instead
   reverseDailyDrop Int?      // cents per day
