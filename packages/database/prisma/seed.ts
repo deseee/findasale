@@ -333,7 +333,7 @@ async function main() {
         lng,
         status,
         photoUrls: [
-          salePhotoUrls[i],
+          salePhotoUrls[i % salePhotoUrls.length],
         ],
         tags,
       },
