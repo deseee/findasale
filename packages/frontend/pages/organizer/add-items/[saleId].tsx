@@ -16,7 +16,7 @@
  * - maxPhotos=5 per camera session (one-item-at-a-time flow)
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -29,7 +29,7 @@ import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 import RapidCapture from '../../../components/RapidCapture';
 
-type ActiveTab = 'manual' | 'batch' | 'camera';
+type ActiveTab = 'camera' | 'batch' | 'manual';
 
 const CATEGORIES = [
   'Furniture',
@@ -77,7 +77,7 @@ const AddItemsDetailPage = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('manual');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('camera');
   const [formData, setFormData] = useState(emptyForm);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -85,6 +85,9 @@ const AddItemsDetailPage = () => {
   const [bulkPrice, setBulkPrice] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraAnalyzing, setCameraAnalyzing] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -291,13 +294,13 @@ const AddItemsDetailPage = () => {
             </p>
           </div>
 
-          {/* Tab Navigation */}
+          {/* Tab Navigation — ordered by primary workflow */}
           <div className="flex gap-2 mb-6 flex-wrap">
-            {['manual', 'batch', 'camera'].map((tab) => (
+            {(['camera', 'batch', 'manual'] as ActiveTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
-                  setActiveTab(tab as ActiveTab);
+                  setActiveTab(tab);
                   setFormData(emptyForm);
                 }}
                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
@@ -306,7 +309,7 @@ const AddItemsDetailPage = () => {
                     : 'bg-white text-warm-700 border border-warm-300 hover:border-amber-400'
                 }`}
               >
-                {tab === 'manual' ? 'Manual Entry' : tab === 'batch' ? 'Batch Upload (Photos)' : 'Camera'}
+                {tab === 'camera' ? 'Camera (AI)' : tab === 'batch' ? 'Batch Upload' : 'Manual Entry'}
               </button>
             ))}
             <button
@@ -414,9 +417,67 @@ const AddItemsDetailPage = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-warm-700 mb-2">Photos</label>
-                  <div className="bg-warm-50 border-2 border-dashed border-warm-300 rounded-lg p-6 text-center">
-                    <p className="text-warm-600 text-sm mb-2">Photos are added via photo manager on edit page</p>
-                  </div>
+                  {formData.photoUrls.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {formData.photoUrls.map((url, i) => (
+                        <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300">
+                          <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePhoto(i)}
+                            className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                            aria-label={`Remove photo ${i + 1}`}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = e.target.files;
+                      if (!files || files.length === 0) return;
+                      setPhotoUploading(true);
+                      try {
+                        const uploadData = new FormData();
+                        Array.from(files).forEach((f) => uploadData.append('photos', f));
+                        const res = await api.post('/upload/sale-photos', uploadData, {
+                          headers: { 'Content-Type': 'multipart/form-data' },
+                        });
+                        const urls: string[] = res.data?.urls || res.data || [];
+                        handlePhotoUpload(urls);
+                        showToast(`${urls.length} photo${urls.length !== 1 ? 's' : ''} uploaded`, 'success');
+                      } catch {
+                        showToast('Photo upload failed', 'error');
+                      } finally {
+                        setPhotoUploading(false);
+                        if (photoInputRef.current) photoInputRef.current.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoUploading}
+                    className="w-full bg-warm-50 border-2 border-dashed border-warm-300 rounded-lg p-6 text-center hover:border-amber-400 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {photoUploading ? (
+                      <span className="text-warm-600 text-sm">Uploading...</span>
+                    ) : (
+                      <>
+                        <svg className="w-8 h-8 mx-auto text-warm-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 16v-8m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.32 3.75 3.75 0 013.572 5.095H19.5a4.5 4.5 0 01-4.5 4.5H9a4.5 4.5 0 01-2.25-.615z" />
+                        </svg>
+                        <span className="text-warm-600 text-sm">Click to upload photos</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 <button
@@ -665,6 +726,41 @@ const AddItemsDetailPage = () => {
                       >
                         Update Price
                       </button>
+                    </div>
+
+                    <div className="ml-auto">
+                      {bulkDeleteConfirm ? (
+                        <span className="flex items-center gap-2">
+                          <span className="text-xs text-red-700">Delete {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''}?</span>
+                          <button
+                            onClick={() => {
+                              bulkUpdateMutation.mutate({
+                                itemIds: Array.from(selectedItems),
+                                operation: 'delete',
+                              });
+                              setBulkDeleteConfirm(false);
+                            }}
+                            disabled={bulkUpdateMutation.isPending}
+                            className="text-sm font-bold text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            Yes, delete
+                          </button>
+                          <button
+                            onClick={() => setBulkDeleteConfirm(false)}
+                            className="text-sm font-medium text-warm-600 hover:text-warm-700"
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setBulkDeleteConfirm(true)}
+                          disabled={bulkUpdateMutation.isPending}
+                          className="text-sm font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+                        >
+                          Delete Selected
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
