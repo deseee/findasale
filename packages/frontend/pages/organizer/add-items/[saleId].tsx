@@ -162,7 +162,7 @@ const AddItemsDetailPage = () => {
   const { data: items, isLoading: itemsLoading, refetch: refetchItems } = useQuery({
     queryKey: ['sale-items', saleId],
     queryFn: async () => {
-      const response = await api.get(`/items/${saleId}`);
+      const response = await api.get(`/items?saleId=${saleId}`);
       return response.data;
     },
     enabled: !!saleId,
