@@ -140,6 +140,7 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
           reverseDailyDrop: d.reverseDailyDrop ? Math.round(parseFloat(d.reverseDailyDrop) * 100) : null,
           reverseFloorPrice: d.reverseFloorPrice ? Math.round(parseFloat(d.reverseFloorPrice) * 100) : null,
           reverseStartDate: d.reverseStartDate ? new Date(d.reverseStartDate) : null,
+          embedding: [], // embedding default dropped in migration — must supply explicitly; Ollama will backfill async
         });
       }
     });
@@ -164,9 +165,9 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     console.error('CSV import error:', error);
-    res.status(500).json({ 
-      message: 'Failed to import items from CSV', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Failed to import items from CSV',
+      error: error.message
     });
   }
 };
@@ -217,6 +218,30 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     const { saleId } = req.query;
     const items = await prisma.item.findMany({
       where: { saleId: saleId as string },
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        description: true,
+        price: true,
+        auctionStartPrice: true,
+        auctionReservePrice: true,
+        bidIncrement: true,
+        auctionEndTime: true,
+        currentBid: true,
+        status: true,
+        category: true,
+        condition: true,
+        photoUrls: true,
+        shippingAvailable: true,
+        shippingPrice: true,
+        listingType: true,
+        isAiTagged: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        // embedding intentionally excluded — large Float[] crashes serialization
+      },
       orderBy: { createdAt: 'desc' },
       take: 100
     });
@@ -337,6 +362,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
     const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+    // Note: quantity is accepted in req.body but not yet persisted — schema migration pending
 
     // Check if item exists and belongs to organizer's sale
     const item = await prisma.item.findUnique({
@@ -630,7 +656,7 @@ export const bulkUpdateItems = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'itemIds must be a non-empty array' });
     }
 
-    if (!['delete', 'status', 'category', 'price_adjust'].includes(operation)) {
+    if (!['delete', 'status', 'category', 'price_adjust', 'isActive', 'price'].includes(operation)) {
       return res.status(400).json({ message: 'Invalid operation' });
     }
 
@@ -654,6 +680,22 @@ export const bulkUpdateItems = async (req: AuthRequest, res: Response) => {
       if (operation === 'delete') {
         const result = await prisma.item.deleteMany({
           where: { id: { in: ownedItems.map(i => i.id) } }
+        });
+        updated = result.count;
+      } else if (operation === 'isActive') {
+        const result = await prisma.item.updateMany({
+          where: { id: { in: ownedItems.map(i => i.id) } },
+          data: { isActive: Boolean(value) }
+        });
+        updated = result.count;
+      } else if (operation === 'price') {
+        const newPrice = parseFloat(value);
+        if (isNaN(newPrice) || newPrice < 0) {
+          return res.status(400).json({ message: 'Invalid price value' });
+        }
+        const result = await prisma.item.updateMany({
+          where: { id: { in: ownedItems.map(i => i.id) } },
+          data: { price: newPrice }
         });
         updated = result.count;
       } else if (operation === 'status') {

@@ -144,13 +144,9 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">6. Platform Fees</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
-              FindA.Sale charges a platform fee on each completed transaction, deducted automatically from the Organizer
-              payout:
+              FindA.Sale charges a <strong>10% flat platform fee</strong> on each completed transaction, regardless of
+              sale type (fixed-price or auction). The fee is deducted automatically from the Organizer payout.
             </p>
-            <ul className="list-disc list-inside text-warm-700 space-y-2 mb-3">
-              <li><strong>Fixed-price purchases:</strong> 5% of the item sale price</li>
-              <li><strong>Auction items:</strong> 7% of the winning bid price</li>
-            </ul>
             <p className="text-warm-700 leading-relaxed">
               Fees are exclusive of any Stripe payment processing fees, which are charged separately per Stripe's
               standard rates. We reserve the right to modify our fee structure with 30 days' notice to Organizers.
@@ -216,13 +212,13 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 mb-4">11. Limitation of Liability</h2>
             <p className="text-warm-700 leading-relaxed mb-3">
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, FINDА.SALE LLC AND ITS MEMBERS, OFFICERS, AND AGENTS SHALL NOT
+              TO THE MAXIMUM EXTENT PERMITTED BY LAW, FIND\u0410.SALE LLC AND ITS MEMBERS, OFFICERS, AND AGENTS SHALL NOT
               BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR
               USE OF THE PLATFORM, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
             </p>
             <p className="text-warm-700 leading-relaxed">
               OUR TOTAL LIABILITY TO YOU FOR ANY CLAIM ARISING FROM OR RELATED TO THESE TERMS OR YOUR USE OF THE
-              PLATFORM SHALL NOT EXCEED THE GREATER OF (A) $100 OR (B) THE FEES PAID BY YOU TO FINDА.SALE IN THE
+              PLATFORM SHALL NOT EXCEED THE GREATER OF (A) $100 OR (B) THE FEES PAID BY YOU TO FIND\u0410.SALE IN THE
               THREE MONTHS PRECEDING THE CLAIM.
             </p>
           </section>

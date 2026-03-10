@@ -11,9 +11,10 @@ interface TierBenefits {
 
 /**
  * Tier thresholds and benefits:
- * - BRONZE: 1+ completed sales | 10% platform fee (flat)
- * - SILVER: 5+ completed sales OR 50+ items sold | 10% platform fee (flat)
- * - GOLD: 15+ completed sales OR 200+ items sold | 10% platform fee (flat)
+ * - BRONZE: 1+ completed sales | 10% flat platform fee
+ * - SILVER: 5+ completed sales OR 50+ items sold | 10% flat platform fee
+ * - GOLD: 15+ completed sales OR 200+ items sold | 10% flat platform fee
+ * Tier-based fee discounts deferred post-beta.
  */
 
 export async function calculateOrganizerTier(organizerId: string): Promise<OrganizerTier> {

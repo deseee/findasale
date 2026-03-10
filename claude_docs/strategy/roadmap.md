@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-09 (v22 — Session 119 records audit: Features #9/#10/#11 marked done, pre-beta queue updated, VAPID + wrap docs resolved)
+**Last Updated:** 2026-03-10 (v23 — Session 129: Phase 4 items added from Advisory Board + Pitchman; Manage Holds button removed pending holds MVP)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
 ---
@@ -77,6 +77,9 @@
 | 21 | User Impact Scoring in Sentry | 0.5 sprints | Correlate errors with affected user IDs + transaction value. Prioritize by user damage, not raw error count. (Pitchman sweep) |
 | 22 | Low-Bandwidth Mode (PWA) | 1 sprint | Detect slow connections, auto-reduce photo quality, disable video previews. Organizers on job sites often have 2G. (Pitchman sweep) |
 | 23 | Unsubscribe-to-Snooze (MailerLite) | 0.5 sprints | Pause emails 30 days instead of full unsubscribe. Preserves seasonal organizers. (Pitchman sweep) |
+| 24 | Holds-Only Item View (/organizer/items) | 1 sprint | Cross-sale list of items with holdCount > 0. Advisory Board: highest-trust-damage risk for beta if missing. Manage Holds button removed from dashboard until this ships. (Session 129) |
+| 25 | Organizer Item Library (Consignment Rack) | 2 sprints | Upload once, reuse across sales. Items become compounding assets. Full cross-sale search, price history, sold vs. unsold analytics. (Pitchman session 129) |
+| 26 | Cross-Sale Price Intelligence | 1 sprint | Item velocity by category, price elasticity, "what sold vs. what didn't" report per organizer. Makes organizers smarter with every sale. (Pitchman session 129) |
 
 ---
 

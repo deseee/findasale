@@ -96,7 +96,7 @@ const OrganizerSettingsPage = () => {
             <div className="card p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-xl font-semibold text-warm-900">Payment Settings</h2>
-                <Tooltip content="Connect Stripe to receive payouts. FindA.Sale deposits your earnings (minus 5% platform fee) on a weekly schedule." />
+                <Tooltip content="Connect Stripe to receive payouts. FindA.Sale charges a 10% platform fee per sale. Payouts are deposited on a weekly schedule." />
               </div>
               <p className="text-warm-600 mb-6">
                 Connect your Stripe account to receive payouts from your sales.

@@ -72,6 +72,7 @@ Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 impl
 - Backend tierService.ts perks text confirmed correct on GitHub ("10% flat") — Railway deploy pending (stale instance still shows 5%/7% in dashboard tier perks card)
 - ⚠️ Carry-forward: Camera tab "coming soon" regression on add-items/[saleId].tsx not yet investigated
 
+
 **Session 126 COMPLETE (2026-03-10):** Docs correction + session 125 fix verification + item list audit.
 - Session 125 fixes verified live in Chrome: BUG-1 (PUT fix) ✅, BUG-2 (organizer null crash) ✅, BUG-3 (dropdown case) ✅
 - Organizer item list audit: all bulk actions pass (hide, show, set price, checkboxes). Per-item edit + delete pass.
@@ -87,8 +88,6 @@ Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 impl
 - ⚠️ Two remaining issues NOT fixed: (1) backend `getItemById` omits `organizer` from Prisma select (should be fixed in backend); (2) edit page uses public endpoint that filters ENDED/DRAFT items (organizer can't edit items on closed sales).
 - Files: `packages/frontend/pages/organizer/edit-item/[id].tsx`, `packages/frontend/pages/items/[id].tsx`.
 - Commit: b2ac5c7. Audit report: `claude_docs/audits/session-125-edit-item-photo-audit.md`.
-
-**Session 124 COMPLETE (2026-03-10):** Chrome audit of organizer item listings + single-item edit flow. Identified PATCH/PUT mismatch and organizer null crash — detailed in audit report.
 
 **Session 120 COMPLETE (2026-03-10):** Beta dry run friction blitz. 13/15 items implemented (items 7 + 13 deferred). Vercel build cascade fixed (6 type errors in items/[id].tsx after agent full-file rewrite). QA P2 fixes: z-index, per-field validation. Docs: migration rollback plan, beta organizer email, spring content, dry run friction log.
 
