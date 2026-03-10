@@ -13,7 +13,7 @@ import {
   removeItemPhoto,
   reorderItemPhotos,
 } from '../controllers/itemController';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 
@@ -150,7 +150,7 @@ router.post('/bulk', authenticate, async (req, res) => {
   }
 });
 
-router.get('/:id', getItemById);
+router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);
 router.post('/', authenticate, upload.array('images', 5), createItem);
 router.put('/:id', authenticate, updateItem);
