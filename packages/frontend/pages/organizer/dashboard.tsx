@@ -455,7 +455,18 @@ const OrganizerDashboard = () => {
                     <div key={sale.id}>
                       <div className="card overflow-hidden hover:shadow-lg transition-shadow">
                         <div className="p-4">
-                          <h3 className="text-lg font-semibold text-warm-900 mb-2">{sale.title}</h3>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <h3 className="text-lg font-semibold text-warm-900">{sale.title}</h3>
+                            {sale.status === 'PUBLISHED' ? (
+                              <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">
+                                ● LIVE
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">
+                                ◌ DRAFT
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-warm-600 mb-4">{sale.city}, {sale.state}</p>
                           <div className="flex gap-2 flex-wrap items-center">
                             <Link

@@ -69,6 +69,7 @@ const CreateSalePage = () => {
 
     if (formData.startDate) {
       const startDate = new Date(formData.startDate);
+      startDate.setHours(0, 0, 0, 0);
       if (startDate < today) {
         errors.startDate = 'Start date must be today or in the future';
       }
@@ -76,7 +77,9 @@ const CreateSalePage = () => {
 
     if (formData.startDate && formData.endDate) {
       const startDate = new Date(formData.startDate);
+      startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(formData.endDate);
+      endDate.setHours(0, 0, 0, 0);
       if (endDate <= startDate) {
         errors.endDate = 'End date must be after start date';
       }
@@ -206,6 +209,7 @@ const CreateSalePage = () => {
                 {validationErrors.startDate && (
                   <p className="text-red-500 text-sm mt-1">{validationErrors.startDate}</p>
                 )}
+                <p className="text-xs text-warm-500 mt-1">Dates are based on your local timezone.</p>
               </div>
               <div>
                 <label htmlFor="endDate" className="block text-sm font-medium text-warm-700 mb-2">End Date</label>

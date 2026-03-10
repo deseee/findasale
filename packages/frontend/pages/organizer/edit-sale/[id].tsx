@@ -26,6 +26,7 @@ const EditSalePage = () => {
   const { showToast } = useToast();
   const [isCloning, setIsCloning] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -120,6 +121,35 @@ const EditSalePage = () => {
     }
   };
 
+  const handleToggleSaleStatus = async () => {
+    if (!id || !sale) return;
+    setIsTogglingStatus(true);
+    try {
+      const newStatus = sale.status === 'PUBLISHED' ? 'ENDED' : 'PUBLISHED';
+      const confirmMessage = sale.status === 'PUBLISHED'
+        ? 'Hide this sale from shoppers? They won\'t be able to find it anymore.'
+        : 'Make this sale visible to shoppers on the map?';
+
+      if (!window.confirm(confirmMessage)) {
+        setIsTogglingStatus(false);
+        return;
+      }
+
+      await api.patch(`/sales/${id}/status`, { status: newStatus });
+      showToast(
+        newStatus === 'PUBLISHED' ? 'Sale is now live!' : 'Sale is now hidden',
+        'success'
+      );
+      // Refetch the sale data
+      await new Promise(resolve => setTimeout(resolve, 500));
+      router.push(`/organizer/edit-sale/${id}`);
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
+    } finally {
+      setIsTogglingStatus(false);
+    }
+  };
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-white py-8">
@@ -148,7 +178,30 @@ const EditSalePage = () => {
             Back to dashboard
           </Link>
 
-          <h1 className="text-3xl font-bold text-warm-900 mb-8">Edit Sale</h1>
+          <div className="flex items-center justify-between gap-4 mb-8">
+            <h1 className="text-3xl font-bold text-warm-900">Edit Sale</h1>
+            {sale && (
+              <div className="flex items-center gap-3">
+                {sale.status === 'PUBLISHED' ? (
+                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-3 py-1 text-sm font-semibold">
+                    ● LIVE
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-full px-3 py-1 text-sm font-semibold">
+                    ◌ DRAFT
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleToggleSaleStatus}
+                  disabled={isTogglingStatus}
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50 font-medium"
+                >
+                  {isTogglingStatus ? 'Updating...' : (sale.status === 'PUBLISHED' ? 'Unpublish' : 'Publish')}
+                </button>
+              </div>
+            )}
+          </div>
 
           <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-6">
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
