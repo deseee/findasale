@@ -38,9 +38,15 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    // Fetch all sales for this organizer
+    // Optional: filter to a single sale if saleId query param provided
+    const saleIdFilter = req.query.saleId as string | undefined;
+
+    // Fetch sales for this organizer (optionally filtered)
     const sales = await prisma.sale.findMany({
-      where: { organizerId: organizer.id },
+      where: {
+        organizerId: organizer.id,
+        ...(saleIdFilter ? { id: saleIdFilter } : {}),
+      },
       include: {
         items: {
           select: {
@@ -52,6 +58,13 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
           },
         },
       },
+    });
+
+    // Also fetch the full sales list (id + title) for the frontend dropdown
+    const salesList = await prisma.sale.findMany({
+      where: { organizerId: organizer.id },
+      select: { id: true, title: true, status: true },
+      orderBy: { createdAt: 'desc' },
     });
 
     // Calculate total sales metrics
@@ -141,6 +154,7 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
         topItems,
         categoryBreakdown,
         statusBreakdown,
+        salesList, // for frontend dropdown — always the full list regardless of saleId filter
       })
     );
   } catch (error) {
