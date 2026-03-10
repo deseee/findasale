@@ -1,4 +1,5 @@
 // V2: Instant payouts — balance, triggered payouts, and payout schedule management
+// Feature #9: getEarningsBreakdown — item-level fee transparency
 import { Response } from 'express';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
@@ -182,5 +183,122 @@ export const createPayout = async (req: AuthRequest, res: Response) => {
     }
     console.error('createPayout error:', error);
     res.status(500).json({ message: 'Failed to create payout' });
+  }
+};
+
+// ── Earnings Breakdown (Feature #9: Payout Transparency Dashboard) ────────────
+
+const STRIPE_RATE = 0.029;
+const STRIPE_FIXED = 0.30;
+const PLATFORM_RATE = 0.10;
+
+export interface EarningsBreakdownItem {
+  purchaseId: string;
+  itemId: string | null;
+  itemTitle: string;
+  itemCategory: string | null;
+  saleId: string | null;
+  saleTitle: string;
+  saleDate: Date | null;
+  purchaseDate: Date;
+  salePrice: number;
+  platformFee: number;
+  stripeFee: number;
+  netPayout: number;
+}
+
+/**
+ * GET /api/stripe/earnings?saleId=<optional>
+ *
+ * Returns an item-level payout breakdown for the organizer's PAID purchases,
+ * showing gross sale price, platform fee, estimated Stripe fee, and net payout.
+ *
+ * Stripe fee is estimated at 2.9% + $0.30. Actual fees may vary slightly.
+ * Platform fee is 10% flat (locked session 106).
+ */
+export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const { saleId } = req.query;
+
+    const whereClause: {
+      sale: { organizerId: string };
+      status: string;
+      saleId?: string;
+    } = {
+      sale: { organizerId: organizer.id },
+      status: 'PAID',
+    };
+    if (saleId && typeof saleId === 'string') {
+      whereClause.saleId = saleId;
+    }
+
+    const purchases = await prisma.purchase.findMany({
+      where: whereClause,
+      include: {
+        item: { select: { id: true, title: true, category: true } },
+        sale: { select: { id: true, title: true, startDate: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const items: EarningsBreakdownItem[] = purchases.map((p) => {
+      const salePrice = p.amount;
+      const platformFee = parseFloat((p.platformFeeAmount ?? salePrice * PLATFORM_RATE).toFixed(2));
+      const stripeFee = parseFloat((salePrice * STRIPE_RATE + STRIPE_FIXED).toFixed(2));
+      const netPayout = parseFloat((salePrice - platformFee - stripeFee).toFixed(2));
+
+      return {
+        purchaseId: p.id,
+        itemId: p.item?.id ?? null,
+        itemTitle: p.item?.title ?? 'Unknown item',
+        itemCategory: (p.item as any)?.category ?? null,
+        saleId: p.sale?.id ?? null,
+        saleTitle: p.sale?.title ?? 'Unknown sale',
+        saleDate: p.sale?.startDate ?? null,
+        purchaseDate: p.createdAt,
+        salePrice: parseFloat(salePrice.toFixed(2)),
+        platformFee,
+        stripeFee,
+        netPayout,
+      };
+    });
+
+    const totals = items.reduce(
+      (acc, item) => {
+        acc.grossRevenue += item.salePrice;
+        acc.totalPlatformFees += item.platformFee;
+        acc.totalStripeFees += item.stripeFee;
+        acc.totalNetPayout += item.netPayout;
+        return acc;
+      },
+      { grossRevenue: 0, totalPlatformFees: 0, totalStripeFees: 0, totalNetPayout: 0 }
+    );
+
+    res.json({
+      items,
+      totals: {
+        grossRevenue: parseFloat(totals.grossRevenue.toFixed(2)),
+        totalPlatformFees: parseFloat(totals.totalPlatformFees.toFixed(2)),
+        totalStripeFees: parseFloat(totals.totalStripeFees.toFixed(2)),
+        totalNetPayout: parseFloat(totals.totalNetPayout.toFixed(2)),
+      },
+      count: items.length,
+      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% flat.',
+    });
+  } catch (error) {
+    console.error('getEarningsBreakdown error:', error);
+    res.status(500).json({ message: 'Failed to retrieve earnings breakdown' });
   }
 };

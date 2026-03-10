@@ -7,7 +7,7 @@ import {
   createRefund,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
-import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout } from '../controllers/payoutController';
+import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown } from '../controllers/payoutController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -28,6 +28,7 @@ router.get('/balance', authenticate, getBalance);
 router.get('/payout-schedule', authenticate, getPayoutSchedule);
 router.patch('/payout-schedule', authenticate, updatePayoutSchedule);
 router.post('/payout', authenticate, createPayout);
+router.get('/earnings', authenticate, getEarningsBreakdown);
 
 // Webhook
 router.post('/webhook', webhookHandler);
