@@ -177,9 +177,40 @@ export const getItemById = async (req: Request, res: Response) => {
     const { id } = req.params;
     const authReq = req as AuthRequest;
 
+    // Use select instead of include to avoid querying columns that may not
+    // exist in production yet (tags) or that crash serialization (embedding).
     const item = await prisma.item.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        sku: true,
+        description: true,
+        price: true,
+        auctionStartPrice: true,
+        auctionReservePrice: true,
+        bidIncrement: true,
+        auctionEndTime: true,
+        currentBid: true,
+        status: true,
+        category: true,
+        condition: true,
+        photoUrls: true,
+        shippingAvailable: true,
+        shippingPrice: true,
+        listingType: true,
+        isAiTagged: true,
+        isActive: true,
+        isLiveDrop: true,
+        liveDropAt: true,
+        reverseAuction: true,
+        reverseDailyDrop: true,
+        reverseFloorPrice: true,
+        reverseStartDate: true,
+        createdAt: true,
+        updatedAt: true,
+        // embedding & tags intentionally excluded — see getItemsBySaleId comment
         sale: {
           select: {
             title: true,
@@ -206,9 +237,7 @@ export const getItemById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Strip embedding (large Float[]) to prevent serialization crash — see getItemsBySaleId
-    const { embedding, ...safeItem } = item;
-    res.json(safeItem);
+    res.json(item);
   } catch (error) {
     console.error('Error fetching item:', error);
     res.status(500).json({ message: 'Server error while fetching item' });
