@@ -74,7 +74,7 @@ Previously gated behind `{item && <ItemPhotoManager ... />}` — this was the co
 Tested via Chrome MCP with a synthetic canvas-generated photo upload:
 
 | Operation | Endpoint | Result |
-|-----------|----------|--------|
+|-----------|----------|---------|
 | Upload photo | `POST /upload/item-photo` → `POST /items/:id/photos` | ✅ Photo uploaded to Cloudinary, URL stored in DB |
 | Reorder photos | `PATCH /items/:id/photos/reorder` | ✅ 200 OK, order persists on reload |
 | Delete photo | `DELETE /items/:id/photos/:photoIndex` | ✅ Removed from DB, verified via fetch |
