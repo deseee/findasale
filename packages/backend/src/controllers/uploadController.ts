@@ -90,6 +90,21 @@ export const uploadSalePhotos = async (req: Request, res: Response): Promise<voi
       }
     });
 
+    // P0-1: Validate that all returned URLs are non-empty strings
+    const invalidUrls = imageVariants
+      .map((variant, idx) => variant.original)
+      .filter((url, idx) => !url || typeof url !== 'string')
+      .length;
+
+    if (invalidUrls > 0) {
+      const errorCount = partialErrors.length + invalidUrls;
+      res.status(500).json({
+        error: `Upload failed for ${errorCount} file${errorCount !== 1 ? 's' : ''}`,
+        partialErrors: [...partialErrors, `${invalidUrls} file${invalidUrls !== 1 ? 's' : ''} uploaded but returned invalid URLs`],
+      });
+      return;
+    }
+
     res.json({ urls, imageVariants, ...(partialErrors.length ? { partialErrors } : {}) });
   } catch (error) {
     console.error('uploadSalePhotos error:', error);

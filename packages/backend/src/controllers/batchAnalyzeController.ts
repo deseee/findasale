@@ -24,6 +24,7 @@ interface BatchAnalysisResult {
   suggestedTags: string[];
   confidence: 'high' | 'medium' | 'low';
   error?: string;
+  errorCode?: 'AI_TIMEOUT' | 'AI_PARSE_ERROR' | 'AI_RATE_LIMIT' | 'AI_ERROR';
 }
 
 /**
@@ -102,8 +103,12 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           if (useCloudAI) {
             try {
               ai = await analyzeItemImage(imageBuffer, 'image/jpeg');
-            } catch {
-              // Cloud AI failed — fall through to Ollama
+            } catch (error: any) {
+              // P0-3: Capture error code from Cloud AI for later surfacing
+              const errorCode = (error as any)?.errorCode || 'AI_ERROR';
+              const errorMsg = error.message || 'Cloud AI failed';
+              console.error(`Cloud AI error for batch item: ${errorCode} - ${errorMsg}`);
+              // Fall through to Ollama
             }
           }
 
@@ -130,9 +135,11 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           }
 
           if (!ai) {
+            // P0-3: Return structured error for frontend visibility
             return {
               photoUrl,
               error: 'AI analysis unavailable for this image',
+              errorCode: 'AI_ERROR',
             } as Partial<BatchAnalysisResult>;
           }
 
