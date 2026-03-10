@@ -4,7 +4,7 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": null,
+    "sessionId": 119,
     "startedAt": null,
     "estimatedTokensUsed": 0,
     "turnCount": 0,
@@ -14,7 +14,7 @@
     "githubApiCalls": 0,
     "lastCheckpointAt": null,
     "compressionOccurred": false,
-    "notes": ""
+    "notes": "Ready for Session 119. Read this file at init and write currentSession.startedAt."
   },
   "checkpoints": [],
   "compressionEvents": [],
@@ -22,10 +22,12 @@
     {
       "sessionId": 118,
       "date": "2026-03-09",
-      "tokensBurned": "~90k (est)",
+      "tokensBurned": "~110k (est)",
       "checkpointsLogged": 0,
       "compressions": 0,
-      "notes": "Context audit session. Manifest created. 5 fixes implemented."
+      "subagents": 7,
+      "filesChanged": 5,
+      "notes": "Context loss audit. 6 parallel agents + advisory board. 5 fixes shipped. Manifest created this session — first full session to use it will be 119."
     }
   ],
   "predictionHeuristics": {
