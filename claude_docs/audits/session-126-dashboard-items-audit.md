@@ -38,7 +38,7 @@ The `ItemListWithBulkSelection` component (card grid) used by a different page v
 ## Bulk Actions — All Pass ✅
 
 | Action | Result |
-|--------|--------|
+|--------|---------|
 | Select checkbox (single item) | ✅ Bulk toolbar appeared |
 | Select All | ✅ All 12 checkboxes selected (verified via JS) |
 | Hide Selected | ✅ Item got "Hidden" badge immediately |
@@ -51,7 +51,7 @@ The `ItemListWithBulkSelection` component (card grid) used by a different page v
 ## Per-Item Actions
 
 | Action | Result |
-|--------|--------|
+|--------|---------|
 | Edit link | ✅ Navigates to /organizer/edit-item/[id] correctly |
 | Delete button | ✅ `window.confirm("Delete '[title]'?")` → DELETE /api/items/:id → item removed, count decremented (12 → 11) |
 
@@ -69,7 +69,7 @@ The item list shows all items in a single unsorted list with no filter by status
 
 ### FINDING-2 — P2 · Delete uses native `window.confirm()` — no undo, no success feedback
 
-Per-item Delete uses `window.confirm()` — native browser dialog, unblockable by accident, no undo path, and no success toast on completion (only failure is surfaced). Item is permanently destroyed on confirm.
+Per-item Delete uses `window.confirm()` — native browser dialog, unblockable by accident, no undo path, and no success toast on completion (only failure is surfaced via toast). Item is permanently destroyed on confirm.
 
 **Recommendation:** Replace with inline confirmation pattern (button flips to "Confirm? Yes / No" for 3s) or small modal. Add success toast. Consider soft-delete with brief undo window for beta. Low priority for initial beta but a known rough edge.
 
