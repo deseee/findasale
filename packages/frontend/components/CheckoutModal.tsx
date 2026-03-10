@@ -17,16 +17,20 @@ interface PaymentFormProps {
   originalAmount?: number; // pre-discount item price (for strikethrough display)
   platformFee: number;
   discountApplied?: number;
+  saleName?: string;
+  saleAddress?: string;
+  saleDates?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tosAgreed, setTosAgreed] = useState(false);
+  const [paymentSucceeded, setPaymentSucceeded] = useState(false);
 
   // itemPrice is already post-discount (server returns finalPriceCents/100)
   // total = discounted item price + platform fee
@@ -52,9 +56,69 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
       setErrorMessage(error.message ?? 'Payment failed. Please try again.');
       setIsSubmitting(false);
     } else {
-      onSuccess();
+      setPaymentSucceeded(true);
+      setTimeout(() => {
+        onSuccess();
+      }, 2000);
     }
   };
+
+  const handleRetry = () => {
+    setErrorMessage(null);
+    setIsSubmitting(false);
+  };
+
+  if (paymentSucceeded) {
+    return (
+      <div className="text-center">
+        <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+          <p className="text-3xl mb-2">✅</p>
+          <p className="text-lg font-bold text-green-900 mb-1">Order Confirmed!</p>
+          <p className="text-xs text-green-700 mb-3">Your payment has been processed successfully.</p>
+        </div>
+
+        <div className="mb-4 p-4 bg-warm-50 rounded-lg text-left space-y-3">
+          <div>
+            <p className="text-xs text-warm-500">Item</p>
+            <p className="font-semibold text-warm-900">{itemTitle}</p>
+          </div>
+
+          <div>
+            <p className="text-xs text-warm-500">Total Paid</p>
+            <p className="text-lg font-bold text-warm-900">${total.toFixed(2)}</p>
+          </div>
+
+          {saleName && (
+            <div>
+              <p className="text-xs text-warm-500">Sale</p>
+              <p className="font-semibold text-warm-900">{saleName}</p>
+            </div>
+          )}
+
+          {saleAddress && (
+            <div>
+              <p className="text-xs text-warm-500">Location & Dates</p>
+              <p className="text-sm text-warm-900">
+                📍 {saleAddress}
+                {saleDates && <span> | {saleDates}</span>}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-xs text-warm-600 mb-4">
+          Contact the organizer for pickup details.
+        </p>
+
+        <button
+          onClick={onClose}
+          className="w-full py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
+        >
+          Done
+        </button>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit}>
@@ -111,7 +175,15 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
 
       {errorMessage && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-          {errorMessage}
+          <p className="mb-2">{errorMessage}</p>
+          <p className="text-xs text-red-600 mb-3">You can also try a different card — just update your payment details above.</p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="text-xs underline text-red-600 hover:text-red-800 font-medium"
+          >
+            Try Again
+          </button>
         </div>
       )}
 
@@ -125,7 +197,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
           aria-required="true"
         />
         <span className="text-xs text-warm-600 leading-relaxed">
-          I agree to the{' '}
+          I understand all sales are final — no returns or refunds. I agree to the{' '}
           <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
             Terms of Service
           </a>{' '}
@@ -133,7 +205,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
           <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
             Privacy Policy
           </a>
-          . All sales are final.{' '}
+          .{' '}
           <a href="/contact" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
             Contact support
           </a>{' '}
@@ -180,6 +252,9 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
   const [discountApplied, setDiscountApplied] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [resolvedTitle, setResolvedTitle] = useState(itemTitle);
+  const [saleName, setSaleName] = useState<string>('');
+  const [saleAddress, setSaleAddress] = useState<string>('');
+  const [saleDates, setSaleDates] = useState<string>('');
 
   // Sprint 3: Coupon entry phase — shown before calling create-payment-intent
   const [started, setStarted] = useState(!!purchaseId); // auction resumption skips coupon step
@@ -219,6 +294,9 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
         setClientSecret(data.clientSecret);
         setItemPrice(data.totalAmount);
         setPlatformFee(data.platformFee);
+        if (data.saleName) setSaleName(data.saleName);
+        if (data.saleAddress) setSaleAddress(data.saleAddress);
+        if (data.saleDates) setSaleDates(data.saleDates);
       } catch (err: any) {
         setLoadError(
           err.response?.data?.message ?? 'Could not start checkout. Please try again.'
@@ -319,6 +397,9 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
                   originalAmount={originalAmount}
                   platformFee={platformFee}
                   discountApplied={discountApplied}
+                  saleName={saleName}
+                  saleAddress={saleAddress}
+                  saleDates={saleDates}
                   onClose={onClose}
                   onSuccess={handleSuccess}
                 />
