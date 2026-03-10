@@ -55,12 +55,12 @@ const PrintInventoryPage = () => {
     return null;
   }
 
-  // Fetch organizer's sales
-  const { data: salesData, isLoading: salesLoading } = useQuery({
+  // Fetch organizer's sales — same endpoint as dashboard
+  const { data: salesData, isLoading: salesLoading } = useQuery<Sale[]>({
     queryKey: ['organizer-sales', user?.id],
     queryFn: async () => {
-      const response = await api.get('/organizer/sales');
-      return response.data;
+      const response = await api.get('/sales/mine');
+      return response.data.sales as Sale[];
     },
     enabled: !!user?.id,
   });
@@ -69,14 +69,14 @@ const PrintInventoryPage = () => {
   const { data: inventoryData, isLoading: itemsLoading, error: itemsError } = useQuery<
     Array<{ saleId: string; saleTitle: string; items: Item[] }>
   >({
-    queryKey: ['organizer-inventory', salesData?.sales],
+    queryKey: ['organizer-inventory', salesData],
     queryFn: async () => {
-      if (!salesData?.sales || salesData.sales.length === 0) {
+      if (!salesData || salesData.length === 0) {
         return [];
       }
 
       // Fetch items for each sale in parallel
-      const itemsPromises = salesData.sales.map((sale: Sale) =>
+      const itemsPromises = salesData.map((sale: Sale) =>
         api.get('/items', { params: { saleId: sale.id } })
           .then((res) => ({ saleId: sale.id, saleTitle: sale.title, items: res.data as Item[] }))
           .catch(() => ({ saleId: sale.id, saleTitle: sale.title, items: [] as Item[] }))
@@ -84,7 +84,7 @@ const PrintInventoryPage = () => {
 
       return Promise.all(itemsPromises);
     },
-    enabled: !!salesData?.sales && salesData.sales.length > 0,
+    enabled: !!salesData && salesData.length > 0,
   });
 
   // Group inventory data whenever it changes (replaces removed onSuccess)
