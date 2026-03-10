@@ -152,7 +152,10 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             suggestedCategory: (ai.category as string) || 'Other',
             suggestedCondition: (ai.condition as string) || 'GOOD',
             suggestedPrice: (ai.suggestedPrice as number) || 10,
-            suggestedTags: Array.isArray(ai.suggestedTags)
+            // CB5-fix: cloud AI returns 'tags', Ollama returns 'suggestedTags' — handle both
+            suggestedTags: Array.isArray(ai.tags)
+              ? (ai.tags as string[])
+              : Array.isArray(ai.suggestedTags)
               ? (ai.suggestedTags as string[])
               : [],
             confidence: 'medium', // Default to medium; could be refined with model confidence scores
