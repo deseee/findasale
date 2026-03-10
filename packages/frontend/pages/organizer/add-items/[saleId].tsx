@@ -8,7 +8,7 @@
  * - Item list with edit/delete/bulk actions
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -20,7 +20,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 
-type ActiveTab = 'manual' | 'batch';
+type ActiveTab = 'manual' | 'batch' | 'camera';
 
 const CATEGORIES = [
   'Furniture',
@@ -67,6 +67,92 @@ const AddItemsDetailPage = () => {
   });
 
   const [formError, setFormError] = useState('');
+
+  // Webcam capture state
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<Blob | null>(null);
+  const [capturedImageURL, setCapturedImageURL] = useState<string | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setCameraActive(true);
+      }
+    } catch (err) {
+      showToast('Failed to access camera. Check permissions.', 'error');
+      console.error('Camera error:', err);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext('2d');
+      if (context) {
+        canvasRef.current.width = videoRef.current.videoWidth;
+        canvasRef.current.height = videoRef.current.videoHeight;
+        context.drawImage(videoRef.current, 0, 0);
+        canvasRef.current.toBlob((blob) => {
+          if (blob) {
+            setCapturedImage(blob);
+            setCapturedImageURL(URL.createObjectURL(blob));
+            stopCamera();
+            showToast('Photo captured! Upload it with an item.', 'success');
+          }
+        }, 'image/jpeg', 0.9);
+      }
+    }
+  };
+
+  const clearCapture = () => {
+    setCapturedImage(null);
+    if (capturedImageURL) {
+      URL.revokeObjectURL(capturedImageURL);
+    }
+    setCapturedImageURL(null);
+  };
+
+  const uploadCapturedPhoto = async () => {
+    if (!capturedImage) {
+      showToast('No photo to upload', 'error');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('photos', capturedImage, 'camera-capture.jpg');
+      const response = await api.post('/upload/rapid-batch', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      showToast('Photo uploaded and analyzed!', 'success');
+      clearCapture();
+      queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
+    } catch (error) {
+      showToast('Failed to upload photo', 'error');
+      console.error('Upload error:', error);
+    }
+  };
 
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -167,19 +253,15 @@ const AddItemsDetailPage = () => {
   ) => {
     const { name, value, type } = e.target as any;
     if (type === 'checkbox') {
-      setFormData((prev) => (
-        {
-          ...prev,
-          [name]: (e.target as HTMLInputElement).checked,
-        }
-      ));
+      setFormData((prev) => ({
+        ...prev,
+        [name]: (e.target as HTMLInputElement).checked,
+      }));
     } else {
-      setFormData((prev) => (
-        {
-          ...prev,
-          [name]: value,
-        }
-      ));
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
     }
     setFormError('');
   };
@@ -325,6 +407,16 @@ const AddItemsDetailPage = () => {
                 }`}
               >
                 ✏️ Manual Entry
+              </button>
+              <button
+                onClick={() => setActiveTab('camera')}
+                className={`pb-4 px-2 font-medium transition-colors ${
+                  activeTab === 'camera'
+                    ? 'text-amber-600 border-b-2 border-amber-600'
+                    : 'text-warm-600 hover:text-warm-900'
+                }`}
+              >
+                📷 Use Camera
               </button>
               <button
                 onClick={() => setActiveTab('batch')}
@@ -637,6 +729,83 @@ const AddItemsDetailPage = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Camera Tab */}
+          {activeTab === 'camera' && (
+            <div className="mb-8">
+              <div className="bg-warm-50 border border-warm-200 rounded-lg p-6">
+                <h2 className="text-xl font-semibold text-warm-900 mb-4">Capture Item Photo</h2>
+
+                {!cameraActive && !capturedImageURL && (
+                  <button
+                    onClick={startCamera}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg mb-4"
+                  >
+                    📷 Start Camera
+                  </button>
+                )}
+
+                {cameraActive && (
+                  <div className="space-y-4">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full rounded-lg bg-black"
+                      style={{ maxHeight: '400px', objectFit: 'cover' }}
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={capturePhoto}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"
+                      >
+                        ✅ Capture
+                      </button>
+                      <button
+                        onClick={stopCamera}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
+                      >
+                        ✕ Close Camera
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {capturedImageURL && (
+                  <div className="space-y-4">
+                    <div className="relative rounded-lg overflow-hidden bg-warm-100">
+                      <img
+                        src={capturedImageURL}
+                        alt="Captured"
+                        className="w-full"
+                        style={{ maxHeight: '400px', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <p className="text-sm text-warm-600">
+                      Photo captured! Upload it below to analyze with AI.
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={uploadCapturedPhoto}
+                        className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg"
+                      >
+                        🚀 Upload & Analyze
+                      </button>
+                      <button
+                        onClick={clearCapture}
+                        className="flex-1 bg-warm-300 hover:bg-warm-400 text-warm-900 font-bold py-2 px-4 rounded-lg"
+                      >
+                        🔄 Retake
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hidden canvas for photo capture */}
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
               </div>
             </div>
           )}

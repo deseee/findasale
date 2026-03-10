@@ -141,6 +141,7 @@ async function ftsSearch(params: {
     JOIN "Organizer" o ON s."organizerId" = o.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
+      AND i."isActive" = true
       AND i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
   `);
   sqlParams.push(q, q);
@@ -205,6 +206,7 @@ async function ilikeSearch(params: {
     JOIN "Organizer" o ON s."organizerId" = o.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
+      AND i."isActive" = true
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -253,6 +255,7 @@ async function filteredSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<Sea
     JOIN "Organizer" o ON s."organizerId" = o.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
+      AND i."isActive" = true
   `);
 
   idx = appendFilters(sqlParts, sqlParams, idx, { category, condition, saleId, priceMin, priceMax });
@@ -284,6 +287,7 @@ async function countFts(
     JOIN "Sale" s ON i."saleId" = s.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
+      AND i."isActive" = true
       AND i."searchVector" @@ plainto_tsquery('english', $${idx})
   `);
   sqlParams.push(q);
@@ -308,6 +312,7 @@ async function countIlike(
     JOIN "Sale" s ON i."saleId" = s.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
+      AND i."isActive" = true
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -335,6 +340,7 @@ async function countFiltered(
     JOIN "Sale" s ON i."saleId" = s.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
+      AND i."isActive" = true
   `);
   appendFilters(sqlParts, sqlParams, idx, filters);
 
@@ -465,7 +471,7 @@ export async function getItemFacets(
 export async function getItemCategories(): Promise<Record<string, number>> {
   const rows = await prisma.item.groupBy({
     by: ['category'],
-    where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, category: { not: null } },
+    where: { status: 'AVAILABLE', isActive: true, sale: { status: 'PUBLISHED' }, category: { not: null } },
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
   });
