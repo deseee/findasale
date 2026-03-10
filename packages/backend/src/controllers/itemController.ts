@@ -206,7 +206,9 @@ export const getItemById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    res.json(item);
+    // Strip embedding (large Float[]) to prevent serialization crash — see getItemsBySaleId
+    const { embedding, ...safeItem } = item;
+    res.json(safeItem);
   } catch (error) {
     console.error('Error fetching item:', error);
     res.status(500).json({ message: 'Server error while fetching item' });
