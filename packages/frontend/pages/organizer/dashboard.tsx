@@ -44,11 +44,18 @@ const TIER_BENEFITS: Record<string, string[]> = {
   ],
 };
 
+// Phase 31: Tier descriptions shown in the Tier Rewards card
+const TIER_DESCRIPTIONS: Record<string, string> = {
+  BRONZE: 'Starting tier for all organizers. Run sales and build your reputation.',
+  SILVER: 'Awarded after consistently completing sales. Unlocks priority search placement and a verified badge.',
+  GOLD: 'Top tier for high-volume organizers. Featured placement and dedicated support.',
+};
+
 const OrganizerDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sales'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
   const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
@@ -257,12 +264,12 @@ const OrganizerDashboard = () => {
             </Link>
           </div>
 
-          {/* Tab Navigation */}
+          {/* Tab Navigation — Overview and Sales only. Insights is a dedicated page. */}
           <div className="flex gap-4 mb-8 border-b border-warm-200">
-            {['overview', 'sales', 'analytics'].map((tab) => (
+            {(['overview', 'sales'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab as any)}
+                onClick={() => setActiveTab(tab)}
                 className={`pb-2 font-medium capitalize ${
                   activeTab === tab
                     ? 'border-b-2 border-amber-600 text-amber-600'
@@ -330,38 +337,37 @@ const OrganizerDashboard = () => {
               {/* Phase 31: Organizer Tier Rewards card */}
               {tierData && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                  {/* Tier Rewards section */}
+                  {/* Current Tier */}
                   <div className="bg-white rounded-lg shadow-md p-6">
-                    <h3 className="text-lg font-semibold text-warm-900 mb-4">Tier Rewards</h3>
-                    <div className="flex items-center gap-3 mb-4">
+                    <h3 className="text-lg font-semibold text-warm-900 mb-4">Your Tier</h3>
+                    <div className="flex items-center gap-3 mb-3">
                       <OrganizerTierBadge tier={tierData.tier} />
-                      <span className="text-sm text-warm-600 font-medium">{tierData.benefits.label}</span>
+                      <span className="text-sm font-semibold text-warm-800">{tierData.benefits.label}</span>
                     </div>
-                    <div className="bg-amber-50 rounded p-3 mb-4">
-                      <p className="text-sm text-warm-900 font-semibold mb-2">Platform Fees</p>
-                      <p className="text-sm text-warm-700">
-                        10% flat across all item types
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2">Perks</p>
-                      <ul className="space-y-1">
-                        {tierData.benefits.perks.map((perk) => (
-                          <li key={perk} className="flex items-center gap-2 text-sm text-warm-700">
-                            <span className="text-amber-600 flex-shrink-0">✓</span>
-                            {perk}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <p className="text-sm text-warm-600 mb-4">
+                      {TIER_DESCRIPTIONS[tierData.tier] || ''}
+                    </p>
+                    {tierData.benefits.perks.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2">Perks</p>
+                        <ul className="space-y-1">
+                          {tierData.benefits.perks.map((perk) => (
+                            <li key={perk} className="flex items-center gap-2 text-sm text-warm-700">
+                              <span className="text-amber-600 flex-shrink-0">✓</span>
+                              {perk}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
 
                   {/* Progress to next tier */}
                   {tierData.progress.nextTier && (
                     <div className="bg-white rounded-lg shadow-md p-6">
-                      <h3 className="text-lg font-semibold text-warm-900 mb-4">Progress to Next Tier</h3>
+                      <h3 className="text-lg font-semibold text-warm-900 mb-2">Progress to Next Tier</h3>
                       <p className="text-sm text-warm-600 mb-4">
-                        Upgrade to <strong>{tierData.progress.nextTier}</strong> and get better rates!
+                        Keep completing sales to reach <strong>{tierData.progress.nextTier}</strong>.
                       </p>
                       <div className="space-y-4">
                         <div>
@@ -556,13 +562,6 @@ const OrganizerDashboard = () => {
                 />
               )}
             </>
-          )}
-
-          {activeTab === 'analytics' && (
-            <div className="text-center py-16">
-              <p className="text-warm-600 text-lg mb-4">Advanced analytics dashboard coming soon</p>
-              <p className="text-warm-500 text-sm">Check back soon for detailed insights and performance metrics</p>
-            </div>
           )}
         </div>
       </div>
