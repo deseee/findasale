@@ -149,6 +149,31 @@ Only entries with ≥2 occurrences OR structurally certain to recur.
 **Neon URLs location:** `packages/backend/.env` lines 24–25 — ⚠️ COMMENTED OUT with `#`. The active `DATABASE_URL=` (line 28) is the LOCAL url. `Select-String "^DATABASE_URL="` always returns local. Claude must read the file from the VM directly, strip the leading `# `, and inline the real Neon values — never use PowerShell extraction for this.
 **Test:** Patrick can copy-paste command block without editing anything.
 
+### 29. HTTP Method Mismatch — Frontend/Backend Route Divergence
+**Trigger:** Frontend calls `api.patch('/resource/:id')` but backend only registers `router.put('/:id')` (or vice versa). Page-level mutation fails with 404 "Cannot PATCH /api/...".
+**Environment:** Next.js frontend with axios wrapper + Express backend routes
+**Pattern:** API method (GET, POST, PUT, PATCH, DELETE) is not standardized in the codebase. Frontend assumes PUT for updates, backend implements PATCH (or vice versa). Axios library allows any method so no compile-time error. Real errors only appear in prod/audit when the mutation is tested.
+**Fix:** Standardize: use PUT for single-record updates (PUT is idempotent, matches REST convention of replacing a resource). If PATCH is needed (partial updates with specific semantics), both frontend call AND backend route must agree. Search codebase: `grep -r "api\.patch\|api\.put" packages/frontend/pages/ --include="*.tsx"` and `grep -r "router\.put\|router\.patch" packages/backend/src/routes/ --include="*.ts"` — ensure method matches on every endpoint.
+**Known instances:** Session 125 — `edit-item/[id].tsx` line 66 called `api.patch()` but `items.ts` line 156 registered `router.put()`. Fixed: changed frontend to `api.put()`.
+**Test:** `curl -X PUT http://localhost:3001/api/items/cmmcz9r3q00bawh91ngkyr473 -d '{"title":"test"}'` → should succeed. `curl -X PATCH ...` → should fail with 404 if only PUT is registered.
+
+### 30. Nullable Related Entity in Public API — Optional Chaining on Render
+**Trigger:** Frontend render accesses nested property (e.g. `item.sale.organizer.name`) but the public API endpoint returns `organizer: null`. Result: `TypeError: Cannot read properties of undefined (reading 'name')`, error boundary shown, page broken.
+**Environment:** Public API response + React component render
+**Pattern:** A related entity is included in the API schema but marked `null` when exposed to the public (for privacy reasons, performance, or it was never loaded). Frontend assumes the entity is always present and accesses properties without guards. Real error only in production audit when a shopper navigates to a public item.
+**Fix:** Use optional chaining (`?.`) on all nullable relations: `item.sale.organizer?.name ?? 'Organizer'`. Update TypeScript interfaces to mark the entity as optional/nullable: `organizer?: { name: string } | null`. Always consider why an API field is nullable — if privacy-related, the null guard is permanent. If performance-related, consider whether the frontend really needs that field.
+**Known instances:** Session 125 — `items/[id].tsx` line 366 accessed `item.sale.organizer.name` but public `GET /api/items/:id` returns `organizer: null`. Fixed: changed to `item.sale.organizer?.name ?? 'Organizer'` and updated interface.
+**Test:** Fetch a public item from production API: `curl -s http://localhost:3001/api/items/<id> | jq '.sale.organizer'` — confirms null. Then load `/items/<id>` in browser — should render without error boundary, organizer text shows fallback.
+
+### 31. Form Select Case Mismatch — API Returns Lowercase, Option Values Title Case
+**Trigger:** Form loads with API data. A select dropdown for `category` or `condition` shows blank even though `formData` contains a value. User sees blank select + filled text input below it.
+**Environment:** React controlled select + Next.js form with API prefill
+**Pattern:** API returns field in one case (lowercase `"tools"`) but the `<option value="">` elements in the form use a different case (`"Tools"`). React's `<select value={formData.category}>` doesn't find a matching option, so it renders blank. The underlying `formData` state is correct, so if the user submits without editing the select, the lowercase value is sent correctly. But UX is broken (looks like no value is selected).
+**Fix:** Normalize the API value to match option values in the `useEffect` that populates `formData`. Example: category is Title Case (capitalize first letter, lowercase rest); condition is UPPERCASE. `const normalized = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()`.
+**Known instances:** Session 125 — `edit-item/[id].tsx` API returned `category: "tools"` and `condition: "good"` but option values were `"Tools"` and `"GOOD"`. Fixed: normalized in useEffect on form load.
+**Test:** Edit an existing item → open browser DevTools console → check `formData` state — value should be there and selected in the dropdown, not blank.
+**Edge cases:** Multi-word categories (e.g. "kitchenware") — simple normalize works. Enums with underscores (e.g. "LIKE_NEW") — need explicit mapping if API stores lowercase "like_new".
+
 ### 29. Local/GitHub Drift — git pull --rebase Blocked by Unstaged Changes
 **Trigger:** `git pull --rebase` fails with "unstaged changes" — even after `git restore <file>` or `git stash`. Root cause: MCP pushes files directly to GitHub without touching Patrick's local repo, causing HEAD to fall behind. CRLF conversions and case-rename artifacts in git's index create unstaged changes that survive stash.
 **Nuclear fix (use when stash/restore loops fail):**

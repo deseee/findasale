@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-10T05:18:08.524Z*
+*Generated at 2026-03-10T12:54:08.645Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -49,7 +49,12 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── STACK.md
 │   ├── STATE.md
 │   ├── WRAP_PROTOCOL_QUICK_REFERENCE.md
-│   ├── beta-launch/ (4 files)
+│   ├── archive/ (0 files)
+│   ├── audits/
+│   │   ├── chrome-audit-session-124.md
+│   │   ├── next-audit-brief-add-edit-item.md
+│   │   └── session-125-edit-item-photo-audit.md
+│   ├── beta-launch/ (5 files)
 │   ├── brand/ (8 files)
 │   ├── competitor-intel/ (1 files)
 │   ├── feature-notes/ (7 files)
@@ -62,13 +67,16 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   └── spring-content-2026-03-09.md
 │   │   └── spring-2026-content.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (13 files)
+│   ├── operations/ (14 files)
 │   ├── qa/
 │   │   └── payment-edge-cases-2026-03-09.md
-│   ├── research/ (1 files)
+│   ├── research/ (2 files)
 │   ├── security/
 │   │   └── oauth-redteam-2026-03-09.md
 │   ├── self-healing/ (1 files)
+│   ├── session-log.md
+│   ├── session-wraps/
+│   │   └── session-124-wrap.md
 │   ├── skills-package/ (27 files)
 │   ├── strategy/ (4 files)
 │   └── workflow-retrospectives/ (0 files)
