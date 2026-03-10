@@ -7,13 +7,13 @@
  * - Batch (AI — multiple): SmartInventoryUpload for bulk photo processing
  * - CSV: modal trigger
  *
- * Session 128 fixes:
- * - Full file rewrite to resolve session 127 merge conflict residue
- * - Camera: fullscreen overlay on mobile, flash/torch toggle
- * - Batch vs Camera tab labels distinguish use cases
- * - Item list: title is a Link to edit-item page (click-to-edit)
- * - Native confirm replaced with toast-based delete confirmation
- * - Duplicate JSX blocks and orphaned JSX-in-JS removed
+ * Session 132 fixes:
+ * - Removed Qty column from item list (quantity not in Prisma schema)
+ * - Removed Quantity input from manual entry form
+ * - Fixed bulk update URL: /items/bulk (was /items/bulk-update — silent 404)
+ * - Restored Camera tab: wired RapidCapture with AI analysis flow
+ * - Camera: capture → upload → AI analyze → pre-fill manual form → review
+ * - maxPhotos=5 per camera session (one-item-at-a-time flow)
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -141,7 +141,7 @@ const AddItemsDetailPage = () => {
 
   const bulkUpdateMutation = useMutation({
     mutationFn: async (payload: { itemIds: string[]; operation: string; value?: any }) => {
-      return await api.post(`/items/bulk-update`, payload);
+      return await api.post(`/items/bulk`, payload);
     },
     onSuccess: () => {
       showToast('Items updated', 'success');
@@ -280,7 +280,7 @@ const AddItemsDetailPage = () => {
               href={`/organizer/dashboard`}
               className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
             >
-              ← Back to dashboard
+              &larr; Back to dashboard
             </Link>
           </div>
 
@@ -385,17 +385,6 @@ const AddItemsDetailPage = () => {
                       onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                       className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                       placeholder="0.00"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-2">Quantity</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
 
@@ -534,7 +523,6 @@ const AddItemsDetailPage = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Title</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Category</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Price</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Qty</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Actions</th>
                     </tr>
@@ -563,11 +551,10 @@ const AddItemsDetailPage = () => {
                             {item.title}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-sm text-warm-600">{item.category || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-600">{item.category || '\u2014'}</td>
                         <td className="px-4 py-3 text-sm text-warm-900 font-semibold">
-                          ${item.price ?? item.auctionStartPrice ?? '—'}
+                          ${item.price ?? item.auctionStartPrice ?? '\u2014'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-warm-600">{item.quantity}</td>
                         <td className="px-4 py-3 text-sm">
                           <button
                             onClick={() =>
