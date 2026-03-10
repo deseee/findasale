@@ -40,6 +40,7 @@ const CreateSalePage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -62,7 +63,7 @@ const CreateSalePage = () => {
     }
   };
 
-  const validateDates = (): boolean => {
+  const validateDateFields = (): boolean => {
     const errors: { [key: string]: string } = {};
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -85,8 +86,18 @@ const CreateSalePage = () => {
       }
     }
 
-    setValidationErrors(errors);
+    setValidationErrors(prev => ({ ...prev, ...errors }));
     return Object.keys(errors).length === 0;
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name } = e.target;
+    setTouchedFields(prev => new Set([...prev, name]));
+
+    // For date fields, validate on blur
+    if (name === 'startDate' || name === 'endDate') {
+      validateDateFields();
+    }
   };
 
   const handleGenerateDescription = async () => {
@@ -112,7 +123,7 @@ const CreateSalePage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateDates()) {
+    if (!validateDateFields()) {
       return;
     }
 
@@ -158,6 +169,7 @@ const CreateSalePage = () => {
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 required
                 className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="e.g., Downtown Estate Sale"
@@ -184,6 +196,7 @@ const CreateSalePage = () => {
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 rows={4}
                 className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="Describe the sale, highlight special items..."
@@ -203,11 +216,12 @@ const CreateSalePage = () => {
                   name="startDate"
                   value={formData.startDate}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   required
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
-                {validationErrors.startDate && (
-                  <p className="text-red-500 text-sm mt-1">{validationErrors.startDate}</p>
+                {validationErrors.startDate && touchedFields.has('startDate') && (
+                  <p className="text-red-600 text-xs mt-1">{validationErrors.startDate}</p>
                 )}
                 <p className="text-xs text-warm-500 mt-1">Dates are based on your local timezone.</p>
               </div>
@@ -219,11 +233,12 @@ const CreateSalePage = () => {
                   name="endDate"
                   value={formData.endDate}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   required
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
-                {validationErrors.endDate && (
-                  <p className="text-red-500 text-sm mt-1">{validationErrors.endDate}</p>
+                {validationErrors.endDate && touchedFields.has('endDate') && (
+                  <p className="text-red-600 text-xs mt-1">{validationErrors.endDate}</p>
                 )}
               </div>
             </div>
@@ -240,6 +255,7 @@ const CreateSalePage = () => {
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 required
                 className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="123 Main St"
@@ -255,6 +271,7 @@ const CreateSalePage = () => {
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   required
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
@@ -267,6 +284,7 @@ const CreateSalePage = () => {
                   name="state"
                   value={formData.state}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   required
                   maxLength={2}
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
@@ -280,6 +298,7 @@ const CreateSalePage = () => {
                   name="zip"
                   value={formData.zip}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   required
                   className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
@@ -296,6 +315,7 @@ const CreateSalePage = () => {
                 name="neighborhood"
                 value={formData.neighborhood}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white"
               >
                 <option value="">— Select neighborhood —</option>
@@ -326,6 +346,7 @@ const CreateSalePage = () => {
                 name="saleType"
                 value={formData.saleType}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               >
                 <option value="ESTATE">Estate Sale</option>

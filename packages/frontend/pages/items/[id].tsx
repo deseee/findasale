@@ -334,7 +334,7 @@ const ItemDetail: React.FC = () => {
                     <span className="text-white text-2xl font-bold">SOLD</span>
                   </div>
                 )}
-                {item.isLiveDrop && <CountdownTimer targetDate={item.liveDropAt} />}
+                {item.isLiveDrop && item.liveDropAt && <CountdownTimer targetDate={item.liveDropAt} />}
               </div>
 
               {/* Photo Thumbnails */}
@@ -358,7 +358,7 @@ const ItemDetail: React.FC = () => {
               {/* Header */}
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  {item.reverseAuction && <ReverseAuctionBadge />}
+                  {item.reverseAuction && <ReverseAuctionBadge item={item} />}
                   <h1 className="text-3xl font-bold text-gray-900">{item.title}</h1>
                 </div>
                 <div className="text-sm text-gray-500 mb-2">
@@ -446,7 +446,12 @@ const ItemDetail: React.FC = () => {
                 >
                   {isUserLiked ? '❤️ Liked' : '🤍 Like'}
                 </button>
-                <ItemShareButton />
+                <ItemShareButton
+                  itemId={item.id}
+                  itemTitle={item.title}
+                  itemPrice={currentPrice}
+                  userId={user?.id}
+                />
               </div>
 
               {/* Bid/Cart Section */}
@@ -530,7 +535,14 @@ const ItemDetail: React.FC = () => {
           )}
 
           {/* Buying Pool */}
-          {item.buyingPool && <BuyingPoolCard pool={item.buyingPool} itemId={item.id} />}
+          {item.buyingPool && (
+            <BuyingPoolCard
+              itemId={item.id}
+              itemPrice={item.price}
+              itemStatus={item.status}
+              userId={user?.id}
+            />
+          )}
         </div>
       </div>
 
@@ -550,7 +562,7 @@ const ItemDetail: React.FC = () => {
       {isLightboxOpen && (
         <PhotoLightbox
           photos={item.photoUrls}
-          startIndex={currentLightboxIndex}
+          initialIndex={currentLightboxIndex}
           onClose={() => setIsLightboxOpen(false)}
         />
       )}
