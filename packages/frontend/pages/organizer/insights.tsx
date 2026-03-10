@@ -8,7 +8,7 @@
  * - Conversion rate calculation
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -40,11 +40,18 @@ interface Insights {
     status: string;
     count: number;
   }>;
+  salesList: Array<{
+    id: string;
+    title: string;
+    status: string;
+  }>;
 }
 
 const OrganizerInsightsPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+
+  const [selectedSaleId, setSelectedSaleId] = useState<string>('');
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -52,11 +59,12 @@ const OrganizerInsightsPage = () => {
     return null;
   }
 
-  // Fetch insights data
+  // Fetch insights data — optionally filtered by sale
   const { data: insights, isLoading: insightsLoading, error } = useQuery({
-    queryKey: ['organizer-insights', user?.id],
+    queryKey: ['organizer-insights', user?.id, selectedSaleId],
     queryFn: async () => {
-      const response = await api.get('/insights/organizer');
+      const params = selectedSaleId ? `?saleId=${selectedSaleId}` : '';
+      const response = await api.get(`/insights/organizer${params}`);
       return response.data as Insights;
     },
     enabled: !!user?.id,
@@ -147,12 +155,34 @@ const OrganizerInsightsPage = () => {
         </div>
 
         <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-          {/* Title */}
-          <div>
-            <h2 className="text-2xl font-bold text-warm-900">Your Sales Analytics</h2>
-            <p className="text-warm-600 text-sm mt-1">
-              Overview of your sales performance and item metrics
-            </p>
+          {/* Title + Sale Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-warm-900">Your Sales Analytics</h2>
+              <p className="text-warm-600 text-sm mt-1">
+                {selectedSaleId ? 'Filtered to one sale' : 'Overview of all your sales'}
+              </p>
+            </div>
+            {insights?.salesList && insights.salesList.length > 1 && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="sale-filter" className="text-sm font-medium text-warm-700 whitespace-nowrap">
+                  Filter by sale:
+                </label>
+                <select
+                  id="sale-filter"
+                  value={selectedSaleId}
+                  onChange={(e) => setSelectedSaleId(e.target.value)}
+                  className="border border-warm-300 rounded-lg px-3 py-2 text-sm bg-white text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 max-w-xs"
+                >
+                  <option value="">All Sales</option>
+                  {insights.salesList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title} {s.status === 'PUBLISHED' ? '' : `(${s.status.toLowerCase()})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Key Metrics Cards */}
