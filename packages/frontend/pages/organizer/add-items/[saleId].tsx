@@ -421,7 +421,7 @@ const AddItemsDetailPage = () => {
               )}
 
               <h2 className="text-xl font-semibold text-warm-900 mb-4">Item Details</h2>
-              <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4">
+              <form onSubmit={handleFormSubmit} className="space-y-4">
                 {/* Title */}
                 <div>
                   <label className="block text-sm font-medium text-warm-900 mb-1">
