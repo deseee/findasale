@@ -266,14 +266,14 @@ const ReviewScreen = () => {
               Review Items Before Publishing
             </h1>
             <p className="text-warm-600 mb-4">
-              {items.length} item{items.length !== 1 ? 's' : ''} ·{' '}
+              {items.length} item{items.length !== 1 ? 's' : ''} &middot;{' '}
               <span className="text-green-700 font-semibold">{readyCount} ready</span>{' '}
-              ·
+              &middot;
               <span className="text-amber-700 font-semibold">{analyzingCount} analyzing</span>
               {errorCount > 0 && (
                 <>
                   {' '}
-                  ·
+                  &middot;
                   <span className="text-red-700 font-semibold">
                     {errorCount} error{errorCount !== 1 ? 's' : ''}
                   </span>
