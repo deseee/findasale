@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-11T15:11:08.966Z*
+*Generated at 2026-03-11T16:19:59.286Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -79,7 +79,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   └── spring-content-2026-03-09.md
 │   │   └── spring-2026-content.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (19 files)
+│   ├── operations/ (20 files)
 │   ├── qa/
 │   │   └── payment-edge-cases-2026-03-09.md
 │   ├── research/ (2 files)
@@ -92,6 +92,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   └── session-124-wrap.md
 │   ├── skills-package/ (27 files)
 │   ├── strategy/ (4 files)
+│   ├── test.tmp
 │   ├── ux-spotchecks/
 │   │   ├── 2026-03-11.md
 │   │   └── rapidfire-mode-ux-spec.md
@@ -187,6 +188,22 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── session-wrap-check.sh
 │   ├── stress-test.js
 │   └── update-context.js
+├── skill-updates/
+│   ├── zi0JKDFh
+│   ├── zi0ZAsNh
+│   ├── zi5C2Zsb
+│   ├── ziEM3pic
+│   ├── ziK18NL3
+│   ├── ziMOvrz4
+│   ├── ziXJ1M6C
+│   ├── ziheNXAk
+│   ├── zihmC4Xj
+│   ├── ziipsPq3
+│   ├── zio1ID9B
+│   ├── zis6sZdE
+│   ├── zisKPUAA
+│   ├── zivGh9XE
+│   └── ziy2i7m2
 └── ziVgsNRB
 
 ```

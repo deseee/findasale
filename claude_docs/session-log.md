@@ -2,6 +2,12 @@
 
 ## Recent Sessions
 
+### 2026-03-11 · Session 140
+**Worked on:** Full agent fleet plugin-skill awareness audit (Power User). Discovered all 15 findasale-* subagents were plugin-blind — no knowledge of the 100+ plugin skills available to them. Architect, QA, and Pitchman reviewed proposed mappings in parallel. Added `## Plugin Skill Delegation` sections to all 15 SKILL.md files (98 plugin refs total). Fixed stale data in findasale-architect (5%/7% fee → 10% flat, removed Docker ref) and findasale-qa (same fee fix). Created `claude_docs/operations/plugin-skill-routing.md` as master routing reference for main session and fleet. All 15 updated skills installed by Patrick.
+**Decisions:** Advisory board approved for forward-strategy plugins (`product-management:roadmap-management` + `data:create-viz`). `findasale-sales-ops` (proposed by Pitchman — organizer outreach/trial-to-insight agent) deferred to post-beta planning session per Patrick. Routing matrix is now the authoritative source for plugin vs. findasale-* routing logic.
+**Next up:** Push `claude_docs/operations/plugin-skill-routing.md` to GitHub via `.\push.ps1`. Planning session to review findasale-sales-ops proposal + other Pitchman fleet ideas. Neon migration `20260311000002_add_item_draft_status` still pending deploy.
+**Blockers:** Neon migration undeployed. `plugin-skill-routing.md` not yet pushed to GitHub.
+
 ### 2026-03-11 · Session 139
 **Worked on:** Packaged conversation-defaults v4 as a proper `.skill` file with Rule 13 (post-diagnosis routing gate). Fixed packaging validation failure — removed non-standard `version` and `last_updated` frontmatter keys that the `package_skill` validator rejects. Used skill-creator packaging workflow; delivered `.skill` file to workspace for Patrick to install via "Copy to your skills".
 **Decisions:** Rule 13 routes post-diagnosis implementation to the "appropriate subagent" (findasale-dev for code, findasale-records for docs/skills) — not necessarily the diagnosing agent and never inline. This resolves the session 138 autocompact caused by doing inline implementation.

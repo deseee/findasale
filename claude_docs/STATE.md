@@ -7,6 +7,10 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 140 COMPLETE (2026-03-11) — AGENT FLEET PLUGIN-SKILL AWARENESS UPGRADE:**
+Power User audit revealed all 15 findasale-* subagents had zero awareness of available plugin skills. Architect, QA, and Pitchman reviewed proposed mappings in parallel. All 15 SKILL.md files updated with `## Plugin Skill Delegation` sections (98 plugin refs total). Stale fee refs (5%/7%) corrected to 10% flat in findasale-architect and findasale-qa; Docker ref removed from architect. `claude_docs/operations/plugin-skill-routing.md` created as master routing reference. Advisory board approved for forward-strategy plugins. `findasale-sales-ops` agent concept deferred to post-beta planning session.
+**ACTION REQUIRED (Patrick):** Push `claude_docs/operations/plugin-skill-routing.md` to GitHub: `git add claude_docs/operations/plugin-skill-routing.md && git commit -m "docs: add plugin skill routing matrix" && .\push.ps1`
+
 **Session 137 COMPLETE (2026-03-11) — RAPIDFIRE BUG FIX + ENFORCEMENT HARDENING:**
 Two critical bugs fixed: (1) Prisma P2022 — `Item.draftStatus` missing from Neon production DB — fixed by deploying migration `20260311000002_add_item_draft_status`; (2) Rapidfire camera button bug — clicking Rapidfire opened regular camera flow instead of rapid capture flow — fixed with `handleRapidCameraComplete` handler in add-items/[saleId].tsx, creates optimistic DRAFT items per photo. Workflow improvements: skill enforcement gates hardened across `conversation-defaults` and `dev-environment`, CORE.md env gate upgraded to hard STOP gate with explicit `Skill()` invocation, SECURITY.md §6 updated with no-placeholder-credential rule, skill packaging workflow fixed. Global CLAUDE.md updated with subagent-first rule. Files changed: `packages/frontend/pages/organizer/add-items/[saleId].tsx`, plus docs/skills already pushed to GitHub.
 

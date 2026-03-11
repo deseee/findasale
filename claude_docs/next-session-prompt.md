@@ -1,33 +1,32 @@
 # Next Session Resume Prompt
 *Written: 2026-03-11T00:00:00Z*
-*Session ended: normally — session 139 complete*
+*Session ended: normally — session 140 complete*
 
 ## Resume From
-Install conversation-defaults v4 skill if not already done (file is in workspace root as `conversation-defaults.skill`), then verify the Rapidfire review page is working correctly in production on Railway.
+This was a fleet improvement session — no code in flight. Next session should be the planning session Patrick mentioned: reviewing the findasale-sales-ops proposal and other Pitchman fleet ideas, then pivoting to product/beta work.
 
 ## What Was In Progress
-Nothing in flight — session ended cleanly.
+Nothing in flight — session ended cleanly. All 15 skill updates installed.
 
 ## What Was Completed This Session
-- Packaged conversation-defaults v4 as a `.skill` file with Rule 13 (post-diagnosis routing gate)
-- Fixed frontmatter validation failure (removed `version` and `last_updated` keys, which the package_skill validator rejects)
-- Delivered `conversation-defaults.skill` to workspace for Patrick to install via "Copy to your skills"
-- Added SH-006 self-healing entry (skill packaging frontmatter validation)
-- STATE.md updated to session 139
-- session-log.md trimmed to 5 most recent entries
+- Power User audit: all 15 findasale-* subagents now have `## Plugin Skill Delegation` sections (98 plugin refs total)
+- Stale fee refs fixed in findasale-architect (5%/7% → 10% flat, Docker ref removed) and findasale-qa (same fee fix)
+- `claude_docs/operations/plugin-skill-routing.md` created as master routing reference for main session and fleet
+- Advisory board approved for `product-management:roadmap-management` + `data:create-viz`
+- `findasale-sales-ops` agent concept deferred to post-beta planning session
+- STATE.md and session-log.md updated
 
 ## Environment Notes
-- `conversation-defaults.skill` is in the workspace root (`FindaSale/conversation-defaults.skill`) — Patrick needs to click "Copy to your skills" to install it
-- STATE.md, session-log.md, self_healing_skills.md, and next-session-prompt.md have been updated but not yet committed — Patrick should stage and push:
+- **Neon migration still pending:** `20260311000002_add_item_draft_status` — run `cd packages/database && npx prisma migrate deploy` with real Neon URL from `packages/backend/.env`
+- **Git push needed:** `claude_docs/operations/plugin-skill-routing.md` and updated STATE.md/session-log.md/next-session-prompt.md:
   ```
-  git add claude_docs/STATE.md claude_docs/session-log.md claude_docs/self_healing_skills.md claude_docs/next-session-prompt.md
-  git commit -m "docs: session 139 wrap"
+  git add claude_docs/operations/plugin-skill-routing.md claude_docs/STATE.md claude_docs/session-log.md claude_docs/next-session-prompt.md
+  git commit -m "docs: session 140 wrap — fleet plugin-skill audit"
   .\push.ps1
   ```
-- The Rapidfire review page fixes (session 138, commit 35b4f85) are on GitHub and should be live on Railway — verify by adding items via Rapidfire and checking the review page
-- All migrations are deployed as of session 138
+- No Railway or Vercel deploys needed (no code changes this session)
 
 ## Exact Context
-- conversation-defaults v4 Rule 13: post-diagnosis routing gate — orchestrator must route implementation to the appropriate subagent (findasale-dev for code, findasale-records for docs/skills), never inline
-- Old staging files that can be deleted after skill is installed: `claude_docs/operations/conversation-defaults-v4-proposed.md` and `claude_docs/operations/conversation-defaults.skill` (old manual zip)
-- Patrick's 5 beta-blocking items still pending: Stripe business account, Google Search Console verification, business cards, beta organizer outreach, attorney consult (optional)
+- Planning session agenda: (1) findasale-sales-ops agent — organizer outreach, pipeline review, trial-to-insight conversion; (2) other Pitchman fleet improvement ideas; (3) Patrick's 5 beta-blocking items: Stripe business account, Google Search Console verification, business cards, beta organizer outreach, Michigan attorney check (optional)
+- Routing matrix lives at: `claude_docs/operations/plugin-skill-routing.md`
+- Old staging files that can be cleaned up: `claude_docs/operations/conversation-defaults-v4-proposed.md` and `claude_docs/operations/conversation-defaults.skill`
