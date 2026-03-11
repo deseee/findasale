@@ -199,7 +199,7 @@ CLAUDE.md rules. You own them with the same rigor as Tier 1 files.
 
 Review with: list all scheduled tasks via the `mcp__scheduled-tasks__list_scheduled_tasks` tool.
 
-Known tasks as of last audit (2026-03-09 — 10 registered, 1 disabled):
+Known tasks as of last audit (2026-03-11 — 11 registered, 0 disabled):
 - `findasale-health-scout` — weekly health scan (Sunday 11pm)
 - `findasale-competitor-monitor` — weekly competitive intel pipeline (Monday 8am)
 - `findasale-ux-spotcheck` — weekly rotating UX code review (Wednesday 9am)
@@ -209,10 +209,13 @@ Known tasks as of last audit (2026-03-09 — 10 registered, 1 disabled):
 - `findasale-workflow-retrospective` — monthly meta-audit of AI workflow (8th of month, 9am)
 - `context-freshness-check` — daily STATE.md + context.md staleness check (8am daily)
 - `findasale-power-user-sweep` — weekly improvement sweep (Sunday 10pm)
-- `weekly-industry-intel` — DISABLED (merged into findasale-competitor-monitor)
+- `daily-friction-audit` — daily workflow friction scan (M-F 8:38am, owned by findasale-workflow) [added post-advisory-board]
+- `weekly-pipeline-briefing` — organizer acquisition pipeline briefing (Monday 9am, owned by findasale-sales-ops) [added post-advisory-board]
 
-Note: `findasale-nightly-context` is NOT registered (may have been merged into context-freshness-check).
+Note: `weekly-industry-intel` was deleted (was disabled since 2026-03-09; merged into findasale-competitor-monitor).
+`findasale-nightly-context` is NOT registered (merged into context-freshness-check).
 `findasale-workflow-review` has been superseded by `findasale-workflow-retrospective`.
+**Prompt-level audit pending** for `daily-friction-audit` and `weekly-pipeline-briefing` — prompts not yet verified (stored in Windows OneDrive, outside VM access).
 
 ### Scheduled Task Audit Protocol
 
@@ -326,6 +329,20 @@ At the end of any meaningful work session, run these steps in order:
 
 4. **COMPLETED_PHASES.md**: If a full phase or sprint completed, add a summary
    entry. Keep it brief — one paragraph max per phase.
+
+5. **Wrap commit — include self-created files**: The wrap process itself writes
+   files (STATE.md, session-log.md, next-session-prompt.md, context.md,
+   claude_docs/.last-wrap). These are written DURING the wrap, so they are never
+   in Patrick's prior commit. Always include them explicitly in the wrap commit
+   block — never assume they were already staged. The commit block must always
+   contain at minimum:
+   ```
+   git add claude_docs/.last-wrap claude_docs/STATE.md claude_docs/logs/session-log.md claude_docs/next-session-prompt.md context.md
+   git commit -m "Session [N] wrap: STATE, session-log, context, next-session-prompt"
+   .\push.ps1
+   ```
+   If other files were changed during the session, add them to the same commit.
+   Never split the wrap into two messages — all wrap-written files go in one block.
 
 ---
 
@@ -442,11 +459,11 @@ Every Claude skill exists in two locations:
 - **Source copy** (`claude_docs/skills-package/[skill]/SKILL.md`) — lives in git, pushed via push.ps1. This is the durable record.
 - **Installed copy** (`.skills/skills/[skill]/SKILL.md`) — what Claude loads at runtime. Only updated when Patrick reinstalls the .skill file from the Cowork UI.
 
-When updating any skill, BOTH steps are required:
+When updating any skill, ALL THREE steps are required:
 
 1. Edit the source copy in `claude_docs/skills-package/[skill]/SKILL.md` (or create the directory if one doesn't exist — extract from the `.skill` archive first).
-2. Package the updated SKILL.md as a new `.skill` file via `package_skill.py`.
-3. Tell Patrick to reinstall from Cowork UI (provide the exact path to the `.skill` file).
+2. Package the updated SKILL.md as a new `.skill` file: zip the skill directory with a `.skill` extension (e.g. `cd claude_docs/skills-package && zip -r findasale-records.skill findasale-records/`). Overwrite the existing `.skill` file in `claude_docs/skills-package/`.
+3. Present the `.skill` file to Patrick using `mcp__cowork__present_files` — this renders a clickable card in chat with a **"Copy to your skills"** install button. Patrick clicks it to install. Do not just print the path; use the tool so the card appears.
 
 **Failure mode A:** Edit only the source → Claude still loads the old installed skill next session. No effect until Patrick reinstalls.
 
