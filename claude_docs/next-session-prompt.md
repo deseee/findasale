@@ -1,30 +1,56 @@
 # Next Session Resume Prompt
 *Written: 2026-03-10*
-*Session ended: normally — session 134 complete*
+*Session ended: normally — session 136 complete*
 
 ## Resume From
 
-Two items were queued but not started when session wrapped:
+Patrick runs `git pull` + `prisma migrate deploy` for migration `20260311000002_add_item_draft_status`, then end-to-end test of the Rapidfire flow.
 
-1. **Hide/show/selected bar** — move it to the top of the item list (currently only at bottom, Patrick almost missed it). The component is likely `BulkItemToolbar.tsx` in `packages/frontend/components/`. Render it above the item list in addition to (or instead of) the bottom position.
+## What Was Completed This Session (136)
 
-2. **Test CSV for import** — create a small CSV file Patrick can use to test the CSV import flow end-to-end. Format must match what `importItemsFromCSV` in `itemController.ts` expects. Check the CSV header row in `exportItems` (line ~815) to confirm column names: Title, Category, Condition, Price, Status, Tags.
+- **Rapidfire Mode Phases 1A–3C fully implemented and pushed to GitHub**
+- Phase 1A: Migration `20260311000002_add_item_draft_status` (draftStatus/aiErrorLog/optimisticLockVersion + backfill + indexes)
+- Phase 1B: `PUBLIC_ITEM_FILTER` helper + all public endpoints patched (search, browse, sale detail, serendipity)
+- Phase 2A: `uploadRapidfire` endpoint in `uploadController.ts`
+- Phase 2B: `processRapidDraft` background job + `cleanupStaleDrafts` cron + `getItemDraftStatus` + `publishItem` + routes
+- Phase 3A: `ModeToggle.tsx`, `CaptureButton.tsx` components
+- Phase 3B: `RapidCarousel.tsx`, `PreviewModal.tsx`, `useUploadQueue.ts` hook
+- Phase 3C: `review.tsx` page + `add-items/[saleId].tsx` integration
+- **QA PASS WITH NOTES** — 2 blockers found and fixed (createItem + importItemsFromCSV were missing `draftStatus: 'PUBLISHED'`, which would have made all non-Rapidfire items invisible after migration deployed)
+- Final commit: `8960403` — both blockers patched
 
-## What Was Completed This Session
+## What Was In Progress (carry-forward)
 
-- **Auction job P2022 fixed**: `Item.tags` column was missing from Neon production. Created migration `20260310000002_add_item_tags`. Committed alongside two other previously missing migrations (`20260309000002_add_token_version`, `20260309200001_add_processed_webhook_event`). `prisma migrate deploy` confirmed column already on Neon — all Item `include` endpoints are safe.
-- **Endpoint audit complete**: all bare `include` queries on Item (updateItem, deleteItem, analyzeItemTags, getItemForOrganizer, bulkUpdateItems, exportItems, placeBid, auctionJob) confirmed safe now that `tags` is on Neon.
-- **STATE.md updated**: embedding perf concern logged as post-beta deferred item.
+1. **End-to-end Rapidfire test** — needs migration deployed to Neon first
+2. **Hide/show/selected bar** — move to top of item list (component: likely `BulkItemToolbar.tsx`). Carried from session 134.
+3. **Test CSV for import** — create a small sample CSV matching `importItemsFromCSV` expected headers (Title, Category, Condition, Price, Status, Tags). Carried from session 134.
 
 ## Environment Notes
 
-- Patrick ran `prisma migrate deploy` against Neon — confirmed no pending migrations.
-- Three migration files committed and pushed: `20260309000002_add_token_version`, `20260309200001_add_processed_webhook_event`, `20260310000002_add_item_tags`.
-- Auction job runs every 5 minutes — should self-heal next cycle after Railway picks up latest deploy.
+- **Patrick must `git pull`** — many commits were pushed via GitHub MCP this session and are not in Patrick's local repo yet
+- **Migration deploy required before any Rapidfire testing:**
+  ```
+  cd packages/database
+  npx prisma generate
+  npx prisma migrate deploy
+  ```
+  Migration: `20260311000002_add_item_draft_status`
+- Railway will pick up new code after Patrick does `git pull` + `.\push.ps1` or triggers a manual redeploy
+- No pending Vercel deploys (frontend changes were pushed to main via MCP — Vercel auto-deploys from main)
+- Git is ahead of local — do NOT commit locally without pulling first or there will be merge conflicts
 
-## Deferred (logged in STATE.md)
+## Known Phase 3C Gaps (for next dev touch)
 
-- `exportItems` (line 815) and `trendingController` fetch full `embedding[]` (768 floats/item) — performance concern on large sales, not a crash. Add `select` to exclude `embedding` pre-launch.
-- Camera tab "coming soon" regression on add-items/[saleId].tsx — still unresolved.
+- `useUploadQueue` is scaffolded but not fully wired to camera blob capture flow in `add-items/[saleId].tsx` — items don't automatically enqueue on photo capture
+- `rapidItems` not loaded on mount from existing DB DRAFT/PENDING_REVIEW items — review page (`/organizer/add-items/[saleId]/review`) starts empty on revisit
+- Both are acceptable for beta (organizer starts fresh each session) but should be fixed post-launch
+
+## QA WARN to track (non-blocking)
+
+- `publishItem` B5 optimistic lock is skipped if frontend omits `optimisticLockVersion` field entirely. Low risk (B2 gate prevents double-publish), but worth hardening post-beta.
+
+## Deferred (unchanged from prior sessions)
+
+- `exportItems` (line 815) + `trendingController` fetch full `embedding[]` — perf concern, not crash. Pre-beta fix.
 - BUG-3 (/organizer/items 404) — deferred.
 - Patrick's beta-blocking items: Stripe business account, Google Search Console, business cards, beta organizer outreach.

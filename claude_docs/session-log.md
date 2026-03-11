@@ -2,6 +2,18 @@
 
 ## Recent Sessions
 
+### 2026-03-10 · Session 136
+**Worked on:** Rapidfire Mode full implementation (Phases 1A–3C) + QA sign-off. Ran phases in parallel using general-purpose agents with embedded skill context. Built: schema migration (draftStatus/aiErrorLog/optimisticLockVersion + backfill + indexes), PUBLIC_ITEM_FILTER helper, processRapidDraft background job, cleanupStaleDrafts cron (7-day), uploadRapidfire endpoint, getItemDraftStatus poll endpoint, publishItem with B2+B5 gates, search service updates, ModeToggle/CaptureButton/RapidCarousel/PreviewModal components, useUploadQueue hook (IndexedDB, 3-concurrent), review.tsx page, Phase 3C add-items integration. QA audit caught 2 blockers (createItem + importItemsFromCSV missing draftStatus: 'PUBLISHED') — both fixed and pushed. Final verdict: PASS WITH NOTES.
+**Decisions:** All Rapidfire architecture locked per ADR. draftStatus defaults to DRAFT in schema — non-Rapidfire creation paths must explicitly set PUBLISHED. B5 optimistic lock is permissive when version field omitted (by design, B2 gate is sufficient safety net).
+**Next up:** Patrick runs `git pull` then `prisma generate` + `prisma migrate deploy` from `packages/database` for migration `20260311000002_add_item_draft_status`. After deploy: test full Rapidfire flow end-to-end. Then: hide/show bar move to top of item list, test CSV file (carried from session 134).
+**Blockers:** Migration not yet deployed to Neon — Rapidfire endpoints will 500 until `draftStatus` column exists. Patrick must deploy before testing.
+
+### 2026-03-10 · Session 135
+**Worked on:** Rapidfire Mode full design sprint. Ran UX, Pitchman, and Architect agents in parallel, then QA and Advisory Board in parallel for review. Advisory Board: green light. QA: conditional approval — 6 blockers identified and resolved in the ADR. Locked all of Patrick's decisions (v1 scope = Core + Confidence Coaching + Batching; 7-day DRAFT retention; Rapidfire as new-organizer default; Cloudinary 500/hr upload queue required at 6/min cap). Multi-photo tagging architecture decision: Regular mode batches all photos to AI after "Done" tap — one call, better accuracy. Wrote dev session prompt for next session to begin implementation.
+**Decisions:** draftStatus: DRAFT | PENDING_REVIEW | PUBLISHED. optimisticLockVersion on Item. Rapidfire and Regular carousels isolated in IndexedDB. node-cron for background AI (no queue infra). Simple polling (Socket.io reserved for auctions). Migration default DRAFT + backfill existing items to PUBLISHED.
+**Next up:** Load `claude_docs/operations/rapidfire-dev-session-prompt.md` and start Phase 1A (schema migration). Also pending from session 134: hide/show bar move to top of item list, test CSV file.
+**Blockers:** None — design complete, dev prompt written, ready to build.
+
 ### 2026-03-10 · Session 134
 **Worked on:** Diagnosed and fixed `auctionJob` P2022 crash (`Item.tags` column missing from Neon). Created migration `20260310000002_add_item_tags`. Committed two other previously missing migrations (`add_token_version`, `add_processed_webhook_event`). Ran `prisma migrate deploy` — confirmed no pending. Audited all bare `include` Item endpoints — all safe. Logged `embedding[]` perf concern as post-beta deferred. Updated STATE.md + session docs.
 **Decisions:** Migration approach was correct (column already on Neon per `migrate deploy` output). All `include` endpoints left as-is — no `select` patching needed.
@@ -37,11 +49,5 @@
 **Decisions:** Any new `item.create/createMany()` path must supply `embedding: []` explicitly — the column default was dropped in the coupon migration and Ollama backfills async via `scheduleItemEmbedding()`. Use `create_or_update_file` (not `push_files`) when pushing files with existing content — push_files risks hallucinating content from memory.
 **Next up:** Verify CSV import success after Railway redeploys commit a670457. Then: Patrick's 5 beta-blocking items (Stripe business account, Google Search Console, business cards, beta outreach). Schema drift check: `tags String[]` field may need migration.
 **Blockers:** CSV import fix unverified in prod (Railway redeploy pending). Chrome disconnected before re-test.
-
-### 2026-03-10 · Session 127
-**Worked on:** Chrome QA of add-items photo upload flow. Fixed Bug 1 (no photo input on Manual Entry) and Bug 2 (camera analyze discarded API response — nothing happened after toast). Auto-create (⚡) checkbox added above Start Camera. Multiple merge conflicts resolved after dev agents did full-file rewrites across several commits.
-**Decisions:** Manual Entry photo = standard upload only (no AI — AI is a paid feature). Camera = AI pre-fill form; auto-create checkbox skips review and saves immediately.
-**Next up:** Continue Chrome audit — 4 queued findings: (1) camera fullscreen/flash controls on mobile, (2) batch photo workflow distinction (one item vs many items), (3) item cards in list should be clickable/inline-editable, (4) test CSV import end-to-end. Also: FINDING-3 (stale fee copy on dashboard) still open.
-**Blockers:** None — all commits pushed (afc280a is HEAD on main).
 
 ---

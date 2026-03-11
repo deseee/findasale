@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-11T00:07:12.308Z*
+*Generated at 2026-03-11T02:48:56.113Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -59,7 +59,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (8 files)
 │   ├── competitor-intel/ (1 files)
-│   ├── feature-notes/ (7 files)
+│   ├── feature-notes/ (9 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (1 files)
 │   ├── improvement-memos/ (0 files)
@@ -69,7 +69,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   └── spring-content-2026-03-09.md
 │   │   └── spring-2026-content.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (14 files)
+│   ├── operations/ (16 files)
 │   ├── qa/
 │   │   └── payment-edge-cases-2026-03-09.md
 │   ├── research/ (2 files)
@@ -81,6 +81,8 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   └── session-124-wrap.md
 │   ├── skills-package/ (27 files)
 │   ├── strategy/ (4 files)
+│   ├── ux-spotchecks/
+│   │   └── rapidfire-mode-ux-spec.md
 │   └── workflow-retrospectives/ (0 files)
 ├── docs/
 │   └── CD2_PHASE2_TREASURE_HUNT.md
@@ -106,9 +108,11 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
 │   │   │   ├── controllers/ (52 files)
+│   │   │   ├── helpers/
+│   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
 │   │   │   ├── instrument.ts
-│   │   │   ├── jobs/ (11 files)
+│   │   │   ├── jobs/ (12 files)
 │   │   │   ├── lib/ (3 files)
 │   │   │   ├── middleware/ (2 files)
 │   │   │   ├── models/ (1 files)
@@ -124,7 +128,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (73 migrations)
+│   │   │   ├── migrations/ (75 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -134,10 +138,10 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── .gitignore
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
-│   │   ├── components/ (93 files)
+│   │   ├── components/ (94 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (1 files)
-│   │   ├── hooks/ (8 files)
+│   │   ├── hooks/ (9 files)
 │   │   ├── lib/ (3 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js

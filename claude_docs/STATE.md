@@ -7,6 +7,37 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 136 COMPLETE (2026-03-10) — RAPIDFIRE MODE IMPLEMENTATION:**
+Phases 1A–3C fully built and pushed to GitHub. QA verdict: PASS WITH NOTES. One migration pending Neon deploy — everything else is live on Railway/Vercel once Patrick deploys.
+
+**What was built (all pushed to main):**
+- Migration `20260311000002_add_item_draft_status` — draftStatus/aiErrorLog/optimisticLockVersion + backfill + indexes
+- `helpers/itemQueries.ts` — PUBLIC_ITEM_FILTER, getPublicItemsBySaleId
+- `jobs/processRapidDraft.ts` — background AI analysis (setImmediate, non-throwing)
+- `jobs/cleanupStaleDrafts.ts` — 7-day DRAFT cleanup cron (2am daily)
+- `uploadController.ts` — uploadRapidfire endpoint
+- `itemController.ts` — getItemDraftStatus + publishItem (B2+B5 enforced) + BLOCKER fix (createItem/importItemsFromCSV now set draftStatus: 'PUBLISHED')
+- `routes/items.ts` — new routes registered before /:id
+- `index.ts` — scheduleCleanupCron() wired at startup
+- Search service + routes — all updated with PUBLIC_ITEM_FILTER
+- Frontend: ModeToggle, CaptureButton, RapidCarousel, PreviewModal, useUploadQueue hook
+- Frontend: review.tsx page, add-items/[saleId].tsx Phase 3C integration
+
+**⚠️ ACTION REQUIRED (Patrick):**
+1. `git pull` to get all MCP-pushed commits
+2. `cd packages/database && npx prisma generate && npx prisma migrate deploy` on Neon
+3. Railway will redeploy automatically after pull+push (or trigger manually)
+4. Test Rapidfire flow end-to-end after Neon deploy
+
+**Known Phase 3C gaps (post-beta):**
+- `useUploadQueue` not fully wired to camera blob capture (upload queue scaffolded, wiring incomplete)
+- `rapidItems` not loaded on mount from existing DB drafts (review page starts empty on revisit)
+
+**Session 135 COMPLETE (2026-03-10) — RAPIDFIRE MODE DESIGN SPRINT:**
+Full design package complete and greenlit. Files: rapidfire-mode-adr.md, rapidfire-mode-ux-spec.md, rapidfire-mode-design-brief.md, rapidfire-dev-session-prompt.md.
+
+---
+
 Session 105 Bug Blitz COMPLETE. Session 106 B1 ADR COMPLETE. Session 107 B1 implementation COMPLETE. Session 109 skill packaging COMPLETE. Session 110 P1 bug blitz COMPLETE. Full detail: `claude_docs/COMPLETED_PHASES.md`.
 
 **Session 113 COMPLETE (2026-03-09):** Fleet audit + governance overhaul.
@@ -228,4 +259,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-10 (session 134 — Item.tags migration deployed, missing migrations committed, embedding perf deferred)
+Last Updated: 2026-03-10 (session 135 — Rapidfire Mode design sprint complete, dev prompt written, all decisions locked)

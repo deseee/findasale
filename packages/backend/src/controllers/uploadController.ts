@@ -3,6 +3,9 @@ import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import axios from 'axios';
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService';
+import { enqueueProcessRapidDraft } from '../jobs/processRapidDraft';
+import { prisma } from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth';
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -265,5 +268,87 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
       console.error('analyzePhotoWithAI error:', error);
       res.status(500).json({ error: 'Photo analysis failed' });
     }
+  }
+};
+
+// POST /api/upload/rapidfire — Phase 2A: Single image upload for Rapidfire Mode
+// Accepts { saleId: string, imageBase64: string } OR multipart form
+// Creates DRAFT Item immediately, queues background AI processing
+// Returns { itemId, status: 'DRAFT' }
+export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      res.status(403).json({ error: 'Organizer access required' });
+      return;
+    }
+
+    const { saleId } = req.body;
+    const file = req.file;
+
+    if (!saleId) {
+      res.status(400).json({ error: 'saleId is required' });
+      return;
+    }
+
+    if (!file) {
+      res.status(400).json({ error: 'No image provided' });
+      return;
+    }
+
+    // Verify sale exists and belongs to organizer
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        organizer: { select: { userId: true } }
+      }
+    });
+
+    if (!sale) {
+      res.status(404).json({ error: 'Sale not found' });
+      return;
+    }
+
+    if (sale.organizer.userId !== req.user.id) {
+      res.status(403).json({ error: 'Not your sale' });
+      return;
+    }
+
+    // Upload image to Cloudinary
+    let photoUrl: string;
+    try {
+      const urls = await uploadToCloudinary(file.buffer);
+      photoUrl = urls.original;
+    } catch (uploadErr) {
+      console.error('[rapidfire] Cloudinary upload failed:', uploadErr);
+      res.status(500).json({ error: 'Image upload failed' });
+      return;
+    }
+
+    // Create DRAFT Item with minimal required fields
+    const item = await prisma.item.create({
+      data: {
+        saleId,
+        title: 'Untitled Item',
+        photoUrls: [photoUrl],
+        draftStatus: 'DRAFT',
+        status: 'AVAILABLE',
+        embedding: [],
+        listingType: 'FIXED',
+        isActive: true
+      }
+    });
+
+    // Queue background job (non-blocking)
+    enqueueProcessRapidDraft(item.id);
+
+    // Return immediately with itemId and DRAFT status
+    res.status(201).json({
+      itemId: item.id,
+      status: 'DRAFT',
+      photoUrl
+    });
+  } catch (error) {
+    console.error('[rapidfire] uploadRapidfire error:', error);
+    res.status(500).json({ error: 'Upload failed' });
   }
 };

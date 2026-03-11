@@ -10,6 +10,7 @@ import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -208,6 +209,7 @@ export const getItemById = async (req: Request, res: Response) => {
         reverseDailyDrop: true,
         reverseFloorPrice: true,
         reverseStartDate: true,
+        draftStatus: true,
         createdAt: true,
         updatedAt: true,
         // embedding & tags intentionally excluded — see getItemsBySaleId comment
@@ -232,8 +234,8 @@ export const getItemById = async (req: Request, res: Response) => {
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
     const isOwner = authReq.user?.id === item.sale.organizer.userId;
 
-    // For everyone else, enforce public visibility rules
-    if (!isOwner && (!item.isActive || item.sale.status !== 'PUBLISHED')) {
+    // For everyone else, enforce public visibility rules: must be PUBLISHED + active + in published sale
+    if (!isOwner && (!item.isActive || item.sale.status !== 'PUBLISHED' || item.draftStatus !== 'PUBLISHED')) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -248,7 +250,10 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
   try {
     const { saleId } = req.query;
     const items = await prisma.item.findMany({
-      where: { saleId: saleId as string },
+      where: {
+        saleId: saleId as string,
+        ...PUBLIC_ITEM_FILTER,
+      },
       select: {
         id: true,
         saleId: true,
@@ -929,5 +934,152 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error placing bid:', error);
     res.status(500).json({ message: 'Server error while placing bid' });
+  }
+};
+
+// Phase 2B: Rapidfire Mode — Draft status polling endpoint
+export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const { itemId } = req.params;
+
+    // Fetch item with minimal fields — lightweight poll response
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        saleId: true,
+        draftStatus: true,
+        aiErrorLog: true,
+        title: true,
+        photoUrls: true,
+        sale: {
+          select: {
+            organizer: {
+              select: { userId: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Auth: only the organizer who owns the sale can poll this item's draft status
+    const isOwner = req.user?.id === item.sale.organizer.userId;
+    if (!isOwner) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Return lightweight draft status response
+    res.json({
+      itemId: item.id,
+      draftStatus: item.draftStatus,
+      aiErrorLog: item.aiErrorLog,
+      title: item.title,
+      thumbnailUrl: item.photoUrls && item.photoUrls.length > 0 ? item.photoUrls[0] : null
+    });
+  } catch (error) {
+    console.error('Error fetching draft status:', error);
+    res.status(500).json({ message: 'Server error while fetching draft status' });
+  }
+};
+
+// Phase 2B: Rapidfire Mode — Publish endpoint with optimistic lock and draftStatus gate
+export const publishItem = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { itemId } = req.params;
+    const { title, price, category, condition, optimisticLockVersion } = req.body;
+
+    // Fetch current item state
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        saleId: true,
+        draftStatus: true,
+        optimisticLockVersion: true,
+        sale: {
+          select: {
+            organizer: {
+              select: { userId: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Auth: only the organizer who owns the sale can publish items
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // B2 blocker: reject if draftStatus is not PENDING_REVIEW (AI analysis not complete)
+    if (item.draftStatus !== 'PENDING_REVIEW') {
+      return res.status(400).json({
+        message: 'Item not ready — AI analysis still in progress.'
+      });
+    }
+
+    // B5 blocker: optimistic lock check — prevent concurrent edits
+    if (optimisticLockVersion !== undefined && optimisticLockVersion !== item.optimisticLockVersion) {
+      return res.status(409).json({
+        message: 'Item was updated. Refresh and try again.'
+      });
+    }
+
+    // Prepare update data with optional organizer edits
+    const updateData: any = {
+      draftStatus: 'PUBLISHED',
+      optimisticLockVersion: (item.optimisticLockVersion ?? 0) + 1
+    };
+
+    // Apply optional organizer edits from request body
+    if (title !== undefined) updateData.title = title;
+    if (price !== undefined) updateData.price = price !== null ? parseFloat(price) : null;
+    if (category !== undefined) updateData.category = category;
+    if (condition !== undefined) updateData.condition = condition;
+
+    // Update item with new state
+    const updatedItem = await prisma.item.update({
+      where: { id: itemId },
+      data: updateData,
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        description: true,
+        price: true,
+        category: true,
+        condition: true,
+        draftStatus: true,
+        optimisticLockVersion: true,
+        photoUrls: true,
+        status: true,
+        updatedAt: true
+      }
+    });
+
+    // Fire webhooks for published item (X1: Zapier integration)
+    fireWebhooks('item.published', {
+      itemId: updatedItem.id,
+      saleId: updatedItem.saleId,
+      title: updatedItem.title,
+      status: updatedItem.draftStatus
+    }).catch(err => console.error('Webhook fire error:', err));
+
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Error publishing item:', error);
+    res.status(500).json({ message: 'Server error while publishing item' });
   }
 };
