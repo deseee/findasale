@@ -142,6 +142,7 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
           reverseFloorPrice: d.reverseFloorPrice ? Math.round(parseFloat(d.reverseFloorPrice) * 100) : null,
           reverseStartDate: d.reverseStartDate ? new Date(d.reverseStartDate) : null,
           embedding: [], // embedding default dropped in migration — must supply explicitly; Ollama will backfill async
+          draftStatus: 'PUBLISHED', // Phase 1A: CSV-imported items are deliberate organizer actions — publish immediately
         });
       }
     });
@@ -360,6 +361,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         isAiTagged: isAiTagged === true || isAiTagged === 'true',
         // U1: satisfies NOT NULL constraint; scheduleItemEmbedding fills it async
         embedding: [],
+        // Phase 1A: regular item creation is a deliberate organizer action — publish immediately
+        // (Only Rapidfire/uploadRapidfire creates DRAFT items intentionally)
+        draftStatus: 'PUBLISHED',
       }
     });
 
