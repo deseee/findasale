@@ -195,6 +195,13 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 
 ---
 
+**Session 133 COMPLETE (2026-03-10):** Session 128 audit regression fixes + edit-item P2022 crash fix.
+- Session 128 regressions restored: RapidCapture torch toggle, camera switch, photo upload, tab reorder, bulk delete — commit faa16f4
+- AI vendor branding genericized: faq.tsx + privacy.tsx — "Google Vision" / "Claude Haiku" references replaced with "AI" — commit aa7ae46
+- add-items/[saleId].tsx: tab reorder, photo upload wiring, bulk delete restore — commit d7648e1
+- **P0 bug fixed:** `getItemById` (GET /items/:id) was crashing with P2022 — `Item.tags` column doesn't exist in production DB (migration never created). Switched from `include` to explicit `select`, excluding `tags` and `embedding` — commit aa13deb. Verified live in Chrome: edit-item page loads correctly.
+- ⚠️ Carry-forward: other endpoints still use `include` and will hit the same P2022 if `tags` column is queried: `updateItem`, `deleteItem`, `analyzeItemTags`, `getItemForOrganizer`, `bulkUpdateItems`, `exportItems`, `placeBid`. A migration to add `Item.tags` is also needed.
+
 **Session 128 COMPLETE (2026-03-10):** Chrome QA audit of session 127/128 changes. FINDING-3 fixed. CSV import 500 bug found and fixed.
 - Chrome audit PASS: tab labels ✅, click-to-edit item titles ✅, inline delete confirm ✅, CSV modal opens ✅, camera fullscreen overlay ✅
 - FINDING-3 (stale 5%/7% fee copy on organizer settings.tsx) → fixed (committed 9d6bfda)
@@ -213,4 +220,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-10 (session 131 — print inventory fix, per-sale insights filter, AI branding audit scoped)
+Last Updated: 2026-03-10 (session 133 — session 128 regressions restored, AI branding fix, edit-item P2022 crash fixed)

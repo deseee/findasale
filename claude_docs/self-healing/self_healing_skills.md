@@ -336,6 +336,7 @@ git merge origin/main --no-edit
 2. Apply to Neon: `DATABASE_URL=... DIRECT_URL=... prisma migrate deploy` (can run from VM using credentials in `packages/backend/.env`)
 3. Push migration file to GitHub via MCP
 **Prevention:** After any schema.prisma change, immediately run `prisma migrate dev`. Never add fields to schema without a corresponding migration. The deploy checklist should include `prisma migrate status` to catch drift.
+**Variant (Session 133) — Read endpoint using bare `include`:** If a GET endpoint uses `prisma.model.findUnique({ include: { relation: true } })` (without a `select`), Prisma generates `SELECT *` and hits every column including drifted ones. The symptom is a 500 on read, while a sibling endpoint using `select` succeeds. Fix: switch the failing endpoint to explicit `select` listing only columns known to exist in production. This buys time until the missing migration is deployed. Affected endpoint type: **any `findUnique` / `findMany` using bare `include` on a model that has drifted fields.**
 
 ### 44. Railway Not Triggering New Build After Consecutive Pushes
 **Trigger:** After pushing to main, Railway does not start a new deployment. Push.ps1 shows commits landing on GitHub but Railway stays on the old failed build. Empty commits (`git commit --allow-empty`) also don't help.

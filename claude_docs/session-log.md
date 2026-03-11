@@ -2,6 +2,12 @@
 
 ## Recent Sessions
 
+### 2026-03-10 · Session 133
+**Worked on:** Restored session 128 regressions (torch toggle, camera switch, photo upload, tab reorder, bulk delete on add-items/[saleId].tsx). Genericized AI vendor branding in faq.tsx + privacy.tsx. Diagnosed and fixed P0 crash on `GET /items/:id` — P2022 error because `Item.tags` column doesn't exist in production DB (migration never created); `getItemById` used Prisma `include` which queries all schema fields including the missing `tags` column. Switched to explicit `select` excluding `tags` and `embedding`. Verified edit-item page loads correctly in Chrome (Tiffany Glass Lamp #4 populated).
+**Decisions:** Use `select` (never bare `include`) on Item queries in production until `Item.tags` migration is deployed. Pattern matches existing `getItemsBySaleId` approach.
+**Next up:** (1) Create migration for `Item.tags TEXT[] DEFAULT '{}'` to fix the schema drift permanently. (2) Audit remaining `include`-based Item endpoints (`updateItem`, `deleteItem`, `analyzeItemTags`, `bulkUpdateItems`, `exportItems`, `placeBid`) — all will hit P2022 if queried. (3) Patrick's beta-blocking items (Stripe account, GSC, business cards, outreach).
+**Blockers:** Patrick needs to run `git stash && git pull && git stash drop` locally — 5+ MCP commits since last sync.
+
 ### 2026-03-10 · Session 131
 **Worked on:** Fixed print inventory 500 error (embedding Float[] excluded from getItemsBySaleId). Added per-sale insights filtering (backend saleId param + frontend dropdown). Verified both live in Chrome. Scoped AI branding audit — found 6 user-facing locations naming "Google Vision", "Claude Haiku", or "Anthropic" that should say "AI" generically.
 **Decisions:** Google Maps links and OAuth buttons stay as-is (those are functional references, not branding). Only marketing/disclosure copy about the AI pipeline needs genericizing.
@@ -31,11 +37,5 @@
 **Decisions:** Manual Entry photo = standard upload only (no AI — AI is a paid feature). Camera = AI pre-fill form; auto-create checkbox skips review and saves immediately.
 **Next up:** Continue Chrome audit — 4 queued findings: (1) camera fullscreen/flash controls on mobile, (2) batch photo workflow distinction (one item vs many items), (3) item cards in list should be clickable/inline-editable, (4) test CSV import end-to-end. Also: FINDING-3 (stale fee copy on dashboard) still open.
 **Blockers:** None — all commits pushed (afc280a is HEAD on main).
-
-### 2026-03-10 · Session 126
-**Worked on:** Docs correction (STATE.md, session-log). Verified session 125 fixes live in Chrome (all 3 pass ✅). Continued Chrome audit — organizer item list + bulk actions on add-items/[saleId] page.
-**Decisions:** Session 125 fixes confirmed complete. Three new findings logged (filter/sort gap, native confirm on delete, stale fee copy on dashboard).
-**Next up:** Fix FINDING-3 (stale fee copy), consider FINDING-1/2 for post-beta backlog. Continue Chrome audit — CSV export/import, batch upload (AI) tab, deferred friction items #7 and #13.
-**Blockers:** None.
 
 ---

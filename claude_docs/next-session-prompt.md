@@ -1,57 +1,51 @@
 # Next Session Resume Prompt
-*Written: 2026-03-10T21:50:00Z*
-*Session ended: normally — session 131 complete*
-
----
+*Written: 2026-03-10T23:59:00Z*
+*Session ended: normally — session 133 complete*
 
 ## Resume From
-AI branding audit: replace all overt references to "Google", "Claude", "Anthropic", "Gemini", "Ollama" in user-facing copy with generic "AI" or "our AI". Functional references (Google Maps links, Google OAuth buttons) stay as-is.
 
-## AI Branding Audit — Full Scope
+Create a Prisma migration to add the missing `Item.tags` column to production, then audit all remaining Item endpoints that use bare `include` (they will all hit the same P2022 crash).
 
-### User-Facing Copy (MUST change)
+## What Was In Progress
 
-1. **`packages/frontend/pages/faq.tsx` line ~189**
-   - Current: "our AI (Google Vision + Claude Haiku) analyzes the image and suggests..."
-   - Target: "our AI analyzes the image and suggests..."
+Nothing mid-task — all work this session was completed and verified.
 
-2. **`packages/frontend/pages/privacy.tsx` line ~51**
-   - Current: "We may pass uploaded images through an AI tagging service (Google Cloud Vision and/or Claude)..."
-   - Target: "We may pass uploaded images through an AI tagging service to generate suggested item descriptions..."
+## What Was Completed This Session
 
-3. **`packages/frontend/pages/privacy.tsx` lines ~106-108**
-   - Current: "Google Cloud / Anthropic: If AI tagging is enabled, item photos may be sent to Google Cloud Vision or Anthropic's API..."
-   - Target: "AI Services: If AI tagging is enabled, item photos may be sent to third-party AI services for label generation. No personally identifiable information is included in these requests."
+- **Session 128 regressions restored** on `add-items/[saleId].tsx`: torch toggle, camera switch, photo upload, tab reorder, bulk delete (commit faa16f4)
+- **AI vendor branding genericized** in `faq.tsx` + `privacy.tsx`: "Google Vision" / "Claude Haiku" → "AI" (commit aa7ae46)
+- **add-items/[saleId].tsx** additional fixes: tab label order, photo upload wiring, bulk delete (commit d7648e1)
+- **P0 edit-item crash fixed**: `getItemById` was crashing P2022 because `Item.tags` column missing from production DB. Switched from bare `include` to explicit `select` (excludes `tags` + `embedding`). Commit aa13deb. Verified live in Chrome — edit-item page fully working.
 
-4. **`packages/backend/src/controllers/routeController.ts`** (error message)
-   - Current: "Route planning is temporarily unavailable. Open in Google Maps to plan manually."
-   - Decision needed: This references Google Maps as a functional tool (user clicks a link to Google Maps). Probably fine to keep. Review in context.
+## Environment Notes
 
-### Functional References (KEEP as-is)
-- **login.tsx / register.tsx**: "Google" OAuth button — this IS Google sign-in, correct to name it
-- **LocationMap.tsx / RouteBuilder.tsx**: Google Maps links for directions — functional, not branding
-- **guide.tsx / faq.tsx**: "Google Sheets" via Zapier integration — third-party tool name, not our AI branding
-- **`_document.tsx`**: Google Fonts CDN — infrastructure, invisible to users
+- Patrick needs to sync local repo: `git stash && git pull && git stash drop`
+- Railway deployed commit aa13deb — confirmed working
+- No pending migrations from this session
 
-### Backend Comments (LOW priority, nice-to-have)
-- `batchAnalyzeController.ts` lines 37-38: "Google Vision + Claude Haiku (or Ollama fallback)"
-- `uploadController.ts` line 133: "Cloud AI (Google Vision + Claude Haiku) with Ollama fallback"
-- `itemController.ts`: Multiple comments referencing "Google Vision + Claude Haiku"
-- These are developer-only comments, not user-visible. Clean up if touching those files anyway.
+## Exact Context
 
-## What Was Completed (Session 131)
-- Print inventory 500 error fixed (embedding excluded from getItemsBySaleId) — commit 10c66a5
-- Per-sale insights filter + dropdown — commit 3cfc1ad
-- Both verified live in Chrome (print inventory shows all 43 items; insights dropdown filters correctly)
-- Full AI branding audit scoped (this document)
+**The core schema drift issue:**
+- `tags String[] @default([])` exists in `packages/database/prisma/schema.prisma` (Item model, line ~191)
+- NO migration was ever created for this field on the Item table
+- The init migration (`20260223014340_init`) has `"tags" TEXT[]` at line 59, but that's in the **Sale** table, not Item
+- Fix 1 (done): `getItemById` now uses `select` to avoid querying `tags`
+- Fix 2 (needed): create migration: `ALTER TABLE "Item" ADD COLUMN IF NOT EXISTS "tags" TEXT[] DEFAULT '{}'`
 
-## Lower Priority Carry-Forward
-- Camera tab "coming soon" regression on add-items/[saleId].tsx
-- BUG-3: `/organizer/items` route 404 (Manage Holds removed as interim)
-- Schema drift: `tags String[] @default([])` — no migration yet
-- `quantity` field: frontend accepts it, schema lacks column
-- "Collectibles" duplicate in insights category breakdown (seed data capitalization)
+**Other endpoints still using bare `include` on Item (will also P2022 if `tags` is queried):**
+- `updateItem` — line ~399: `prisma.item.findUnique({ where: { id }, include: { sale: { include: { organizer: ... } } } })`
+- `deleteItem` — line ~486: same pattern
+- `analyzeItemTags` — line ~522: same pattern
+- `getItemForOrganizer` helper — line ~570: same pattern (used by photo add/remove/reorder endpoints)
+- `bulkUpdateItems` — line ~695: `prisma.item.findMany({ where: ..., include: ... })`
+- `exportItems` — line ~815: `prisma.item.findMany({ where: { saleId }, orderBy: ... })` — no select, hits all columns
+- `placeBid` — line ~858: `prisma.item.findUnique({ where: { id }, include: ... })`
 
-## Session 131 GitHub Commits
-1. `3cfc1ad` — fix: per-sale insights filter + salesList for dropdown
-2. `10c66a5` — fix: exclude embedding from getItemsBySaleId — fixes 500 on print inventory
+These are primarily write paths — less frequently hit, but still broken. The cleanest fix is the migration (then these can stay as-is). If migration is blocked, each needs a `select` patch like `getItemById`.
+
+**Current GitHub SHA for itemController.ts:** `d913f988d26c683afc69b481b9af330f7b618ad8`
+
+**Remaining carry-forwards (not from this session):**
+- Camera tab on add-items/[saleId].tsx — "coming soon" regression still unresolved
+- BUG-3 (/organizer/items 404) — deferred
+- Patrick's beta-blocking items: Stripe business account, Google Search Console, business cards, beta organizer outreach
