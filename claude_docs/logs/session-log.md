@@ -16,6 +16,17 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+## Session 141 — 2026-03-11 — Fleet Redesign Proposal v1
+
+**Worked on:** Comprehensive fleet redesign planning session. Drafted, reviewed (2 rounds), and finalized `fleet-redesign-proposal-v1.md` with 22 approved decisions. Round 1 reviewers: architect, qa, hacker, pitchman, power-user, workflow. Round 2 reviewers: architect, hacker, pitchman, power-user. Two open questions resolved mid-session (token budget learning, DA trigger scope).
+**Decisions:** Merge CX+Support → Customer Champion. Merge R&D+Pitchman → Innovation. New agents: sales-ops, devils-advocate, steelman, investor, competitor. Board restructured to 12 seats + 6 subcommittees. Escalation channel with guardrails. Handoff protocol with integrity metadata. Red-flag veto gate. Async voting. Trial/rollback protocol. Cross-agent feedback loops. Daily friction audit. Budget-first sessions with outcome-bucketed learning. decisions-log.md. DA/Steelman scoped to direction-only with preflight checklist. Phased rollout approved.
+**Token efficiency:** Planning-only session. 10 subagent dispatches across 2 review rounds. No code changes. Medium-high burn for high strategic output.
+**Token burn:** ~120k tokens (est.), 0 checkpoints.
+**Next up:** Phase 1 rollout — 6 parallel dispatches (2 merges, escalation channel, handoff protocol, veto gate, decisions-log). QA verification. Then Phase 2.
+**Blockers:** Patrick git push needed for proposal + session docs. Neon migration still pending. Beta-blocking items unchanged.
+
+---
+
 ## Session 138 — 2026-03-11 — Plugin Skill Fleet Audit & Routing Update
 
 **Cowork Power User audit complete.** All 15 findasale-* SKILL.md files updated with Plugin Skill Delegation sections. Two stale data bugs fixed (5%/7% fee → 10% flat in architect + qa; Docker reference removed from architect). plugin-skill-routing.md created at claude_docs/operations/.
