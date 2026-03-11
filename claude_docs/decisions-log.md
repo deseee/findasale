@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-03-11 — Session 143 (Fleet Redesign Phase 2 Execution)
+
+- EXECUTED: All 5 new standalone agents created and on 2-week trial. Rollback conditions defined in trial-rollback-protocol.md.
+- EXECUTED: Advisory board restructured to 12 seats + 6 subcommittees per session 141 spec. Async voting protocol active.
+- EXECUTED: conversation-defaults v6 — budget-first planning (Rule 17), DA/Steelman co-fire (Rule 18), feedback loop routing (Rule 19).
+- EXECUTED: 2 scheduled tasks live — daily-friction-audit (8:30am Mon-Fri), weekly-pipeline-briefing (Mon 9am).
+- DECIDED: Fleet redesign complete. Both phases shipped. Next priority returns to beta launch blockers.
+
 ## 2026-03-11 — Session 141 (Fleet Redesign)
 
 - DECIDED: Merge CX + Support into Customer Champion. Reason: pre-beta scale doesn't justify split. Revisit at 50 organizers.

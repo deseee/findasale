@@ -4,17 +4,17 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": 142,
+    "sessionId": 143,
     "startedAt": "2026-03-11T00:00:00Z",
-    "estimatedTokensUsed": 12,
-    "turnCount": 1,
-    "fileReadsCount": 5,
-    "toolCallsCount": 6,
-    "subagentDispatches": 0,
+    "estimatedTokensUsed": 25,
+    "turnCount": 6,
+    "fileReadsCount": 12,
+    "toolCallsCount": 18,
+    "subagentDispatches": 1,
     "githubApiCalls": 0,
     "lastCheckpointAt": "2026-03-11T00:00:00Z",
     "compressionOccurred": false,
-    "notes": "Session 142. Phase 1 fleet redesign implementation. 6 items dispatching across 4 parallel agents (grouped by file dependency)."
+    "notes": "Session 143. Phase 2 fleet redesign — full execution. Pre-dispatch checkpoint before 4 parallel agents."
   },
   "checkpoints": [
     {
@@ -32,6 +32,14 @@
       "filesRead": 5,
       "toolCalls": 6,
       "note": "Session 142 init complete. Pre-dispatch checkpoint. About to dispatch 4 parallel agents for Phase 1 fleet redesign."
+    },
+    {
+      "turn": 6,
+      "timestamp": "2026-03-11T00:00:00Z",
+      "estimatedSessionTokens": 25,
+      "filesRead": 12,
+      "toolCalls": 18,
+      "note": "Session 143 pre-dispatch checkpoint. About to dispatch 4 parallel agents for Phase 2 fleet redesign. Est. post-dispatch: ~45k."
     }
   ],
   "compressionEvents": [],
@@ -45,6 +53,16 @@
       "subagents": 7,
       "filesChanged": 5,
       "notes": "Context loss audit. 6 parallel agents + advisory board. 5 fixes shipped. Manifest created this session — first full session to use it will be 119."
+    },
+    {
+      "sessionId": 142,
+      "date": "2026-03-11",
+      "tokensBurned": "~35k (est)",
+      "checkpointsLogged": 1,
+      "compressions": 0,
+      "subagents": 4,
+      "filesChanged": 10,
+      "notes": "Fleet redesign Phase 1 implementation. 6 items across 4 parallel agents. Two agent merges, CORE.md v3, conversation-defaults v5."
     }
   ],
   "predictionHeuristics": {

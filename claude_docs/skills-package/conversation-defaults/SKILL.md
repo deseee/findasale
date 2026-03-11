@@ -1,6 +1,6 @@
 ---
-version: 3
-last_updated: 2026-03-09 (Session 118)
+version: 6
+last_updated: 2026-03-11 (Session 143)
 name: conversation-defaults
 description: >
   Always-active conversation behavior defaults for Patrick's Cowork sessions.
@@ -292,6 +292,51 @@ Why this exists: Fleet redesign session 141 — decisions made in session N get 
 
 ---
 
+## Rule 17: Budget-first session planning
+
+At session init (after Rule 3 step 3), estimate token budget for planned work:
+
+1. List planned work items from next-session-prompt.md or Patrick's request.
+2. Estimate tokens per item: survey (5-10k), targeted edit (3-8k/file), subagent dispatch (5-15k/agent), file read batch (1-2k/100 lines), MCP push (2-5k/call).
+3. Sum estimates. Compare to available budget.
+4. If planned work exceeds 80% of available budget: flag to Patrick, propose cuts or deferrals.
+
+At session wrap, log the actual vs. estimated token burn in `.checkpoint-manifest.json` `sessionHistory[]` with a `budgetDelta` category: "succeeded-on-plan" (within ±20%), "over-plan" (>120%), or "succeeded-after-retry".
+
+Reference: `claude_docs/operations/budget-first-session-planning.md`
+
+Why this exists: Fleet redesign session 141 — budget surprises caused 3 premature session wraps in the prior 10 sessions. Pre-planning eliminates this. (Added 2026-03-11, Session 143.)
+
+---
+
+## Rule 18: DA/Steelman co-fire
+
+When dispatching `findasale-devils-advocate`, ALWAYS also dispatch `findasale-steelman` in the same parallel batch (and vice versa). They are designed as a pair.
+
+**Exception:** Patrick explicitly asks for only one of them (e.g., "just poke holes, don't steelman it").
+
+Why this exists: Fleet redesign session 141 — DA and Steelman are counterbalances. Hearing only one side produces biased advice. (Added 2026-03-11, Session 143.)
+
+---
+
+## Rule 19: Feedback loop routing
+
+After reading MESSAGE_BOARD.json (Rule 8), check for entries with a `feedbackLoop` field. If found, include the feedback signal in the next dispatch to the target agent.
+
+**Known feedback loops:**
+- Rollback → Innovation (post-mortem learning)
+- Customer Champion → Sales-Ops (friction/churn signals)
+- Competitor → Innovation (threat-as-opportunity)
+- QA → Dev (regression patterns)
+- Hacker → Architect (security findings)
+- Workflow → [responsible agent] (friction audit findings)
+
+Reference: `claude_docs/operations/cross-agent-feedback-loops.md`
+
+Why this exists: Fleet redesign session 141 — intelligence was siloed in agents with no cross-pollination. (Added 2026-03-11, Session 143.)
+
+---
+
 ## Summary
 
 | Rule | Status |
@@ -312,3 +357,6 @@ Why this exists: Fleet redesign session 141 — decisions made in session N get 
 | Surface all `## Patrick Direct` escalation blocks | Active (added 2026-03-11, Session 142) |
 | Inter-agent handoff pass-through | Active (added 2026-03-11, Session 142) |
 | Load decisions-log.md at session init | Active (added 2026-03-11, Session 142) |
+| Budget-first session planning | Active (added 2026-03-11, Session 143) |
+| DA/Steelman co-fire | Active (added 2026-03-11, Session 143) |
+| Feedback loop routing | Active (added 2026-03-11, Session 143) |
