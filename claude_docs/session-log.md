@@ -2,6 +2,12 @@
 
 ## Recent Sessions
 
+### 2026-03-10 · Session 134
+**Worked on:** Diagnosed and fixed `auctionJob` P2022 crash (`Item.tags` column missing from Neon). Created migration `20260310000002_add_item_tags`. Committed two other previously missing migrations (`add_token_version`, `add_processed_webhook_event`). Ran `prisma migrate deploy` — confirmed no pending. Audited all bare `include` Item endpoints — all safe. Logged `embedding[]` perf concern as post-beta deferred. Updated STATE.md + session docs.
+**Decisions:** Migration approach was correct (column already on Neon per `migrate deploy` output). All `include` endpoints left as-is — no `select` patching needed.
+**Next up:** Move hide/show/selected bar to top of item list. Create test CSV for import flow. Camera tab "coming soon" regression still unresolved.
+**Blockers:** None.
+
 ### 2026-03-10 · Session 133
 **Worked on:** Restored session 128 regressions (torch toggle, camera switch, photo upload, tab reorder, bulk delete on add-items/[saleId].tsx). Genericized AI vendor branding in faq.tsx + privacy.tsx. Diagnosed and fixed P0 crash on `GET /items/:id` — P2022 error because `Item.tags` column doesn't exist in production DB (migration never created); `getItemById` used Prisma `include` which queries all schema fields including the missing `tags` column. Switched to explicit `select` excluding `tags` and `embedding`. Verified edit-item page loads correctly in Chrome (Tiffany Glass Lamp #4 populated).
 **Decisions:** Use `select` (never bare `include`) on Item queries in production until `Item.tags` migration is deployed. Pattern matches existing `getItemsBySaleId` approach.

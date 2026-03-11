@@ -200,7 +200,15 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - AI vendor branding genericized: faq.tsx + privacy.tsx — "Google Vision" / "Claude Haiku" references replaced with "AI" — commit aa7ae46
 - add-items/[saleId].tsx: tab reorder, photo upload wiring, bulk delete restore — commit d7648e1
 - **P0 bug fixed:** `getItemById` (GET /items/:id) was crashing with P2022 — `Item.tags` column doesn't exist in production DB (migration never created). Switched from `include` to explicit `select`, excluding `tags` and `embedding` — commit aa13deb. Verified live in Chrome: edit-item page loads correctly.
-- ⚠️ Carry-forward: other endpoints still use `include` and will hit the same P2022 if `tags` column is queried: `updateItem`, `deleteItem`, `analyzeItemTags`, `getItemForOrganizer`, `bulkUpdateItems`, `exportItems`, `placeBid`. A migration to add `Item.tags` is also needed.
+- ✅ Resolved in session 134: `Item.tags` migration created (`20260310000002_add_item_tags`) and deployed. All bare `include` endpoints confirmed safe.
+
+**Session 134 COMPLETE (2026-03-10):** Auction job P2022 fix + session wrap.
+- Diagnosed `auctionJob` P2022 crash: `Item.tags` column missing from Neon production DB, no migration file existed.
+- Created migration `20260310000002_add_item_tags` (`ALTER TABLE "Item" ADD COLUMN IF NOT EXISTS "tags" TEXT[] NOT NULL DEFAULT '{}'`).
+- Also committed two other missing migrations: `20260309000002_add_token_version` and `20260309200001_add_processed_webhook_event`.
+- `prisma migrate deploy` confirmed no pending — column already on Neon. All Item `include` endpoints (auction job, updateItem, deleteItem, etc.) are safe.
+- ⚠️ Deferred (post-beta): `exportItems` (itemController line 815) and `trendingController` pull full `embedding[]` (768 floats/item) with no `select` — performance concern on large sales, not a crash.
+- Two items NOT completed this session (interrupted): hide/show/selected bar move to top of item list, test CSV file for import.
 
 **Session 128 COMPLETE (2026-03-10):** Chrome QA audit of session 127/128 changes. FINDING-3 fixed. CSV import 500 bug found and fixed.
 - Chrome audit PASS: tab labels ✅, click-to-edit item titles ✅, inline delete confirm ✅, CSV modal opens ✅, camera fullscreen overlay ✅
@@ -220,4 +228,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-10 (session 133 — session 128 regressions restored, AI branding fix, edit-item P2022 crash fixed)
+Last Updated: 2026-03-10 (session 134 — Item.tags migration deployed, missing migrations committed, embedding perf deferred)
