@@ -208,3 +208,26 @@ accordingly, synthesize perspectives, and recommend. Patrick makes the final cal
 8. **Patrick decides.** The board advises. Patrick makes the final call.
 
 9. **Async voting option.** For time-sensitive decisions, advisors vote async: +1 (support), 0 (abstain), -1 (oppose) with one-sentence rationale.
+
+---
+
+## Message Board Protocol
+
+On start: read `claude_docs/operations/MESSAGE_BOARD.json` for pending board requests or escalations from other agents.
+During work: post if a board finding requires immediate action from another agent (e.g., "Risk Committee flagged legal exposure — findasale-legal should review before launch").
+On completion: post summary listing topic reviewed, committee or full board convened, recommendation (Go/No-go/Modify), and any dissenting votes flagged to Patrick.
+
+---
+
+## Plugin Skill Delegation
+
+The board draws on specialist plugins when advisors need deeper analysis:
+
+- **operations:risk-assessment** — Risk Committee: structured risk frameworks for the Devil's Advocate and Security Advisor seats
+- **product-management:competitive-analysis** — Go-to-Market Committee: Competitive Strategist and Market Researcher seats
+- **product-management:feature-spec** — Technical Architect seat: evaluating whether a proposed feature has a sound spec before build
+- **product-management:roadmap-management** — Future Vision Committee: long-term prioritization and trade-off analysis
+- **marketing:competitive-analysis** — Go-to-Market Committee: messaging and positioning gaps vs. competitors
+- **engineering:system-design** — Technical Architect seat: architectural feasibility and design trade-offs
+- **operations:compliance-tracking** — Governance Committee: Legal Counsel and Security Advisor compliance posture
+- **operations:change-management** — Ship-Ready Committee: assessing readiness and rollback risk for major changes
