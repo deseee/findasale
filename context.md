@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-11T16:19:59.286Z*
+*Generated at 2026-03-11T22:25:59.371Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -35,6 +35,8 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   └── pre-push
 ├── .gitignore
 ├── .skills/
+│   ├── findasale-customer-champion/
+│   │   └── SKILL.md
 │   └── skills/
 │       ├── conversation-defaults/
 │       │   └── SKILL.md
@@ -51,54 +53,31 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 ├── claude_docs/
 │   ├── .last-wrap
 │   ├── CORE.md
-│   ├── QUICK_REFERENCE_diagnosis-implementation-contract.md
 │   ├── RECOVERY.md
 │   ├── SECURITY.md
-│   ├── SESSION_WRAP_PROTOCOL.md
 │   ├── STACK.md
 │   ├── STATE.md
-│   ├── WRAP_PROTOCOL_QUICK_REFERENCE.md
-│   ├── archive/ (0 files)
-│   ├── audits/
-│   │   ├── chrome-audit-session-124.md
-│   │   ├── cowork-power-user-session-init-audit-2026-03-11.md
-│   │   ├── next-audit-brief-126-dashboard-items.md
-│   │   ├── next-audit-brief-add-edit-item.md
-│   │   ├── session-125-edit-item-photo-audit.md
-│   │   └── session-126-dashboard-items-audit.md
+│   ├── archive/ (9 files)
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (8 files)
 │   ├── competitor-intel/ (1 files)
+│   ├── decisions-log.md
+│   ├── escalation-log.md
 │   ├── feature-notes/ (9 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (1 files)
-│   ├── improvement-memos/ (5 files)
 │   ├── logs/ (2 files)
-│   ├── marketing/
-│   │   ├── content-pipeline/
-│   │   │   └── spring-content-2026-03-09.md
-│   │   └── spring-2026-content.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (20 files)
-│   ├── qa/
-│   │   └── payment-edge-cases-2026-03-09.md
+│   ├── operations/ (23 files)
 │   ├── research/ (2 files)
-│   ├── security/
-│   │   └── oauth-redteam-2026-03-09.md
 │   ├── self-healing/ (1 files)
-│   ├── self_healing_skills.md
 │   ├── session-log.md
-│   ├── session-wraps/
-│   │   └── session-124-wrap.md
-│   ├── skills-package/ (27 files)
+│   ├── skills-package/ (29 files)
 │   ├── strategy/ (4 files)
-│   ├── test.tmp
-│   ├── ux-spotchecks/
-│   │   ├── 2026-03-11.md
-│   │   └── rapidfire-mode-ux-spec.md
 │   └── workflow-retrospectives/ (0 files)
 ├── docs/
 │   └── CD2_PHASE2_TREASURE_HUNT.md
+├── fleet-redesign-proposal-v1.md
 ├── next
 ├── package.json
 ├── packages/
@@ -204,7 +183,17 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── zisKPUAA
 │   ├── zivGh9XE
 │   └── ziy2i7m2
-└── ziVgsNRB
+├── zi54JQTo
+├── ziB74Bhe
+├── ziII9Ru6
+├── ziUGIXdI
+├── ziUSoel0
+├── ziVgsNRB
+├── zikuUM5r
+├── zimhIoGT
+├── zinUkFrh
+├── ziylST2k
+└── ziz0hA2T
 
 ```
 

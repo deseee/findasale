@@ -7,12 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 144 COMPLETE (2026-03-11) — FILE GOVERNANCE OVERHAUL (ADVISORY BOARD MEETING #1):**
+Advisory Board Meeting #1 convened (full 12-seat board). Agenda: (1) audit sessions 142-143 — strategic deliverables confirmed, file hygiene failures identified; (2) hard-gated file/folder rules — 5-point plan approved unanimously and implemented. Implementation: deleted 10 junk/deprecated files, rebuilt MESSAGE_BOARD.json (68KB corrupted → clean 600-byte JSON), archived 25 files from 9 unauthorized directories (audits/, marketing/, qa/, security/, session-wraps/, ux-spotchecks/, improvement-memos/, operations/context-audit/), created archive-index.json (Records-only vault with manifest visible to all agents), rewrote file-creation-schema.md with hard gates + Locked Folder Map + Archive Vault section + Tier system + banned temp patterns, added Rules 20-22 to conversation-defaults SKILL.md (temp gate, locked dirs, archive vault), added Archive Vault Gatekeeper section to findasale-records SKILL.md. Both skills packaged and presented to Patrick.
+**ACTION REQUIRED (Patrick):**
+1. Install updated skills (presented as .skill files): `conversation-defaults` (v7, Rules 20-22) + `findasale-records` (Archive Vault Gatekeeper)
+2. Complete git push: `git add claude_docs/self-healing/self_healing_skills.md && git add claude_docs/archive/ && git add claude_docs/operations/ && git commit -m "Session 144: file governance overhaul" && .\push.ps1`
+
 **Session 143 COMPLETE (2026-03-11) — FLEET REDESIGN PHASE 2 IMPLEMENTATION:**
 Phase 2 fully executed. 5 new agents: `findasale-sales-ops`, `findasale-devils-advocate`, `findasale-steelman`, `findasale-investor`, `findasale-competitor`. Advisory board rewritten to 12 seats + 6 subcommittees + async voting. 4 infrastructure docs: budget-first-session-planning, trial-rollback-protocol, cross-agent-feedback-loops, async-decision-voting. 2 scheduled tasks: daily-friction-audit (8:30am Mon-Fri), weekly-pipeline-briefing (Mon 9am). conversation-defaults v6: Rules 17-19 (budget-first, DA/Steelman co-fire, feedback loop routing). All 5 new agents on 2-week trial.
-**ACTION REQUIRED (Patrick):**
-1. Install 5 new skills: `findasale-sales-ops`, `findasale-devils-advocate`, `findasale-steelman`, `findasale-investor`, `findasale-competitor` (source in `claude_docs/skills-package/`)
-2. Reinstall updated: `findasale-advisory-board`, `conversation-defaults` (source in `claude_docs/skills-package/`)
-3. Push all changes via `.\push.ps1` (see file list at end of session)
+**Skills still pending Patrick install from session 143:** `findasale-sales-ops`, `findasale-devils-advocate`, `findasale-steelman`, `findasale-investor`, `findasale-competitor`, `findasale-advisory-board` (rewritten)
 
 **Sessions 140-142:** Fleet redesign Phase 1 complete + plugin-skill awareness upgrade. See session-log for details.
 
@@ -275,4 +278,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-11 (session 137 — Rapidfire camera bug fixed, P2022 migration identified, enforcement hardening complete, global subagent rule established)
+Last Updated: 2026-03-11 (session 144 — Advisory Board Meeting #1, file governance overhaul, archive vault created, conversation-defaults v7 + Records skill updated)
