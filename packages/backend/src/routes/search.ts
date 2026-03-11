@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { getVisionLabels } from '../services/cloudAIService';
 import { upload } from '../controllers/uploadController';
 import { searchItems } from '../services/itemSearchService';
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 
 const router = Router();
 
@@ -58,6 +59,7 @@ router.get('/', async (req: Request, res: Response) => {
       ],
       status: 'AVAILABLE',
       sale: { status: 'PUBLISHED', ...saleStatusWhere },
+      ...PUBLIC_ITEM_FILTER,
     };
 
     // Apply price filters
@@ -202,6 +204,7 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
       category: { equals: category, mode: 'insensitive' as const },
       status: 'AVAILABLE',
       sale: { status: 'PUBLISHED' },
+      ...PUBLIC_ITEM_FILTER,
     };
 
     const [items, total] = await Promise.all([
@@ -329,6 +332,7 @@ router.get('/random', async (req: Request, res: Response) => {
         i.status = 'AVAILABLE'
         AND s.status = 'PUBLISHED'
         AND s."endDate" >= NOW()
+        AND i."draftStatus" = 'PUBLISHED'
         ${priceCondition}
         ${categoryCondition}
         ${locationCondition}
@@ -403,6 +407,7 @@ router.post('/visual', upload.single('photo'), async (req: Request, res: Respons
         ],
         status: 'AVAILABLE',
         sale: { status: 'PUBLISHED' },
+        ...PUBLIC_ITEM_FILTER,
       },
       select: {
         id: true,

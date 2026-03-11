@@ -99,6 +99,7 @@ import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
 import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest — Mondays 8 AM
 import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly email
 import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
+import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -261,7 +262,10 @@ process.on('SIGTERM', async () => {
 // V1: Listen on the HTTP server (not app.listen) so Socket.io shares the same port
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`FindA.Sale backend running on port ${PORT} (HTTP + Socket.io)`);
-  
+
+  // Phase 2B: Register cleanup cron for stale DRAFT items
+  scheduleCleanupCron();
+
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {
     console.log('Environment variables status:');

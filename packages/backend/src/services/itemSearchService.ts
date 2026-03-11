@@ -142,6 +142,7 @@ async function ftsSearch(params: {
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
+      AND i."draftStatus" = 'PUBLISHED'
       AND i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
   `);
   sqlParams.push(q, q);
@@ -207,6 +208,7 @@ async function ilikeSearch(params: {
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
+      AND i."draftStatus" = 'PUBLISHED'
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -256,6 +258,7 @@ async function filteredSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<Sea
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
+      AND i."draftStatus" = 'PUBLISHED'
   `);
 
   idx = appendFilters(sqlParts, sqlParams, idx, { category, condition, saleId, priceMin, priceMax });
@@ -288,6 +291,7 @@ async function countFts(
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
+      AND i."draftStatus" = 'PUBLISHED'
       AND i."searchVector" @@ plainto_tsquery('english', $${idx})
   `);
   sqlParams.push(q);
@@ -313,6 +317,7 @@ async function countIlike(
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
+      AND i."draftStatus" = 'PUBLISHED'
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -341,6 +346,7 @@ async function countFiltered(
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
+      AND i."draftStatus" = 'PUBLISHED'
   `);
   appendFilters(sqlParts, sqlParams, idx, filters);
 
@@ -438,13 +444,13 @@ export async function getItemFacets(
   const [categoryRows, conditionRows, priceRows] = await Promise.all([
     prisma.item.groupBy({
       by: ['category'],
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, category: { not: null } },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED' },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     }),
     prisma.item.groupBy({
       by: ['condition'],
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, condition: { not: null } },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, condition: { not: null }, draftStatus: 'PUBLISHED' },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     }),
@@ -471,7 +477,7 @@ export async function getItemFacets(
 export async function getItemCategories(): Promise<Record<string, number>> {
   const rows = await prisma.item.groupBy({
     by: ['category'],
-    where: { status: 'AVAILABLE', isActive: true, sale: { status: 'PUBLISHED' }, category: { not: null } },
+    where: { status: 'AVAILABLE', isActive: true, sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED' },
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
   });
