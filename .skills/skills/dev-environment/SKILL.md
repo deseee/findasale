@@ -1,5 +1,6 @@
 ---
 name: dev-environment
+last_updated: 2026-03-11 (Session 137)
 description: >
   Patrick's FindA.Sale development environment reference. Critical for avoiding
   the wrong-database trap, stale Prisma client, wrong terminal syntax, and
@@ -24,9 +25,14 @@ Getting these details wrong wastes entire sessions.
 If you are a subagent (findasale-architect, findasale-dev, findasale-ops, or any other)
 and you find yourself about to output a shell command, PowerShell command, Prisma command,
 migration instruction, or environment variable guidance — stop and verify this skill has
-been loaded in the current session. If it has not, load it immediately (invoke
-`Skill('dev-environment')`) before issuing the command. This applies even mid-sprint,
-in follow-up corrections, and in handoff responses. No exceptions.
+been loaded in the current session.
+
+**GATE (fires before emitting ANY such command):**
+- Ask: "Have I loaded dev-environment in this session?"
+  - NO or UNSURE → Load it immediately via `Skill('dev-environment')`. Then issue the command.
+  - YES and I see my own load call → Proceed; it's loaded.
+
+This applies even mid-sprint, in follow-up corrections, and in handoff responses. No exceptions.
 
 ---
 
@@ -35,17 +41,24 @@ in follow-up corrections, and in handoff responses. No exceptions.
 This rule fires before every Prisma command, migration instruction, or any command
 that references a database URL — regardless of whether this skill was already loaded.
 
-1. **Read `packages/backend/.env` from the VM before generating the command.**
-   Never output a placeholder like `<paste your Neon DATABASE_URL>`.
+**GATE (MUST fire before emitting ANY database command or URL):**
+- Ask: "Does this command reference a database URL?"
+  - YES → STOP. Execute checklist before emitting:
+    1. Read `packages/backend/.env` from the VM right now.
+    2. Find the active `DATABASE_URL=postgresql://...@localhost:5432/findasale` line (NOT the commented one).
+       - For Neon (production): Find the commented line `# DATABASE_URL=postgresql://neondb`.
+       - For local: Find the active line.
+    3. INLINE the full real URL directly into the command output. NO PLACEHOLDERS.
+    4. Emit the corrected command.
+  - NO → Proceed normally.
 
-2. **The Neon URL is on a commented line** starting with `# DATABASE_URL=postgresql://neondb`.
-   Strip the `# ` prefix and inline the full URL directly into the command output.
+**If the .env file cannot be read:**
+- STOP immediately. Do NOT emit a placeholder.
+- Tell Patrick: "I cannot read `packages/backend/.env`. Please paste the DATABASE_URL from your .env file so I can generate the correct command."
+- Wait for Patrick's response.
 
-3. **If the .env file cannot be read:** Stop. Tell Patrick the file is unreadable
-   and ask him to paste the URL. Do not emit a placeholder and continue.
-
-4. **This applies even if dev-environment was loaded earlier in the session.**
-   Re-read .env at command-generation time if there is any doubt about the current value.
+**This applies even if dev-environment was loaded earlier in the session.**
+Re-read .env at command-generation time if there is any doubt about the current value.
 
 Outputting a placeholder URL when the real value is readable from the VM is a core violation.
 Flagged by Patrick on 2026-03-11. No exceptions.
