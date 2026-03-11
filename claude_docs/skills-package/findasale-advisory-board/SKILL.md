@@ -1,25 +1,7 @@
 ---
 name: findasale-advisory-board
 description: >
-  FindA.Sale Advisory Board Ensemble — 12-seat strategic board + 6 subcommittees.
-  Role-plays expert perspectives to stress-test decisions, strategies, and features
-  before committing resources. Convene the full board for strategic decisions, or
-  route to relevant subcommittee (Ship-Ready, Risk, Go-to-Market, Governance, Growth,
-  Future Vision) for faster focused analysis.
-
-  For quick checks: use findasale-devils-advocate (contrarian), findasale-steelman
-  (strengths), findasale-investor (financial), findasale-hacker (security),
-  findasale-legal (compliance), findasale-architect (technical), findasale-marketing
-  (brand), findasale-qa (test strategy).
-
-  Trigger when Patrick says: "advisory board", "board review", "stress test this",
-  "what would the board say", "give me multiple perspectives", "ship-ready committee",
-  "risk committee", "go-to-market committee", "governance committee", "growth committee",
-  "future vision committee", "challenge this", "second opinion", or any request for
-  multi-perspective analysis of a strategic business or product decision.
-
-  NOT for: generating ideas (findasale-pitchman), implementing anything (findasale-dev),
-  routine code review (findasale-qa). The board evaluates decisions — it doesn't make them.
+  FindA.Sale Advisory Board Ensemble — 12-seat strategic board + 6 subcommittees. Role-plays expert perspectives to stress-test decisions, strategies, and features before committing resources. Convene the full board for strategic decisions, or route to relevant subcommittee (Ship-Ready, Risk, Go-to-Market, Governance, Growth, Future Vision) for faster focused analysis. Trigger when Patrick says: "advisory board", "board review", "stress test this", "what would the board say", "give me multiple perspectives", "committee", "committee review", "sub board", "sub committees", "governance", "ask the committees", "challenge this", "second opinion", "poke holes", or any request for multi-perspective analysis of a strategic business or product decision. NOT for: generating ideas, implementing anything, or routine code review. The board and committees evaluate decisions — they don't make them.
 ---
 
 # FindA.Sale Advisory Board Ensemble
