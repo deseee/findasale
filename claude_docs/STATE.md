@@ -7,6 +7,11 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 137 COMPLETE (2026-03-11) — RAPIDFIRE BUG FIX + ENFORCEMENT HARDENING:**
+Two critical bugs fixed: (1) Prisma P2022 — `Item.draftStatus` missing from Neon production DB — fixed by deploying migration `20260311000002_add_item_draft_status`; (2) Rapidfire camera button bug — clicking Rapidfire opened regular camera flow instead of rapid capture flow — fixed with `handleRapidCameraComplete` handler in add-items/[saleId].tsx, creates optimistic DRAFT items per photo. Workflow improvements: skill enforcement gates hardened across `conversation-defaults` and `dev-environment`, CORE.md env gate upgraded to hard STOP gate with explicit `Skill()` invocation, SECURITY.md §6 updated with no-placeholder-credential rule, skill packaging workflow fixed. Global CLAUDE.md updated with subagent-first rule. Files changed: `packages/frontend/pages/organizer/add-items/[saleId].tsx`, plus docs/skills already pushed to GitHub.
+
+**ACTION REQUIRED (Patrick):** Deploy migration `20260311000002_add_item_draft_status` to Neon with: `cd packages/database && npx prisma migrate deploy` (with real credentials from packages/backend/.env).
+
 **Session 136 COMPLETE (2026-03-10) — RAPIDFIRE MODE IMPLEMENTATION:**
 Phases 1A–3C fully built and pushed to GitHub. QA verdict: PASS WITH NOTES. One migration pending Neon deploy — everything else is live on Railway/Vercel once Patrick deploys.
 
@@ -149,8 +154,10 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-**All migrations deployed.** 69 total applied as of 2026-03-09 (confirmed Patrick, session 119).
-Previously deployed (69 total):
+**Pending Neon migration deploy (Session 137):**
+- `20260311000002_add_item_draft_status` — PENDING DEPLOY. Adds `draftStatus` + `aiErrorLog` + `optimisticLockVersion` to Item schema. Unblocks auction end job and completes rapidfire feature. Patrick must run: `cd packages/database && npx prisma migrate deploy` (with real Neon URL from packages/backend/.env)
+
+**All other migrations deployed.** 70 total applied as of session 137. Previously deployed:
 1. `20260309_add_auction_reserve_price`
 2. `20260310000001_add_item_fulltext_search_indexes`
 3. `20260311000001_add_sale_type_item_listing_type`
@@ -259,4 +266,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-10 (session 135 — Rapidfire Mode design sprint complete, dev prompt written, all decisions locked)
+Last Updated: 2026-03-11 (session 137 — Rapidfire camera bug fixed, P2022 migration identified, enforcement hardening complete, global subagent rule established)
