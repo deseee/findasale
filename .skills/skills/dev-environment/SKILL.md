@@ -30,13 +30,25 @@ in follow-up corrections, and in handoff responses. No exceptions.
 
 ---
 
-## Before Any Prisma or Database Command (Non-Negotiable)
+## Before Any Database Command (Non-Negotiable)
 
-Claude must read `packages/backend/.env` from the VM before issuing any command that references a database URL. Never output a placeholder like "<paste your Neon DATABASE_URL>" — always inline the real value read from the file.
+This rule fires before every Prisma command, migration instruction, or any command
+that references a database URL — regardless of whether this skill was already loaded.
 
-The Neon DATABASE_URL is on the commented line starting with `# DATABASE_URL=postgresql://neondb` — read that line, strip the `# ` prefix, and use the full value. If the .env file cannot be read, stop and tell Patrick rather than issuing a placeholder command.
+1. **Read `packages/backend/.env` from the VM before generating the command.**
+   Never output a placeholder like `<paste your Neon DATABASE_URL>`.
 
-This rule applies even if dev-environment was loaded earlier in the session — re-read .env at command time if in doubt.
+2. **The Neon URL is on a commented line** starting with `# DATABASE_URL=postgresql://neondb`.
+   Strip the `# ` prefix and inline the full URL directly into the command output.
+
+3. **If the .env file cannot be read:** Stop. Tell Patrick the file is unreadable
+   and ask him to paste the URL. Do not emit a placeholder and continue.
+
+4. **This applies even if dev-environment was loaded earlier in the session.**
+   Re-read .env at command-generation time if there is any doubt about the current value.
+
+Outputting a placeholder URL when the real value is readable from the VM is a core violation.
+Flagged by Patrick on 2026-03-11. No exceptions.
 
 ---
 
@@ -71,7 +83,7 @@ Hot reload is handled by nodemon (backend) and Next.js (frontend). No container 
 Two databases in use:
 
 | Context | Database | URL source |
-|---------|----------|----------|
+|---------|----------|------------|
 | **Local dev** | Native PostgreSQL on Windows | `packages/backend/.env` → active `DATABASE_URL=postgresql://...@localhost:5432/findasale` |
 | **Production** | Neon PostgreSQL (cloud) | `packages/backend/.env` → **commented out** `# DATABASE_URL=postgresql://neondb_owner:...@neon.tech/neondb` |
 
@@ -167,7 +179,7 @@ git commit -m "chore: update lockfile for <package>"
 Docker-based image-tagger is **retired**. Cloud AI pipeline is live:
 
 | Step | Service | Purpose |
-|------|---------|--------|
+|------|---------|---------|
 | Photo analysis | Google Cloud Vision | Labels, objects, colors |
 | Structured tagging | Claude Haiku | Title, description, category, condition |
 | Fallback | Ollama (local, optional) | Local dev only |
@@ -176,7 +188,7 @@ Docker-based image-tagger is **retired**. Cloud AI pipeline is live:
 
 ## Git Push Workflow
 
-**Never use raw `git push`.** Always use `.\ push.ps1`:
+**Never use raw `git push`.** Always use `.\push.ps1`:
 
 ```powershell
 git add packages/backend/src/controllers/someFile.ts
