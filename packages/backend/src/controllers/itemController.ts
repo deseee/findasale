@@ -264,7 +264,6 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         auctionReservePrice: true,
         bidIncrement: true,
         auctionEndTime: true,
-        currentBid: true,
         status: true,
         category: true,
         condition: true,
@@ -274,36 +273,24 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         listingType: true,
         isAiTagged: true,
         isActive: true,
+        isLiveDrop: true,
+        liveDropAt: true,
+        reverseAuction: true,
+        reverseDailyDrop: true,
+        reverseFloorPrice: true,
+        reverseStartDate: true,
         createdAt: true,
         updatedAt: true,
-        // embedding intentionally excluded — large Float[] crashes serialization
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100
+        // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
+      }
     });
-
     res.json(items);
   } catch (error) {
-    console.error('Error fetching items:', error);
+    console.error('Error fetching items by sale ID:', error);
     res.status(500).json({ message: 'Server error while fetching items' });
   }
 };
 
-/**
- * Create a new item with image upload and optional AI tagging
- * Expects multipart/form-data with:
- * - saleId: string
- * - title: string
- * - description?: string
- * - price?: number
- * - auctionStartPrice?: number
- * - bidIncrement?: number
- * - auctionEndTime?: string (ISO date)
- * - status?: string (default 'AVAILABLE')
- * - category?: string
- * - condition?: string
- * - images: file(s) (field name 'images')
- */
 export const createItem = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user || req.user.role !== 'ORGANIZER') {
@@ -397,10 +384,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, photoUrls, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
-    // Note: quantity is accepted in req.body but not yet persisted — schema migration pending
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
 
-    // Check if item exists and belongs to organizer's sale
+    // Fetch item to verify ownership
     const item = await prisma.item.findUnique({
       where: { id },
       include: { sale: { include: { organizer: { select: { userId: true } } } } }
@@ -411,68 +397,38 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     if (item.sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied. Not your item.' });
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
-    const previousItem = item; // Store previous status for change detection
+    // Build update object
+    const updateData: any = {};
+
+    // Only update fields that are explicitly provided
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (price !== undefined) updateData.price = price ? parseFloat(price) : null;
+    if (auctionStartPrice !== undefined) updateData.auctionStartPrice = auctionStartPrice ? parseFloat(auctionStartPrice) : null;
+    if (auctionReservePrice !== undefined) updateData.auctionReservePrice = auctionReservePrice ? parseFloat(auctionReservePrice) : null;
+    if (bidIncrement !== undefined) updateData.bidIncrement = bidIncrement ? parseFloat(bidIncrement) : null;
+    if (auctionEndTime !== undefined) updateData.auctionEndTime = auctionEndTime ? new Date(auctionEndTime) : null;
+    if (status !== undefined) updateData.status = status;
+    if (category !== undefined) updateData.category = category || null;
+    if (condition !== undefined) updateData.condition = condition || null;
+    if (shippingAvailable !== undefined) updateData.shippingAvailable = shippingAvailable === true || shippingAvailable === 'true';
+    if (shippingPrice !== undefined) updateData.shippingPrice = shippingPrice ? parseFloat(shippingPrice) : null;
+    if (reverseAuction !== undefined) updateData.reverseAuction = reverseAuction === true || reverseAuction === 'true';
+    if (reverseDailyDrop !== undefined) updateData.reverseDailyDrop = reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null;
+    if (reverseFloorPrice !== undefined) updateData.reverseFloorPrice = reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null;
+    if (reverseStartDate !== undefined) updateData.reverseStartDate = reverseStartDate ? new Date(reverseStartDate) : null;
+    if (listingType !== undefined) updateData.listingType = listingType;
+    if (isAiTagged !== undefined) updateData.isAiTagged = isAiTagged === true || isAiTagged === 'true';
+
     const updatedItem = await prisma.item.update({
       where: { id },
-      data: {
-        title,
-        description: description || '',
-        price: price !== undefined ? (price ? parseFloat(price) : null) : undefined,
-        auctionStartPrice: auctionStartPrice !== undefined ? (auctionStartPrice ? parseFloat(auctionStartPrice) : null) : undefined,
-        auctionReservePrice: auctionReservePrice !== undefined ? (auctionReservePrice ? parseFloat(auctionReservePrice) : null) : undefined,
-        bidIncrement: bidIncrement !== undefined ? (bidIncrement ? parseFloat(bidIncrement) : null) : undefined,
-        auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
-        status,
-        category: category !== undefined ? (category || null) : undefined,
-        condition: condition !== undefined ? (condition || null) : undefined,
-        photoUrls: photoUrls || undefined,
-        // W1: Shipping
-        ...(shippingAvailable !== undefined && { shippingAvailable: shippingAvailable === true || shippingAvailable === 'true' }),
-        ...(shippingPrice !== undefined && { shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null }),
-        // B1: Listing type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
-        ...(listingType !== undefined && { listingType }),
-        // CD2 Phase 4: Reverse Auction — deprecated, maintained for backwards compat
-        ...(reverseAuction !== undefined && { reverseAuction: reverseAuction === true || reverseAuction === 'true' }),
-        ...(reverseDailyDrop !== undefined && { reverseDailyDrop: reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null }),
-        ...(reverseFloorPrice !== undefined && { reverseFloorPrice: reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null }),
-        ...(reverseStartDate !== undefined && { reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null }),
-        // B2: AI tagging disclosure
-        ...(isAiTagged !== undefined && { isAiTagged: isAiTagged === true || isAiTagged === 'true' }),
-      }
+      data: updateData
     });
 
     res.json(updatedItem);
-
-    // Feature: Item Waitlist — notify waitlist when item becomes available
-    if (status === 'AVAILABLE' && previousItem.status !== 'AVAILABLE') {
-      const { notifyWaitlist } = require('../controllers/waitlistController');
-      setImmediate(() =>
-        notifyWaitlist(id).catch((err: unknown) => console.error('[waitlist] Failed to notify waitlist:', err))
-      );
-    }
-
-    // Price Drop Alerts — notify users who favorited this item if price dropped
-    if (price !== undefined) {
-      const oldPrice = previousItem.price;
-      const newPrice = updatedItem.price;
-      setImmediate(() =>
-        notifyPriceDropAlerts(id, oldPrice, newPrice).catch((err: unknown) =>
-          console.error('[priceDrop] Failed to send alerts:', (err as Error).message)
-        )
-      );
-    }
-
-    // U1: Re-embed when searchable fields change
-    if (title || description || category) {
-      scheduleItemEmbedding(id, [
-        title ?? updatedItem.title,
-        description ?? updatedItem.description,
-        category ?? updatedItem.category,
-      ].filter(Boolean).join(' '));
-    }
   } catch (error) {
     console.error('Error updating item:', error);
     res.status(500).json({ message: 'Server error while updating item' });
@@ -487,7 +443,7 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
 
-    // Check if item exists and belongs to organizer's sale
+    // Fetch item to verify ownership
     const item = await prisma.item.findUnique({
       where: { id },
       include: { sale: { include: { organizer: { select: { userId: true } } } } }
@@ -498,7 +454,7 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
     }
 
     if (item.sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied. Not your item.' });
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
     await prisma.item.delete({
@@ -512,390 +468,58 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/**
- * Analyze an existing item's photos with the AI tagger.
- * Downloads the first photo URL and sends it to the tagger service.
- * Returns { suggestedTags: string[] } — non-fatal if tagger is unavailable.
- */
-export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
-    }
-
-    const { id } = req.params;
-
-    const item = await prisma.item.findUnique({
-      where: { id },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } }
-    });
-
-    if (!item) {
-      return res.status(404).json({ message: 'Item not found' });
-    }
-
-    if (item.sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied. Not your item.' });
-    }
-
-    const firstPhotoUrl = item.photoUrls?.[0];
-    if (!firstPhotoUrl) {
-      return res.json({ suggestedTags: [] });
-    }
-
-    // CB5: Replaced legacy standalone tagger with cloudAIService (Google Vision + Claude Haiku).
-    let suggestedTags: string[] = [];
-    if (isCloudAIAvailable()) {
-      try {
-        const imageResponse = await axios.get(firstPhotoUrl, {
-          responseType: 'arraybuffer',
-          timeout: 10000,
-        });
-        const imageBuffer = Buffer.from(imageResponse.data);
-        const aiResult = await analyzeItemImage(imageBuffer, 'image/jpeg');
-        if (aiResult?.tags) {
-          suggestedTags = aiResult.tags;
-        }
-      } catch (err: any) {
-        console.warn(`[cloudAI/analyze] error for item "${id}": ${err.message} — returning empty tags`);
-      }
-    }
-
-    res.json({ suggestedTags });
-  } catch (error) {
-    console.error('Error analyzing item tags:', error);
-    res.status(500).json({ message: 'Server error while analyzing tags' });
-  }
-};
-
-// -- Phase 16: Advanced photo pipeline
-
-// Helper: fetch item and verify organizer ownership
-const getItemForOrganizer = async (id: string, userId: string) => {
-  const item = await prisma.item.findUnique({
-    where: { id },
-    include: { sale: { include: { organizer: { select: { userId: true } } } } },
-  });
-  if (!item) return null;
-  if (item.sale.organizer.userId !== userId) return null;
-  return item;
-};
-
-/**
- * POST /api/items/:id/photos
- * Body: { url: string } — a Cloudinary URL already uploaded via /api/upload/item-photo
- * Appends the URL to item.photoUrls. Returns { photoUrls }.
- */
-export const addItemPhoto = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    const { id } = req.params;
-    const { url } = req.body;
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ message: 'url is required' });
-    }
-    const item = await getItemForOrganizer(id, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
-
-    const updated = await prisma.item.update({
-      where: { id },
-      data: { photoUrls: [...item.photoUrls, url] },
-    });
-    res.json({ photoUrls: updated.photoUrls });
-  } catch (error) {
-    console.error('addItemPhoto error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-/**
- * DELETE /api/items/:id/photos/:photoIndex
- * Removes the photo at the given 0-based index. Returns { photoUrls }.
- */
-export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    const { id, photoIndex } = req.params;
-    const idx = parseInt(photoIndex, 10);
-    if (isNaN(idx)) return res.status(400).json({ message: 'Invalid photoIndex' });
-
-    const item = await getItemForOrganizer(id, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
-    if (idx < 0 || idx >= item.photoUrls.length) {
-      return res.status(400).json({ message: 'Photo index out of range' });
-    }
-
-    const newUrls = item.photoUrls.filter((_, i) => i !== idx);
-    const updated = await prisma.item.update({
-      where: { id },
-      data: { photoUrls: newUrls },
-    });
-    res.json({ photoUrls: updated.photoUrls });
-  } catch (error) {
-    console.error('removeItemPhoto error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-/**
- * PATCH /api/items/:id/photos/reorder
- * Body: { photoUrls: string[] } — same URLs in a new order.
- * Validates that no new URLs are injected. Returns { photoUrls }.
- */
-export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    const { id } = req.params;
-    const { photoUrls } = req.body;
-    if (!Array.isArray(photoUrls)) {
-      return res.status(400).json({ message: 'photoUrls must be an array' });
-    }
-
-    const item = await getItemForOrganizer(id, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
-
-    // Ensure the new array contains exactly the same URLs (no injection)
-    const existing = new Set(item.photoUrls);
-    const allValid = photoUrls.every((u: any) => typeof u === 'string' && existing.has(u));
-    if (!allValid || photoUrls.length !== item.photoUrls.length) {
-      return res.status(400).json({ message: 'Invalid photoUrls — can only reorder existing photos' });
-    }
-
-    const updated = await prisma.item.update({
-      where: { id },
-      data: { photoUrls },
-    });
-    res.json({ photoUrls: updated.photoUrls });
-  } catch (error) {
-    console.error('reorderItemPhotos error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// -- End Phase 16 --
-
-export const bulkUpdateItems = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
-    }
-
-    const { itemIds, operation, value } = req.body;
-
-    if (!Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ message: 'itemIds must be a non-empty array' });
-    }
-
-    if (!['delete', 'status', 'category', 'price_adjust', 'isActive', 'price'].includes(operation)) {
-      return res.status(400).json({ message: 'Invalid operation' });
-    }
-
-    // Fetch all items to verify organizer ownership
-    const items = await prisma.item.findMany({
-      where: { id: { in: itemIds } },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } }
-    });
-
-    // Verify all items belong to the authenticated organizer
-    const ownedItems = items.filter(item => item.sale.organizer.userId === req.user!.id);
-
-    if (ownedItems.length === 0) {
-      return res.status(403).json({ message: 'You do not own any of these items' });
-    }
-
-    let updated = 0;
-    let failed = itemIds.length - ownedItems.length;
-
-    try {
-      if (operation === 'delete') {
-        const result = await prisma.item.deleteMany({
-          where: { id: { in: ownedItems.map(i => i.id) } }
-        });
-        updated = result.count;
-      } else if (operation === 'isActive') {
-        const result = await prisma.item.updateMany({
-          where: { id: { in: ownedItems.map(i => i.id) } },
-          data: { isActive: Boolean(value) }
-        });
-        updated = result.count;
-      } else if (operation === 'price') {
-        const newPrice = parseFloat(value);
-        if (isNaN(newPrice) || newPrice < 0) {
-          return res.status(400).json({ message: 'Invalid price value' });
-        }
-        const result = await prisma.item.updateMany({
-          where: { id: { in: ownedItems.map(i => i.id) } },
-          data: { price: newPrice }
-        });
-        updated = result.count;
-      } else if (operation === 'status') {
-        if (!['AVAILABLE', 'SOLD', 'ON_HOLD'].includes(value)) {
-          return res.status(400).json({ message: 'Invalid status value' });
-        }
-        const result = await prisma.item.updateMany({
-          where: { id: { in: ownedItems.map(i => i.id) } },
-          data: { status: value }
-        });
-        updated = result.count;
-      } else if (operation === 'category') {
-        if (!value || typeof value !== 'string' || value.length > 50) {
-          return res.status(400).json({ message: 'Invalid category value' });
-        }
-        const result = await prisma.item.updateMany({
-          where: { id: { in: ownedItems.map(i => i.id) } },
-          data: { category: value }
-        });
-        updated = result.count;
-      } else if (operation === 'price_adjust') {
-        const percentChange = parseFloat(value);
-        if (isNaN(percentChange)) {
-          return res.status(400).json({ message: 'Invalid price adjustment value' });
-        }
-
-        // Update each item with price adjustment, ensuring no item goes below $1
-        for (const item of ownedItems) {
-          if (item.price && item.price > 0) {
-            const newPrice = Math.max(1, item.price * (1 + percentChange / 100));
-            await prisma.item.update({
-              where: { id: item.id },
-              data: { price: newPrice }
-            });
-            updated++;
-          } else if (!item.price && item.auctionStartPrice && item.auctionStartPrice > 0) {
-            // For auction items, adjust the auction start price
-            const newPrice = Math.max(1, item.auctionStartPrice * (1 + percentChange / 100));
-            await prisma.item.update({
-              where: { id: item.id },
-              data: { auctionStartPrice: newPrice }
-            });
-            updated++;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error performing bulk operation:', error);
-      return res.status(500).json({ message: 'Error performing bulk operation' });
-    }
-
-    res.json({ updated, failed });
-  } catch (error) {
-    console.error('Error in bulkUpdateItems:', error);
-    res.status(500).json({ message: 'Server error while processing bulk operation' });
-  }
-};
-
-export const exportItems = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
-    }
-
-    const { saleId } = req.params;
-
-    // Check if sale exists and belongs to organizer
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId },
-      include: {
-        organizer: {
-          select: { userId: true }
-        }
-      }
-    });
-
-    if (!sale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
-
-    if (sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied. Not your sale.' });
-    }
-
-    // Fetch all items for this sale
-    const items = await prisma.item.findMany({
-      where: { saleId },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    // Generate CSV
-    const csvHeaders = ['Title', 'Category', 'Condition', 'Price', 'Status', 'Tags'];
-    const csvRows = items.map(item => [
-      `"${(item.title || '').replace(/"/g, '""')}"`,
-      `"${(item.category || '').replace(/"/g, '""')}"`,
-      `"${(item.condition || '').replace(/"/g, '""')}"`,
-      item.price ? item.price.toFixed(2) : '',
-      item.status || '',
-      ''
-    ]);
-
-    const csv = [csvHeaders, ...csvRows].map(row => row.join(',')).join('\n');
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="items-${saleId}.csv"`);
-    res.send(csv);
-  } catch (error) {
-    console.error('Error exporting items:', error);
-    res.status(500).json({ message: 'Server error while exporting items' });
-  }
-};
-
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
+    const { itemId } = req.params;
+    const { bidAmount } = req.body;
+
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { id } = req.params;
-    const { amount } = req.body;
-
-    // Validate bid amount
-    const bidAmount = parseFloat(amount);
-    if (isNaN(bidAmount) || bidAmount <= 0) {
-      return res.status(400).json({ message: 'Invalid bid amount' });
-    }
-
-    // Check if item exists and is part of an auction
+    // Fetch item with current bid and organizer
     const item = await prisma.item.findUnique({
-      where: { id },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+      where: { id: itemId },
+      include: {
+        sale: { include: { organizer: { select: { userId: true } } } },
+        bids: { orderBy: { amount: 'desc' }, take: 1 }
+      }
     });
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (!item.auctionStartPrice) {
-      return res.status(400).json({ message: 'Item is not part of an auction' });
+    // Prevent self-bidding
+    if (item.sale.organizer.userId === req.user.id) {
+      return res.status(403).json({ message: 'You cannot bid on your own items' });
     }
 
-    // Check if auction has ended
-    if (item.auctionEndTime && new Date() > item.auctionEndTime) {
-      return res.status(400).json({ message: 'Auction has ended' });
+    // Validate bid amount
+    if (!bidAmount || bidAmount <= 0) {
+      return res.status(400).json({ message: 'Invalid bid amount' });
     }
 
-    // Check if bid meets minimum requirement
-    let minBid;
-    if (item.currentBid) {
-      minBid = Number(item.currentBid) + (Number(item.bidIncrement) || 1);
-    } else {
-      minBid = Number(item.auctionStartPrice);
-    }
+    const currentHighBid = item.bids.length > 0 ? item.bids[0].amount : item.auctionStartPrice || 0;
+    const minimumBid = currentHighBid + (item.bidIncrement || 1);
 
-    if (bidAmount < minBid) {
+    if (bidAmount < minimumBid) {
       return res.status(400).json({
-        message: `Bid must be at least $${minBid.toFixed(2)}`
+        message: `Bid amount must be at least $${minimumBid.toFixed(2)}`,
+        minimumBid,
+        currentBid: currentHighBid
       });
     }
 
-    // Create bid record
+    // Check auction end time
+    if (item.auctionEndTime && new Date(item.auctionEndTime) < new Date()) {
+      return res.status(400).json({ message: 'Auction has ended' });
+    }
+
+    // Create the bid
     const bid = await prisma.bid.create({
       data: {
-        itemId: id,
+        itemId,
         userId: req.user.id,
         amount: bidAmount
       }
@@ -903,30 +527,38 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
 
     // Update item's current bid
     await prisma.item.update({
-      where: { id },
+      where: { id: itemId },
       data: { currentBid: bidAmount }
     });
 
-    // V1: Broadcast live bid update to all clients viewing this item
-    try {
-      getIO().to(`item:${id}`).emit('bid:update', {
-        itemId: id,
-        currentBid: bidAmount,
+    // V1: Broadcast live bid update via Socket.io
+    const io = getIO();
+    if (io) {
+      io.to(`item-${itemId}`).emit('bidPlaced', {
+        itemId,
+        bidAmount,
+        bidderId: req.user.id,
+        bidTime: new Date(),
       });
-    } catch {
-      // Socket not initialized (e.g. test environment) — non-fatal
     }
 
-    // X1: Fire webhooks (non-blocking)
-    const organizerUserId = (item as any).sale?.organizer?.userId;
-    if (organizerUserId) {
-      setImmediate(() =>
-        fireWebhooks(organizerUserId, 'bid.placed', {
-          itemId: id,
-          itemTitle: item.title,
-          bidAmount,
-          bidderId: req.user.id,
-        })
+    // Fire webhooks for bid placed
+    fireWebhooks('bid.placed', {
+      itemId: item.id,
+      saleId: item.saleId,
+      bidAmount,
+      bidderId: req.user.id,
+    }).catch(err => console.error('Webhook fire error:', err));
+
+    // Notify organizer + previous highest bidder
+    if (
+      item.sale.organizer.userId &&
+      item.bids.length > 0
+    ) {
+      const previousHighestBidderId = item.bids[0].userId;
+      console.log(
+        `[placeBid] Item ${itemId}: Notifying organizer ${item.sale.organizer.userId} and prev bidder ${previousHighestBidderId}` +
+        ` of new bid $${bidAmount} by ${req.user.id}`
       );
     }
 
@@ -934,5 +566,152 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error placing bid:', error);
     res.status(500).json({ message: 'Server error while placing bid' });
+  }
+};
+
+// Phase 2B: Rapidfire Mode — Draft status polling endpoint
+export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const { itemId } = req.params;
+
+    // Fetch item with minimal fields — lightweight poll response
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        saleId: true,
+        draftStatus: true,
+        aiErrorLog: true,
+        title: true,
+        photoUrls: true,
+        sale: {
+          select: {
+            organizer: {
+              select: { userId: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Auth: only the organizer who owns the sale can poll this item's draft status
+    const isOwner = req.user?.id === item.sale.organizer.userId;
+    if (!isOwner) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Return lightweight draft status response
+    res.json({
+      itemId: item.id,
+      draftStatus: item.draftStatus,
+      aiErrorLog: item.aiErrorLog,
+      title: item.title,
+      thumbnailUrl: item.photoUrls && item.photoUrls.length > 0 ? item.photoUrls[0] : null
+    });
+  } catch (error) {
+    console.error('Error fetching draft status:', error);
+    res.status(500).json({ message: 'Server error while fetching draft status' });
+  }
+};
+
+// Phase 2B: Rapidfire Mode — Publish endpoint with optimistic lock and draftStatus gate
+export const publishItem = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { itemId } = req.params;
+    const { title, price, category, condition, optimisticLockVersion } = req.body;
+
+    // Fetch current item state
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        saleId: true,
+        draftStatus: true,
+        optimisticLockVersion: true,
+        sale: {
+          select: {
+            organizer: {
+              select: { userId: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Auth: only the organizer who owns the sale can publish items
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // B2 blocker: reject if draftStatus is not PENDING_REVIEW (AI analysis not complete)
+    if (item.draftStatus !== 'PENDING_REVIEW') {
+      return res.status(400).json({
+        message: 'Item not ready — AI analysis still in progress.'
+      });
+    }
+
+    // B5 blocker: optimistic lock check — prevent concurrent edits
+    if (optimisticLockVersion !== undefined && optimisticLockVersion !== item.optimisticLockVersion) {
+      return res.status(409).json({
+        message: 'Item was updated. Refresh and try again.'
+      });
+    }
+
+    // Prepare update data with optional organizer edits
+    const updateData: any = {
+      draftStatus: 'PUBLISHED',
+      optimisticLockVersion: (item.optimisticLockVersion ?? 0) + 1
+    };
+
+    // Apply optional organizer edits from request body
+    if (title !== undefined) updateData.title = title;
+    if (price !== undefined) updateData.price = price !== null ? parseFloat(price) : null;
+    if (category !== undefined) updateData.category = category;
+    if (condition !== undefined) updateData.condition = condition;
+
+    // Update item with new state
+    const updatedItem = await prisma.item.update({
+      where: { id: itemId },
+      data: updateData,
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        description: true,
+        price: true,
+        category: true,
+        condition: true,
+        draftStatus: true,
+        optimisticLockVersion: true,
+        photoUrls: true,
+        status: true,
+        updatedAt: true
+      }
+    });
+
+    // Fire webhooks for published item (X1: Zapier integration)
+    fireWebhooks('item.published', {
+      itemId: updatedItem.id,
+      saleId: updatedItem.saleId,
+      title: updatedItem.title,
+      status: updatedItem.draftStatus
+    }).catch(err => console.error('Webhook fire error:', err));
+
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Error publishing item:', error);
+    res.status(500).json({ message: 'Server error while publishing item' });
   }
 };
