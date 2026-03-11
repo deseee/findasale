@@ -65,7 +65,7 @@ const ReviewScreen = () => {
     queryFn: async () => {
       if (!saleId) return [];
       const response = await api.get(
-        `/items?saleId=${saleId}&draftStatus=DRAFT,PENDING_REVIEW&page=${page}&limit=${pageSize}`
+        `/items/drafts?saleId=${saleId}&page=${page}&limit=${pageSize}`
       );
       return response.data || [];
     },
@@ -266,14 +266,14 @@ const ReviewScreen = () => {
               Review Items Before Publishing
             </h1>
             <p className="text-warm-600 mb-4">
-              {items.length} item{items.length !== 1 ? 's' : ''} ·{' '}
+              {items.length} item{items.length !== 1 ? 's' : ''} &middot;{' '}
               <span className="text-green-700 font-semibold">{readyCount} ready</span>{' '}
-              ·
+              &middot;
               <span className="text-amber-700 font-semibold">{analyzingCount} analyzing</span>
               {errorCount > 0 && (
                 <>
                   {' '}
-                  ·
+                  &middot;
                   <span className="text-red-700 font-semibold">
                     {errorCount} error{errorCount !== 1 ? 's' : ''}
                   </span>
@@ -405,7 +405,7 @@ const ReviewScreen = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => setSelectedPreviewId(item.id)}
+                            onClick={() => router.push(`/organizer/edit-item/${item.id}`)}
                             className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg"
                           >
                             Edit

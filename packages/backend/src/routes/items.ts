@@ -13,6 +13,7 @@ import {
   removeItemPhoto,
   reorderItemPhotos,
   getItemDraftStatus,
+  getDraftItemsBySaleId,
   publishItem,
 } from '../controllers/itemController';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
@@ -25,6 +26,10 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Sprint 4a: FTS search endpoints — MUST be declared before /:id to avoid param capture
 router.get('/search', searchItemsHandler);           // GET /api/items/search?q=...
 router.get('/categories', getItemCategoriesHandler); // GET /api/items/categories
+
+// Phase 2B: Rapidfire Mode — Organizer-only draft items for review page
+// Must be before /:id to prevent 'drafts' being captured as an item ID
+router.get('/drafts', authenticate, getDraftItemsBySaleId); // GET /api/items/drafts?saleId=...
 
 // Phase 2B: Rapidfire Mode draft status polling + publish endpoints
 // Declared before /:id to prevent param capture
