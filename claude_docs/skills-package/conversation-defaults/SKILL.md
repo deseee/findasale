@@ -63,7 +63,7 @@ flow. This rule closes that gap.
 **Any first message** — short opener, status report, completion update, task assignment, or anything else — is a session start signal. ONE response pattern. No branching.
 
 **Single unified pattern (all first messages):**
-1. Load context silently: STATE.md, session-log (last 2 entries), next-session-prompt.md, `.checkpoint-manifest.json`. Do not narrate the loads.
+1. Load context silently: STATE.md, session-log (last 2 entries), next-session-prompt.md, `.checkpoint-manifest.json`, decisions-log.md. Do not narrate the loads.
 2. Acknowledge in one sentence. If short opener, add warmth. If task/status, confirm receipt. Either way: one sentence.
 3. Announce: session number, token budget ("~200k context window. ~5k init overhead. ~195k available. Warn at 170k used."), last session summary, and priority queue.
 4. Begin Priority 1 immediately. If P1 is blocked (requires Patrick's external input), begin Priority 2 and name P1 as blocked. Never end init with a question.
@@ -212,6 +212,86 @@ Why this exists: Multi-agent batches are the largest single token spike in any s
 
 ---
 
+## Rule 12: Never output placeholder values
+
+Before emitting any command, code snippet, or output with a value:
+
+- Ask: "Does this output contain a placeholder like `<paste your X>` or `<your Y>`?"
+  - YES → Stop. Is the real value readable from a VM file?
+    - YES → Read the file. Inline the real value instead.
+    - NO → Tell Patrick the file is unreadable and ask him to provide the value. Do not emit a placeholder.
+  - NO → Proceed.
+
+Common cases: Neon `DATABASE_URL` → read from `packages/backend/.env`; file paths → derive from project structure.
+
+Flagged by Patrick on 2026-03-11 as a core violation. No exceptions.
+
+Why this exists: Prevents broken commands and credentials-in-docs footguns.
+
+---
+
+## Rule 13: Route post-diagnosis implementation to the appropriate subagent
+
+After any subagent completes a diagnosis, analysis, or design task that surfaces required code changes or documentation updates, do not implement those changes inline. Route to the correct implementation subagent.
+
+**When to route:**
+- **Code changes** (bug fixes, feature implementation, refactors, security patches) → **Invoke `findasale-dev`**
+- **Documentation changes** (SKILL.md, CLAUDE.md, STATE.md, CORE.md, etc.) → **Invoke `findasale-records`**
+- **Both** → Invoke `findasale-dev` first, then `findasale-records`
+
+**Hard stops — never implement inline after these agents return findings:**
+- `findasale-qa`, `health-scout` → route code fixes to `findasale-dev`
+- `findasale-hacker` → route security patches to `findasale-dev`
+- `findasale-architect` → route implementation to `findasale-dev`
+- `findasale-ux` → route UI/code changes to `findasale-dev`
+
+Why this exists: Session 138 — findasale-dev diagnosed 3 bugs, fixes were implemented inline. This consumed full context, triggered autocompact, and required push reconstruction. Inline implementation after subagent diagnosis is the largest preventable cause of context bloat. (Added 2026-03-11, Session 138.)
+
+---
+
+## Rule 14: Surface all `## Patrick Direct` escalation blocks
+
+When a subagent returns output containing a `## Patrick Direct` section, present it to Patrick verbatim.
+
+**GATE (after every subagent returns):**
+- Does this output contain a `## Patrick Direct` block?
+  - YES → Present it to Patrick verbatim before any other commentary. Auto-append it to `claude_docs/escalation-log.md`.
+  - NO → Proceed normally.
+
+**Hard rule:** Never summarize, filter, or omit an escalation block. Suppressing a `## Patrick Direct` is a CORE.md violation.
+
+Why this exists: Fleet redesign session 141 — escalation channel established to give subagents a safety valve when the main session misjudges priority, ignores findings, or operates on stale context. (Added 2026-03-11, Session 142.)
+
+---
+
+## Rule 15: Inter-agent handoff pass-through
+
+When a subagent produces a `## Handoff:` block for another agent, pass it to the receiving agent WITHOUT editing or summarizing.
+
+**GATE (after subagent returns with a handoff):**
+- Does this output contain a `## Handoff:` block?
+  - YES → When dispatching the receiving agent, include the handoff block verbatim in the dispatch prompt. Do not paraphrase or omit fields.
+  - NO → Proceed normally.
+
+Why this exists: Fleet redesign session 141 — context degrades at every handoff when the main session summarizes instead of passing through. (Added 2026-03-11, Session 142.)
+
+---
+
+## Rule 16: Load decisions-log.md at session init
+
+Add `claude_docs/decisions-log.md` to the session init file list (Rule 3, step 1).
+
+**GATE (at session init, after loading STATE.md):**
+- Have I loaded decisions-log.md?
+  - NO → Read it. Note any decisions from the last 7 days that affect today's work.
+  - YES → Proceed.
+
+Before making any decision that affects future sessions, check decisions-log.md for prior decisions on the same topic. If a prior decision exists and hasn't been explicitly reversed, honor it.
+
+Why this exists: Fleet redesign session 141 — decisions made in session N get lost by session N+3. The log provides cross-session decision memory. (Added 2026-03-11, Session 142.)
+
+---
+
 ## Summary
 
 | Rule | Status |
@@ -227,3 +307,8 @@ Why this exists: Multi-agent batches are the largest single token spike in any s
 | Token budget briefing at session start | Active (added 2026-03-09, Session 116) |
 | Checkpoint manifest reads/writes | Active (added 2026-03-09, Session 118) |
 | Pre-dispatch checkpoint before 3+ agents | Active (added 2026-03-09, Session 118) |
+| Never output placeholder values | Active (added 2026-03-11, Session 137) |
+| Route post-diagnosis implementation to appropriate subagent | Active (added 2026-03-11, Session 138) |
+| Surface all `## Patrick Direct` escalation blocks | Active (added 2026-03-11, Session 142) |
+| Inter-agent handoff pass-through | Active (added 2026-03-11, Session 142) |
+| Load decisions-log.md at session init | Active (added 2026-03-11, Session 142) |

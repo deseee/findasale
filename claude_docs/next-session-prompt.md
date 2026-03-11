@@ -1,55 +1,54 @@
 # Next Session Resume Prompt
 *Written: 2026-03-11*
-*Session ended: normally — session 141 complete*
+*Session ended: normally — session 142 complete*
 
 ## Hard Gate Checklist
 - [ ] Read context.md (regenerate if >24h old)
 - [ ] Read STATE.md
 - [ ] Read this file completely
 - [ ] Check .checkpoint-manifest.json
+- [ ] Read decisions-log.md (new — Rule 16)
 - [ ] Note active MCP tools
 
 ## Resume From
-Fleet redesign planning session complete. Proposal v1 finalized with 22 decisions, all approved by Patrick. Two rounds of fleet review (architect, qa, hacker, pitchman, power-user, workflow). Next session executes **Phase 1 of the phased rollout**.
+Phase 1 of fleet redesign complete. All 6 items implemented. Patrick needs to install/uninstall skills and push to GitHub before Phase 2 begins.
 
-## What Was Completed This Session (141)
-- Fleet redesign proposal drafted, reviewed twice, and finalized: `fleet-redesign-proposal-v1.md` (repo root)
-- 22 decisions approved across fleet structure, advisory board, communication/safety, session/context, and scheduled tasks
-- Two open questions resolved: (1) token budget learning via outcome-bucketed delta tracking, (2) DA/Steelman scoped to direction-only with internalized preflight checklist
-- Round 1: architect, qa, hacker, pitchman, power-user, workflow reviewed
-- Round 2: architect, hacker, pitchman, power-user reviewed
+## What Was Completed This Session (142)
+- Merged findasale-cx + findasale-support → findasale-customer-champion (317 lines, Voice of Customer role)
+- Merged findasale-rd + findasale-pitchman → findasale-innovation (213 lines, two-phase ideate→evaluate)
+- CORE.md v3: §6 Escalation Channel, §7 Handoff Protocol, §8 Red-Flag Veto Gate
+- conversation-defaults v5: Rules 14 (escalation surfacing), 15 (handoff pass-through), 16 (decisions-log at init)
+- Created escalation-log.md (append-only)
+- Created decisions-log.md (all 22 session 141 decisions)
 
-## Phase 1 — Execute Immediately (Next Session)
-All six items are independent. **Dispatch in parallel via subagents.**
+## Patrick Action Required (Before Next Session)
+1. **Install new skills via Cowork UI:**
+   - `findasale-customer-champion` (source: `claude_docs/skills-package/findasale-customer-champion/`)
+   - `findasale-innovation` (source: `claude_docs/skills-package/findasale-innovation/`)
+   - Updated `conversation-defaults` (source: `claude_docs/skills-package/conversation-defaults/`)
 
-1. **Merge CX + Support → findasale-customer-champion** — Create new SKILL.md combining CX onboarding + Support ticket handling + Voice of Customer signal logging. Delete findasale-cx and findasale-support SKILL.md files. Use `skill-creator` skill.
+2. **Uninstall old skills via Cowork UI:**
+   - `findasale-cx`
+   - `findasale-support`
+   - `findasale-rd`
+   - `findasale-pitchman`
 
-2. **Merge R&D + Pitchman → findasale-innovation** — Create new SKILL.md with two-phase output (ideate → evaluate). Delete findasale-rd and findasale-pitchman SKILL.md files. Use `skill-creator` skill.
-
-3. **Escalation channel** — Add `## Patrick Direct` rules to CORE.md (evidence required, cooldown, auto-logging, no-action-requests). Create `escalation-log.md` in claude_docs/. Update conversation-defaults with escalation surfacing rule.
-
-4. **Handoff protocol** — Add structured handoff template to CORE.md (timestamp, source agent, cited file versions, no-edit pass-through). Update conversation-defaults with pass-through rule.
-
-5. **Red-flag veto gate** — Add to CORE.md §security: auth/payment/deletion/security changes require Architect or Hacker sign-off before Dev dispatch. Reference session 120 incident as justification.
-
-6. **decisions-log.md** — Create file in claude_docs/. Add to session-init checklist in conversation-defaults. First entries: all 22 decisions from this session.
-
-**After Phase 1 completes:** Run QA verification on all changed skill files. Update STATE.md and session-log.md.
+3. **Push to GitHub:**
+   ```powershell
+   git add claude_docs/CORE.md claude_docs/escalation-log.md claude_docs/decisions-log.md claude_docs/skills-package/findasale-customer-champion/SKILL.md claude_docs/skills-package/findasale-innovation/SKILL.md claude_docs/skills-package/conversation-defaults/SKILL.md claude_docs/STATE.md claude_docs/logs/session-log.md claude_docs/next-session-prompt.md .checkpoint-manifest.json
+   git commit -m "docs: session 142 — fleet redesign Phase 1 (merges, escalation, handoff, veto gate, decisions-log)"
+   .\push.ps1
+   ```
 
 ## Phase 2 — Two Weeks After Phase 1 Stabilizes
-See `fleet-redesign-proposal-v1.md` Appendix for full Phase 2 plan. Key items: 5 new standalone agents (sales-ops, DA, steelman, investor, competitor), board restructure to 12 seats + 6 subcommittees, budget-first session planning, trial/rollback protocol, cross-agent feedback loops, 2 new scheduled tasks.
+See `fleet-redesign-proposal-v1.md` Appendix for full plan. Key items:
+- 5 new standalone agents (sales-ops, devils-advocate, steelman, investor, competitor)
+- Advisory board restructure (12 seats + 6 subcommittees)
+- Budget-first session planning
+- Trial/rollback protocol
+- Cross-agent feedback loops
+- 2 new scheduled tasks (daily-friction-audit, weekly-pipeline-briefing)
 
-## Environment Notes
-- **Neon migration still pending:** `20260311000002_add_item_draft_status`
-- **Git push needed for this session:**
-  ```
-  git add fleet-redesign-proposal-v1.md claude_docs/logs/session-log.md claude_docs/next-session-prompt.md
-  git commit -m "docs: session 141 — fleet redesign proposal v1 finalized"
-  .\push.ps1
-  ```
-- No Railway or Vercel deploys needed (no code changes this session)
-
-## Exact Context
-- Proposal file: `fleet-redesign-proposal-v1.md` (repo root)
-- Session log: `claude_docs/logs/session-log.md`
-- Patrick's 5 beta-blocking items still open: Stripe business account, Google Search Console, business cards, beta organizer outreach, Michigan attorney check
+## Carry-Forward Blockers
+- Neon migration `20260311000002_add_item_draft_status` still pending deploy
+- Patrick's 5 beta-blocking items: Stripe business account, Google Search Console, business cards, beta organizer outreach, Michigan attorney check

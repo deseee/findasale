@@ -7,6 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 142 COMPLETE (2026-03-11) — FLEET REDESIGN PHASE 1 IMPLEMENTATION:**
+Phase 1 of fleet redesign executed (6 items across 4 parallel agents). Two agent merges: findasale-cx + findasale-support → `findasale-customer-champion` (Voice of Customer role added); findasale-rd + findasale-pitchman → `findasale-innovation` (two-phase ideate→evaluate output). CORE.md upgraded to v3 with §6 Escalation Channel, §7 Handoff Protocol, §8 Red-Flag Veto Gate. conversation-defaults v5: Rules 14 (escalation surfacing), 15 (handoff pass-through), 16 (decisions-log at init). New files: `claude_docs/escalation-log.md`, `claude_docs/decisions-log.md` (all 22 session 141 decisions logged).
+**ACTION REQUIRED (Patrick):**
+1. Package and install new skills: `findasale-customer-champion`, `findasale-innovation` (source in `claude_docs/skills-package/`)
+2. Uninstall old skills: `findasale-cx`, `findasale-support`, `findasale-rd`, `findasale-pitchman`
+3. Repackage and install updated `conversation-defaults` (source in `claude_docs/skills-package/conversation-defaults/`)
+4. Push all changes via `.\push.ps1` (see file list at end of session)
+
+**Session 141 COMPLETE (2026-03-11) — FLEET REDESIGN PROPOSAL FINALIZED:**
+Full fleet redesign proposal drafted, reviewed twice (architect, qa, hacker, pitchman, power-user, workflow), and finalized. 22 decisions approved. Two rounds of fleet review. Phased rollout plan established (Phase 1 immediate, Phase 2 in two weeks).
+
 **Session 140 COMPLETE (2026-03-11) — AGENT FLEET PLUGIN-SKILL AWARENESS UPGRADE:**
 Power User audit revealed all 15 findasale-* subagents had zero awareness of available plugin skills. Architect, QA, and Pitchman reviewed proposed mappings in parallel. All 15 SKILL.md files updated with `## Plugin Skill Delegation` sections (98 plugin refs total). Stale fee refs (5%/7%) corrected to 10% flat in findasale-architect and findasale-qa; Docker ref removed from architect. `claude_docs/operations/plugin-skill-routing.md` created as master routing reference. Advisory board approved for forward-strategy plugins. `findasale-sales-ops` agent concept deferred to post-beta planning session.
 **ACTION REQUIRED (Patrick):** Push `claude_docs/operations/plugin-skill-routing.md` to GitHub: `git add claude_docs/operations/plugin-skill-routing.md && git commit -m "docs: add plugin skill routing matrix" && .\push.ps1`

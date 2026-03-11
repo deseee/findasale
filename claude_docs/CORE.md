@@ -99,6 +99,75 @@ Before ending any session:
 
 ---
 
+## 6. Escalation Channel
+
+Any subagent may include a `## Patrick Direct` section in its output when it
+believes the main session is: (a) ignoring a P0/P1 finding, (b) dispatching
+work that contradicts a locked decision, (c) operating on stale context, or
+(d) burning tokens on a wrong path.
+
+**Guardrails:**
+- Evidence required: every `## Patrick Direct` block must cite specific evidence
+  (file names, decision references, concrete data). "I have a bad feeling" is
+  not sufficient.
+- Cooldown: one `## Patrick Direct` per agent per session. If overruled, do not
+  re-escalate on the same topic in the same session.
+- Auto-logging: all `## Patrick Direct` blocks are appended to
+  `claude_docs/escalation-log.md` (append-only, pruned monthly by Records).
+- No action requests: escalation blocks flag concerns only — they never say
+  "do Z instead." Patrick decides the action.
+- Stale-context claims must cite a specific file version delta (e.g., "STATE.md
+  updated in session 140 but main session references session 138 state").
+
+**Main session obligation:** Surface every `## Patrick Direct` block to Patrick
+verbatim. No summarizing, no filtering. Suppressing an escalation is a CORE.md
+violation.
+
+---
+
+## 7. Handoff Protocol
+
+When Agent A's work creates a task for Agent B, Agent A writes a structured
+handoff block:
+
+```
+## Handoff: [Source Agent] → [Target Agent]
+Timestamp: [ISO 8601]
+Source agent: [name]
+Task: [what needs to be done]
+Context files: [relevant files with paths]
+Decisions already made: [locked decisions relevant to this task]
+Constraints: [scope limits, no-go areas]
+Acceptance criteria: [how to verify completion]
+Cited file versions: [filename@commit:hash or "current" if uncommitted]
+```
+
+**Integrity rules:**
+- The main session passes handoff blocks as-is — no editing, no summarizing.
+  The main session is a pass-through, not a translator.
+- If the receiving agent detects a conflict between the handoff and current file
+  state, it raises a `## Patrick Direct` escalation rather than silently resolving.
+
+---
+
+## 8. Red-Flag Veto Gate
+
+Changes touching auth flows, payment processing, data deletion, or security
+config require sign-off from Architect or Hacker before the main session
+dispatches Dev. This is a mandatory pre-dispatch check, not optional review.
+
+**Orange tier (review before merge):** Fee changes, public-facing content, new
+integrations, API contract changes. DA + Steelman weigh in; Patrick decides.
+
+**Red tier (blocks until sign-off):** Auth flow changes, payment processing
+changes, data deletion logic, security config changes. Requires sign-off from
+Architect or Hacker before proceeding.
+
+Reference: Session 120 incident — Dev agent replaced a 563-line file with a
+stub due to unsupervised dispatch on a security-sensitive path.
+
+---
+
 ## Reference Docs (load on demand, not at init)
 
 | Need | File |
@@ -115,4 +184,4 @@ Before ending any session:
 
 ---
 
-Status: Behavioral Authority (v2, Session 112)
+Status: Behavioral Authority (v3, Session 142)
