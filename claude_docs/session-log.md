@@ -2,6 +2,20 @@
 
 ## Recent Sessions
 
+### 2026-03-11 · Session 142
+**Worked on:** Fleet redesign Phase 1 implementation. 6 items dispatched across 4 parallel agents (grouped by file dependency to avoid conflicts). Two agent merges completed: findasale-cx + findasale-support → findasale-customer-champion (317 lines, adds Voice of Customer signal logging via customer-signals.md); findasale-rd + findasale-pitchman → findasale-innovation (213 lines, two-phase ideate→evaluate output). CORE.md upgraded to v3 with 3 new sections: §6 Escalation Channel (evidence-required `## Patrick Direct` blocks, cooldown, auto-logging), §7 Handoff Protocol (structured handoff blocks with integrity metadata, no-edit pass-through), §8 Red-Flag Veto Gate (Orange/Red tier system, Architect/Hacker sign-off on auth/payment/deletion/security). conversation-defaults v5 with 3 new rules: Rule 14 (surface escalation blocks verbatim), Rule 15 (handoff pass-through), Rule 16 (decisions-log at init). Two new files: escalation-log.md (append-only, monthly prune by Records) and decisions-log.md (all 22 session 141 decisions populated).
+**Decisions:** All Phase 1 items executed as specified in fleet-redesign-proposal-v1.md. No deviations from approved plan.
+**Files changed:** `claude_docs/CORE.md`, `claude_docs/escalation-log.md` (new), `claude_docs/decisions-log.md` (new), `claude_docs/skills-package/findasale-customer-champion/SKILL.md` (new), `claude_docs/skills-package/findasale-innovation/SKILL.md` (new), `claude_docs/skills-package/conversation-defaults/SKILL.md`, `claude_docs/STATE.md`, `claude_docs/session-log.md`, `claude_docs/next-session-prompt.md`, `.checkpoint-manifest.json`
+**Scoreboard:** Files changed: 10 | Compressions: 0 | Subagents: 4 (general-purpose) | Push method: Patrick PS1
+**Next up:** Patrick installs new skills, uninstalls old ones, pushes to GitHub. Phase 2 begins in two weeks (new standalone agents, board restructure, context infrastructure, scheduled tasks).
+**Blockers:** Skills need manual install/uninstall by Patrick via Cowork UI. Neon migration `20260311000002_add_item_draft_status` still pending deploy.
+
+### 2026-03-11 · Session 141
+**Worked on:** Fleet redesign proposal v1 — full planning session. Drafted, reviewed twice (architect, qa, hacker, pitchman, power-user, workflow), and finalized. 22 decisions approved across fleet structure, advisory board, communication/safety, session/context, and scheduled tasks.
+**Decisions:** All 22 decisions approved. See `claude_docs/decisions-log.md` for full list.
+**Next up:** Phase 1 implementation (completed in session 142).
+**Blockers:** None.
+
 ### 2026-03-11 · Session 140
 **Worked on:** Full agent fleet plugin-skill awareness audit (Power User). Discovered all 15 findasale-* subagents were plugin-blind — no knowledge of the 100+ plugin skills available to them. Architect, QA, and Pitchman reviewed proposed mappings in parallel. Added `## Plugin Skill Delegation` sections to all 15 SKILL.md files (98 plugin refs total). Fixed stale data in findasale-architect (5%/7% fee → 10% flat, removed Docker ref) and findasale-qa (same fee fix). Created `claude_docs/operations/plugin-skill-routing.md` as master routing reference for main session and fleet. All 15 updated skills installed by Patrick.
 **Decisions:** Advisory board approved for forward-strategy plugins (`product-management:roadmap-management` + `data:create-viz`). `findasale-sales-ops` (proposed by Pitchman — organizer outreach/trial-to-insight agent) deferred to post-beta planning session per Patrick. Routing matrix is now the authoritative source for plugin vs. findasale-* routing logic.
