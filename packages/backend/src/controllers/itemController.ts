@@ -547,7 +547,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     }
 
     // Fire webhooks for bid placed
-    fireWebhooks('bid.placed', {
+    fireWebhooks(item.sale.organizer.userId, 'bid.placed', {
       itemId: item.id,
       saleId: item.saleId,
       bidAmount,
@@ -570,6 +570,143 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error placing bid:', error);
     res.status(500).json({ message: 'Server error while placing bid' });
+  }
+};
+
+export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    const firstPhotoUrl = item.photoUrls?.[0];
+    if (!firstPhotoUrl) {
+      return res.json({ suggestedTags: [] });
+    }
+
+    let suggestedTags: string[] = [];
+    if (isCloudAIAvailable()) {
+      try {
+        const imageResponse = await axios.get(firstPhotoUrl, {
+          responseType: 'arraybuffer',
+          timeout: 10000,
+        });
+        const imageBuffer = Buffer.from(imageResponse.data);
+        const aiResult = await analyzeItemImage(imageBuffer, 'image/jpeg');
+        if (aiResult?.tags) {
+          suggestedTags = aiResult.tags;
+        }
+      } catch (err: any) {
+        console.warn(`[cloudAI/analyze] error for item "${id}": ${err.message} — returning empty tags`);
+      }
+    }
+
+    res.json({ suggestedTags });
+  } catch (error) {
+    console.error('Error analyzing item tags:', error);
+    res.status(500).json({ message: 'Server error while analyzing tags' });
+  }
+};
+
+// Phase 16: Photo management
+
+const getItemForOrganizer = async (id: string, userId: string) => {
+  const item = await prisma.item.findUnique({
+    where: { id },
+    include: { sale: { include: { organizer: { select: { userId: true } } } } },
+  });
+  if (!item) return null;
+  if (item.sale.organizer.userId !== userId) return null;
+  return item;
+};
+
+export const addItemPhoto = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id } = req.params;
+    const { url } = req.body;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ message: 'url is required' });
+    }
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls: [...item.photoUrls, url] },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('addItemPhoto error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id, photoIndex } = req.params;
+    const idx = parseInt(photoIndex, 10);
+    if (isNaN(idx)) return res.status(400).json({ message: 'Invalid photoIndex' });
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    if (idx < 0 || idx >= item.photoUrls.length) {
+      return res.status(400).json({ message: 'Photo index out of range' });
+    }
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls: item.photoUrls.filter((_, i) => i !== idx) },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('removeItemPhoto error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { id } = req.params;
+    const { photoUrls } = req.body;
+    if (!Array.isArray(photoUrls)) {
+      return res.status(400).json({ message: 'photoUrls must be an array' });
+    }
+    const item = await getItemForOrganizer(id, req.user.id);
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    const existing = new Set(item.photoUrls);
+    const allValid = photoUrls.every((u: any) => typeof u === 'string' && existing.has(u));
+    if (!allValid || photoUrls.length !== item.photoUrls.length) {
+      return res.status(400).json({ message: 'Invalid photoUrls — can only reorder existing photos' });
+    }
+    const updated = await prisma.item.update({
+      where: { id },
+      data: { photoUrls },
+    });
+    res.json({ photoUrls: updated.photoUrls });
+  } catch (error) {
+    console.error('reorderItemPhotos error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -706,7 +843,7 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     });
 
     // Fire webhooks for published item (X1: Zapier integration)
-    fireWebhooks('item.published', {
+    fireWebhooks(req.user.id, 'item.published', {
       itemId: updatedItem.id,
       saleId: updatedItem.saleId,
       title: updatedItem.title,

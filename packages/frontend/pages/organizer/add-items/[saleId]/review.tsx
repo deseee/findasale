@@ -16,12 +16,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../../../../../lib/api';
-import { useAuth } from '../../../../../components/AuthContext';
-import { useToast } from '../../../../../components/ToastContext';
+import api from '../../../../lib/api';
+import { useAuth } from '../../../../components/AuthContext';
+import { useToast } from '../../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
-import Skeleton from '../../../../../components/Skeleton';
+import Skeleton from '../../../../components/Skeleton';
 
 interface DraftItem {
   id: string;
