@@ -14,9 +14,18 @@
  * - Restored Camera tab: wired RapidCapture with AI analysis flow
  * - Camera: capture → upload → AI analyze → pre-fill manual form → review
  * - maxPhotos=5 per camera session (one-item-at-a-time flow)
+ *
+ * Phase 3C: Rapidfire Mode Integration
+ * - Added ModeToggle for Rapidfire/Regular capture modes
+ * - Rapidfire mode: multi-item capture with background upload/analyze
+ * - Regular mode: existing single-item flow with AI pre-fill
+ * - RapidCarousel for live progress tracking
+ * - PreviewModal for inline item editing
+ * - Draft status polling (3s intervals)
+ * - Review & Publish button for PENDING_REVIEW items
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -28,8 +37,22 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 import RapidCapture from '../../../components/RapidCapture';
+import ModeToggle from '../../../components/camera/ModeToggle';
+import CaptureButton from '../../../components/camera/CaptureButton';
+import RapidCarousel from '../../../components/camera/RapidCarousel';
+import PreviewModal from '../../../components/camera/PreviewModal';
+import { useUploadQueue } from '../../../hooks/useUploadQueue';
 
 type ActiveTab = 'camera' | 'batch' | 'manual';
+
+interface RapidItem {
+  id: string;
+  thumbnailUrl?: string;
+  draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
+  title?: string;
+  category?: string;
+  aiError?: string;
+}
 
 const CATEGORIES = [
   'Furniture',
@@ -88,6 +111,14 @@ const AddItemsDetailPage = () => {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // Rapidfire Mode state
+  const [captureMode, setCaptureMode] = useState<'rapidfire' | 'regular'>('rapidfire');
+  const [rapidItems, setRapidItems] = useState<RapidItem[]>([]);
+  const [previewItemId, setPreviewItemId] = useState<string | null>(null);
+  const [carouselCollapsed, setCarouselCollapsed] = useState(true);
+  const [aiPaused, setAiPaused] = useState(false);
+  const { queue, enqueue, uploadingCount } = useUploadQueue(saleId as string);
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -255,6 +286,36 @@ const AddItemsDetailPage = () => {
       condition: normalizeToArray(newCondition, CONDITIONS),
     }));
   };
+
+  const handleDeleteDraft = async (itemId: string) => {
+    setRapidItems((prev) => prev.filter((i) => i.id !== itemId));
+  };
+
+  // Polling for draft status updates
+  useEffect(() => {
+    const draftItems = rapidItems.filter(
+      (i) => i.draftStatus === 'DRAFT' && !i.aiError
+    );
+    if (draftItems.length === 0 || aiPaused) return;
+
+    const interval = setInterval(async () => {
+      for (const item of draftItems) {
+        try {
+          const res = await api.get(`/items/${item.id}/draft-status`);
+          const data = res.data;
+          if (data.draftStatus !== 'DRAFT') {
+            setRapidItems((prev) =>
+              prev.map((i) => (i.id === item.id ? { ...i, ...data } : i))
+            );
+          }
+        } catch (e) {
+          // Silent error
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [rapidItems, aiPaused]);
 
   if (authLoading) {
     return (
@@ -507,28 +568,74 @@ const AddItemsDetailPage = () => {
           {/* Camera Tab */}
           {activeTab === 'camera' && (
             <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-              <h2 className="text-xl font-bold text-warm-900 mb-6">Capture with Camera</h2>
-              {cameraAnalyzing ? (
-                <div className="text-center py-12">
-                  <div className="inline-block w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4" />
-                  <p className="text-warm-700 font-medium">Analyzing photo with AI...</p>
-                  <p className="text-warm-500 text-sm mt-1">This may take a few seconds</p>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-warm-900">Capture with Camera</h2>
+                <ModeToggle mode={captureMode} onChange={setCaptureMode} />
+              </div>
+
+              {captureMode === 'rapidfire' ? (
+                <div className="space-y-6">
+                  <p className="text-warm-600">
+                    Rapidly capture multiple items. Photos upload and analyze in the background.
+                  </p>
+
+                  <div className="flex justify-center">
+                    <CaptureButton
+                      onCapture={() => setCameraOpen(true)}
+                      state={cameraOpen ? 'capturing' : 'ready'}
+                    />
+                  </div>
+
+                  {/* RapidCarousel - only shown when there are items or mode is rapidfire */}
+                  {rapidItems.length > 0 && (
+                    <RapidCarousel
+                      items={rapidItems}
+                      onThumbnailTap={(id) => setPreviewItemId(id)}
+                      onDeleteRequest={handleDeleteDraft}
+                      collapsed={carouselCollapsed}
+                      onToggleCollapse={() => setCarouselCollapsed(!carouselCollapsed)}
+                      aiPaused={aiPaused}
+                      onTogglePause={() => setAiPaused(!aiPaused)}
+                    />
+                  )}
+
+                  {/* Review & Publish button */}
+                  {rapidItems.some((i) => i.draftStatus === 'PENDING_REVIEW') && (
+                    <button
+                      onClick={() =>
+                        router.push(`/organizer/add-items/${saleId}/review`)
+                      }
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                    >
+                      Review & Publish ({rapidItems.filter((i) => i.draftStatus === 'PENDING_REVIEW').length} ready)
+                    </button>
+                  )}
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <p className="text-warm-600 mb-4">
-                    Take a photo of an item. AI will identify it and pre-fill the details for you to review.
-                  </p>
-                  <button
-                    onClick={() => setCameraOpen(true)}
-                    className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Open Camera
-                  </button>
+                <div>
+                  {cameraAnalyzing ? (
+                    <div className="text-center py-12">
+                      <div className="inline-block w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4" />
+                      <p className="text-warm-700 font-medium">Analyzing photo with AI...</p>
+                      <p className="text-warm-500 text-sm mt-1">This may take a few seconds</p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-warm-600 mb-4">
+                        Take a photo of an item. AI will identify it and pre-fill the details for you to review.
+                      </p>
+                      <button
+                        onClick={() => setCameraOpen(true)}
+                        className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Open Camera
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -612,9 +719,9 @@ const AddItemsDetailPage = () => {
                             {item.title}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-sm text-warm-600">{item.category || '\u2014'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-600">{item.category || '—'}</td>
                         <td className="px-4 py-3 text-sm text-warm-900 font-semibold">
-                          ${item.price ?? item.auctionStartPrice ?? '\u2014'}
+                          ${item.price ?? item.auctionStartPrice ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-sm">
                           <button
@@ -784,6 +891,35 @@ const AddItemsDetailPage = () => {
           setCsvModalOpen(false);
         }}
       />
+
+      {/* Preview Modal for Rapidfire Items */}
+      {previewItemId && (
+        <PreviewModal
+          isOpen={true}
+          item={rapidItems.find((i) => i.id === previewItemId) || { id: previewItemId, draftStatus: 'DRAFT' }}
+          onClose={() => setPreviewItemId(null)}
+          onSave={async (edits) => {
+            try {
+              await api.patch(`/items/${previewItemId}`, edits);
+              setRapidItems((prev) =>
+                prev.map((i) =>
+                  i.id === previewItemId
+                    ? { ...i, ...edits }
+                    : i
+                )
+              );
+              showToast('Item updated', 'success');
+            } catch (error: any) {
+              const message =
+                error.response?.data?.message || 'Failed to save item';
+              showToast(message, 'error');
+              throw error;
+            }
+          }}
+          onDelete={handleDeleteDraft}
+          onRetake={() => setPreviewItemId(null)}
+        />
+      )}
     </>
   );
 };

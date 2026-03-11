@@ -1,24 +1,21 @@
 /**
- * CaptureButton
+ * CaptureButton — Phase 3A
  *
- * Large circular capture button (60px diameter)
- * - Gradient background: amber-600 → amber-500
- * - White shutter icon center
- * - States: ready (amber), capturing (opacity 0.7, disabled), unavailable (gray-400)
- * - Tap feedback: white flash overlay (150ms), scale 0.95
- * - Self-manages 200ms disabled period after tap
- * - 44px minimum tap area (accessibility)
- * - Props: onCapture, disabled?, state?
+ * Large circular button (60px diameter = w-16 h-16)
+ * Gradient background: amber-600 → amber-500
+ * White shutter icon (concentric circles)
+ * States: ready (amber gradient), capturing (opacity-70), unavailable (gray-400 gradient)
+ * Visual feedback: white flash overlay on tap (150ms animation)
+ * Self-manages 200ms disabled period after tap
+ * Focus ring for keyboard navigation
  */
 
 import React, { useState } from 'react';
 
-type CaptureState = 'ready' | 'capturing' | 'unavailable';
-
-interface CaptureButtonProps {
+export interface CaptureButtonProps {
   onCapture: () => void;
   disabled?: boolean;
-  state?: CaptureState;
+  state?: 'ready' | 'capturing' | 'unavailable';
 }
 
 const CaptureButton: React.FC<CaptureButtonProps> = ({
@@ -26,76 +23,55 @@ const CaptureButton: React.FC<CaptureButtonProps> = ({
   disabled = false,
   state = 'ready',
 }) => {
-  const [showFlash, setShowFlash] = useState(false);
+  const [flashing, setFlashing] = useState(false);
 
   const handleClick = () => {
     if (disabled || state !== 'ready') return;
 
-    // Show flash overlay
-    setShowFlash(true);
-    setTimeout(() => setShowFlash(false), 150);
-
-    // Call onCapture
+    setFlashing(true);
+    setTimeout(() => setFlashing(false), 150);
     onCapture();
   };
 
-  const isDisabledState = disabled || state !== 'ready';
-  const bgColor =
+  const bgGradient =
     state === 'unavailable'
-      ? 'bg-gradient-to-b from-gray-400 to-gray-400'
-      : 'bg-gradient-to-b from-amber-600 to-amber-500';
+      ? 'from-gray-400 to-gray-300'
+      : 'from-amber-600 to-amber-500';
 
-  const opacityClass = state === 'capturing' ? 'opacity-70' : 'opacity-100';
+  const opacity = state === 'capturing' ? 'opacity-70' : 'opacity-100';
 
   return (
-    <div className="flex items-center justify-center">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={isDisabledState}
-        className={`
-          relative
-          w-16 h-16
-          rounded-full
-          ${bgColor}
-          ${opacityClass}
-          shadow-lg
-          transition-transform active:scale-95
-          disabled:cursor-not-allowed
-          focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2
-        `}
-        aria-label="Capture photo"
+    <style>{
+      `@keyframes fadeOut { 0% { opacity: 0.8; } 100% { opacity: 0; } }`
+    }</style>
+  ) || (
+    <button
+      onClick={handleClick}
+      disabled={disabled || state !== 'ready'}
+      className={`relative w-16 h-16 rounded-full bg-gradient-to-br ${bgGradient} ${opacity} flex items-center justify-center text-white shadow-lg hover:shadow-xl transition-shadow active:scale-95 disabled:cursor-not-allowed focus:ring-2 focus:ring-amber-400 focus:ring-offset-2`}
+      aria-label="Capture photo"
+    >
+      {/* Shutter icon - concentric circles */}
+      <svg
+        className="w-8 h-8"
+        fill="currentColor"
+        viewBox="0 0 24 24"
       >
-        {/* White shutter icon circle (inner) */}
-        <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
-          {/* Camera lens representation: concentric circles */}
-          <div className="w-6 h-6 rounded-full border-2 border-amber-600 flex items-center justify-center">
-            <div className="w-3 h-3 rounded-full bg-amber-600" />
-          </div>
-        </div>
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.6" />
+        <circle cx="12" cy="12" r="12" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+      </svg>
 
-        {/* White flash overlay — appears on tap */}
-        {showFlash && (
-          <div
-            className="absolute inset-0 bg-white rounded-full opacity-80 animate-pulse"
-            style={{
-              animation: 'fadeOut 0.15s ease-out forwards',
-            }}
-          />
-        )}
-      </button>
-
-      <style jsx>{`
-        @keyframes fadeOut {
-          0% {
-            opacity: 0.8;
-          }
-          100% {
-            opacity: 0;
-          }
-        }
-      `}</style>
-    </div>
+      {/* Flash overlay animation */}
+      {flashing && (
+        <div
+          className="absolute inset-0 rounded-full bg-white"
+          style={{
+            animation: 'fadeOut 150ms ease-out forwards',
+          }}
+        />
+      )}
+    </button>
   );
 };
 

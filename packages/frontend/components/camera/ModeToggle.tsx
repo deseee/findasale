@@ -1,46 +1,40 @@
 /**
- * ModeToggle
+ * ModeToggle — Phase 3A
  *
- * Two-mode toggle: "Rapidfire" | "Regular"
- * - Active pill: amber-600 bg, white text, rounded-full
- * - Inactive: text-gray-500
- * - Instant mode switch (no animation)
- * - Accessible with keyboard support
+ * Two-mode pill-button toggle: 'Rapidfire' | 'Regular'
+ * Active mode: amber-600 bg, white text, rounded-full, smooth transition
+ * Inactive mode: text-gray-500, hover:text-gray-700
  */
 
 import React from 'react';
 
-type CameraMode = 'rapidfire' | 'regular';
-
-interface ModeToggleProps {
-  mode: CameraMode;
-  onChange: (mode: CameraMode) => void;
+export interface ModeToggleProps {
+  mode: 'rapidfire' | 'regular';
+  onChange: (mode: 'rapidfire' | 'regular') => void;
 }
 
 const ModeToggle: React.FC<ModeToggleProps> = ({ mode, onChange }) => {
   return (
-    <div className="flex gap-1 bg-gray-100 rounded-full p-0.5 w-fit">
+    <div className="flex items-center gap-2 bg-warm-50 rounded-full p-1 border border-warm-200">
       <button
-        type="button"
         onClick={() => onChange('rapidfire')}
-        className={`px-3 py-1 text-sm font-medium rounded-full transition-all ${
+        aria-pressed={mode === 'rapidfire'}
+        className={`px-4 py-1.5 rounded-full font-medium text-sm transition-all ${
           mode === 'rapidfire'
             ? 'bg-amber-600 text-white'
             : 'text-gray-500 hover:text-gray-700'
         }`}
-        aria-pressed={mode === 'rapidfire'}
       >
         Rapidfire
       </button>
       <button
-        type="button"
         onClick={() => onChange('regular')}
-        className={`px-3 py-1 text-sm font-medium rounded-full transition-all ${
+        aria-pressed={mode === 'regular'}
+        className={`px-4 py-1.5 rounded-full font-medium text-sm transition-all ${
           mode === 'regular'
             ? 'bg-amber-600 text-white'
             : 'text-gray-500 hover:text-gray-700'
         }`}
-        aria-pressed={mode === 'regular'}
       >
         Regular
       </button>
