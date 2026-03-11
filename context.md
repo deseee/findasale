@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-11T12:04:14.873Z*
+*Generated at 2026-03-11T15:11:08.966Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -34,6 +34,14 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── pre-commit
 │   └── pre-push
 ├── .gitignore
+├── .skills/
+│   └── skills/
+│       ├── conversation-defaults/
+│       │   └── SKILL.md
+│       ├── dev-environment/
+│       │   └── SKILL.md
+│       └── skill-creator/
+│           └── SKILL.md
 ├── AGENT_QUICK_REFERENCE.md
 ├── CLAUDE.md
 ├── README.md
@@ -43,6 +51,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 ├── claude_docs/
 │   ├── .last-wrap
 │   ├── CORE.md
+│   ├── QUICK_REFERENCE_diagnosis-implementation-contract.md
 │   ├── RECOVERY.md
 │   ├── SECURITY.md
 │   ├── SESSION_WRAP_PROTOCOL.md
@@ -52,6 +61,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── archive/ (0 files)
 │   ├── audits/
 │   │   ├── chrome-audit-session-124.md
+│   │   ├── cowork-power-user-session-init-audit-2026-03-11.md
 │   │   ├── next-audit-brief-126-dashboard-items.md
 │   │   ├── next-audit-brief-add-edit-item.md
 │   │   ├── session-125-edit-item-photo-audit.md
@@ -62,26 +72,28 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── feature-notes/ (9 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (1 files)
-│   ├── improvement-memos/ (0 files)
+│   ├── improvement-memos/ (5 files)
 │   ├── logs/ (2 files)
 │   ├── marketing/
 │   │   ├── content-pipeline/
 │   │   │   └── spring-content-2026-03-09.md
 │   │   └── spring-2026-content.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (16 files)
+│   ├── operations/ (19 files)
 │   ├── qa/
 │   │   └── payment-edge-cases-2026-03-09.md
 │   ├── research/ (2 files)
 │   ├── security/
 │   │   └── oauth-redteam-2026-03-09.md
 │   ├── self-healing/ (1 files)
+│   ├── self_healing_skills.md
 │   ├── session-log.md
 │   ├── session-wraps/
 │   │   └── session-124-wrap.md
 │   ├── skills-package/ (27 files)
 │   ├── strategy/ (4 files)
 │   ├── ux-spotchecks/
+│   │   ├── 2026-03-11.md
 │   │   └── rapidfire-mode-ux-spec.md
 │   └── workflow-retrospectives/ (0 files)
 ├── docs/
@@ -168,12 +180,14 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 ├── pnpm-workspace.yaml
 ├── push.ps1
 ├── railway.toml
-└── scripts/
-    ├── health-check.ts
-    ├── session-wrap-check.ps1
-    ├── session-wrap-check.sh
-    ├── stress-test.js
-    └── update-context.js
+├── scripts/
+│   ├── health-check.ts
+│   ├── package-skill.sh
+│   ├── session-wrap-check.ps1
+│   ├── session-wrap-check.sh
+│   ├── stress-test.js
+│   └── update-context.js
+└── ziVgsNRB
 
 ```
 
