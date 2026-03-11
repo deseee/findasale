@@ -211,10 +211,15 @@ model Item {
   waitlist         ItemWaitlist[]
   currency          String     @default("USD")  // Batch 17: multi-currency groundwork
   priceHistory      ItemPriceHistory[]
+  draftStatus       String     @default("DRAFT") // DRAFT | PUBLISHED — Rapidfire Mode item draft status
+  aiErrorLog        Json?                        // Rapidfire Mode AI error logging (JSON array of errors)
+  optimisticLockVersion Int     @default(0)     // Rapidfire Mode optimistic concurrency control
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@unique([saleId, sku])
+  @@index([draftStatus])
+  @@index([saleId, draftStatus])
 }
 
 model Favorite {
