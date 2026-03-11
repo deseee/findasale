@@ -12,6 +12,7 @@ export type WebhookEventType =
   | 'sale.published'
   | 'sale.ended'
   | 'item.sold'
+  | 'item.published'
   | 'bounty.created';
 
 export interface WebhookPayload {
