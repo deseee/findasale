@@ -27,6 +27,14 @@ gathering requirements before starting multi-step work.
 **Use it when:** Format choices, ambiguous scope, multiple valid approaches,
 or any multi-step task where clarification upfront saves a wasted turn.
 
+**Self-check gate (before responding to multi-step tasks):**
+- "Is Patrick's request ambiguous on approach, scope, or priorities?"
+  - YES → Use AskUserQuestion. Stop. Wait for clarification.
+  - NO → Proceed with best-fit approach, announce it clearly.
+- "Could clarifying upfront save a wasted follow-up turn?"
+  - YES → Use AskUserQuestion.
+  - NO → Proceed.
+
 **Don't use it for:** Simple follow-ups mid-task, quick yes/no checks, or
 when the answer is already clear from context.
 
@@ -62,6 +70,12 @@ flow. This rule closes that gap.
 
 **Any first message** — short opener, status report, completion update, task assignment, or anything else — is a session start signal. ONE response pattern. No branching.
 
+**GATE (fires before first response):**
+Before responding to Patrick's first message, ask yourself:
+- "Is this my first message in this conversation?"
+  - YES → Execute the unified pattern below (all steps, no exceptions)
+  - NO → Skip this rule; proceed normally
+
 **Single unified pattern (all first messages):**
 1. Load context silently: STATE.md, session-log (last 2 entries), next-session-prompt.md, `.checkpoint-manifest.json`. Do not narrate the loads.
 2. Acknowledge in one sentence. If short opener, add warmth. If task/status, confirm receipt. Either way: one sentence.
@@ -82,8 +96,11 @@ Before issuing **any** shell command, PowerShell command, Prisma command,
 migration instruction, or environment variable guidance — verify that the
 `dev-environment` skill has been loaded this session.
 
-- If not yet loaded: load it immediately, then issue the command.
-- If already loaded: apply its rules without reloading.
+**GATE (fires before emitting ANY such command):**
+- Ask yourself: "Have I loaded or verified dev-environment in this session?"
+  - NO → Load it now via `Skill('dev-environment')`. Then issue the command.
+  - YES and I see my own load call → Proceed; it's loaded.
+  - UNSURE → Load it now. Better safe than wrong-database.
 
 This applies on the **first command of any session**, mid-sprint, in follow-up
 corrections, and in subagent handoffs. The trigger is the act of writing the
@@ -102,14 +119,21 @@ layer without requiring Claude to proactively remember §16 mid-sprint.
 When encountering any git problem — merge conflicts, stale branches, rebase errors,
 uncommitted file conflicts — **always use available tools to fix it yourself**.
 
+**GATE (before escalating or asking Patrick to fix git):**
+- Ask: "Can I use Read + Edit + MCP push to fix this myself?"
+  - YES → Do it. Diagnose, read the file, edit, push.
+  - NO → Ask: "Is this genuine repo corruption (not a merge conflict or stale state)?"
+    - YES → Escalate with full diagnosis of what `git status` shows.
+    - NO → It's fixable. Try again.
+- "Am I about to tell Patrick to manually fix something?" → STOP. Fix it yourself first.
+
+Examples:
 - **Merge conflicts:** Read the file → Edit to remove markers → push via MCP
-- **Stale local state:** Push correct version via MCP, tell Patrick to run `.\\push.ps1`
+- **Stale local state:** Push correct version via MCP, tell Patrick to run `.\push.ps1`
 - **Uncommitted changes blocking pull:** Tell Patrick `git checkout -- <files>` only when the correct versions are already on remote
 
 **Never say:** "Manually resolve the conflict," "Open the file and remove the markers,"
 or "Run `git merge --abort` and fix it yourself."
-
-**Always do:** Diagnose and fix the issue using Read + Edit + MCP push before reporting completion.
 
 **Exception:** Genuine repo corruption requiring `git init` — escalate with full diagnosis.
 
@@ -143,12 +167,18 @@ vague. (Added 2026-03-09, backlog E11.)
 Before creating any new file in `claude_docs/`, verify the path against
 `claude_docs/operations/file-creation-schema.md`:
 
-1. **Correct directory?** Research → `research/`, operations → `operations/`, etc.
-2. **Correct naming?** Authority = UPPERCASE, living = kebab-case, one-time = kebab-case-date.
-3. **Research docs?** Must include backlog ID prefix (e.g., `e2-topic.md`).
-4. **Root-level?** Only Tier 1 authority docs go in `claude_docs/` root.
+**GATE (before calling Write to create a new file in claude_docs/):**
+- Ask: "Does this file go in `claude_docs/`?"
+  - NO → Create it in the appropriate directory. (Skip rest of this rule.)
+  - YES → Check 4 questions before writing:
+    1. **Correct directory?** Research → `research/`, operations → `operations/`, etc. ✓
+    2. **Correct naming?** Authority = UPPERCASE, living = kebab-case, one-time = kebab-case-date. ✓
+    3. **Research docs?** Must include backlog ID prefix (e.g., `e2-topic.md`). ✓
+    4. **Root-level?** Only Tier 1 authority docs go in `claude_docs/` root. ✓
+  - If ANY answer is NO → Fix the path first, then write.
+  - If ALL answers are YES → Write the file.
 
-If the path doesn't match the schema, fix it before writing. Don't ask Patrick
+If unsure about the schema, read `claude_docs/operations/file-creation-schema.md` first. Don't ask Patrick
 about file paths — just follow the schema.
 
 Why this exists: Session 95 audit (E17) found inconsistent naming across 115 files.
@@ -162,7 +192,13 @@ When invoking a subagent via `Skill` tool, include this instruction in the dispa
 "Read `claude_docs/operations/MESSAGE_BOARD.json` on start. Post a status message
 on completion listing all files changed."
 
-After each Skill return, read MESSAGE_BOARD.json for new messages before continuing.
+**GATE (before dispatching any subagent):**
+- Ask: "Am I about to invoke a Skill (subagent)?"
+  - YES → Add the message board instruction to the dispatch. Then call Skill.
+  - NO → Skip this rule.
+- Ask: "Did a Skill just complete?"
+  - YES → Read MESSAGE_BOARD.json for new messages before responding or continuing.
+  - NO → Skip.
 
 Why this exists: E4 inter-agent communication foundation (session 96). (Added 2026-03-09.)
 
@@ -187,10 +223,15 @@ Why this exists: Session 115 research confirmed token tracking is low-cost (30 t
 
 `.checkpoint-manifest.json` at repo root is the persistent token state store. It survives compressions and session transitions.
 
-- **At session init:** Read `.checkpoint-manifest.json`. Restore last session history. Write new `currentSession` entry (new sessionId, reset counters, set `startedAt`).
-- **At each checkpoint log:** Write the checkpoint to `checkpoints[]` in the manifest.
-- **At context compression:** IMMEDIATELY write to `compressionEvents[]` before doing anything else.
-- **At session wrap:** Write final token burn to `sessionHistory[]`.
+**GATE (at each critical moment):**
+- At session init: Ask "Have I read `.checkpoint-manifest.json` yet?"
+  - NO → Read it. Restore last session history. Write new `currentSession` entry (new sessionId, reset counters, set `startedAt`).
+- At each checkpoint: Ask "Should I log a checkpoint now?" (natural pause, major work completed)
+  - YES → Write to `checkpoints[]` in the manifest before continuing.
+- At context compression: Ask "Am I being compressed?"
+  - YES → IMMEDIATELY write to `compressionEvents[]` before doing anything else.
+- At session wrap: Ask "Am I signing off?"
+  - YES → Write final token burn to `sessionHistory[]`.
 
 If the manifest file is missing or corrupted: create a fresh one using the schema from CORE.md §3.
 
@@ -201,10 +242,16 @@ Why this exists: Session 118 advisory board audit found that in-conversation che
 ## Rule 11: Pre-dispatch checkpoint before agent batches
 
 Before dispatching 3 or more agents in parallel:
-1. Write a checkpoint to `.checkpoint-manifest.json` `checkpoints[]`.
-2. Estimate the session token total after the dispatch (add 5k per agent baseline).
-3. If estimated total will exceed 150k, warn Patrick: "Dispatching N agents will push session to ~Xk tokens (Yk% of budget). Proceed?"
-4. If estimated total will exceed 170k, require explicit Patrick confirmation before dispatching.
+
+**GATE (before calling Skill 3+ times in parallel):**
+- Ask: "Am I about to dispatch 3 or more agents?"
+  - YES → Execute checklist before dispatch:
+    1. Write a checkpoint to `.checkpoint-manifest.json` `checkpoints[]`.
+    2. Estimate the session token total after the dispatch (add 5k per agent baseline).
+    3. If estimated total will exceed 150k, warn Patrick: "Dispatching N agents will push session to ~Xk tokens (Yk% of budget). Proceed?"
+    4. If estimated total will exceed 170k, STOP and require explicit Patrick confirmation before dispatching.
+    5. If estimate is acceptable → Dispatch all agents.
+  - NO → Proceed without this gate.
 
 Why this exists: Multi-agent batches are the largest single token spike in any session (5–15k per agent). Pre-dispatch checkpoint ensures state is saved before the spike, and budget check prevents surprises. (Added 2026-03-09, Session 118.)
 
@@ -212,9 +259,12 @@ Why this exists: Multi-agent batches are the largest single token spike in any s
 
 ## Rule 12: Never output placeholder values
 
-Never emit a placeholder like `<paste your X here>` or `<your Y>` when the actual
-value is readable from a file in the VM. Always read the source file and inline
-the real value.
+**GATE (before emitting ANY command, code snippet, or output with a value):**
+- Ask: "Does this output contain a placeholder like `<paste your X>` or `<your Y>`?"
+  - YES → Ask: "Is the real value readable from a VM file?"
+    - YES → Stop. Read the file. Inline the real value instead. Emit corrected output.
+    - NO → Stop. Tell Patrick the file is unreadable and ask him to provide the value. Do not emit a placeholder.
+  - NO → Proceed.
 
 Common cases:
 - Neon `DATABASE_URL` → read from `packages/backend/.env` (commented line starting with `# DATABASE_URL=postgresql://neondb`)
@@ -257,4 +307,3 @@ forward — session init does not need to be re-run.
 | Checkpoint manifest reads/writes | Active (added 2026-03-09, Session 118) |
 | Pre-dispatch checkpoint before 3+ agents | Active (added 2026-03-09, Session 118) |
 | Never output placeholder values | Active (added 2026-03-11, Session 137) |
-| Fallback (If Not System-Injected) | Active (added 2026-03-11, Session 137) |
