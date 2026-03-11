@@ -264,6 +264,50 @@ const AddItemsDetailPage = () => {
     }
   };
 
+  // Rapidfire mode handler — each photo POSTs to /upload/rapidfire, creates a DRAFT item
+  // Uses optimistic UI: temp entry added immediately, replaced with real itemId on success
+  const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
+    setCameraOpen(false);
+    if (photos.length === 0) return;
+
+    for (const photo of photos) {
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      // Optimistic: show thumbnail in carousel immediately
+      setRapidItems((prev) => [
+        ...prev,
+        { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
+      ]);
+
+      try {
+        const fd = new FormData();
+        fd.append('image', photo.blob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+
+        const res = await api.post('/upload/rapidfire', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const { itemId } = res.data;
+
+        // Swap temp id for real DB item id
+        setRapidItems((prev) =>
+          prev.map((item) =>
+            item.id === tempId ? { ...item, id: itemId, draftStatus: 'DRAFT' } : item
+          )
+        );
+      } catch (err: any) {
+        console.error('[rapidfire] Upload failed:', err);
+        setRapidItems((prev) =>
+          prev.map((item) =>
+            item.id === tempId ? { ...item, aiError: 'Upload failed' } : item
+          )
+        );
+        showToast('One photo failed to upload. Try again.', 'error');
+      }
+    }
+  };
+
   const handleCategoryChange = (newCategory: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -635,9 +679,9 @@ const AddItemsDetailPage = () => {
           {/* RapidCapture fullscreen overlay */}
           {cameraOpen && (
             <RapidCapture
-              onComplete={handleCameraComplete}
+              onComplete={captureMode === 'rapidfire' ? handleRapidCameraComplete : handleCameraComplete}
               onCancel={() => setCameraOpen(false)}
-              maxPhotos={5}
+              maxPhotos={captureMode === 'rapidfire' ? 20 : 5}
             />
           )}
 
