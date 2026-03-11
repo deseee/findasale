@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 
 export const getTrendingItems = async (req: Request, res: Response) => {
   try {
@@ -11,6 +12,7 @@ export const getTrendingItems = async (req: Request, res: Response) => {
       where: {
         status: 'AVAILABLE',
         sale: { status: 'PUBLISHED' },
+        ...PUBLIC_ITEM_FILTER,
       },
       include: {
         sale: { select: { id: true, title: true, city: true, state: true } },

@@ -9,6 +9,7 @@ import { syncOrganizerTier } from '../services/tierService';
 import { notifyMatchedBuyers } from '../services/buyerMatchService';
 import { markSalePublished } from '../services/mailerliteService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
@@ -172,7 +173,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
 export const getSale = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const sale = await prisma.sale.findUnique({
       where: { id },
       include: {
@@ -183,6 +184,7 @@ export const getSale = async (req: Request, res: Response) => {
           }
         },
         items: {
+          where: PUBLIC_ITEM_FILTER,
           select: {
             id: true, title: true, description: true, price: true,
             auctionStartPrice: true, currentBid: true, bidIncrement: true,
