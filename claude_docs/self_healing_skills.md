@@ -73,3 +73,27 @@ Recurring bugs and their confirmed fixes. Add an entry when a pattern has been s
 **Fix:** `Remove-Item -LiteralPath "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"`
 
 **Confidence:** HIGH — seen session 137, PowerShell behavior is consistent.
+
+---
+
+## SH-006: skill-creator package_skill validation failure — non-standard frontmatter keys
+
+**Trigger:** `❌ Validation failed: Unexpected key(s) in SKILL.md frontmatter: last_updated, version. Allowed properties are: allowed-tools, compatibility, description, license, metadata, name`
+
+**Environment:** Any session packaging a skill with the skill-creator `package_skill` script.
+
+**Pattern:** When drafting a SKILL.md for human review (e.g., via findasale-records), it's natural to add doc-style frontmatter like `version: 4` or `last_updated: 2026-03-11`. The packager only allows: `name`, `description`, `compatibility`, `allowed-tools`, `license`, `metadata`. Any other key fails validation.
+
+**Known instance:** Session 139 — conversation-defaults v4 SKILL.md had `version: 4` and `last_updated: 2026-03-11 (Session 138)` in frontmatter.
+
+**Steps:**
+1. Open the SKILL.md being packaged
+2. Remove any frontmatter keys that are not in the allowed set: `name`, `description`, `compatibility`, `allowed-tools`, `license`, `metadata`
+3. Keep `version` and `last_updated` as prose inside the body of the skill if needed for reference
+4. Re-run `python -m scripts.package_skill <path> <output-dir>` from the skill-creator directory
+
+**Edge Cases:**
+- The output directory must be writable — `/sessions/*` works, `/tmp` may have a stale read-only `.skill` file from a prior run that blocks overwrite; use a fresh subdirectory
+- The `.skills/skills/` directory is read-only from the VM — always output to `/sessions/*/skill-output/` or the workspace folder
+
+**Confidence:** HIGH — validator is deterministic; any non-standard frontmatter key will always fail.

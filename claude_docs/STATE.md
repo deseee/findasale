@@ -7,6 +7,18 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 139 COMPLETE (2026-03-11) — CONVERSATION-DEFAULTS V4 SKILL PACKAGED:**
+Packaged conversation-defaults v4 as a proper `.skill` file using the skill-creator packaging workflow. Rule 13 added: post-diagnosis routing gate — orchestrator must route implementation to the appropriate subagent (findasale-dev for code, findasale-records for docs/skills), not inline. Fixed frontmatter validation issue (removed non-standard `version`/`last_updated` keys before packaging). Skill file delivered to Patrick's workspace for installation via "Copy to your skills". This resolves the workflow gap identified in session 138.
+
+**Session 138 COMPLETE (2026-03-11) — RAPIDFIRE REVIEW PAGE BUGS FIXED:**
+Three bugs fixed after Rapidfire mode use: (1) New draft items not appearing on review page — root cause: `GET /api/items` uses `PUBLIC_ITEM_FILTER` (PUBLISHED only), added new `getDraftItemsBySaleId` controller + `GET /api/items/drafts` route; (2) 19 old items showing "Analyzing..." with broken photos — same root cause, fixed by the new `/drafts` endpoint which explicitly includes `draftStatus` in select; (3) Edit buttons on review page broken — `setSelectedPreviewId()` was called but no modal existed in review.tsx, fixed to `router.push('/organizer/edit-item/:id')`. TypeScript compiled clean on both backend and frontend. Pushed to GitHub (commit 35b4f85), Patrick committed locally and ran push.ps1.
+Files changed: `packages/backend/src/controllers/itemController.ts`, `packages/backend/src/routes/items.ts`, `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`.
+
+**Session 137 COMPLETE (2026-03-11) — RAPIDFIRE BUG FIX + ENFORCEMENT HARDENING:**
+Two critical bugs fixed: (1) Prisma P2022 — `Item.draftStatus` missing from Neon production DB — fixed by deploying migration `20260311000002_add_item_draft_status`; (2) Rapidfire camera button bug — clicking Rapidfire opened regular camera flow instead of rapid capture flow — fixed with `handleRapidCameraComplete` handler in add-items/[saleId].tsx, creates optimistic DRAFT items per photo. Workflow improvements: skill enforcement gates hardened across `conversation-defaults` and `dev-environment`, CORE.md env gate upgraded to hard STOP gate with explicit `Skill()` invocation, SECURITY.md §6 updated with no-placeholder-credential rule, skill packaging workflow fixed. Global CLAUDE.md updated with subagent-first rule. Files changed: `packages/frontend/pages/organizer/add-items/[saleId].tsx`, plus docs/skills already pushed to GitHub.
+
+**ACTION REQUIRED (Patrick):** Deploy migration `20260311000002_add_item_draft_status` to Neon with: `cd packages/database && npx prisma migrate deploy` (with real credentials from packages/backend/.env).
+
 **Session 136 COMPLETE (2026-03-10) — RAPIDFIRE MODE IMPLEMENTATION:**
 Phases 1A–3C fully built and pushed to GitHub. QA verdict: PASS WITH NOTES. One migration pending Neon deploy — everything else is live on Railway/Vercel once Patrick deploys.
 
@@ -149,8 +161,10 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-**All migrations deployed.** 69 total applied as of 2026-03-09 (confirmed Patrick, session 119).
-Previously deployed (69 total):
+**Migration status:** All migrations deployed as of session 138.
+- `20260311000002_add_item_draft_status` — ✅ Deployed (session 138). Adds `draftStatus` + `aiErrorLog` + `optimisticLockVersion` to Item.
+
+**All other migrations deployed.** 70 total applied as of session 137. Previously deployed:
 1. `20260309_add_auction_reserve_price`
 2. `20260310000001_add_item_fulltext_search_indexes`
 3. `20260311000001_add_sale_type_item_listing_type`
@@ -168,7 +182,7 @@ For future migration deploys, see `claude_docs/DEVELOPMENT.md` and `packages/bac
 - **Support email** — ✅ DONE (2026-03-06). support@finda.sale email forwarding configured.
 - **Neon migrations** — ✅ 66 applied (Session 112). All caught up.
 - **Neon credentials** — ✅ Rotated (Session 111). Old exposed password scrubbed from git history.
-- **conversation-defaults skill** — ✅ v3 reinstalled (Session 119). v3: Rule 3 unified single-path, Rules 10 & 11 added (manifest reads + pre-dispatch checkpoint).
+- **conversation-defaults skill** — ✅ v4 packaged (Session 139). v4 adds Rule 13: post-diagnosis routing gate (findasale-dev for code, findasale-records for docs). Install via `conversation-defaults.skill` in project workspace.
 
 ---
 
@@ -259,4 +273,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-10 (session 135 — Rapidfire Mode design sprint complete, dev prompt written, all decisions locked)
+Last Updated: 2026-03-11 (session 139 — conversation-defaults v4 skill packaged with Rule 13)
