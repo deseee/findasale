@@ -10,6 +10,7 @@ import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -208,6 +209,7 @@ export const getItemById = async (req: Request, res: Response) => {
         reverseDailyDrop: true,
         reverseFloorPrice: true,
         reverseStartDate: true,
+        draftStatus: true,
         createdAt: true,
         updatedAt: true,
         // embedding & tags intentionally excluded — see getItemsBySaleId comment
@@ -232,8 +234,8 @@ export const getItemById = async (req: Request, res: Response) => {
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
     const isOwner = authReq.user?.id === item.sale.organizer.userId;
 
-    // For everyone else, enforce public visibility rules
-    if (!isOwner && (!item.isActive || item.sale.status !== 'PUBLISHED')) {
+    // For everyone else, enforce public visibility rules: must be PUBLISHED + active + in published sale
+    if (!isOwner && (!item.isActive || item.sale.status !== 'PUBLISHED' || item.draftStatus !== 'PUBLISHED')) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -248,7 +250,10 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
   try {
     const { saleId } = req.query;
     const items = await prisma.item.findMany({
-      where: { saleId: saleId as string },
+      where: {
+        saleId: saleId as string,
+        ...PUBLIC_ITEM_FILTER,
+      },
       select: {
         id: true,
         saleId: true,
