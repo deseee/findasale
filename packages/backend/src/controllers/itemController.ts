@@ -710,6 +710,64 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Phase 2B: Rapidfire Mode — Organizer endpoint to fetch DRAFT + PENDING_REVIEW items for a sale
+// Used by the review-before-publish page. Requires organizer ownership of the sale.
+export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ORGANIZER') {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const { saleId, page = '1', limit = '20' } = req.query;
+
+    if (!saleId) {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+
+    // Verify organizer owns the sale
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId as string },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale || sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale' });
+    }
+
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
+
+    const items = await prisma.item.findMany({
+      where: {
+        saleId: saleId as string,
+        draftStatus: { in: ['DRAFT', 'PENDING_REVIEW'] },
+      },
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        category: true,
+        condition: true,
+        price: true,
+        photoUrls: true,
+        draftStatus: true,
+        aiErrorLog: true,
+        optimisticLockVersion: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
+    });
+
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching draft items:', error);
+    res.status(500).json({ message: 'Server error while fetching draft items' });
+  }
+};
+
 // Phase 2B: Rapidfire Mode — Draft status polling endpoint
 export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
   try {
