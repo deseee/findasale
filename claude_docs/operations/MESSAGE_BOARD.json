@@ -412,5 +412,19 @@
     ],
     "commit_sha": "7b0784e"
   }
+  ,{
+    "id": "msg-136-phase1a",
+    "timestamp": "2026-03-11T00:00:00Z",
+    "from": "findasale-dev",
+    "to": "orchestrator, patrick",
+    "type": "completion",
+    "subject": "Phase 1A Complete — Schema migration + schema.prisma updated",
+    "body": "RAPIDFIRE MODE PHASE 1A COMPLETE. Migration 20260311000002_add_item_draft_status created and schema.prisma updated with three new Item fields: (1) draftStatus (TEXT, default 'DRAFT') — tracks item draft vs published state for Rapidfire AI tagging workflow. (2) aiErrorLog (JSONB, nullable) — stores AI processing errors for debugging and retry logic. (3) optimisticLockVersion (INT, default 0) — optimistic concurrency control for concurrent item edits. SQL migration includes: ALTER TABLE for 3 columns, UPDATE backfill to mark all existing items as PUBLISHED (since they are pre-Rapidfire real items), and two new indexes (Item_draftStatus_idx and Item_saleId_draftStatus_idx) for efficient filtering by draft status. Schema.prisma updated with all fields + comments + two @@index directives. No data loss. Next: Phase 1B (backend API + validation logic).",
+    "status": "complete",
+    "files_changed": [
+      "packages/database/prisma/migrations/20260311000002_add_item_draft_status/migration.sql",
+      "packages/database/prisma/schema.prisma"
+    ]
+  }
   ]
 }
