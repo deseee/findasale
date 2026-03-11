@@ -1,6 +1,6 @@
 ---
 version: 3
-last_updated: 2026-03-09 (Session 118)
+last_updated: 2026-03-11 (Session 137)
 name: conversation-defaults
 description: >
   Always-active conversation behavior defaults for Patrick's Cowork sessions.
@@ -103,7 +103,7 @@ When encountering any git problem — merge conflicts, stale branches, rebase er
 uncommitted file conflicts — **always use available tools to fix it yourself**.
 
 - **Merge conflicts:** Read the file → Edit to remove markers → push via MCP
-- **Stale local state:** Push correct version via MCP, tell Patrick to run `.\push.ps1`
+- **Stale local state:** Push correct version via MCP, tell Patrick to run `.\\push.ps1`
 - **Uncommitted changes blocking pull:** Tell Patrick `git checkout -- <files>` only when the correct versions are already on remote
 
 **Never say:** "Manually resolve the conflict," "Open the file and remove the markers,"
@@ -210,21 +210,34 @@ Why this exists: Multi-agent batches are the largest single token spike in any s
 
 ---
 
-## Fallback (If Not System-Injected)
+## Rule 12: Never output placeholder values
 
-If conversation-defaults was not loaded at session start, Claude should load it manually on the first message that involves: shell commands, database operations, file edits, or multi-step tasks.
+Never emit a placeholder like `<paste your X here>` or `<your Y>` when the actual
+value is readable from a file in the VM. Always read the source file and inline
+the real value.
 
-The manual load trigger: any message from Patrick containing words like "fix", "run", "deploy", "migrate", "build", "push", or "implement".
+Common cases:
+- Neon `DATABASE_URL` → read from `packages/backend/.env` (commented line starting with `# DATABASE_URL=postgresql://neondb`)
+- File paths → derive from the project structure, don't guess
+
+If the file genuinely cannot be read, stop and say so explicitly.
+Do not emit a placeholder and continue as if the command is complete.
+
+Flagged by Patrick on 2026-03-11 as a core violation. No exceptions.
 
 ---
 
-## Session Start Checklist
+## Fallback: If This Skill Was Not Loaded at Session Start
 
-These rules must be enforced at the absolute start of every session:
+conversation-defaults requires system injection to fire automatically. If it was
+not loaded on the first message, load it manually on the first message that involves
+any of: shell commands, file edits, database operations, or multi-step tasks.
 
-- Load context.md and STATE.md before any work begins
-- Load dev-environment skill before any shell, Prisma, or database command
-- Never output placeholder values (e.g. "<paste X here>") — always read from source files in the VM
+Manual load triggers (keywords in Patrick's message): "fix", "run", "deploy",
+"migrate", "build", "push", "implement", "create", "update", "check", "debug".
+
+When loaded mid-session via fallback, apply all rules from the current message
+forward — session init does not need to be re-run.
 
 ---
 
@@ -243,5 +256,5 @@ These rules must be enforced at the absolute start of every session:
 | Token budget briefing at session start | Active (added 2026-03-09, Session 116) |
 | Checkpoint manifest reads/writes | Active (added 2026-03-09, Session 118) |
 | Pre-dispatch checkpoint before 3+ agents | Active (added 2026-03-09, Session 118) |
-| Fallback (If Not System-Injected) | Active (added 2026-03-11) |
-| Session Start Checklist | Active (added 2026-03-11) |
+| Never output placeholder values | Active (added 2026-03-11, Session 137) |
+| Fallback (If Not System-Injected) | Active (added 2026-03-11, Session 137) |
