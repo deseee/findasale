@@ -55,6 +55,18 @@ const resolveOrganizer = async (req: AuthRequest, res: Response) => {
  */
 export const createConnectionToken = async (req: AuthRequest, res: Response) => {
   try {
+    // Simulated mode: skip stripeConnectId requirement — create token on platform account.
+    // Stripe allows this for simulated readers, enabling testing without a real Connect account.
+    const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
+
+    if (isSimulated) {
+      if (!req.user || req.user.role !== 'ORGANIZER') {
+        return res.status(403).json({ message: 'Organizer access required' });
+      }
+      const token = await stripe().terminal.connectionTokens.create({});
+      return res.json({ secret: token.secret });
+    }
+
     const organizer = await resolveOrganizer(req, res);
     if (!organizer) return;
 

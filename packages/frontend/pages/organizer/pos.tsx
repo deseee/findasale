@@ -79,7 +79,7 @@ export default function POSPage() {
     api.get<{ data: Sale[] }>('/sales/mine')
       .then(res => {
         // Filter to active (PUBLISHED) sales only
-        const active = (res.data.data ?? res.data).filter(
+        const active = (res.data.sales ?? res.data.data ?? res.data).filter(
           (s: Sale) => s.status === 'PUBLISHED'
         );
         setSales(active);

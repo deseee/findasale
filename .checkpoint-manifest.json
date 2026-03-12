@@ -4,17 +4,17 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": 151,
-    "startedAt": "2026-03-12T18:00:00Z",
-    "estimatedTokensUsed": 45,
+    "sessionId": 152,
+    "startedAt": "2026-03-12T19:00:00Z",
+    "estimatedTokensUsed": 8,
     "turnCount": 1,
-    "fileReadsCount": 4,
-    "toolCallsCount": 8,
-    "subagentDispatches": 2,
+    "fileReadsCount": 5,
+    "toolCallsCount": 7,
+    "subagentDispatches": 0,
     "githubApiCalls": 0,
-    "lastCheckpointAt": "2026-03-12T18:45:00Z",
+    "lastCheckpointAt": "2026-03-12T19:00:00Z",
     "compressionOccurred": false,
-    "notes": "Session 151. Terminal POS build fixes + QA audit complete. All findings resolved. Migration still pending Neon deploy."
+    "notes": "Session 152 init. POS testing + planning what's next."
   },
   "checkpoints": [
     {
