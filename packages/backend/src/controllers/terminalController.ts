@@ -20,6 +20,7 @@ const stripe = () => getStripe();
 /**
  * Resolve the organizer record + stripeConnectId for the authed user.
  * Returns null (and writes 4xx response) if not eligible.
+ * requireStripe (default true): set false for endpoints that don't need Stripe Connect (e.g. cash).
  */
 const resolveOrganizer = async (req: AuthRequest, res: Response, opts: { requireStripe?: boolean } = {}) => {
   const { requireStripe = true } = opts;
@@ -87,11 +88,12 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
 
 /**
  * POST /api/stripe/terminal/payment-intent
- * Body: { items: [{itemId?: string, amount: number, label?: string}], buyerEmail?: string }
+ * Body: { items: [{itemId?: string, amount: number, label?: string}], buyerEmail?: string, saleId?: string }
  *
  * Creates a Stripe PaymentIntent for a multi-item terminal payment (cart).
  * Uses capture_method: 'manual' (Terminal requires explicit capture after card swipe).
  * Applies same 10% platform fee as online purchases.
+ * In simulated mode: PI created on platform account (no Connect account required).
  */
 export const createTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
@@ -116,6 +118,12 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
 
     // Fetch and validate all items with itemId
     const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
+
+    // Reject duplicate itemIds — each physical item can only be charged once per transaction
+    if (itemIds.length !== new Set(itemIds).size) {
+      return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
+    }
+
     let dbItems: Record<string, any> = {};
     if (itemIds.length > 0) {
       const fetched = await prisma.item.findMany({
@@ -132,14 +140,14 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       // Verify all items exist, belong to organizer, and are AVAILABLE
       for (const itemId of itemIds) {
         if (!dbItems[itemId]) {
-          return res.status(404).json({ message: `Item ${itemId} not found` });
+          return res.status(404).json({ message: `Item not found` });
         }
         const item = dbItems[itemId];
         if (item.sale.organizerId !== organizer.id) {
-          return res.status(403).json({ message: `Item ${itemId} does not belong to your sale` });
+          return res.status(403).json({ message: `"${item.title}" does not belong to your sale` });
         }
         if (item.status !== 'AVAILABLE') {
-          return res.status(400).json({ message: `Item ${itemId} is not available (status: ${item.status})` });
+          return res.status(400).json({ message: `"${item.title}" is sold or unavailable` });
         }
       }
     }
@@ -177,11 +185,11 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     }
 
     // Create terminal PaymentIntent — platform account in simulated mode, connected account in production
-    const piParams: Parameters<typeof stripe().paymentIntents.create>[0] = {
+    const piParams = {
       amount: totalAmountCents,
       currency: 'usd',
       payment_method_types: ['card_present'], // Terminal-only: physical card reader
-      capture_method: 'manual',               // Terminal requires explicit capture
+      capture_method: 'manual' as const,      // Terminal requires explicit capture
       ...(!isSimulated ? { application_fee_amount: platformFeeAmount } : {}),
       metadata: {
         items: JSON.stringify(items),
@@ -288,7 +296,6 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
 
     // If all purchases are already PAID, return idempotent success
     if (purchases.every(p => p.status === 'PAID')) {
-      const buyerEmail = purchases[0]?.buyerEmail;
       return res.json({ purchaseIds: purchases.map(p => p.id), status: 'PAID', receiptSent: false });
     }
 
@@ -455,6 +462,8 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
  *
  * Records a cash sale immediately without Stripe processing.
  * Creates Purchase records with status PAID and marks items SOLD.
+ * Accumulates 10% platform fees into organizer.cashFeeBalance for later payout deduction.
+ * platformFeeAmount tracks fee for accounting; collection is handled outside Stripe.
  */
 export const cashPayment = async (req: AuthRequest, res: Response) => {
   try {
@@ -503,20 +512,26 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
 
     // Fetch and validate all items with itemId
     const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
+
+    // Reject duplicate itemIds — each physical item can only be charged once per transaction
+    if (itemIds.length !== new Set(itemIds).size) {
+      return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
+    }
+
     let dbItems: Record<string, any> = {};
     if (itemIds.length > 0) {
       const fetched = await prisma.item.findMany({
         where: { id: { in: itemIds }, saleId },
-        select: { id: true, status: true },
+        select: { id: true, title: true, status: true },
       });
       dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
 
       for (const itemId of itemIds) {
         if (!dbItems[itemId]) {
-          return res.status(404).json({ message: `Item ${itemId} not found in this sale` });
+          return res.status(404).json({ message: `Item not found in this sale` });
         }
         if (dbItems[itemId].status !== 'AVAILABLE') {
-          return res.status(400).json({ message: `Item ${itemId} is not available` });
+          return res.status(400).json({ message: `"${dbItems[itemId].title}" is sold or unavailable` });
         }
       }
     }

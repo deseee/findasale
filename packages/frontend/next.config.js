@@ -199,7 +199,7 @@ const nextConfig = {
 module.exports = withSentryConfig(withPWA(nextConfig), {
   // Suppress non-essential Sentry CLI output during builds
   silent: true,
-  // Hide source maps from client bundle (security)
+  // Hide source maps from client bundle (security)\
   hideSourceMaps: true,
   // Tree-shake Sentry logger in production
   disableLogger: true,

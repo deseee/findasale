@@ -106,6 +106,20 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id,
   });
 
+  // Fetch earnings to check for cash fee balance
+  const { data: earnings } = useQuery({
+    queryKey: ['earnings-breakdown'],
+    queryFn: async () => {
+      const response = await api.get('/stripe/earnings');
+      return response.data as {
+        cashFeeBalance?: number;
+        cashFeeBalanceUpdatedAt?: string;
+      };
+    },
+    enabled: !!user?.id,
+    staleTime: 2 * 60_000,
+  });
+
   // Show wizard if onboarding not complete
   useEffect(() => {
     if (orgProfile && !orgProfile.onboardingComplete) {
@@ -154,6 +168,15 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id,
   });
 
+  // Helper: Check if cash fee is stale (> 30 days)
+  const isCashFeeStale = (): boolean => {
+    if (!earnings?.cashFeeBalanceUpdatedAt) return false;
+    const updated = new Date(earnings.cashFeeBalanceUpdatedAt);
+    const now = new Date();
+    const daysDiff = (now.getTime() - updated.getTime()) / (1000 * 60 * 60 * 24);
+    return daysDiff > 30;
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 py-8">
@@ -169,6 +192,8 @@ const OrganizerDashboard = () => {
       </div>
     );
   }
+
+  const cashFeeBalance = earnings?.cashFeeBalance ?? 0;
 
   return (
     <>
@@ -270,7 +295,7 @@ const OrganizerDashboard = () => {
             </Link>
           </div>
 
-          {/* Tab Navigation — Overview and Sales only. Insights is a dedicated page. */}
+          {/* Tab Navigation */}
           <div className="flex gap-4 mb-8 border-b border-warm-200">
             {(['overview', 'sales'] as const).map((tab) => (
               <button
@@ -305,123 +330,106 @@ const OrganizerDashboard = () => {
                 </div>
               </div>
 
-              {/* H1: How It Works onboarding card */}
+              {/* Cash Fee Balance card */}
+              {cashFeeBalance > 0 && (
+                <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">Cash Fee Balance</p>
+                      <p className="text-2xl font-bold text-amber-900 mt-1">${cashFeeBalance.toFixed(2)}</p>
+                      {earnings?.cashFeeBalanceUpdatedAt && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Last updated: {new Date(earnings.cashFeeBalanceUpdatedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                      {isCashFeeStale() && (
+                        <p className="text-xs text-amber-700 mt-2 italic">⚠️ This balance is 30+ days old and will be deducted from your next payout.</p>
+                      )}
+                    </div>
+                    <Link
+                      href="/organizer/payouts"
+                      className="text-sm font-semibold text-amber-700 hover:text-amber-900 whitespace-nowrap ml-4"
+                    >
+                      View Payouts →
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* H1: How It Works card */}
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h3 className="text-lg font-semibold text-warm-900 mb-4">How It Works</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="text-center">
-                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-xl">📋</span>
-                    </div>
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">📋</span></div>
                     <p className="font-semibold text-warm-900 text-sm mb-1">1. Create a Sale</p>
                     <p className="text-xs text-warm-600">Set your date, location, and sale details to get started.</p>
                   </div>
                   <div className="text-center">
-                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-xl">📷</span>
-                    </div>
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">📷</span></div>
                     <p className="font-semibold text-warm-900 text-sm mb-1">2. Add Your Items</p>
                     <p className="text-xs text-warm-600">Snap photos and set prices. AI helps tag and describe items.</p>
                   </div>
                   <div className="text-center">
-                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-xl">🛒</span>
-                    </div>
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">🛒</span></div>
                     <p className="font-semibold text-warm-900 text-sm mb-1">3. Attract Buyers</p>
                     <p className="text-xs text-warm-600">Your sale goes live on the map. Buyers browse, search, and save items.</p>
                   </div>
                   <div className="text-center">
-                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-xl">💰</span>
-                    </div>
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">💰</span></div>
                     <p className="font-semibold text-warm-900 text-sm mb-1">4. Complete the Sale</p>
                     <p className="text-xs text-warm-600">Accept offers, process payments, and track your earnings.</p>
                   </div>
                 </div>
               </div>
 
-              {/* Phase 31: Organizer Tier Rewards card */}
+              {/* Phase 31: Tier Rewards card */}
               {tierData && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                  {/* Current Tier */}
                   <div className="bg-white rounded-lg shadow-md p-6">
                     <h3 className="text-lg font-semibold text-warm-900 mb-4">Your Tier</h3>
                     <div className="flex items-center gap-3 mb-3">
                       <OrganizerTierBadge tier={tierData.tier} />
                       <span className="text-sm font-semibold text-warm-800">{tierData.benefits.label}</span>
                     </div>
-                    <p className="text-sm text-warm-600 mb-4">
-                      {TIER_DESCRIPTIONS[tierData.tier] || ''}
-                    </p>
+                    <p className="text-sm text-warm-600 mb-4">{TIER_DESCRIPTIONS[tierData.tier] || ''}</p>
                     {tierData.benefits.perks.length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2">Perks</p>
                         <ul className="space-y-1">
                           {tierData.benefits.perks.map((perk) => (
                             <li key={perk} className="flex items-center gap-2 text-sm text-warm-700">
-                              <span className="text-amber-600 flex-shrink-0">✓</span>
-                              {perk}
+                              <span className="text-amber-600 flex-shrink-0">✓</span>{perk}
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
                   </div>
-
-                  {/* Progress to next tier */}
                   {tierData.progress.nextTier && (
                     <div className="bg-white rounded-lg shadow-md p-6">
                       <h3 className="text-lg font-semibold text-warm-900 mb-2">Progress to Next Tier</h3>
-                      <p className="text-sm text-warm-600 mb-4">
-                        Keep completing sales to reach <strong>{tierData.progress.nextTier}</strong>.
-                      </p>
+                      <p className="text-sm text-warm-600 mb-4">Keep completing sales to reach <strong>{tierData.progress.nextTier}</strong>.</p>
                       <div className="space-y-4">
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm font-medium text-warm-700">Completed Sales</span>
-                            <span className="text-sm text-warm-600">
-                              {tierData.progress.completedSales} / {tierData.progress.completedSales + tierData.progress.salesNeeded}
-                            </span>
+                            <span className="text-sm text-warm-600">{tierData.progress.completedSales} / {tierData.progress.completedSales + tierData.progress.salesNeeded}</span>
                           </div>
                           <div className="w-full bg-warm-200 rounded-full h-2">
-                            <div
-                              className="bg-amber-600 h-2 rounded-full transition-all"
-                              style={{
-                                width: tierData.progress.salesNeeded > 0
-                                  ? `${(tierData.progress.completedSales / (tierData.progress.completedSales + tierData.progress.salesNeeded)) * 100}%`
-                                  : '100%',
-                              }}
-                            />
+                            <div className="bg-amber-600 h-2 rounded-full transition-all" style={{ width: tierData.progress.salesNeeded > 0 ? `${(tierData.progress.completedSales / (tierData.progress.completedSales + tierData.progress.salesNeeded)) * 100}%` : '100%' }} />
                           </div>
-                          {tierData.progress.salesNeeded > 0 && (
-                            <p className="text-xs text-warm-600 mt-1">
-                              {tierData.progress.salesNeeded} more {tierData.progress.salesNeeded === 1 ? 'sale' : 'sales'} needed
-                            </p>
-                          )}
+                          {tierData.progress.salesNeeded > 0 && <p className="text-xs text-warm-600 mt-1">{tierData.progress.salesNeeded} more {tierData.progress.salesNeeded === 1 ? 'sale' : 'sales'} needed</p>}
                         </div>
-
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm font-medium text-warm-700">Items Sold</span>
-                            <span className="text-sm text-warm-600">
-                              {tierData.progress.soldItems} / {tierData.progress.soldItems + tierData.progress.itemsNeeded}
-                            </span>
+                            <span className="text-sm text-warm-600">{tierData.progress.soldItems} / {tierData.progress.soldItems + tierData.progress.itemsNeeded}</span>
                           </div>
                           <div className="w-full bg-warm-200 rounded-full h-2">
-                            <div
-                              className="bg-amber-600 h-2 rounded-full transition-all"
-                              style={{
-                                width: tierData.progress.itemsNeeded > 0
-                                  ? `${(tierData.progress.soldItems / (tierData.progress.soldItems + tierData.progress.itemsNeeded)) * 100}%`
-                                  : '100%',
-                              }}
-                            />
+                            <div className="bg-amber-600 h-2 rounded-full transition-all" style={{ width: tierData.progress.itemsNeeded > 0 ? `${(tierData.progress.soldItems / (tierData.progress.soldItems + tierData.progress.itemsNeeded)) * 100}%` : '100%' }} />
                           </div>
-                          {tierData.progress.itemsNeeded > 0 && (
-                            <p className="text-xs text-warm-600 mt-1">
-                              {tierData.progress.itemsNeeded} more {tierData.progress.itemsNeeded === 1 ? 'item' : 'items'} needed
-                            </p>
-                          )}
+                          {tierData.progress.itemsNeeded > 0 && <p className="text-xs text-warm-600 mt-1">{tierData.progress.itemsNeeded} more {tierData.progress.itemsNeeded === 1 ? 'item' : 'items'} needed</p>}
                         </div>
                       </div>
                     </div>
@@ -438,28 +446,16 @@ const OrganizerDashboard = () => {
                     <p className="text-sm text-warm-600">{orgProfile.progressMessage}</p>
                   </div>
                   <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-                    <div>
-                      <p className="text-2xl font-bold text-warm-900">{orgProfile.completedSales}</p>
-                      <p className="text-xs text-warm-500">Completed Sales</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-warm-900">{orgProfile.followerCount}</p>
-                      <p className="text-xs text-warm-500">Followers</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-warm-900">
-                        {orgProfile.avgRating ? orgProfile.avgRating.toFixed(1) : '—'}
-                      </p>
-                      <p className="text-xs text-warm-500">Avg Rating</p>
-                    </div>
+                    <div><p className="text-2xl font-bold text-warm-900">{orgProfile.completedSales}</p><p className="text-xs text-warm-500">Completed Sales</p></div>
+                    <div><p className="text-2xl font-bold text-warm-900">{orgProfile.followerCount}</p><p className="text-xs text-warm-500">Followers</p></div>
+                    <div><p className="text-2xl font-bold text-warm-900">{orgProfile.avgRating ? orgProfile.avgRating.toFixed(1) : '—'}</p><p className="text-xs text-warm-500">Avg Rating</p></div>
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2">Your tier benefits</p>
                     <ul className="space-y-1">
                       {(TIER_BENEFITS[orgProfile.reputationTier] || TIER_BENEFITS.NEW).map((benefit) => (
                         <li key={benefit} className="flex items-center gap-2 text-sm text-warm-700">
-                          <span className="text-green-500 flex-shrink-0">✓</span>
-                          {benefit}
+                          <span className="text-green-500 flex-shrink-0">✓</span>{benefit}
                         </li>
                       ))}
                     </ul>
@@ -482,60 +478,20 @@ const OrganizerDashboard = () => {
                           <div className="flex items-center justify-between gap-2 mb-2">
                             <h3 className="text-lg font-semibold text-warm-900">{sale.title}</h3>
                             {sale.status === 'PUBLISHED' ? (
-                              <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">
-                                ● LIVE
-                              </span>
+                              <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">● LIVE</span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">
-                                ◌ DRAFT
-                              </span>
+                              <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">◌ DRAFT</span>
                             )}
                           </div>
                           <p className="text-sm text-warm-600 mb-4">{sale.city}, {sale.state}</p>
                           <div className="flex gap-2 flex-wrap items-center">
-                            <Link
-                              href={`/sales/${sale.id}`}
-                              className="text-sm text-amber-600 hover:underline font-semibold"
-                            >
-                              View Sale
-                            </Link>
-                            <Link
-                              href={`/organizer/edit-sale/${sale.id}`}
-                              className="text-sm text-amber-600 hover:underline"
-                            >
-                              Edit
-                            </Link>
-                            <Link
-                              href={`/organizer/add-items/${sale.id}`}
-                              className="text-sm text-amber-600 hover:underline"
-                            >
-                              Items
-                            </Link>
-                            <button
-                              onClick={() => setOpenQRSale(openQRSale === sale.id ? null : sale.id)}
-                              className="text-sm text-amber-600 hover:underline"
-                            >
-                              {openQRSale === sale.id ? 'Hide QR' : 'QR Code'}
-                            </button>
-                            <button
-                              onClick={() => handleCloneSale(sale.id)}
-                              disabled={cloningId === sale.id}
-                              className="text-sm text-amber-600 hover:underline disabled:opacity-50"
-                            >
-                              {cloningId === sale.id ? 'Cloning...' : 'Clone'}
-                            </button>
-                            <button
-                              onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)}
-                              className="text-sm text-red-600 hover:underline font-semibold"
-                            >
-                              {flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}
-                            </button>
-                            <button
-                              onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })}
-                              className="text-sm text-sage-600 hover:underline font-semibold"
-                            >
-                              📣 Share
-                            </button>
+                            <Link href={`/sales/${sale.id}`} className="text-sm text-amber-600 hover:underline font-semibold">View Sale</Link>
+                            <Link href={`/organizer/edit-sale/${sale.id}`} className="text-sm text-amber-600 hover:underline">Edit</Link>
+                            <Link href={`/organizer/add-items/${sale.id}`} className="text-sm text-amber-600 hover:underline">Items</Link>
+                            <button onClick={() => setOpenQRSale(openQRSale === sale.id ? null : sale.id)} className="text-sm text-amber-600 hover:underline">{openQRSale === sale.id ? 'Hide QR' : 'QR Code'}</button>
+                            <button onClick={() => handleCloneSale(sale.id)} disabled={cloningId === sale.id} className="text-sm text-amber-600 hover:underline disabled:opacity-50">{cloningId === sale.id ? 'Cloning...' : 'Clone'}</button>
+                            <button onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)} className="text-sm text-red-600 hover:underline font-semibold">{flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}</button>
+                            <button onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })} className="text-sm text-sage-600 hover:underline font-semibold">📣 Share</button>
                           </div>
                           {openQRSale === sale.id && (
                             <div className="mt-4 pt-4 border-t border-warm-100">
@@ -544,14 +500,7 @@ const OrganizerDashboard = () => {
                           )}
                           {flashDealSaleId === sale.id && sale.items && (
                             <div className="mt-4 pt-4 border-t border-warm-100">
-                              <FlashDealForm
-                                saleId={sale.id}
-                                saleItems={sale.items}
-                                onSuccess={() => {
-                                  setFlashDealSaleId(null);
-                                }}
-                                onCancel={() => setFlashDealSaleId(null)}
-                              />
+                              <FlashDealForm saleId={sale.id} saleItems={sale.items} onSuccess={() => setFlashDealSaleId(null)} onCancel={() => setFlashDealSaleId(null)} />
                             </div>
                           )}
                         </div>
@@ -560,12 +509,7 @@ const OrganizerDashboard = () => {
                   ))}
                 </div>
               ) : (
-                <EmptyState
-                  icon="🏷️"
-                  heading="You haven't created any sales yet"
-                  subtext="Start by creating your first estate sale. Set up details, add inventory, and go live!"
-                  cta={{ label: 'Create Your First Sale', href: '/organizer/create-sale' }}
-                />
+                <EmptyState icon="🏷️" heading="You haven't created any sales yet" subtext="Start by creating your first estate sale. Set up details, add inventory, and go live!" cta={{ label: 'Create Your First Sale', href: '/organizer/create-sale' }} />
               )}
             </>
           )}

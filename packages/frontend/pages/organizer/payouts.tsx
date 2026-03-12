@@ -81,7 +81,14 @@ const OrganizerPayoutsPage = () => {
     queryKey: ['earnings-breakdown'],
     queryFn: async () => {
       const res = await api.get('/stripe/earnings');
-      return res.data as { items: EarningsItem[]; totals: EarningsTotals; count: number; note: string };
+      return res.data as {
+        items: EarningsItem[];
+        totals: EarningsTotals;
+        count: number;
+        note: string;
+        cashFeeBalance?: number;
+        cashFeeBalanceUpdatedAt?: string;
+      };
     },
     enabled: !!user?.id,
     staleTime: 2 * 60_000,
@@ -123,6 +130,7 @@ const OrganizerPayoutsPage = () => {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['stripe-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
       const { amount, method, arrivalDate } = res.data;
       const arrival = arrivalDate ? new Date(arrivalDate).toLocaleDateString() : 'soon';
       showToast(
@@ -150,11 +158,25 @@ const OrganizerPayoutsPage = () => {
       showToast('Enter a valid payout amount', 'error');
       return;
     }
-    if (balance && amount > balance.available) {
-      showToast(`Amount exceeds available balance ($${balance.available.toFixed(2)})`, 'error');
+    const availableAfterFee = Math.max(0, (balance?.available ?? 0) - (earnings?.cashFeeBalance ?? 0));
+    if (amount > availableAfterFee) {
+      showToast(
+        `Amount exceeds available balance after cash fee deduction ($${availableAfterFee.toFixed(2)})`,
+        'error'
+      );
       return;
     }
     createPayoutMutation.mutate();
+  };
+
+  // ─── Helper: Check if cash fee is stale (> 30 days) ────────────────────────
+
+  const isCashFeeStale = (): boolean => {
+    if (!earnings?.cashFeeBalanceUpdatedAt) return false;
+    const updated = new Date(earnings.cashFeeBalanceUpdatedAt);
+    const now = new Date();
+    const daysDiff = (now.getTime() - updated.getTime()) / (1000 * 60 * 60 * 24);
+    return daysDiff > 30;
   };
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -163,6 +185,7 @@ const OrganizerPayoutsPage = () => {
 
   const currentInterval = selectedInterval ?? schedule?.interval ?? 'daily';
   const scheduleChanged = schedule && selectedInterval !== null && selectedInterval !== schedule.interval;
+  const cashFeeBalance = earnings?.cashFeeBalance ?? 0;
 
   return (
     <>
@@ -223,6 +246,36 @@ const OrganizerPayoutsPage = () => {
               </div>
             )}
           </div>
+
+          {/* Cash Fee Balance card — shown only when balance > 0 */}
+          {cashFeeBalance > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
+                Cash Fee Balance
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-3xl font-bold text-amber-600">
+                    ${cashFeeBalance.toFixed(2)}
+                  </p>
+                  {earnings?.cashFeeBalanceUpdatedAt && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Last updated: {new Date(earnings.cashFeeBalanceUpdatedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                {/* 30-day stale warning */}
+                {isCashFeeStale() && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">⚠️ Cash fee balance hasn't been cleared in 30+ days.</span> It will be deducted from your next payout.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Payout schedule */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -298,13 +351,36 @@ const OrganizerPayoutsPage = () => {
                 {balance && (
                   <button
                     type="button"
-                    onClick={() => setPayoutAmount(balance.available.toFixed(2))}
+                    onClick={() => {
+                      const afterFee = Math.max(0, balance.available - cashFeeBalance);
+                      setPayoutAmount(afterFee.toFixed(2));
+                    }}
                     className="text-xs text-blue-600 hover:underline mt-1"
                   >
-                    Use full available balance (${balance.available.toFixed(2)})
+                    Use full available balance after fees (${
+                      Math.max(0, balance.available - cashFeeBalance).toFixed(2)
+                    })
                   </button>
                 )}
               </div>
+
+              {/* Cash fee deduction info — shown only if balance > 0 */}
+              {cashFeeBalance > 0 && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-amber-800">Cash fee deduction:</span>
+                    <span className="font-semibold text-amber-900">-${cashFeeBalance.toFixed(2)}</span>
+                  </div>
+                  {payoutAmount && (
+                    <div className="flex justify-between text-sm border-t border-amber-200 pt-1 mt-1">
+                      <span className="text-amber-800 font-semibold">Net payout:</span>
+                      <span className="font-semibold text-amber-900">
+                        ${Math.max(0, parseFloat(payoutAmount) - cashFeeBalance).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Method */}
               <div>

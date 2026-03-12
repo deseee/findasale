@@ -10,7 +10,7 @@
  *   - Quick-add misc item buttons (25¢, 50¢, $1, $2, $5, $10)
  *   - Custom amount input via numpad
  *   - Card or cash payment mode
- *   - Collapsible numpad for price/cash entry
+ *   - Collapsible numpad for price entry; inline numpad for cash received
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
@@ -47,7 +47,12 @@ interface CartItem {
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | 'success' | 'error' | 'cancelled';
 type PaymentMode = 'card' | 'cash';
-type NumpadMode = 'price' | 'cash';
+type NumpadMode = 'price';
+
+interface CashPaymentResponse {
+  platformFee: number;
+  cashFeeBalance: number;
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -65,14 +70,15 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [buyerEmail, setBuyerEmail] = useState('');
 
-  // Numpad state
+  // Numpad state (price / custom amount only)
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadValue, setNumpadValue] = useState('');
-  const [numpadMode, setNumpadMode] = useState<NumpadMode>('price');
+  const [numpadMode] = useState<NumpadMode>('price');
 
   // Payment state
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('card');
   const [cashReceived, setCashReceived] = useState(0);
+  const [cashNumpadValue, setCashNumpadValue] = useState('');
 
   // Terminal state
   const [readerStatus, setReaderStatus] = useState<ReaderStatus>('idle');
@@ -80,6 +86,9 @@ export default function POSPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [paymentIntentId, setPaymentIntentId] = useState('');
+
+  // Cash fee state
+  const [lastCashFee, setLastCashFee] = useState<CashPaymentResponse | null>(null);
 
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
@@ -178,14 +187,30 @@ export default function POSPage() {
     return () => clearTimeout(timeout);
   }, [itemSearch, selectedSaleId]);
 
+  // ─── Sync inline cash numpad → cashReceived ──────────────────────────────
+
+  useEffect(() => {
+    const cents = parseInt(cashNumpadValue || '0', 10);
+    setCashReceived(cents / 100);
+  }, [cashNumpadValue]);
+
   // ─── Cart operations ────────────────────────────────────────────────────
 
   const addToCart = (item: Item | { title: string; amount: number }) => {
+    if ('price' in item) {
+      // Block adding the same inventory item twice
+      if (cart.some(c => c.itemId === item.id)) {
+        setErrorMessage(`"${item.title}" is already in the cart.`);
+        setItemSearch('');
+        setSearchResults([]);
+        return;
+      }
+    }
+
     const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
     if ('price' in item) {
-      // Database item
-      setCart([
-        ...cart,
+      setCart(prev => [
+        ...prev,
         {
           id: cartId,
           itemId: item.id,
@@ -195,9 +220,8 @@ export default function POSPage() {
         },
       ]);
     } else {
-      // Misc item
-      setCart([
-        ...cart,
+      setCart(prev => [
+        ...prev,
         {
           id: cartId,
           title: item.title,
@@ -205,40 +229,44 @@ export default function POSPage() {
         },
       ]);
     }
+    setErrorMessage('');
     setItemSearch('');
     setSearchResults([]);
   };
 
   const quickAddMisc = (amount: number) => {
-    const label = amount >= 1 ? `$${amount.toFixed(2)}` : `${Math.round(amount * 100)}¢`;
+    const label = amount >= 1 ? `$${amount.toFixed(0)}` : amount === 0.25 ? '25¢' : '50¢';
     addToCart({ title: `Misc ${label}`, amount });
   };
 
   const removeFromCart = (cartId: string) => {
-    setCart(cart.filter(c => c.id !== cartId));
+    setCart(prev => prev.filter(c => c.id !== cartId));
   };
 
   const clearCart = () => {
     setCart([]);
     setNumpadValue('');
     setCashReceived(0);
+    setCashNumpadValue('');
     setBuyerEmail('');
+    setItemSearch('');
+    setSearchResults([]);
   };
 
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
   const cartChange = Math.max(0, cashReceived - cartTotal);
 
-  // ─── Numpad operations ──────────────────────────────────────────────────
+  // ─── Numpad operations (price entry only) ───────────────────────────────
 
   const handleNumpadKey = (key: string) => {
     if (key === 'backspace') {
-      setNumpadValue(numpadValue.slice(0, -1));
+      setNumpadValue(prev => prev.slice(0, -1));
     } else if (key === 'clear') {
       setNumpadValue('');
     } else if (key === '00') {
-      setNumpadValue(numpadValue + '00');
-    } else if (/^\d$/.test(key)) {
-      setNumpadValue(numpadValue + key);
+      setNumpadValue(prev => prev + '00');
+    } else if (/^\\d$/.test(key)) {
+      setNumpadValue(prev => prev + key);
     }
   };
 
@@ -248,15 +276,9 @@ export default function POSPage() {
     const cents = parseInt(numpadValue, 10);
     const dollars = cents / 100;
 
-    if (numpadMode === 'price') {
-      if (dollars > 0) {
-        const label = dollars >= 1 ? `$${dollars.toFixed(2)}` : `${cents}¢`;
-        addToCart({ title: `Custom ${label}`, amount: dollars });
-        setNumpadValue('');
-        setNumpadOpen(false);
-      }
-    } else if (numpadMode === 'cash') {
-      setCashReceived(dollars);
+    if (dollars > 0) {
+      const label = dollars >= 1 ? `$${dollars.toFixed(2)}` : `${cents}¢`;
+      addToCart({ title: `Custom ${label}`, amount: dollars });
       setNumpadValue('');
       setNumpadOpen(false);
     }
@@ -285,28 +307,25 @@ export default function POSPage() {
         platformFee: number;
       }>('/stripe/terminal/payment-intent', {
         items,
-        saleId: selectedSaleId,  // fallback for misc-only carts (no itemId in cart)
+        saleId: selectedSaleId,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
 
       const { paymentIntentId: piId, clientSecret } = piRes.data;
       setPaymentIntentId(piId);
 
-      // Present card to reader
       setPaymentStatus('waiting_for_card');
       const collectResult = await terminalRef.current.collectPaymentMethod(clientSecret);
       if ('error' in collectResult) {
         throw new Error(collectResult.error.message);
       }
 
-      // Process payment
       setPaymentStatus('processing');
       const processResult = await terminalRef.current.processPayment(collectResult.paymentIntent);
       if ('error' in processResult) {
         throw new Error(processResult.error.message);
       }
 
-      // Capture on backend
       await api.post('/stripe/terminal/capture', { paymentIntentId: piId });
 
       setPaymentStatus('success');
@@ -318,7 +337,10 @@ export default function POSPage() {
     } catch (err: any) {
       console.error('[pos] Payment error:', err);
       setPaymentStatus('error');
-      setErrorMessage(err?.message ?? 'Payment failed. Please try again.');
+      // Surface the specific backend message (e.g. "Item X is not available") when present
+      const message =
+        err?.response?.data?.message ?? err?.message ?? 'Payment failed. Please try again.';
+      setErrorMessage(message);
     }
   };
 
@@ -335,13 +357,14 @@ export default function POSPage() {
         label: c.title,
       }));
 
-      await api.post('/stripe/terminal/cash-payment', {
+      const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
         items,
         cashReceived,
         saleId: selectedSaleId,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
 
+      setLastCashFee(response.data);
       setPaymentStatus('success');
       const change = (cashReceived - cartTotal).toFixed(2);
       setSuccessMessage(
@@ -352,7 +375,9 @@ export default function POSPage() {
     } catch (err: any) {
       console.error('[pos] Cash payment error:', err);
       setPaymentStatus('error');
-      setErrorMessage(err?.message ?? 'Cash sale failed. Please try again.');
+      const message =
+        err?.response?.data?.message ?? err?.message ?? 'Cash sale failed. Please try again.';
+      setErrorMessage(message);
     }
   };
 
@@ -380,6 +405,7 @@ export default function POSPage() {
     setPaymentStatus('idle');
     setErrorMessage('');
     setSuccessMessage('');
+    setLastCashFee(null);
   };
 
   // ─── Reader status badge ─────────────────────────────────────────────────
@@ -401,7 +427,7 @@ export default function POSPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-warm-900 font-fraunces">POS v2</h1>
+          <h1 className="text-2xl font-bold text-warm-900 font-fraunces">POS</h1>
           <p className="text-sm text-warm-500">In-person payments</p>
         </div>
         <span className={`text-xs px-3 py-1 rounded-full font-medium ${readerBadge.color}`}>
@@ -510,8 +536,7 @@ export default function POSPage() {
       {selectedSaleId && (
         <button
           onClick={() => {
-            setNumpadMode('price');
-            setNumpadOpen(!numpadOpen);
+            setNumpadOpen(prev => !prev);
             setNumpadValue('');
           }}
           className="w-full mb-4 py-2 rounded-lg bg-warm-100 border border-warm-300 text-warm-700 text-sm font-medium hover:bg-warm-200 transition"
@@ -520,13 +545,11 @@ export default function POSPage() {
         </button>
       )}
 
-      {/* Numpad */}
+      {/* Numpad (price / custom amount only) */}
       {numpadOpen && (
         <div className="mb-4 p-4 rounded-xl bg-white border border-warm-200 shadow-md">
           <div className="mb-3 p-2 rounded-lg bg-warm-50 border border-warm-200 text-center">
-            <p className="text-xs text-warm-600">
-              {numpadMode === 'price' ? 'Custom Amount' : 'Cash Received'}
-            </p>
+            <p className="text-xs text-warm-600">Custom Amount</p>
             <p className="text-2xl font-bold text-warm-900">
               ${(parseInt(numpadValue || '0', 10) / 100).toFixed(2)}
             </p>
@@ -609,7 +632,7 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Buyer email (only show when cart has items) */}
+      {/* Buyer email */}
       {cart.length > 0 && (
         <div className="mb-4">
           <label className="block text-sm font-medium text-warm-700 mb-1">
@@ -645,6 +668,7 @@ export default function POSPage() {
             onClick={() => {
               setPaymentMode('cash');
               setCashReceived(0);
+              setCashNumpadValue('');
             }}
             className={`flex-1 py-3 rounded-xl font-semibold transition ${
               paymentMode === 'cash'
@@ -667,6 +691,25 @@ export default function POSPage() {
       {successMessage && paymentStatus === 'success' && (
         <div className="mb-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
           {successMessage}
+          
+          {/* Cash fee details section */}
+          {paymentMode === 'cash' && lastCashFee && (
+            <div className="mt-3 pt-3 border-t border-emerald-200 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-emerald-700">Platform fee:</span>
+                <span className="font-semibold text-emerald-900">${lastCashFee.platformFee.toFixed(2)}</span>
+              </div>
+              <p className="text-xs text-emerald-700 italic">This fee will be deducted from your next payout.</p>
+              {lastCashFee.cashFeeBalance > 0 && (
+                <div className="mt-2 pt-2 border-t border-emerald-200">
+                  <p className="text-xs text-emerald-700">
+                    <span className="font-semibold">Pending fee balance:</span> ${lastCashFee.cashFeeBalance.toFixed(2)} total
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          
           <button
             onClick={handleNewTransaction}
             className="block mt-3 w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
@@ -707,27 +750,53 @@ export default function POSPage() {
             </>
           ) : (
             <>
-              <div className="p-3 rounded-lg bg-warm-50 border border-warm-200">
-                <p className="text-xs text-warm-600 mb-1">Cash Received</p>
-                <button
-                  onClick={() => {
-                    setNumpadMode('cash');
-                    setNumpadOpen(true);
-                    setNumpadValue(Math.round(cashReceived * 100).toString());
-                  }}
-                  className="w-full py-2 rounded-lg bg-white border border-warm-300 text-warm-900 font-semibold hover:bg-warm-50 transition"
-                >
-                  ${cashReceived.toFixed(2)}
-                </button>
-              </div>
-
-              {cashReceived >= cartTotal && (
-                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <p className="text-sm font-semibold text-emerald-700">
-                    Change: ${cartChange.toFixed(2)}
+              {/* Inline cash received numpad */}
+              <div className="p-4 rounded-xl bg-white border border-warm-200 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-warm-700">Cash Received</p>
+                  <p className="text-2xl font-bold text-warm-900">
+                    ${(parseInt(cashNumpadValue || '0', 10) / 100).toFixed(2)}
                   </p>
                 </div>
-              )}
+
+                {cashNumpadValue.length > 0 && (
+                  <div
+                    className={`mb-3 p-2 rounded-lg text-center ${
+                      cashReceived >= cartTotal
+                        ? 'bg-emerald-50 border border-emerald-200'
+                        : 'bg-warm-50 border border-warm-200'
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-semibold ${
+                        cashReceived >= cartTotal ? 'text-emerald-700' : 'text-warm-500'
+                      }`}
+                    >
+                      {cashReceived >= cartTotal
+                        ? `Change: $${cartChange.toFixed(2)}`
+                        : `Short $${(cartTotal - cashReceived).toFixed(2)}`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-1">
+                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'backspace'].map(key => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        if (key === 'backspace') {
+                          setCashNumpadValue(prev => prev.slice(0, -1));
+                        } else {
+                          setCashNumpadValue(prev => prev + key);
+                        }
+                      }}
+                      className="py-3 rounded-lg bg-warm-100 hover:bg-warm-200 text-warm-900 text-sm font-semibold transition active:bg-warm-300"
+                    >
+                      {key === 'backspace' ? '⌫' : key}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <button
                 onClick={handleCashPayment}

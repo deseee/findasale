@@ -255,6 +255,7 @@ export interface EarningsBreakdownItem {
  *
  * Returns an item-level payout breakdown for the organizer's PAID purchases,
  * showing gross sale price, platform fee, estimated Stripe fee, and net payout.
+ * Also includes accumulated cash platform fees from POS sales.
  *
  * Stripe fee is estimated at 2.9% + $0.30. Actual fees may vary slightly.
  * Platform fee is 10% flat (locked session 106).
