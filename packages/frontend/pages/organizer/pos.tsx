@@ -10,7 +10,7 @@
  *   - Quick-add misc item buttons (25¢, 50¢, $1, $2, $5, $10)
  *   - Custom amount input via numpad
  *   - Card or cash payment mode
- *   - Collapsible numpad for price/cash entry
+ *   - Collapsible numpad for price entry; inline numpad for cash received
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
@@ -47,7 +47,7 @@ interface CartItem {
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | 'success' | 'error' | 'cancelled';
 type PaymentMode = 'card' | 'cash';
-type NumpadMode = 'price' | 'cash';
+type NumpadMode = 'price';
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -65,14 +65,15 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [buyerEmail, setBuyerEmail] = useState('');
 
-  // Numpad state
+  // Numpad state (price / custom amount only)
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadValue, setNumpadValue] = useState('');
-  const [numpadMode, setNumpadMode] = useState<NumpadMode>('price');
+  const [numpadMode] = useState<NumpadMode>('price');
 
   // Payment state
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('card');
   const [cashReceived, setCashReceived] = useState(0);
+  const [cashNumpadValue, setCashNumpadValue] = useState('');
 
   // Terminal state
   const [readerStatus, setReaderStatus] = useState<ReaderStatus>('idle');
@@ -178,6 +179,13 @@ export default function POSPage() {
     return () => clearTimeout(timeout);
   }, [itemSearch, selectedSaleId]);
 
+  // ─── Sync inline cash numpad → cashReceived ──────────────────────────────
+
+  useEffect(() => {
+    const cents = parseInt(cashNumpadValue || '0', 10);
+    setCashReceived(cents / 100);
+  }, [cashNumpadValue]);
+
   // ─── Cart operations ────────────────────────────────────────────────────
 
   const addToCart = (item: Item | { title: string; amount: number }) => {
@@ -231,6 +239,7 @@ export default function POSPage() {
     setCart([]);
     setNumpadValue('');
     setCashReceived(0);
+    setCashNumpadValue('');
     setBuyerEmail('');
     setItemSearch('');
     setSearchResults([]);
@@ -239,7 +248,7 @@ export default function POSPage() {
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
   const cartChange = Math.max(0, cashReceived - cartTotal);
 
-  // ─── Numpad operations ──────────────────────────────────────────────────
+  // ─── Numpad operations (price entry only) ───────────────────────────────
 
   const handleNumpadKey = (key: string) => {
     if (key === 'backspace') {
@@ -259,15 +268,9 @@ export default function POSPage() {
     const cents = parseInt(numpadValue, 10);
     const dollars = cents / 100;
 
-    if (numpadMode === 'price') {
-      if (dollars > 0) {
-        const label = dollars >= 1 ? `$${dollars.toFixed(2)}` : `${cents}¢`;
-        addToCart({ title: `Custom ${label}`, amount: dollars });
-        setNumpadValue('');
-        setNumpadOpen(false);
-      }
-    } else if (numpadMode === 'cash') {
-      setCashReceived(dollars);
+    if (dollars > 0) {
+      const label = dollars >= 1 ? `$${dollars.toFixed(2)}` : `${cents}¢`;
+      addToCart({ title: `Custom ${label}`, amount: dollars });
       setNumpadValue('');
       setNumpadOpen(false);
     }
@@ -523,7 +526,6 @@ export default function POSPage() {
       {selectedSaleId && (
         <button
           onClick={() => {
-            setNumpadMode('price');
             setNumpadOpen(prev => !prev);
             setNumpadValue('');
           }}
@@ -533,13 +535,11 @@ export default function POSPage() {
         </button>
       )}
 
-      {/* Numpad */}
+      {/* Numpad (price / custom amount only) */}
       {numpadOpen && (
         <div className="mb-4 p-4 rounded-xl bg-white border border-warm-200 shadow-md">
           <div className="mb-3 p-2 rounded-lg bg-warm-50 border border-warm-200 text-center">
-            <p className="text-xs text-warm-600">
-              {numpadMode === 'price' ? 'Custom Amount' : 'Cash Received'}
-            </p>
+            <p className="text-xs text-warm-600">Custom Amount</p>
             <p className="text-2xl font-bold text-warm-900">
               ${(parseInt(numpadValue || '0', 10) / 100).toFixed(2)}
             </p>
@@ -658,6 +658,7 @@ export default function POSPage() {
             onClick={() => {
               setPaymentMode('cash');
               setCashReceived(0);
+              setCashNumpadValue('');
             }}
             className={`flex-1 py-3 rounded-xl font-semibold transition ${
               paymentMode === 'cash'
@@ -720,27 +721,53 @@ export default function POSPage() {
             </>
           ) : (
             <>
-              <div className="p-3 rounded-lg bg-warm-50 border border-warm-200">
-                <p className="text-xs text-warm-600 mb-1">Cash Received</p>
-                <button
-                  onClick={() => {
-                    setNumpadMode('cash');
-                    setNumpadOpen(true);
-                    setNumpadValue(Math.round(cashReceived * 100).toString());
-                  }}
-                  className="w-full py-2 rounded-lg bg-white border border-warm-300 text-warm-900 font-semibold hover:bg-warm-50 transition"
-                >
-                  ${cashReceived.toFixed(2)}
-                </button>
-              </div>
-
-              {cashReceived >= cartTotal && (
-                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <p className="text-sm font-semibold text-emerald-700">
-                    Change: ${cartChange.toFixed(2)}
+              {/* Inline cash received numpad */}
+              <div className="p-4 rounded-xl bg-white border border-warm-200 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-warm-700">Cash Received</p>
+                  <p className="text-2xl font-bold text-warm-900">
+                    ${(parseInt(cashNumpadValue || '0', 10) / 100).toFixed(2)}
                   </p>
                 </div>
-              )}
+
+                {cashNumpadValue.length > 0 && (
+                  <div
+                    className={`mb-3 p-2 rounded-lg text-center ${
+                      cashReceived >= cartTotal
+                        ? 'bg-emerald-50 border border-emerald-200'
+                        : 'bg-warm-50 border border-warm-200'
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-semibold ${
+                        cashReceived >= cartTotal ? 'text-emerald-700' : 'text-warm-500'
+                      }`}
+                    >
+                      {cashReceived >= cartTotal
+                        ? `Change: $${cartChange.toFixed(2)}`
+                        : `Short $${(cartTotal - cashReceived).toFixed(2)}`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-1">
+                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'backspace'].map(key => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        if (key === 'backspace') {
+                          setCashNumpadValue(prev => prev.slice(0, -1));
+                        } else {
+                          setCashNumpadValue(prev => prev + key);
+                        }
+                      }}
+                      className="py-3 rounded-lg bg-warm-100 hover:bg-warm-200 text-warm-900 text-sm font-semibold transition active:bg-warm-300"
+                    >
+                      {key === 'backspace' ? '⌫' : key}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <button
                 onClick={handleCashPayment}
