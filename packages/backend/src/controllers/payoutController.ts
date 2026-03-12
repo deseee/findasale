@@ -122,6 +122,7 @@ export const updatePayoutSchedule = async (req: AuthRequest, res: Response) => {
  * POST /api/stripe/payout
  * Body: { amount: number (dollars), method?: 'standard' | 'instant' }
  * Triggers an on-demand payout from the organizer's Stripe Connect balance to their bank.
+ * Automatically deducts any accumulated cash platform fees before the Stripe call.
  * 'instant' requires an eligible debit card external account; falls back gracefully if unsupported.
  */
 export const createPayout = async (req: AuthRequest, res: Response) => {
@@ -143,16 +144,56 @@ export const createPayout = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "method must be 'standard' or 'instant'" });
     }
 
+    // Fetch organizer's accumulated cash fee balance
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // Check 30-day guardrail: advisory warning if balance > 0 and > 30 days old
+    let guardrailWarning: string | null = null;
+    if (organizer.cashFeeBalance > 0 && organizer.cashFeeBalanceUpdatedAt) {
+      const daysSinceUpdate = (Date.now() - organizer.cashFeeBalanceUpdatedAt.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceUpdate > 30) {
+        guardrailWarning = `Your cash fee balance of $${organizer.cashFeeBalance.toFixed(2)} has been pending for ${Math.floor(daysSinceUpdate)} days.`;
+      }
+    }
+
+    // Deduct cash fee balance from requested payout amount
+    const payoutAmountAfterFees = amount - organizer.cashFeeBalance;
+
+    if (payoutAmountAfterFees < 0.50) {
+      // Payout would be below Stripe minimum after deducting fees
+      return res.status(400).json({
+        message: `Cash fees ($${organizer.cashFeeBalance.toFixed(2)}) exceed payout amount. Available balance after deduction: $${Math.max(0, payoutAmountAfterFees).toFixed(2)}.`,
+        cashFeeDeduction: organizer.cashFeeBalance,
+        originalAmount: amount,
+      });
+    }
+
     const stripe = getStripe();
     const payout = await stripe.payouts.create(
       {
-        amount: Math.round(amount * 100), // convert dollars → cents
+        amount: Math.round(payoutAmountAfterFees * 100), // convert dollars → cents (net amount only)
         currency: 'usd',
         method: method as 'standard' | 'instant',
         statement_descriptor: 'FindA.Sale Payout',
       },
       { stripeAccount: connectId }
     );
+
+    // After successful payout, reset the cash fee balance
+    await prisma.organizer.update({
+      where: { userId: req.user.id },
+      data: {
+        cashFeeBalance: 0,
+        cashFeeBalanceUpdatedAt: new Date(),
+      },
+    });
 
     res.json({
       id: payout.id,
@@ -163,6 +204,8 @@ export const createPayout = async (req: AuthRequest, res: Response) => {
       arrivalDate: payout.arrival_date
         ? new Date(payout.arrival_date * 1000).toISOString()
         : null,
+      ...(guardrailWarning && { guardrailWarning }),
+      cashFeeDeducted: organizer.cashFeeBalance,
     });
   } catch (error: any) {
     // Stripe specific codes for instant payout eligibility failures
@@ -212,6 +255,7 @@ export interface EarningsBreakdownItem {
  *
  * Returns an item-level payout breakdown for the organizer's PAID purchases,
  * showing gross sale price, platform fee, estimated Stripe fee, and net payout.
+ * Also includes accumulated cash platform fees from POS sales.
  *
  * Stripe fee is estimated at 2.9% + $0.30. Actual fees may vary slightly.
  * Platform fee is 10% flat (locked session 106).
@@ -296,6 +340,9 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
       },
       count: items.length,
       note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% flat.',
+      // Cash POS: accumulated fees awaiting payout deduction
+      cashFeeBalance: organizer.cashFeeBalance,
+      cashFeeBalanceUpdatedAt: organizer.cashFeeBalanceUpdatedAt,
     });
   } catch (error) {
     console.error('getEarningsBreakdown error:', error);
