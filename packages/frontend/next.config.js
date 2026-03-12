@@ -172,7 +172,7 @@ const nextConfig = {
               // api.qrserver.com: SaleQRCode component fetches QR images and downloads via fetch().
               // Missing from img-src → blank QR on dashboard. Missing from connect-src → download fails.
               "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com https://raw.githubusercontent.com https://picsum.photos https://fastly.picsum.photos https://api.qrserver.com",
-              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
+              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://terminal-simulator.stripe.com wss://terminal-simulator.stripe.com wss://ws.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
               "frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
@@ -199,7 +199,7 @@ const nextConfig = {
 module.exports = withSentryConfig(withPWA(nextConfig), {
   // Suppress non-essential Sentry CLI output during builds
   silent: true,
-  // Hide source maps from client bundle (security)
+  // Hide source maps from client bundle (security)\
   hideSourceMaps: true,
   // Tree-shake Sentry logger in production
   disableLogger: true,
