@@ -7,6 +7,16 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 153 COMPLETE (2026-03-12) — POS v2: MULTI-ITEM CART + CASH PAYMENT + NUMPAD:**
+- **Multi-item cart:** React client-side state only (no DB model/migration). `CartItem[]` with `id` (client UUID), optional `itemId`, `title`, `amount`. One PaymentIntent per cart total, one Purchase record per cart item. `Purchase.itemId` already nullable — no schema change needed.
+- **Quick-add misc buttons:** 25¢, 50¢, $1, $2, $5, $10 — adds unnamed misc items to cart with labels like "Misc $1".
+- **Cash payment:** New `POST /stripe/terminal/cash-payment` endpoint. Validates items + saleId + cashReceived ≥ total. Creates PAID Purchase records with `cash_${randomUUID()}` as `stripePaymentIntentId` (UUID v4 — collision-safe, `@unique` constraint safe). Marks items SOLD. Returns change amount.
+- **Collapsible numpad:** 12-key numpad for custom price entry (NumpadMode: 'price') and cash received entry (NumpadMode: 'cash'). Stores cents as string to avoid float drift.
+- **QA blockers fixed (3):** (1) Misc-only carts: frontend now sends `saleId` in PI request, backend falls back to `bodySaleId` + ownership check. (2) UUID collision risk: replaced `Date.now() + random` with `randomUUID()`. (3) Ownership bypass: capture endpoint now checks `purchases[0].saleId → prisma.sale` when no item-linked purchase exists.
+- **Commit:** `afa28c1` on `main` (3 files: pos.tsx, terminalController.ts, stripe.ts)
+- **Migration deployed to Neon:** `20260312000002_add_purchase_pos_fields` ✅ (Session 153, confirmed by Patrick)
+**Last Updated:** 2026-03-12 (session 153 — POS v2 complete, migration deployed to Neon)
+
 **Session 151 COMPLETE (2026-03-12) — STRIPE TERMINAL POS BUILD FIXES + QA AUDIT:**
 - **Build error fixes (3 TypeScript/module errors resolved):**
   1. `terminalController.ts` line 162: `stripeConnectId` `null` → `undefined` mismatch — added `!` non-null assertion
@@ -193,10 +203,10 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-**Migrations pending Neon deploy (session 150):**
-- `20260312000002_add_purchase_pos_fields` — Makes `Purchase.userId` nullable, adds `source` + `buyerEmail` columns. Required for Terminal POS to work in production.
+**All migrations deployed.** 72 total applied (including session 153). Recently deployed:
+- `20260312000002_add_purchase_pos_fields` — ✅ Deployed (Session 153). Makes `Purchase.userId` nullable, adds `source` + `buyerEmail` columns for Terminal POS (v1 + v2).
 
-**All prior migrations deployed.** 71 total applied as of session 145. Previously deployed:
+**Prior migrations deployed:**
 1. `20260309_add_auction_reserve_price`
 2. `20260310000001_add_item_fulltext_search_indexes`
 3. `20260311000001_add_sale_type_item_listing_type`

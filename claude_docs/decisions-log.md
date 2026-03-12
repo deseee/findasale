@@ -5,6 +5,12 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-03-12 — Session 153 (Cash POS Fee Policy)
+
+- DECIDED: 10% platform fee applies to all cash POS transactions (parity with online/card transactions). Rationale: prevents perverse incentive to route everything through cash to avoid fees; maintains P&L consistency.
+- DECIDED: Collection method = accumulate as `cashFeeBalance` on Organizer, deduct from next Stripe payout. Rationale: cleanest automatic collection without separate invoicing overhead.
+- DECIDED: 30-day guardrail — if Stripe balance can't cover accumulated cash fees, surface a warning in organizer dashboard. Rationale: protects platform revenue without aggressive enforcement pre-beta.
+
 ## 2026-03-11 — Session 146 (Camera Workflow v2 Architecture)
 
 - DECIDED: Background removal via Cloudinary server-side lazy transform (b_remove). Rationale: cost-efficient, no on-device WASM bloat, reduces network roundtrips vs. Remove.bg cloud API.

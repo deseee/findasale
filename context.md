@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-12T13:37:11.187Z*
+*Generated at 2026-03-12T16:35:30.581Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -23,7 +23,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
 ⚠ 1+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/eloquent-compassionate-faraday/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:152:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+  /sessions/quirky-nifty-fermi/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:152:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```

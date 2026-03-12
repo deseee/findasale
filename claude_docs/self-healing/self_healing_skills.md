@@ -126,7 +126,7 @@ Recurring bugs and their confirmed fixes. Add an entry when a pattern has been s
 
 ---
 
-**#SH-XX — review.tsx fetches published items instead of drafts**
+**## SH-008: review.tsx fetches published items instead of drafts**
 
 **Trigger:** After clicking Done in Rapidfire, the Review & Publish page shows all existing published items as "pending" with broken AI confidence bars, while newly captured draft items are invisible.
 
@@ -148,3 +148,55 @@ Recurring bugs and their confirmed fixes. Add an entry when a pattern has been s
 **Test Command:** After Rapidfire session, navigate to /organizer/add-items/[saleId]/review — verify only new DRAFT items appear, not the published catalog.
 
 **Confidence:** HIGH — backend architecture is definitive; `PUBLIC_ITEM_FILTER` is immutable in `getItemsBySaleId`.
+
+---
+
+## SH-009: Edit tool rejects write — "file has been modified since last read"
+
+**Trigger:** Claude uses the Edit tool on a file that was modified (by GitHub MCP push, another agent write, or a prior Edit call in the same session) after the last Read. Edit fails with "file has been modified since last read."
+
+**Environment:** Any file in the FindaSale workspace, particularly `.tsx` / `.ts` files that multiple agents or tool calls may touch in the same session.
+
+**Pattern:** The Edit tool tracks a content hash from the last Read. If anything writes to the file between the Read and the Edit — even another Edit call earlier in the session — the hash mismatches and the edit is rejected.
+
+**Known instances:** 
+- Session 153: Applying the `saleId` fix to `pos.tsx` after Dev's full rewrite. Edit rejected because QA had already edited the file since the last read.
+
+**Steps:**
+1. Use `Grep` (not `Read`) to locate the target line(s) — this refreshes the match without a full re-read.
+2. If the change is small (1–3 lines), use `Read` with `offset` and `limit` targeted to just the changed section.
+3. Re-apply the Edit with the refreshed content as `old_string`.
+4. If the file is still rejecting (e.g., multiple agents have touched it), do a full `Read` of the file first, then apply the Edit.
+
+**Edge Cases:**
+- GitHub MCP `push_files` or `create_or_update_file` also modifies the file on the VM — any Edit after an MCP push requires a fresh Read first.
+- Do NOT use `replace_all: true` as a workaround unless the pattern is truly unique — it can silently replace unintended occurrences.
+
+**Test Command:** `Read` the file after any MCP push; confirm line numbers match before editing.
+
+**Confidence:** HIGH — Edit tool behavior is deterministic; content hash mismatch is always the cause.
+
+---
+
+## SH-010: Stripe Terminal cash sale — @unique constraint violation on stripePaymentIntentId
+
+**Trigger:** Multiple concurrent cash sales fail with Prisma P2002 (unique constraint violation) on `Purchase.stripePaymentIntentId`.
+
+**Environment:** `packages/backend/src/controllers/terminalController.ts` — `cashPayment` handler.
+
+**Pattern:** `Purchase.stripePaymentIntentId` has `@unique` in the Prisma schema. Cash sales don't have a real PI, so a placeholder ID must be generated. Using `Date.now() + Math.random()` is not collision-safe — two requests in the same millisecond can produce the same string. Must use `randomUUID()` from Node.js built-in `crypto`.
+
+**Known instance:** Session 153 — QA flagged as BLOCKER. Fixed by switching to `cash_${randomUUID()}`.
+
+**Steps:**
+1. Add `import { randomUUID } from 'crypto'` at top of the controller file (Node.js built-in, no install needed).
+2. Use `const cashPiId = \`cash_\${randomUUID()}\`` for each cash transaction.
+3. Do NOT use `Date.now()`, `Math.random()`, or any time-based ID for DB unique constraints.
+
+**Edge Cases:**
+- `randomUUID()` is available in Node.js ≥ 14.17 — safe for this stack.
+- One UUID per transaction, not per cart item — all Purchase records for a single cash transaction share the same `cash_${uuid}` PI ID.
+
+**Test Command:** In terminal: `node -e "const {randomUUID}=require('crypto'); console.log(randomUUID())"` — should output a valid UUID.
+
+**Confidence:** HIGH — UUID v4 provides 2^122 entropy; collision is cryptographically impossible in practice.

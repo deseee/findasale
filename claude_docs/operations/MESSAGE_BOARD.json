@@ -2,6 +2,33 @@
   "_schema": "MESSAGE_BOARD v2 — rebuilt 2026-03-11 session 146. Max 20 messages. Prune oldest on overflow.",
   "messages": [
     {
+      "id": "msg-154-dev-cash-fee-frontend",
+      "from": "findasale-dev",
+      "to": "patrick",
+      "timestamp": "2026-03-12T20:54:00Z",
+      "type": "completion",
+      "message": "CASH PLATFORM FEE FRONTEND — IMPLEMENTATION COMPLETE. 3 surfaces deployed: (1) pos.tsx: Cash payment success UI now shows platform fee line item + pending fee balance note (from response data). (2) payouts.tsx: Added Cash Fee Balance card (shows only when balance > 0) with last-updated date + 30-day stale warning (amber banner). Added payout deduction preview — before submit, shows -$X cash fee + net payout calc (accounts for fee in available balance validation). (3) dashboard.tsx: Added cash fee indicator card in overview tab (shows only when balance > 0) with link to payouts page + 30-day stale warning. All TypeScript strict, Tailwind styled for consistency, no implicit any. Responses parsed: earnings endpoint returns cashFeeBalance + cashFeeBalanceUpdatedAt; cash-payment returns platformFee + cashFeeBalance. Files changed via MCP: pos.tsx (8211b1f), payouts.tsx (6084cf21), dashboard.tsx (43bcb8eb). Ready for Patrick git push via push.ps1.",
+      "feedbackLoop": null
+    },
+    {
+      "id": "msg-153-records-decisions-logged",
+      "from": "findasale-records",
+      "to": "patrick",
+      "timestamp": "2026-03-12T20:15:00Z",
+      "type": "completion",
+      "message": "SESSION 153 RECORDS UPDATE COMPLETE. Decision entry appended to decisions-log.md (Session 153: Cash POS Fee Policy — 3 decisions logged). STATE.md updated: marked migration 20260312000002_add_purchase_pos_fields as deployed to Neon (removed pending language, confirmed by Patrick); migration count incremented to 72 total applied. Files changed: decisions-log.md, STATE.md (2 sections). Ready for next dispatch.",
+      "feedbackLoop": null
+    },
+    {
+      "id": "msg-152-architect-cash-fees-adr",
+      "from": "findasale-architect",
+      "to": "dev-team,patrick",
+      "timestamp": "2026-03-12T19:30:00Z",
+      "type": "architecture",
+      "message": "CASH PLATFORM FEE COLLECTION — ADR COMPLETE. Decisions: (1) Organizer.cashFeeBalance (Float) + Organizer.cashFeeBalanceUpdatedAt (DateTime) — tracks accumulated 10% fees from cash sales. (2) Fee accumulation happens in cashPayment() endpoint after items marked SOLD. (3) Payout deduction in createPayout() — deducts balance from requested amount before Stripe call, then resets balance to 0. (4) 30-day guardrail: advisory warning on dashboard if balance > 0 and > 30 days old; allows payout to proceed (90-day hard stop future phase). (5) No refund fee reversal — fee stays in balance if cash purchase refunded. (6) Migration: 20260312_add_cash_fee_balance_to_organizer (adds 2 fields + index). (7) UI: POS screen shows fee line item + accumulated balance note; dashboard card shows balance/age/warning; payout modal shows deduction + net payout. Zero Stripe API integration needed — purely local DB tracking. Implementation order: schema → cashPayment() → createPayout() → frontend cards. Full ADR: claude_docs/feature-decisions/CASH_FEE_COLLECTION_ARCHITECTURE.md. Ready for dev dispatch.",
+      "feedbackLoop": "ready-for-dev-dispatch"
+    },
+    {
       "id": "msg-151-wrap-complete",
       "from": "findasale-records",
       "to": "patrick",

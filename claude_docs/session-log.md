@@ -2,6 +2,14 @@
 
 ## Recent Sessions
 
+### 2026-03-12 · Session 153
+**Worked on:** POS v2 — multi-item cart, quick-add misc buttons, cash payment endpoint + flow, collapsible numpad with change display. Full Architect → Dev → QA cycle. Architect confirmed client-side cart (no new DB model), specced multi-item PI endpoint and new cash-payment endpoint. Dev rewrote `pos.tsx` (760 lines) and `terminalController.ts` (575 lines), added cash-payment route. QA found 3 blockers: misc-only cart rejection (saleId not sent from frontend), UUID collision risk on cash PI IDs, ownership bypass for misc-only captures. All 3 fixed. Pushed to GitHub as `afa28c1`. Also provided full Neon migration deploy command for `20260312000002_add_purchase_pos_fields` (session setup item 3).
+**Decisions:** Multi-item cart is client-side state only — no POSTransaction model needed. Cash PI IDs use `randomUUID()` (Node crypto, v4 UUID). Misc items allowed with no itemId — saleId must be explicitly passed in request body.
+**Files changed:** `packages/frontend/pages/organizer/pos.tsx`, `packages/backend/src/controllers/terminalController.ts`, `packages/backend/src/routes/stripe.ts`
+**Scoreboard:** Files changed: 3 | QA blockers fixed: 3 | Subagents: 3 (findasale-architect, findasale-dev, findasale-qa) | Push method: GitHub MCP (`afa28c1`)
+**Next up:** Patrick: deploy Neon migration (command in chat), open `/organizer/pos`, test card flow (multi-item + misc + connect + charge + capture) and cash flow (items + cash amount + change). Once tests pass, POS v2 ready for beta with real hardware.
+**Blockers:** Migration `20260312000002_add_purchase_pos_fields` not yet on Neon — POS will fail in production without it.
+
 ### 2026-03-12 · Session 151
 **Worked on:** Terminal POS build fixes + QA audit completion. Started with 3 TypeScript/module errors from session 150 dev work: `terminalController.ts` null/undefined mismatch, `pos.tsx` import path, AuthContextType property name. All fixed. Dispatched findasale-qa to audit Stripe Terminal POS payment flow (terminalController.ts, stripeController.ts webhook guard, pos.tsx charge flow). QA found 1 BLOCKER + 3 WARNs: BLOCKER = conflicting Stripe PI creation args (on_behalf_of + transfer_data incompatible with stripeAccount header); WARN1 = missing capture ownership check; WARN2 = missing cancel state sync; WARN3 = missing concurrent purchase guard. All 4 issues fixed by findasale-dev. POS now ready for Patrick testing in simulated mode.
 **Decisions:** All QA findings fixed immediately. POS goes to beta only after Patrick tests in simulated mode.
@@ -46,12 +54,5 @@
 **Next up:** Patrick installs 5 new skills + reinstalls 2 updated skills (advisory-board, conversation-defaults), pushes to GitHub. Fleet redesign complete. Next priority: beta launch blockers.
 **Blockers:** Skills need manual install by Patrick. Neon migration `20260311000002_add_item_draft_status` still pending.
 
-### 2026-03-11 · Session 142
-**Worked on:** Fleet redesign Phase 1 implementation. 6 items dispatched across 4 parallel agents (grouped by file dependency to avoid conflicts). Two agent merges completed: findasale-cx + findasale-support → findasale-customer-champion (317 lines, adds Voice of Customer signal logging via customer-signals.md); findasale-rd + findasale-pitchman → findasale-innovation (213 lines, two-phase ideate→evaluate output). CORE.md upgraded to v3 with 3 new sections: §6 Escalation Channel (evidence-required `## Patrick Direct` blocks, cooldown, auto-logging), §7 Handoff Protocol (structured handoff blocks with integrity metadata, no-edit pass-through), §8 Red-Flag Veto Gate (Orange/Red tier system, Architect/Hacker sign-off on auth/payment/deletion/security). conversation-defaults v5 with 3 new rules: Rule 14 (surface escalation blocks verbatim), Rule 15 (handoff pass-through), Rule 16 (decisions-log at init). Two new files: escalation-log.md (append-only, monthly prune by Records) and decisions-log.md (all 22 session 141 decisions populated).
-**Decisions:** All Phase 1 items executed as specified in fleet-redesign-proposal-v1.md. No deviations from approved plan.
-**Files changed:** `claude_docs/CORE.md`, `claude_docs/escalation-log.md` (new), `claude_docs/decisions-log.md` (new), `claude_docs/skills-package/findasale-customer-champion/SKILL.md` (new), `claude_docs/skills-package/findasale-innovation/SKILL.md` (new), `claude_docs/skills-package/conversation-defaults/SKILL.md`, `claude_docs/STATE.md`, `claude_docs/session-log.md`, `claude_docs/next-session-prompt.md`, `.checkpoint-manifest.json`
-**Scoreboard:** Files changed: 10 | Compressions: 0 | Subagents: 4 (general-purpose) | Push method: Patrick PS1
-**Next up:** Patrick installs new skills, uninstalls old ones, pushes to GitHub. Phase 2 begins in two weeks (new standalone agents, board restructure, context infrastructure, scheduled tasks).
-**Blockers:** Skills need manual install/uninstall by Patrick via Cowork UI. Neon migration `20260311000002_add_item_draft_status` still pending deploy.
 
 ---

@@ -1,67 +1,69 @@
 # Next Session Resume Prompt
-*Written: 2026-03-12T18:45:00Z*
+*Written: 2026-03-12T00:00:00Z*
 *Session ended: normally*
 
 ## Resume From
-
-Patrick tests Stripe Terminal POS in simulated mode (`NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true`). If tests pass, feature is ready for beta organizers with real hardware.
+Deploy the Neon migration `20260312000002_add_purchase_pos_fields`, then open `/organizer/pos` and run the POS v2 test plan below.
 
 ## What Was In Progress
+Nothing — all POS v2 development is complete and pushed (`afa28c1`).
 
-Nothing mid-task. All build errors and QA findings fixed. Feature complete and tested by findasale-qa. Waiting on Patrick testing + git push before next dev work.
+## What Was Completed This Session
+- **POS v2 full implementation** (Architect → Dev → QA cycle):
+  - Multi-item cart (client-side React state, no DB model change)
+  - Quick-add misc buttons: 25¢, 50¢, $1, $2, $5, $10
+  - Cash payment endpoint + flow (`POST /stripe/terminal/cash-payment`)
+  - Collapsible numpad (price entry + cash received + change display)
+  - 3 QA blockers found and fixed (misc-only cart, UUID collision, ownership bypass)
+- **Migration deploy command** provided in chat (run before testing)
+- Commit: `afa28c1` on `main` — 3 files changed
 
-## What Was Completed This Session (151)
+## Environment Notes
+- VM local git is 2 commits behind `origin/main` (index.lock blocks git ops in VM — harmless, Patrick pushes from Windows).
+- Vercel GitHub App disconnection noted session 149 — Patrick still needs to reconnect in Vercel dashboard → findasale → Settings → Git, or manually trigger deploy.
+- `NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true` confirmed in local `.env` (line 34). Also needs to be set in Vercel for staging.
+- `pnpm --filter frontend add @stripe/terminal-js` — confirm done (session 151 action). If not, run from Windows PowerShell before testing.
 
-- Fixed 3 TypeScript/module errors from session 150 dev work
-- Fixed 4 QA findings (1 BLOCKER + 3 WARNs) — all code changes shipped
-- **Files changed:**
-  - `packages/backend/src/controllers/terminalController.ts` — removed conflicting Stripe args, added capture ownership check, added concurrent purchase guard
-  - `packages/frontend/pages/organizer/pos.tsx` — added import path fix, added AuthContext property fix, added payment state sync, added null guards
+## Exact Context — POS v2 Test Plan
 
-## Patrick Action Plan (Blocks POS Testing)
+**Pre-flight (Patrick, PowerShell):**
+```powershell
+# 1. Deploy Neon migration (command from session 153 chat — includes real credentials)
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+# [See session 153 chat for the full command with inline Neon credentials]
+npx prisma migrate deploy
+$env:DATABASE_URL=""
+$env:DIRECT_URL=""
+```
 
-**Must complete before session 152 dev work:**
-1. From PowerShell (project root):
-   ```powershell
-   pnpm --filter frontend add @stripe/terminal-js
-   ```
-2. Add to Vercel env vars AND local `.env`:
-   ```
-   NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true
-   ```
-3. Deploy Neon migration (critical):
-   - `cd packages/database`
-   - Read commented-out `DATABASE_URL` from `packages/backend/.env`
-   - Run: `npx prisma migrate deploy` (with Neon URL)
-4. Push to GitHub:
-   ```powershell
-   git add packages/backend/src/controllers/terminalController.ts
-   git add packages/frontend/pages/organizer/pos.tsx
-   git commit -m "Session 151: Terminal POS QA fixes"
-   .\push.ps1
-   ```
+**Card flow test (simulated reader):**
+1. Open `/organizer/pos`
+2. Select an active sale from the dropdown
+3. Add 2–3 items from the item picker + 1–2 quick-add misc amounts
+4. Verify cart total is correct
+5. Click "Connect Reader" — simulated reader should appear
+6. Click "Charge $X.XX"
+7. Verify success + receipt modal, items SOLD in item list
 
-**Then test locally in simulated mode:**
-- Open `/organizer/pos` in browser
-- Select a sale + item
-- Verify payment flow (connect reader → charge → capture)
-- Check that cancels work
+**Cash flow test:**
+1. Same setup — add items to cart
+2. Click 💵 Cash toggle
+3. Click "Cash Received" — numpad opens
+4. Enter amount ≥ cart total (e.g. $20 on a $12 cart)
+5. Verify change display: "Change: $8.00"
+6. Click "Record Sale"
+7. Verify success + receipt with change amount
 
-## Environment Status
+**Cancel test:**
+1. Start a card charge flow
+2. Click Cancel before completing
+3. Verify cart restored and no Purchase records created
 
-**GitHub:** Session 151 files are ready for staging and push.
-
-**Neon:** Migration `20260312000002_add_purchase_pos_fields` NOT YET deployed — required for POS to work.
-
-**Stripe:** Business account still needed for real hardware testing (optional for simulated mode).
-
-**Vercel:** GitHub App reconnected — auto-deploy should work after next push.
-
-## Known QA Results
-
-- BLOCKER: Removed `on_behalf_of` + `transfer_data` from terminal PI creation (was conflicting with `stripeAccount` header) — FIXED
-- WARN 1: Capture endpoint now checks purchase ownership — FIXED
-- WARN 2: Cancel endpoint now syncs state to component — FIXED
-- WARN 3: Concurrent purchase guard added to capture endpoint — FIXED
-
-All fixes verified by findasale-dev. Feature is code-complete.
+## Files Changed This Session
+- `packages/frontend/pages/organizer/pos.tsx` (complete rewrite — 760 lines)
+- `packages/backend/src/controllers/terminalController.ts` (complete rewrite — 575 lines)
+- `packages/backend/src/routes/stripe.ts` (added cash-payment route)
+- `claude_docs/STATE.md` (session 153 entry added)
+- `claude_docs/session-log.md` (session 153 entry, session 142 pruned)
+- `claude_docs/self-healing/self_healing_skills.md` (SH-008 renumbered, SH-009 + SH-010 added)
+- `claude_docs/next-session-prompt.md` (this file)
