@@ -165,6 +165,8 @@ interface RapidItem {
   title?: string;
   category?: string;
   aiError?: string;
+  photoUrls?: string[];
+  autoEnhanced?: boolean;
 }
 
 const CATEGORIES = [
@@ -461,10 +463,12 @@ const AddItemsDetailPage = () => {
 
         const { itemId } = res.data;
 
-        // Swap temp id for real DB item id
+        // Swap temp id for real DB item id and set autoEnhanced flag
         setRapidItems((prev) =>
           prev.map((item) =>
-            item.id === tempId ? { ...item, id: itemId, draftStatus: 'DRAFT' } : item
+            item.id === tempId
+              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [photo.previewUrl], autoEnhanced }
+              : item
           )
         );
       } catch (err: any) {
@@ -497,7 +501,7 @@ const AddItemsDetailPage = () => {
       setRapidItems((prev) =>
         prev.map((item) =>
           item.id === pendingFaceUpload.tempId
-            ? { ...item, id: itemId, draftStatus: 'DRAFT' }
+            ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [pendingFaceUpload.previewUrl] }
             : item
         )
       );

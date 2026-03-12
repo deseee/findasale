@@ -325,12 +325,12 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             {/* Phase 3: 4:3 Framing Guide */}
             <div className="absolute inset-0 pointer-events-none">
               {/* Corner brackets */}
-              <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-white/50" />
-              <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-white/50" />
-              <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-white/50" />
-              <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-white/50" />
+              <div className="absolute top-4 left-4 w-10 h-10 border-t-4 border-l-4 border-blue-400/90" />
+              <div className="absolute top-4 right-4 w-10 h-10 border-t-4 border-r-4 border-blue-400/90" />
+              <div className="absolute bottom-4 left-4 w-10 h-10 border-b-4 border-l-4 border-blue-400/90" />
+              <div className="absolute bottom-4 right-4 w-10 h-10 border-b-4 border-r-4 border-blue-400/90" />
               {/* Label */}
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-white/40 text-xs">
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-blue-400/60 text-xs">
                 4:3
               </div>
             </div>
