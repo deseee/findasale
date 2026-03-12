@@ -1083,9 +1083,6 @@ const AddItemsDetailPage = () => {
                   <input
                     type="checkbox"
                     checked={selectedItems.size === items.length && items.length > 0}
-                    indeterminate={
-                      selectedItems.size > 0 && selectedItems.size < items.length
-                    }
                     onChange={(e) => {
                       if (e.target.checked) {
                         setSelectedItems(new Set(items.map((i: any) => i.id)));
