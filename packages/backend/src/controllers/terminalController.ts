@@ -8,6 +8,7 @@
  * Payment flow: connection-token → payment-intent → [SDK presents to reader] → capture
  */
 import { Response } from 'express';
+import { randomUUID } from 'crypto';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -85,9 +86,9 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
 
 /**
  * POST /api/stripe/terminal/payment-intent
- * Body: { itemId: string, buyerEmail?: string }
+ * Body: { items: [{itemId?: string, amount: number, label?: string}], buyerEmail?: string, saleId?: string }
  *
- * Creates a Stripe PaymentIntent for an in-person terminal payment.
+ * Creates a Stripe PaymentIntent for a multi-item terminal payment (cart).
  * Uses capture_method: 'manual' (Terminal requires explicit capture after card swipe).
  * Applies same 10% platform fee as online purchases.
  */
@@ -96,75 +97,94 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     const organizer = await resolveOrganizer(req, res);
     if (!organizer) return;
 
-    const { itemId, buyerEmail } = req.body as { itemId?: string; buyerEmail?: string };
+    const { items, buyerEmail, saleId: bodySaleId } = req.body as {
+      items?: Array<{ itemId?: string; amount: number; label?: string }>;
+      buyerEmail?: string;
+      saleId?: string;  // required when cart contains only misc items (no itemId)
+    };
 
-    if (!itemId) {
-      return res.status(400).json({ message: 'itemId is required' });
+    // Validate items array
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'items array is required and must be non-empty' });
     }
 
-    const item = await prisma.item.findUnique({
-      where: { id: itemId },
-      select: {
-        id: true,
-        title: true,
-        price: true,
-        status: true,
-        draftStatus: true,
-        listingType: true,
-        sale: {
-          select: {
-            id: true,
-            organizerId: true,
-            organizer: {
-              select: { id: true, stripeConnectId: true },
-            },
-          },
+    if (!items.every(i => typeof i.amount === 'number' && i.amount > 0)) {
+      return res.status(400).json({ message: 'Each item must have a positive amount' });
+    }
+
+    // Fetch and validate all items with itemId
+    const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
+    let dbItems: Record<string, any> = {};
+    if (itemIds.length > 0) {
+      const fetched = await prisma.item.findMany({
+        where: { id: { in: itemIds } },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          sale: { select: { id: true, organizerId: true } },
         },
-      },
-    });
+      });
+      dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
 
-    if (!item) {
-      return res.status(404).json({ message: 'Item not found' });
+      // Verify all items exist, belong to organizer, and are AVAILABLE
+      for (const itemId of itemIds) {
+        if (!dbItems[itemId]) {
+          return res.status(404).json({ message: `Item ${itemId} not found` });
+        }
+        const item = dbItems[itemId];
+        if (item.sale.organizerId !== organizer.id) {
+          return res.status(403).json({ message: `Item ${itemId} does not belong to your sale` });
+        }
+        if (item.status !== 'AVAILABLE') {
+          return res.status(400).json({ message: `Item ${itemId} is not available (status: ${item.status})` });
+        }
+      }
     }
 
-    // Ensure the item belongs to this organizer
-    if (item.sale.organizer.id !== organizer.id) {
-      return res.status(403).json({ message: 'Item does not belong to your sale' });
-    }
+    // Calculate total amount in cents
+    const totalAmountCents = Math.round(items.reduce((sum, i) => sum + i.amount, 0) * 100);
 
-    if (item.status !== 'AVAILABLE') {
-      return res.status(400).json({ message: `Item is not available for purchase (status: ${item.status})` });
-    }
-
-    if (item.price == null || item.price <= 0) {
-      return res.status(400).json({ message: 'Item must have a price set before processing payment' });
-    }
-
-    if (item.price < 0.5) {
-      return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
-    }
-
-    // Fee: read from FeeStructure (same as online), apply referral discount if active
+    // Fee: read from FeeStructure, apply referral discount if active
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
     const baseFeeRate = feeStructure?.feeRate ?? 0.10;
     const hasReferralDiscount =
       organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
     const feeRate = hasReferralDiscount ? 0 : baseFeeRate;
+    const platformFeeAmount = Math.round(totalAmountCents * feeRate);
 
-    const priceCents = Math.round(item.price * 100);
-    const platformFeeAmount = Math.round(priceCents * feeRate);
+    // Determine sale ID: derive from first item with itemId, or fall back to bodySaleId (misc-only carts)
+    let saleId = '';
+    for (const item of items) {
+      if (item.itemId && dbItems[item.itemId]) {
+        saleId = dbItems[item.itemId].sale.id;
+        break;
+      }
+    }
+    if (!saleId) {
+      // Misc-only cart — require explicit saleId in body
+      if (!bodySaleId) {
+        return res.status(400).json({ message: 'saleId is required when cart contains only misc items' });
+      }
+      // Verify the provided saleId belongs to this organizer
+      const sale = await prisma.sale.findUnique({ where: { id: bodySaleId }, select: { organizerId: true } });
+      if (!sale || sale.organizerId !== organizer.id) {
+        return res.status(403).json({ message: 'Sale does not belong to your account' });
+      }
+      saleId = bodySaleId;
+    }
 
     // Create terminal PaymentIntent on the organizer's connected account
     const paymentIntent = await stripe().paymentIntents.create(
       {
-        amount: priceCents,
+        amount: totalAmountCents,
         currency: 'usd',
         payment_method_types: ['card_present'], // Terminal-only: physical card reader
         capture_method: 'manual',               // Terminal requires explicit capture
         application_fee_amount: platformFeeAmount,
         metadata: {
-          itemId: item.id,
-          saleId: item.sale.id,
+          items: JSON.stringify(items),
+          saleId,
           source: 'POS',
           ...(buyerEmail ? { buyerEmail } : {}),
         },
@@ -172,28 +192,34 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       { stripeAccount: organizer.stripeConnectId! }
     );
 
-    // Create PENDING Purchase record immediately (same pattern as online flow)
-    const purchase = await prisma.purchase.create({
-      data: {
-        // userId intentionally null — POS walk-in buyer has no account
-        itemId: item.id,
-        saleId: item.sale.id,
-        amount: priceCents / 100,
-        platformFeeAmount: platformFeeAmount / 100,
-        stripePaymentIntentId: paymentIntent.id,
-        status: 'PENDING',
-        source: 'POS',
-        ...(buyerEmail ? { buyerEmail } : {}),
-      },
-    });
+    // Create PENDING Purchase records for each cart item
+    const purchaseIds: string[] = [];
+    for (const item of items) {
+      const itemAmount = item.amount;
+      const itemAmountCents = Math.round(itemAmount * 100);
+      const itemPlatformFeeAmount = item.itemId ? Math.round(itemAmountCents * feeRate) : 0;
+
+      const purchase = await prisma.purchase.create({
+        data: {
+          itemId: item.itemId ?? null,
+          saleId,
+          amount: itemAmount,
+          platformFeeAmount: itemPlatformFeeAmount / 100,
+          stripePaymentIntentId: paymentIntent.id,
+          status: 'PENDING',
+          source: 'POS',
+          ...(buyerEmail ? { buyerEmail } : {}),
+        },
+      });
+      purchaseIds.push(purchase.id);
+    }
 
     res.json({
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
-      purchaseId: purchase.id,
-      amount: priceCents / 100,
+      purchaseIds,
+      totalAmount: totalAmountCents / 100,
       platformFee: platformFeeAmount / 100,
-      itemTitle: item.title,
     });
   } catch (error) {
     console.error('[terminal] createTerminalPaymentIntent error:', error);
@@ -206,7 +232,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
  * Body: { paymentIntentId: string }
  *
  * Captures a terminal PaymentIntent after the card has been presented to the reader.
- * Marks the Purchase PAID and the Item SOLD.
+ * Marks all purchases for this PI as PAID and their items as SOLD.
  * The Stripe webhook (payment_intent.succeeded) also fires — the webhook handler
  * handles idempotency via ProcessedWebhookEvent.
  */
@@ -221,7 +247,8 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       return res.status(400).json({ message: 'paymentIntentId is required' });
     }
 
-    const purchase = await prisma.purchase.findUnique({
+    // Find all purchases for this PaymentIntent
+    const purchases = await prisma.purchase.findMany({
       where: { stripePaymentIntentId: paymentIntentId },
       include: {
         item: {
@@ -235,46 +262,60 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       },
     });
 
-    if (!purchase) {
-      return res.status(404).json({ message: 'Purchase not found for this payment intent' });
+    if (!purchases.length) {
+      return res.status(404).json({ message: 'No purchases found for this payment intent' });
     }
 
-    // Verify the purchase's sale belongs to the current organizer (ownership check)
-    if (!purchase.item || purchase.item.sale.organizerId !== organizer.id) {
-      return res.status(403).json({ message: 'You do not have permission to capture this payment' });
-    }
-
-    if (purchase.status === 'PAID') {
-      // Already captured (idempotent — webhook may have already processed it)
-      return res.json({ purchaseId: purchase.id, status: 'PAID', receiptSent: false });
-    }
-
-    // Re-check item status: if another transaction sold it concurrently, cancel this PI
-    const currentItemStatus = await prisma.item.findUnique({
-      where: { id: purchase.itemId! },
-      select: { status: true },
-    });
-
-    if (currentItemStatus?.status === 'SOLD' && purchase.status !== 'PAID') {
-      // Item was sold by another concurrent transaction — cancel this PI and fail the purchase
-      try {
-        await stripe().paymentIntents.cancel(
-          paymentIntentId,
-          {},
-          { stripeAccount: organizer.stripeConnectId! }
-        );
-      } catch (e) {
-        console.warn('[terminal] Failed to cancel PI during concurrent guard:', e);
+    // Verify ownership — use first purchase with an item, or fall back to saleId check (misc-only carts)
+    const ownerPurchase = purchases.find(p => p.item);
+    if (ownerPurchase) {
+      if (ownerPurchase.item!.sale.organizerId !== organizer.id) {
+        return res.status(403).json({ message: 'You do not have permission to capture this payment' });
       }
+    } else {
+      // All misc items — verify via saleId on purchase record
+      const firstSaleId = purchases[0]?.saleId;
+      if (firstSaleId) {
+        const sale = await prisma.sale.findUnique({ where: { id: firstSaleId }, select: { organizerId: true } });
+        if (!sale || sale.organizerId !== organizer.id) {
+          return res.status(403).json({ message: 'You do not have permission to capture this payment' });
+        }
+      }
+    }
 
-      await prisma.purchase.update({
-        where: { id: purchase.id },
-        data: { status: 'FAILED' },
-      });
+    // If all purchases are already PAID, return idempotent success
+    if (purchases.every(p => p.status === 'PAID')) {
+      return res.json({ purchaseIds: purchases.map(p => p.id), status: 'PAID', receiptSent: false });
+    }
 
-      return res.status(409).json({
-        message: 'Item was sold by another transaction before this payment could be captured',
+    // Concurrent guard: check if any item with itemId is already SOLD
+    for (const p of purchases) {
+      if (!p.itemId) continue;
+      const current = await prisma.item.findUnique({
+        where: { id: p.itemId },
+        select: { status: true },
       });
+      if (current?.status === 'SOLD' && p.status !== 'PAID') {
+        // Item was sold by another concurrent transaction — cancel this PI and fail all purchases
+        try {
+          await stripe().paymentIntents.cancel(
+            paymentIntentId,
+            {},
+            { stripeAccount: organizer.stripeConnectId! }
+          );
+        } catch (e) {
+          console.warn('[terminal] Failed to cancel PI during concurrent guard:', e);
+        }
+
+        await prisma.purchase.updateMany({
+          where: { stripePaymentIntentId: paymentIntentId },
+          data: { status: 'FAILED' },
+        });
+
+        return res.status(409).json({
+          message: 'An item in the cart was sold by another transaction',
+        });
+      }
     }
 
     // Capture the payment on the organizer's connected account
@@ -284,32 +325,42 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       { stripeAccount: organizer.stripeConnectId! }
     );
 
-    // Mark purchase PAID + item SOLD
-    await prisma.purchase.update({
-      where: { id: purchase.id },
+    // Mark all purchases PAID
+    await prisma.purchase.updateMany({
+      where: { stripePaymentIntentId: paymentIntentId },
       data: { status: 'PAID' },
     });
 
-    if (purchase.itemId) {
-      await prisma.item.update({
-        where: { id: purchase.itemId },
-        data: { status: 'SOLD' },
-      });
+    // Mark items SOLD
+    for (const p of purchases) {
+      if (p.itemId) {
+        await prisma.item.update({
+          where: { id: p.itemId },
+          data: { status: 'SOLD' },
+        });
+      }
     }
 
     // Send receipt to buyer if email was provided
     let receiptSent = false;
-    const buyerEmail = purchase.buyerEmail;
+    const buyerEmail = purchases[0]?.buyerEmail;
     if (buyerEmail && process.env.RESEND_API_KEY) {
       try {
         const { Resend } = await import('resend');
         const { buildEmail } = await import('../services/emailTemplateService');
         const resend = new Resend(process.env.RESEND_API_KEY);
         const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
+
+        // Build receipt with all items
+        const itemsList = purchases
+          .map(p => `<li>${p.item?.title ?? 'Misc item'}: $${p.amount.toFixed(2)}</li>`)
+          .join('');
+        const totalAmount = purchases.reduce((sum, p) => sum + p.amount, 0);
+
         const html = buildEmail({
-          preheader: `Receipt for ${purchase.item?.title ?? 'your purchase'}`,
+          preheader: `Receipt for your purchase`,
           headline: 'Your receipt from FindA.Sale 🎉',
-          body: `<p>Thank you for your purchase!</p><p>Amount paid: <strong>$${purchase.amount.toFixed(2)}</strong>${purchase.item?.title ? ` for <strong>${purchase.item.title}</strong>` : ''}.</p><p>Payment processed securely via Stripe.</p>`,
+          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul><p><strong>Total: $${totalAmount.toFixed(2)}</strong></p><p>Payment processed securely via Stripe.</p>`,
           ctaText: 'Visit FindA.Sale',
           ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
           accentColor: '#10b981',
@@ -317,7 +368,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
         await resend.emails.send({
           from: fromEmail,
           to: buyerEmail,
-          subject: `Receipt: ${purchase.item?.title ?? 'Your in-person purchase'}`,
+          subject: `Receipt: Your in-person purchase`,
           html,
         });
         receiptSent = true;
@@ -326,7 +377,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       }
     }
 
-    res.json({ purchaseId: purchase.id, status: 'PAID', receiptSent });
+    res.json({ purchaseIds: purchases.map(p => p.id), status: 'PAID', receiptSent });
   } catch (error) {
     console.error('[terminal] captureTerminalPaymentIntent error:', error);
     res.status(500).json({ message: 'Failed to capture Terminal payment' });
@@ -338,7 +389,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
  * Body: { paymentIntentId: string }
  *
  * Cancels an in-progress terminal PaymentIntent (e.g. buyer walks away).
- * Marks the Purchase FAILED and returns the Item to AVAILABLE.
+ * Marks all purchases FAILED and returns items to AVAILABLE.
  */
 export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
@@ -351,15 +402,15 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       return res.status(400).json({ message: 'paymentIntentId is required' });
     }
 
-    const purchase = await prisma.purchase.findUnique({
+    const purchases = await prisma.purchase.findMany({
       where: { stripePaymentIntentId: paymentIntentId },
     });
 
-    if (!purchase) {
-      return res.status(404).json({ message: 'Purchase not found' });
+    if (!purchases.length) {
+      return res.status(404).json({ message: 'No purchases found for this payment intent' });
     }
 
-    if (purchase.status === 'PAID') {
+    if (purchases.some(p => p.status === 'PAID')) {
       return res.status(400).json({ message: 'Cannot cancel a completed payment — use refund instead' });
     }
 
@@ -370,22 +421,176 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       { stripeAccount: organizer.stripeConnectId! }
     );
 
-    // Mark purchase FAILED + restore item to AVAILABLE
-    await prisma.purchase.update({
-      where: { id: purchase.id },
+    // Mark all purchases FAILED
+    await prisma.purchase.updateMany({
+      where: { stripePaymentIntentId: paymentIntentId },
       data: { status: 'FAILED' },
     });
 
-    if (purchase.itemId) {
-      await prisma.item.update({
-        where: { id: purchase.itemId },
-        data: { status: 'AVAILABLE' },
-      });
+    // Restore items to AVAILABLE
+    for (const p of purchases) {
+      if (p.itemId) {
+        await prisma.item.update({
+          where: { id: p.itemId },
+          data: { status: 'AVAILABLE' },
+        });
+      }
     }
 
     res.json({ status: 'CANCELLED' });
   } catch (error) {
     console.error('[terminal] cancelTerminalPaymentIntent error:', error);
     res.status(500).json({ message: 'Failed to cancel Terminal payment' });
+  }
+};
+
+/**
+ * POST /api/stripe/terminal/cash-payment
+ * Body: { items: [{itemId?: string, amount: number, label?: string}], cashReceived: number, buyerEmail?: string, saleId: string }
+ *
+ * Records a cash sale immediately without Stripe processing.
+ * Creates Purchase records with status PAID and marks items SOLD.
+ */
+export const cashPayment = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizer(req, res);
+    if (!organizer) return;
+
+    const { items, cashReceived, buyerEmail, saleId } = req.body as {
+      items?: Array<{ itemId?: string; amount: number; label?: string }>;
+      cashReceived?: number;
+      buyerEmail?: string;
+      saleId?: string;
+    };
+
+    // Validate inputs
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'items array is required and must be non-empty' });
+    }
+
+    if (!items.every(i => typeof i.amount === 'number' && i.amount > 0)) {
+      return res.status(400).json({ message: 'Each item must have a positive amount' });
+    }
+
+    if (typeof cashReceived !== 'number' || cashReceived < 0) {
+      return res.status(400).json({ message: 'cashReceived must be a non-negative number' });
+    }
+
+    const totalAmount = items.reduce((sum, i) => sum + i.amount, 0);
+    if (cashReceived < totalAmount) {
+      return res.status(400).json({ message: 'Insufficient cash received' });
+    }
+
+    if (!saleId) {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+
+    // Verify sale belongs to organizer
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { organizerId: true },
+    });
+
+    if (!sale || sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Sale does not belong to your account' });
+    }
+
+    // Fetch and validate all items with itemId
+    const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
+    let dbItems: Record<string, any> = {};
+    if (itemIds.length > 0) {
+      const fetched = await prisma.item.findMany({
+        where: { id: { in: itemIds }, saleId },
+        select: { id: true, status: true },
+      });
+      dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
+
+      for (const itemId of itemIds) {
+        if (!dbItems[itemId]) {
+          return res.status(404).json({ message: `Item ${itemId} not found in this sale` });
+        }
+        if (dbItems[itemId].status !== 'AVAILABLE') {
+          return res.status(400).json({ message: `Item ${itemId} is not available` });
+        }
+      }
+    }
+
+    // Create Purchase records immediately with status PAID
+    const purchaseIds: string[] = [];
+    for (const item of items) {
+      // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
+      const cashPIId = `cash_${randomUUID()}`;
+
+      const purchase = await prisma.purchase.create({
+        data: {
+          itemId: item.itemId ?? null,
+          saleId,
+          amount: item.amount,
+          platformFeeAmount: 0,
+          stripePaymentIntentId: cashPIId,
+          status: 'PAID',
+          source: 'POS',
+          ...(buyerEmail ? { buyerEmail } : {}),
+        },
+      });
+      purchaseIds.push(purchase.id);
+    }
+
+    // Mark items SOLD
+    for (const item of items) {
+      if (item.itemId) {
+        await prisma.item.update({
+          where: { id: item.itemId },
+          data: { status: 'SOLD' },
+        });
+      }
+    }
+
+    // Optionally send receipt email
+    let receiptSent = false;
+    if (buyerEmail && process.env.RESEND_API_KEY) {
+      try {
+        const { Resend } = await import('resend');
+        const { buildEmail } = await import('../services/emailTemplateService');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
+
+        const itemsList = items
+          .map(i => `<li>${i.label ?? 'Item'}: $${i.amount.toFixed(2)}</li>`)
+          .join('');
+        const change = (cashReceived - totalAmount).toFixed(2);
+
+        const html = buildEmail({
+          preheader: `Receipt for your purchase`,
+          headline: 'Your receipt from FindA.Sale 🎉',
+          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul><p><strong>Total: $${totalAmount.toFixed(2)}</strong></p><p>Cash received: $${cashReceived.toFixed(2)}</p><p>Change: $${change}</p>`,
+          ctaText: 'Visit FindA.Sale',
+          ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
+          accentColor: '#10b981',
+        });
+
+        await resend.emails.send({
+          from: fromEmail,
+          to: buyerEmail,
+          subject: `Receipt: Your in-person purchase`,
+          html,
+        });
+        receiptSent = true;
+      } catch (emailErr) {
+        console.warn('[terminal] Failed to send cash sale receipt email:', emailErr);
+      }
+    }
+
+    const change = cashReceived - totalAmount;
+    res.json({
+      purchaseIds,
+      totalAmount,
+      cashReceived,
+      change,
+      receiptSent,
+    });
+  } catch (error) {
+    console.error('[terminal] cashPayment error:', error);
+    res.status(500).json({ message: 'Failed to record cash sale' });
   }
 };
