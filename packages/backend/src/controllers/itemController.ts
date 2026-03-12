@@ -254,16 +254,36 @@ export const getItemById = async (req: Request, res: Response) => {
 
 export const getItemsBySaleId = async (req: Request, res: Response) => {
   try {
-    const { saleId } = req.query;
+    const { saleId, q, status, limit } = req.query;
+
+    const where: any = {
+      saleId: saleId as string,
+      ...PUBLIC_ITEM_FILTER,
+    };
+
+    // POS / search: filter by title or SKU substring match
+    if (q) {
+      where.OR = [
+        { title: { contains: q as string, mode: 'insensitive' } },
+        { sku: { contains: q as string, mode: 'insensitive' } },
+      ];
+    }
+
+    // POS / search: filter by item status (e.g. AVAILABLE)
+    if (status) {
+      where.status = status as string;
+    }
+
+    const take = limit ? Math.min(100, parseInt(limit as string, 10)) : undefined;
+
     const items = await prisma.item.findMany({
-      where: {
-        saleId: saleId as string,
-        ...PUBLIC_ITEM_FILTER,
-      },
+      where,
+      ...(take ? { take } : {}),
       select: {
         id: true,
         saleId: true,
         title: true,
+        sku: true,
         description: true,
         price: true,
         auctionStartPrice: true,
