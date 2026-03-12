@@ -4,17 +4,17 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": 143,
+    "sessionId": 147,
     "startedAt": "2026-03-11T00:00:00Z",
-    "estimatedTokensUsed": 25,
-    "turnCount": 6,
-    "fileReadsCount": 12,
-    "toolCallsCount": 18,
-    "subagentDispatches": 1,
+    "estimatedTokensUsed": 15,
+    "turnCount": 1,
+    "fileReadsCount": 8,
+    "toolCallsCount": 10,
+    "subagentDispatches": 0,
     "githubApiCalls": 0,
     "lastCheckpointAt": "2026-03-11T00:00:00Z",
     "compressionOccurred": false,
-    "notes": "Session 143. Phase 2 fleet redesign — full execution. Pre-dispatch checkpoint before 4 parallel agents."
+    "notes": "Session 147. Camera workflow v2 makeover — architect review + dev implementation."
   },
   "checkpoints": [
     {
