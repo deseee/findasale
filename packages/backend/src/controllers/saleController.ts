@@ -649,7 +649,7 @@ export const getSaleActivity = async (req: Request, res: Response) => {
       ...recentPurchases.map((purch) => ({
         id: purch.id,
         type: 'purchase' as const,
-        message: `${purch.user.name || 'Someone'} just bought ${purch.item?.title || 'an item'}`,
+        message: `${purch.user?.name || 'Someone'} just bought ${purch.item?.title || 'an item'}`,
         timestamp: purch.createdAt.toISOString(),
       })),
     ];

@@ -61,7 +61,7 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
     // Create connection token on the organizer's connected account
     const token = await stripe().terminal.connectionTokens.create(
       {},
-      { stripeAccount: organizer.stripeConnectId }
+      { stripeAccount: organizer.stripeConnectId! }
     );
 
     res.json({ secret: token.secret });
@@ -150,8 +150,8 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
         payment_method_types: ['card_present'], // Terminal-only: physical card reader
         capture_method: 'manual',               // Terminal requires explicit capture
         application_fee_amount: platformFeeAmount,
-        on_behalf_of: organizer.stripeConnectId,
-        transfer_data: { destination: organizer.stripeConnectId },
+        on_behalf_of: organizer.stripeConnectId!,
+        transfer_data: { destination: organizer.stripeConnectId! },
         metadata: {
           itemId: item.id,
           saleId: item.sale.id,
@@ -231,7 +231,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
     await stripe().paymentIntents.capture(
       paymentIntentId,
       {},
-      { stripeAccount: organizer.stripeConnectId }
+      { stripeAccount: organizer.stripeConnectId! }
     );
 
     // Mark purchase PAID + item SOLD
@@ -317,7 +317,7 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     await stripe().paymentIntents.cancel(
       paymentIntentId,
       {},
-      { stripeAccount: organizer.stripeConnectId }
+      { stripeAccount: organizer.stripeConnectId! }
     );
 
     // Mark purchase FAILED + restore item to AVAILABLE
