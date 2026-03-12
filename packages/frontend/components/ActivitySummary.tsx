@@ -17,9 +17,9 @@ const ActivitySummary: React.FC = () => {
     queryKey: ['activity-stats'],
     queryFn: async (): Promise<ActivityStats> => {
       const [purchasesRes, favoritesRes, subscriptionsRes, userRes] = await Promise.all([
-        api.get('/shopper/purchases'),
-        api.get('/shopper/favorites'),
-        api.get('/sales/subscribed').catch(() => ({ data: [] })),
+        api.get('/users/purchases'),
+        api.get('/favorites'),
+        api.get('/notifications/subscriptions').catch(() => ({ data: [] })),
         api.get('/users/me'),
       ]);
 

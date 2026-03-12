@@ -26,7 +26,7 @@ const ShopperPurchasesPage = () => {
   const { data: purchases, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchases', sort],
     queryFn: async () => {
-      const response = await api.get('/shopper/purchases', { params: { sort } });
+      const response = await api.get('/users/purchases', { params: { sort } });
       return response.data;
     },
     enabled: !!user?.id,
