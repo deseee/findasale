@@ -36,20 +36,26 @@ export interface RapidCarouselProps {
   items: RapidCarouselItem[];
   onThumbnailTap: (itemId: string) => void;
   onDeleteRequest: (itemId: string) => void;
+  onAddPhotoToItem?: (itemId: string) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   aiPaused?: boolean;
   onTogglePause?: () => void;
+  addingToItemId?: string | null;
+  enhancedCount?: number;
 }
 
 const RapidCarousel: React.FC<RapidCarouselProps> = ({
   items,
   onThumbnailTap,
   onDeleteRequest,
+  onAddPhotoToItem,
   collapsed = false,
   onToggleCollapse,
   aiPaused = false,
   onTogglePause,
+  addingToItemId = null,
+  enhancedCount = 0,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pressedId, setPressedId] = useState<string | null>(null);
@@ -179,7 +185,9 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
               title={item.title || 'Item'}
             >
               {/* Thumbnail container */}
-              <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300 bg-warm-50">
+              <div className={`relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300 bg-warm-50 transition-all ${
+                addingToItemId === item.id ? 'ring-2 ring-amber-400' : ''
+              }`}>
                 {item.thumbnailUrl ? (
                   <img
                     src={item.thumbnailUrl}
@@ -198,6 +206,25 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
                 >
                   {icon}
                 </div>
+
+                {/* Phase 5: Auto-enhance badge */}
+                {item.thumbnailUrl && (
+                  <span className="absolute top-1 left-1 text-xs">✨</span>
+                )}
+
+                {/* Phase 5: Multi-photo "+" button */}
+                {item.thumbnailUrl && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddPhotoToItem?.(item.id);
+                    }}
+                    className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-gray-800/80 text-white flex items-center justify-center text-xs hover:bg-gray-900 transition-colors"
+                    title="Add more photos to this item"
+                  >
+                    {addingToItemId === item.id ? '×' : '+'}
+                  </button>
+                )}
               </div>
 
               {/* Title & Category */}
@@ -220,6 +247,15 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
           );
         })}
       </div>
+
+      {/* Phase 5: Enhanced count footer */}
+      {enhancedCount > 0 && (
+        <div className="border-t border-warm-100 px-3 py-2 bg-warm-50">
+          <p className="text-center text-xs text-gray-500">
+            {enhancedCount} auto-enhanced ✨
+          </p>
+        </div>
+      )}
     </div>
   );
 };
