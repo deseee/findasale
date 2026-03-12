@@ -58,6 +58,7 @@ export default function POSPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [lastPurchaseId, setLastPurchaseId] = useState('');
+  const [paymentIntentId, setPaymentIntentId] = useState('');
 
   // Stripe Terminal SDK ref (dynamic import)
   const terminalRef = useRef<any>(null);
@@ -180,7 +181,8 @@ export default function POSPage() {
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
 
-      const { paymentIntentId, clientSecret, purchaseId } = piRes.data;
+      const { paymentIntentId: piId, clientSecret, purchaseId } = piRes.data;
+      setPaymentIntentId(piId);
 
       // 2. Present card to reader
       setPaymentStatus('waiting_for_card');
@@ -197,7 +199,7 @@ export default function POSPage() {
       }
 
       // 4. Capture on backend
-      await api.post('/stripe/terminal/capture', { paymentIntentId });
+      await api.post('/stripe/terminal/capture', { paymentIntentId: piId });
 
       setLastPurchaseId(purchaseId);
       setPaymentStatus('success');
@@ -224,9 +226,17 @@ export default function POSPage() {
     } catch { /* reader may already be idle */ }
     setPaymentStatus('cancelled');
     setErrorMessage('Payment cancelled.');
-    // Restore item to available (backend cancel endpoint)
-    // If we have a paymentIntentId in flight, cancel it — but we don't store it in state
-    // for simplicity; the backend's cancel endpoint handles this on next load.
+
+    // Call backend cancel endpoint if paymentIntentId exists
+    if (paymentIntentId) {
+      try {
+        await api.post('/stripe/terminal/cancel', { paymentIntentId });
+      } catch (err) {
+        console.error('[pos] Failed to cancel payment intent on backend:', err);
+      }
+      setPaymentIntentId('');
+    }
+
     setPaymentStatus('idle');
   };
 

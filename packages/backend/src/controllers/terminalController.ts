@@ -150,8 +150,6 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
         payment_method_types: ['card_present'], // Terminal-only: physical card reader
         capture_method: 'manual',               // Terminal requires explicit capture
         application_fee_amount: platformFeeAmount,
-        on_behalf_of: organizer.stripeConnectId!,
-        transfer_data: { destination: organizer.stripeConnectId! },
         metadata: {
           itemId: item.id,
           saleId: item.sale.id,
@@ -214,7 +212,14 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
     const purchase = await prisma.purchase.findUnique({
       where: { stripePaymentIntentId: paymentIntentId },
       include: {
-        item: { select: { id: true, status: true, title: true } },
+        item: {
+          select: {
+            id: true,
+            status: true,
+            title: true,
+            sale: { select: { organizerId: true } },
+          },
+        },
       },
     });
 
@@ -222,9 +227,42 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       return res.status(404).json({ message: 'Purchase not found for this payment intent' });
     }
 
+    // Verify the purchase's sale belongs to the current organizer (ownership check)
+    if (purchase.item.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'You do not have permission to capture this payment' });
+    }
+
     if (purchase.status === 'PAID') {
       // Already captured (idempotent — webhook may have already processed it)
       return res.json({ purchaseId: purchase.id, status: 'PAID', receiptSent: false });
+    }
+
+    // Re-check item status: if another transaction sold it concurrently, cancel this PI
+    const currentItemStatus = await prisma.item.findUnique({
+      where: { id: purchase.itemId! },
+      select: { status: true },
+    });
+
+    if (currentItemStatus?.status === 'SOLD' && purchase.status !== 'PAID') {
+      // Item was sold by another concurrent transaction — cancel this PI and fail the purchase
+      try {
+        await stripe().paymentIntents.cancel(
+          paymentIntentId,
+          {},
+          { stripeAccount: organizer.stripeConnectId! }
+        );
+      } catch (e) {
+        console.warn('[terminal] Failed to cancel PI during concurrent guard:', e);
+      }
+
+      await prisma.purchase.update({
+        where: { id: purchase.id },
+        data: { status: 'FAILED' },
+      });
+
+      return res.status(409).json({
+        message: 'Item was sold by another transaction before this payment could be captured',
+      });
     }
 
     // Capture the payment on the organizer's connected account
