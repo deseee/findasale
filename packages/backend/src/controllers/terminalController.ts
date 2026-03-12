@@ -462,7 +462,8 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
  *
  * Records a cash sale immediately without Stripe processing.
  * Creates Purchase records with status PAID and marks items SOLD.
- * platformFeeAmount tracks 10% for accounting; collection is handled outside Stripe.
+ * Accumulates 10% platform fees into organizer.cashFeeBalance for later payout deduction.
+ * platformFeeAmount tracks fee for accounting; collection is handled outside Stripe.
  */
 export const cashPayment = async (req: AuthRequest, res: Response) => {
   try {
@@ -572,6 +573,21 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Accumulate platform fee to organizer's cash fee balance
+    const totalPlatformFees = items.reduce((sum, item) => {
+      const itemFee = Math.round(item.amount * feeRate * 100) / 100;
+      return sum + itemFee;
+    }, 0);
+    if (totalPlatformFees > 0) {
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: {
+          cashFeeBalance: { increment: totalPlatformFees },
+          cashFeeBalanceUpdatedAt: new Date(),
+        },
+      });
+    }
+
     // Optionally send receipt email
     let receiptSent = false;
     if (buyerEmail && process.env.RESEND_API_KEY) {
@@ -608,12 +624,22 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     }
 
     const change = cashReceived - totalAmount;
+
+    // Fetch updated organizer balance to return in response
+    const updatedOrganizer = await prisma.organizer.findUnique({
+      where: { id: organizer.id },
+      select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
+    });
+
     res.json({
       purchaseIds,
       totalAmount,
+      platformFee: totalPlatformFees,
       cashReceived,
       change,
       receiptSent,
+      cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
+      cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt,
     });
   } catch (error) {
     console.error('[terminal] cashPayment error:', error);
