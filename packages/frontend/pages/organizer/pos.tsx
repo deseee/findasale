@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
-import api from '../../utils/api';
+import api from '../../lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

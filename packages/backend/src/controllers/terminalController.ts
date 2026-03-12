@@ -159,7 +159,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           ...(buyerEmail ? { buyerEmail } : {}),
         },
       },
-      { stripeAccount: organizer.stripeConnectId }
+      { stripeAccount: organizer.stripeConnectId! }
     );
 
     // Create PENDING Purchase record immediately (same pattern as online flow)
