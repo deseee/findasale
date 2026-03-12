@@ -137,38 +137,53 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {staticNavLinks.map(({ href, label }) => (
                 <Link key={href} href={href} className="text-warm-900 hover:text-amber-600">{label}</Link>
               ))}
+            </nav>
 
+            {/* Desktop right-side nav (Saved, Messages, Profile + Auth) */}
+            <div className="hidden md:flex items-center space-x-4">
               {!isClient ? (
                 <>
                   <Link href="/login" className="text-warm-900 hover:text-amber-600">Login</Link>
                   <Link href="/register" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md">Register</Link>
                 </>
               ) : user ? (
-                <div className="flex items-center space-x-4">
-                  <span className="text-warm-900 text-sm">Hi, {user.name || user.email}</span>
-                  {user.role === 'ORGANIZER' && (
-                    <Link href="/organizer/dashboard" className="text-warm-900 hover:text-amber-600">Dashboard</Link>
-                  )}
-                  {(user.role === 'USER' || user.role === 'ADMIN') && (
-                    <>
-                      <Link href="/shopper/dashboard" className="text-warm-900 hover:text-amber-600">My Profile</Link>
-                      <Link href="/wishlists" className="text-warm-900 hover:text-amber-600">My Wishlists</Link>
-                      <Link href="/referral-dashboard" className="text-warm-900 hover:text-amber-600">Referrals</Link>
-                    </>
-                  )}
-                  {user.role === 'ADMIN' && (
-                    <Link href="/admin" className="text-warm-900 hover:text-amber-600 font-medium">Admin Panel</Link>
-                  )}
-                  <NotificationBell />
-                  <button onClick={handleLogout} className="text-warm-900 hover:text-amber-600">Logout</button>
-                </div>
+                <>
+                  <Link href="/shopper/dashboard#favorites" className="text-warm-900 hover:text-amber-600" title="Saved sales">
+                    <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                    </svg>
+                  </Link>
+                  <Link href="/messages" className="text-warm-900 hover:text-amber-600" title="Messages">
+                    <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </Link>
+                  <div className="border-l border-warm-300 pl-4">
+                    <span className="text-warm-900 text-sm mr-3">Hi, {user.name || user.email}</span>
+                    {user.role === 'ORGANIZER' && (
+                      <Link href="/organizer/dashboard" className="text-warm-900 hover:text-amber-600 mr-3">Dashboard</Link>
+                    )}
+                    {(user.role === 'USER' || user.role === 'ADMIN') && (
+                      <>
+                        <Link href="/shopper/dashboard" className="text-warm-900 hover:text-amber-600 mr-3">My Profile</Link>
+                        <Link href="/wishlists" className="text-warm-900 hover:text-amber-600 mr-3">My Wishlists</Link>
+                        <Link href="/referral-dashboard" className="text-warm-900 hover:text-amber-600 mr-3">Referrals</Link>
+                      </>
+                    )}
+                    {user.role === 'ADMIN' && (
+                      <Link href="/admin" className="text-warm-900 hover:text-amber-600 font-medium mr-3">Admin Panel</Link>
+                    )}
+                    <NotificationBell />
+                    <button onClick={handleLogout} className="text-warm-900 hover:text-amber-600 ml-2">Logout</button>
+                  </div>
+                </>
               ) : (
                 <>
                   <Link href="/login" className="text-warm-900 hover:text-amber-600">Login</Link>
                   <Link href="/register" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md">Register</Link>
                 </>
               )}
-            </nav>
+            </div>
 
             {/* Mobile: notification bell (if logged in) + hamburger */}
             <div className="md:hidden flex items-center gap-1">

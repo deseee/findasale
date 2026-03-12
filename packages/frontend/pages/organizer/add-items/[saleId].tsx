@@ -713,6 +713,9 @@ const AddItemsDetailPage = () => {
                         <input
                           type="checkbox"
                           checked={selectedItems.size === items.length && items.length > 0}
+                          indeterminate={
+                            selectedItems.size > 0 && selectedItems.size < items.length
+                          }
                           onChange={(e) => {
                             if (e.target.checked) {
                               setSelectedItems(new Set(items.map((i: any) => i.id)));
@@ -810,6 +813,28 @@ const AddItemsDetailPage = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Select All at Bottom — shown when 5+ items to warrant scrolling */}
+              {items.length >= 5 && (
+                <div className="px-4 py-3 border-t border-warm-200 bg-warm-50 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedItems.size === items.length && items.length > 0}
+                    indeterminate={
+                      selectedItems.size > 0 && selectedItems.size < items.length
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedItems(new Set(items.map((i: any) => i.id)));
+                      } else {
+                        setSelectedItems(new Set());
+                      }
+                    }}
+                    className="rounded"
+                  />
+                  <span className="text-sm text-warm-700">Select all {items.length} items</span>
+                </div>
+              )}
 
               {/* Bulk Actions */}
               {selectedItems.size > 0 && (
