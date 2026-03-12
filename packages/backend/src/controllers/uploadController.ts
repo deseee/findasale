@@ -325,6 +325,7 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     }
 
     // Create DRAFT Item with minimal required fields
+    const autoEnhanced = req.body.autoEnhanced === true || req.body.autoEnhanced === 'true';
     const item = await prisma.item.create({
       data: {
         saleId,
@@ -334,7 +335,8 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
         status: 'AVAILABLE',
         embedding: [],
         listingType: 'FIXED',
-        isActive: true
+        isActive: true,
+        autoEnhanced
       }
     });
 

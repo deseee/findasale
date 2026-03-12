@@ -30,6 +30,8 @@ export interface RapidCarouselItem {
   title?: string;
   category?: string;
   aiError?: string;
+  photoUrls?: string[];
+  autoEnhanced?: boolean;
 }
 
 export interface RapidCarouselProps {
@@ -207,19 +209,30 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
                   {icon}
                 </div>
 
-                {/* Phase 5: Auto-enhance badge */}
-                {item.thumbnailUrl && (
-                  <span className="absolute top-1 left-1 text-xs">✨</span>
+                {/* Photo count badge "×N" */}
+                {item.photoUrls && item.photoUrls.length > 1 && (
+                  <span className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded-full z-10">
+                    ×{item.photoUrls.length}
+                  </span>
                 )}
 
-                {/* Phase 5: Multi-photo "+" button */}
+                {/* Auto-enhance badge (only when autoEnhanced is true) */}
+                {item.autoEnhanced && (
+                  <span className="absolute top-1 left-1 text-xs z-10">✨</span>
+                )}
+
+                {/* "+" button for adding photos to item */}
                 {item.thumbnailUrl && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onAddPhotoToItem?.(item.id);
                     }}
-                    className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-gray-800/80 text-white flex items-center justify-center text-xs hover:bg-gray-900 transition-colors"
+                    className={`absolute bottom-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold z-10 ${
+                      addingToItemId === item.id
+                        ? 'bg-amber-500 ring-2 ring-amber-300'
+                        : 'bg-gray-800/80'
+                    }`}
                     title="Add more photos to this item"
                   >
                     {addingToItemId === item.id ? '×' : '+'}
