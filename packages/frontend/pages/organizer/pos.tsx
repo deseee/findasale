@@ -76,7 +76,7 @@ export default function POSPage() {
 
   useEffect(() => {
     if (!user || user.role !== 'ORGANIZER') return;
-    api.get<{ data: Sale[] }>('/sales/mine')
+    api.get<{ sales?: Sale[]; data?: Sale[] }>('/sales/mine')
       .then(res => {
         // Filter to active (PUBLISHED) sales only
         const active = (res.data.sales ?? res.data.data ?? res.data).filter(
