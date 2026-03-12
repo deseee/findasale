@@ -176,7 +176,7 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
         {items.map((item) => {
           const { icon, bgColor, ring } = getStatusIcon(item);
           return (
-            <button
+            <div
               key={item.id}
               onMouseDown={() => handleMouseDown(item.id)}
               onMouseUp={() => handleMouseUp(item.id)}
@@ -256,7 +256,7 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
                   <span className="text-xs text-white font-bold">Hold 500ms to delete</span>
                 </div>
               )}
-            </button>
+            </div>
           );
         })}
       </div>
