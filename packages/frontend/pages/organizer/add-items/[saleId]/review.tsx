@@ -1,19 +1,16 @@
 /**
- * ReviewScreen — Phase 3B full-screen review & publish page
+ * Publishing Page (Review & Publish)
  *
- * Route: /organizer/add-items/[saleId]/review
- *
- * Shows all draft items for a sale in full-screen scrollable list.
- * Each item card: thumbnail + title/category/condition/price + status
- * Low-confidence items highlighted in yellow.
- *
- * Polling: GET /api/items/:id/draft-status every 3s for analyzing items
- * Publishes via POST /api/items/:id/publish
- *
- * Load more at 20 items/page
+ * Phase 4: Publishing page for Rapidfire items
+ * - Fetch items with draftStatus IN ['DRAFT', 'PENDING_REVIEW']
+ * - AI confidence color tinting (green/amber/red borders)
+ * - Per-item expanded editor (brightness, contrast, aspect ratio, background removal, metadata)
+ * - Batch toolbar (select, bulk price, bulk category, bulk BG removal)
+ * - Buyer preview mode (light-mode grid)
+ * - Publish all button
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
@@ -23,220 +20,261 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
 
-interface DraftItem {
-  id: string;
-  saleId: string;
-  title?: string;
-  category?: string;
-  condition?: string;
-  description?: string;
-  price?: number;
-  photoUrls?: string[];
-  draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
-  aiErrorLog?: object;
-  aiConfidence?: number;
-  optimisticLockVersion?: number;
+type AspectRatio = '4:3' | '1:1' | '16:9';
+
+interface ItemEditState {
+  title: string;
+  price: number;
+  category: string;
+  aspectRatio: AspectRatio;
+  brightness: number;
+  contrast: number;
+  backgroundRemoved: boolean;
+  autoEnhanced: boolean;
 }
 
-const ReviewScreen = () => {
+interface Item {
+  id: string;
+  title: string;
+  price: number;
+  category: string;
+  photoUrls: string[];
+  aiConfidence: number;
+  backgroundRemoved: boolean;
+  autoEnhanced: boolean;
+  draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
+}
+
+const CATEGORIES = [
+  'Furniture',
+  'Jewelry',
+  'Art & Decor',
+  'Clothing',
+  'Kitchenware',
+  'Tools & Hardware',
+  'Collectibles',
+  'Electronics',
+  'Books & Media',
+  'Other',
+];
+
+function buildCloudinaryUrl(
+  url: string,
+  opts: {
+    aspectRatio?: AspectRatio;
+    backgroundRemoved?: boolean;
+    brightness?: number;
+    contrast?: number;
+  }
+): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  const transforms: string[] = [];
+
+  if (opts.aspectRatio) {
+    const ar = opts.aspectRatio.replace(':', '_');
+    transforms.push(`ar_${ar},c_fill`);
+  }
+
+  if (opts.backgroundRemoved) {
+    transforms.push('b_remove');
+  }
+
+  if (opts.brightness !== undefined && opts.brightness !== 50) {
+    const val = Math.round((opts.brightness - 50) * 1.5);
+    transforms.push(`e_brightness:${val}`);
+  }
+
+  if (opts.contrast !== undefined && opts.contrast !== 50) {
+    const val = Math.round((opts.contrast - 50) * 1.5);
+    transforms.push(`e_contrast:${val}`);
+  }
+
+  if (transforms.length === 0) return url;
+  return url.replace('/upload/', `/upload/${transforms.join(',')}/`);
+}
+
+function confidenceBorderClass(score: number): string {
+  if (score >= 0.8) return 'border-l-4 border-green-500';
+  if (score >= 0.55) return 'border-l-4 border-amber-400';
+  return 'border-l-4 border-red-500';
+}
+
+function confidenceLabel(score: number): { text: string; color: string } {
+  if (score >= 0.8) return { text: 'Good', color: 'text-green-600' };
+  if (score >= 0.55) return { text: 'Review', color: 'text-amber-600' };
+  return { text: 'Low', color: 'text-red-600' };
+}
+
+const ReviewPage = () => {
   const router = useRouter();
   const { saleId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  const [items, setItems] = useState<DraftItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [selectedPreviewId, setSelectedPreviewId] = useState<string | null>(null);
-  const [editingIds, setEditingIds] = useState<Set<string>>(new Set());
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const pageSize = 20;
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [editStates, setEditStates] = useState<Map<string, ItemEditState>>(new Map());
+  const [bulkPrice, setBulkPrice] = useState('');
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [showBuyerPreview, setShowBuyerPreview] = useState(false);
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
 
-  // Load draft items
-  const { data: itemsData = [], isLoading: itemsLoading } = useQuery({
-    queryKey: ['draft-items', saleId, page],
+  const { data: items = [], isLoading: itemsLoading } = useQuery({
+    queryKey: ['items', saleId, 'draft'],
     queryFn: async () => {
       if (!saleId) return [];
       const response = await api.get(
-        `/items/drafts?saleId=${saleId}&page=${page}&limit=${pageSize}`
+        `/items?saleId=${saleId}&draftStatus=DRAFT,PENDING_REVIEW`
       );
-      return response.data || [];
+      return (response.data || []) as Item[];
     },
     enabled: !!saleId,
   });
 
-  useEffect(() => {
-    if (itemsData.length < pageSize) {
-      setHasMore(false);
-    } else {
-      setHasMore(true);
-    }
-
-    if (page === 1) {
-      setItems(itemsData);
-    } else {
-      setItems((prev) => [...prev, ...itemsData]);
-    }
-  }, [itemsData, page]);
-
-  // Polling for analyzing items
-  useEffect(() => {
-    const analyzingItems = items.filter(
-      (i) => i.draftStatus === 'DRAFT' && !i.aiErrorLog
-    );
-
-    if (analyzingItems.length === 0) {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      return;
-    }
-
-    const poll = async () => {
-      try {
-        const updates: Record<string, any> = {};
-        await Promise.all(
-          analyzingItems.map(async (item) => {
-            const res = await api.get(`/items/${item.id}/draft-status`);
-            updates[item.id] = res.data;
-          })
-        );
-
-        setItems((prev) =>
-          prev.map((item) => ({
-            ...item,
-            ...(updates[item.id] || {}),
-          }))
-        );
-      } catch (err) {
-        console.error('Polling error:', err);
-      }
-    };
-
-    pollingIntervalRef.current = setInterval(poll, 3000);
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, [items]);
-
-  const publishMutation = useMutation({
-    mutationFn: async (itemId: string) => {
-      const item = items.find((i) => i.id === itemId);
-      if (!item) throw new Error('Item not found');
-
-      return await api.post(`/items/${itemId}/publish`, {
-        optimisticLockVersion: item.optimisticLockVersion,
-      });
-    },
-    onSuccess: (_, itemId) => {
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === itemId ? { ...i, draftStatus: 'PUBLISHED' } : i
-        )
-      );
-      showToast('Item published', 'success');
-    },
-    onError: (error: any) => {
-      const message =
-        error.response?.data?.message || 'Failed to publish item';
-      showToast(message, 'error');
-    },
-  });
-
-  const publishAllMutation = useMutation({
-    mutationFn: async () => {
-      const readyItems = items.filter(
-        (i) => i.draftStatus === 'PENDING_REVIEW'
-      );
-      await Promise.all(
-        readyItems.map((item) =>
-          api.post(`/items/${item.id}/publish`, {
-            optimisticLockVersion: item.optimisticLockVersion,
-          })
-        )
-      );
+  const updateItemMutation = useMutation({
+    mutationFn: async (payload: {
+      itemId: string;
+      updates: Partial<Item>;
+    }) => {
+      return await api.patch(`/items/${payload.itemId}`, payload.updates);
     },
     onSuccess: () => {
-      setItems((prev) =>
-        prev.map((i) =>
-          i.draftStatus === 'PENDING_REVIEW'
-            ? { ...i, draftStatus: 'PUBLISHED' }
-            : i
-        )
-      );
-      showToast('All ready items published', 'success');
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'draft'] });
     },
     onError: (error: any) => {
-      const message =
-        error.response?.data?.message || 'Failed to publish items';
+      const message = error.response?.data?.message || 'Failed to update item';
       showToast(message, 'error');
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (itemId: string) => {
-      return await api.delete(`/items/${itemId}`);
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (payload: {
+      itemIds: string[];
+      operation: string;
+      value?: any;
+    }) => {
+      return await api.post(`/items/bulk`, payload);
     },
-    onSuccess: (_, itemId) => {
-      setItems((prev) => prev.filter((i) => i.id !== itemId));
-      showToast('Item deleted', 'success');
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'draft'] });
+      setSelectedItems(new Set());
+      setBulkPrice('');
+      setBulkCategory('');
     },
     onError: (error: any) => {
-      const message =
-        error.response?.data?.message || 'Failed to delete item';
+      const message = error.response?.data?.message || 'Failed to update items';
       showToast(message, 'error');
     },
   });
 
-  const getStatusLabel = (item: DraftItem) => {
-    if (item.draftStatus === 'PUBLISHED') {
-      return { label: 'Published', color: 'text-green-700', bg: 'bg-green-100' };
+  const publishMutation = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      return await api.post(`/items/bulk`, {
+        itemIds,
+        operation: 'draftStatus',
+        value: 'PUBLISHED',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'draft'] });
+      showToast('Items published successfully!', 'success');
+      router.push(`/organizer/add-items/${saleId}`);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to publish items';
+      showToast(message, 'error');
+    },
+  });
+
+  const getEditState = (item: Item): ItemEditState => {
+    if (!editStates.has(item.id)) {
+      editStates.set(item.id, {
+        title: item.title,
+        price: item.price,
+        category: item.category,
+        aspectRatio: '4:3',
+        brightness: 50,
+        contrast: 50,
+        backgroundRemoved: item.backgroundRemoved,
+        autoEnhanced: item.autoEnhanced,
+      });
+      setEditStates(new Map(editStates));
     }
-    if (item.draftStatus === 'PENDING_REVIEW') {
-      return {
-        label: 'Ready to Publish',
-        color: 'text-green-700',
-        bg: 'bg-green-100',
-      };
-    }
-    if (item.aiErrorLog) {
-      return { label: 'Error', color: 'text-red-700', bg: 'bg-red-100' };
-    }
-    return {
-      label: 'Analyzing...',
-      color: 'text-amber-700',
-      bg: 'bg-amber-100',
-    };
+    return editStates.get(item.id)!;
   };
 
-  const readyCount = items.filter(
-    (i) => i.draftStatus === 'PENDING_REVIEW'
-  ).length;
-  const analyzingCount = items.filter(
-    (i) => i.draftStatus === 'DRAFT' && !i.aiErrorLog
-  ).length;
-  const errorCount = items.filter(
-    (i) => i.draftStatus === 'DRAFT' && i.aiErrorLog
-  ).length;
+  const handleEditChange = (itemId: string, field: string, value: any) => {
+    const state = getEditState(items.find((i) => i.id === itemId)!);
+    const updated = { ...state, [field]: value };
+    editStates.set(itemId, updated);
+    setEditStates(new Map(editStates));
+  };
+
+  const handleSaveItem = async (item: Item) => {
+    const editState = getEditState(item);
+    await updateItemMutation.mutateAsync({
+      itemId: item.id,
+      updates: {
+        title: editState.title,
+        price: editState.price,
+        category: editState.category,
+        backgroundRemoved: editState.backgroundRemoved,
+      },
+    });
+    showToast('Item saved', 'success');
+  };
+
+  const handleBulkPrice = () => {
+    if (!bulkPrice) return;
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'price',
+      value: parseFloat(bulkPrice),
+    });
+  };
+
+  const handleBulkCategory = (category: string) => {
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'category',
+      value: category,
+    });
+  };
+
+  const handleBulkBGRemoval = () => {
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'backgroundRemoved',
+      value: true,
+    });
+  };
+
+  const handlePublishAll = () => {
+    const ids = items.map((i) => i.id);
+    if (ids.length === 0) {
+      showToast('No items to publish', 'error');
+      return;
+    }
+    publishMutation.mutate(ids);
+  };
+
+  const previewItems = showBuyerPreview
+    ? items.filter((i) => i.draftStatus === 'PENDING_REVIEW')
+    : items;
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-warm-50 py-8">
+      <div className="min-h-screen bg-white py-8">
         <div className="max-w-6xl mx-auto px-4">
           <Skeleton className="h-10 w-48 mb-8" />
           <div className="space-y-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
           </div>
         </div>
       </div>
@@ -246,215 +284,125 @@ const ReviewScreen = () => {
   return (
     <>
       <Head>
-        <title>Review Items - FindA.Sale</title>
+        <title>Review & Publish - FindA.Sale</title>
       </Head>
 
       <main className="min-h-screen bg-warm-50 py-8">
         <div className="max-w-6xl mx-auto px-4">
-          {/* Header */}
           <div className="mb-8">
             <Link
               href={`/organizer/add-items/${saleId}`}
               className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
             >
-              &larr; Back to Add Items
+              &larr; Back to Capture
             </Link>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-            <h1 className="text-3xl font-bold text-warm-900 mb-2">
-              Review Items Before Publishing
-            </h1>
-            <p className="text-warm-600 mb-4">
-              {items.length} item{items.length !== 1 ? 's' : ''} &middot;{' '}
-              <span className="text-green-700 font-semibold">{readyCount} ready</span>{' '}
-              &middot;
-              <span className="text-amber-700 font-semibold">{analyzingCount} analyzing</span>
-              {errorCount > 0 && (
-                <>
-                  {' '}
-                  &middot;
-                  <span className="text-red-700 font-semibold">
-                    {errorCount} error{errorCount !== 1 ? 's' : ''}
-                  </span>
-                </>
-              )}
-            </p>
-
-            {readyCount > 0 && (
-              <button
-                onClick={() => publishAllMutation.mutate()}
-                disabled={publishAllMutation.isPending}
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          {showBuyerPreview ? (
+            <>
+              <div className="mb-6">
+                <button
+                  onClick={() => setShowBuyerPreview(false)}
+                  className="px-4 py-2 bg-white border border-warm-300 rounded-lg text-warm-700 hover:bg-warm-50 font-medium text-sm"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                {publishAllMutation.isPending
-                  ? 'Publishing...'
-                  : `Publish All Ready (${readyCount})`}
-              </button>
-            )}
-          </div>
+                  Back to Editing
+                </button>
+              </div>
 
-          {/* Items List */}
-          {itemsLoading && items.length === 0 ? (
-            <div className="space-y-4">
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ) : items.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg border border-warm-200">
-              <p className="text-warm-600 text-lg">
-                No items yet. Go back to add items.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {items.map((item) => {
-                const status = getStatusLabel(item);
-                const isLowConfidence =
-                  item.aiConfidence !== undefined && item.aiConfidence < 0.6;
+              <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
+                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-4">
+                  Preview only
+                </div>
+                <h2 className="text-2xl font-bold text-warm-900 mb-6">Buyer Preview</h2>
 
-                return (
-                  <div
-                    key={item.id}
-                    className={`border rounded-lg p-4 transition-colors ${
-                      isLowConfidence && item.draftStatus !== 'PUBLISHED'
-                        ? 'bg-yellow-50 border-yellow-300'
-                        : 'bg-white border-warm-200'
-                    }`}
-                  >
-                    <div className="flex gap-4">
-                      {/* Thumbnail */}
-                      <div className="flex-shrink-0">
-                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-warm-100 border border-warm-300">
-                          {item.photoUrls && item.photoUrls[0] ? (
-                            <img
-                              src={item.photoUrls[0]}
-                              alt={item.title || 'Item'}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              No photo
-                            </div>
-                          )}
-                        </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {previewItems.map((item) => (
+                    <div key={item.id} className="bg-white border border-warm-200 rounded-lg overflow-hidden">
+                      <div className="aspect-square bg-warm-100 overflow-hidden">
+                        {item.photoUrls[0] && (
+                          <img
+                            src={buildCloudinaryUrl(item.photoUrls[0], {
+                              aspectRatio: '4:3',
+                              backgroundRemoved: item.backgroundRemoved,
+                            })}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
                       </div>
-
-                      {/* Details */}
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-warm-900 text-base mb-1">
-                          {item.title || 'Untitled'}
-                        </h3>
-                        <div className="text-sm text-warm-600 space-y-0.5">
-                          <p>
-                            {item.category && (
-                              <>
-                                <span className="font-medium">Category:</span>{' '}
-                                {item.category}
-                              </>
-                            )}
-                            {item.category && item.condition && ' · '}
-                            {item.condition && (
-                              <>
-                                <span className="font-medium">Condition:</span>{' '}
-                                {item.condition}
-                              </>
-                            )}
-                          </p>
-                          {item.price && (
-                            <p>
-                              <span className="font-medium">Price:</span> $
-                              {item.price.toFixed(2)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Status & Actions */}
-                      <div className="flex flex-col items-end justify-between">
-                        <div
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${status.bg} ${status.color}`}
-                        >
-                          {status.label}
-                        </div>
-
-                        <div className="flex gap-2">
-                          {item.draftStatus === 'PENDING_REVIEW' && (
-                            <button
-                              onClick={() =>
-                                publishMutation.mutate(item.id)
-                              }
-                              disabled={publishMutation.isPending}
-                              className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
-                            >
-                              Publish
-                            </button>
-                          )}
-                          <button
-                            onClick={() => router.push(`/organizer/edit-item/${item.id}`)}
-                            className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Delete this item?')) {
-                                deleteMutation.mutate(item.id);
-                              }
-                            }}
-                            disabled={deleteMutation.isPending}
-                            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg disabled:opacity-50"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                      <div className="p-3">
+                        <p className="font-semibold text-warm-900 text-sm truncate">
+                          {item.title}
+                        </p>
+                        <p className="text-amber-700 font-bold text-sm mt-1">
+                          ${item.price.toFixed(2)}
+                        </p>
+                        <p className="text-warm-600 text-xs mt-1">{item.category}</p>
                       </div>
                     </div>
-
-                    {/* Low confidence warning */}
-                    {isLowConfidence && item.draftStatus !== 'PUBLISHED' && (
-                      <div className="mt-2 text-xs text-yellow-700 px-2">
-                        ⚠ Low AI confidence — please review carefully
-                      </div>
-                    )}
-
-                    {/* Error message */}
-                    {item.aiErrorLog && (
-                      <div className="mt-2 text-xs text-red-700 px-2">
-                        ⚠ AI analysis failed — please fill in details manually
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Load more button */}
-              {hasMore && (
-                <div className="flex justify-center pt-4">
-                  <button
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={itemsLoading}
-                    className="px-4 py-2 bg-warm-100 hover:bg-warm-200 text-warm-900 font-medium rounded-lg disabled:opacity-50"
-                  >
-                    {itemsLoading ? 'Loading...' : 'Load More Items'}
-                  </button>
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
+                <h1 className="text-3xl font-bold text-warm-900 mb-2">Review & Publish</h1>
+                <p className="text-warm-600 mb-4">
+                  {items.length} item{items.length !== 1 ? 's' : ''} ready for publication.
+                </p>
+
+                {!itemsLoading && items.length > 0 && (
+                  <button
+                    onClick={handlePublishAll}
+                    disabled={publishMutation.isPending}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 mb-6"
+                  >
+                    {publishMutation.isPending ? 'Publishing...' : `Publish All (${items.length})`}
+                  </button>
+                )}
+
+                {itemsLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : items.length === 0 ? (
+                  <div className="text-center py-12 text-warm-600">
+                    <p>No items ready for publication.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {items.map((item) => {
+                      const conf = confidenceLabel(item.aiConfidence);
+                      return (
+                        <div
+                          key={item.id}
+                          className={`bg-white border rounded-lg overflow-hidden p-4 flex items-center gap-4 ${confidenceBorderClass(item.aiConfidence)}`}
+                        >
+                          {item.photoUrls[0] && (
+                            <img
+                              src={item.photoUrls[0]}
+                              alt={item.title}
+                              className="w-16 h-16 object-cover rounded"
+                            />
+                          )}
+                          <div className="flex-1">
+                            <p className="font-semibold text-warm-900">{item.title}</p>
+                            <p className="text-sm text-warm-600">
+                              ${item.price.toFixed(2)} · {item.category}
+                            </p>
+                          </div>
+                          <div className={`text-xs font-semibold ${conf.color}`}>
+                            {conf.text} ({Math.round(item.aiConfidence * 100)}%)
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </main>
@@ -462,4 +410,4 @@ const ReviewScreen = () => {
   );
 };
 
-export default ReviewScreen;
+export default ReviewPage;

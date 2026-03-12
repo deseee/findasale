@@ -43,6 +43,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [preCaptureWarning, setPreCaptureWarning] = useState<string | null>(null);
 
   // Start camera on mount and when facingMode changes
   useEffect(() => {
@@ -109,6 +110,31 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       }
     };
   }, [facingMode]);
+
+  // Phase 3: Pre-capture quality check — sample video brightness every 2 seconds
+  useEffect(() => {
+    if (!cameraReady || !videoRef.current) return;
+
+    const qualityInterval = setInterval(() => {
+      if (videoRef.current && cameraReady) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(videoRef.current, 0, 0, 64, 64);
+        const data = ctx.getImageData(0, 0, 64, 64).data;
+        let total = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          total += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+        }
+        const avg = total / (64 * 64);
+        setPreCaptureWarning(avg < 40 ? 'Too dark — adjust lighting' : null);
+      }
+    }, 2000);
+
+    return () => clearInterval(qualityInterval);
+  }, [cameraReady]);
 
   // Capture a photo from the video stream
   const capturePhoto = useCallback(() => {
@@ -295,6 +321,26 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               muted
               className="absolute inset-0 w-full h-full object-cover"
             />
+
+            {/* Phase 3: 4:3 Framing Guide */}
+            <div className="absolute inset-0 pointer-events-none">
+              {/* Corner brackets */}
+              <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-white/50" />
+              <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-white/50" />
+              <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-white/50" />
+              <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-white/50" />
+              {/* Label */}
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-white/40 text-xs">
+                4:3
+              </div>
+            </div>
+
+            {/* Phase 3: Pre-capture quality warning */}
+            {preCaptureWarning && (
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-amber-500/90 text-white text-sm font-medium px-4 py-2 rounded-lg z-10">
+                {preCaptureWarning}
+              </div>
+            )}
 
             {/* Flash overlay */}
             {flashEffect && (

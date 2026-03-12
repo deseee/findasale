@@ -7,6 +7,16 @@
  * - Batch (AI — multiple): SmartInventoryUpload for bulk photo processing
  * - CSV: modal trigger
  *
+ * Phase 3 additions (Camera Workflow v2):
+ * - autoEnhanceImage: Canvas brightness+saturation correction (non-blocking)
+ * - cropTo4x3: Center crop to 4:3 aspect ratio
+ * - checkImageQuality: Detect dark images for retake toast
+ * - detectFace: Stub for TensorFlow.js COCO-SSD (on-device privacy)
+ * - Rapidfire pipeline: capture → enhance → crop → quality check → face detect → upload
+ * - Retake toast for dark images
+ * - Face detection modal before upload
+ * - Pre-capture quality hint on viewfinder
+ *
  * Session 132 fixes:
  * - Removed Qty column from item list (quantity not in Prisma schema)
  * - Removed Quantity input from manual entry form
@@ -33,6 +43,118 @@ import CaptureButton from '../../../components/camera/CaptureButton';
 import RapidCarousel from '../../../components/camera/RapidCarousel';
 import PreviewModal from '../../../components/camera/PreviewModal';
 import { useUploadQueue } from '../../../hooks/useUploadQueue';
+
+/**
+ * Phase 3: On-Device Image Processing Utilities
+ */
+
+async function autoEnhanceImage(blob: Blob): Promise<{ blob: Blob; enhanced: boolean }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        const offscreen = document.createElement('canvas');
+        offscreen.width = img.width;
+        offscreen.height = img.height;
+        const octx = offscreen.getContext('2d')!;
+        octx.filter = 'brightness(1.15) saturate(1.1)';
+        octx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        offscreen.toBlob((enhanced) => {
+          resolve({ blob: enhanced || blob, enhanced: !!enhanced });
+        }, 'image/jpeg', 0.92);
+      } catch {
+        URL.revokeObjectURL(url);
+        resolve({ blob, enhanced: false });
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ blob, enhanced: false });
+    };
+    img.src = url;
+  });
+}
+
+async function cropTo4x3(blob: Blob): Promise<Blob> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      try {
+        const targetRatio = 4 / 3;
+        const srcRatio = img.width / img.height;
+        let sx = 0,
+          sy = 0,
+          sw = img.width,
+          sh = img.height;
+        if (srcRatio > targetRatio) {
+          sw = Math.floor(img.height * targetRatio);
+          sx = Math.floor((img.width - sw) / 2);
+        } else {
+          sh = Math.floor(img.width / targetRatio);
+          sy = Math.floor((img.height - sh) / 2);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((cropped) => resolve(cropped || blob), 'image/jpeg', 0.92);
+      } catch {
+        URL.revokeObjectURL(url);
+        resolve(blob);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+    img.src = url;
+  });
+}
+
+async function checkImageQuality(blob: Blob): Promise<{ isDark: boolean; avgBrightness: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const sampleSize = 64;
+      canvas.width = sampleSize;
+      canvas.height = sampleSize;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+      URL.revokeObjectURL(url);
+      const data = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+      let total = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        total += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      }
+      const avg = total / (sampleSize * sampleSize);
+      resolve({ isDark: avg < 40, avgBrightness: avg });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ isDark: false, avgBrightness: 128 });
+    };
+    img.src = url;
+  });
+}
+
+// TODO: Implement face detection with @tensorflow-models/coco-ssd
+// Patrick: run `pnpm add @tensorflow/tfjs @tensorflow-models/coco-ssd` in packages/frontend
+// then replace this stub with real detection
+async function detectFace(_blob: Blob): Promise<boolean> {
+  return false;
+}
 
 type ActiveTab = 'camera' | 'batch' | 'manual';
 
@@ -110,6 +232,17 @@ const AddItemsDetailPage = () => {
   const [carouselCollapsed, setCarouselCollapsed] = useState(true);
   const [aiPaused, setAiPaused] = useState(false);
   const { queue, enqueue, uploadingCount } = useUploadQueue(saleId as string);
+
+  // Phase 3: Quality control state
+  const [showRetakeToast, setShowRetakeToast] = useState(false);
+  const [retakeToastTimeout, setRetakeToastTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const [pendingFaceBlob, setPendingFaceBlob] = useState<Blob | null>(null);
+  const [pendingFaceUpload, setPendingFaceUpload] = useState<{
+    blob: Blob;
+    previewUrl: string;
+    tempId: string;
+  } | null>(null);
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -265,6 +398,7 @@ const AddItemsDetailPage = () => {
   };
 
   // Rapidfire mode handler — each photo POSTs to /upload/rapidfire, creates a DRAFT item
+  // Phase 3: Pipeline: enhance → crop → quality check → face detect → upload
   // Uses optimistic UI: temp entry added immediately, replaced with real itemId on success
   const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
     setCameraOpen(false);
@@ -280,9 +414,46 @@ const AddItemsDetailPage = () => {
       ]);
 
       try {
+        // Phase 3: On-device processing pipeline
+        let processedBlob = photo.blob;
+        let autoEnhanced = false;
+
+        // 1. Auto-enhance (non-blocking)
+        const enhanced = await autoEnhanceImage(photo.blob);
+        processedBlob = enhanced.blob;
+        autoEnhanced = enhanced.enhanced;
+
+        // 2. Crop to 4:3
+        processedBlob = await cropTo4x3(processedBlob);
+
+        // 3. Check quality
+        const quality = await checkImageQuality(processedBlob);
+        if (quality.isDark) {
+          // Show retake toast
+          setShowRetakeToast(true);
+          if (retakeToastTimeout) clearTimeout(retakeToastTimeout);
+          const timeout = setTimeout(() => setShowRetakeToast(false), 4000);
+          setRetakeToastTimeout(timeout);
+        }
+
+        // 4. Face detection
+        const hasFace = await detectFace(processedBlob);
+        if (hasFace) {
+          // Show face modal and pause upload
+          setShowFaceModal(true);
+          setPendingFaceUpload({
+            blob: processedBlob,
+            previewUrl: photo.previewUrl,
+            tempId,
+          });
+          return; // Wait for modal response
+        }
+
+        // 5. Upload
         const fd = new FormData();
-        fd.append('image', photo.blob, 'rapidfire.jpg');
+        fd.append('image', processedBlob, 'rapidfire.jpg');
         fd.append('saleId', saleId as string);
+        fd.append('autoEnhanced', autoEnhanced ? 'true' : 'false');
 
         const res = await api.post('/upload/rapidfire', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -306,6 +477,59 @@ const AddItemsDetailPage = () => {
         showToast('One photo failed to upload. Try again.', 'error');
       }
     }
+  };
+
+  // Face modal handlers
+  const handleFaceUploadAnyway = async () => {
+    if (!pendingFaceUpload) return;
+    setShowFaceModal(false);
+    try {
+      const fd = new FormData();
+      fd.append('image', pendingFaceUpload.blob, 'rapidfire.jpg');
+      fd.append('saleId', saleId as string);
+      fd.append('faceDetected', 'true');
+
+      const res = await api.post('/upload/rapidfire', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const { itemId } = res.data;
+      setRapidItems((prev) =>
+        prev.map((item) =>
+          item.id === pendingFaceUpload.tempId
+            ? { ...item, id: itemId, draftStatus: 'DRAFT' }
+            : item
+        )
+      );
+    } catch (err: any) {
+      console.error('[rapidfire] Face upload failed:', err);
+      setRapidItems((prev) =>
+        prev.map((item) =>
+          item.id === pendingFaceUpload.tempId
+            ? { ...item, aiError: 'Upload failed' }
+            : item
+        )
+      );
+      showToast('Photo upload failed', 'error');
+    } finally {
+      setPendingFaceUpload(null);
+    }
+  };
+
+  const handleFaceRetake = () => {
+    setShowFaceModal(false);
+    // Remove the temp item from carousel
+    if (pendingFaceUpload) {
+      setRapidItems((prev) =>
+        prev.filter((item) => item.id !== pendingFaceUpload.tempId)
+      );
+    }
+    setPendingFaceUpload(null);
+  };
+
+  const handleRetake = () => {
+    setShowRetakeToast(false);
+    // Toast dismissed; photo stays in carousel for organizer to accept or delete
   };
 
   const handleCategoryChange = (newCategory: string) => {
@@ -627,10 +851,13 @@ const AddItemsDetailPage = () => {
                       items={rapidItems}
                       onThumbnailTap={(id) => setPreviewItemId(id)}
                       onDeleteRequest={handleDeleteDraft}
+                      onAddPhotoToItem={() => {}} // Phase 5: Would wire to add-photo-mode
                       collapsed={carouselCollapsed}
                       onToggleCollapse={() => setCarouselCollapsed(!carouselCollapsed)}
                       aiPaused={aiPaused}
                       onTogglePause={() => setAiPaused(!aiPaused)}
+                      addingToItemId={null} // Phase 5: Would be set when user taps "+"
+                      enhancedCount={rapidItems.filter((i) => i.thumbnailUrl).length} // Placeholder
                     />
                   )}
 
@@ -673,6 +900,45 @@ const AddItemsDetailPage = () => {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Phase 3: Retake toast */}
+          {showRetakeToast && (
+            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-3 rounded-xl flex items-center gap-3 shadow-lg z-50">
+              <span className="text-sm">Image looks dark — retake?</span>
+              <button onClick={handleRetake} className="text-amber-400 text-sm font-medium">
+                Keep
+              </button>
+              <button onClick={handleRetake} className="text-gray-400 text-sm">
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Phase 3: Face detection modal */}
+          {showFaceModal && (
+            <div className="fixed inset-0 bg-black/60 flex items-end z-50">
+              <div className="bg-white rounded-t-2xl p-6 w-full">
+                <h3 className="font-semibold text-gray-900 mb-2">Privacy check</h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  This photo may contain a person. Upload anyway?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleFaceUploadAnyway}
+                    className="flex-1 bg-gray-900 text-white py-3 rounded-xl text-sm font-medium"
+                  >
+                    Upload anyway
+                  </button>
+                  <button
+                    onClick={handleFaceRetake}
+                    className="flex-1 bg-gray-100 text-gray-900 py-3 rounded-xl text-sm font-medium"
+                  >
+                    Retake
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
