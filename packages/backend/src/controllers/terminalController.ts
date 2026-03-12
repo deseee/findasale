@@ -140,14 +140,14 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       // Verify all items exist, belong to organizer, and are AVAILABLE
       for (const itemId of itemIds) {
         if (!dbItems[itemId]) {
-          return res.status(404).json({ message: `Item ${itemId} not found` });
+          return res.status(404).json({ message: `Item not found` });
         }
         const item = dbItems[itemId];
         if (item.sale.organizerId !== organizer.id) {
-          return res.status(403).json({ message: `Item ${itemId} does not belong to your sale` });
+          return res.status(403).json({ message: `"${item.title}" does not belong to your sale` });
         }
         if (item.status !== 'AVAILABLE') {
-          return res.status(400).json({ message: `Item ${itemId} is not available (status: ${item.status})` });
+          return res.status(400).json({ message: `"${item.title}" is sold or unavailable` });
         }
       }
     }
@@ -521,16 +521,16 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     if (itemIds.length > 0) {
       const fetched = await prisma.item.findMany({
         where: { id: { in: itemIds }, saleId },
-        select: { id: true, status: true },
+        select: { id: true, title: true, status: true },
       });
       dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
 
       for (const itemId of itemIds) {
         if (!dbItems[itemId]) {
-          return res.status(404).json({ message: `Item ${itemId} not found in this sale` });
+          return res.status(404).json({ message: `Item not found in this sale` });
         }
         if (dbItems[itemId].status !== 'AVAILABLE') {
-          return res.status(400).json({ message: `Item ${itemId} is not available` });
+          return res.status(400).json({ message: `"${dbItems[itemId].title}" is sold or unavailable` });
         }
       }
     }
