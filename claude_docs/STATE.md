@@ -7,6 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+<<<<<<< HEAD
+**Session 153 COMPLETE (2026-03-12) — POS v2: MULTI-ITEM CART + CASH PAYMENT + NUMPAD:**
+- **Multi-item cart:** React client-side state only (no DB model/migration). `CartItem[]` with `id` (client UUID), optional `itemId`, `title`, `amount`. One PaymentIntent per cart total, one Purchase record per cart item. `Purchase.itemId` already nullable — no schema change needed.
+- **Quick-add misc buttons:** 25¢, 50¢, $1, $2, $5, $10 — adds unnamed misc items to cart with labels like "Misc $1".
+- **Cash payment:** New `POST /stripe/terminal/cash-payment` endpoint. Validates items + saleId + cashReceived ≥ total. Creates PAID Purchase records with `cash_${randomUUID()}` as `stripePaymentIntentId` (UUID v4 — collision-safe, `@unique` constraint safe). Marks items SOLD. Returns change amount.
+- **Collapsible numpad:** 12-key numpad for custom price entry (NumpadMode: 'price') and cash received entry (NumpadMode: 'cash'). Stores cents as string to avoid float drift.
+- **QA blockers fixed (3):** (1) Misc-only carts: frontend now sends `saleId` in PI request, backend falls back to `bodySaleId` + ownership check. (2) UUID collision risk: replaced `Date.now() + random` with `randomUUID()`. (3) Ownership bypass: capture endpoint now checks `purchases[0].saleId → prisma.sale` when no item-linked purchase exists.
+- **Commit:** `afa28c1` on `main` (3 files: pos.tsx, terminalController.ts, stripe.ts)
+- **Migration deployed to Neon:** `20260312000002_add_purchase_pos_fields` ✅ (Session 153, confirmed by Patrick)
+**Last Updated:** 2026-03-12 (session 153 — POS v2 complete, migration deployed to Neon)
+=======
 **Session 152 COMPLETE (2026-03-12) — POS v2 POST-GO-LIVE FIXES:**
 - **Duplicate itemId guard:** Both `createTerminalPaymentIntent` and `cashPayment` now reject requests with duplicate itemIds. Error: "Duplicate items in cart. Each item can only be charged once per transaction." (commit `3119821`)
 - **Error messages humanized:** `terminalController.ts` error strings now use `item.title` instead of raw DB UUIDs (e.g., `"Oak Dresser" is sold or unavailable` vs `Item cmmksgzs5... is not available`). Added `title: true` to `cashPayment` dbItems select (commit `3957771`).
@@ -15,6 +26,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Files changed:** `packages/backend/src/controllers/terminalController.ts`, `packages/backend/src/controllers/itemController.ts`, `packages/frontend/pages/organizer/pos.tsx`
 - **Open question for session 153:** Cash fee collection mechanism — card sales auto-collect 10% via Stripe Connect; cash sales have no equivalent. Options A–E defined in `next-session-prompt.md`. Decision needed before beta with real organizers.
 **Last Updated:** 2026-03-12 (session 152 — POS post-go-live fixes: duplicate guard, error messages, item search, inline cash numpad)
+>>>>>>> origin/main
 
 **Session 151 COMPLETE (2026-03-12) — STRIPE TERMINAL POS BUILD FIXES + QA AUDIT:**
 - **Build error fixes (3 TypeScript/module errors resolved):**
@@ -202,10 +214,10 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-**Migrations pending Neon deploy (session 150):**
-- `20260312000002_add_purchase_pos_fields` — Makes `Purchase.userId` nullable, adds `source` + `buyerEmail` columns. Required for Terminal POS to work in production.
+**All migrations deployed.** 72 total applied (including session 153). Recently deployed:
+- `20260312000002_add_purchase_pos_fields` — ✅ Deployed (Session 153). Makes `Purchase.userId` nullable, adds `source` + `buyerEmail` columns for Terminal POS (v1 + v2).
 
-**All prior migrations deployed.** 71 total applied as of session 145. Previously deployed:
+**Prior migrations deployed:**
 1. `20260309_add_auction_reserve_price`
 2. `20260310000001_add_item_fulltext_search_indexes`
 3. `20260311000001_add_sale_type_item_listing_type`
