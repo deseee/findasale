@@ -118,6 +118,12 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
 
     // Fetch and validate all items with itemId
     const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
+
+    // Reject duplicate itemIds — each physical item can only be charged once per transaction
+    if (itemIds.length !== new Set(itemIds).size) {
+      return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
+    }
+
     let dbItems: Record<string, any> = {};
     if (itemIds.length > 0) {
       const fetched = await prisma.item.findMany({
@@ -505,6 +511,12 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
 
     // Fetch and validate all items with itemId
     const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
+
+    // Reject duplicate itemIds — each physical item can only be charged once per transaction
+    if (itemIds.length !== new Set(itemIds).size) {
+      return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
+    }
+
     let dbItems: Record<string, any> = {};
     if (itemIds.length > 0) {
       const fetched = await prisma.item.findMany({
