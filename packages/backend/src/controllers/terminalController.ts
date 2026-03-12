@@ -20,8 +20,10 @@ const stripe = () => getStripe();
 /**
  * Resolve the organizer record + stripeConnectId for the authed user.
  * Returns null (and writes 4xx response) if not eligible.
+ * requireStripe (default true): set false for endpoints that don't need Stripe Connect (e.g. cash).
  */
-const resolveOrganizer = async (req: AuthRequest, res: Response) => {
+const resolveOrganizer = async (req: AuthRequest, res: Response, opts: { requireStripe?: boolean } = {}) => {
+  const { requireStripe = true } = opts;
   if (!req.user || req.user.role !== 'ORGANIZER') {
     res.status(403).json({ message: 'Organizer access required' });
     return null;
@@ -37,7 +39,7 @@ const resolveOrganizer = async (req: AuthRequest, res: Response) => {
     return null;
   }
 
-  if (!organizer.stripeConnectId) {
+  if (requireStripe && !organizer.stripeConnectId) {
     res.status(400).json({
       message: 'Stripe account not connected. Complete Stripe onboarding in Settings before using POS.',
     });
@@ -91,10 +93,12 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
  * Creates a Stripe PaymentIntent for a multi-item terminal payment (cart).
  * Uses capture_method: 'manual' (Terminal requires explicit capture after card swipe).
  * Applies same 10% platform fee as online purchases.
+ * In simulated mode: PI created on platform account (no Connect account required).
  */
 export const createTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res);
+    const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
+    const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
     const { items, buyerEmail, saleId: bodySaleId } = req.body as {
@@ -174,23 +178,23 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       saleId = bodySaleId;
     }
 
-    // Create terminal PaymentIntent on the organizer's connected account
-    const paymentIntent = await stripe().paymentIntents.create(
-      {
-        amount: totalAmountCents,
-        currency: 'usd',
-        payment_method_types: ['card_present'], // Terminal-only: physical card reader
-        capture_method: 'manual',               // Terminal requires explicit capture
-        application_fee_amount: platformFeeAmount,
-        metadata: {
-          items: JSON.stringify(items),
-          saleId,
-          source: 'POS',
-          ...(buyerEmail ? { buyerEmail } : {}),
-        },
+    // Create terminal PaymentIntent — platform account in simulated mode, connected account in production
+    const piParams: Parameters<typeof stripe().paymentIntents.create>[0] = {
+      amount: totalAmountCents,
+      currency: 'usd',
+      payment_method_types: ['card_present'], // Terminal-only: physical card reader
+      capture_method: 'manual',               // Terminal requires explicit capture
+      ...(!isSimulated ? { application_fee_amount: platformFeeAmount } : {}),
+      metadata: {
+        items: JSON.stringify(items),
+        saleId,
+        source: 'POS',
+        ...(buyerEmail ? { buyerEmail } : {}),
       },
-      { stripeAccount: organizer.stripeConnectId! }
-    );
+    };
+    const paymentIntent = isSimulated
+      ? await stripe().paymentIntents.create(piParams)
+      : await stripe().paymentIntents.create(piParams, { stripeAccount: organizer.stripeConnectId! });
 
     // Create PENDING Purchase records for each cart item
     const purchaseIds: string[] = [];
@@ -238,7 +242,8 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
  */
 export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res);
+    const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
+    const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
     const { paymentIntentId } = req.body as { paymentIntentId?: string };
@@ -298,11 +303,11 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       if (current?.status === 'SOLD' && p.status !== 'PAID') {
         // Item was sold by another concurrent transaction — cancel this PI and fail all purchases
         try {
-          await stripe().paymentIntents.cancel(
-            paymentIntentId,
-            {},
-            { stripeAccount: organizer.stripeConnectId! }
-          );
+          if (isSimulated) {
+            await stripe().paymentIntents.cancel(paymentIntentId);
+          } else {
+            await stripe().paymentIntents.cancel(paymentIntentId, {}, { stripeAccount: organizer.stripeConnectId! });
+          }
         } catch (e) {
           console.warn('[terminal] Failed to cancel PI during concurrent guard:', e);
         }
@@ -318,12 +323,12 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       }
     }
 
-    // Capture the payment on the organizer's connected account
-    await stripe().paymentIntents.capture(
-      paymentIntentId,
-      {},
-      { stripeAccount: organizer.stripeConnectId! }
-    );
+    // Capture the payment — platform account in simulated mode, connected account in production
+    if (isSimulated) {
+      await stripe().paymentIntents.capture(paymentIntentId);
+    } else {
+      await stripe().paymentIntents.capture(paymentIntentId, {}, { stripeAccount: organizer.stripeConnectId! });
+    }
 
     // Mark all purchases PAID
     await prisma.purchase.updateMany({
@@ -393,7 +398,8 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
  */
 export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res);
+    const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
+    const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
     const { paymentIntentId } = req.body as { paymentIntentId?: string };
@@ -414,12 +420,12 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       return res.status(400).json({ message: 'Cannot cancel a completed payment — use refund instead' });
     }
 
-    // Cancel the PaymentIntent on the organizer's connected account
-    await stripe().paymentIntents.cancel(
-      paymentIntentId,
-      {},
-      { stripeAccount: organizer.stripeConnectId! }
-    );
+    // Cancel the PaymentIntent — platform account in simulated mode, connected account in production
+    if (isSimulated) {
+      await stripe().paymentIntents.cancel(paymentIntentId);
+    } else {
+      await stripe().paymentIntents.cancel(paymentIntentId, {}, { stripeAccount: organizer.stripeConnectId! });
+    }
 
     // Mark all purchases FAILED
     await prisma.purchase.updateMany({
@@ -450,10 +456,12 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
  *
  * Records a cash sale immediately without Stripe processing.
  * Creates Purchase records with status PAID and marks items SOLD.
+ * platformFeeAmount tracks 10% for accounting; collection is handled outside Stripe.
  */
 export const cashPayment = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res);
+    // Cash never touches Stripe — no Connect account required
+    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { items, cashReceived, buyerEmail, saleId } = req.body as {
@@ -515,18 +523,24 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Fee: read from FeeStructure (same rate as card flow). Cash organizer collects full amount in person —
+    // platformFeeAmount is tracked for accounting; billing/collection is handled outside Stripe.
+    const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
+    const feeRate = feeStructure?.feeRate ?? 0.10;
+
     // Create Purchase records immediately with status PAID
     const purchaseIds: string[] = [];
     for (const item of items) {
       // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
       const cashPIId = `cash_${randomUUID()}`;
+      const itemPlatformFeeAmount = Math.round(item.amount * feeRate * 100) / 100;
 
       const purchase = await prisma.purchase.create({
         data: {
           itemId: item.itemId ?? null,
           saleId,
           amount: item.amount,
-          platformFeeAmount: 0,
+          platformFeeAmount: itemPlatformFeeAmount,
           stripePaymentIntentId: cashPIId,
           status: 'PAID',
           source: 'POS',
