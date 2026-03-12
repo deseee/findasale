@@ -13,6 +13,7 @@ import {
   createTerminalPaymentIntent,
   captureTerminalPaymentIntent,
   cancelTerminalPaymentIntent,
+  cashPayment,
 } from '../controllers/terminalController';
 import { authenticate } from '../middleware/auth';
 
@@ -41,6 +42,7 @@ router.post('/terminal/connection-token', authenticate, createConnectionToken);
 router.post('/terminal/payment-intent', authenticate, createTerminalPaymentIntent);
 router.post('/terminal/capture', authenticate, captureTerminalPaymentIntent);
 router.post('/terminal/cancel', authenticate, cancelTerminalPaymentIntent);
+router.post('/terminal/cash-payment', authenticate, cashPayment);
 
 // Webhook
 router.post('/webhook', webhookHandler);
