@@ -179,11 +179,11 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     }
 
     // Create terminal PaymentIntent — platform account in simulated mode, connected account in production
-    const piParams: Parameters<typeof stripe().paymentIntents.create>[0] = {
+    const piParams = {
       amount: totalAmountCents,
       currency: 'usd',
       payment_method_types: ['card_present'], // Terminal-only: physical card reader
-      capture_method: 'manual',               // Terminal requires explicit capture
+      capture_method: 'manual' as const,      // Terminal requires explicit capture
       ...(!isSimulated ? { application_fee_amount: platformFeeAmount } : {}),
       metadata: {
         items: JSON.stringify(items),
