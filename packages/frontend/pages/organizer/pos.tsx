@@ -41,7 +41,7 @@ type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | '
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function POSPage() {
-  const { user, loading } = useAuth();
+  const { user, isLoading: loading } = useAuth();
   const router = useRouter();
 
   // Sale + item state
