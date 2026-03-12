@@ -181,9 +181,18 @@ export default function POSPage() {
   // ─── Cart operations ────────────────────────────────────────────────────
 
   const addToCart = (item: Item | { title: string; amount: number }) => {
+    if ('price' in item) {
+      // Block adding the same inventory item twice
+      if (cart.some(c => c.itemId === item.id)) {
+        setErrorMessage(`"${item.title}" is already in the cart.`);
+        setItemSearch('');
+        setSearchResults([]);
+        return;
+      }
+    }
+
     const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
     if ('price' in item) {
-      // Database item
       setCart(prev => [
         ...prev,
         {
@@ -195,7 +204,6 @@ export default function POSPage() {
         },
       ]);
     } else {
-      // Misc item
       setCart(prev => [
         ...prev,
         {
@@ -205,6 +213,7 @@ export default function POSPage() {
         },
       ]);
     }
+    setErrorMessage('');
     setItemSearch('');
     setSearchResults([]);
   };
@@ -287,28 +296,25 @@ export default function POSPage() {
         platformFee: number;
       }>('/stripe/terminal/payment-intent', {
         items,
-        saleId: selectedSaleId,  // fallback for misc-only carts (no itemId in cart)
+        saleId: selectedSaleId,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
 
       const { paymentIntentId: piId, clientSecret } = piRes.data;
       setPaymentIntentId(piId);
 
-      // Present card to reader
       setPaymentStatus('waiting_for_card');
       const collectResult = await terminalRef.current.collectPaymentMethod(clientSecret);
       if ('error' in collectResult) {
         throw new Error(collectResult.error.message);
       }
 
-      // Process payment
       setPaymentStatus('processing');
       const processResult = await terminalRef.current.processPayment(collectResult.paymentIntent);
       if ('error' in processResult) {
         throw new Error(processResult.error.message);
       }
 
-      // Capture on backend
       await api.post('/stripe/terminal/capture', { paymentIntentId: piId });
 
       setPaymentStatus('success');
@@ -320,7 +326,10 @@ export default function POSPage() {
     } catch (err: any) {
       console.error('[pos] Payment error:', err);
       setPaymentStatus('error');
-      setErrorMessage(err?.message ?? 'Payment failed. Please try again.');
+      // Surface the specific backend message (e.g. "Item X is not available") when present
+      const message =
+        err?.response?.data?.message ?? err?.message ?? 'Payment failed. Please try again.';
+      setErrorMessage(message);
     }
   };
 
@@ -354,7 +363,9 @@ export default function POSPage() {
     } catch (err: any) {
       console.error('[pos] Cash payment error:', err);
       setPaymentStatus('error');
-      setErrorMessage(err?.message ?? 'Cash sale failed. Please try again.');
+      const message =
+        err?.response?.data?.message ?? err?.message ?? 'Cash sale failed. Please try again.';
+      setErrorMessage(message);
     }
   };
 
