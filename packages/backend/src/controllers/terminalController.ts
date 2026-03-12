@@ -228,7 +228,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
     }
 
     // Verify the purchase's sale belongs to the current organizer (ownership check)
-    if (purchase.item.sale.organizerId !== organizer.id) {
+    if (!purchase.item || purchase.item.sale.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'You do not have permission to capture this payment' });
     }
 
