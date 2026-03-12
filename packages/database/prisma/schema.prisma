@@ -211,15 +211,35 @@ model Item {
   waitlist         ItemWaitlist[]
   currency          String     @default("USD")  // Batch 17: multi-currency groundwork
   priceHistory      ItemPriceHistory[]
-  draftStatus       String     @default("DRAFT") // DRAFT | PUBLISHED — Rapidfire Mode item draft status
+  draftStatus       String     @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED — Rapidfire Mode item draft status
   aiErrorLog        Json?                        // Rapidfire Mode AI error logging (JSON array of errors)
   optimisticLockVersion Int     @default(0)     // Rapidfire Mode optimistic concurrency control
+  // Camera Workflow v2 fields
+  aiConfidence     Float      @default(0.5)     // AI confidence score (0.0–1.0)
+  backgroundRemoved Boolean   @default(false)   // Background removal applied
+  faceDetected     Boolean    @default(false)   // Face detected in image
+  autoEnhanced     Boolean    @default(false)   // Auto-enhancement applied
+  photos           Photo[]                       // Multi-photo support (forward-looking)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@unique([saleId, sku])
   @@index([draftStatus])
   @@index([saleId, draftStatus])
+}
+
+// Camera Workflow v2: Photo model for multi-photo support (forward-looking schema)
+model Photo {
+  id               String   @id @default(cuid())
+  itemId           String
+  item             Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  url              String
+  label            String?  // "front" | "back" | "detail" — null for unlabeled (v3 future)
+  isPrimary        Boolean  @default(false)
+  autoEnhanced     Boolean  @default(false)
+  backgroundRemoved Boolean @default(false)
+  createdAt        DateTime @default(now())
+  @@index([itemId])
 }
 
 model Favorite {

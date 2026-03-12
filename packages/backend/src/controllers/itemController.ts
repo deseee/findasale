@@ -211,6 +211,11 @@ export const getItemById = async (req: Request, res: Response) => {
         reverseFloorPrice: true,
         reverseStartDate: true,
         draftStatus: true,
+        // Camera Workflow v2: Add new fields
+        aiConfidence: true,
+        backgroundRemoved: true,
+        faceDetected: true,
+        autoEnhanced: true,
         createdAt: true,
         updatedAt: true,
         // embedding & tags intentionally excluded — see getItemsBySaleId comment
@@ -280,6 +285,12 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         reverseDailyDrop: true,
         reverseFloorPrice: true,
         reverseStartDate: true,
+        draftStatus: true,
+        // Camera Workflow v2: Add new fields
+        aiConfidence: true,
+        backgroundRemoved: true,
+        faceDetected: true,
+        autoEnhanced: true,
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
@@ -388,7 +399,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, backgroundRemoved, draftStatus } = req.body;
 
     // Fetch item to verify ownership
     const item = await prisma.item.findUnique({
@@ -426,6 +437,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (reverseStartDate !== undefined) updateData.reverseStartDate = reverseStartDate ? new Date(reverseStartDate) : null;
     if (listingType !== undefined) updateData.listingType = listingType;
     if (isAiTagged !== undefined) updateData.isAiTagged = isAiTagged === true || isAiTagged === 'true';
+    // Camera Workflow v2: Support backgroundRemoved and draftStatus updates
+    if (backgroundRemoved !== undefined) updateData.backgroundRemoved = backgroundRemoved === true || backgroundRemoved === 'true';
+    if (draftStatus !== undefined) updateData.draftStatus = draftStatus;
 
     const updatedItem = await prisma.item.update({
       where: { id },
@@ -753,6 +767,11 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         draftStatus: true,
         aiErrorLog: true,
         optimisticLockVersion: true,
+        // Camera Workflow v2: Add new fields for publishing page
+        aiConfidence: true,
+        backgroundRemoved: true,
+        faceDetected: true,
+        autoEnhanced: true,
         createdAt: true,
         updatedAt: true,
       },
