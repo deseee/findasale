@@ -223,6 +223,8 @@ export default function POSPage() {
     setNumpadValue('');
     setCashReceived(0);
     setBuyerEmail('');
+    setItemSearch('');
+    setSearchResults([]);
   };
 
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
