@@ -153,6 +153,30 @@ router.post('/bulk', authenticate, async (req, res) => {
         return res.json({ message: `Updated price to $${price.toFixed(2)} for ${confirmedIds.length} item(s).` });
       }
 
+      // Camera Workflow v2: Background removal toggle
+      case 'backgroundRemoved': {
+        const bgRemoved = typeof value === 'boolean' ? value : value === 'true' || value === true;
+        await prisma.item.updateMany({
+          where: { id: { in: confirmedIds } },
+          data: { backgroundRemoved: bgRemoved },
+        });
+        const action = bgRemoved ? 'applied background removal to' : 'removed background removal from';
+        return res.json({ message: `${action} ${confirmedIds.length} item(s).` });
+      }
+
+      // Camera Workflow v2: Draft status transition
+      case 'draftStatus': {
+        const allowed = ['DRAFT', 'PENDING_REVIEW', 'PUBLISHED'];
+        if (!value || !allowed.includes(value as string)) {
+          return res.status(400).json({ message: `draftStatus value must be one of: ${allowed.join(', ')}` });
+        }
+        await prisma.item.updateMany({
+          where: { id: { in: confirmedIds } },
+          data: { draftStatus: value as string },
+        });
+        return res.json({ message: `Updated draftStatus to ${value} for ${confirmedIds.length} item(s).` });
+      }
+
       default:
         return res.status(400).json({ message: `Unknown operation: ${operation}` });
     }

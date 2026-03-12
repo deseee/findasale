@@ -24,6 +24,7 @@ export interface AITagResult {
   condition: string;
   suggestedPrice: number;
   tags: string[];
+  confidence?: number; // Camera Workflow v2: AI confidence score (0.0–1.0), defaults to 0.5
 }
 
 // ── CB4: In-memory feedback stats (post-beta: migrate to DB table) ─────────────
@@ -165,6 +166,10 @@ Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: materi
     // Ensure tags is always an array even if Haiku omits the field
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];
+    }
+    // Camera Workflow v2: Set confidence from Vision API if available, default to 0.5
+    if (!parsed.confidence) {
+      parsed.confidence = 0.5;
     }
     return parsed;
   } catch (error: any) {

@@ -86,6 +86,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
           price: aiResult.suggestedPrice ?? item.price,
           tags: aiResult.tags || [],
           isAiTagged: true,
+          aiConfidence: aiResult.confidence ?? 0.5, // Camera Workflow v2: Store AI confidence
           draftStatus: 'PENDING_REVIEW'
         }
       });
