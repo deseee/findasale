@@ -42,7 +42,7 @@ const ShopperDashboard = () => {
   const { data: purchases } = useQuery({
     queryKey: ['shopper-purchases'],
     queryFn: async () => {
-      const response = await api.get('/shopper/purchases');
+      const response = await api.get('/users/purchases');
       return response.data;
     },
     enabled: !!user?.id,
@@ -51,7 +51,7 @@ const ShopperDashboard = () => {
   const { data: favorites } = useQuery({
     queryKey: ['shopper-favorites'],
     queryFn: async () => {
-      const response = await api.get('/shopper/favorites');
+      const response = await api.get('/favorites');
       return response.data;
     },
     enabled: !!user?.id,
