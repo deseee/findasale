@@ -233,6 +233,7 @@ const AddItemsDetailPage = () => {
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
   const [carouselCollapsed, setCarouselCollapsed] = useState(true);
   const [aiPaused, setAiPaused] = useState(false);
+  const [addingToItemId, setAddingToItemId] = useState<string | null>(null);
   const { queue, enqueue, uploadingCount } = useUploadQueue(saleId as string);
 
   // Phase 3: Quality control state
@@ -401,19 +402,26 @@ const AddItemsDetailPage = () => {
 
   // Rapidfire mode handler — each photo POSTs to /upload/rapidfire, creates a DRAFT item
   // Phase 3: Pipeline: enhance → crop → quality check → face detect → upload
+  // Phase 5: If addingToItemId is set, append photo to that item instead of creating new
   // Uses optimistic UI: temp entry added immediately, replaced with real itemId on success
   const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
     setCameraOpen(false);
     if (photos.length === 0) return;
 
+    // Snapshot and reset add-mode so next capture goes to new item
+    const appendToItemId = addingToItemId;
+    if (appendToItemId) setAddingToItemId(null);
+
     for (const photo of photos) {
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-      // Optimistic: show thumbnail in carousel immediately
-      setRapidItems((prev) => [
-        ...prev,
-        { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
-      ]);
+      // Optimistic: show thumbnail in carousel immediately (skip for append-mode — no new item)
+      if (!appendToItemId) {
+        setRapidItems((prev) => [
+          ...prev,
+          { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
+        ]);
+      }
 
       try {
         // Phase 3: On-device processing pipeline
@@ -452,25 +460,51 @@ const AddItemsDetailPage = () => {
         }
 
         // 5. Upload
-        const fd = new FormData();
-        fd.append('image', processedBlob, 'rapidfire.jpg');
-        fd.append('saleId', saleId as string);
-        fd.append('autoEnhanced', autoEnhanced ? 'true' : 'false');
+        if (appendToItemId) {
+          // Phase 5: Append photo to existing item
+          // Upload photo via sale-photos (returns URL array)
+          const fd = new FormData();
+          fd.append('photos', processedBlob, 'rapidfire.jpg');
+          fd.append('saleId', saleId as string);
+          const uploadRes = await api.post('/upload/sale-photos', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
+          if (urls[0]) {
+            // Append URL to existing item
+            await api.post(`/items/${appendToItemId}/photos`, { url: urls[0] });
+            // Update local state to append photo
+            setRapidItems((prev) =>
+              prev.map((item) =>
+                item.id === appendToItemId
+                  ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
+                  : item
+              )
+            );
+          }
+          // No temp entry was added in append-mode, nothing to clean up
+        } else {
+          // Normal: create new item
+          const fd = new FormData();
+          fd.append('image', processedBlob, 'rapidfire.jpg');
+          fd.append('saleId', saleId as string);
+          fd.append('autoEnhanced', autoEnhanced ? 'true' : 'false');
 
-        const res = await api.post('/upload/rapidfire', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+          const res = await api.post('/upload/rapidfire', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
 
-        const { itemId } = res.data;
+          const { itemId } = res.data;
 
-        // Swap temp id for real DB item id and set autoEnhanced flag
-        setRapidItems((prev) =>
-          prev.map((item) =>
-            item.id === tempId
-              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [photo.previewUrl], autoEnhanced }
-              : item
-          )
-        );
+          // Swap temp id for real DB item id and set autoEnhanced flag
+          setRapidItems((prev) =>
+            prev.map((item) =>
+              item.id === tempId
+                ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [photo.previewUrl], autoEnhanced }
+                : item
+            )
+          );
+        }
       } catch (err: any) {
         console.error('[rapidfire] Upload failed:', err);
         setRapidItems((prev) =>
@@ -855,13 +889,16 @@ const AddItemsDetailPage = () => {
                       items={rapidItems}
                       onThumbnailTap={(id) => setPreviewItemId(id)}
                       onDeleteRequest={handleDeleteDraft}
-                      onAddPhotoToItem={() => {}} // Phase 5: Would wire to add-photo-mode
+                      onAddPhotoToItem={(id) => {
+                        setAddingToItemId((prev) => (prev === id ? null : id));
+                        setCameraOpen(true);
+                      }}
                       collapsed={carouselCollapsed}
                       onToggleCollapse={() => setCarouselCollapsed(!carouselCollapsed)}
                       aiPaused={aiPaused}
                       onTogglePause={() => setAiPaused(!aiPaused)}
-                      addingToItemId={null} // Phase 5: Would be set when user taps "+"
-                      enhancedCount={rapidItems.filter((i) => i.thumbnailUrl).length} // Placeholder
+                      addingToItemId={addingToItemId}
+                      enhancedCount={rapidItems.filter((i) => i.autoEnhanced).length}
                     />
                   )}
 
