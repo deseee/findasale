@@ -128,9 +128,10 @@ const ReviewPage = () => {
     queryKey: ['items', saleId, 'draft'],
     queryFn: async () => {
       if (!saleId) return [];
-      const response = await api.get(
-        `/items?saleId=${saleId}&draftStatus=DRAFT,PENDING_REVIEW`
-      );
+      // Use the organizer-only /items/drafts endpoint which correctly filters
+      // for draftStatus IN ['DRAFT', 'PENDING_REVIEW']. GET /items uses
+      // PUBLIC_ITEM_FILTER (draftStatus='PUBLISHED') and ignores query params.
+      const response = await api.get(`/items/drafts?saleId=${saleId}`);
       return (response.data || []) as Item[];
     },
     enabled: !!saleId,
