@@ -46,7 +46,7 @@
 ## Feature Pipeline
 
 ### Next Up
-*No features queued. All Phase 3 features shipped. See Phase 4 for next build candidates.*
+*No features queued
 
 *Recently shipped: Features #9/#10/#11 (sessions 116–117), Feature #4 Search by Item Type (session 116), Feature #12 SEO Description Optimization (session 116). AI Sale Description Writer (session 87), Branded Social Templates (session 87), Shopper Loyalty Program (session 88). See COMPLETED_PHASES.md.*
 
