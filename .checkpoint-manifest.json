@@ -4,17 +4,17 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": 147,
-    "startedAt": "2026-03-11T00:00:00Z",
-    "estimatedTokensUsed": 15,
+    "sessionId": 150,
+    "startedAt": "2026-03-12T00:00:00Z",
+    "estimatedTokensUsed": 40,
     "turnCount": 1,
-    "fileReadsCount": 8,
-    "toolCallsCount": 10,
+    "fileReadsCount": 9,
+    "toolCallsCount": 12,
     "subagentDispatches": 0,
     "githubApiCalls": 0,
-    "lastCheckpointAt": "2026-03-11T00:00:00Z",
+    "lastCheckpointAt": "2026-03-12T00:00:00Z",
     "compressionOccurred": false,
-    "notes": "Session 147. Camera workflow v2 makeover — architect review + dev implementation."
+    "notes": "Session 150. Stripe Terminal POS — Ship-Ready review → architect design → dev implementation."
   },
   "checkpoints": [
     {
