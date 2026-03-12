@@ -426,21 +426,47 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }).catch(err => console.warn('Failed to increment affiliate conversion:', err));
         }
 
-        // Award purchase badge
-        await handlePurchaseBadge(purchase.userId);
+        // POS purchases (source: POS) have no buyer account — skip buyer-only features
+        const isPOS = paymentIntent.metadata?.source === 'POS';
 
-        // Phase 19: Award 10 points for purchase
-        awardPoints(
-          purchase.userId,
-          'PURCHASE',
-          10,
-          purchase.saleId ?? undefined,
-          paymentIntent.metadata?.itemId,
-          'Purchased an item',
-        ).catch(err => console.warn('[points] Failed to award purchase points:', err));
+        if (!isPOS && purchase.userId) {
+          // Award purchase badge
+          await handlePurchaseBadge(purchase.userId);
 
-        // Send receipt email
-        if (purchase.user) {
+          // Phase 19: Award 10 points for purchase
+          awardPoints(
+            purchase.userId,
+            'PURCHASE',
+            10,
+            purchase.saleId ?? undefined,
+            paymentIntent.metadata?.itemId,
+            'Purchased an item',
+          ).catch(err => console.warn('[points] Failed to award purchase points:', err));
+
+          // Sprint 3: Issue loyalty coupon (fire-and-forget)
+          issueLoyaltyCoupon(purchase.userId, purchase.id)
+            .catch(err => console.warn('[coupon] Failed to issue loyalty coupon:', err));
+
+          // Sprint 3: Mark applied coupon as used if one was redeemed
+          if (paymentIntent.metadata?.couponId) {
+            markCouponUsed(paymentIntent.metadata.couponId, purchase.id)
+              .catch(err => console.warn('[coupon] Failed to mark coupon used:', err));
+          }
+
+          // Create in-app notification for purchase confirmation (fire-and-forget)
+          createNotification(
+            purchase.userId,
+            'purchase',
+            'Purchase confirmed',
+            `Your purchase of "${purchase.item?.title || 'item'}" is confirmed!`,
+            '/shopper/purchases'
+          ).catch(err => console.error('[notification] Failed to create purchase notification:', err));
+        }
+
+        // Send receipt email:
+        // - Online: to the registered buyer's email
+        // - POS: to buyerEmail in metadata (if provided), skip if none
+        if (!isPOS && purchase.user) {
           await sendReceiptEmail({
             id: purchase.id,
             amount: purchase.amount,
@@ -449,25 +475,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             sale: purchase.sale,
           });
         }
-
-        // Sprint 3: Issue loyalty coupon (fire-and-forget)
-        issueLoyaltyCoupon(purchase.userId, purchase.id)
-          .catch(err => console.warn('[coupon] Failed to issue loyalty coupon:', err));
-
-        // Sprint 3: Mark applied coupon as used if one was redeemed
-        if (paymentIntent.metadata?.couponId) {
-          markCouponUsed(paymentIntent.metadata.couponId, purchase.id)
-            .catch(err => console.warn('[coupon] Failed to mark coupon used:', err));
-        }
-
-        // Create in-app notification for purchase confirmation (fire-and-forget)
-        createNotification(
-          purchase.userId,
-          'purchase',
-          'Purchase confirmed',
-          `Your purchase of "${purchase.item?.title || 'item'}" is confirmed!`,
-          '/shopper/purchases'
-        ).catch(err => console.error('[notification] Failed to create purchase notification:', err));
+        // Note: POS receipt is sent directly by terminalController.captureTerminalPaymentIntent
+        // (which runs before the webhook). The webhook is secondary for POS — it provides
+        // idempotency only. No duplicate receipt is sent here.
 
         // X1: Fire webhooks (non-blocking)
         const orgUserId = (purchase.sale as any)?.organizer?.userId;

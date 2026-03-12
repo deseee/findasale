@@ -272,16 +272,18 @@ model Purchase {
   id                    String         @id @default(cuid())
   amount                Float
   platformFeeAmount     Float?
-  status                String         @default("PENDING") // PENDING, PAID, REFUNDED
-  userId                String
-  user                  User           @relation(fields: [userId], references: [id])
+  status                String         @default("PENDING") // PENDING, PAID, REFUNDED, FAILED, DISPUTED
+  userId                String?        // Nullable: POS walk-in buyers have no FindA.Sale account
+  user                  User?          @relation(fields: [userId], references: [id])
   itemId                String?
   item                  Item?          @relation(fields: [itemId], references: [id])
   saleId                String?
   sale                  Sale?          @relation(fields: [saleId], references: [id])
   stripePaymentIntentId String?        @unique
-  affiliateLinkId       String?        
+  affiliateLinkId       String?
   affiliateLink         AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
+  source                String         @default("ONLINE") // ONLINE | POS
+  buyerEmail            String?        // POS only: optional email for receipt delivery
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 }

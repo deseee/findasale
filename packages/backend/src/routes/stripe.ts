@@ -8,6 +8,12 @@ import {
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown } from '../controllers/payoutController';
+import {
+  createConnectionToken,
+  createTerminalPaymentIntent,
+  captureTerminalPaymentIntent,
+  cancelTerminalPaymentIntent,
+} from '../controllers/terminalController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -29,6 +35,12 @@ router.get('/payout-schedule', authenticate, getPayoutSchedule);
 router.patch('/payout-schedule', authenticate, updatePayoutSchedule);
 router.post('/payout', authenticate, createPayout);
 router.get('/earnings', authenticate, getEarningsBreakdown);
+
+// Terminal POS — organizer-only in-person card payments
+router.post('/terminal/connection-token', authenticate, createConnectionToken);
+router.post('/terminal/payment-intent', authenticate, createTerminalPaymentIntent);
+router.post('/terminal/capture', authenticate, captureTerminalPaymentIntent);
+router.post('/terminal/cancel', authenticate, cancelTerminalPaymentIntent);
 
 // Webhook
 router.post('/webhook', webhookHandler);
