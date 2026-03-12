@@ -2,6 +2,20 @@
 
 ## Recent Sessions
 
+### 2026-03-12 · Session 150
+**Worked on:** Stripe Terminal POS — roadmap item #5, full implementation across 3 agent phases. Ship-Ready subcommittee approved (reader: WisePOS E/S700 WiFi, `internet` discovery; M2 Bluetooth rejected for iOS PWA incompatibility). Architect produced ADR. Dev implemented: schema migration (Purchase nullable userId + source + buyerEmail), terminalController.ts (4 endpoints: connection token, create PI, capture, cancel), 4 new stripe routes, webhook isPOS null-safety guard, pos.tsx frontend page (full charge flow with @stripe/terminal-js dynamic import), POS quick-action link on dashboard. Context hit limit mid-session; resumed cleanly in continuation.
+**Decisions:** v1 = 1 item per POS transaction (multi-item cart deferred — needs POSTransaction model, Architect sign-off). `internet` discovery mode only (no Bluetooth). Same 10% platform fee + referral discount logic as online flow.
+**Next up:** Patrick: install @stripe/terminal-js, add NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true, deploy migration 20260312000002_add_purchase_pos_fields to Neon, push to GitHub via .\push.ps1. Then findasale-qa reviews payment flow before enabling for beta organizers.
+**Blockers:** Stripe business account (Patrick still needs to open one for live hardware). Migration not yet on Neon. pnpm-lock.yaml needs update after @stripe/terminal-js install.
+
+### 2026-03-12 · Session 149
+**Worked on:** Daily friction audit (scheduled task — ran automatically); P0 review page bug fix; shopper API 404 fixes. Friction audit identified: Vercel GitHub App disconnected (P0 — frontend not deploying), .checkpoint-manifest.json stale for 5 sessions, camera v2 MESSAGE_BOARD handoff aging at 24h+, recurring "Patrick needs to push" blocker pattern. Report: `claude_docs/operations/friction-audit-2026-03-12.md`. Review page P0: `review.tsx` was hitting `GET /items` (returns only PUBLISHED via PUBLIC_ITEM_FILTER) instead of `GET /items/drafts` — new rapidfire items were invisible, all published items appeared as pending with broken AI confidence. One-line fix, b578cca. Shopper 404s: 3 pages calling non-existent `/shopper/purchases`, `/shopper/favorites`, `/sales/subscribed` routes — corrected to real backend endpoints. Layout.tsx nav spacing cleaned up.
+**Decisions:** None — all bug fixes with no architectural choices.
+**Files changed:** `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` (endpoint fix), `packages/frontend/components/ActivitySummary.tsx`, `packages/frontend/components/Layout.tsx`, `packages/frontend/pages/shopper/dashboard.tsx`, `packages/frontend/pages/shopper/purchases.tsx` (API 404 fixes)
+**Scoreboard:** Files changed: 5 | Subagents: 0 | Push method: Patrick PS1 | Commits: b578cca, 816c352
+**Next up:** Planning committee (Ship-Ready subcommittee) reviews Stripe Terminal POS (roadmap item #5) → findasale-architect designs → findasale-dev implements.
+**Blockers:** Vercel GitHub App disconnected — frontend fixes not deploying to production. Patrick needs to reconnect in Vercel dashboard → findasale → Settings → Git.
+
 ### 2026-03-11 · Session 146
 **Worked on:** Camera workflow v2 + publishing page design sprint. Built fully interactive React mockup (`camera-mode-mockup.jsx`) through multiple iterations. Camera screen features: Rapidfire multi-photo via "+" button on carousel thumbnails (opens item, glows amber, banner above shutter, auto-closes after one shot), 4:3 crop guide corner brackets on viewfinder, auto-enhance ✨ badges on carousel thumbnails, mode toggle pill (⚡ Rapidfire / 📷 Regular), standard shutter row (gallery | shutter | flip). Publishing screen features: AI confidence tinting (green/amber/red borders), per-item expand with photo editor (aspect ratio pills, BG removal toggle, auto-enhance toggle, brightness/contrast sliders, title/price fields), batch toolbar (select all, bulk price, bulk category, bulk BG removal), buyer preview mode. Consulted Innovation, UX, and Customer Champion agents for feature ideas. Agreed shortlist: photo quality warning, retake toast, face detection flag, batch context injection, AI confidence on carousel. Anti-shake deferred. Feature spec written: `claude_docs/feature-notes/camera-workflow-publishing-spec.md`. EstateSales.NET does not publish specific photo specs — 4:3 is the safe default based on general listing platform standards.
 **Decisions:** Post-processing split: auto-brighten + color correction run automatically in background (like AI tagging); background removal and manual corrections live in publishing page only. Anti-shake deferred until user-requested. All photo quality features agreed.
@@ -31,18 +45,5 @@
 **Scoreboard:** Files changed: 10 | Compressions: 0 | Subagents: 4 (general-purpose) | Push method: Patrick PS1
 **Next up:** Patrick installs new skills, uninstalls old ones, pushes to GitHub. Phase 2 begins in two weeks (new standalone agents, board restructure, context infrastructure, scheduled tasks).
 **Blockers:** Skills need manual install/uninstall by Patrick via Cowork UI. Neon migration `20260311000002_add_item_draft_status` still pending deploy.
-
-### 2026-03-11 · Session 141
-**Worked on:** Fleet redesign proposal v1 — full planning session. Drafted, reviewed twice (architect, qa, hacker, pitchman, power-user, workflow), and finalized. 22 decisions approved across fleet structure, advisory board, communication/safety, session/context, and scheduled tasks.
-**Decisions:** All 22 decisions approved. See `claude_docs/decisions-log.md` for full list.
-**Next up:** Phase 1 implementation (completed in session 142).
-**Blockers:** None.
-
-### 2026-03-11 · Session 140
-**Worked on:** Full agent fleet plugin-skill awareness audit (Power User). Discovered all 15 findasale-* subagents were plugin-blind — no knowledge of the 100+ plugin skills available to them. Architect, QA, and Pitchman reviewed proposed mappings in parallel. Added `## Plugin Skill Delegation` sections to all 15 SKILL.md files (98 plugin refs total). Fixed stale data in findasale-architect (5%/7% fee → 10% flat, removed Docker ref) and findasale-qa (same fee fix). Created `claude_docs/operations/plugin-skill-routing.md` as master routing reference for main session and fleet. All 15 updated skills installed by Patrick.
-**Decisions:** Advisory board approved for forward-strategy plugins (`product-management:roadmap-management` + `data:create-viz`). `findasale-sales-ops` (proposed by Pitchman — organizer outreach/trial-to-insight agent) deferred to post-beta planning session per Patrick. Routing matrix is now the authoritative source for plugin vs. findasale-* routing logic.
-**Next up:** Push `claude_docs/operations/plugin-skill-routing.md` to GitHub via `.\push.ps1`. Planning session to review findasale-sales-ops proposal + other Pitchman fleet ideas. Neon migration `20260311000002_add_item_draft_status` still pending deploy.
-**Blockers:** Neon migration undeployed. `plugin-skill-routing.md` not yet pushed to GitHub.
-
 
 ---

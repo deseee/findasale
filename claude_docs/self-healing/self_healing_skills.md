@@ -123,3 +123,28 @@ Recurring bugs and their confirmed fixes. Add an entry when a pattern has been s
 **Test Command:** `rm /sessions/*/mnt/FindaSale/<any-file>` — if it fails, call `mcp__cowork__allow_cowork_file_delete` first.
 
 **Confidence:** HIGH — workspace mount restriction is consistent; always required before any delete in FindaSale directory.
+
+---
+
+**#SH-XX — review.tsx fetches published items instead of drafts**
+
+**Trigger:** After clicking Done in Rapidfire, the Review & Publish page shows all existing published items as "pending" with broken AI confidence bars, while newly captured draft items are invisible.
+
+**Environment:** `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`
+
+**Pattern:** `GET /items?saleId=...&draftStatus=DRAFT,PENDING_REVIEW` — the `draftStatus` query param is silently ignored by `getItemsBySaleId` which hardcodes `PUBLIC_ITEM_FILTER = { draftStatus: 'PUBLISHED' }`. Result: always returns published items regardless of params. The correct organizer-only endpoint is `GET /items/drafts?saleId=...` (`getDraftItemsBySaleId`) which actually filters for DRAFT/PENDING_REVIEW and verifies ownership.
+
+**Known instance:** Identified session 147, fixed session 149 (commit b578cca). Bug had been in STATE.md as "P0 QA bug (open)" for one full session without being patched.
+
+**Steps:**
+1. Check `review.tsx` — is the query calling `/items?saleId=...` or `/items/drafts?saleId=...`?
+2. If `/items?...`: change to `api.get(\`/items/drafts?saleId=${saleId}\`)`
+3. The `/items/drafts` route requires organizer auth — make sure the `api` instance sends the auth header (it does by default via the axios interceptor)
+
+**Edge Cases:**
+- Do NOT add draftStatus as a query param to `GET /items` — the backend does not read it. The only way to get draft items is via `/items/drafts`
+- `getDraftItemsBySaleId` paginates (default 20/page) — if an organizer has >20 draft items, the review page will silently truncate. Not an issue for MVP.
+
+**Test Command:** After Rapidfire session, navigate to /organizer/add-items/[saleId]/review — verify only new DRAFT items appear, not the published catalog.
+
+**Confidence:** HIGH — backend architecture is definitive; `PUBLIC_ITEM_FILTER` is immutable in `getItemsBySaleId`.

@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 150 COMPLETE (2026-03-12) — STRIPE TERMINAL POS (ROADMAP #5):**
+- **Ship-Ready subcommittee** reviewed POS feature: approved for implementation. Reader selected: BBPOS WisePOS E / S700 (WiFi, `internet` discovery) — M2 Bluetooth rejected (unsupported in iOS Safari/PWA).
+- **Architect** produced ADR: `claude_docs/feature-notes/stripe-terminal-pos-adr.md`. v1 scope: 1 item per transaction (multi-item cart deferred — needs POSTransaction model).
+- **Dev implemented all 7 steps:**
+  1. `packages/database/prisma/schema.prisma` — `Purchase.userId` nullable, added `source` (default `'ONLINE'`) and `buyerEmail` fields
+  2. `packages/database/prisma/migrations/20260312000002_add_purchase_pos_fields/migration.sql` — safe additive migration
+  3. `packages/backend/src/controllers/terminalController.ts` — NEW: connection token, create PI, capture, cancel endpoints
+  4. `packages/backend/src/routes/stripe.ts` — 4 terminal routes added
+  5. `packages/backend/src/controllers/stripeController.ts` — webhook `isPOS` guard; buyer-only ops skipped for POS purchases
+  6. `packages/frontend/pages/organizer/pos.tsx` — NEW: full POS UI (sale selector, item search, reader connect, charge flow)
+  7. `packages/frontend/pages/organizer/dashboard.tsx` — 💳 POS quick-action link added
+- **Migration pending Neon deploy:** `20260312000002_add_purchase_pos_fields`
+- **Patrick action required:** `pnpm --filter frontend add @stripe/terminal-js`, add `NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true` env var, deploy migration, push to GitHub via `.\push.ps1`
+- **QA flag:** Payment flow changes — flag `findasale-qa` before enabling for beta organizers.
+- **Vercel reconnect:** Patrick confirmed GitHub App reconnected this session (no further deploy blockers from that issue).
+**Last Updated:** 2026-03-12 (session 150 — Stripe Terminal POS implementation complete, awaiting Patrick push + Neon migration)
+
+**Session 149 COMPLETE (2026-03-12) — REVIEW PAGE P0 FIX + SHOPPER 404 FIXES:**
+- **P0 fixed:** `review.tsx` was calling `GET /items?saleId=...&draftStatus=DRAFT,PENDING_REVIEW` — backend `getItemsBySaleId` hardcodes `PUBLIC_ITEM_FILTER={draftStatus:'PUBLISHED'}` and ignores all query params, so the page always returned published items instead of drafts. Fixed: switched to `GET /items/drafts?saleId=...` (`getDraftItemsBySaleId` — correct organizer-only endpoint). Commit b578cca.
+- **Shopper 404s fixed:** `ActivitySummary.tsx`, `shopper/dashboard.tsx`, `shopper/purchases.tsx` were calling `/shopper/purchases`, `/shopper/favorites`, `/sales/subscribed` — none of these routes exist in the backend. Corrected to `/users/purchases`, `/favorites`, `/notifications/subscriptions`. `Layout.tsx` nav spacing cleaned up (mr-3 → flex gap-2). Commits 816c352 + 9e1f905 + 73a309c.
+- **Friction audit ran** (daily-friction-audit scheduled task): report at `claude_docs/operations/friction-audit-2026-03-12.md`. P0 flagged: Vercel GitHub App integration disconnected — frontend pushes not deploying. Patrick needs to reconnect in Vercel dashboard → findasale → Settings → Git.
+- **Next session:** Planning committee (Ship-Ready subcommittee) reviews Stripe Terminal POS (roadmap item #5) → findasale-dev implements.
+**Last Updated:** 2026-03-12 (session 149 — review page P0 + shopper 404 fixes; Vercel reconnect still pending)
+
 **Sessions 147–148 COMPLETE (2026-03-12) — RAPIDFIRE UI P1 FIXES + PHASE 5 WIRING:**
 Two bugs diagnosed and fixed in the Rapidfire camera UI:
 1. **Nested `<button>` HTML invalidity** (`RapidCarousel.tsx`) — browsers eject inner `<button>` elements from outer `<button>` wrappers, making the "+" button and photo-count badge invisible. Fix: changed outer wrapper from `<button>` to `<div>`, preserving all touch/mouse handlers. Pushed via GitHub MCP (SHA: `622195faa8fdd410bb9347231469af8bb4b560c5`).
@@ -169,7 +193,10 @@ Phases 1–13 + pre-beta audit + rebrand + Sprints A–X all verified and shippe
 
 ## In Progress
 
-**All migrations deployed.** 71 total applied as of session 145. Previously deployed:
+**Migrations pending Neon deploy (session 150):**
+- `20260312000002_add_purchase_pos_fields` — Makes `Purchase.userId` nullable, adds `source` + `buyerEmail` columns. Required for Terminal POS to work in production.
+
+**All prior migrations deployed.** 71 total applied as of session 145. Previously deployed:
 1. `20260309_add_auction_reserve_price`
 2. `20260310000001_add_item_fulltext_search_indexes`
 3. `20260311000001_add_sale_type_item_listing_type`
@@ -236,7 +263,7 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - **Production migration deploy (Neon):** Claude reads `packages/backend/.env` from the VM, extracts the commented-out Neon URLs, and provides a ready-to-paste command with real credentials in chat output (ephemeral — never committed). Never embed credentials in any committed file. See SECURITY.md §3 and CORE.md §17.3(c).
 - **Vercel GitHub App integration** — As of session 148 (2026-03-12), Vercel is not auto-deploying on push. GitHub App connection may be broken. Check Vercel dashboard → findasale → Settings → Git to reconnect, or manually trigger deployment. Railway and Vercel use GitHub App integration (Settings → Applications), NOT traditional webhooks.
 - **Railway is backend-only** — `railway.toml` builds from `packages/backend/Dockerfile.production`. Frontend-only changes (Next.js pages, components) never trigger Railway builds. All frontend deploys go to Vercel only.
-- **P0 QA bug (open):** `review.tsx` (publishing page) calls `GET /items?saleId=...&draftStatus=...` but backend GET /items does NOT support `draftStatus` filter — should use `/items/drafts`. Not yet fixed.
+- ✅ **P0 QA bug (FIXED session 149):** `review.tsx` now calls `GET /items/drafts?saleId=...` — previously called `GET /items?...&draftStatus=DRAFT,PENDING_REVIEW` which was silently returning only PUBLISHED items. Commit b578cca.
 - **Migration `20260311000003_add_camera_workflow_v2_fields` (status unclear):** Adds `aiConfidence`, `backgroundRemoved`, `faceDetected`, `autoEnhanced` to Item + new Photo table. Created in session 147 to fix potential P2022 auction job crash. Verify whether Patrick deployed this via `prisma migrate deploy`.
 
 ---
@@ -282,4 +309,4 @@ Full audit reports: archived (git history, sessions 84–85). Beta checklist: ar
 - FINDING-3 (stale fee copy on dashboard) — deferred from session 126, still open.
 - 4 new QA findings queued — all resolved in Session 128: camera fullscreen/flash ✅, tab labels ✅, click-to-edit ✅, CSV import tested + fixed ✅.
 
-Last Updated: 2026-03-12 (sessions 147–148 — Rapidfire P1 nested-button fix + Phase 5 add-photo-to-item wiring; Vercel deployment not triggered)
+Last Updated: 2026-03-12 (session 149 — review page P0 + shopper 404 fixes; Vercel reconnect still pending Patrick)

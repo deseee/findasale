@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-11T22:25:59.371Z*
+*Generated at 2026-03-12T13:37:11.187Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -22,7 +22,8 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
-✓ TODOs: none found
+⚠ 1+ TODO/FIXME markers in source (showing up to 5):
+  /sessions/eloquent-compassionate-faraday/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:152:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```
@@ -45,11 +46,13 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │       └── skill-creator/
 │           └── SKILL.md
 ├── AGENT_QUICK_REFERENCE.md
+├── CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md
 ├── CLAUDE.md
 ├── README.md
 ├── STRIPE_WEBHOOK_HARDENING.md
 ├── ai-config/
 │   └── global-instructions.md
+├── camera-mode-mockup.jsx
 ├── claude_docs/
 │   ├── .last-wrap
 │   ├── CORE.md
@@ -63,16 +66,18 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── competitor-intel/ (1 files)
 │   ├── decisions-log.md
 │   ├── escalation-log.md
-│   ├── feature-notes/ (9 files)
+│   ├── feature-decisions/
+│   │   └── CAMERA_WORKFLOW_V2_ARCHITECTURE.md
+│   ├── feature-notes/ (11 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (1 files)
 │   ├── logs/ (2 files)
 │   ├── next-session-prompt.md
-│   ├── operations/ (23 files)
-│   ├── research/ (2 files)
+│   ├── operations/ (24 files)
+│   ├── research/ (3 files)
 │   ├── self-healing/ (1 files)
 │   ├── session-log.md
-│   ├── skills-package/ (29 files)
+│   ├── skills-package/ (30 files)
 │   ├── strategy/ (4 files)
 │   └── workflow-retrospectives/ (0 files)
 ├── docs/
@@ -99,7 +104,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (52 files)
+│   │   │   ├── controllers/ (53 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
@@ -120,7 +125,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (75 migrations)
+│   │   │   ├── migrations/ (77 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -167,33 +172,22 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── session-wrap-check.sh
 │   ├── stress-test.js
 │   └── update-context.js
-├── skill-updates/
-│   ├── zi0JKDFh
-│   ├── zi0ZAsNh
-│   ├── zi5C2Zsb
-│   ├── ziEM3pic
-│   ├── ziK18NL3
-│   ├── ziMOvrz4
-│   ├── ziXJ1M6C
-│   ├── ziheNXAk
-│   ├── zihmC4Xj
-│   ├── ziipsPq3
-│   ├── zio1ID9B
-│   ├── zis6sZdE
-│   ├── zisKPUAA
-│   ├── zivGh9XE
-│   └── ziy2i7m2
-├── zi54JQTo
-├── ziB74Bhe
-├── ziII9Ru6
-├── ziUGIXdI
-├── ziUSoel0
-├── ziVgsNRB
-├── zikuUM5r
-├── zimhIoGT
-├── zinUkFrh
-├── ziylST2k
-└── ziz0hA2T
+└── skill-updates/
+    ├── zi0JKDFh
+    ├── zi0ZAsNh
+    ├── zi5C2Zsb
+    ├── ziEM3pic
+    ├── ziK18NL3
+    ├── ziMOvrz4
+    ├── ziXJ1M6C
+    ├── ziheNXAk
+    ├── zihmC4Xj
+    ├── ziipsPq3
+    ├── zio1ID9B
+    ├── zis6sZdE
+    ├── zisKPUAA
+    ├── zivGh9XE
+    └── ziy2i7m2
 
 ```
 

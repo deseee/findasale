@@ -2,6 +2,15 @@
   "_schema": "MESSAGE_BOARD v2 — rebuilt 2026-03-11 session 146. Max 20 messages. Prune oldest on overflow.",
   "messages": [
     {
+      "id": "msg-150-architect-terminal-adr",
+      "from": "findasale-architect",
+      "to": "dev-team,patrick",
+      "timestamp": "2026-03-12T00:00:00Z",
+      "type": "architecture",
+      "message": "STRIPE TERMINAL POS — ADR COMPLETE. Decisions: WisePOS E/S700 (WiFi) not M2 Bluetooth (iOS Safari incompatible). @stripe/terminal-js SDK, internet discovery mode. Schema: Purchase gets source (ONLINE|POS), nullable userId (walk-in buyers), optional buyerEmail. v1: 1 item per transaction. New controller: terminalController.ts. New routes: /api/stripe/terminal/{connection-token,payment-intent,capture,cancel}. New page: /organizer/pos. Terminal PIs use capture_method:manual + payment_method_types:[card_present]. Existing webhook handler covers success event with minor buyerEmail receipt tweak. ADR: claude_docs/feature-notes/stripe-terminal-pos-adr.md. Ready for dev dispatch.",
+      "feedbackLoop": "ready-for-dev-dispatch"
+    },
+    {
       "id": "msg-146-architect-decisions-final",
       "from": "findasale-architect",
       "to": "dev-team,patrick",

@@ -1,65 +1,50 @@
-# Next Session Prompt — Session 149
-*Written: 2026-03-12 · Sessions 147–148 complete*
+# Next Session Resume Prompt
+*Written: 2026-03-12T00:00:00Z*
+*Session ended: normally*
 
-## Priority 1 — Verify Vercel deployment
+## Resume From
 
-Sessions 147–148 fixes are on GitHub (merge commit `a7eb375`) but NOT yet live on Vercel.
+Run findasale-qa on the Stripe Terminal POS payment flow (terminalController.ts, stripeController.ts webhook isPOS guard) before enabling for beta organizers.
 
-**Check:** Does Vercel show a deployment from March 12 or later?
-- If no: Vercel dashboard → findasale → Settings → Git → verify/reconnect GitHub App, then trigger redeploy using "Use latest commit from main."
-- Once live: Patrick tests on phone — "+" button should appear (gray circle, bottom-right of each thumbnail), tap it, amber glow appears + camera opens, photo capture appends to that item's `photoUrls` (×2 badge shows).
+## What Was In Progress
 
----
+Nothing mid-task. All 7 implementation steps for Stripe Terminal POS are complete. Waiting on Patrick actions before next dev work can proceed.
 
-## Priority 2 — Verify Neon migration `20260311000003`
+## What Was Completed This Session
 
-Migration `20260311000003_add_camera_workflow_v2_fields` was created in session 147 to add `aiConfidence`, `backgroundRemoved`, `faceDetected`, `autoEnhanced` to `Item` + new `Photo` table. Status unknown — Patrick may or may not have run `prisma migrate deploy`.
+- Ship-Ready subcommittee approved Stripe Terminal POS (session 150)
+- Architect ADR: `claude_docs/feature-notes/stripe-terminal-pos-adr.md`
+- Schema: `Purchase.userId` nullable, `source` + `buyerEmail` fields added
+- Migration: `packages/database/prisma/migrations/20260312000002_add_purchase_pos_fields/migration.sql`
+- `packages/backend/src/controllers/terminalController.ts` (NEW — 4 endpoints)
+- `packages/backend/src/routes/stripe.ts` (4 terminal routes added)
+- `packages/backend/src/controllers/stripeController.ts` (isPOS webhook guard)
+- `packages/frontend/pages/organizer/pos.tsx` (NEW — full POS charge UI)
+- `packages/frontend/pages/organizer/dashboard.tsx` (💳 POS nav link added)
 
-**Check:** Run `prisma migrate status` from `packages/database` and confirm 0 pending. If pending, deploy.
+## Environment Notes
 
----
+**Patrick must complete before next session:**
+1. `pnpm --filter frontend add @stripe/terminal-js` (from PowerShell, project root)
+2. Add env var: `NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true` (Vercel + local .env)
+3. Deploy Neon migration (from `packages/database`):
+   - Read the commented-out Neon DATABASE_URL from `packages/backend/.env`
+   - Run `npx prisma migrate deploy` with that URL
+4. Run `npx prisma generate` (from `packages/database`, local)
+5. Git push — feature commit (9 files) + ADR commit (1 file) via `.\push.ps1`
 
-## Priority 3 — Fix P0 QA bug in review.tsx
+**Vercel:** GitHub App integration was reconnected this session — auto-deploy should resume on next push.
 
-**Bug:** `review.tsx` (the publishing page at `/organizer/review-items/[saleId]`) calls:
-```
-GET /items?saleId=...&draftStatus=DRAFT
-```
-But backend `GET /items` does NOT support a `draftStatus` filter param. Should use:
-```
-GET /items/drafts?saleId=...
-```
-or whatever endpoint surfaces DRAFT items. Confirm the correct endpoint, then fix the frontend call.
+**Stripe business account:** Patrick still needs to open one to register real hardware. Simulated mode works without it.
 
----
+## Exact Context
 
-## Priority 4 — Camera Workflow v2 (from session 146 spec)
-
-When the above are cleared, return to the camera workflow v2 implementation:
-1. `claude_docs/feature-notes/camera-workflow-publishing-spec.md` — full feature spec
-2. `camera-mode-mockup.jsx` (repo root) — interactive mockup
-3. Dispatch `findasale-architect` first (7 open questions in spec §Technical Notes)
-4. Then Ship-Ready subcommittee, then `findasale-dev`
-
-Load `dev-environment` skill before any shell/Prisma/database commands.
-
----
-
-## Context to load at session start
-
-1. `claude_docs/STATE.md`
-2. `claude_docs/logs/session-log.md`
-
----
-
-## Files changed in sessions 147–148 (confirm pushed)
-
-- `packages/frontend/components/camera/RapidCarousel.tsx` — nested button fix (pushed via MCP, SHA: `622195faa8fdd410bb9347231469af8bb4b560c5`)
-- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — Phase 5 wiring (pushed by Patrick via push.ps1, merge commit `a7eb375`)
-
-Wrap files written this session — include in next commit:
-```powershell
-git add claude_docs/STATE.md claude_docs/logs/session-log.md claude_docs/next-session-prompt.md claude_docs/.last-wrap
-git commit -m "Session 148 wrap: STATE, session-log, next-session-prompt"
-.\push.ps1
-```
+- POS page lives at `/organizer/pos` — requires ORGANIZER role JWT
+- Connection token endpoint: `POST /api/stripe/terminal/connection-token`
+- PaymentIntent: `POST /api/stripe/terminal/payment-intent` — body: `{ itemId, buyerEmail? }`
+- Capture: `POST /api/stripe/terminal/capture` — body: `{ paymentIntentId }`
+- Cancel: `POST /api/stripe/terminal/cancel` — body: `{ paymentIntentId }`
+- All terminal routes go through `authenticate` middleware — organizer JWT required
+- `NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true` enables the simulated reader in the frontend (no hardware required for testing)
+- Multi-item POS cart deferred to v2 — needs new `POSTransaction` model (Architect must approve)
+- QA flag: payment flow (terminal PI creation, capture, webhook idempotency) should be reviewed by findasale-qa before beta enablement
