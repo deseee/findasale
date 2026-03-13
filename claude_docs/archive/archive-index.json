@@ -1,8 +1,48 @@
 {
   "_schema": "Archive Index v1 — Records-only write access. All agents may read to check existence. To retrieve a file, dispatch findasale-records.",
-  "_lastUpdated": "2026-03-11",
-  "_archivedBy": "advisory-board session 144 — initial vault creation",
+  "_lastUpdated": "2026-03-13",
+  "_archivedBy": "findasale-records session 157",
   "entries": [
+    {
+      "file": "feature-notes/CD2_PHASE2_TREASURE_HUNT.md",
+      "topic": "CD2 Phase 2 — Treasure Hunt Mode implementation spec",
+      "archivedFrom": "docs/CD2_PHASE2_TREASURE_HUNT.md",
+      "originSession": "unknown (pre-session-144 governance)",
+      "dateArchived": "2026-03-13",
+      "summary": "Full implementation handoff spec for Treasure Hunt Mode: schema (TreasureHunt + TreasureHuntFind models), backend service + routes, frontend banner + item detail integration, AI clue generation prompt. Feature is shipped. docs/ directory is unauthorized — archived and source pending deletion."
+    },
+    {
+      "file": "AGENT_QUICK_REFERENCE.md",
+      "topic": "Agent fleet quick reference — routing map",
+      "archivedFrom": "AGENT_QUICK_REFERENCE.md (repo root)",
+      "originSession": "85 (last updated)",
+      "dateArchived": "2026-03-13",
+      "summary": "Agent-to-task routing map and pipeline patterns. Stale — references eliminated agents (findasale-cx, findasale-support, findasale-rd, findasale-pitchman) and superseded scheduled tasks. Replaced by each agent's SKILL.md trigger descriptions and conversation-defaults routing rules."
+    },
+    {
+      "file": "feature-notes/CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md",
+      "topic": "Camera Workflow v2 — Phases 1-2 complete, 3-6 implementation handoff",
+      "archivedFrom": "CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md (repo root)",
+      "originSession": 147,
+      "dateArchived": "2026-03-13",
+      "summary": "Point-in-time implementation status doc for Camera Workflow v2. Phases 1-2 (DB schema + backend) confirmed complete. Phases 3-6 (on-device processing, publishing page, multi-photo carousel) were the implementation target for sessions 148+. Superseded by completed code — Phase 5 confirmed wired in session 148."
+    },
+    {
+      "file": "STRIPE_WEBHOOK_HARDENING.md",
+      "topic": "Stripe webhook hardening — beta production readiness",
+      "archivedFrom": "STRIPE_WEBHOOK_HARDENING.md (repo root)",
+      "originSession": "pre-144 (March 5, 2026)",
+      "dateArchived": "2026-03-13",
+      "summary": "Implementation record for Stripe webhook hardening: idempotency (StripeEvent model), expanded event handlers, Sentry error tracking. Status: Complete. Commits 43f64a6, cd43b93, 2f85116 on main. Superseded by code in stripeController.ts."
+    },
+    {
+      "file": "fleet-redesign-proposal-v1.md",
+      "topic": "Fleet redesign proposal v1 — sessions 141-143",
+      "archivedFrom": "fleet-redesign-proposal-v1.md (repo root)",
+      "originSession": 141,
+      "dateArchived": "2026-03-13",
+      "summary": "Full fleet redesign planning doc (22 decisions). All decisions approved by Patrick and implemented in sessions 143-145: 5 new agents, 2 merges, 12-seat board restructure, 6 subcommittees, 2 scheduled tasks. Superseded by installed skills and SKILL.md files."
+    },
     {
       "file": "audits/chrome-audit-session-124.md",
       "topic": "Chrome extension browser audit",
