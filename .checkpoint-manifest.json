@@ -4,17 +4,17 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": 153,
-    "startedAt": "2026-03-12T20:00:00Z",
-    "estimatedTokensUsed": 25,
-    "turnCount": 1,
-    "fileReadsCount": 7,
-    "toolCallsCount": 8,
-    "subagentDispatches": 0,
-    "githubApiCalls": 0,
-    "lastCheckpointAt": "2026-03-12T20:00:00Z",
-    "compressionOccurred": false,
-    "notes": "Session 153 init. Migration 20260312000002 now deployed. 10% cash fee policy decision."
+    "sessionId": "S-current",
+    "startedAt": "2026-03-13T18:05:30.488Z",
+    "checkpoints": [
+      {
+        "at": "2026-03-13T18:05:30.488Z",
+        "tokensUsed": "~8k",
+        "note": "Pre-dispatch checkpoint — 4-agent parallel batch: cowork-power-user, findasale-workflow, findasale-architect, findasale-records. Task: Design rolling 96hr I/O capture file + scheduled analysis tasks."
+      }
+    ],
+    "compressionEvents": [],
+    "tokensUsed": "~8k"
   },
   "checkpoints": [
     {
