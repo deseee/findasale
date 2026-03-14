@@ -411,7 +411,7 @@ const ReviewPage = () => {
                           <div className="flex-1">
                             <p className="font-semibold text-warm-900">{item.title}</p>
                             <p className="text-sm text-warm-600">
-                              {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'} · {item.category || 'Uncategorized'}
+                              {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'} \u00B7 {item.category || 'Uncategorized'}
                             </p>
                           </div>
                           <div className={`text-xs font-semibold ${conf.color}`}>
