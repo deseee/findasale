@@ -391,7 +391,7 @@ const ReviewPage = () => {
                   )}
                 </p>
 
-                {/* Feature 61: Near-Miss Nudge \u2014 encourage completing the listing */}
+                {/* Feature 61: Near-Miss Nudge — encourage completing the listing */}
                 <NearMissNudge
                   current={items.filter((i: any) => i.photoUrls?.length > 0 && i.price > 0).length}
                   target={items.length}
