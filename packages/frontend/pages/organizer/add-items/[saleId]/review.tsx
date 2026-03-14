@@ -199,8 +199,8 @@ const ReviewPage = () => {
     if (!editStates.has(item.id)) {
       editStates.set(item.id, {
         title: item.title,
-        price: item.price,
-        category: item.category,
+        price: item.price ?? 0,
+        category: item.category ?? '',
         aspectRatio: '4:3',
         brightness: 50,
         contrast: 50,
@@ -361,7 +361,7 @@ const ReviewPage = () => {
                   )}
                 </p>
 
-                {/* Feature 61: Near-Miss Nudge — encourage completing the listing */}
+                {/* Feature 61: Near-Miss Nudge \u2014 encourage completing the listing */}
                 <NearMissNudge
                   current={items.filter((i: any) => i.photoUrls?.length > 0 && i.price > 0).length}
                   target={items.length}
