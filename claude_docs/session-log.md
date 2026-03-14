@@ -2,6 +2,13 @@
 
 ## Recent Sessions
 
+### 2026-03-14 · Session 159
+**Worked on:** Full codebase audit for Grand Rapids / Michigan references. Found and removed 35+ references across 19 files. Hardcoded user-visible UI strings (footer, pin badge, leaderboard heading, plan subheading) to generic "near you" / "local" language. Genericized OG/Twitter meta tags on index, about, contact, map pages. Updated all `|| 'Grand Rapids'` env var fallbacks. Cleared regionConfig.ts hardcoded defaults. Updated seed org names and test fixtures. Legal text in terms.tsx and privacy.tsx intentionally preserved.
+**Decisions:** UI text hardcoded generic (not env-var driven) so Vercel/Railway env vars can't override. Legal references (Michigan LLC, governing law, Kent County, Michigan residents rights) stay as-is.
+**Files changed:** 19 files — see STATE.md for full list. Committed 5ac6897.
+**Next up:** Patrick: optionally clear `NEXT_PUBLIC_DEFAULT_CITY` / `DEFAULT_CITY` env vars in Vercel/Railway. Then resume roadmap P1: #24 Holds feature (1 sprint).
+**Blockers:** None.
+
 ### 2026-03-12 · Session 155
 **Worked on:** Full roadmap strategic review. Cleaned up roadmap.md — marked shipped features (POS, Rapidfire, Camera v2), fixed stale agent refs, updated migration count. Expanded #27 from photo watermark to Listing Factory (AI tag auto-suggestion, Listing Health Score, multi-platform export, social templates). Locked priority order (#24→#27→#8→#28→#6). Locked 7 design decisions (holds expiry, health score gate, tag vocabulary, social template tones, heatmap density, background removal, holds grouping). Innovation proposed 9 new ideas; DA and Steelman debated all 9. Patrick promoted 5 to Phase 4 (#29 Loyalty Passport, #30 AI Valuations, #31 Brand Kit, #32 Wishlist Alerts, #17 Bid Bot validated) and deferred 4 (Flash Auctions, Livestream, Insurance Badge, Pop-Up Clusters). Added Brand Voice session to upcoming work.
 **Decisions:** Priority order locked (P1–P5). 7 UX design decisions locked. 5 Innovation ideas promoted, 4 deferred. #26 merged into #6. #24 moved to Next Up P1.
@@ -31,11 +38,5 @@
 **Scoreboard:** Files changed: 2 | Build errors fixed: 4 | QA findings: 4 (all resolved) | Subagents: 2 (findasale-qa, findasale-dev) | Push method: MCP (planned)
 **Next up:** Patrick tests POS in simulated mode. If tests pass, POS ready for beta organizers with real hardware.
 **Blockers:** Neon migration `20260312000002_add_purchase_pos_fields` not yet deployed. Patrick still needs to run `pnpm --filter frontend add @stripe/terminal-js` and add env vars.
-
-### 2026-03-12 · Session 150
-**Worked on:** Stripe Terminal POS — roadmap item #5, full implementation across 3 agent phases. Ship-Ready subcommittee approved (reader: WisePOS E/S700 WiFi, `internet` discovery; M2 Bluetooth rejected for iOS PWA incompatibility). Architect produced ADR. Dev implemented: schema migration (Purchase nullable userId + source + buyerEmail), terminalController.ts (4 endpoints: connection token, create PI, capture, cancel), 4 new stripe routes, webhook isPOS null-safety guard, pos.tsx frontend page (full charge flow with @stripe/terminal-js dynamic import), POS quick-action link on dashboard. Context hit limit mid-session; resumed cleanly in continuation.
-**Decisions:** v1 = 1 item per POS transaction (multi-item cart deferred — needs POSTransaction model, Architect sign-off). `internet` discovery mode only (no Bluetooth). Same 10% platform fee + referral discount logic as online flow.
-**Next up:** Patrick: install @stripe/terminal-js, add NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED=true, deploy migration 20260312000002_add_purchase_pos_fields to Neon, push to GitHub via .\push.ps1. Then findasale-qa reviews payment flow before enabling for beta organizers.
-**Blockers:** Stripe business account (Patrick still needs to open one for live hardware). Migration not yet on Neon. pnpm-lock.yaml needs update after @stripe/terminal-js install.
 
 

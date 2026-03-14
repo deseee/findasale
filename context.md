@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-14T00:43:00.731Z*
+*Generated at 2026-03-14T18:11:46.578Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -17,7 +17,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
 ⚠ 1+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/gifted-zen-euler/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:152:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+  /sessions/gallant-magical-gauss/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:152:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```
@@ -67,7 +67,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── logs/ (2 files)
 │   ├── next-session-prompt.md
 │   ├── operations/ (27 files)
-│   ├── research/ (4 files)
+│   ├── research/ (5 files)
 │   ├── self-healing/ (1 files)
 │   ├── session-log.md
 │   ├── skills-package/ (30 files)
@@ -155,14 +155,15 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 ├── pnpm-workspace.yaml
 ├── push.ps1
 ├── railway.toml
-└── scripts/
-    ├── health-check.ts
-    ├── package-skill.sh
-    ├── session-wrap-check.ps1
-    ├── session-wrap-check.sh
-    ├── statusline-token-usage.sh
-    ├── stress-test.js
-    └── update-context.js
+├── scripts/
+│   ├── health-check.ts
+│   ├── package-skill.sh
+│   ├── session-wrap-check.ps1
+│   ├── session-wrap-check.sh
+│   ├── statusline-token-usage.sh
+│   ├── stress-test.js
+│   └── update-context.js
+└── v0-prompt.md
 
 ```
 

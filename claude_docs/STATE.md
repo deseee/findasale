@@ -7,6 +7,19 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 159 COMPLETE (2026-03-14) — GRAND RAPIDS / MICHIGAN REFERENCE AUDIT:**
+- **Full codebase audit:** Grepped all `.ts`/`.tsx` files for "Grand Rapids" and "Michigan". Found 35+ references across 19 files.
+- **User-facing content fixed:** trending.tsx meta, neighborhoods/[slug].tsx page title + meta + link text, neighborhoods/index.tsx title/meta/subheading/Downtown card, cities/index.tsx all Michigan references, email-digest-preview.tsx mock data, leaderboard subheading, plan.tsx subheading, Layout.tsx footer, index.tsx pin badge.
+- **Env var fallbacks updated:** All `|| 'Grand Rapids'` → `|| 'your area'`, `|| 'MI'` → `|| ''` across terms, Layout, plan, contact, map, leaderboard, index, about.
+- **Meta tags genericized:** OG/Twitter tags on index.tsx, about.tsx, contact.tsx, map.tsx rewritten to use "near you" / "local" — no longer city/state dependent.
+- **UI text hardcoded:** Footer, pin badge, leaderboard heading, plan subheading now hardcoded generic — no longer read from env vars, so Vercel/Railway values can't override them.
+- **Config defaults cleared:** regionConfig.ts defaults for city/state/stateAbbrev/county changed to empty strings. Timezone changed to America/Chicago.
+- **Comments + seed data:** userController.ts comment, regionConfig.ts comments, seed.ts org names (West Michigan Liquidators → Riverside Liquidators, Grand Rapids Auctions → Local Estate Auctions, Michigan Liquidation Solutions → Premier Liquidation Solutions).
+- **Test fixtures updated:** weeklyDigest.e2e.ts, stripe.e2e.ts, emailReminders.e2e.ts — city changed to 'Springfield'.
+- **Intentionally preserved:** terms.tsx (Michigan LLC, governing law, Kent County) and privacy.tsx (Michigan residents rights) — legal requirements.
+- **Committed:** 5ac6897. Patrick still needs to clear `NEXT_PUBLIC_DEFAULT_CITY` / `DEFAULT_CITY` env vars from Vercel/Railway (optional — UI no longer reads them, but meta tags in terms.tsx still do).
+**Last Updated:** 2026-03-14 (session 159 — Grand Rapids/Michigan reference audit complete)
+
 **Session 158 COMPLETE (2026-03-13) — REPO ROOT CLEANUP + TOKEN STATUSLINE:**
 - **Token statusline:** Investigated Cowork token bar (statusline approach). Confirmed Cowork desktop UI does not pass `context_window` JSON to statusline scripts — outputs `Tokens: waiting...` indefinitely. Dead end for visual bar. Statusline script persisted to `scripts/statusline-token-usage.sh` + CLAUDE.md §4 reinstall rule added for VM ephemerality. Token estimates calibrated from 19 sessions (S118–S157): avg ~13.6k/agent (prior default 5k was 2.6× too low). Updated conversation-defaults Rule 17 packaged as installable .skill.
 - **Repo root audit (findasale-records):** 5 unauthorized orphaned files removed from repo root: `AGENT_QUICK_REFERENCE.md` (stale, eliminated agents), `CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md` (completed handoff), `STRIPE_WEBHOOK_HARDENING.md` (completed record), `fleet-redesign-proposal-v1.md` (implemented), `docs/CD2_PHASE2_TREASURE_HUNT.md` (completed feature spec). All archived to `claude_docs/archive/` with index entries. `docs/` and `skill-updates/` directories removed. Repo root is now clean.
