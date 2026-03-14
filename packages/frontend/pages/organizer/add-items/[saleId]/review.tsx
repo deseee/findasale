@@ -37,10 +37,10 @@ interface ItemEditState {
 interface Item {
   id: string;
   title: string;
-  price: number;
-  category: string;
+  price: number | null;
+  category: string | null;
   photoUrls: string[];
-  aiConfidence: number;
+  aiConfidence: number | null;
   backgroundRemoved: boolean;
   autoEnhanced: boolean;
   draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
@@ -94,13 +94,15 @@ function buildCloudinaryUrl(
   return url.replace('/upload/', `/upload/${transforms.join(',')}/`);
 }
 
-function confidenceBorderClass(score: number): string {
+function confidenceBorderClass(score: number | null | undefined): string {
+  if (score == null) return 'border-l-4 border-warm-200';
   if (score >= 0.8) return 'border-l-4 border-green-500';
   if (score >= 0.55) return 'border-l-4 border-amber-400';
   return 'border-l-4 border-red-500';
 }
 
-function confidenceLabel(score: number): { text: string; color: string } {
+function confidenceLabel(score: number | null | undefined): { text: string; color: string } {
+  if (score == null) return { text: 'Manual', color: 'text-warm-500' };
   if (score >= 0.8) return { text: 'Good', color: 'text-green-600' };
   if (score >= 0.55) return { text: 'Review', color: 'text-amber-600' };
   return { text: 'Low', color: 'text-red-600' };
@@ -337,9 +339,9 @@ const ReviewPage = () => {
                           {item.title}
                         </p>
                         <p className="text-amber-700 font-bold text-sm mt-1">
-                          ${item.price.toFixed(2)}
+                          {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}
                         </p>
-                        <p className="text-warm-600 text-xs mt-1">{item.category}</p>
+                        <p className="text-warm-600 text-xs mt-1">{item.category || 'Uncategorized'}</p>
                       </div>
                     </div>
                   ))}
@@ -409,11 +411,11 @@ const ReviewPage = () => {
                           <div className="flex-1">
                             <p className="font-semibold text-warm-900">{item.title}</p>
                             <p className="text-sm text-warm-600">
-                              ${item.price.toFixed(2)} · {item.category}
+                              {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'} · {item.category || 'Uncategorized'}
                             </p>
                           </div>
                           <div className={`text-xs font-semibold ${conf.color}`}>
-                            {conf.text} ({Math.round(item.aiConfidence * 100)}%)
+                            {conf.text}{item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
                           </div>
                         </div>
                       );
