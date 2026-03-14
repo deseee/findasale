@@ -17,6 +17,7 @@ import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 import PickupSlotManager from '../../../components/PickupSlotManager';
+import EntrancePinPicker from '../../../components/EntrancePinPicker'; // Feature 35: Front Door Locator
 import Skeleton from '../../../components/Skeleton';
 
 const EditSalePage = () => {
@@ -38,6 +39,10 @@ const EditSalePage = () => {
     state: '',
     zip: '',
     neighborhood: '',
+    // Feature 35: Front Door Locator
+    entranceLat: undefined as number | undefined,
+    entranceLng: undefined as number | undefined,
+    entranceNote: '' as string,
   });
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -66,6 +71,9 @@ const EditSalePage = () => {
         state: sale.state,
         zip: sale.zip,
         neighborhood: sale.neighborhood ?? '',
+        entranceLat: sale.entranceLat ?? undefined,
+        entranceLng: sale.entranceLng ?? undefined,
+        entranceNote: sale.entranceNote ?? '',
       });
     }
   }, [sale]);
@@ -349,6 +357,31 @@ const EditSalePage = () => {
                 <option value="Wyoming" />
                 <option value="Grandville" />
               </datalist>
+            </div>
+
+            {/* Feature 35: Front Door Locator — entrance/parking pin */}
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-warm-700 mb-2">
+                Entrance / Parking Pin <span className="text-warm-400 font-normal">(optional)</span>
+              </label>
+              <p className="text-sm text-warm-500 mb-3">
+                Drop a pin to show shoppers exactly where to park or enter — especially useful for large properties.
+              </p>
+              <EntrancePinPicker
+                saleLat={formData.address ? undefined : undefined}
+                saleLng={formData.address ? undefined : undefined}
+                value={formData.entranceLat !== undefined && formData.entranceLng !== undefined ? {
+                  entranceLat: formData.entranceLat,
+                  entranceLng: formData.entranceLng,
+                  entranceNote: formData.entranceNote,
+                } : null}
+                onChange={(pin) => setFormData(prev => ({
+                  ...prev,
+                  entranceLat: pin?.entranceLat,
+                  entranceLng: pin?.entranceLng,
+                  entranceNote: pin?.entranceNote ?? '',
+                }))}
+              />
             </div>
 
             <button

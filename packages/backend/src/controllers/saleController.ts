@@ -47,6 +47,10 @@ const saleCreateSchema = z.object({
   // B1: Sale type — ESTATE | YARD | AUCTION | FLEA_MARKET
   saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET']).optional().default('ESTATE'),
   neighborhood: z.string().optional(), // U2
+  // Feature 35: Front Door Locator
+  entranceLat: z.number().optional(),
+  entranceLng: z.number().optional(),
+  entranceNote: z.string().max(150).optional(),
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();

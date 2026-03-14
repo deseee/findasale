@@ -303,9 +303,17 @@ const ItemDetail: React.FC = () => {
       <Head>
         <title>{item.title} - FindA.Sale</title>
         <meta name="description" content={item.description} />
-        <meta property="og:title" content={item.title} />
+        <meta property="og:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
         <meta property="og:description" content={item.description} />
         <meta property="og:image" content={item.photoUrls[0] || ''} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/items/${item.id}`} />
+        <meta property="og:type" content="product" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
+        <meta name="twitter:description" content={item.description} />
+        <meta name="twitter:image" content={item.photoUrls[0] || ''} />
       </Head>
 
       <div className="min-h-screen bg-gray-50 pb-20">

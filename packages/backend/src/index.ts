@@ -87,6 +87,7 @@ import inviteRoutes from './routes/invites'; // Beta invite code validation
 import socialPostRoutes from './routes/socialPost'; // Social media post generator
 import couponsRouter from './routes/coupons';          // Sprint 3: Shopper Loyalty Coupons
 import routeRoutes from './routes/routes';             // D3: Map route planning
+import viewersRouter from './routes/viewers';           // Feature 34: Hype Meter
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -226,6 +227,7 @@ app.use('/api/invites', inviteRoutes); // Beta invite code validation (public)
 app.use('/api/social-post', socialPostRoutes); // Social media post generator
 app.use('/api/coupons', couponsRouter);         // Sprint 3: Shopper Loyalty Coupons
 app.use('/api/routes', routeRoutes);            // D3: Map route planning
+app.use('/api/sales', viewersRouter);           // Feature 34: Hype Meter viewer counts
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

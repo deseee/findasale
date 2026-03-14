@@ -143,6 +143,10 @@ model Sale {
   saleType      String     @default("ESTATE") // B1: ESTATE | YARD | AUCTION | FLEA_MARKET
   qrScanCount   Int        @default(0)
   endingSoonNotified Boolean @default(false) // Track if "Sale Ending Soon" notification has been sent
+  // Feature #35: Front Door Locator — entrance/parking location
+  entranceLat   Float?     // Latitude of entrance/parking location
+  entranceLng   Float?     // Longitude of entrance/parking location
+  entranceNote  String?    @db.VarChar(150) // Optional note: "Side entrance", "Park in back", etc.
   organizerId   String
   organizer     Organizer  @relation(fields: [organizerId], references: [id])
   items         Item[]

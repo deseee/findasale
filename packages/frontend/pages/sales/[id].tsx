@@ -25,6 +25,7 @@ import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import ActivityFeed from '../../components/ActivityFeed';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
+import HypeMeter from '../../components/HypeMeter'; // Feature 34: Hype Meter
 
 interface Sale {
   id: string;
@@ -71,6 +72,10 @@ interface Sale {
     photoUrls: string[];
   }[];
   isAuctionSale: boolean;
+  // Feature 35: Front Door Locator
+  entranceLat?: number;
+  entranceLng?: number;
+  entranceNote?: string;
 }
 
 interface Bid {
@@ -344,6 +349,9 @@ const SaleDetailPage = () => {
           </div>
         </div>
 
+        {/* Feature 34: Hype Meter — live viewer count */}
+        <HypeMeter saleId={sale.id} />
+
         {/* Organizer Info Card */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="flex items-start justify-between">
@@ -604,6 +612,11 @@ const SaleDetailPage = () => {
                 lng: sale.lng,
                 label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
               }}
+              entrancePin={sale.entranceLat && sale.entranceLng ? {
+                lat: sale.entranceLat,
+                lng: sale.entranceLng,
+                note: sale.entranceNote,
+              } : undefined}
               height="360px"
             />
           ) : (

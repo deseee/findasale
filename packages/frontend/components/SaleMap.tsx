@@ -22,6 +22,8 @@ interface SaleMapProps {
   zoom?: number;
   /** Single-pin mode: show just one sale with a marker */
   singlePin?: { lat: number; lng: number; label: string };
+  /** Feature 35: Front Door Locator — entrance/parking pin */
+  entrancePin?: { lat: number; lng: number; note?: string };
   height?: string;
   userLocation?: { lat: number; lng: number } | null;
 }

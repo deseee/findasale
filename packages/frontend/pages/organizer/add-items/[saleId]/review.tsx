@@ -19,6 +19,7 @@ import { useToast } from '../../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
+import NearMissNudge from '../../../../components/NearMissNudge'; // Feature 61
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
@@ -352,6 +353,14 @@ const ReviewPage = () => {
                 <p className="text-warm-600 mb-4">
                   {items.length} item{items.length !== 1 ? 's' : ''} ready for publication.
                 </p>
+
+                {/* Feature 61: Near-Miss Nudge — encourage completing the listing */}
+                <NearMissNudge
+                  current={items.filter((i: any) => i.photoUrls?.length > 0 && i.price > 0).length}
+                  target={items.length}
+                  reward="a fully photo'd & priced listing"
+                  unit="item"
+                />
 
                 {!itemsLoading && items.length > 0 && (
                   <button

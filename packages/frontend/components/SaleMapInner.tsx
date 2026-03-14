@@ -1,6 +1,7 @@
 // SaleMapInner.tsx — actual Leaflet implementation (browser-only, loaded dynamically)
 import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import EntranceMarker from './EntranceMarker'; // Feature 35: Front Door Locator
 import L from 'leaflet';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -73,6 +74,8 @@ interface SaleMapInnerProps {
   center?: [number, number];
   zoom?: number;
   singlePin?: { lat: number; lng: number; label: string };
+  /** Feature 35: Front Door Locator — entrance/parking pin */
+  entrancePin?: { lat: number; lng: number; note?: string };
   height?: string;
   userLocation?: { lat: number; lng: number } | null;
 }
@@ -85,6 +88,7 @@ const SaleMapInner = ({
   ],
   zoom = 11,
   singlePin,
+  entrancePin,
   height = '400px',
   userLocation,
 }: SaleMapInnerProps) => {
@@ -120,6 +124,15 @@ const SaleMapInner = ({
           <Marker position={[singlePin.lat, singlePin.lng]} icon={orangeIcon}>
             <Popup>{singlePin.label}</Popup>
           </Marker>
+        )}
+
+        {/* Feature 35: Front Door Locator — entrance/parking pin */}
+        {singlePin && entrancePin && (
+          <EntranceMarker
+            entranceLat={entrancePin.lat}
+            entranceLng={entrancePin.lng}
+            entranceNote={entrancePin.note}
+          />
         )}
 
         {/* Multi-pin mode (homepage / search / map page) */}
