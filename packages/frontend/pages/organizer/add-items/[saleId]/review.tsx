@@ -126,13 +126,13 @@ const ReviewPage = () => {
   }
 
   const { data: items = [], isLoading: itemsLoading } = useQuery({
-    queryKey: ['items', saleId, 'draft'],
+    queryKey: ['items', saleId, 'review'],
     queryFn: async () => {
       if (!saleId) return [];
-      // Use the organizer-only /items/drafts endpoint which correctly filters
-      // for draftStatus IN ['DRAFT', 'PENDING_REVIEW']. GET /items uses
-      // PUBLIC_ITEM_FILTER (draftStatus='PUBLISHED') and ignores query params.
-      const response = await api.get(`/items/drafts?saleId=${saleId}`);
+      // Fetch all published items for the sale so organizers can review
+      // items regardless of how they were created (Manual, Batch, CSV,
+      // or Rapidfire). Uses the same endpoint as the add-items table.
+      const response = await api.get(`/items?saleId=${saleId}`);
       return (response.data || []) as Item[];
     },
     enabled: !!saleId,
@@ -146,7 +146,7 @@ const ReviewPage = () => {
       return await api.patch(`/items/${payload.itemId}`, payload.updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'draft'] });
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
     },
     onError: (error: any) => {
       const message = error.response?.data?.message || 'Failed to update item';
@@ -163,7 +163,7 @@ const ReviewPage = () => {
       return await api.post(`/items/bulk`, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'draft'] });
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       setSelectedItems(new Set());
       setBulkPrice('');
       setBulkCategory('');
@@ -183,7 +183,7 @@ const ReviewPage = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'draft'] });
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       showToast('Items published successfully!', 'success');
       router.push(`/organizer/add-items/${saleId}`);
     },
@@ -351,7 +351,12 @@ const ReviewPage = () => {
               <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
                 <h1 className="text-3xl font-bold text-warm-900 mb-2">Review & Publish</h1>
                 <p className="text-warm-600 mb-4">
-                  {items.length} item{items.length !== 1 ? 's' : ''} ready for publication.
+                  {items.length} item{items.length !== 1 ? 's' : ''} in this sale.
+                  {items.filter((i) => i.draftStatus !== 'PUBLISHED').length > 0 && (
+                    <span className="ml-1 text-amber-600 font-medium">
+                      {items.filter((i) => i.draftStatus !== 'PUBLISHED').length} unpublished.
+                    </span>
+                  )}
                 </p>
 
                 {/* Feature 61: Near-Miss Nudge — encourage completing the listing */}
@@ -362,13 +367,17 @@ const ReviewPage = () => {
                   unit="item"
                 />
 
-                {!itemsLoading && items.length > 0 && (
+                {/* Only show Publish All if there are unpublished items */}
+                {!itemsLoading && items.filter((i) => i.draftStatus !== 'PUBLISHED').length > 0 && (
                   <button
-                    onClick={handlePublishAll}
+                    onClick={() => {
+                      const unpublishedIds = items.filter((i) => i.draftStatus !== 'PUBLISHED').map((i) => i.id);
+                      publishMutation.mutate(unpublishedIds);
+                    }}
                     disabled={publishMutation.isPending}
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 mb-6"
                   >
-                    {publishMutation.isPending ? 'Publishing...' : `Publish All (${items.length})`}
+                    {publishMutation.isPending ? 'Publishing...' : `Publish All (${items.filter((i) => i.draftStatus !== 'PUBLISHED').length} unpublished)`}
                   </button>
                 )}
 
@@ -379,7 +388,7 @@ const ReviewPage = () => {
                   </div>
                 ) : items.length === 0 ? (
                   <div className="text-center py-12 text-warm-600">
-                    <p>No items ready for publication.</p>
+                    <p>No items in this sale yet.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">

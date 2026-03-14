@@ -1010,6 +1010,12 @@ const AddItemsDetailPage = () => {
                     </span>
                   )}
                 </h2>
+                <Link
+                  href={`/organizer/add-items/${saleId}/review`}
+                  className="text-sm font-medium text-amber-700 hover:text-amber-900 hover:underline"
+                >
+                  Review & Publish &rarr;
+                </Link>
               </div>
 
               <div className="overflow-x-auto">
@@ -1075,14 +1081,14 @@ const AddItemsDetailPage = () => {
                               })
                             }
                             disabled={bulkUpdateMutation.isPending}
-                            title={item.isActive ? 'Click to hide' : 'Click to show'}
+                            title={item.isActive ? 'Click to hide from buyers' : 'Click to make visible to buyers'}
                             className={`px-2 py-1 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50 ${
                               item.isActive
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-gray-100 text-gray-700'
                             }`}
                           >
-                            {item.isActive ? 'Active' : 'Hidden'}
+                            {item.isActive ? 'Visible' : 'Hidden'}
                           </button>
                         </td>
                         <td className="px-4 py-3 text-sm">
