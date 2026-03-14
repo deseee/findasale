@@ -7,6 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 161 COMPLETE (2026-03-14) — REVIEW PAGE FIXES + ADD-ITEMS UX IMPROVEMENTS:**
+- **3 wiped files restored:** `ActivityFeed.tsx`, `HypeMeter.tsx`, `sales/[id].tsx` — all wiped by empty MCP push in prior session (commit `ad542263`). Restored via MCP push (commit `52041ee`).
+- **Review & Publish page data source fix:** Page was fetching from `/items/drafts` (DRAFT+PENDING_REVIEW only), but all 16 items were created via Manual Entry (draftStatus='PUBLISHED'). Switched to `/items?saleId=` endpoint so all items appear regardless of creation method.
+- **Review page null-safety crash fix:** After data source switch, page crashed on `.toFixed(2)` and `Math.round(null * 100)` for Manual Entry items with null price/category/aiConfidence. Added nullable types to Item interface, null guards to confidence functions, null-coalesce in edit state (`?? 0` for price, `?? ''` for category). Commits `62a0b55`, `7ce115c`.
+- **Add Items page — Review & Publish link:** Added persistent "Review & Publish →" link in items table header (was previously only a conditional button for Rapidfire items).
+- **Add Items page — Visible/Hidden labels:** Renamed "Active"/"Hidden" to "Visible"/"Hidden" with clearer tooltips ("Click to hide from buyers" / "Click to make visible to buyers"). Customer Champion analysis confirmed both `isActive` (visibility toggle) and `draftStatus` (content readiness) serve distinct purposes.
+- **Files changed:** `packages/frontend/pages/organizer/add-items/[saleId].tsx`, `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`
+- **All changes on GitHub main.** Vercel auto-deploying.
+- **Next session:** Chrome audit of Review & Publish page (see next-session-prompt.md).
+- **Last Updated:** 2026-03-14 (session 161)
+
 **Session 160 COMPLETE (2026-03-14) — FOUR FEATURES SHIPPED + RAILWAY BACKEND RESTART INVESTIGATION:**
 - **#61 Near-Miss Nudges** — `NearMissNudge.tsx` component wired into organizer review page. Shows nudge when items are 60–99% complete (photo + price present). No schema change. ✅ SHIPPED
 - **#34 Hype Meter** — Viewer tracking in `viewerController.ts` + `viewers.ts` (60s expiry, in-memory), `HypeMeter.tsx` wired into sale detail page (shows "👀 N people looking" when 2+ viewers). ✅ SHIPPED
