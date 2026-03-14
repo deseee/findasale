@@ -20,13 +20,18 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
 import NearMissNudge from '../../../../components/NearMissNudge'; // Feature 61
+import ItemPhotoManager from '../../../../components/ItemPhotoManager'; // Phase 16
+import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Phase 3
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
 interface ItemEditState {
   title: string;
+  description: string;
   price: number;
   category: string;
+  condition: string;
+  quantity: number;
   aspectRatio: AspectRatio;
   brightness: number;
   contrast: number;
@@ -37,10 +42,14 @@ interface ItemEditState {
 interface Item {
   id: string;
   title: string;
+  description: string | null;
   price: number | null;
   category: string | null;
+  condition: string | null;
+  quantity: number;
   photoUrls: string[];
   aiConfidence: number | null;
+  isAiTagged: boolean;
   backgroundRemoved: boolean;
   autoEnhanced: boolean;
   draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
@@ -94,15 +103,15 @@ function buildCloudinaryUrl(
   return url.replace('/upload/', `/upload/${transforms.join(',')}/`);
 }
 
-function confidenceBorderClass(score: number | null | undefined): string {
-  if (score == null) return 'border-l-4 border-warm-200';
+function confidenceBorderClass(score: number | null | undefined, isAiTagged?: boolean): string {
+  if (!isAiTagged || score == null) return 'border-l-4 border-warm-200';
   if (score >= 0.8) return 'border-l-4 border-green-500';
   if (score >= 0.55) return 'border-l-4 border-amber-400';
   return 'border-l-4 border-red-500';
 }
 
-function confidenceLabel(score: number | null | undefined): { text: string; color: string } {
-  if (score == null) return { text: 'Manual', color: 'text-warm-500' };
+function confidenceLabel(score: number | null | undefined, isAiTagged?: boolean): { text: string; color: string } {
+  if (!isAiTagged || score == null) return { text: 'Manual', color: 'text-warm-500' };
   if (score >= 0.8) return { text: 'Good', color: 'text-green-600' };
   if (score >= 0.55) return { text: 'Review', color: 'text-amber-600' };
   return { text: 'Low', color: 'text-red-600' };
@@ -199,8 +208,11 @@ const ReviewPage = () => {
     if (!editStates.has(item.id)) {
       editStates.set(item.id, {
         title: item.title,
+        description: item.description ?? '',
         price: item.price ?? 0,
         category: item.category ?? '',
+        condition: item.condition ?? '',
+        quantity: item.quantity ?? 1,
         aspectRatio: '4:3',
         brightness: 50,
         contrast: 50,
@@ -225,12 +237,24 @@ const ReviewPage = () => {
       itemId: item.id,
       updates: {
         title: editState.title,
+        description: editState.description,
         price: editState.price,
         category: editState.category,
+        condition: editState.condition,
+        quantity: editState.quantity,
         backgroundRemoved: editState.backgroundRemoved,
       },
     });
     showToast('Item saved', 'success');
+  };
+
+  const handlePublishItem = async (item: Item) => {
+    const newStatus = item.draftStatus === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
+    await updateItemMutation.mutateAsync({
+      itemId: item.id,
+      updates: { draftStatus: newStatus } as any,
+    });
+    showToast(newStatus === 'PUBLISHED' ? 'Item published' : 'Item unpublished', 'success');
   };
 
   const handleBulkPrice = () => {
@@ -293,13 +317,19 @@ const ReviewPage = () => {
 
       <main className="min-h-screen bg-warm-50 py-8">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="mb-8">
+          <div className="mb-8 flex items-center justify-between">
             <Link
               href={`/organizer/add-items/${saleId}`}
               className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
             >
               &larr; Back to Capture
             </Link>
+            <button
+              onClick={() => setShowBuyerPreview(true)}
+              className="px-4 py-2 bg-white border border-warm-300 rounded-lg text-warm-700 hover:bg-warm-50 font-medium text-sm"
+            >
+              👁 Buyer Preview
+            </button>
           </div>
 
           {showBuyerPreview ? (
@@ -393,34 +423,238 @@ const ReviewPage = () => {
                     <p>No items in this sale yet.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {items.map((item) => {
-                      const conf = confidenceLabel(item.aiConfidence);
+                  <>
+                    {selectedItems.size > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex flex-wrap items-center gap-3">
+                        <span className="text-sm font-medium text-amber-800">{selectedItems.size} selected</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Bulk price..."
+                            value={bulkPrice}
+                            onChange={(e) => setBulkPrice(e.target.value)}
+                            className="border border-warm-300 rounded px-2 py-1 text-sm w-28"
+                          />
+                          <button
+                            onClick={handleBulkPrice}
+                            disabled={!bulkPrice || bulkUpdateMutation.isPending}
+                            className="px-3 py-1 bg-amber-600 text-white text-sm rounded disabled:opacity-50"
+                          >
+                            Set Price
+                          </button>
+                        </div>
+                        <select
+                          value={bulkCategory}
+                          onChange={(e) => { setBulkCategory(e.target.value); handleBulkCategory(e.target.value); }}
+                          className="border border-warm-300 rounded px-2 py-1 text-sm"
+                        >
+                          <option value="">Bulk category...</option>
+                          {CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => setSelectedItems(new Set())}
+                          className="px-3 py-1 border border-warm-300 text-warm-700 text-sm rounded hover:bg-warm-50"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {items.map((item) => {
+                      const conf = confidenceLabel(item.aiConfidence, item.isAiTagged);
                       return (
                         <div
                           key={item.id}
-                          className={`bg-white border rounded-lg overflow-hidden p-4 flex items-center gap-4 ${confidenceBorderClass(item.aiConfidence)}`}
+                          className={`bg-white border rounded-lg overflow-hidden ${confidenceBorderClass(item.aiConfidence, item.isAiTagged)}`}
                         >
-                          {item.photoUrls[0] && (
-                            <img
-                              src={item.photoUrls[0]}
-                              alt={item.title}
-                              className="w-16 h-16 object-cover rounded"
+                          {/* Collapsed row — always visible */}
+                          <div
+                            className="p-4 flex items-center gap-4 cursor-pointer hover:bg-warm-50"
+                            onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.has(item.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const next = new Set(selectedItems);
+                                if (e.target.checked) next.add(item.id);
+                                else next.delete(item.id);
+                                setSelectedItems(next);
+                              }}
+                              className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                          )}
-                          <div className="flex-1">
-                            <p className="font-semibold text-warm-900">{item.title}</p>
-                            <p className="text-sm text-warm-600">
-                              {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'} \u00B7 {item.category || 'Uncategorized'}
-                            </p>
+                            {item.photoUrls[0] && (
+                              <img src={item.photoUrls[0]} alt={item.title} className="w-16 h-16 object-cover rounded flex-shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-warm-900 truncate">{item.title}</p>
+                              <p className="text-sm text-warm-600">
+                                {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <div className={`text-xs font-semibold ${conf.color}`}>
+                                {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
+                              </div>
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                item.draftStatus === 'PUBLISHED'
+                                  ? 'bg-green-100 text-green-700'
+                                  : item.draftStatus === 'PENDING_REVIEW'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-warm-100 text-warm-600'
+                              }`}>
+                                {item.draftStatus === 'PUBLISHED' ? 'Published' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
+                              </span>
+                              <span className="text-warm-400 text-sm">{expandedItemId === item.id ? '▲' : '▼'}</span>
+                            </div>
                           </div>
-                          <div className={`text-xs font-semibold ${conf.color}`}>
-                            {conf.text}{item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
-                          </div>
+
+                          {/* Expanded edit panel */}
+                          {expandedItemId === item.id && (() => {
+                            const editState = getEditState(item);
+                            return (
+                              <div className="border-t border-warm-200 p-4 bg-warm-50 space-y-4">
+
+                                {/* Photos */}
+                                <div>
+                                  <label className="block text-xs font-medium text-warm-700 mb-2">Photos</label>
+                                  <ItemPhotoManager
+                                    itemId={item.id}
+                                    initialPhotos={item.photoUrls || []}
+                                  />
+                                </div>
+
+                                {/* Title */}
+                                <div>
+                                  <label className="block text-xs font-medium text-warm-700 mb-1">Title</label>
+                                  <input
+                                    type="text"
+                                    value={editState.title}
+                                    onChange={(e) => handleEditChange(item.id, 'title', e.target.value)}
+                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  />
+                                </div>
+
+                                {/* Description */}
+                                <div>
+                                  <label className="block text-xs font-medium text-warm-700 mb-1">Description</label>
+                                  <textarea
+                                    rows={3}
+                                    value={editState.description}
+                                    onChange={(e) => handleEditChange(item.id, 'description', e.target.value)}
+                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  />
+                                </div>
+
+                                {/* Price */}
+                                <div>
+                                  <label className="block text-xs font-medium text-warm-700 mb-1">Price ($)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={editState.price}
+                                    onChange={(e) => handleEditChange(item.id, 'price', parseFloat(e.target.value) || 0)}
+                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  />
+                                  <div className="mt-2">
+                                    <PriceSuggestion
+                                      title={editState.title}
+                                      category={editState.category}
+                                      condition={editState.condition}
+                                      onApplyPrice={(price) => handleEditChange(item.id, 'price', price)}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Category + Condition */}
+                                <div className="flex gap-3">
+                                  <div className="flex-1">
+                                    <label className="block text-xs font-medium text-warm-700 mb-1">Category</label>
+                                    <select
+                                      value={editState.category}
+                                      onChange={(e) => handleEditChange(item.id, 'category', e.target.value)}
+                                      className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    >
+                                      <option value="">Select category...</option>
+                                      {CATEGORIES.map((cat) => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="flex-1">
+                                    <label className="block text-xs font-medium text-warm-700 mb-1">Condition</label>
+                                    <select
+                                      value={editState.condition}
+                                      onChange={(e) => handleEditChange(item.id, 'condition', e.target.value)}
+                                      className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    >
+                                      <option value="">Select condition...</option>
+                                      <option value="NEW">New</option>
+                                      <option value="LIKE_NEW">Like New</option>
+                                      <option value="GOOD">Good</option>
+                                      <option value="FAIR">Fair</option>
+                                      <option value="POOR">Poor</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {/* Quantity */}
+                                <div className="w-32">
+                                  <label className="block text-xs font-medium text-warm-700 mb-1">Quantity</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={editState.quantity}
+                                    onChange={(e) => handleEditChange(item.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  />
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center justify-between pt-1 border-t border-warm-200">
+                                  <div className="flex items-center gap-3">
+                                    <Link
+                                      href={`/organizer/edit-item/${item.id}`}
+                                      className="text-sm text-amber-700 hover:text-amber-800 font-medium underline"
+                                    >
+                                      Full Edit Page →
+                                    </Link>
+                                    <button
+                                      onClick={() => handlePublishItem(item)}
+                                      disabled={updateItemMutation.isPending}
+                                      className={`px-3 py-1.5 text-sm font-medium rounded-lg disabled:opacity-50 ${
+                                        item.draftStatus === 'PUBLISHED'
+                                          ? 'bg-warm-100 text-warm-700 hover:bg-warm-200'
+                                          : 'bg-green-600 hover:bg-green-700 text-white'
+                                      }`}
+                                    >
+                                      {item.draftStatus === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
+                                    </button>
+                                  </div>
+                                  <button
+                                    onClick={() => handleSaveItem(item)}
+                                    disabled={updateItemMutation.isPending}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                                  >
+                                    {updateItemMutation.isPending ? 'Saving...' : 'Save Changes'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             </>
