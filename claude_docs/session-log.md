@@ -2,6 +2,14 @@
 
 ## Recent Sessions
 
+### 2026-03-14 · Session 160
+**Worked on:** Four Phase 4 features shipped and wired. #61 Near-Miss Nudges (progress indicator on review page when items 60–99% complete). #34 Hype Meter (real-time viewer count via viewerController + viewers.ts, shows on sale detail when 2+ people viewing). #35 Front Door Locator (entrance pin picker, schema migration created for Neon, wired into shopper sale view + organizer edit-sale page). #33 Share Card Factory (Cloudinary OG image generation, ogImage.ts utility + full OG/Twitter Card meta tags on items page). All 4 wired and tested locally.
+**Environment:** #35 migration `20260314193440_add_entrance_pin` applied locally, needs Neon deploy. #33 env var `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` added to frontend/.env.local, needs Vercel environment secret.
+**Known issue:** Railway backend randomly restarting, main page shows "Error Loading Sales" intermittently. No build errors in deploy logs. Suspect route conflict (viewersRouter might be interfering with saleRoutes) or cold starts.
+**Files changed:** ~15 files across frontend + backend. All tested locally. Not yet pushed to GitHub (pending Railway investigation).
+**Next up:** (1) Debug and fix Railway backend restarts, (2) apply entrance pin migration to Neon, (3) add NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME to Vercel, (4) test all 4 features end-to-end.
+**Blockers:** Railway backend instability blocking feature validation.
+
 ### 2026-03-14 · Session 159
 **Worked on:** Full codebase audit for Grand Rapids / Michigan references. Found and removed 35+ references across 19 files. Hardcoded user-visible UI strings (footer, pin badge, leaderboard heading, plan subheading) to generic "near you" / "local" language. Genericized OG/Twitter meta tags on index, about, contact, map pages. Updated all `|| 'Grand Rapids'` env var fallbacks. Cleared regionConfig.ts hardcoded defaults. Updated seed org names and test fixtures. Legal text in terms.tsx and privacy.tsx intentionally preserved.
 **Decisions:** UI text hardcoded generic (not env-var driven) so Vercel/Railway env vars can't override. Legal references (Michigan LLC, governing law, Kent County, Michigan residents rights) stay as-is.

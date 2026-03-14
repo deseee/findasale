@@ -7,6 +7,14 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 160 COMPLETE (2026-03-14) — FOUR FEATURES SHIPPED + RAILWAY BACKEND RESTART INVESTIGATION:**
+- **#61 Near-Miss Nudges** — `NearMissNudge.tsx` component wired into organizer review page. Shows nudge when items are 60–99% complete (photo + price present). No schema change. ✅ SHIPPED
+- **#34 Hype Meter** — Viewer tracking in `viewerController.ts` + `viewers.ts` (60s expiry, in-memory), `HypeMeter.tsx` wired into sale detail page (shows "👀 N people looking" when 2+ viewers). ✅ SHIPPED
+- **#35 Front Door Locator** — Entrance pin picker (`EntrancePinPicker.tsx`, `EntranceMarker.tsx`, `SaleMap.tsx` wiring). Schema migration `20260314193440_add_entrance_pin` applied locally (entranceLat, entranceLng, entranceNote on Sale). Wired into shopper view + organizer edit-sale. **⚠️ Neon migration pending.**
+- **#33 Share Card Factory** — OG/Twitter Card generation. `ogImage.ts` Cloudinary utility, `SaleOGMeta.tsx`, `ItemOGMeta.tsx` wired into items page. `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=db8yhzjdq` added to frontend/.env.local. **⚠️ Needs Vercel env var + potential backend URL config.**
+- **⚠️ OPEN ISSUE:** Backend on Railway restarting randomly. Main page intermittently shows "Error Loading Sales". Deploy logs show no build errors. May be route conflict (viewersRouter vs saleRoutes) or cold starts. Under investigation.
+- **Last Updated:** 2026-03-14 (session 160 — 4 features shipped, Railway restarts flagged)
+
 **Session 159 COMPLETE (2026-03-14) — GRAND RAPIDS / MICHIGAN REFERENCE AUDIT:**
 - **Full codebase audit:** Grepped all `.ts`/`.tsx` files for "Grand Rapids" and "Michigan". Found 35+ references across 19 files.
 - **User-facing content fixed:** trending.tsx meta, neighborhoods/[slug].tsx page title + meta + link text, neighborhoods/index.tsx title/meta/subheading/Downtown card, cities/index.tsx all Michigan references, email-digest-preview.tsx mock data, leaderboard subheading, plan.tsx subheading, Layout.tsx footer, index.tsx pin badge.

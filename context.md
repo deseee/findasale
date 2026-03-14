@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-14T18:47:00.706Z*
+*Generated at 2026-03-14T20:17:55.013Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -40,6 +40,8 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │       └── skill-creator/
 │           └── SKILL.md
 ├── CLAUDE.md
+├── FEATURE_35_IMPLEMENTATION.md
+├── FEATURE_35_WIRING_SNIPPETS.md
 ├── README.md
 ├── ai-config/
 │   └── global-instructions.md
@@ -94,7 +96,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (53 files)
+│   │   │   ├── controllers/ (54 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
@@ -103,7 +105,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── lib/ (3 files)
 │   │   │   ├── middleware/ (2 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (54 files)
+│   │   │   ├── routes/ (55 files)
 │   │   │   ├── services/ (19 files)
 │   │   │   └── utils/ (2 files)
 │   │   └── tsconfig.json
@@ -115,7 +117,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (78 migrations)
+│   │   │   ├── migrations/ (79 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -125,11 +127,12 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── .gitignore
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
-│   │   ├── components/ (94 files)
+│   │   ├── FEATURE_33_OG_META_WIRING.md
+│   │   ├── components/ (101 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (1 files)
 │   │   ├── hooks/ (9 files)
-│   │   ├── lib/ (3 files)
+│   │   ├── lib/ (4 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
 │   │   ├── next.config.js
