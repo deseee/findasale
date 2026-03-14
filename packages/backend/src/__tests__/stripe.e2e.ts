@@ -141,7 +141,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
         title:        'Stripe E2E Regular Sale',
         description:  'Created by stripe.e2e.ts — safe to delete',
         address:      '100 Test Ave',
-        city:         'Grand Rapids',
+        city:         'Springfield',
         state:        'MI',
         zip:          '49503',
         lat:          42.9629,   // schema field is `lat`, not `latitude`
@@ -160,7 +160,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
         title:        'Stripe E2E Auction Sale',
         description:  'Created by stripe.e2e.ts — safe to delete',
         address:      '100 Test Ave',
-        city:         'Grand Rapids',
+        city:         'Springfield',
         state:        'MI',
         zip:          '49503',
         lat:          42.9629,

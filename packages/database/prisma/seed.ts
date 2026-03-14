@@ -4,11 +4,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 const prisma = new PrismaClient();
 
-// Seed configuration — allows seeding different regions via environment variables
-// Defaults to Grand Rapids, MI for backward compatibility
+// Seed configuration — override via environment variables to seed any region
 const SEED_CONFIG = {
-  city: process.env.SEED_CITY || 'Grand Rapids',
-  state: process.env.SEED_STATE || 'MI',
+  city: process.env.SEED_CITY || 'Riverside',
+  state: process.env.SEED_STATE || 'IL',
   stateAbbrev: process.env.SEED_STATE_ABBREV || 'MI',
   centerLat: parseFloat(process.env.SEED_CENTER_LAT || '42.96'),
   centerLng: parseFloat(process.env.SEED_CENTER_LNG || '-85.66'),
@@ -38,9 +37,9 @@ const lastNames = [
 ];
 
 const businessNames = [
-  'Lakeshore Estate Sales', 'West Michigan Liquidators', 'Grand Rapids Auctions',
+  'Lakeshore Estate Sales', 'Riverside Liquidators', 'Local Estate Auctions',
   'Heritage Estate Services', 'Lakewood Estate Clearance', 'Priority Estate Sales',
-  'Michigan Liquidation Solutions', 'Treasure Find Estate Sales', 'Valley Estate Auctions',
+  'Premier Liquidation Solutions', 'Treasure Find Estate Sales', 'Valley Estate Auctions',
   'Downtown Downsizing', 'Eastside Estate Specialists', 'West side Collectibles',
 ];
 

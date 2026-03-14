@@ -1,6 +1,6 @@
 /**
  * Neighborhood Directory — Sprint U2
- * Static overview page listing all supported Grand Rapids neighborhoods.
+ * Static overview page listing all supported neighborhoods.
  * Each card links to /neighborhoods/[slug] for full SEO landing page.
  * Route: /neighborhoods
  */
@@ -15,7 +15,7 @@ export const GRAND_RAPIDS_NEIGHBORHOODS: Array<{
   name: string;
   description: string;
 }> = [
-  { slug: 'downtown',       name: 'Downtown',         description: 'Heart of Grand Rapids — lofts, condos, and eclectic finds.' },
+  { slug: 'downtown',       name: 'Downtown',         description: 'City center — lofts, condos, and eclectic finds.' },
   { slug: 'eastown',        name: 'Eastown',           description: 'Vibrant district known for mid-century gems and vintage décor.' },
   { slug: 'east-hills',     name: 'East Hills',        description: 'Historic neighborhood with antiques, art, and craftsman furniture.' },
   { slug: 'heritage-hill',  name: 'Heritage Hill',     description: 'Victorian homes full of heirloom pieces and estate jewelry.' },
@@ -35,10 +35,10 @@ const NeighborhoodsPage = () => {
   return (
     <Layout>
       <Head>
-        <title>Estate Sales by Neighborhood — Grand Rapids, MI | FindA.Sale</title>
+        <title>Estate Sales by Neighborhood | FindA.Sale</title>
         <meta
           name="description"
-          content="Browse upcoming estate sales by neighborhood in Grand Rapids, Michigan. From Eastown to Heritage Hill, find estate sales near you on FindA.Sale."
+          content="Browse upcoming estate sales by neighborhood. Find estate sales near you on FindA.Sale."
         />
         <link rel="canonical" href="https://finda.sale/neighborhoods" />
       </Head>
@@ -52,7 +52,7 @@ const NeighborhoodsPage = () => {
               Estate Sales by Neighborhood
             </h1>
             <p className="text-warm-500 text-sm">
-              Grand Rapids, Michigan • Browse sales close to home
+              Browse sales close to home
             </p>
           </div>
 

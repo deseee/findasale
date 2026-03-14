@@ -1,6 +1,6 @@
 /**
  * Cities Index Page — SEO Landing Pages
- * Displays all Michigan cities with active estate sales.
+ * Displays all cities with active estate sales.
  * Each city card shows: city name, state, active sales count, last sale date.
  * Route: /cities
  */
@@ -35,16 +35,16 @@ const CitiesPage = () => {
   return (
     <Layout>
       <Head>
-        <title>Estate Sales by City — Michigan | FindA.Sale</title>
+        <title>Estate Sales by City | FindA.Sale</title>
         <meta
           name="description"
-          content="Browse upcoming estate sales by city across Michigan. Find furniture, antiques, and collectibles in your area on FindA.Sale."
+          content="Browse upcoming estate sales by city near you. Find furniture, antiques, and collectibles in your area on FindA.Sale."
         />
         <link rel="canonical" href="https://finda.sale/cities" />
-        <meta property="og:title" content="Estate Sales by City — Michigan | FindA.Sale" />
+        <meta property="og:title" content="Estate Sales by City | FindA.Sale" />
         <meta
           property="og:description"
-          content="Find estate sales across Michigan cities. Browse by location and discover furniture, antiques, and more."
+          content="Find local estate sales near you. Browse by city and discover furniture, antiques, and more."
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://finda.sale/cities" />
@@ -59,7 +59,7 @@ const CitiesPage = () => {
               Estate Sales by City
             </h1>
             <p className="text-warm-600 text-lg">
-              Michigan • Browse sales in your area
+              Browse sales in your area
             </p>
           </div>
 

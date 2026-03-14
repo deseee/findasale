@@ -10,8 +10,8 @@ interface Message {
 }
 
 const PlanPage = () => {
-  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
-  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'your state';
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -103,7 +103,7 @@ const PlanPage = () => {
           <div className="max-w-2xl mx-auto px-4">
             <h1 className="text-4xl font-bold text-warm-900 mb-2">Estate Sale Planning Assistant</h1>
             <p className="text-warm-600 text-lg">
-              Free guidance for families and executors in {defaultCity}
+              Free guidance for families and executors
             </p>
           </div>
         </div>

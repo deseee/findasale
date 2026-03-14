@@ -6,7 +6,7 @@ import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
-  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
 
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -309,7 +309,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <div>
               <h3 className="text-lg font-bold mb-4">FindA.Sale</h3>
               <p className="text-warm-400 mb-4">
-                Helping you find the best estate sales and auctions in {defaultCity} and beyond.
+                Helping you find the best local estate sales and auctions near you.
               </p>
               <div className="bg-warm-700 rounded-lg p-4">
                 <p className="text-xs text-warm-300 font-semibold mb-2">Need Help?</p>
