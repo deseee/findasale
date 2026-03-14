@@ -789,6 +789,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         optimisticLockVersion: true,
         // Camera Workflow v2: Add new fields for publishing page
         aiConfidence: true,
+        isAiTagged: true,
         backgroundRemoved: true,
         faceDetected: true,
         autoEnhanced: true,
@@ -820,6 +821,8 @@ export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
         saleId: true,
         draftStatus: true,
         aiErrorLog: true,
+        aiConfidence: true,
+        isAiTagged: true,
         title: true,
         photoUrls: true,
         sale: {
