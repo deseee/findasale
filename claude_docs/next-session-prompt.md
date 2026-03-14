@@ -1,49 +1,35 @@
 # Next Session Resume Prompt
-*Written: 2026-03-14T18:12:24Z*
+*Written: 2026-03-14T23:59:00Z*
 *Session ended: normally*
 
-## Resume Priority — Critical Issue First
-
-**Railway backend is restarting randomly.** Main page shows "Error Loading Sales" intermittently. No build errors in deploy logs. This blocks feature validation and all 4 shipped features (#61, #34, #35, #33). **Fix this before anything else.**
-
 ## What Was Completed This Session
-Four Phase 4 features built and wired (not yet pushed to GitHub):
-- **#61 Near-Miss Nudges** — Progress nudge on review page (60–99% complete)
-- **#34 Hype Meter** — Real-time viewer count on sale detail (viewerController + viewers.ts)
-- **#35 Front Door Locator** — Entrance pin picker, schema migration created, wired into edit-sale + shopper view
-- **#33 Share Card Factory** — Cloudinary OG image generation, full OG/Twitter Card meta tags
+Session 162: Chrome audit of Review & Publish page. All 7 checks passed. Two P1 bugs found and fixed live.
 
-## In Progress / Pending Deployment
-All 4 features are tested locally but **NOT YET PUSHED** due to Railway investigation.
+## Immediate Priority
 
-## What To Do Next
+### URGENT: Railway backend still restarting randomly (from session 160)
+**Not fixed yet.** Main page shows "Error Loading Sales" intermittently. This blocks the 4 features from session 160 that are on GitHub main but haven't been verified on production backend.
+1. Check Railway logs for error pattern
+2. Fix and stabilize Railway
+3. Then test the 4 session 160 features end-to-end: #61 Near-Miss Nudges, #34 Hype Meter, #35 Front Door Locator, #33 Share Card Factory
 
-### URGENT (Session Start)
-1. **Debug Railway backend restarts** — Check Railway dashboard for error logs. Look for:
-   - Route conflicts (viewersRouter might be interfering with existing saleRoutes)
-   - Missing middleware or authentication guards
-   - Cold start timeouts
-   - Consider rolling back recent viewers/viewerController changes if Railway logs point to them
-2. Once Railway is stable, push all 4 features to GitHub via `.\push.ps1`
+## Pending Deployment Actions
+- **Neon migration:** `20260314193440_add_entrance_pin` (Front Door Locator, #35) — still needs `prisma migrate deploy`
+- **Vercel env var:** `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=db8yhzjdq` still needed in Vercel project settings
 
-### Secondary (After Railway Fixed)
-3. **Deploy entrance pin migration to Neon:** Run `prisma migrate deploy` with migration `20260314193440_add_entrance_pin` against Neon production
-4. **Add Vercel env var:** `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=db8yhzjdq` to Vercel project settings
-5. **Test all 4 features end-to-end** on production (Vercel + Railway)
-6. Once confirmed working, resume roadmap P1: **#24 Holds** (1 sprint, trust blocker for beta)
+## Open Bugs (Non-Blocking)
+- **P2:** Item thumbnail images on Review & Publish page break on page reload — Cloudinary URLs load on first visit but fail on subsequent navigation. Needs investigation.
+- **Schema tech debt:** `aiConfidence Float @default(0.5)` should be `Float?` with data migration (backfill manual items to null). Not urgent — masked by `isAiTagged` check in UI.
 
-## Key Files Changed (Waiting to Push)
-Frontend: NearMissNudge.tsx, HypeMeter.tsx, EntrancePinPicker.tsx, EntrancePinPickerInner.tsx, EntranceMarker.tsx, SaleOGMeta.tsx, ItemOGMeta.tsx, SaleMap.tsx, SaleMapInner.tsx, add-items/[saleId].tsx, edit-sale/[id].tsx, sales/[id].tsx, items page Head block
-Backend: viewerController.ts, viewers.ts, itemController.ts, routes wiring (index.ts)
-Schema: Migration 20260314193440_add_entrance_pin (created locally, needs Neon deploy)
+## After Railway is Stable
+- Resume roadmap P1: **#24 Holds** (1 sprint, trust blocker for beta)
+- Brand Voice session (on upcoming list)
 
 ## Environment Status
-- **frontend/.env.local** — NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME added, needs copying to Vercel
-- **Vercel GitHub App** — still potentially disconnected (flagged session 149)
+- **Vercel GitHub App** — auto-deploying (confirmed session 162)
+- **Railway** — unstable (main blocker, carry from session 160)
 - **Neon migrations** — 72 current, +1 pending (entrance pin)
-- **Railway** — unstable (main blocker)
+- **Roadmap** — v27, next priority after railway fix: #24 Holds
 
 ## Context
-- Roadmap v27, next priority after fix: #24 Holds (1 sprint)
-- Brand Voice session on upcoming list
 - Load STATE.md and CLAUDE.md before starting work

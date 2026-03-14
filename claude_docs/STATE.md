@@ -7,6 +7,16 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 162 COMPLETE (2026-03-14) — REVIEW & PUBLISH CHROME AUDIT + P1 BUG FIXES + EDIT WIRING:**
+- **Chrome audit of Review & Publish page:** All 7 checks passed. Page loads without errors, 16 items shown, "Review & Publish →" link visible, "Publish All" correctly absent, "Back to Capture" link works, Visible/Hidden labels correct, Near-Miss Nudge (#61) working.
+- **Bug 1 fixed (P1):** `\u00B7` separator in item cards rendered as literal text (JSX text node Unicode escape not processed). Fixed: changed to `{' · '}` in review.tsx line 415.
+- **Bug 2 fixed (P1):** Manual Entry items showed "Low (50%)" confidence label instead of "Manual". Root cause: `aiConfidence Float @default(0.5)` in schema. Fixed via `isAiTagged` field — updated `confidenceLabel()` and `confidenceBorderClass()` to check `isAiTagged` first; added field to Item interface + backend select clause.
+- **Bug 3 fixed (P1):** Item cards were completely non-interactive — all state/handlers (`expandedItemId`, `editStates`, `selectedItems`, `bulkPrice`, `handleSaveItem`, etc.) were defined but not wired to JSX. Fixed: checkboxes, click-to-expand edit panel (title/price/category/Save), bulk toolbar, Buyer Preview button all wired and verified live.
+- **Schema tech debt noted:** `aiConfidence Float @default(0.5)` should be changed to `Float?` with a data migration post-beta to clean up existing manual items. Not urgent — `isAiTagged` check masks it in the UI.
+- **Files changed:** `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`, `packages/backend/src/controllers/itemController.ts`
+- **All changes on GitHub main.** Vercel auto-deploying. All fixes verified live.
+- **Last Updated:** 2026-03-14 (session 162)
+
 **Session 161 COMPLETE (2026-03-14) — REVIEW PAGE FIXES + ADD-ITEMS UX IMPROVEMENTS:**
 - **3 wiped files restored:** `ActivityFeed.tsx`, `HypeMeter.tsx`, `sales/[id].tsx` — all wiped by empty MCP push in prior session (commit `ad542263`). Restored via MCP push (commit `52041ee`).
 - **Review & Publish page data source fix:** Page was fetching from `/items/drafts` (DRAFT+PENDING_REVIEW only), but all 16 items were created via Manual Entry (draftStatus='PUBLISHED'). Switched to `/items?saleId=` endpoint so all items appear regardless of creation method.

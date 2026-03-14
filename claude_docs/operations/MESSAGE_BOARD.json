@@ -2,6 +2,33 @@
   "_schema": "MESSAGE_BOARD v2 — rebuilt 2026-03-11 session 146. Max 20 messages. Prune oldest on overflow.",
   "messages": [
     {
+      "id": "msg-163-review-jsx-wired",
+      "from": "findasale-dev",
+      "to": "patrick",
+      "timestamp": "2026-03-14T23:15:00Z",
+      "type": "completion",
+      "message": "REVIEW & PUBLISH PAGE JSX WIRED — COMPLETE. All 6 state handlers now connected to JSX. (1) Header: Added Buyer Preview button (onClick -> setShowBuyerPreview). (2) Bulk toolbar: Renders when selectedItems.size > 0 above items list — shows selection count, bulk price input + Set Price button, bulk category dropdown with immediate apply, Clear button. (3) Item cards: Replaced static read-only div with interactive expandable version — collapsed row (checkbox + thumbnail + title/price/category + confidence label + chevron) always visible, click to expand/collapse edit panel below. (4) Edit panel: Title input (handleEditChange), Price input, Category select, Save Changes button (onClick -> handleSaveItem). (5) Buyer Preview: Already had toggle button at bottom; now wired header button to setShowBuyerPreview(true). (6) All event handlers (setSelectedItems, setExpandedItemId, handleEditChange, handleSaveItem, handleBulkPrice, handleBulkCategory) now connected. File: packages/frontend/pages/organizer/add-items/[saleId]/review.tsx (554 lines, 16.8 KB). Commit SHA: 1f7082926eb8062d86fa4cd99c70101ca93554e1. Ready for Vercel deploy.",
+      "feedbackLoop": null
+    },
+    {
+      "id": "msg-162-wrap-complete",
+      "from": "findasale-records",
+      "to": "patrick",
+      "timestamp": "2026-03-14T23:59:00Z",
+      "type": "wrap-complete",
+      "message": "SESSION 162 WRAP COMPLETE. Chrome audit of Review & Publish page — all 7 checks passed. Two P1 bugs found and fixed live: (1) `\\u00B7` unicode separator rendering as literal text in JSX text nodes (fixed: `{' · '}` in review.tsx line 415). (2) Manual Entry items showing \"Low (50%)\" instead of \"Manual\" (root cause: schema default `aiConfidence Float @default(0.5)`; fixed via `isAiTagged` field check in confidenceLabel/confidenceBorderClass functions). One P2 bug open: thumbnail images broken on Review page reload (Cloudinary URLs load first visit, fail on subsequent navigation — needs investigation). Files changed: packages/frontend/pages/organizer/add-items/[saleId]/review.tsx, packages/backend/src/controllers/itemController.ts. Both pushed to GitHub main via MCP. Vercel auto-deploying. STATE.md, next-session-prompt.md, session-log.md, .checkpoint-manifest.json all updated. Ready for Patrick git push.",
+      "feedbackLoop": null
+    },
+    {
+      "id": "msg-159-p1-bugs-fixed",
+      "from": "findasale-dev",
+      "to": "patrick",
+      "timestamp": "2026-03-14T09:00:00Z",
+      "type": "completion",
+      "message": "P1 BUGS FIXED — REVIEW & PUBLISH PAGE CHROME AUDIT. Two critical bugs resolved: (1) Unicode separator rendering — fixed JSX escape sequence `\\u00B7` to actual middle dot character `{' · '}` in item card subtitle (packages/frontend/pages/organizer/add-items/[saleId]/review.tsx line 415). (2) Manual Entry items showing \"Low (50%)\" instead of \"Manual\" — root cause: items manually created get `aiConfidence = 0.5` (default), triggering 'Low' label logic. Solution: use `isAiTagged` field (already in schema) to distinguish manual vs AI-analyzed items. Updated confidenceLabel() and confidenceBorderClass() functions to check isAiTagged first; only show percentage for AI-tagged items. Backend: added `isAiTagged: true` to getDraftItemsBySaleId select clause (line 792) and getItemDraftStatus select clause (lines 824-825). TypeScript types updated: added `isAiTagged: boolean` to Item interface. Files changed: (1) packages/frontend/pages/organizer/add-items/[saleId]/review.tsx (interface + 2 helper functions + 2 call sites), (2) packages/backend/src/controllers/itemController.ts (2 endpoints). Both pushed via GitHub MCP. Ready for QA.",
+      "feedbackLoop": null
+    },
+    {
       "id": "msg-158-workflow-capture-findings",
       "from": "findasale-workflow",
       "to": "patrick",

@@ -16,6 +16,22 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+## Session 162 — 2026-03-14 — Review & Publish Chrome Audit + P1 Bug Fixes
+
+**Worked on:** Chrome audit of Review & Publish page (7 checks). All checks passed: link visible, page loads without errors, 16 items shown, Publish All correctly absent, Back to Capture link works, Visible/Hidden labels correct, Near-Miss Nudge (#61) working. Two P1 bugs diagnosed and fixed live. Bug 1: unicode separator `\u00B7` rendering as literal text (JSX text node issue) — fixed with `{' · '}` character in review.tsx line 415. Bug 2: Manual Entry items showing "Low (50%)" instead of "Manual" — root cause discovered: Prisma schema has `aiConfidence Float @default(0.5)`, every manual item gets 0.5. Fixed using existing `isAiTagged` boolean field — updated `confidenceLabel()` and `confidenceBorderClass()` to check `isAiTagged` first, only show percentage for AI-tagged items. Added `isAiTagged: boolean` to Item interface and backend select clauses. Bug 3 open (P2): thumbnail images break on page reload — Cloudinary URLs load on first visit but fail on subsequent navigation, root cause unknown.
+
+**Decisions:** Use `isAiTagged` field to distinguish manual vs AI items on frontend. Schema cleanup (change `aiConfidence` to nullable `Float?`) deferred post-beta. Manual items don't need percentage confidence displayed — only AI-tagged items show the confidence percentage.
+
+**Token efficiency:** Inline fixes, no subagent dispatches. Two focused edits (frontend + backend), verified live in Chrome. Low burn.
+
+**Token burn:** ~50k tokens (est.), 0 checkpoints.
+
+**Next up:** Fix Railway backend restarts (session 160 carry-forward). Then validate 4 features (#61, #34, #35, #33) end-to-end on production. Resume roadmap P1: #24 Holds.
+
+**Blockers:** Railway unstable (blocks session 160 feature validation). P2 thumbnail issue needs investigation.
+
+---
+
 ## Session 158 — 2026-03-13 — Repo Root Cleanup + Token Statusline Research
 
 **Worked on:** (1) Token statusline investigation — confirmed Cowork desktop UI does not pass `context_window` JSON to statusline scripts; bar stays at `Tokens: waiting...` indefinitely. Statusline script stored in `scripts/statusline-token-usage.sh`, CLAUDE.md §4 updated with session-init reinstall block to handle VM ephemerality. Token estimates calibrated from 19 sessions: avg ~13.6k/agent (prior 5k default was 2.6× too low), updated in conversation-defaults Rule 17, packaged as installable .skill. (2) Records audit of repo root — 5 unauthorized orphaned files identified and removed: `AGENT_QUICK_REFERENCE.md`, `CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md`, `STRIPE_WEBHOOK_HARDENING.md`, `fleet-redesign-proposal-v1.md`, `docs/CD2_PHASE2_TREASURE_HUNT.md`. All archived with index entries. `docs/` directory and `skill-updates/` directory removed.
