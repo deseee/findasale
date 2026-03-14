@@ -360,29 +360,30 @@ const EditSalePage = () => {
             </div>
 
             {/* Feature 35: Front Door Locator — entrance/parking pin */}
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-warm-700 mb-2">
-                Entrance / Parking Pin <span className="text-warm-400 font-normal">(optional)</span>
-              </label>
-              <p className="text-sm text-warm-500 mb-3">
-                Drop a pin to show shoppers exactly where to park or enter — especially useful for large properties.
-              </p>
-              <EntrancePinPicker
-                saleLat={formData.address ? undefined : undefined}
-                saleLng={formData.address ? undefined : undefined}
-                value={formData.entranceLat !== undefined && formData.entranceLng !== undefined ? {
-                  entranceLat: formData.entranceLat,
-                  entranceLng: formData.entranceLng,
-                  entranceNote: formData.entranceNote,
-                } : null}
-                onChange={(pin) => setFormData(prev => ({
-                  ...prev,
-                  entranceLat: pin?.entranceLat,
-                  entranceLng: pin?.entranceLng,
-                  entranceNote: pin?.entranceNote ?? '',
-                }))}
-              />
-            </div>
+            {sale?.lat && sale?.lng && (
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-warm-700 mb-2">
+                  Entrance / Parking Pin <span className="text-warm-400 font-normal">(optional)</span>
+                </label>
+                <p className="text-sm text-warm-500 mb-3">
+                  Drop a pin to show shoppers exactly where to park or enter — especially useful for large properties.
+                </p>
+                <EntrancePinPicker
+                  saleAddress={formData.address}
+                  saleLat={sale.lat}
+                  saleLng={sale.lng}
+                  initialEntranceLat={formData.entranceLat}
+                  initialEntranceLng={formData.entranceLng}
+                  initialEntranceNote={formData.entranceNote}
+                  onChange={(data) => setFormData(prev => ({
+                    ...prev,
+                    entranceLat: data.entranceLat,
+                    entranceLng: data.entranceLng,
+                    entranceNote: data.entranceNote ?? '',
+                  }))}
+                />
+              </div>
+            )}
 
             <button
               type="submit"
