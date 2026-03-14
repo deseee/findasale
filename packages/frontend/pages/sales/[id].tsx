@@ -25,7 +25,6 @@ import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import ActivityFeed from '../../components/ActivityFeed';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
-import HypeMeter from '../../components/HypeMeter'; // Feature 34: Hype Meter
 
 interface Sale {
   id: string;
@@ -348,9 +347,6 @@ const SaleDetailPage = () => {
             </div>
           </div>
         </div>
-
-        {/* Feature 34: Hype Meter — live viewer count */}
-        <HypeMeter saleId={sale.id} />
 
         {/* Organizer Info Card */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
