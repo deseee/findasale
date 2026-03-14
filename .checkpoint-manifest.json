@@ -4,17 +4,11 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S-current",
-    "startedAt": "2026-03-13T18:05:30.488Z",
-    "checkpoints": [
-      {
-        "at": "2026-03-13T18:05:30.488Z",
-        "tokensUsed": "~8k",
-        "note": "Pre-dispatch checkpoint — 4-agent parallel batch: cowork-power-user, findasale-workflow, findasale-architect, findasale-records. Task: Design rolling 96hr I/O capture file + scheduled analysis tasks."
-      }
-    ],
+    "sessionId": "S-162",
+    "startedAt": "2026-03-14T00:00:00.000Z",
+    "checkpoints": [],
     "compressionEvents": [],
-    "tokensUsed": "~8k"
+    "tokensUsed": "~50k (est)"
   },
   "checkpoints": [
     {
@@ -44,6 +38,17 @@
   ],
   "compressionEvents": [],
   "sessionHistory": [
+    {
+      "sessionId": 162,
+      "date": "2026-03-14",
+      "tokensBurned": "~50k (est)",
+      "checkpointsLogged": 0,
+      "compressions": 0,
+      "subagents": 0,
+      "filesChanged": 2,
+      "budgetDelta": "succeeded-on-plan",
+      "notes": "Chrome audit session. 7 checks, 2 P1 fixes shipped and verified live. review.tsx unicode separator + isAiTagged confidence label logic. Both verified live."
+    },
     {
       "sessionId": 151,
       "date": "2026-03-12",
