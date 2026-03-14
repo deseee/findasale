@@ -294,13 +294,19 @@ const ReviewPage = () => {
 
       <main className="min-h-screen bg-warm-50 py-8">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="mb-8">
+          <div className="mb-8 flex items-center justify-between">
             <Link
               href={`/organizer/add-items/${saleId}`}
               className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
             >
               &larr; Back to Capture
             </Link>
+            <button
+              onClick={() => setShowBuyerPreview(true)}
+              className="px-4 py-2 bg-white border border-warm-300 rounded-lg text-warm-700 hover:bg-warm-50 font-medium text-sm"
+            >
+              👁 Buyer Preview
+            </button>
           </div>
 
           {showBuyerPreview ? (
@@ -394,34 +400,146 @@ const ReviewPage = () => {
                     <p>No items in this sale yet.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {items.map((item) => {
+                  <>
+                    {selectedItems.size > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex flex-wrap items-center gap-3">
+                        <span className="text-sm font-medium text-amber-800">{selectedItems.size} selected</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Bulk price..."
+                            value={bulkPrice}
+                            onChange={(e) => setBulkPrice(e.target.value)}
+                            className="border border-warm-300 rounded px-2 py-1 text-sm w-28"
+                          />
+                          <button
+                            onClick={handleBulkPrice}
+                            disabled={!bulkPrice || bulkUpdateMutation.isPending}
+                            className="px-3 py-1 bg-amber-600 text-white text-sm rounded disabled:opacity-50"
+                          >
+                            Set Price
+                          </button>
+                        </div>
+                        <select
+                          value={bulkCategory}
+                          onChange={(e) => { setBulkCategory(e.target.value); handleBulkCategory(e.target.value); }}
+                          className="border border-warm-300 rounded px-2 py-1 text-sm"
+                        >
+                          <option value="">Bulk category...</option>
+                          {CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => setSelectedItems(new Set())}
+                          className="px-3 py-1 border border-warm-300 text-warm-700 text-sm rounded hover:bg-warm-50"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {items.map((item) => {
                       const conf = confidenceLabel(item.aiConfidence, item.isAiTagged);
                       return (
                         <div
                           key={item.id}
-                          className={`bg-white border rounded-lg overflow-hidden p-4 flex items-center gap-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged)}`}
+                          className={`bg-white border rounded-lg overflow-hidden ${confidenceBorderClass(item.aiConfidence, item.isAiTagged)}`}
                         >
-                          {item.photoUrls[0] && (
-                            <img
-                              src={item.photoUrls[0]}
-                              alt={item.title}
-                              className="w-16 h-16 object-cover rounded"
+                          {/* Collapsed row — always visible */}
+                          <div
+                            className="p-4 flex items-center gap-4 cursor-pointer hover:bg-warm-50"
+                            onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.has(item.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const next = new Set(selectedItems);
+                                if (e.target.checked) next.add(item.id);
+                                else next.delete(item.id);
+                                setSelectedItems(next);
+                              }}
+                              className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                          )}
-                          <div className="flex-1">
-                            <p className="font-semibold text-warm-900">{item.title}</p>
-                            <p className="text-sm text-warm-600">
-                              {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
-                            </p>
+                            {item.photoUrls[0] && (
+                              <img src={item.photoUrls[0]} alt={item.title} className="w-16 h-16 object-cover rounded flex-shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-warm-900 truncate">{item.title}</p>
+                              <p className="text-sm text-warm-600">
+                                {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <div className={`text-xs font-semibold ${conf.color}`}>
+                                {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
+                              </div>
+                              <span className="text-warm-400 text-sm">{expandedItemId === item.id ? '▲' : '▼'}</span>
+                            </div>
                           </div>
-                          <div className={`text-xs font-semibold ${conf.color}`}>
-                            {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
-                          </div>
+
+                          {/* Expanded edit panel */}
+                          {expandedItemId === item.id && (() => {
+                            const editState = getEditState(item);
+                            return (
+                              <div className="border-t border-warm-200 p-4 bg-warm-50 space-y-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-warm-700 mb-1">Title</label>
+                                  <input
+                                    type="text"
+                                    value={editState.title}
+                                    onChange={(e) => handleEditChange(item.id, 'title', e.target.value)}
+                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  />
+                                </div>
+                                <div className="flex gap-3">
+                                  <div className="flex-1">
+                                    <label className="block text-xs font-medium text-warm-700 mb-1">Price ($)</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={editState.price}
+                                      onChange={(e) => handleEditChange(item.id, 'price', parseFloat(e.target.value) || 0)}
+                                      className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    />
+                                  </div>
+                                  <div className="flex-1">
+                                    <label className="block text-xs font-medium text-warm-700 mb-1">Category</label>
+                                    <select
+                                      value={editState.category}
+                                      onChange={(e) => handleEditChange(item.id, 'category', e.target.value)}
+                                      className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    >
+                                      <option value="">Select category...</option>
+                                      {CATEGORIES.map((cat) => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+                                <div className="flex justify-end">
+                                  <button
+                                    onClick={() => handleSaveItem(item)}
+                                    disabled={updateItemMutation.isPending}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                                  >
+                                    {updateItemMutation.isPending ? 'Saving...' : 'Save Changes'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             </>
