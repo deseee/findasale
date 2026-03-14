@@ -41,6 +41,7 @@ interface Item {
   category: string | null;
   photoUrls: string[];
   aiConfidence: number | null;
+  isAiTagged: boolean;
   backgroundRemoved: boolean;
   autoEnhanced: boolean;
   draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
@@ -94,15 +95,15 @@ function buildCloudinaryUrl(
   return url.replace('/upload/', `/upload/${transforms.join(',')}/`);
 }
 
-function confidenceBorderClass(score: number | null | undefined): string {
-  if (score == null) return 'border-l-4 border-warm-200';
+function confidenceBorderClass(score: number | null | undefined, isAiTagged?: boolean): string {
+  if (!isAiTagged || score == null) return 'border-l-4 border-warm-200';
   if (score >= 0.8) return 'border-l-4 border-green-500';
   if (score >= 0.55) return 'border-l-4 border-amber-400';
   return 'border-l-4 border-red-500';
 }
 
-function confidenceLabel(score: number | null | undefined): { text: string; color: string } {
-  if (score == null) return { text: 'Manual', color: 'text-warm-500' };
+function confidenceLabel(score: number | null | undefined, isAiTagged?: boolean): { text: string; color: string } {
+  if (!isAiTagged || score == null) return { text: 'Manual', color: 'text-warm-500' };
   if (score >= 0.8) return { text: 'Good', color: 'text-green-600' };
   if (score >= 0.55) return { text: 'Review', color: 'text-amber-600' };
   return { text: 'Low', color: 'text-red-600' };
@@ -361,7 +362,7 @@ const ReviewPage = () => {
                   )}
                 </p>
 
-                {/* Feature 61: Near-Miss Nudge \u2014 encourage completing the listing */}
+                {/* Feature 61: Near-Miss Nudge — encourage completing the listing */}
                 <NearMissNudge
                   current={items.filter((i: any) => i.photoUrls?.length > 0 && i.price > 0).length}
                   target={items.length}
@@ -395,11 +396,11 @@ const ReviewPage = () => {
                 ) : (
                   <div className="space-y-3">
                     {items.map((item) => {
-                      const conf = confidenceLabel(item.aiConfidence);
+                      const conf = confidenceLabel(item.aiConfidence, item.isAiTagged);
                       return (
                         <div
                           key={item.id}
-                          className={`bg-white border rounded-lg overflow-hidden p-4 flex items-center gap-4 ${confidenceBorderClass(item.aiConfidence)}`}
+                          className={`bg-white border rounded-lg overflow-hidden p-4 flex items-center gap-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged)}`}
                         >
                           {item.photoUrls[0] && (
                             <img
@@ -411,11 +412,11 @@ const ReviewPage = () => {
                           <div className="flex-1">
                             <p className="font-semibold text-warm-900">{item.title}</p>
                             <p className="text-sm text-warm-600">
-                              {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'} \u00B7 {item.category || 'Uncategorized'}
+                              {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
                             </p>
                           </div>
                           <div className={`text-xs font-semibold ${conf.color}`}>
-                            {conf.text}{item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
+                            {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
                           </div>
                         </div>
                       );
