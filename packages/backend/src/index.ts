@@ -153,8 +153,19 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
+  skip: (req) => req.path.startsWith('/api/viewers'),  // viewer endpoints have their own limiter
 });
 app.use(globalLimiter);
+
+// Viewer ping limiter — higher limit, short window, exempt from global limiter
+const viewerLimiter = rateLimit({
+  windowMs: 60 * 1000,           // 1 minute window
+  max: 120,                       // 120 req/min per IP (covers ~4 active sale tabs with 30s ping + 15s poll each)
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => false,
+  message: { error: 'Too many viewer requests.' },
+});
 
 // Stricter limit on auth routes — 10 req / 15 min per IP
 const authLimiter = rateLimit({
@@ -227,7 +238,7 @@ app.use('/api/invites', inviteRoutes); // Beta invite code validation (public)
 app.use('/api/social-post', socialPostRoutes); // Social media post generator
 app.use('/api/coupons', couponsRouter);         // Sprint 3: Shopper Loyalty Coupons
 app.use('/api/routes', routeRoutes);            // D3: Map route planning
-app.use('/api/sales', viewersRouter);           // Feature 34: Hype Meter viewer counts
+app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hype Meter viewer counts
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

@@ -7,13 +7,13 @@ import {
 
 const router = Router();
 
-// GET /api/sales/:saleId/viewers — retrieve current viewer count
-router.get('/:saleId/viewers', getViewerCount);
+// GET /api/viewers/:saleId — retrieve current viewer count
+router.get('/:saleId', getViewerCount);
 
-// POST /api/sales/:saleId/viewers/ping — register/refresh a viewer session
-router.post('/:saleId/viewers/ping', pingViewer);
+// POST /api/viewers/:saleId/ping — register/refresh a viewer session
+router.post('/:saleId/ping', pingViewer);
 
-// DELETE /api/sales/:saleId/viewers/:viewerId — remove viewer on unmount
-router.delete('/:saleId/viewers/:viewerId', removeViewer);
+// DELETE /api/viewers/:saleId/:viewerId — remove viewer on unmount
+router.delete('/:saleId/:viewerId', removeViewer);
 
 export default router;
