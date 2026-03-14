@@ -129,7 +129,7 @@ const SaleDetailPage = () => {
   useEffect(() => {
     if (!id || !user) return;
     api.post('/points/track-visit', { saleId: id })
-      .then((res) => { if (res.data?.awarded === true) showToast('🏆 +1 pt earned!', 'points'); })
+      .then((res) => { if (res.data?.awarded === true) showToast('\ud83c\udfc6 +1 pt earned!', 'points'); })
       .catch(() => { /* non-fatal */ });
   }, [id, user]);
 
@@ -259,7 +259,7 @@ const SaleDetailPage = () => {
   const ogImageUrl = `${siteUrl}/api/og?${new URLSearchParams({
     type: 'sale',
     title: sale.title,
-    date: `${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}`,
+    date: `${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}`,
     location: `${sale.city}, ${sale.state}`,
     itemCount: sale.items?.length?.toString() || '0',
     organizer: sale.organizer?.businessName || '',
@@ -269,17 +269,17 @@ const SaleDetailPage = () => {
     <div className="min-h-screen bg-warm-50">
       <Head>
         <title>{sale.title} - FindA.Sale</title>
-        <meta name="description" content={`${sale.title} in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}.`} />
-        <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
-        <meta property="og:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}`} />
+        <meta name="description" content={`${sale.title} in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}.`} />
+        <meta property="og:title" content={`${sale.title} \u2014 FindA.Sale`} />
+        <meta property="og:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}`} />
         <meta property="og:image" content={ogImageUrl} />
         <meta property="og:url" content={`${siteUrl}/sales/${sale.id}`} />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
-        <meta name="twitter:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}–${format(saleEndDate, 'MMM d, yyyy')}`} />
+        <meta name="twitter:title" content={`${sale.title} \u2014 FindA.Sale`} />
+        <meta name="twitter:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}`} />
         <meta name="twitter:image" content={ogImageUrl} />
-        {/* Structured data — Event schema for Google rich results */}
+        {/* Structured data \u2014 Event schema for Google rich results */}
         {sale && (
           <script
             type="application/ld+json"
@@ -318,7 +318,7 @@ const SaleDetailPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
-          ← Back to browse sales
+          \u2190 Back to browse sales
         </Link>
 
         {/* Sale Header */}
@@ -448,7 +448,7 @@ const SaleDetailPage = () => {
                   className="mt-4 inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
                   aria-label={`Take a tour of ${sale.title}`}
                 >
-                  <span>🎬</span>
+                  <span>\ud83c\udfac</span>
                   <span>Take a Tour</span>
                 </button>
               </div>
@@ -554,7 +554,7 @@ const SaleDetailPage = () => {
           </div>
         </div>
 
-        {/* Photo Gallery — Phase 18: click to open lightbox */}
+        {/* Photo Gallery \u2014 Phase 18: click to open lightbox */}
         {sale.photoUrls && sale.photoUrls.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold mb-4 text-warm-900">
@@ -606,7 +606,7 @@ const SaleDetailPage = () => {
               singlePin={{
                 lat: sale.lat,
                 lng: sale.lng,
-                label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
+                label: `${sale.title} \u2014 ${sale.address}, ${sale.city}, ${sale.state}`,
               }}
               entrancePin={sale.entranceLat && sale.entranceLng ? {
                 lat: sale.entranceLat,
@@ -661,11 +661,11 @@ const SaleDetailPage = () => {
                   </span>
                 ) : isLowStock ? (
                   <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-sm font-bold px-3 py-1.5 rounded-full ring-1 ring-red-200 animate-pulse">
-                    🔥 Only {availableCount} left!
+                    \ud83d\udd25 Only {availableCount} left!
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-sm font-semibold px-3 py-1.5 rounded-full">
-                    ✓ {availableCount} available
+                    \u2713 {availableCount} available
                   </span>
                 )}
                 {soldCount > 0 && (
@@ -766,17 +766,17 @@ const SaleDetailPage = () => {
                         {/* CD2: Status social-proof badges */}
                         {item.status === 'RESERVED' && (
                           <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            🔒 On Hold
+                            \ud83d\udd12 On Hold
                           </span>
                         )}
                         {(item.status === 'SOLD' || item.status === 'PENDING') && (
                           <span className="inline-block bg-warm-700 text-white px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            ✓ Sold
+                            \u2713 Sold
                           </span>
                         )}
                         {item.auctionEndTime && (
                           <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            🔨 Auction
+                            \ud83d\udd28 Auction
                           </span>
                         )}
                         {item.category && (
