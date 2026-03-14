@@ -56,6 +56,8 @@ Do not ask "shall I continue?" mid-batch.
 Include this in session-log.md at wrap. Preserve Operational Anchors
 (package paths, script names, shell syntax) through compression.
 
+**Post-compression re-read (mandatory):** Immediately after any compression event — before continuing any work — re-read CORE.md §4 (Push Rules). The commit block format rule (always provide full `git add` + `git commit` + `.\push.ps1` block) is the first rule lost after compression. Re-reading §4 restores it. No exceptions.
+
 **Token checkpoints:** At natural pauses (after file read batch, after subagent
 dispatch, before wrap), log:
 `[CHECKPOINT — Turn N] Files read: X (est. Yk) | Tools: Z (est. Wk) | Session: ~Vk / 200k (P%)`
