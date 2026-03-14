@@ -34,8 +34,8 @@ const Leaderboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
-  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
 
   useEffect(() => {
     fetchLeaderboards();
@@ -88,7 +88,7 @@ const Leaderboard = () => {
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-warm-900 mb-2">City Leaderboards</h1>
             <p className="text-lg text-warm-600">
-              Celebrating the top shoppers and organizers in {defaultCity}
+              Celebrating the top local shoppers and organizers
             </p>
           </div>
 

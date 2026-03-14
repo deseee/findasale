@@ -37,8 +37,8 @@ const MapPage = () => {
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [filteredPins, setFilteredPins] = useState<SalePin[]>([]);
 
-  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
-  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
 
   const { data: sales, isLoading, isError, refetch } = useQuery({
     queryKey: ['sales', { limit: 200 }],
@@ -171,7 +171,7 @@ const MapPage = () => {
         <title>Sales Near You - FindA.Sale</title>
         <meta name="description" content="View estate sales on an interactive map near you" />
         <meta property="og:title" content="Estate Sales Map — FindA.Sale" />
-        <meta property="og:description" content={`See all upcoming estate sales on an interactive map. Filter by date and find sales near you in ${defaultCity}, ${defaultState}.`} />
+        <meta property="og:description" content="See all upcoming estate sales on an interactive map. Filter by date and find sales near you." />
         <meta property="og:url" content="https://finda.sale/map" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
@@ -184,7 +184,7 @@ const MapPage = () => {
             <div>
               <h1 className="text-3xl font-bold text-warm-900">Sales Near You</h1>
               <p className="text-sm text-warm-600 mt-1">
-                {isLoading ? '...' : `${saleCount} sale${saleCount !== 1 ? 's' : ''} near ${defaultCity}, ${defaultState}`}
+                {isLoading ? '...' : `${saleCount} sale${saleCount !== 1 ? 's' : ''} near you`}
               </p>
             </div>
             <button

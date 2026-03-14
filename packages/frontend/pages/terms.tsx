@@ -3,7 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 
 const TermsPage = () => {
-  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
   const effectiveDate = 'March 5, 2026';
 
   return (

@@ -50,7 +50,7 @@ export default function EmailDigestPreview() {
       { title: 'Set of Decorative Vases', price: 28.00 },
     ],
     upcomingSales: [
-      { title: 'Estate Sale - Downtown Grand Rapids', startDate: 'Mar 8 - Mar 10' },
+      { title: 'Estate Sale - Downtown', startDate: 'Mar 8 - Mar 10' },
       { title: 'Spring Clearance - Eastown', startDate: 'Mar 15 - Mar 17' },
     ],
   };

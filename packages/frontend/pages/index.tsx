@@ -43,8 +43,8 @@ const SaleCardSkeleton = () => (
 );
 
 const HomePage = () => {
-  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'Grand Rapids';
-  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'MI';
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
 
   const router = useRouter();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -153,14 +153,14 @@ const HomePage = () => {
       <Head>
         <title>FindA.Sale - Find Estate Sales Near You</title>
         <meta name="description" content="Find estate sales and auctions near you" />
-        <meta property="og:title" content={`FindA.Sale — Estate Sales in ${defaultCity}, ${defaultState}`} />
-        <meta property="og:description" content={`Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales in ${defaultCity}, ${defaultState}.`} />
+        <meta property="og:title" content="FindA.Sale — Find Estate Sales Near You" />
+        <meta property="og:description" content="Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales." />
         <meta property="og:url" content="https://finda.sale" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`FindA.Sale — Estate Sales in ${defaultCity}, ${defaultState}`} />
-        <meta name="twitter:description" content={`Browse estate sales and auctions near you in ${defaultCity}, ${defaultState}.`} />
+        <meta name="twitter:title" content="FindA.Sale — Find Estate Sales Near You" />
+        <meta name="twitter:description" content="Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales." />
         {/* Structured data — Organization + WebSite schema for Google */}
         <script
           type="application/ld+json"
@@ -171,7 +171,7 @@ const HomePage = () => {
               name: 'FindA.Sale',
               url: 'https://finda.sale',
               logo: 'https://finda.sale/icons/icon-512x512.png',
-              description: `${defaultCity} estate sale marketplace — browse, buy, and sell estate sale items online`,
+              description: 'Local estate sale marketplace — browse, buy, and sell estate sale items online',
               address: {
                 '@type': 'PostalAddress',
                 addressLocality: defaultCity,
@@ -290,7 +290,7 @@ const HomePage = () => {
               )}
               {!feedData?.personalized && sales && (
                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs font-medium text-blue-700">
-                  📍 Near {defaultCity}
+                  📍 Sales Near You
                 </span>
               )}
               <h2 className="text-3xl font-bold text-warm-900">Featured Sales</h2>

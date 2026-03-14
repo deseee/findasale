@@ -379,7 +379,7 @@ export const handleSalesViewedBadge = async (userId: string) => {
   }
 };
 
-// CD2 Phase 3: Grand Rapids Legend — awarded when user reaches 500 streak points
+// CD2 Phase 3: Local Legend — awarded when user reaches 500 streak points
 export const handleLegendBadge = async (userId: string) => {
   try {
     const user = await prisma.user.findUnique({

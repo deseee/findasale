@@ -2,7 +2,7 @@
  * Region Configuration
  *
  * Centralizes all region-specific settings (city, state, coordinates, timezones, etc.)
- * Loaded from environment variables with Grand Rapids as defaults.
+ * Loaded from environment variables with configurable defaults.
  *
  * This allows the app to serve any region by changing env vars at deployment time.
  */
@@ -31,17 +31,17 @@ const parseFloat_ = (key: string, defaultValue: number): number => {
 
 /**
  * Global region configuration
- * Defaults to Grand Rapids, MI so existing deployments don't break
+ * Default region config — override via environment variables
  */
 export const regionConfig: RegionConfig = {
-  city: parseEnv('DEFAULT_CITY', 'Grand Rapids'),
-  state: parseEnv('DEFAULT_STATE', 'Michigan'),
-  stateAbbrev: parseEnv('DEFAULT_STATE_ABBREV', 'MI'),
+  city: parseEnv('DEFAULT_CITY', ''),
+  state: parseEnv('DEFAULT_STATE', ''),
+  stateAbbrev: parseEnv('DEFAULT_STATE_ABBREV', ''),
   centerLat: parseFloat_('DEFAULT_LAT', 42.9619),
   centerLng: parseFloat_('DEFAULT_LNG', -85.6789),
   defaultSearchRadius: parseFloat_('DEFAULT_RADIUS_MILES', 25),
-  county: parseEnv('DEFAULT_COUNTY', 'Kent County'),
-  timeZone: parseEnv('DEFAULT_TIMEZONE', 'America/Detroit'),
+  county: parseEnv('DEFAULT_COUNTY', ''),
+  timeZone: parseEnv('DEFAULT_TIMEZONE', 'America/Chicago'),
 };
 
 /**

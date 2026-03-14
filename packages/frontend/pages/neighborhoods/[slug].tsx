@@ -1,6 +1,6 @@
 /**
  * Neighborhood Landing Page — Sprint U2
- * SEO-optimised page for estate sales in a specific Grand Rapids neighborhood.
+ * SEO-optimised page for estate sales in a specific neighborhood.
  * Uses getServerSideProps so search engines get pre-rendered sale listings.
  * Route: /neighborhoods/[slug]
  */
@@ -46,8 +46,8 @@ const isActive = (start: string, end: string) => {
 
 const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
   const canonicalUrl = `https://finda.sale/neighborhoods/${slug}`;
-  const pageTitle = `Estate Sales in ${name}, Grand Rapids MI | FindA.Sale`;
-  const metaDesc = `Browse ${total > 0 ? total : 'upcoming'} estate sale${total !== 1 ? 's' : ''} in ${name}, Grand Rapids, Michigan. Find furniture, antiques, collectibles and more near you.`;
+  const pageTitle = `Estate Sales in ${name} | FindA.Sale`;
+  const metaDesc = `Browse ${total > 0 ? total : 'upcoming'} estate sale${total !== 1 ? 's' : ''} in ${name}. Find furniture, antiques, collectibles and more near you.`;
 
   return (
     <Layout>
@@ -204,7 +204,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
               href="/neighborhoods"
               className="text-amber-600 hover:text-amber-700 font-medium text-sm"
             >
-              View all Grand Rapids neighborhoods →
+              View all neighborhoods →
             </Link>
           </div>
 
