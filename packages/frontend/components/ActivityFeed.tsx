@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
+import HypeMeter from './HypeMeter';
 
 interface Activity {
   id: string;
@@ -17,7 +18,6 @@ interface Props {
 const ActivityFeed = ({ saleId }: Props) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewCount, setViewCount] = useState(0);
 
   // Fetch activity data from the backend every 30 seconds
   useEffect(() => {
@@ -25,7 +25,6 @@ const ActivityFeed = ({ saleId }: Props) => {
       try {
         const response = await api.get(`/sales/${saleId}/activity`);
         setActivities(response.data.activities || []);
-        setViewCount(response.data.viewCount || 0);
         setIsLoading(false);
       } catch (error) {
         console.error('Failed to fetch activity:', error);
@@ -105,20 +104,10 @@ const ActivityFeed = ({ saleId }: Props) => {
     <div className="bg-white rounded-lg shadow-md p-6 mb-8">
       <h2 className="text-lg font-bold text-warm-900 mb-4">Live Activity</h2>
 
-      {/* Viewing Count */}
-      {viewCount > 0 && (
-        <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-          <svg className="h-5 w-5 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-          </svg>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-blue-900">
-              {viewCount} {viewCount === 1 ? 'person viewing' : 'people viewing'}
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Feature 34: Hype Meter — real-time viewer count */}
+      <div className="mb-4">
+        <HypeMeter saleId={saleId} />
+      </div>
 
       {/* Recent Activities */}
       {activities.length === 0 ? (

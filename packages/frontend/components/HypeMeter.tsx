@@ -23,7 +23,7 @@ const HypeMeter: React.FC<HypeMeterProps> = ({ saleId }) => {
 
     const pingInterval = setInterval(() => {
       api
-        .post(`/sales/${saleId}/viewers/ping`, {
+        .post(`/viewers/${saleId}/ping`, {
           viewerId: viewerIdRef.current,
         })
         .catch((err) => {
@@ -40,7 +40,7 @@ const HypeMeter: React.FC<HypeMeterProps> = ({ saleId }) => {
 
     const pollInterval = setInterval(() => {
       api
-        .get(`/sales/${saleId}/viewers`)
+        .get(`/viewers/${saleId}`)
         .then((res) => {
           const newCount = res.data.count || 0;
           setViewerCount(newCount);
@@ -59,23 +59,23 @@ const HypeMeter: React.FC<HypeMeterProps> = ({ saleId }) => {
     return () => {
       if (!viewerIdRef.current || !saleId) return;
       api
-        .delete(`/sales/${saleId}/viewers/${viewerIdRef.current}`)
+        .delete(`/viewers/${saleId}/${viewerIdRef.current}`)
         .catch((err) => {
           console.debug('[HypeMeter] Cleanup failed (non-fatal):', err.message);
         });
     };
   }, [saleId]);
 
-  if (!isVisible || viewerCount < 2) {
+  if (!isVisible || viewerCount < 1) {
     return null;
   }
 
   return (
-    <div className="flex items-center gap-1 text-sm text-warm-600">
+    <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
       <span className="text-base">👀</span>
-      <span>
+      <p className="text-sm font-semibold text-blue-900">
         {viewerCount} {viewerCount === 1 ? 'person' : 'people'} viewing now
-      </span>
+      </p>
     </div>
   );
 };
