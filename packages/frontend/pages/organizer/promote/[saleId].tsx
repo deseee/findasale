@@ -15,6 +15,12 @@ import api from '../../../lib/api';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 
+interface Item {
+  id: string;
+  title: string;
+  price: number | null;
+}
+
 interface Sale {
   id: string;
   title: string;
@@ -86,6 +92,15 @@ const ExportCard: React.FC<ExportCardProps> = ({
   );
 };
 
+interface SocialTemplate {
+  text: string;
+  hashtags: string[];
+  charCount: number;
+  overLimit: boolean;
+  platformLimit: number;
+  photoUrl: string | null;
+}
+
 export default function PromotePage(): JSX.Element {
   const router = useRouter();
   const { saleId } = router.query;
@@ -93,6 +108,11 @@ export default function PromotePage(): JSX.Element {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [itemCount, setItemCount] = useState(0);
+  const [selectedItemId, setSelectedItemId] = useState<string>('');
+  const [selectedTone, setSelectedTone] = useState<'casual' | 'professional' | 'friendly'>('casual');
+  const [selectedPlatform, setSelectedPlatform] = useState<'instagram' | 'facebook'>('instagram');
+  const [socialTemplate, setSocialTemplate] = useState<SocialTemplate | null>(null);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -111,13 +131,13 @@ export default function PromotePage(): JSX.Element {
     enabled: !!saleId && !!user,
   });
 
-  // Fetch published item count
-  const { data: itemsData } = useQuery({
+  // Fetch published items
+  const { data: itemsData = [] } = useQuery({
     queryKey: ['sale-items', saleId],
     queryFn: async () => {
       if (!saleId) return [];
       const response = await api.get(`/items?saleId=${saleId}`);
-      return response.data;
+      return response.data as Item[];
     },
     enabled: !!saleId && !!user,
   });
@@ -125,8 +145,49 @@ export default function PromotePage(): JSX.Element {
   React.useEffect(() => {
     if (itemsData) {
       setItemCount(itemsData.length);
+      // Auto-select first item if not yet selected
+      if (!selectedItemId && itemsData.length > 0) {
+        setSelectedItemId(itemsData[0].id);
+      }
     }
-  }, [itemsData]);
+  }, [itemsData, selectedItemId]);
+
+  // Fetch social template when item, tone, or platform changes
+  React.useEffect(() => {
+    const fetchTemplate = async () => {
+      if (!selectedItemId) return;
+      try {
+        setLoadingTemplate(true);
+        const response = await api.get(
+          `/social/${selectedItemId}/template?tone=${selectedTone}&platform=${selectedPlatform}`
+        );
+        setSocialTemplate(response.data as SocialTemplate);
+      } catch (error) {
+        console.error('Failed to fetch social template:', error);
+        setSocialTemplate(null);
+        showToast('Failed to generate social template', 'error');
+      } finally {
+        setLoadingTemplate(false);
+      }
+    };
+
+    if (selectedItemId && selectedTone && selectedPlatform) {
+      fetchTemplate();
+    }
+  }, [selectedItemId, selectedTone, selectedPlatform, showToast]);
+
+  // Copy full post (text + hashtags) to clipboard
+  const copyFullPost = async () => {
+    if (!socialTemplate) return;
+    try {
+      const fullPost = `${socialTemplate.text}\n\n${socialTemplate.hashtags.join(' ')}`;
+      await navigator.clipboard.writeText(fullPost);
+      showToast('Post copied to clipboard!', 'success');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      showToast('Failed to copy to clipboard', 'error');
+    }
+  };
 
   // Loading state
   if (authLoading || saleLoading) {
@@ -330,6 +391,138 @@ export default function PromotePage(): JSX.Element {
               onSecondary={copyCraigslistText}
               loading={loading}
             />
+          </div>
+
+          {/* Social Template Section */}
+          <div className="bg-white border border-warm-200 rounded-lg p-6 mb-12">
+            <h2 className="text-2xl font-bold text-warm-900 mb-6">Create Social Posts</h2>
+
+            {/* Item Picker */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-warm-900 mb-2">Select Item</label>
+              <select
+                value={selectedItemId}
+                onChange={(e) => setSelectedItemId(e.target.value)}
+                className="w-full border border-warm-200 rounded-lg px-4 py-2 bg-white text-warm-900 focus:outline-none focus:ring-2 focus:ring-amber-600"
+              >
+                <option value="">Choose an item...</option>
+                {itemsData.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title} {item.price ? `— $${item.price}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedItemId && (
+              <>
+                {/* Tone Selector */}
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-warm-900 mb-3">Tone</label>
+                  <div className="flex gap-3">
+                    {(['casual', 'professional', 'friendly'] as const).map((tone) => (
+                      <button
+                        key={tone}
+                        onClick={() => setSelectedTone(tone)}
+                        className={`px-4 py-2 rounded-full font-medium transition ${
+                          selectedTone === tone
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+                        }`}
+                      >
+                        {tone.charAt(0).toUpperCase() + tone.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Platform Selector */}
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-warm-900 mb-3">Platform</label>
+                  <div className="flex gap-3">
+                    {(['instagram', 'facebook'] as const).map((platform) => (
+                      <button
+                        key={platform}
+                        onClick={() => setSelectedPlatform(platform)}
+                        className={`px-4 py-2 rounded-full font-medium transition ${
+                          selectedPlatform === platform
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+                        }`}
+                      >
+                        {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Social Template Preview */}
+                {loadingTemplate ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : socialTemplate ? (
+                  <div className="bg-warm-50 border border-warm-200 rounded-lg p-6 space-y-4">
+                    {/* Preview Image */}
+                    {socialTemplate.photoUrl && (
+                      <div className="mb-4">
+                        <img
+                          src={socialTemplate.photoUrl}
+                          alt="Item preview"
+                          className="w-full max-w-xs rounded-lg object-cover max-h-48"
+                        />
+                      </div>
+                    )}
+
+                    {/* Post Text */}
+                    <div>
+                      <p className="text-sm font-semibold text-warm-700 mb-2">Post Text</p>
+                      <p className="text-warm-900 leading-relaxed whitespace-pre-wrap">{socialTemplate.text}</p>
+                    </div>
+
+                    {/* Hashtags */}
+                    <div>
+                      <p className="text-sm font-semibold text-warm-700 mb-2">Hashtags</p>
+                      <div className="flex flex-wrap gap-2">
+                        {socialTemplate.hashtags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => {
+                              navigator.clipboard.writeText(tag);
+                              showToast(`${tag} copied!`, 'success');
+                            }}
+                            className="bg-warm-100 text-warm-900 px-3 py-1 rounded-full text-sm hover:bg-warm-200 transition cursor-pointer"
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Character Count */}
+                    <div className="flex items-center justify-between pt-4 border-t border-warm-200">
+                      <div>
+                        <p className="text-sm text-warm-700">
+                          Characters: <span className={socialTemplate.overLimit ? 'text-red-600 font-semibold' : 'text-warm-900 font-semibold'}>
+                            {socialTemplate.charCount} / {socialTemplate.platformLimit}
+                          </span>
+                        </p>
+                        {socialTemplate.overLimit && (
+                          <p className="text-xs text-red-600 mt-1">⚠️ Post exceeds platform limit</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={copyFullPost}
+                        className="bg-amber-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-amber-700 transition"
+                      >
+                        Copy Full Post
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
 
           {/* Help section */}
