@@ -32,6 +32,7 @@ interface ItemEditState {
   price: number;
   category: string;
   condition: string;
+  conditionGrade?: string; // #64: S | A | B | C | D
   quantity: number;
   aspectRatio: AspectRatio;
   brightness: number;
@@ -47,6 +48,7 @@ interface HealthBreakdown {
   description: number;
   tags: number;
   price: number;
+  conditionGrade?: number; // #64
 }
 
 interface HealthScore {
@@ -62,6 +64,7 @@ interface Item {
   price: number | null;
   category: string | null;
   condition: string | null;
+  conditionGrade?: string | null; // #64: S | A | B | C | D
   quantity: number;
   photoUrls: string[];
   aiConfidence: number | null;
@@ -71,6 +74,7 @@ interface Item {
   draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
   tags?: string[];
   suggestedTags?: string[];
+  suggestedConditionGrade?: string; // #64: AI-suggested condition grade
   healthScore?: HealthScore;
 }
 
@@ -231,6 +235,7 @@ const ReviewPage = () => {
         price: item.price ?? 0,
         category: item.category ?? '',
         condition: item.condition ?? '',
+        conditionGrade: item.conditionGrade ?? undefined, // #64
         quantity: item.quantity ?? 1,
         aspectRatio: '4:3',
         brightness: 50,
@@ -690,6 +695,38 @@ const ReviewPage = () => {
                                       <option value="FAIR">Fair</option>
                                       <option value="POOR">Poor</option>
                                     </select>
+                                  </div>
+                                </div>
+
+                                {/* #64: Condition Grade Picker */}
+                                <div className="mt-3">
+                                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                                    Condition Grade
+                                    {item.suggestedConditionGrade && (
+                                      <span className="ml-2 text-xs text-indigo-500 font-normal">AI suggests: {item.suggestedConditionGrade}</span>
+                                    )}
+                                  </label>
+                                  <div className="flex gap-2">
+                                    {(['S','A','B','C','D'] as const).map(grade => {
+                                      const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                                      const current = editState.conditionGrade ?? item.conditionGrade;
+                                      return (
+                                        <button
+                                          key={grade}
+                                          onClick={() => handleEditChange(item.id, 'conditionGrade', grade)}
+                                          className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${current === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}
+                                          title={labels[grade]}
+                                        >
+                                          {grade}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="text-xs text-gray-400 mt-0.5">
+                                    {(['S','A','B','C','D'] as const).map(g => {
+                                      const labels: Record<string, string> = { S:'Like new', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                                      return `${g}=${labels[g]}`;
+                                    }).join(' · ')}
                                   </div>
                                 </div>
 
