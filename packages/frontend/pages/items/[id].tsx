@@ -627,10 +627,24 @@ export default ItemDetail;
  */
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const { id } = context.params as { id: string };
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  // Use INTERNAL_API_URL (server-only) if set; fall back to NEXT_PUBLIC_API_URL.
+  // Never falls back to localhost — that hangs and kills the Vercel function timeout.
+  const apiUrl =
+    process.env.INTERNAL_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    null;
+
+  if (!apiUrl) {
+    return { props: { ogData: null } };
+  }
 
   try {
-    const res = await fetch(`${apiUrl}/items/${id}`);
+    // 3s timeout — fail fast so Vercel function never hangs waiting for localhost
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${apiUrl}/items/${id}`, { signal: controller.signal });
+    clearTimeout(timeout);
+
     if (!res.ok) {
       return { props: { ogData: null } };
     }
