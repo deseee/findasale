@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { GetServerSidePropsContext } from 'next';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { io as socketIO, Socket } from 'socket.io-client'; // V1: live bidding
+import type { Socket } from 'socket.io-client'; // type-only — prevents SSR module crash
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
@@ -212,34 +212,40 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const { triggerAnimation: triggerHeartAnimation } = useHeartAnimation();
 
   // Setup socket for live bidding
+  // Dynamic import prevents socket.io-client from loading during SSR (fixes #33 500 error)
   useEffect(() => {
     if (!id) return;
 
-    const newSocket = socketIO(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5,
-    });
+    let newSocket: Socket | null = null;
 
-    newSocket.on('connect', () => {
-      newSocket.emit('join-item', { itemId: id });
-    });
+    import('socket.io-client').then(({ io }) => {
+      newSocket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+      });
 
-    newSocket.on('bid-placed', (data) => {
-      refetchItem();
-      refetchBids();
-    });
+      newSocket.on('connect', () => {
+        newSocket!.emit('join-item', { itemId: id });
+      });
 
-    newSocket.on('item-sold', (data) => {
-      refetchItem();
-    });
+      newSocket.on('bid-placed', (_data: unknown) => {
+        refetchItem();
+        refetchBids();
+      });
 
-    socketRef.current = newSocket;
-    setSocket(newSocket);
+      newSocket.on('item-sold', (_data: unknown) => {
+        refetchItem();
+      });
+
+      socketRef.current = newSocket;
+      setSocket(newSocket);
+    });
 
     return () => {
-      newSocket.disconnect();
+      if (newSocket) newSocket.disconnect();
+      else if (socketRef.current) { socketRef.current.disconnect(); socketRef.current = null; }
     };
   }, [id, refetchItem, refetchBids]);
 
