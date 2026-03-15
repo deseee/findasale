@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
 import { randomUUID } from 'crypto';
 import { handleReferralBadge, handlePointsBadge } from './userController';
+import { addShopperSubscriber } from '../services/mailerliteService';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
 const ALLOWED_REDIRECT_URIS = () => {
@@ -183,6 +184,13 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
+    // Subscribe shoppers to weekly digest (fire-and-forget, non-blocking)
+    if (effectiveRole === 'USER') {
+      addShopperSubscriber(user.email, user.name || 'Shopper').catch((err) => {
+        console.error('Failed to subscribe shopper to weekly digest:', err);
+      });
+    }
+
     // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
     const token = jwt.sign(
       {
@@ -249,6 +257,11 @@ export const oauthLogin = async (req: Request, res: Response) => {
           referralCode: userReferralCode,
           points: 0,
         },
+      });
+
+      // Subscribe to weekly digest (fire-and-forget, non-blocking)
+      addShopperSubscriber(user.email, user.name || 'Shopper').catch((err) => {
+        console.error('Failed to subscribe OAuth user to weekly digest:', err);
       });
     }
 

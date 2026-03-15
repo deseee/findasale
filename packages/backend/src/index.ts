@@ -100,6 +100,7 @@ import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
 import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest — Mondays 8 AM
 import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly email
 import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
+import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper digest — Sundays 6 PM
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
