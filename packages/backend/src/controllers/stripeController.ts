@@ -158,6 +158,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
         nodeEnv: process.env.NODE_ENV,
       }
     });
+    if (statusCode === 503) res.set('Retry-After', '60');
     res.status(statusCode).json({ message });
   }
 };
