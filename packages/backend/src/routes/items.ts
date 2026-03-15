@@ -99,7 +99,8 @@ router.post('/bulk', authenticate, async (req, res) => {
     };
 
     const safeStatuses = statusSafeMatrix[operation];
-    const errors: Array<{ itemId: string; reason: string }> = [];
+    const succeeded: string[] = [];
+    const failed: Array<{ itemId: string; reason: string }> = [];
     const confirmedIds: string[] = [];
     const oldValues: Record<string, any> = {};
     const newValues: Record<string, any> = {};
@@ -108,7 +109,7 @@ router.post('/bulk', authenticate, async (req, res) => {
     if (safeStatuses) {
       for (const item of items) {
         if (!safeStatuses.includes(item.status)) {
-          errors.push({
+          failed.push({
             itemId: item.id,
             reason: `Status is ${item.status} — ${operation} only allowed on ${safeStatuses.join('/')} items`,
           });
@@ -120,12 +121,12 @@ router.post('/bulk', authenticate, async (req, res) => {
       confirmedIds.push(...items.map((i) => i.id));
     }
 
-    // If validation errors exist, return them
-    if (errors.length > 0) {
+    // If all validation errors (no items passed validation), return 400
+    if (confirmedIds.length === 0) {
       return res.status(400).json({
-        message: `Cannot ${operation} ${errors.length} item(s) — status constraints violated`,
-        count: errors.length,
-        errors,
+        message: `Cannot ${operation} — status constraints violated for all item(s)`,
+        succeeded: [],
+        failed,
       });
     }
 
@@ -300,11 +301,13 @@ router.post('/bulk', authenticate, async (req, res) => {
     // Actual mutations
     switch (operation) {
       case 'delete':
+        succeeded.push(...confirmedIds);
         await prisma.item.deleteMany({ where: { id: { in: confirmedIds } } });
-        return res.json({
+        const deleteStatus = failed.length > 0 ? 207 : 200;
+        return res.status(deleteStatus).json({
           message: `Deleted ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'delete',
         });
 
@@ -313,6 +316,7 @@ router.post('/bulk', authenticate, async (req, res) => {
         if (!value || !allowed.includes(value as string)) {
           return res.status(400).json({ message: `status value must be one of: ${allowed.join(', ')}` });
         }
+        succeeded.push(...confirmedIds);
         for (const item of confirmedItems) {
           oldValues[item.id] = item.status;
           newValues[item.id] = value as string;
@@ -321,13 +325,12 @@ router.post('/bulk', authenticate, async (req, res) => {
           where: { id: { in: confirmedIds } },
           data: { status: value as string },
         });
-        return res.json({
+        const statusCode = failed.length > 0 ? 207 : 200;
+        return res.status(statusCode).json({
           message: `Updated status to ${value} for ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'status',
-          oldValues,
-          newValues,
         });
       }
 
@@ -335,14 +338,28 @@ router.post('/bulk', authenticate, async (req, res) => {
         if (typeof value !== 'string' || !value.trim()) {
           return res.status(400).json({ message: 'category value must be a non-empty string.' });
         }
+        // P1 Bug 5: Validate category against whitelist
+        const ALLOWED_CATEGORIES = [
+          'furniture', 'decor', 'vintage', 'textiles', 'collectibles',
+          'art', 'antiques', 'jewelry', 'books', 'tools',
+          'electronics', 'clothing', 'home', 'other'
+        ];
+        const category = (value as string).trim().toLowerCase();
+        if (!ALLOWED_CATEGORIES.includes(category)) {
+          return res.status(400).json({
+            message: `Invalid category. Allowed values: ${ALLOWED_CATEGORIES.join(', ')}`
+          });
+        }
+        succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
-          data: { category: (value as string).trim() },
+          data: { category },
         });
-        return res.json({
+        const catStatus = failed.length > 0 ? 207 : 200;
+        return res.status(catStatus).json({
           message: `Updated category for ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'category',
         });
       }
@@ -359,6 +376,7 @@ router.post('/bulk', authenticate, async (req, res) => {
           .filter((i) => i.price === null)
           .map((i) => ({ itemId: i.id, reason: 'price not set' }));
 
+        succeeded.push(...validItems.map(i => i.id));
         const updates = validItems.map((i) => {
           const newPrice = Math.max(0, parseFloat((i.price! * multiplier).toFixed(2)));
           oldValues[i.id] = i.price;
@@ -369,28 +387,29 @@ router.post('/bulk', authenticate, async (req, res) => {
           });
         });
         await Promise.all(updates);
-        return res.json({
+        const adjStatus = (failed.length > 0 || skipped.length > 0) ? 207 : 200;
+        return res.status(adjStatus).json({
           message: `Adjusted prices for ${updates.length} item(s) by ${pct}%.`,
-          count: updates.length,
-          affectedIds: updates.map((_, i) => validItems[i].id),
+          succeeded,
+          failed,
           operation: 'price_adjust',
-          oldValues,
-          newValues,
           ...(skipped.length > 0 && { skipped }),
         });
       }
 
       case 'isActive': {
         const isActive = typeof value === 'boolean' ? value : value === 'true' || value === true;
+        succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
           data: { isActive },
         });
         const action = isActive ? 'activated' : 'hidden';
-        return res.json({
+        const activeStatus = failed.length > 0 ? 207 : 200;
+        return res.status(activeStatus).json({
           message: `${action.charAt(0).toUpperCase() + action.slice(1)} ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'isActive',
         });
       }
@@ -401,6 +420,7 @@ router.post('/bulk', authenticate, async (req, res) => {
           return res.status(400).json({ message: 'price value must be a non-negative number.' });
         }
         const finalPrice = Math.max(0, parseFloat(price.toFixed(2)));
+        succeeded.push(...confirmedIds);
         for (const item of confirmedItems) {
           oldValues[item.id] = item.price;
           newValues[item.id] = finalPrice;
@@ -409,29 +429,28 @@ router.post('/bulk', authenticate, async (req, res) => {
           where: { id: { in: confirmedIds } },
           data: { price: finalPrice },
         });
-        // P0 Fix 2: Report skipped items (those with null price) — no items are actually skipped here
-        // because we update all confirmedIds. This operation applies to all items regardless of price.
-        return res.json({
+        const priceStatus = failed.length > 0 ? 207 : 200;
+        return res.status(priceStatus).json({
           message: `Updated price to $${finalPrice.toFixed(2)} for ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'price',
-          oldValues,
-          newValues,
         });
       }
 
       case 'backgroundRemoved': {
         const bgRemoved = typeof value === 'boolean' ? value : value === 'true' || value === true;
+        succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
           data: { backgroundRemoved: bgRemoved },
         });
         const action = bgRemoved ? 'applied background removal to' : 'removed background removal from';
-        return res.json({
+        const bgStatus = failed.length > 0 ? 207 : 200;
+        return res.status(bgStatus).json({
           message: `${action} ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'backgroundRemoved',
         });
       }
@@ -441,14 +460,16 @@ router.post('/bulk', authenticate, async (req, res) => {
         if (!value || !allowed.includes(value as string)) {
           return res.status(400).json({ message: `draftStatus value must be one of: ${allowed.join(', ')}` });
         }
+        succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
           data: { draftStatus: value as string },
         });
-        return res.json({
+        const dsStatus = failed.length > 0 ? 207 : 200;
+        return res.status(dsStatus).json({
           message: `Updated draftStatus to ${value} for ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'draftStatus',
         });
       }
@@ -487,6 +508,7 @@ router.post('/bulk', authenticate, async (req, res) => {
         const normalizedTags = tagList.map((t) => t.toLowerCase());
 
         // Apply tags operation
+        succeeded.push(...confirmedIds);
         for (const item of confirmedItems) {
           let updatedTags = [...item.tags];
           if (action === 'add') {
@@ -507,13 +529,12 @@ router.post('/bulk', authenticate, async (req, res) => {
           });
         }
 
-        return res.json({
+        const tagsStatus = failed.length > 0 ? 207 : 200;
+        return res.status(tagsStatus).json({
           message: `${action === 'add' ? 'Added' : 'Removed'} tags for ${confirmedIds.length} item(s).`,
-          count: confirmedIds.length,
-          affectedIds: confirmedIds,
+          succeeded,
+          failed,
           operation: 'tags',
-          oldValues,
-          newValues,
         });
       }
 
@@ -597,6 +618,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
 
     // Apply mutations
     const confirmedIds: string[] = [];
+    const skipped: Array<{ itemId: string; reason: string }> = [];
 
     if (operation === 'add') {
       for (const item of items) {
@@ -605,6 +627,10 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
         const newPhotos = photoUrls.filter((url) => !item.photoUrls.includes(url));
 
         if (currentCount + newPhotos.length > 5) {
+          skipped.push({
+            itemId: item.id,
+            reason: 'would exceed 5 photo limit'
+          });
           continue; // Skip items that would exceed 5 photos
         }
 
@@ -618,11 +644,12 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
           confirmedIds.push(item.id);
         }
       }
-      return res.json({
+      const photoStatus = skipped.length > 0 ? 207 : 200;
+      return res.status(photoStatus).json({
         message: `Added photo(s) to ${confirmedIds.length} item(s)`,
-        count: confirmedIds.length,
-        affectedIds: confirmedIds,
+        succeeded: confirmedIds,
         operation: 'add',
+        ...(skipped.length > 0 && { skipped }),
       });
     } else {
       // remove
@@ -641,8 +668,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
       }
       return res.json({
         message: `Removed photo(s) from ${confirmedIds.length} item(s)`,
-        count: confirmedIds.length,
-        affectedIds: confirmedIds,
+        succeeded: confirmedIds,
         operation: 'remove',
       });
     }

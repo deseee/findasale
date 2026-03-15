@@ -117,32 +117,48 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
 
     res.json({ url: accountLink.url });
   } catch (error: unknown) {
-    let message = 'Unknown error';
+    // P1 Bug 3: Detect Stripe error types and return appropriate status codes
+    let statusCode = 500;
+    let message = 'Failed to create Stripe Connect account';
     let type = undefined;
-    let stack = undefined;
 
     if (error instanceof Error) {
       message = error.message;
-      stack = error.stack;
       type = (error as any).type;
-    } else if (typeof error === 'string') {
-      message = error;
+
+      // Check for Stripe validation errors (400)
+      if (type === 'invalid_request_error') {
+        statusCode = 400;
+        message = error.message; // e.g., "Missing required param: email"
+      }
+      // Check for rate limit errors (503)
+      else if (type === 'rate_limit_error') {
+        statusCode = 503;
+        message = 'Service temporarily unavailable, please try again in a moment';
+      }
+      // All other errors remain 500
     } else if (error && typeof error === 'object') {
-      message = String(error);
       type = (error as any).type;
-      stack = (error as any).stack;
+
+      if (type === 'invalid_request_error') {
+        statusCode = 400;
+        message = (error as any).message || 'Invalid request to Stripe';
+      } else if (type === 'rate_limit_error') {
+        statusCode = 503;
+        message = 'Service temporarily unavailable, please try again in a moment';
+      }
     }
 
-    console.error('Stripe Connect account creation error details:', {
-      message,
+    console.error('Stripe Connect account creation error:', {
       type,
-      stack,
+      statusCode,
+      message,
       env: {
         hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
         nodeEnv: process.env.NODE_ENV,
       }
     });
-    res.status(500).json({ message: 'Failed to create Stripe Connect account' });
+    res.status(statusCode).json({ message });
   }
 };
 
