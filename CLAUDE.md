@@ -143,6 +143,11 @@ Every git instruction block provided to Patrick must be copy-paste-ready and inc
 
 Never use placeholders, never omit the script, never use `&&` (bash only).
 
+**File delivery rule:** When creating any file Patrick needs to view, install, or act on
+(INSTALL docs, skill files, research output, etc.), ALWAYS save it to the workspace
+folder and present a clickable `computer://` link. Never describe file contents inline
+without also providing the link. Patrick should never have to hunt for a file.
+
 ---
 
 ## 10. Subagent Push Ban (Experimental, S169–171)
