@@ -119,6 +119,10 @@ model Organizer {
   // Cash POS: accumulated platform fees awaiting payout deduction
   cashFeeBalance Float @default(0)
   cashFeeBalanceUpdatedAt DateTime?
+  // #31 Brand Kit: organizer branding for sales and exports
+  brandLogoUrl        String?   // Cloudinary URL for organizer logo
+  brandPrimaryColor   String?   // Hex e.g. "#2563EB"
+  brandSecondaryColor String?   // Hex e.g. "#1E40AF"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -183,6 +187,7 @@ model Item {
   status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, AUCTION_ENDED
   category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
   condition        String?   // mint, excellent, good, fair, poor
+  conditionGrade   String?   // S | A | B | C | D — null for items not yet graded
   photoUrls        String[]
   // U1: Ollama nomic-embed-text 768-dim vector for semantic search
   embedding        Float[]

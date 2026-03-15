@@ -26,6 +26,7 @@ export interface AITagResult {
   tags: string[];
   confidence?: number; // Camera Workflow v2: AI confidence score (0.0–1.0), defaults to 0.5
   suggestedTags?: string[]; // Sprint 1: Curated tags suggested by Haiku from Vision labels
+  suggestedConditionGrade?: string; // #64: AI-suggested condition grade (S|A|B|C|D)
 }
 
 // ── CB4: In-memory feedback stats (post-beta: migrate to DB table) ─────────────
@@ -258,6 +259,74 @@ Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern"
   }
 }
 
+/**
+ * #64: Suggest a condition grade based on image analysis.
+ * Returns one of: S | A | B | C | D
+ * - S: Like new / pristine, no visible wear
+ * - A: Excellent, minor traces of use
+ * - B: Good, some wear but fully functional
+ * - C: Fair, visible wear or minor damage
+ * - D: Poor, significant damage or for parts
+ */
+async function suggestConditionGrade(imageBase64: string, mimeType: string): Promise<string> {
+  if (!ANTHROPIC_API_KEY) {
+    return 'B'; // Default to 'Good' if no API key
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 50,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mimeType,
+                  data: imageBase64,
+                },
+              },
+              {
+                type: 'text',
+                text: `Assess the condition of the item in this photo and suggest a single grade:
+S = Like new / pristine, no visible wear
+A = Excellent, minor traces of use
+B = Good, some wear but fully functional
+C = Fair, visible wear or minor damage
+D = Poor, significant damage or for parts
+
+If uncertain, suggest B. Return ONLY the single letter (S, A, B, C, or D), no explanation.`,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY as string,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+
+    const content: string = response.data.content?.[0]?.text ?? '';
+    const grade = content.trim().toUpperCase().charAt(0);
+
+    // Validate grade is one of S|A|B|C|D, default to B if invalid
+    return ['S', 'A', 'B', 'C', 'D'].includes(grade) ? grade : 'B';
+  } catch {
+    // Condition grade suggestion is best-effort — default to B on error
+    return 'B';
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -296,6 +365,13 @@ export async function analyzeItemImage(
   } catch {
     // Tag suggestion failed — set empty array (non-blocking)
     result.suggestedTags = [];
+  }
+
+  // #64: Add condition grade suggestion (non-blocking)
+  try {
+    result.suggestedConditionGrade = await suggestConditionGrade(imageBase64, mimeType);
+  } catch {
+    // Condition grade suggestion failed — leave undefined (non-blocking)
   }
 
   return result;
