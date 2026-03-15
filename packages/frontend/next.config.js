@@ -131,6 +131,13 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
+  // Force webpack to bundle these ESM packages rather than loading them natively.
+  // @tanstack/react-query v5 ships a "modern" ESM build that uses
+  // `import { jsx } from "react/jsx-runtime"` — React is CJS so Node.js 24's
+  // ESM loader can't resolve the named export, causing a 500 on any SSR page
+  // (e.g. /items/[id] with getServerSideProps). Transpiling forces the CJS path.
+  transpilePackages: ['@tanstack/react-query', '@tanstack/query-core'],
+
   // Cloudinary image optimisation
   images: {
     domains: ['res.cloudinary.com'],
