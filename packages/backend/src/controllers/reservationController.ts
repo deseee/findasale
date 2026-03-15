@@ -15,12 +15,12 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { select: { holdDurationHours: true } } },
+      include: { sale: true },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
     if (item.status !== 'AVAILABLE') return res.status(409).json({ message: 'Item is not available for hold' });
 
-    const durationMs = ((item as any).sale?.holdDurationHours ?? DEFAULT_HOLD_HOURS) * 3600000;
+    const durationMs = ((item.sale as any)?.holdDurationHours ?? DEFAULT_HOLD_HOURS) * 3600000;
     const expiresAt = new Date(Date.now() + durationMs);
 
     const reservation = await prisma.$transaction(async (tx) => {
@@ -188,12 +188,12 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       where: { id: { in: ids }, status: { in: ['PENDING', 'CONFIRMED'] } },
       include: {
         item: {
-          select: { id: true, sale: { select: { organizerId: true, holdDurationHours: true } } },
+          include: { sale: true },
         },
       },
     });
 
-    const validHolds = holds.filter((h) => (h.item as any).sale?.organizerId === organizer.id);
+    const validHolds = holds.filter((h) => h.item.sale?.organizerId === organizer.id);
     if (validHolds.length === 0) {
       return res.status(404).json({ message: 'No valid holds found' });
     }
@@ -216,7 +216,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       // Extend each hold by its sale's holdDurationHours from now
       await prisma.$transaction(
         validHolds.map((h) => {
-          const hours = (h.item as any).sale?.holdDurationHours ?? DEFAULT_HOLD_HOURS;
+          const hours = (h.item.sale as any)?.holdDurationHours ?? DEFAULT_HOLD_HOURS;
           return prisma.itemReservation.update({
             where: { id: h.id },
             data: { expiresAt: new Date(Date.now() + hours * 3600000) },
