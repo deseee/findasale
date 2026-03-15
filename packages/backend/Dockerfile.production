@@ -31,11 +31,10 @@ ENV NODE_ENV=production
 
 WORKDIR /app/packages/backend
 
-# ⚠️ CRITICAL: This port must match PORT variable in Railway Variables.
+# CRITICAL: This port must match PORT variable in Railway Variables.
 # Railway routes public traffic to this port. If they differ, backend returns 502.
 # PORT=5000 is set explicitly in Railway Variables. Update both if you change this.
 EXPOSE 5000
 
-# Run pending migrations then start the compiled server
-# Use pnpm run (not npx) so pnpm resolves the prisma binary from the workspace install
+# Start the compiled server
 CMD ["node", "/app/packages/backend/dist/index.js"]
