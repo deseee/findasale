@@ -77,11 +77,26 @@ Tell Patrick `.\push.ps1` for 4+ files, large files, or session wrap.
 TypeScript. Grep entire frontend for a pattern before pushing a build fix.
 One Read call prevents 3 failed deploys.
 
+**MCP file content rule (Session 167 audit):** `create_or_update_file` replaces
+the entire remote file — it does not merge or append. Always read the full file
+first. Always push the COMPLETE file content, never truncated or partial lines.
+Truncated schema.prisma (Session 166) broke Railway P1012. No exceptions.
+
 **Standing rules:** STATE.md pushes only at wrap. Wrap-only docs
 (session-log, STATE, next-session-prompt) never MCP-pushed mid-session.
 package.json and pnpm-lock.yaml always committed together.
 
+**Complete push instruction blocks (Session 167 audit):** Every push block given
+to Patrick must list ALL modified tracked files, ALL new untracked files, ALL
+merge-conflict-resolved files, and ALL migration files. No partial lists. Incomplete
+instruction blocks caused 4–5 follow-up rounds in Session 166. One complete block per push.
+
 **After MCP push:** Do not edit those files locally without `git fetch` first.
+
+**Merge conflict re-staging (Session 167 audit):** After resolving any merge
+conflict, explicitly re-stage ALL files that were in conflict state before
+committing. Missing re-stage causes "staged but uncommitted" abort loops.
+Always: resolve → `git add [all-conflict-files]` → `git commit` → `.\push.ps1`.
 
 **Commit block format (always):** Any time git commit instructions are given to Patrick — mid-session or at wrap — provide a complete copy-paste block. Never give a file list and stop. The block must always include explicit `git add [file]` lines, a `git commit -m "..."` line, and `.\push.ps1`. Never `git add -A`. Never omit the commit message. Never omit `.\push.ps1`. This rule applies to every git instruction in every session, not just at wrap.
 
@@ -188,4 +203,4 @@ stub due to unsupervised dispatch on a security-sensitive path.
 
 ---
 
-Status: Behavioral Authority (v3, Session 142)
+Status: Behavioral Authority (v4, Session 167 — added MCP full-file rule, push block completeness, conflict re-stage)
