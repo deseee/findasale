@@ -2,6 +2,12 @@
 
 ## Recent Sessions
 
+### 2026-03-15 · Session 173 (SMOKE TESTS + PERFORMANCE DASHBOARD + P1 BUG BLITZ)
+**Worked on:** 3 smoke tests (Add Items, Performance Dashboard, Vercel/Railway). Fixed performance dashboard double `/api` prefix bug (URL was hitting `/api/api/organizers/performance` → 404). Fixed recommendations null crash (optional chaining). Moved sticky toolbar above table in add-items (was at bottom of DOM, never activated). Added sale name to Add Items header. Fixed buyer preview showing empty grid (PENDING_REVIEW filter removed). Added Performance link to organizer dashboard. Added buyer preview to capture page via `?preview=true`. Fixed 4 P1 bugs: saleId guard/redirect, bulk mutation skipped-item feedback, Stripe typed error responses, bulk photo skip reporting. Two TS build fixes.
+**Decisions:** Insights (`/organizer/insights`) and Performance (`/organizer/performance`) are separate pages — consolidation deferred pending Patrick product decision.
+**Next up:** Verify buyer preview on capture page in staging. Remaining 4 P1s (entrance pin, batch holds, draft cache, category enum). P2 pass before beta.
+**Blockers:** None — all fixes pushed and building green.
+
 ### 2026-03-15 · Session 171 (P0 BUILD FIX + #8 BATCH OPERATIONS TOOLKIT)
 **Worked on:** Railway build fix (removed broken tagVocabulary imports from socialController + tagController, inlined CURATED_TAGS). Sitemap gap fix (added /tags/[slug] URLs via /api/tags/popular fetch). Full #8 Batch Operations Toolkit implementation: Phase 1 (backend validation matrix, dry-run mode, bulk tags), Phase 2 (POST /api/items/bulk/photos endpoint), Phase 3 (frontend "More Actions" dropdown), Phase 4 (7 modal components: BulkConfirmModal, BulkPhotoModal, BulkTagModal, BulkCategoryModal, BulkStatusModal, BulkOperationErrorModal, BulkActionDropdown), Phase 5 (error handling + toast feedback). Roadmap updated to v31.
 **Decisions:** Batch operations fully specced and shipped. P0 build blockers fixed (commits 3d49470 + 6772906 already merged).

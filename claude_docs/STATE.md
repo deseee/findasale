@@ -7,6 +7,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 173 COMPLETE (2026-03-15) — SMOKE TESTS + PERFORMANCE DASHBOARD FIXES + P1 BUG BLITZ:**
+- **Smoke tests (3):** Add Items page ✅, Performance Dashboard ✅ (with fixes), Vercel/Railway ✅ green
+- **Performance dashboard (#6):** Fixed double `/api` prefix in URL (performance.tsx L131), fixed `recommendations` null crash (optional chaining), dashboard link added, route confirmed live on Railway
+- **Add Items page fixes:** Sticky toolbar moved above table (was at offsetTop 2161px — never stuck), sale name added to header, buyer preview empty grid fixed (was filtering PENDING_REVIEW only → now shows all items), buyer preview added to capture page via `?preview=true` query param
+- **P1 bugs fixed (4):** saleId missing → redirect to dashboard guard, bulk mutation now shows skipped count + reason, Stripe account creation returns typed errors (400/503) instead of generic 500, bulk photo endpoint returns `skipped[]` + HTTP 207
+- **Build fixes (2):** TS implicit `any` on skipped.map callback, missing `useEffect` import in review.tsx
+- **Insights vs Performance:** Confirmed two separate pages — `/organizer/insights` (aggregate cross-sale totals, CD2 Phase 3) vs `/organizer/performance` (per-sale charts, roadmap #6). Consolidation deferred.
+- **Remaining P1 bugs (4):** entrance pin coordinate validation, batch hold re-verification (transaction safety), draft item count cache race, category enum validation — queued for S174
+- **Last Updated:** 2026-03-15 (session 173)
+
+**NEXT SESSION (S174):**
+1. Verify buyer preview on capture page works in staging after last push
+2. Remaining 4 P1 bugs from bug-blitz-2026-03-15.md (entrance pin, batch holds, draft cache, category enum)
+3. P2 cleanup pass: status badge clarity, onboarding wizard re-trigger, listing type debt cleanup
+4. Consider insights + performance consolidation (product decision needed from Patrick)
+
+---
+
 **Session 172 COMPLETE (2026-03-15) — BUG BLITZ P0 FIXES + #28 HEATMAP + DOC AUDIT:**
 - **TypeScript build fix:** `Array.from(new Set(...))` in add-items/[saleId].tsx line 1428.
 - **Prisma build fix:** Removed invalid `not: null` filters on non-nullable `lat`/`lng` Float fields in `heatmapService.ts`.

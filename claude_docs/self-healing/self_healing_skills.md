@@ -200,3 +200,29 @@ Recurring bugs and their confirmed fixes. Add an entry when a pattern has been s
 **Test Command:** In terminal: `node -e "const {randomUUID}=require('crypto'); console.log(randomUUID())"` — should output a valid UUID.
 
 **Confidence:** HIGH — UUID v4 provides 2^122 entropy; collision is cryptographically impossible in practice.
+
+---
+
+## SH-009: Double `/api` prefix in new frontend pages
+
+**Trigger:** New organizer page fetches data and gets 404 in staging. Network tab shows URL like `…/api/api/organizers/something`.
+
+**Environment:** Any new page in `packages/frontend/pages/` that uses the `api` lib from `lib/api.ts`.
+
+**Pattern:** `lib/api.ts` sets `baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'` — the base already ends in `/api`. When a new page constructs a URL as `/api/organizers/…`, the result is `/api/api/organizers/…` → 404. Correct path is `/organizers/…` (no leading `/api/`).
+
+**Known instance:** Session 173 — `/organizer/performance` page built URL as `` `/api/organizers/performance?saleId=${id}` `` → 404 in production. Fixed by removing the leading `/api/`.
+
+**Steps:**
+1. Check the failing fetch URL in Network tab — double `/api/api/` confirms this pattern.
+2. Find the URL construction in the page (search for `` `/api/ ``).
+3. Remove the `/api` prefix: `` `/api/organizers/x` `` → `` `/organizers/x` ``.
+4. Compare against any working page (e.g. `api.get('/sales/mine')`) to confirm pattern.
+
+**Edge Cases:**
+- Only affects pages using `lib/api.ts`. Pages using raw `fetch()` or `axios.create()` with their own baseURL are not affected.
+- Next.js API routes at `/pages/api/…` are a separate system and ARE accessed at `/api/…` — don't apply this fix to Next.js API route calls.
+
+**Test Command:** Browser Network tab → filter by the backend domain → confirm no double `/api/api/` in any request URL.
+
+**Confidence:** HIGH — structurally certain to recur whenever a new page is written without checking existing usage patterns.

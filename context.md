@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-15T19:48:14.906Z*
+*Generated at 2026-03-15T22:43:22.019Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -16,10 +16,11 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
-⚠ 3+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/friendly-laughing-dirac/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/friendly-laughing-dirac/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:927:        description: null, // TODO: Add description to schema if needed
-  /sessions/friendly-laughing-dirac/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+⚠ 4+ TODO/FIXME markers in source (showing up to 5):
+  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:927:        description: null, // TODO: Add description to schema if needed
+  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/backend/src/routes/items.ts:23:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```
@@ -72,7 +73,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
 │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
 │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
-│   ├── feature-notes/ (16 files)
+│   ├── feature-notes/ (17 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (2 files)
 │   ├── logs/ (2 files)
@@ -84,7 +85,8 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── skills-package/ (30 files)
 │   ├── strategy/ (4 files)
 │   ├── ux-spotchecks/
-│   │   └── PROMOTE_PAGE_UX_SPEC.md
+│   │   ├── PROMOTE_PAGE_UX_SPEC.md
+│   │   └── add-items-ux-audit-2026-03-15.md
 │   └── workflow-retrospectives/ (2 files)
 ├── conversation-defaults-SKILL.md
 ├── conversation-defaults-SKILL.md.tmp.11729.1773580809690
@@ -109,7 +111,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (58 files)
+│   │   │   ├── controllers/ (59 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
@@ -119,7 +121,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── middleware/ (2 files)
 │   │   │   ├── models/ (1 files)
 │   │   │   ├── routes/ (58 files)
-│   │   │   ├── services/ (20 files)
+│   │   │   ├── services/ (21 files)
 │   │   │   └── utils/ (4 files)
 │   │   └── tsconfig.json
 │   ├── database/
@@ -141,7 +143,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (110 files)
+│   │   ├── components/ (113 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (1 files)
 │   │   ├── hooks/ (10 files)
