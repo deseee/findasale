@@ -2,6 +2,15 @@
   "_schema": "MESSAGE_BOARD v2 — rebuilt 2026-03-11 session 146. Max 20 messages. Prune oldest on overflow.",
   "messages": [
     {
+      "id": "msg-174-ux-add-items-audit-spec",
+      "from": "findasale-ux",
+      "to": "findasale-dev,patrick",
+      "timestamp": "2026-03-15T18:30:00Z",
+      "type": "architecture",
+      "message": "ADD ITEMS PAGE UX AUDIT SPEC COMPLETE — 2026-03-15 Chrome audit findings organized into prioritized UX spec. CRITICAL ISSUES (3) BLOCKING: (1) Checkboxes non-functional via mouse click — DOM overlay intercepting events, inspect z-index stacking + pointer-events; (2) 'More Actions' dropdown clipped by footer — implement dropup logic with viewport collision detection or move toolbar to sticky top; (3) 'Select All' buried below last item — move checkbox to table header with <thead> structure. HIGH PRIORITY (6): (4) Bulk toolbar only at bottom — add sticky top bar at page top (main fix for #2); (5) No sale context — add dynamic title \"Add Items to [Sale Name]\" + summary stats; (6) Status column shows 'Visible/Hidden' — rename to 'Draft Status' with badges (Draft/Pending/Published); (7) No Edit action per row — add 'Edit' button opening inline panel (reference review.tsx); (8) No photo thumbnails — add photo column (80px) before title with placeholder icon for missing photos; (9) Camera section dominates — collapse when itemCount > 0 (max-height 140px vs 70vh). MEDIUM PRIORITY (3): (10) Onboarding wizard retriggers — add localStorage flag 'onboarding_wizard_seen' + fix X button event propagation; (11) Broken thumbnails on Review & Publish — add onError handler to <img>, show placeholder SVG; (12) Inconsistent category casing — normalize display via formatCategory() utility, output Title Case. FULL SPEC includes: Sticky toolbar detailed design (layout, button grouping, responsive), item row restructure (8 columns: photo, checkbox, title, category, price, photos count, draft status, actions), dropup detection logic, camera collapse CSS. Estimated effort: 17–18 dev hours across 2–3 sessions. Reference design: Review & Publish page (header context, progress bar, thumbnails, badges, inline edit). All changes UI/layout only — no schema, API, or business logic changes. Spec saved: claude_docs/ux-spotchecks/add-items-ux-audit-2026-03-15.md. Ready for findasale-dev dispatch.",
+      "feedbackLoop": "ready-for-dev-dispatch"
+    },
+    {
       "id": "msg-173-dev-performance-dashboard-backend",
       "from": "findasale-dev",
       "to": "patrick",
