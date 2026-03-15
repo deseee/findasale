@@ -75,8 +75,8 @@
 | Priority | # | Feature | Est. | Notes |
 |----------|---|---------|------|-------|
 | P1 | ~~33~~ | ~~Share Card Factory~~ | ✅ Done | SSR OG tags + Cloudinary branded cards on item pages. FB Sharing Debugger clean. Shipped session 163. |
-| P2 | 34 | Hype Meter | 0.5 sprint | Real-time social proof: "47 people are looking at this sale." Drives FOMO and urgency. Lightweight WebSocket or polling counter. |
-| P3 | 35 | Front Door Locator | 0.5 sprint | Entrance pin on sale detail map — "park here, enter here." Solves #1 shopper friction at large estate sales. Organizer sets pin during sale setup. |
+| ~~P2~~ | ~~34~~ | ~~Hype Meter~~ | ✅ Done | Real-time social proof counter shipped session 160. HypeMeter.tsx + ActivityFeed.tsx components live. |
+| ~~P3~~ | ~~35~~ | ~~Front Door Locator~~ | ✅ Done | Entrance pin shipped session 160. EntrancePinPicker.tsx + EntrancePinPickerInner.tsx live; wired to edit-sale and SaleMap. |
 | ~~P4~~ | ~~36~~ | ~~Weekly Treasure Digest~~ | ✅ Done | Personalized weekly shopper digest activated. Sundays 6pm via Resend. MailerLite Shoppers group sync on registration. Shipped session 165. Env var required: `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` |
 | P5 | 37 | Sale Calendar & Reminders | 1 sprint | Calendar view of upcoming sales + "Remind Me" button → push notification or email on sale day. Reduces missed-sale regret. |
 
@@ -174,22 +174,22 @@ Proactive tasks assigned to the fleet. Not product features — operational work
 |------|-------|----------|-------|
 | ~~OAuth Security Red-Team~~ | findasale-hacker | ✅ Done | Session 115 — account-takeover, redirect_uri allowlist, tokenVersion fixes shipped. |
 | ~~Payment Edge-Case QA Pass~~ | findasale-qa | ✅ Done | Session 115 — chargeback handler, idempotency, negative price guards, buyer-own-item guard. |
-| Full-Text Search Migration Rollback Plan | findasale-architect | P0 | Document down() steps + playbook for migration 20260310000001 + last 4 |
-| Beta Organizer Email Sequence | findasale-customer-champion | P1 | 3-email triggered sequence (welcome / day-3 nudge / day-7 help) → load via MailerLite MCP |
+| ~~Full-Text Search Migration Rollback Plan~~ | findasale-architect | ✅ Done | Rollback plan documented in `claude_docs/feature-notes/migration-rollback-plan-2026-03-09.md` and `claude_docs/operations/migration-rollback-plan.md`. |
+| ~~Beta Organizer Email Sequence~~ | findasale-customer-champion | ✅ Done | 3-email automation live in MailerLite (ID: 181389777358030205). Welcome + day-3 + day-7 sequence active. |
 | ~~Fee Decision Brief~~ | findasale-advisory-board | ✅ Done | Session 106 — 10% flat locked. Advisory board stress test complete (msg-005). |
 
 ### Beta Support (Run during/after first organizers activate)
 | Task | Agent | Priority | Brief |
 |------|-------|----------|-------|
-| Spring Content Push | findasale-marketing | P1 | "Spring Estate Sales 2026" blog + 3 social posts — peak demand is NOW, publish this week |
-| Beta Dry Run | findasale-customer-champion + findasale-ux | P1 | Impersonate first-time organizer through full flow; log every friction point before real users do |
-| Support KB Pre-Population | findasale-customer-champion | P1 | Draft 10 predictable FAQ entries before beta launches (payouts, cancellation, photos, search) |
+| ~~Spring Content Push~~ | findasale-marketing | ✅ Done | Spring 2026 blog + social content in `claude_docs/archive/marketing/`. |
+| ~~Beta Dry Run~~ | findasale-customer-champion + findasale-ux | ✅ Done | Friction log from 2026-03-09 in `claude_docs/beta-launch/beta-dry-run-friction-log-2026-03-09.md`. 6 friction points logged. |
+| ~~Support KB Pre-Population~~ | findasale-customer-champion | ✅ Done | KB live in `claude_docs/beta-launch/support-kb.md`. Payouts, fees, photos, search, holds covered. |
 
 ### Infrastructure (One-time, pays off indefinitely)
 | Task | Agent | Priority | Brief |
 |------|-------|----------|-------|
 | Bug Blitz Scoping | findasale-qa + health-scout | P0 | Produce prioritized P0/P1/P2 bug list before Session 105 so dev session is pure execution |
-| RECOVERY.md Decision Trees | findasale-ops | P1 | Convert 3 main failure scenarios to IF/THEN decision trees; label safe-to-auto vs. needs-Patrick |
+| ~~RECOVERY.md Decision Trees~~ | findasale-ops | ✅ Done | Decision trees section live in `claude_docs/RECOVERY.md` with safe-to-auto vs. needs-Patrick labels. |
 | STACK.md Deploy Risk Matrix | findasale-deploy | P1 | Write code-area → risk-level table (payments/auth/schema=HIGH) into STACK.md |
 | Connector-Matrix.md | cowork-power-user | P2 | Audit available MCP connectors vs. Phase 3+4 roadmap features; save to `claude_docs/operations/connector-matrix.md` |
 

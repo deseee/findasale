@@ -89,5 +89,35 @@ No silent library substitutions.
 
 ---
 
+## Deploy Risk Matrix
+
+Risk level for changes in each code area. Used by findasale-deploy to gate pre-deploy checklist steps.
+
+| Code Area | Risk Level | Why | Pre-Deploy Required |
+|-----------|-----------|-----|---------------------|
+| `packages/database/prisma/schema.prisma` | 🔴 HIGH | Schema changes can corrupt data or lock tables | Architect review + migrate deploy (never db push) + Neon backup |
+| `packages/backend/src/controllers/authController.ts` | 🔴 HIGH | Auth bugs = account takeover or lockout | Security review + staging smoke test + OAuth flow test |
+| `packages/backend/src/controllers/stripeController.ts` | 🔴 HIGH | Payment logic errors = money loss or failed transactions | Full checkout flow test + webhook test + Stripe test mode pass |
+| `packages/backend/src/routes/items.ts` (bulk endpoints) | 🟠 MEDIUM-HIGH | Bulk ops on wrong items = data loss for organizers | Dry-run mode test + ownership validation check |
+| `packages/backend/src/controllers/reservationController.ts` | 🟠 MEDIUM-HIGH | Holds are time-sensitive; batch bugs = silent data corruption | Batch hold tests + expiry cron check |
+| `packages/backend/src/index.ts` | 🟠 MEDIUM | Entry point — bad import or route registration = server down | Build check + Railway deploy health check |
+| `packages/frontend/pages/organizer/add-items/[saleId].tsx` | 🟠 MEDIUM | Core organizer workflow — regression = can't add items | Manual smoke test on add-items flow |
+| `packages/frontend/pages/organizer/holds.tsx` | 🟠 MEDIUM | Hold management — batch bugs visible to organizers | Manual holds test |
+| `packages/frontend/pages/organizer/dashboard.tsx` | 🟡 MEDIUM | Dashboard is first screen — visual regressions noticed immediately | Screenshot comparison |
+| `packages/backend/src/services/weeklyEmailService.ts` | 🟡 MEDIUM | Cron job — bad logic = emails to wrong users | Test send to patrick@test before enabling |
+| `packages/backend/src/services/cloudAIService.ts` | 🟡 MEDIUM | AI tagging — bugs produce bad tags, not data loss | Spot check 3 items post-deploy |
+| `packages/frontend/pages/tags/[slug].tsx` | 🟢 LOW | ISR page — worst case = stale cache, not broken | Auto-verified by Vercel build |
+| `packages/frontend/components/BulkCategoryModal.tsx` et al | 🟢 LOW | Modal UI — bugs are visible, not silent | Manual smoke test |
+| `claude_docs/` any `.md` file | 🟢 LOW | Documentation only — zero runtime impact | No gate needed |
+| `.env` / environment variables | 🔴 HIGH | Missing vars = silent failures or startup crash | Verify all required vars in Railway before deploy |
+
+### Deployment Gates by Risk Level
+- 🔴 HIGH: Requires Architect or QA review + staging test + Patrick approval
+- 🟠 MEDIUM-HIGH: Requires QA smoke test + health-scout scan
+- 🟡 MEDIUM: Requires health-scout scan + post-deploy verification
+- 🟢 LOW: Standard deploy, monitor logs for 10 minutes
+
+---
+
 Change Control:
 Any stack modification must update this file.
