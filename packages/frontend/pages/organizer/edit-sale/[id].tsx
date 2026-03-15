@@ -28,6 +28,7 @@ const EditSalePage = () => {
   const [isCloning, setIsCloning] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [entrancePinTooFar, setEntrancePinTooFar] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -44,6 +45,18 @@ const EditSalePage = () => {
     entranceLng: undefined as number | undefined,
     entranceNote: '' as string,
   });
+
+  // Helper: Compute distance between two lat/lng points (degrees, approx)
+  // One degree ≈ 111 km, so 0.005 degrees ≈ 0.55 km ≈ 0.34 miles
+  const computeDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    return Math.hypot(lat2 - lat1, lng2 - lng1);
+  };
+
+  // Helper: Check if entrance pin is far from sale address (> 0.005 degrees)
+  const checkEntrancePinDistance = (entranceLat: number, entranceLng: number, saleLat: number, saleLng: number): boolean => {
+    const distance = computeDistance(saleLat, saleLng, entranceLat, entranceLng);
+    return distance > 0.005; // Beyond ~0.55 km / 0.34 miles
+  };
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
@@ -375,13 +388,32 @@ const EditSalePage = () => {
                   initialEntranceLat={formData.entranceLat}
                   initialEntranceLng={formData.entranceLng}
                   initialEntranceNote={formData.entranceNote}
-                  onChange={(data) => setFormData(prev => ({
-                    ...prev,
-                    entranceLat: data.entranceLat,
-                    entranceLng: data.entranceLng,
-                    entranceNote: data.entranceNote ?? '',
-                  }))}
+                  onChange={(data) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      entranceLat: data.entranceLat,
+                      entranceLng: data.entranceLng,
+                      entranceNote: data.entranceNote ?? '',
+                    }));
+
+                    // Check distance from sale address
+                    if (data.entranceLat !== undefined && data.entranceLng !== undefined && sale?.lat && sale?.lng) {
+                      const isTooFar = checkEntrancePinDistance(data.entranceLat, data.entranceLng, sale.lat, sale.lng);
+                      setEntrancePinTooFar(isTooFar);
+                    } else {
+                      setEntrancePinTooFar(false);
+                    }
+                  }}
                 />
+
+                {/* Distance warning banner */}
+                {entrancePinTooFar && (
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800">
+                      ⚠️ Entrance pin is far from the sale address. Make sure this is correct.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

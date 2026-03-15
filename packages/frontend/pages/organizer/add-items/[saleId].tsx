@@ -330,7 +330,9 @@ const AddItemsDetailPage = () => {
       return await api.post(`/items/bulk`, payload);
     },
     onSuccess: (response: any) => {
-      const count = response.data.count || selectedItems.size;
+      const succeeded = response.data.succeeded || [];
+      const failed = response.data.failed || [];
+      const count = response.data.count || succeeded.length || selectedItems.size;
       const operation = bulkConfirmData?.operation || 'update';
       const operationLabel = {
         delete: 'Deleted',
@@ -341,14 +343,30 @@ const AddItemsDetailPage = () => {
         tags: 'Updated tags for',
       }[operation] || 'Updated';
 
-      showToast(`${operationLabel} ${count} item${count !== 1 ? 's' : ''}`, 'success');
+      // Check for partial failures (207 response with failed items)
+      if (failed.length > 0) {
+        const toastMessage = `${succeeded.length}/${count + failed.length} items updated — ${failed.length} skipped`;
+        showToast(toastMessage, 'warning');
+
+        setBulkErrorData({
+          title: 'Partial Success',
+          message: `${succeeded.length} item(s) updated successfully, ${failed.length} could not be updated.`,
+          errors: failed,
+          itemCount: failed.length,
+        });
+        setBulkErrorModalOpen(true);
+      } else {
+        // All succeeded
+        showToast(`${operationLabel} ${count} item${count !== 1 ? 's' : ''}`, 'success');
+      }
+
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
       setSelectedItems(new Set());
       setBulkPrice('');
       setBulkConfirmOpen(false);
       setBulkConfirmData(null);
 
-      // Show error modal if there were per-item errors
+      // Show error modal if there were per-item errors (backward compat)
       if (response.data.errors && response.data.errors.length > 0) {
         setBulkErrorData({
           title: 'Some items skipped',
@@ -622,6 +640,10 @@ const AddItemsDetailPage = () => {
                 : item
             )
           );
+
+          // Invalidate caches for item lists and draft counts
+          queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+          queryClient.invalidateQueries({ queryKey: ['draft-items', saleId] });
         }
       } catch (err: any) {
         console.error('[rapidfire] Upload failed:', err);
@@ -705,6 +727,17 @@ const AddItemsDetailPage = () => {
   const handleDeleteDraft = async (itemId: string) => {
     setRapidItems((prev) => prev.filter((i) => i.id !== itemId));
   };
+
+  // Validate saleId on mount and when router is ready
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const saleIdParam = router.query.saleId;
+    if (!saleIdParam || typeof saleIdParam !== 'string' || saleIdParam.trim() === '') {
+      showToast('Sale not found', 'error');
+      router.replace('/organizer/dashboard');
+    }
+  }, [router.isReady, router.query.saleId, router, showToast]);
 
   // Polling for draft status updates
   useEffect(() => {
