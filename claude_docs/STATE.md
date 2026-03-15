@@ -7,6 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 172 IN PROGRESS (2026-03-15) — BUILD FIX + DOC SYNC:**
+- TypeScript `Array.from(new Set(...))` fix applied to `packages/frontend/pages/organizer/add-items/[saleId].tsx` line 1428 (was `[...new Set(...)]` which fails without `downlevelIteration`).
+- STATE.md and roadmap updated: #8 Batch Operations Toolkit confirmed complete, roadmap v32.
+- S171 push confirmed merged (commits 909fe20 + 4ceadf2 on main). STATE.md "pending push" note was stale.
+- **Next:** Select next roadmap feature (#28 Neighborhood Heatmap or #6 Seller Performance Dashboard) or parallel slot (#34 Hype Meter, #35 Front Door Locator).
+- **Last Updated:** 2026-03-15 (session 172)
+
+---
+
 **Session 171 COMPLETE (2026-03-15) — P0 BUILD FIX + SITEMAP + #8 BATCH OPERATIONS TOOLKIT (5 PHASES, SHIPPED):**
 - **Type:** Infrastructure fix + roadmap #8 full implementation
 - **Work completed:**

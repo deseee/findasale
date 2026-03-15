@@ -1425,7 +1425,7 @@ const AddItemsDetailPage = () => {
       <BulkCategoryModal
         isOpen={bulkCategoryModalOpen}
         selectedCount={selectedItems.size}
-        categories={items.length > 0 ? [...new Set(items.map((i: any) => i.category).filter(Boolean))] : []}
+        categories={items.length > 0 ? Array.from(new Set(items.map((i: any) => i.category).filter(Boolean))) : []}
         onClose={() => setBulkCategoryModalOpen(false)}
         onApply={handleBulkCategory}
         loading={bulkUpdateMutation.isPending}

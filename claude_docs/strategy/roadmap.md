@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-15 (v31 — Session 171: #27 Listing Factory complete (Sprints 1–3 shipped S166/S168/S170). Fold-ins: #64 Condition Grading (S166) + #31 Brand Kit schema (S166), UI deferred. Build fix applied.)\
+**Last Updated:** 2026-03-15 (v32 — Session 172: #8 Batch Operations Toolkit marked complete. TypeScript `Set` iteration build fix applied to add-items page.)\
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -66,7 +66,7 @@
 |----------|---|---------|------|-------|
 | ~~1~~ | ~~24~~ | ~~Holds-Only Item View~~ | ✅ Done | Configurable hold duration per sale, batch ops (release/extend/markSold), grouped-by-buyer accordion, dashboard badge. Shipped session 164. |
 | ~~2~~ | ~~27~~ | ~~Listing Factory (Photo Export + Social + Tags)~~ | ✅ Done | **All 3 sprints shipped.** Sprint 1 (S166): AI tag suggestion via Haiku + curated tag vocabulary + health score utility + review.tsx picker UI. Sprint 2 (S168): Cloudinary watermark + export controller (CSV/JSON/text formats) + social templates (3 tones × 2 platforms). Sprint 3 (S170): /tags/[slug] ISR pages, /api/tags/popular endpoint, sitemap. Fold-ins: #64 Condition Grading (S166 migration 20260315000001), #31 Brand Kit schema (S166 migration 20260315000002, UI deferred to standalone session). |
-| 3 | 8 | Batch Operations Toolkit | 1 sprint | Bulk pricing, status updates, photo uploads. Partially covered by Rapidfire batch toolbar (session 146 spec). |
+| ~~3~~ | ~~8~~ | ~~Batch Operations Toolkit~~ | ✅ Done | 7-modal toolkit shipped S171: BulkCategoryModal, BulkConfirmModal, BulkOperationErrorModal, BulkPhotoModal, BulkStatusModal, BulkTagModal, BulkActionDropdown. Bulk photos API (POST /api/items/bulk/photos), expanded toolbar "More Actions" dropdown, backend status-safe validation matrix + dry-run mode. |
 | 4 | 28 | Neighborhood Heatmap | 0.5–1 sprint | Sale density overlay on shopper map — color-coded zones by active sale count. Helps shoppers plan routes by concentration. Incremental on existing Leaflet map + OSRM route planning (D3, session 114). |
 | 5 | 6 | Seller Performance Dashboard + Price Intelligence | 2–3 sprints | Analytics, benchmarks, pricing recommendations. Merged with #26 (Cross-Sale Price Intelligence) per competitive urgency — EstateFlow already has AI pricing. **Includes Seasonal Pricing Templates:** pre-loaded pricing suggestions by season (holiday decor in Nov/Dec, outdoor furniture in spring, back-to-school in Aug). AI adjusts base price recommendations by time of year and category sell-through rates. |
 
