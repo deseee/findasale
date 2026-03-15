@@ -5,6 +5,22 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## Session 166 — 2026-03-15
+
+### Decision: #64 Condition Grading — Fold into Sprint 1 of Listing Factory
+**Status:** APPROVED
+**Made by:** Patrick
+**Rationale:** Additive schema change (conditionGrade String? on Item). Ships naturally with Sprint 1 tag picker UI. AI suggests S/A/B/C/D grade from photo during Rapidfire; organizer confirms. Coexists with existing `condition` field (backward compat). Adds +5 to health score when graded. Migration: 20260315000001_add_condition_grade_to_item.
+**Consequences:** Sprint 1 now includes one schema migration. Health score max becomes 105 (or capped at 100).
+
+### Decision: #31 Brand Kit — Schema fields added now, UI deferred to Sprint 3
+**Status:** APPROVED (schema only — UI in Sprint 3)
+**Made by:** Patrick
+**Rationale:** Three additive fields on Organizer (brandLogoUrl, brandPrimaryColor, brandSecondaryColor). Migration 20260315000002_add_brand_kit_to_organizer added now so Sprint 3 dev can build on them without a separate migration session. No UI built yet — Sprint 3 owns settings page section and watermark logo integration.
+**Consequences:** Organizer schema grows by 3 nullable fields. Watermark utility (Sprint 2) will use text overlay until Sprint 3 Brand Kit UI ships.
+
+---
+
 ## 2026-03-12 — Session 153 (Cash POS Fee Policy)
 
 - DECIDED: 10% platform fee applies to all cash POS transactions (parity with online/card transactions). Rationale: prevents perverse incentive to route everything through cash to avoid fees; maintains P&L consistency.

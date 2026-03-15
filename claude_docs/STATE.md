@@ -13,7 +13,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Sprint 2 scope:** Cloudinary watermark, exportController.ts (3 formats: PDF/CSV/JSON), social template endpoint, promote.tsx UI
 - **Sprint 3 scope:** /tags/[slug] ISR pages + sitemap.xml generation. Optional #64 conditionGrade fold-in, #31 Brand Kit fold-in (deferred to post-Sprint 2 eval).
 - **Schema changes:** None for Sprint 1 or 2. Sprint 3 optional migrations documented in spec (conditionGrade, brandKitId, deprecated fields cleanup).
-- **Patrick decisions pending:** #64 fold-in (architect recommends YES for better grading), #31 fold-in (architect recommends defer to Phase 5), EstateSales.NET CSV format verification
+- **Patrick decisions locked:** #64 YES (conditionGrade migration in Sprint 1), #31 YES (schema fields now, UI Sprint 3). Remaining: EstateSales.NET CSV format verification (before Sprint 2 dev).
 - **Dev dispatched:** Sprint 1 implementation in progress (findasale-dev agent).
 - **Last Updated:** 2026-03-15 (session 166)
 
