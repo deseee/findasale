@@ -200,9 +200,9 @@ const sendWeeklyPicksEmail = async (email: string, name: string, picks: WeeklyPi
       subject: `${picks.length} Estate Sale Finds This Week (New Arrivals)`,
       html,
     });
-    console.log(`✓ Weekly picks email sent to ${email}`);
+    console.log(`\u2713 Weekly picks email sent to ${email}`);
   } catch (err) {
-    console.error(`✗ Failed to send weekly picks email to ${email}:`, err);
+    console.error(`\u2717 Failed to send weekly picks email to ${email}:`, err);
     throw err;
   }
 };

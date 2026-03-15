@@ -7,7 +7,7 @@
       "to": "findasale-qa,patrick",
       "timestamp": "2026-03-15T02:30:00Z",
       "type": "completion",
-      "message": "LISTING FACTORY SPRINT 1 COMPLETE — All implementation finished per spec. Files: (1) packages/shared/src/constants/tagVocabulary.ts (CURATED_TAGS 45 tags + type export), (2) packages/shared/src/index.ts (exports tagVocabulary), (3) packages/backend/src/utils/listingHealthScore.ts (computeHealthScore utility 0-100 scale, grade logic: blocked <40, nudge 40-70, clear ≥70), (4) packages/backend/src/services/cloudAIService.ts (suggestCuratedTags function, suggestedTags field in AITagResult, integrated into analyzeItemImage non-blocking), (5) packages/backend/src/controllers/itemController.ts (getDraftItemsBySaleId computes healthScore for each item), (6) packages/frontend/pages/organizer/add-items/[saleId]/review.tsx (tag picker UI with AI suggestions + curated grid + custom input, health bar in collapsed row + aggregate bar at top, disabled publish for blocked items). Commits pushed: b396f19 (shared+utils), b396f19 (cloudAI), 5eb0e8d (itemController). NOTE: review.tsx file size >25k tokens — use git add + .\\ push.ps1 for final push. QA: verify tag suggestions appear in rapidfire, health scores gate publishing correctly, tags persist via API, tag picker UX. Context Checkpoint: yes",
+      "message": "LISTING FACTORY SPRINT 1 COMPLETE — All implementation finished per spec. Files: (1) packages/shared/src/constants/tagVocabulary.ts (CURATED_TAGS 45 tags + type export), (2) packages/shared/src/index.ts (exports tagVocabulary), (3) packages/backend/src/utils/listingHealthScore.ts (computeHealthScore utility 0-100 scale, grade logic: blocked <40, nudge 40-70, clear ≥70), (4) packages/backend/src/services/cloudAIService.ts (suggestCuratedTags function, suggestedTags field in AITagResult, integrated into analyzeItemImage non-blocking), (5) packages/backend/src/controllers/itemController.ts (getDraftItemsBySaleId computes healthScore for each item), (6) packages/frontend/pages/organizer/add-items/[saleId]/review.tsx (tag picker UI with AI suggestions + curated grid + custom input, health bar in collapsed row + aggregate bar at top, disabled publish for blocked items). Commits pushed: f046098 (shared+utils), b396f19 (cloudAI), 5eb0e8d (itemController). NOTE: review.tsx file size >25k tokens — use git add + .\\push.ps1 for final push. QA: verify tag suggestions appear in rapidfire, health scores gate publishing correctly, tags persist via API, tag picker UX. Context Checkpoint: yes",
       "feedbackLoop": "qa-review"
     },
     {
@@ -25,133 +25,7 @@
       "to": "patrick",
       "timestamp": "2026-03-14T23:59:30Z",
       "type": "wrap-complete",
-      "message": "SESSION 162 WRAP COMPLETE. Comprehensive Review & Publish page rebuild + Chrome audit + P1 bug fixes. Inline edit panel upgraded from 3 fields to full feature parity with edit-item page: ItemPhotoManager, description, condition, quantity, PriceSuggestion, per-item Publish/Unpublish toggle, Full Edit Page link. draftStatus badge added to item cards (Published/Pending/Draft). Chrome audit all 7 checks passed. Two P1 bugs fixed: (1) unicode separator `\\u00B7` rendering as literal text (fixed with `{' · '}`), (2) Manual Entry items showing \"Low (50%)\" instead of \"Manual\" (fixed via `isAiTagged` field check). Backend updated: isAiTagged + aiConfidence added to getDraftItemsBySaleId and getItemDraftStatus selects. Merge conflict in review.tsx resolved (kept HEAD). CORE.md updated with §3 rule: re-read §4 Push Rules after compression. Files changed: packages/frontend/pages/organizer/add-items/[saleId]/review.tsx, packages/backend/src/controllers/itemController.ts, claude_docs/CORE.md. All on GitHub main, Vercel auto-deploying. STATE.md, session-log.md, next-session-prompt.md updated. Ready for next session.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-163-review-jsx-wired",
-      "from": "findasale-dev",
-      "to": "patrick",
-      "timestamp": "2026-03-14T23:15:00Z",
-      "type": "completion",
-      "message": "REVIEW & PUBLISH PAGE JSX WIRED — COMPLETE. All 6 state handlers now connected to JSX. (1) Header: Added Buyer Preview button (onClick -> setShowBuyerPreview). (2) Bulk toolbar: Renders when selectedItems.size > 0 above items list — shows selection count, bulk price input + Set Price button, bulk category dropdown with immediate apply, Clear button. (3) Item cards: Replaced static read-only div with interactive expandable version — collapsed row (checkbox + thumbnail + title/price/category + confidence label + chevron) always visible, click to expand/collapse edit panel below. (4) Edit panel: Title input (handleEditChange), Price input, Category select, Save Changes button (onClick -> handleSaveItem). (5) Buyer Preview: Already had toggle button at bottom; now wired header button to setShowBuyerPreview(true). (6) All event handlers (setSelectedItems, setExpandedItemId, handleEditChange, handleSaveItem, handleBulkPrice, handleBulkCategory) now connected. File: packages/frontend/pages/organizer/add-items/[saleId]/review.tsx (554 lines, 16.8 KB). Commit SHA: 1f7082926eb8062d86fa4cd99c70101ca93554e1. Ready for Vercel deploy.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-162-wrap-complete",
-      "from": "findasale-records",
-      "to": "patrick",
-      "timestamp": "2026-03-14T23:59:00Z",
-      "type": "wrap-complete",
-      "message": "SESSION 162 WRAP COMPLETE. Chrome audit of Review & Publish page — all 7 checks passed. Two P1 bugs found and fixed live: (1) `\\u00B7` unicode separator rendering as literal text in JSX text nodes (fixed: `{' · '}` in review.tsx line 415). (2) Manual Entry items showing \"Low (50%)\" instead of \"Manual\" (root cause: schema default `aiConfidence Float @default(0.5)`; fixed via `isAiTagged` field check in confidenceLabel/confidenceBorderClass functions). One P2 bug open: thumbnail images broken on Review page reload (Cloudinary URLs load first visit, fail on subsequent navigation — needs investigation). Files changed: packages/frontend/pages/organizer/add-items/[saleId]/review.tsx, packages/backend/src/controllers/itemController.ts. Both pushed to GitHub main via MCP. Vercel auto-deploying. STATE.md, next-session-prompt.md, session-log.md, .checkpoint-manifest.json all updated. Ready for Patrick git push.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-159-p1-bugs-fixed",
-      "from": "findasale-dev",
-      "to": "patrick",
-      "timestamp": "2026-03-14T09:00:00Z",
-      "type": "completion",
-      "message": "P1 BUGS FIXED — REVIEW & PUBLISH PAGE CHROME AUDIT. Two critical bugs resolved: (1) Unicode separator rendering — fixed JSX escape sequence `\\u00B7` to actual middle dot character `{' · '}` in item card subtitle (packages/frontend/pages/organizer/add-items/[saleId]/review.tsx line 415). (2) Manual Entry items showing \"Low (50%)\" instead of \"Manual\" — root cause: items manually created get `aiConfidence = 0.5` (default), triggering 'Low' label logic. Solution: use `isAiTagged` field (already in schema) to distinguish manual vs AI-analyzed items. Updated confidenceLabel() and confidenceBorderClass() functions to check isAiTagged first; only show percentage for AI-tagged items. Backend: added `isAiTagged: true` to getDraftItemsBySaleId select clause (line 792) and getItemDraftStatus select clause (lines 824-825). TypeScript types updated: added `isAiTagged: boolean` to Item interface. Files changed: (1) packages/frontend/pages/organizer/add-items/[saleId]/review.tsx (interface + 2 helper functions + 2 call sites), (2) packages/backend/src/controllers/itemController.ts (2 endpoints). Both pushed via GitHub MCP. Ready for QA.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-158-workflow-capture-findings",
-      "from": "findasale-workflow",
-      "to": "patrick",
-      "timestamp": "2026-03-13T14:00:00Z",
-      "type": "analysis",
-      "message": "96-HOUR I/O CAPTURE DESIGN COMPLETE — AUDIT FINDINGS. Document: `claude_docs/workflow-retrospectives/96h-io-capture-design.md`. Key findings from sessions 150–157: (1) CONTEXT LOST: Subagent research outputs completed (innovation-round3-2026-03-13.md) but selection rationale not in decisions-log. (2) ASYNC BOUNDARY: Migration pending Neon deploy mentioned in STATE.md but no timestamp/deadline; session 154 had to diagnose P2022 error that should have been flagged at start. (3) LARGE CODE CHANGES UNLOGGED: add-items 989-line rewrite committed but not in session-log; test coverage unclear until session 128 QA ran. (4) DECISION RATIONALE GAP: Organizer Mode Tiers framework decision exists, but no link to feature dependencies or trade-offs. (5) ISOLATED ASYNC: Friction audit (session 149) found P0 but didn't propagate to session 150 start. (6) COMPRESSION BOUNDARY: Session 150 hit context limit mid-POS build; session 151 resumed but STATE.md sync was unclear. Solution: Rolling 96h event log (append-only JSONL) + 12-hour analysis task detecting 7 heuristic patterns (orphaned dispatch, integration gaps, unlogged changes, broken rationale, compression boundaries, isolated async results, uncommitted work). Analysis runs daily 8am + 8pm, produces markdown report with findings + recommendations. No new CLAUDE.md rules — captures logged passively via findasale-records + conversation-defaults. Implementation: Phase 1 (capture infrastructure), Phase 2 (analysis task), Phase 3 (session-start integration). Ready to build.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-158-poweruser-io-capture-design",
-      "from": "cowork-power-user",
-      "to": "patrick",
-      "timestamp": "2026-03-13T16:30:00Z",
-      "type": "research",
-      "message": "96-HOUR SESSION I/O CAPTURE SYSTEM — DESIGN ANALYSIS COMPLETE. Research output: `claude_docs/operations/96h-session-io-capture-system-design.md` (10,000 words). Key findings: (1) Claude cannot access its own conversation history — no raw transcript capture possible. (2) Practical alternative: capture work artifacts (files, commits, handoffs) + have agents log I/O explicitly as JSONL. (3) Architecture: append-only `session-io-capture.jsonl` (400–800 KB rolling 96h buffer) + 12-hour analysis task detecting context loss, auto-compression, orphaned work, post-session orphans. (4) Expected file size: negligible (10 MB/month). (5) Integration: additive to STATE.md, complementary to MESSAGE_BOARD, orthogonal to session-log. (6) CLAUDE.md changes: minimal (1 new rule in conversation-defaults, 1 section in CORE.md). (7) Value: catches ~1–2 invisible issues/sprint (currently silent). (8) Cost: 2 hours setup + automated via scheduled task. Recommendation: BUILD THIS — low cost, high fidelity. Next step: Patrick greenlight Phase 1 (schema + logging). If approved, findasale-records owns scheduled-task skill; findasale-dev owns analysis script.",
-      "feedbackLoop": "awaiting-patrick-decision"
-    },
-    {
-      "id": "msg-154-dev-cash-fee-frontend",
-      "from": "findasale-dev",
-      "to": "patrick",
-      "timestamp": "2026-03-12T20:54:00Z",
-      "type": "completion",
-      "message": "CASH PLATFORM FEE FRONTEND — IMPLEMENTATION COMPLETE. 3 surfaces deployed: (1) pos.tsx: Cash payment success UI now shows platform fee line item + pending fee balance note (from response data). (2) payouts.tsx: Added Cash Fee Balance card (shows only when balance > 0) with last-updated date + 30-day stale warning (amber banner). Added payout deduction preview — before submit, shows -$X cash fee + net payout calc (accounts for fee in available balance validation). (3) dashboard.tsx: Added cash fee indicator card in overview tab (shows only when balance > 0) with link to payouts page + 30-day stale warning. All TypeScript strict, Tailwind styled for consistency, no implicit any. Responses parsed: earnings endpoint returns cashFeeBalance + cashFeeBalanceUpdatedAt; cash-payment returns platformFee + cashFeeBalance. Files changed via MCP: pos.tsx (8211b1f), payouts.tsx (6084cf21), dashboard.tsx (43bcb8eb). Ready for Patrick git push via push.ps1.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-153-records-decisions-logged",
-      "from": "findasale-records",
-      "to": "patrick",
-      "timestamp": "2026-03-12T20:15:00Z",
-      "type": "completion",
-      "message": "SESSION 153 RECORDS UPDATE COMPLETE. Decision entry appended to decisions-log.md (Session 153: Cash POS Fee Policy — 3 decisions logged). STATE.md updated: marked migration 20260312000002_add_purchase_pos_fields as deployed to Neon (removed pending language, confirmed by Patrick); migration count incremented to 72 total applied. Files changed: decisions-log.md, STATE.md (2 sections). Ready for next dispatch.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-152-architect-cash-fees-adr",
-      "from": "findasale-architect",
-      "to": "dev-team,patrick",
-      "timestamp": "2026-03-12T19:30:00Z",
-      "type": "architecture",
-      "message": "CASH PLATFORM FEE COLLECTION — ADR COMPLETE. Decisions: (1) Organizer.cashFeeBalance (Float) + Organizer.cashFeeBalanceUpdatedAt (DateTime) — tracks accumulated 10% fees from cash sales. (2) Fee accumulation happens in cashPayment() endpoint after items marked SOLD. (3) Payout deduction in createPayout() — deducts balance from requested amount before Stripe call, then resets balance to 0. (4) 30-day guardrail: advisory warning on dashboard if balance > 0 and > 30 days old; allows payout to proceed (90-day hard stop future phase). (5) No refund fee reversal — fee stays in balance if cash purchase refunded. (6) Migration: 20260312_add_cash_fee_balance_to_organizer (adds 2 fields + index). (7) UI: POS screen shows fee line item + accumulated balance note; dashboard card shows balance/age/warning; payout modal shows deduction + net payout. Zero Stripe API integration needed — purely local DB tracking. Implementation order: schema → cashPayment() → createPayout() → frontend cards. Full ADR: claude_docs/feature-decisions/CASH_FEE_COLLECTION_ARCHITECTURE.md. Ready for dev dispatch.",
-      "feedbackLoop": "ready-for-dev-dispatch"
-    },
-    {
-      "id": "msg-151-wrap-complete",
-      "from": "findasale-records",
-      "to": "patrick",
-      "timestamp": "2026-03-12T18:45:00Z",
-      "type": "wrap-complete",
-      "message": "SESSION 151 WRAP COMPLETE. Files updated: STATE.md (Session 151 complete block), session-log.md (appended), next-session-prompt.md (rewritten for Session 152), .checkpoint-manifest.json (currentSession + sessionHistory), claude_docs/.last-wrap (timestamp). Hygiene scan: PASS. Ready for git push. Files changed this session: terminalController.ts, pos.tsx (code), STATE.md, session-log.md, next-session-prompt.md, .checkpoint-manifest.json (docs). Status: Terminal POS code-complete, QA audit passed, migration pending Neon deploy, ready for Patrick testing in simulated mode.",
-      "feedbackLoop": null
-    },
-    {
-      "id": "msg-151-dev-terminal-qa-fixes",
-      "from": "findasale-dev",
-      "to": "findasale-qa,patrick",
-      "timestamp": "2026-03-12T14:30:00Z",
-      "type": "completion",
-      "message": "QA HANDOFF — STRIPE TERMINAL POS FIXES COMPLETE. All 1 BLOCKER + 3 WARNs fixed. Files changed: terminalController.ts (BLOCKER + WARN1 + WARN3), pos.tsx (WARN2). BLOCKER: removed on_behalf_of + transfer_data (mutually exclusive with stripeAccount header). WARN1: added organizerId ownership check in captureTerminalPaymentIntent. WARN2: stored paymentIntentId in component state, calls backend /cancel endpoint in handleCancel. WARN3: added concurrent purchase guard — re-checks item status before capture, cancels PI if another transaction sold it. No syntax errors. Ready for testing.",
-      "feedbackLoop": "qa-review"
-    },
-    {
-      "id": "msg-150-architect-terminal-adr",
-      "from": "findasale-architect",
-      "to": "dev-team,patrick",
-      "timestamp": "2026-03-12T00:00:00Z",
-      "type": "architecture",
-      "message": "STRIPE TERMINAL POS — ADR COMPLETE. Decisions: WisePOS E/S700 (WiFi) not M2 Bluetooth (iOS Safari incompatible). @stripe/terminal-js SDK, internet discovery mode. Schema: Purchase gets source (ONLINE|POS), nullable userId (walk-in buyers), optional buyerEmail. v1: 1 item per transaction. New controller: terminalController.ts. New routes: /api/stripe/terminal/{connection-token,payment-intent,capture,cancel}. New page: /organizer/pos. Terminal PIs use capture_method:manual + payment_method_types:[card_present]. Existing webhook handler covers success event with minor buyerEmail receipt tweak. ADR: claude_docs/feature-notes/stripe-terminal-pos-adr.md. Ready for dev dispatch.",
-      "feedbackLoop": "ready-for-dev-dispatch"
-    },
-    {
-      "id": "msg-146-architect-decisions-final",
-      "from": "findasale-architect",
-      "to": "dev-team,patrick",
-      "timestamp": "2026-03-11T18:50:00Z",
-      "type": "architecture",
-      "message": "CAMERA WORKFLOW V2 — ARCHITECTURE DECISIONS SHIPPED. All 7 questions resolved + documented. Status: ready for findasale-dev immediate dispatch. Schema: 4 Item fields (aiConfidence, backgroundRemoved, faceDetected, autoEnhanced) + Photo table forward-look. Backend: analyzeItemImage returns confidence; processRapidDraft stores it; bulk-update handles new flags. Frontend: TensorFlow.js COCO-SSD on-device face detection (100% privacy); Canvas auto-enhance + 4:3 crop before upload (non-blocking); Cloudinary b_remove + ar transforms at display time. Implementation order + full handoff in CAMERA_WORKFLOW_V2_ARCHITECTURE.md (feature-decisions dir). No further decisions needed. Patrick: approve handoff to dev or request changes.",
-      "feedbackLoop": "ready-for-dev-dispatch"
-    },
-    {
-      "id": "msg-146-ship-ready",
-      "from": "ship-ready-committee",
-      "to": "dev-team,patrick",
-      "timestamp": "2026-03-11T18:15:00Z",
-      "type": "decision",
-      "message": "Camera Workflow v2 scope validation COMPLETE. In-scope: rapidfire multi-photo, 4:3 guide, confidence tinting, per-item editor (aspect/brightness/contrast), batch price/category, buyer preview. Deferred: quality warnings, face detection, background removal API (architecture lock required). Zero hard blockers. Architect decisions pending.",
-      "feedbackLoop": "architect-decisions-provided"
-    },
-    {
-      "id": "msg-144-001",
-      "from": "advisory-board",
-      "to": "all",
-      "timestamp": "2026-03-11T17:00:00Z",
-      "type": "announcement",
-      "message": "Board Meeting #1 complete. Two items approved unanimously: (1) Sessions 142-143 audit — fleet redesign delivered, file hygiene did not. (2) Hard-gated file/folder rules — 5-point plan approved. Implementation in progress this session.",
+      "message": "SESSION 162 WRAP COMPLETE. Comprehensive Review & Publish page rebuild + Chrome audit + P1 bug fixes. Inline edit panel upgraded from 3 fields to full feature parity with edit-item page: ItemPhotoManager, description, condition, quantity, PriceSuggestion, per-item Publish/Unpublish toggle, Full Edit Page link. draftStatus badge added to item cards (Published/Pending/Draft). Chrome audit all 7 checks passed. Two P1 bugs fixed: (1) unicode separator `\\u00B7` rendering as literal text (fixed with `{' ·'}`), (2) Manual Entry items showing \"Low (50%)\" instead of \"Manual\" (fixed via `isAiTagged` field check). Backend updated: isAiTagged + aiConfidence added to getDraftItemsBySaleId and getItemDraftStatus selects. Merge conflict in review.tsx resolved (kept HEAD). CORE.md updated with §3 rule: re-read §4 Push Rules after compression. Files changed: packages/frontend/pages/organizer/add-items/[saleId]/review.tsx, packages/backend/src/controllers/itemController.ts, claude_docs/CORE.md. All on GitHub main, Vercel auto-deploying. STATE.md, session-log.md, next-session-prompt.md updated. Ready for next session.",
       "feedbackLoop": null
     }
   ]
