@@ -389,7 +389,7 @@ const AddItemsDetailPage = () => {
 
       // P1-B: Show warning toast if items were skipped
       if (skipped.length > 0) {
-        const skipReasons = skipped.map(s => s.reason).filter(Boolean);
+        const skipReasons = skipped.map((s: { reason?: string }) => s.reason).filter(Boolean);
         const skipMessage = skipReasons.length > 0 ? ` — ${skipReasons[0]}` : '';
         showToast(`${skipped.length} item(s) skipped${skipMessage}`, 'warning');
       }
