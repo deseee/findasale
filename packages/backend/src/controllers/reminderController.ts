@@ -1,24 +1,18 @@
-import { Request, Response } from 'express';
-import { prisma } from '../prisma';
-import { authenticateToken } from '../middleware/auth';
+import { Response } from 'express';
+import { prisma } from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth';
 
-export const getReminderForSale = async (req: Request, res: Response) => {
+export const getReminderForSale = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user?.id;
     const { saleId } = req.params;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const reminder = await prisma.saleReminder.findUnique({
-      where: {
-        userId_saleId_reminderType: {
-          userId,
-          saleId,
-          reminderType: 'email',
-        },
-      },
+    const reminder = await prisma.saleReminder.findFirst({
+      where: { userId, saleId },
     });
 
     return res.json({ reminder });
@@ -28,9 +22,9 @@ export const getReminderForSale = async (req: Request, res: Response) => {
   }
 };
 
-export const createReminder = async (req: Request, res: Response) => {
+export const createReminder = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user?.id;
     const { saleId, reminderType = 'email' } = req.body;
 
     if (!userId) {
@@ -41,31 +35,18 @@ export const createReminder = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'saleId is required' });
     }
 
-    // Check if sale exists
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId },
-    });
-
+    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
     if (!sale) {
       return res.status(404).json({ error: 'Sale not found' });
     }
 
-    // Create or reactivate reminder
+    // Upsert: create or reactivate
     const reminder = await prisma.saleReminder.upsert({
       where: {
-        userId_saleId_reminderType: {
-          userId,
-          saleId,
-          reminderType,
-        },
+        userId_saleId_reminderType: { userId, saleId, reminderType },
       },
       update: { status: 'ACTIVE' },
-      create: {
-        userId,
-        saleId,
-        reminderType,
-        status: 'ACTIVE',
-      },
+      create: { userId, saleId, reminderType, status: 'ACTIVE' },
     });
 
     return res.status(201).json({ reminder });
@@ -75,27 +56,22 @@ export const createReminder = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteReminder = async (req: Request, res: Response) => {
+export const deleteReminder = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user?.id;
     const { reminderId } = req.params;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Verify ownership before deleting
-    const reminder = await prisma.saleReminder.findUnique({
-      where: { id: reminderId },
-    });
+    const reminder = await prisma.saleReminder.findUnique({ where: { id: reminderId } });
 
     if (!reminder || reminder.userId !== userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    await prisma.saleReminder.delete({
-      where: { id: reminderId },
-    });
+    await prisma.saleReminder.delete({ where: { id: reminderId } });
 
     return res.json({ success: true });
   } catch (error) {
