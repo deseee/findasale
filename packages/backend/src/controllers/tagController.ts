@@ -1,7 +1,21 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
-import { CURATED_TAGS } from '@findasale/shared/src/constants/tagVocabulary';
-import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+/**
+ * Curated tag vocabulary — mirrors packages/shared/src/constants/tagVocabulary.ts
+ * Duplicated here because backend tsconfig rootDir=./src blocks cross-package source imports.
+ * If updating tags, update both files. Quarterly review owned by Patrick.
+ */
+const CURATED_TAGS = [
+  'mid-century-modern', 'art-deco', 'victorian', 'craftsman', 'industrial',
+  'farmhouse', 'bohemian', 'danish-modern', 'scandinavian', 'atomic-age',
+  'hollywood-regency', 'arts-and-crafts', 'colonial', 'transitional', 'contemporary',
+  'walnut', 'oak', 'teak', 'brass', 'cast-iron',
+  'wicker', 'leather', 'ceramic', 'glass', 'chrome',
+  'hand-painted', 'signed', 'original', 'limited-edition', 'first-edition',
+  'handmade', 'restored', 'vintage-1950s', 'vintage-1960s', 'vintage-1970s',
+  'collectible', 'antique', 'sterling-silver', 'costume-jewelry', 'fine-art',
+  'folk-art', 'architectural-salvage', 'garden-decor', 'holiday-decor', 'musical',
+] as const;
 
 /**
  * Tag Controller — Sprint 3
