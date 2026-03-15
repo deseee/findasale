@@ -2,10 +2,12 @@
 import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import EntranceMarker from './EntranceMarker'; // Feature 35: Front Door Locator
+import HeatmapOverlay from './HeatmapOverlay'; // Feature #28
 import L from 'leaflet';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import type { SalePin } from './SaleMap';
+import type { HeatmapTile } from '../types/heatmap';
 
 // Fix Leaflet's default icon paths (broken in webpack/Next.js builds)
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -78,6 +80,9 @@ interface SaleMapInnerProps {
   entrancePin?: { lat: number; lng: number; note?: string };
   height?: string;
   userLocation?: { lat: number; lng: number } | null;
+  /** Feature #28: Neighborhood Heatmap tiles */
+  heatmapTiles?: HeatmapTile[];
+  onHeatmapCellClick?: (tile: HeatmapTile) => void;
 }
 
 const SaleMapInner = ({
@@ -91,6 +96,8 @@ const SaleMapInner = ({
   entrancePin,
   height = '400px',
   userLocation,
+  heatmapTiles,
+  onHeatmapCellClick,
 }: SaleMapInnerProps) => {
   const formatDate = (d: string) => {
     try { return format(new Date(d), 'MMM d, yyyy'); } catch { return 'TBA'; }
@@ -118,6 +125,14 @@ const SaleMapInner = ({
 
         {/* Fly to user location if provided */}
         {userLocation && <FlyToUser lat={userLocation.lat} lng={userLocation.lng} />}
+
+        {/* Feature #28: Heatmap overlay (rendered below sale pins) */}
+        {heatmapTiles && heatmapTiles.length > 0 && (
+          <HeatmapOverlay
+            tiles={heatmapTiles}
+            onCellClick={onHeatmapCellClick}
+          />
+        )}
 
         {/* Single-pin mode (sale detail page) */}
         {singlePin && (

@@ -179,6 +179,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+    // P0 Fix 3: Prevent race condition — check item is still AVAILABLE
+    if (item.status !== 'AVAILABLE') {
+      return res.status(409).json({ message: `Item is no longer available (status: ${item.status})` });
+    }
+
     if (!item.sale.organizer.stripeConnectId) {
       return res.status(400).json({ message: 'Organizer has not set up payment processing' });
     }

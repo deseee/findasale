@@ -18,6 +18,7 @@ import {
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
+import { getHeatmapHandler } from '../controllers/heatmapController'; // Feature #28
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -25,6 +26,7 @@ const router = Router();
 // Public routes
 router.get('/', listSales);
 router.get('/search', searchSales);
+router.get('/heatmap', getHeatmapHandler); // Feature #28: Neighborhood heatmap
 router.get('/neighborhood/:slug', getSalesByNeighborhood); // U2: SEO landing pages
 
 // /mine must be registered before /:id so Express doesn't treat "mine" as an ID
