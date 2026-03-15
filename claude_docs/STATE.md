@@ -7,21 +7,27 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 168 COMPLETE (2026-03-15) — SPRINT 2 IMPLEMENTED + PUSHED:**
-- **Sprint 2 shipped:** Cloudinary watermark utility, export controller (3 formats), promote.tsx UI — all on GitHub main.
-- **Files on remote (MCP-pushed):** `cloudinaryWatermark.ts`, `exportController.ts`, `export.ts` (routes), `[saleId].tsx` (promote page)
-- **Files on remote (Patrick PS1):** `packages/backend/src/index.ts` (export route registration), context docs
-- **Production:** Railway + Vercel should auto-deploy. Verify next session.
-- **CORE.md:** v4.1 with MCP truncation gate, full-file rule, complete push blocks, conflict re-staging
-- **Sprint 2 QA:** Not yet run. Next session should dispatch findasale-qa.
-- **Last Updated:** 2026-03-15 (session 168)
+**Session 169 COMPLETE (2026-03-15) — STRATEGIC AUDIT + WORKFLOW OVERHAUL:**
+- **Type:** Research/planning session + implementation (minimal code, max audit/design)
+- **6 parallel research agents dispatched:** workflow audit (sessions 164–168), tool ecosystem eval, cowork ecosystem audit, communications quality (5.3/10 baseline), manager subagent architecture ADR, Sprint 2 QA
+- **3 implementation agents dispatched:** findasale-dev (watermark URL slash + UTC date fixes), findasale-records (CORE.md v4.2, CLAUDE.md §9-10 push block guarantee + subagent push ban), skill-creator (push-coordinator skill template)
+- **Sprint 2 QA verdict:** PASS WITH NOTES — 1 BLOCKER (watermark URL slash in cloudinaryWatermark.ts) fixed, 1 WARN (UTC dates in exportController) fixed, 2 NOTEs acceptable
+- **Decisions locked:**
+  - Subagent push ban experimental: Sessions 169–171 (CLAUDE.md §10 now active)
+  - Push-coordinator lightweight skill approved (ADR confirms full manager pattern not yet feasible in Cowork)
+  - Plugin categories: keep ALL enabled (Patrick override of ecosystem audit recommendation)
+  - Claude Code CLI: use as handoff system with Cowork, not standalone replacement
+- **New skills designed:** conversation-defaults v7 (3 new rules + 3 revised), findasale-push-coordinator (80% benefit of full manager pattern)
+- **Files on remote (MCP-pushed S169):** cloudinaryWatermark.ts + exportController.ts fixes (pushed by dev agent)
+- **Files pending Patrick push:** conversation-defaults v7 INSTALL, push-coordinator INSTALL, claude_docs updates (workflow-audit, tool-eval, qa-verdict, etc.)
+- **Last Updated:** 2026-03-15 (session 169)
 
-**NEXT SESSION: Strategic Audit + Workflow Overhaul (see next-session-prompt.md)**
-- Full multi-agent audit of sessions 164–168
-- Workflow friction analysis + CLAUDE.md improvements
-- Tool ecosystem research (Ollama, autoresearch, Claude Code Playground)
-- Manager subagent pattern design
-- Communications/interaction quality assessment
+**NEXT SESSION: Feature Resume + Verification**
+- Patrick pushes all changed files (conversation-defaults v7 + push-coordinator + claude_docs via `.\push.ps1`)
+- Patrick installs conversation-defaults v7 and push-coordinator skill
+- Verify Railway + Vercel deployed Sprint 2 correctly
+- Test push-coordinator skill with first real subagent output (start S169-171 experiment)
+- Resume feature work per STATE.md roadmap
 
 ---
 

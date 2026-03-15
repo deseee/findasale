@@ -2,6 +2,18 @@
 
 ## Recent Sessions
 
+### 2026-03-15 · Session 169 (STRATEGIC AUDIT + WORKFLOW OVERHAUL)
+**Worked on:** Full multi-agent audit of sessions 164–168 (6 research agents + 3 implementation agents). Workflow friction analysis, tool ecosystem evaluation (Claude Code CLI 9/10 ADOPT, Ollama 6/10 TRIAL, autoresearch 2/10 REJECT), Cowork ecosystem audit, communications quality baseline (5.3/10), manager subagent architecture ADR (determined full manager pattern not yet feasible; designed lightweight push-coordinator as 80% alternative), Sprint 2 QA (PASS WITH NOTES: 1 BLOCKER watermark slash fixed, 1 WARN UTC dates fixed). Conversation-defaults v7 designed (3 new rules, 3 revised). Push-coordinator skill template packaged.
+**Decisions:** Subagent push ban S169–171 locked in CLAUDE.md §10. Plugin categories keep ALL enabled (Patrick override). Claude Code CLI adopted as handoff with Cowork. Push-coordinator skill (not full manager) approved.
+**Files created (awaiting Patrick push):** conversation-defaults v7 INSTALL, push-coordinator INSTALL, claude_docs/workflow-audit-s164-s168.md, tool-ecosystem-evaluation, cowork-ecosystem-audit, communications-quality-assessment, qa-sprint2-verdict, patrick-language-map, push-coordinator-protocol, 3 manager subagent architecture docs
+**Files modified (MCP-pushed this session):** cloudinaryWatermark.ts (URL slash fix), exportController.ts (UTC date fix)
+**Files modified (await Patrick push):** CORE.md v4.2, CLAUDE.md (§9 push block guarantee + §10 subagent push ban)
+**Production status:** Sprint 2 verified PASS (watermark + export fixes shipped by dev agent)
+**Compression:** 0
+**Subagents:** 9 total (workflow, innovation, power-user, advisory-board, architect, qa, dev, records, skill-creator)
+**Next up:** Patrick pushes all pending files, installs new skills, verifies Railway/Vercel, tests push-coordinator, resumes feature work.
+**Scoreboard:** Files changed: 14+ | Compressions: 0 | Subagents: 9 | Push method: MCP (sprint2 fixes) + pending PS1 (bulk)
+
 ### 2026-03-15 · Session 167–168 (combined — context compaction mid-session)
 **Worked on:** (Phase 1 / S167) Production recovery from S166 MCP truncations. Restored itemController.ts (939 lines, 13 exports), Railway redeployed, CORE.md v4.1 locked with 4 MCP safety rules. (Phase 2 / S168) Sprint 2 fully implemented: Cloudinary watermark utility, exportController.ts (3 formats: EstateSales.NET CSV, Facebook JSON, Craigslist text), promote.tsx UI with download/copy buttons. Export route registered in index.ts. All Sprint 2 code pushed to GitHub via MCP (8 commits total).
 **Decisions:** MCP truncation gate in CORE.md (mechanical size-comparison check). Watermark via Cloudinary URL transformation (no re-upload). CSV uses manual string building (no csv-stringify dep). All export endpoints require auth + ownership verification + PUBLISHED items only.
