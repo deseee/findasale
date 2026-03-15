@@ -13,8 +13,16 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
+import SaleSelector from '../../components/SaleSelector';
+import DateRangeSelector from '../../components/DateRangeSelector';
+import MetricsGrid from '../../components/PerformanceDashboard/MetricsGrid';
+import TopItemsTable from '../../components/PerformanceDashboard/TopItemsTable';
+import CategoryBreakdownChart from '../../components/PerformanceDashboard/CategoryBreakdownChart';
+import HoldMetricsCard from '../../components/PerformanceDashboard/HoldMetricsCard';
+import RecommendationsPanel from '../../components/PerformanceDashboard/RecommendationsPanel';
 
 interface Insights {
   totalSalesCount: number;
@@ -47,11 +55,92 @@ interface Insights {
   }>;
 }
 
+interface PerformanceMetrics {
+  success: boolean;
+  organizerId: string;
+  saleId: string;
+  dateRange: {
+    from: string;
+    to: string;
+    label: string;
+  };
+  metrics: {
+    revenue: {
+      total: number;
+      currency: string;
+      platformFeeAmount?: number;
+      strikeThrough?: number;
+      organiserNetRevenue: number;
+      sourceCounts: {
+        online: number;
+        pos: number;
+      };
+    };
+    itemMetrics: {
+      topSellingItems: Array<{
+        itemId: string;
+        title: string;
+        category: string;
+        unitsSold: number;
+        totalRevenue: number;
+        avgPrice: number;
+        healthScore: number;
+      }>;
+      categoryBreakdown: Array<{
+        category: string;
+        itemsListed: number;
+        itemsSold: number;
+        sellThroughRate: number;
+        avgListPrice: number;
+        avgSoldPrice: number;
+        totalRevenue: number;
+        healthScoreAvg: number;
+      }>;
+      aggregateHealthScore: number;
+    };
+    purchasingMetrics: {
+      conversionRate: number;
+      totalUniqueBuyers: number;
+      averageCartValue: number;
+      repeatBuyerRate: number;
+    };
+    holdMetrics: {
+      holdsCreated: number;
+      holdsExpired: number;
+      holdsCancelled: number;
+      holdsConverted: number;
+      noShowRate: number;
+    };
+    recommendations: {
+      seasonalPricingTips: Array<{
+        category: string;
+        basePrice: number;
+        seasonalFactor: number;
+        recommendedPrice: number;
+        rationale: string;
+        confidence: number;
+      }>;
+      actionItems: Array<{
+        priority: 'high' | 'medium' | 'low';
+        title: string;
+        reason: string;
+        estimate: string;
+      }>;
+    };
+  };
+  lastUpdated: string;
+  cacheExpiry: string;
+}
+
 const OrganizerInsightsPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
 
   const [selectedSaleId, setSelectedSaleId] = useState<string>('');
+  const [dateRange, setDateRange] = useState<string>('30d');
+  const [customFrom, setCustomFrom] = useState<Date | undefined>();
+  const [customTo, setCustomTo] = useState<Date | undefined>();
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -59,16 +148,53 @@ const OrganizerInsightsPage = () => {
     return null;
   }
 
-  // Fetch insights data — optionally filtered by sale
+  // Fetch aggregate insights data
   const { data: insights, isLoading: insightsLoading, error } = useQuery({
-    queryKey: ['organizer-insights', user?.id, selectedSaleId],
+    queryKey: ['organizer-insights', user?.id],
     queryFn: async () => {
-      const params = selectedSaleId ? `?saleId=${selectedSaleId}` : '';
-      const response = await api.get(`/insights/organizer${params}`);
+      const response = await api.get(`/insights/organizer`);
       return response.data as Insights;
     },
     enabled: !!user?.id,
   });
+
+  // Fetch per-sale performance metrics
+  const { data: metricsData, isLoading: metricsLoading } = useQuery({
+    queryKey: ['performance-metrics', selectedSaleId, dateRange, customFrom, customTo],
+    queryFn: async () => {
+      if (!selectedSaleId) return null;
+
+      let url = `/organizers/performance?saleId=${selectedSaleId}&range=${dateRange}`;
+      if (dateRange === 'custom' && customFrom && customTo) {
+        url += `&from=${customFrom.toISOString()}&to=${customTo.toISOString()}`;
+      }
+
+      const response = await api.get(url);
+      return response.data as PerformanceMetrics;
+    },
+    enabled: !!selectedSaleId && !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch organizer's sales to pre-select first sale
+  const { data: sales = [] } = useQuery({
+    queryKey: ['organizer-sales-insights'],
+    queryFn: async () => {
+      const response = await api.get('/sales/mine');
+      return (response.data?.sales || []) as Array<{ id: string; title: string }>;
+    },
+    enabled: !!user?.id,
+  });
+
+  const handleSaleChange = (saleId: string) => {
+    setSelectedSaleId(saleId);
+  };
+
+  const handleDateRangeChange = (range: string, from?: Date, to?: Date) => {
+    setDateRange(range);
+    setCustomFrom(from);
+    setCustomTo(to);
+  };
 
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -105,24 +231,6 @@ const OrganizerInsightsPage = () => {
                 <div className="h-10 w-32 bg-warm-200 rounded animate-pulse"></div>
               </div>
             ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="card p-6">
-              <div className="h-6 w-48 bg-warm-200 rounded animate-pulse mb-4"></div>
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-8 bg-warm-100 rounded animate-pulse"></div>
-                ))}
-              </div>
-            </div>
-            <div className="card p-6">
-              <div className="h-6 w-48 bg-warm-200 rounded animate-pulse mb-4"></div>
-              <div className="space-y-2">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-6 bg-warm-100 rounded animate-pulse"></div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -351,6 +459,108 @@ const OrganizerInsightsPage = () => {
               </Link>
             </div>
           )}
+
+          {/* Per-Sale Breakdown Section */}
+          <hr className="my-12 border-warm-300" />
+
+          <div className="space-y-8">
+            <h2 className="text-2xl font-bold text-warm-900">Per-Sale Breakdown</h2>
+
+            {/* Sale Selector & Date Range Controls */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-warm-900 mb-2">
+                    Select Sale
+                  </label>
+                  <SaleSelector
+                    onSaleChange={handleSaleChange}
+                    selectedSaleId={selectedSaleId}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-warm-900 mb-2">
+                    Date Range
+                  </label>
+                  <DateRangeSelector
+                    onRangeChange={handleDateRangeChange}
+                    selectedRange={dateRange}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Placeholder when no sale selected */}
+            {!selectedSaleId && (
+              <div className="card p-12 text-center">
+                <p className="text-warm-600">Select a sale above to see its breakdown</p>
+              </div>
+            )}
+
+            {/* Per-sale metrics */}
+            {selectedSaleId && metricsLoading && (
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                    <div key={i} className="card p-6">
+                      <div className="h-4 w-24 bg-warm-200 rounded mb-2 animate-pulse"></div>
+                      <div className="h-10 w-32 bg-warm-200 rounded animate-pulse"></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedSaleId && metricsData && (
+              <div className="space-y-8">
+                {/* Date Range Info */}
+                <div className="text-xs text-warm-600 text-center">
+                  {metricsData.dateRange.label}
+                  {metricsData.cacheExpiry && (
+                    <span className="ml-2">
+                      (Cache expires: {new Date(metricsData.cacheExpiry).toLocaleTimeString()})
+                    </span>
+                  )}
+                </div>
+
+                {/* Metrics Grid */}
+                <MetricsGrid data={metricsData.metrics} />
+
+                {/* Top Items Table */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-xl font-semibold text-warm-900 mb-4">Top Selling Items</h3>
+                  <TopItemsTable items={metricsData.metrics.itemMetrics.topSellingItems} />
+                </div>
+
+                {/* Category Breakdown Chart */}
+                {metricsData.metrics.itemMetrics.categoryBreakdown.length > 0 && (
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <h3 className="text-xl font-semibold text-warm-900 mb-4">
+                      Category Breakdown
+                    </h3>
+                    <CategoryBreakdownChart
+                      data={metricsData.metrics.itemMetrics.categoryBreakdown}
+                    />
+                  </div>
+                )}
+
+                {/* Hold Metrics */}
+                <HoldMetricsCard data={metricsData.metrics.holdMetrics} />
+
+                {/* Recommendations */}
+                <RecommendationsPanel
+                  seasonalPricingTips={metricsData.metrics.recommendations?.seasonalPricingTips ?? []}
+                  actionItems={metricsData.metrics.recommendations?.actionItems ?? []}
+                />
+
+                {/* Refresh Info */}
+                <div className="text-center text-xs text-warm-600 pt-4 border-t border-warm-200">
+                  Last updated: {new Date(metricsData.lastUpdated).toLocaleString()}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

@@ -52,10 +52,10 @@ const EditSalePage = () => {
     return Math.hypot(lat2 - lat1, lng2 - lng1);
   };
 
-  // Helper: Check if entrance pin is far from sale address (> 0.005 degrees)
+  // Helper: Check if entrance pin is far from sale address (> 0.0045 degrees ≈ 0.5 miles)
   const checkEntrancePinDistance = (entranceLat: number, entranceLng: number, saleLat: number, saleLng: number): boolean => {
     const distance = computeDistance(saleLat, saleLng, entranceLat, entranceLng);
-    return distance > 0.005; // Beyond ~0.55 km / 0.34 miles
+    return distance > 0.0045; // Beyond ~0.5 miles / 0.8 km
   };
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {

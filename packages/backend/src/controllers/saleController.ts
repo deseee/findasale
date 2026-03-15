@@ -289,6 +289,21 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
       }
     }
     
+    // P1 Bug 3: Validate entrance pin is within ~2.8 miles of sale address
+    if (saleData.entranceLat !== undefined && saleData.entranceLng !== undefined) {
+      if (existingSale.lat && existingSale.lng) {
+        const distance = Math.hypot(
+          (saleData.entranceLat as number) - existingSale.lat,
+          (saleData.entranceLng as number) - existingSale.lng
+        );
+        if (distance > 0.05) {
+          return res.status(400).json({
+            message: 'Entrance pin is too far from the sale address. Please place it within ~2.8 miles.'
+          });
+        }
+      }
+    }
+
     const sale = await prisma.sale.update({ where: { id }, data: saleData });
     res.json(convertDecimalsToNumbers(sale));
   } catch (error) {

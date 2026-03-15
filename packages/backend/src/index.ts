@@ -91,6 +91,7 @@ import viewersRouter from './routes/viewers';           // Feature 34: Hype Mete
 import exportRouter from './routes/export';             // Sprint 2: Export features
 import socialRouter from './routes/social';             // Sprint 2: Social template generator
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
+import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -246,6 +247,7 @@ app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hy
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features
 app.use('/api/social', socialRouter);                            // Sprint 2: Social template generator
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
+app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

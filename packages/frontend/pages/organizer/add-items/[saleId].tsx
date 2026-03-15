@@ -238,6 +238,7 @@ const AddItemsDetailPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const inMutationFlight = useRef<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('camera');
   const [formData, setFormData] = useState(emptyForm);
@@ -324,7 +325,7 @@ const AddItemsDetailPage = () => {
       const response = await api.get(`/items?saleId=${saleId}`);
       return response.data || [];
     },
-    enabled: !!saleId,
+    enabled: !!saleId && !inMutationFlight.current,
   });
 
   const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
@@ -339,6 +340,7 @@ const AddItemsDetailPage = () => {
         { headers: { 'Content-Type': 'application/json' } }
       );
     },
+    onMutate: () => { inMutationFlight.current = true; },
     onSuccess: () => {
       showToast('Item created successfully', 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -350,12 +352,14 @@ const AddItemsDetailPage = () => {
         error.response?.data?.message || 'Failed to create item';
       showToast(message, 'error');
     },
+    onSettled: () => { inMutationFlight.current = false; },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (itemId: string) => {
       return await api.delete(`/items/${itemId}`);
     },
+    onMutate: () => { inMutationFlight.current = true; },
     onSuccess: () => {
       showToast('Item deleted', 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -366,12 +370,14 @@ const AddItemsDetailPage = () => {
         error.response?.data?.message || 'Failed to delete item';
       showToast(message, 'error');
     },
+    onSettled: () => { inMutationFlight.current = false; },
   });
 
   const bulkUpdateMutation = useMutation({
     mutationFn: async (payload: { itemIds: string[]; operation: string; value?: any }) => {
       return await api.post(`/items/bulk`, payload);
     },
+    onMutate: () => { inMutationFlight.current = true; },
     onSuccess: (response: any) => {
       const succeeded = response.data.succeeded || [];
       const failed = response.data.failed || [];
@@ -444,6 +450,7 @@ const AddItemsDetailPage = () => {
         setBulkErrorModalOpen(true);
       }
     },
+    onSettled: () => { inMutationFlight.current = false; },
   });
 
   const handlePhotoUpload = (urls: string[]) => {
@@ -464,6 +471,7 @@ const AddItemsDetailPage = () => {
   const handleBulkOperation = (operation: string, value?: any) => {
     if (operation === 'delete') {
       setBulkDeleteCount(selectedItems.size);
+      setBulkConfirmData({ operation, value });
       setBulkDeleteConfirm(true);
     } else {
       setBulkConfirmData({ operation, value });
@@ -735,6 +743,7 @@ const AddItemsDetailPage = () => {
             : item
         )
       );
+      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
     } catch (err: any) {
       console.error('[rapidfire] Face upload failed:', err);
       setRapidItems((prev) =>
@@ -854,13 +863,8 @@ const AddItemsDetailPage = () => {
 
           <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
             <h1 className="text-3xl font-bold text-warm-900 mb-1">
-              Add Items
+              Add Items{sale?.name ? ` to: ${sale.name}` : ''}
             </h1>
-            {sale?.name && (
-              <p className="text-warm-500 text-sm mb-4">
-                {sale.name}
-              </p>
-            )}
             <p className="text-warm-600 mb-1">
               {items.length > 0 && (
                 <>
@@ -1437,9 +1441,19 @@ const AddItemsDetailPage = () => {
                             {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${statusColors[draftStatus as keyof typeof statusColors]}`}>
-                              {draftStatus.replace('_', ' ')}
-                            </span>
+                            <div className="flex gap-2 flex-wrap items-center">
+                              <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                                item.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' :
+                                item.status === 'SOLD' ? 'bg-red-100 text-red-700' :
+                                item.status === 'RESERVED' ? 'bg-orange-100 text-orange-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {item.status}
+                              </span>
+                              <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${statusColors[draftStatus as keyof typeof statusColors]}`}>
+                                {draftStatus.replace('_', ' ')}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <div className="flex gap-2">

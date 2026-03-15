@@ -79,6 +79,7 @@ model User {
   messageTemplates      MessageTemplate[]   @relation("OrganizerTemplates")
   shopperCredits    Float      @default(0)   // Batch 17: shopper referral store credit
   saleWaitlist      SaleWaitlist[]
+  saleReminders     SaleReminder[]
   coupons           Coupon[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
@@ -169,6 +170,7 @@ model Sale {
   rsvps         SaleRSVP[]
   checklist     SaleChecklist?
   saleWaitlist      SaleWaitlist[]
+  saleReminders     SaleReminder[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -904,6 +906,23 @@ model SaleWaitlist {
   createdAt DateTime @default(now())
 
   @@unique([saleId, userId])
+  @@index([saleId])
+}
+
+// Sale Reminders — email reminders for upcoming sales
+model SaleReminder {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  saleId        String
+  sale          Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  reminderType  String   @default("email") // "email" | "push" — type of reminder
+  status        String   @default("ACTIVE") // "ACTIVE" | "SENT" | "CANCELLED"
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, saleId, reminderType])
+  @@index([userId])
   @@index([saleId])
 }
 

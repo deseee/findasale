@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
 import api from '../lib/api';
 import Skeleton from '../components/Skeleton';
+import RemindMeButton from '../components/RemindMeButton';
 
 interface Sale {
   id: string;
@@ -166,14 +167,18 @@ const CalendarPage = () => {
                     </h3>
                     <div className="space-y-2">
                       {daySales.map((sale) => (
-                        <Link
-                          key={sale.id}
-                          href={`/sales/${sale.id}`}
-                          className="block p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition"
-                        >
-                          <p className="font-semibold text-amber-900 line-clamp-1">{sale.title}</p>
-                          <p className="text-sm text-amber-700">{sale.city}, {sale.state}</p>
-                        </Link>
+                        <div key={sale.id} className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <Link
+                            href={`/sales/${sale.id}`}
+                            className="block hover:text-amber-700 transition"
+                          >
+                            <p className="font-semibold text-amber-900 line-clamp-1">{sale.title}</p>
+                            <p className="text-sm text-amber-700">{sale.city}, {sale.state}</p>
+                          </Link>
+                          <div className="mt-2 pt-2 border-t border-amber-200">
+                            <RemindMeButton saleId={sale.id} saleName={sale.title} />
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -217,19 +222,23 @@ const CalendarPage = () => {
                         {format(day, 'd')}
                       </div>
                       <div className="space-y-1">
-                        {daySales.slice(0, 2).map((sale) => (
-                          <Link
-                            key={sale.id}
-                            href={`/sales/${sale.id}`}
-                            className="block text-xs px-1.5 py-1 bg-amber-100 text-amber-900 rounded hover:bg-amber-200 transition font-medium line-clamp-1"
-                            title={sale.title}
-                          >
-                            {sale.title}
-                          </Link>
+                        {daySales.slice(0, 1).map((sale) => (
+                          <div key={sale.id} className="bg-amber-50 rounded p-1.5 border border-amber-200">
+                            <Link
+                              href={`/sales/${sale.id}`}
+                              className="block text-xs text-amber-900 hover:text-amber-700 transition font-medium line-clamp-1"
+                              title={sale.title}
+                            >
+                              {sale.title}
+                            </Link>
+                            <div className="mt-1">
+                              <RemindMeButton saleId={sale.id} saleName={sale.title} />
+                            </div>
+                          </div>
                         ))}
-                        {daySales.length > 2 && (
+                        {daySales.length > 1 && (
                           <div className="text-xs text-amber-700 px-1.5 py-0.5 font-medium">
-                            +{daySales.length - 2} more
+                            +{daySales.length - 1} more
                           </div>
                         )}
                       </div>
