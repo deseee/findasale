@@ -19,7 +19,17 @@ import {
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
-import { CURATED_TAGS } from '../../shared/constants/tagVocabulary'; // P2 #10: Import from shared
+// P2 #10: CURATED_TAGS — single source of truth (shared package not yet wired into backend tsconfig rootDir)
+// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+const CURATED_TAGS = [
+  'mid-century-modern','art-deco','victorian','craftsman','industrial','farmhouse','bohemian',
+  'danish-modern','scandinavian','atomic-age','hollywood-regency','arts-and-crafts','colonial',
+  'transitional','contemporary','walnut','oak','teak','brass','cast-iron','wicker','leather',
+  'ceramic','glass','chrome','hand-painted','signed','original','limited-edition','first-edition',
+  'handmade','restored','vintage-1950s','vintage-1960s','vintage-1970s','collectible','antique',
+  'sterling-silver','costume-jewelry','fine-art','folk-art','architectural-salvage','garden-decor',
+  'holiday-decor','musical',
+] as const;
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
