@@ -96,7 +96,7 @@ export interface PerformanceMetrics {
  * Parse date range query params into from/to ISO strings
  */
 function parseDateRange(range: string, fromParam?: string, toParam?: string): { from: Date; to: Date; label: string } {
-  const to = new Date();
+  let to = new Date();
   let from: Date;
   let label: string;
 

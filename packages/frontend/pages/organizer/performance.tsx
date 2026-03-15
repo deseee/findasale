@@ -128,7 +128,7 @@ const PerformanceDashboard = () => {
     queryFn: async () => {
       if (!selectedSaleId) return null;
 
-      let url = `/api/organizers/performance?saleId=${selectedSaleId}&range=${dateRange}`;
+      let url = `/organizers/performance?saleId=${selectedSaleId}&range=${dateRange}`;
       if (dateRange === 'custom' && customFrom && customTo) {
         url += `&from=${customFrom.toISOString()}&to=${customTo.toISOString()}`;
       }
