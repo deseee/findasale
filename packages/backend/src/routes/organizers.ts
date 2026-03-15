@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { getPerformanceMetricsHandler } from '../controllers/performanceController';
 
 const router = Router();
 
@@ -74,6 +75,10 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// GET /organizers/performance?saleId=X&range=30d — seller performance dashboard metrics
+// Feature #6: Revenue, top items, conversion rate, category breakdown, hold/no-show rate
+router.get('/performance', authenticate, getPerformanceMetricsHandler);
 
 // PATCH /organizers/me — update current organizer's profile (businessName, phone, bio, onboardingComplete)
 router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
