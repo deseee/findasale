@@ -4,6 +4,7 @@ import {
   exportEstatesalesCSV,
   exportFacebookJSON,
   exportCraigslistText,
+  exportOrganizer,
 } from '../controllers/exportController';
 
 const router = Router();
