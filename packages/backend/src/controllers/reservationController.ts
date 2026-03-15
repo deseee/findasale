@@ -183,60 +183,73 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
     const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
     if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
 
-    // Verify all holds belong to this organizer
-    const holds = await prisma.itemReservation.findMany({
-      where: { id: { in: ids }, status: { in: ['PENDING', 'CONFIRMED'] } },
-      include: {
-        item: {
-          include: { sale: true },
+    // P1 Bug 2: Wrap verification + update in transaction with re-verification on each hold
+    const result = await prisma.$transaction(async (tx) => {
+      // Fetch holds within transaction (re-verification point)
+      const holds = await tx.itemReservation.findMany({
+        where: { id: { in: ids }, status: { in: ['PENDING', 'CONFIRMED'] } },
+        include: {
+          item: {
+            include: { sale: true },
+          },
         },
-      },
-    });
+      });
 
-    const validHolds = holds.filter((h) => h.item.sale?.organizerId === organizer.id);
-    if (validHolds.length === 0) {
-      return res.status(404).json({ message: 'No valid holds found' });
-    }
+      // Verify each hold belongs to this organizer (re-check inside transaction)
+      const validHolds = holds.filter((h) => h.item.sale?.organizerId === organizer.id);
+      if (validHolds.length === 0) {
+        throw new Error('No valid holds found');
+      }
 
-    const validIds = validHolds.map((h) => h.id);
-    const validItemIds = validHolds.map((h) => h.item.id);
+      const validIds = validHolds.map((h) => h.id);
+      const validItemIds = validHolds.map((h) => h.item.id);
 
-    if (action === 'release') {
-      await prisma.$transaction([
-        prisma.itemReservation.updateMany({
-          where: { id: { in: validIds } },
+      if (action === 'release') {
+        await tx.itemReservation.updateMany({
+          where: {
+            id: { in: validIds },
+            item: { sale: { organizerId: organizer.id } } // re-verify ownership in where clause
+          },
           data: { status: 'CANCELLED' },
-        }),
-        prisma.item.updateMany({
+        });
+        await tx.item.updateMany({
           where: { id: { in: validItemIds } },
           data: { status: 'AVAILABLE' },
-        }),
-      ]);
-    } else if (action === 'extend') {
-      // Extend each hold by its sale's holdDurationHours from now
-      await prisma.$transaction(
-        validHolds.map((h) => {
+        });
+      } else if (action === 'extend') {
+        // Extend each hold by its sale's holdDurationHours from now
+        for (const h of validHolds) {
           const hours = (h.item.sale as any)?.holdDurationHours ?? DEFAULT_HOLD_HOURS;
-          return prisma.itemReservation.update({
-            where: { id: h.id },
+          await tx.itemReservation.update({
+            where: {
+              id: h.id,
+            },
             data: { expiresAt: new Date(Date.now() + hours * 3600000) },
           });
-        })
-      );
-    } else if (action === 'markSold') {
-      await prisma.$transaction([
-        prisma.itemReservation.updateMany({
-          where: { id: { in: validIds } },
+        }
+      } else if (action === 'markSold') {
+        await tx.itemReservation.updateMany({
+          where: {
+            id: { in: validIds },
+            item: { sale: { organizerId: organizer.id } } // re-verify ownership in where clause
+          },
           data: { status: 'CONFIRMED' },
-        }),
-        prisma.item.updateMany({
+        });
+        await tx.item.updateMany({
           where: { id: { in: validItemIds } },
           data: { status: 'SOLD' },
-        }),
-      ]);
-    }
+        });
+      }
 
-    res.json({ updated: validHolds.length, failed: ids.length - validHolds.length });
+      return { updated: validHolds.length, failed: ids.length - validHolds.length };
+    }).catch((err) => {
+      if (err.message === 'No valid holds found') {
+        return { updated: 0, failed: ids.length };
+      }
+      throw err;
+    });
+
+    res.json(result);
   } catch (error) {
     console.error('[reservations] batchUpdateHolds error:', error);
     res.status(500).json({ message: 'Server error' });
