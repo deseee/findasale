@@ -346,7 +346,7 @@ const ReviewPage = () => {
   };
 
   const previewItems = showBuyerPreview
-    ? items.filter((i) => i.draftStatus === 'PENDING_REVIEW')
+    ? items
     : items;
 
   if (authLoading) {
