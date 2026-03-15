@@ -43,6 +43,13 @@ import CaptureButton from '../../../components/camera/CaptureButton';
 import RapidCarousel from '../../../components/camera/RapidCarousel';
 import PreviewModal from '../../../components/camera/PreviewModal';
 import { useUploadQueue } from '../../../hooks/useUploadQueue';
+import BulkConfirmModal from '../../../components/BulkConfirmModal';
+import BulkPhotoModal from '../../../components/BulkPhotoModal';
+import BulkTagModal from '../../../components/BulkTagModal';
+import BulkActionDropdown from '../../../components/BulkActionDropdown';
+import BulkCategoryModal from '../../../components/BulkCategoryModal';
+import BulkStatusModal from '../../../components/BulkStatusModal';
+import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
 
 /**
  * Phase 3: On-Device Image Processing Utilities
@@ -247,6 +254,24 @@ const AddItemsDetailPage = () => {
     tempId: string;
   } | null>(null);
 
+  // Phase 3-5: Bulk Operations Toolkit state
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkConfirmData, setBulkConfirmData] = useState<{
+    operation: string;
+    value?: any;
+  } | null>(null);
+  const [bulkPhotoModalOpen, setBulkPhotoModalOpen] = useState(false);
+  const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
+  const [bulkCategoryModalOpen, setBulkCategoryModalOpen] = useState(false);
+  const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
+  const [bulkErrorModalOpen, setBulkErrorModalOpen] = useState(false);
+  const [bulkErrorData, setBulkErrorData] = useState<{
+    title: string;
+    message: string;
+    errors?: Array<{ itemId: string; reason: string }>;
+    itemCount?: number;
+  } | null>(null);
+
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
@@ -304,16 +329,51 @@ const AddItemsDetailPage = () => {
     mutationFn: async (payload: { itemIds: string[]; operation: string; value?: any }) => {
       return await api.post(`/items/bulk`, payload);
     },
-    onSuccess: () => {
-      showToast('Items updated', 'success');
+    onSuccess: (response: any) => {
+      const count = response.data.count || selectedItems.size;
+      const operation = bulkConfirmData?.operation || 'update';
+      const operationLabel = {
+        delete: 'Deleted',
+        isActive: 'Updated visibility for',
+        price: 'Updated price for',
+        category: 'Updated category for',
+        status: 'Updated status for',
+        tags: 'Updated tags for',
+      }[operation] || 'Updated';
+
+      showToast(`${operationLabel} ${count} item${count !== 1 ? 's' : ''}`, 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
       setSelectedItems(new Set());
       setBulkPrice('');
+      setBulkConfirmOpen(false);
+      setBulkConfirmData(null);
+
+      // Show error modal if there were per-item errors
+      if (response.data.errors && response.data.errors.length > 0) {
+        setBulkErrorData({
+          title: 'Some items skipped',
+          message: `${response.data.errors.length} item(s) could not be updated due to status restrictions`,
+          errors: response.data.errors,
+          itemCount: response.data.errors.length,
+        });
+        setBulkErrorModalOpen(true);
+      }
     },
     onError: (error: any) => {
       const message =
         error.response?.data?.message || 'Failed to update items';
       showToast(message, 'error');
+
+      // Show detailed error if available
+      if (error.response?.data?.errors && error.response.data.errors.length > 0) {
+        setBulkErrorData({
+          title: 'Operation Failed',
+          message,
+          errors: error.response.data.errors,
+          itemCount: error.response.data.errors.length,
+        });
+        setBulkErrorModalOpen(true);
+      }
     },
   });
 
@@ -329,6 +389,64 @@ const AddItemsDetailPage = () => {
       ...prev,
       photoUrls: prev.photoUrls.filter((_, i) => i !== index),
     }));
+  };
+
+  // Phase 3-5: Bulk operations handlers
+  const handleBulkOperation = (operation: string, value?: any) => {
+    setBulkConfirmData({ operation, value });
+    setBulkConfirmOpen(true);
+  };
+
+  const handleApplyBulkOperation = async () => {
+    if (!bulkConfirmData) return;
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: bulkConfirmData.operation,
+      value: bulkConfirmData.value,
+    });
+  };
+
+  const handleBulkPhotos = async (operation: 'add' | 'remove', photoUrls: string[]) => {
+    try {
+      const response = await api.post('/items/bulk/photos', {
+        itemIds: Array.from(selectedItems),
+        operation,
+        photoUrls,
+      });
+      showToast(
+        `${operation === 'add' ? 'Added' : 'Removed'} photos for ${response.data.count} item${response.data.count !== 1 ? 's' : ''}`,
+        'success'
+      );
+      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+      setSelectedItems(new Set());
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to update photos';
+      showToast(message, 'error');
+    }
+  };
+
+  const handleBulkTags = async (operation: 'add' | 'remove', tags: string[]) => {
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'tags',
+      value: { tags, action: operation },
+    });
+  };
+
+  const handleBulkCategory = async (category: string) => {
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'category',
+      value: category,
+    });
+  };
+
+  const handleBulkStatus = async (status: string) => {
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'status',
+      value: status,
+    });
   };
 
   const handleCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
@@ -1146,10 +1264,12 @@ const AddItemsDetailPage = () => {
               {/* Bulk Actions */}
               {selectedItems.size > 0 && (
                 <div className="bg-amber-50 border-t border-amber-200 p-4">
-                  <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-sm font-semibold text-warm-900">
                       {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
                     </span>
+
+                    {/* Primary actions */}
                     <button
                       onClick={() =>
                         bulkUpdateMutation.mutate({
@@ -1159,7 +1279,7 @@ const AddItemsDetailPage = () => {
                         })
                       }
                       disabled={bulkUpdateMutation.isPending}
-                      className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50"
+                      className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
                     >
                       Hide
                     </button>
@@ -1172,69 +1292,50 @@ const AddItemsDetailPage = () => {
                         })
                       }
                       disabled={bulkUpdateMutation.isPending}
-                      className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50"
+                      className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
                     >
                       Show
                     </button>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-1 items-center">
                       <input
                         type="number"
                         value={bulkPrice}
                         onChange={(e) => setBulkPrice(e.target.value)}
-                        placeholder="New price"
+                        placeholder="Price"
                         step="0.01"
-                        className="w-28 px-3 py-1 border border-amber-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-24 px-2 py-1 border border-amber-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                       <button
                         onClick={() => {
                           if (bulkPrice) {
-                            bulkUpdateMutation.mutate({
-                              itemIds: Array.from(selectedItems),
-                              operation: 'price',
-                              value: parseFloat(bulkPrice),
-                            });
+                            handleBulkOperation('price', parseFloat(bulkPrice));
                           }
                         }}
                         disabled={bulkUpdateMutation.isPending || !bulkPrice}
-                        className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50"
+                        className="text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
                       >
-                        Update Price
+                        Set Price
                       </button>
                     </div>
 
+                    {/* More Actions dropdown */}
+                    <BulkActionDropdown
+                      onSetCategory={() => setBulkCategoryModalOpen(true)}
+                      onSetStatus={() => setBulkStatusModalOpen(true)}
+                      onManageTags={() => setBulkTagModalOpen(true)}
+                      onManagePhotos={() => setBulkPhotoModalOpen(true)}
+                      disabled={bulkUpdateMutation.isPending}
+                    />
+
+                    {/* Delete button */}
                     <div className="ml-auto">
-                      {bulkDeleteConfirm ? (
-                        <span className="flex items-center gap-2">
-                          <span className="text-xs text-red-700">Delete {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''}?</span>
-                          <button
-                            onClick={() => {
-                              bulkUpdateMutation.mutate({
-                                itemIds: Array.from(selectedItems),
-                                operation: 'delete',
-                              });
-                              setBulkDeleteConfirm(false);
-                            }}
-                            disabled={bulkUpdateMutation.isPending}
-                            className="text-sm font-bold text-red-600 hover:text-red-700 disabled:opacity-50"
-                          >
-                            Yes, delete
-                          </button>
-                          <button
-                            onClick={() => setBulkDeleteConfirm(false)}
-                            className="text-sm font-medium text-warm-600 hover:text-warm-700"
-                          >
-                            Cancel
-                          </button>
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setBulkDeleteConfirm(true)}
-                          disabled={bulkUpdateMutation.isPending}
-                          className="text-sm font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
-                        >
-                          Delete Selected
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleBulkOperation('delete')}
+                        disabled={bulkUpdateMutation.isPending}
+                        className="text-sm font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                      >
+                        Delete Selected
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1287,6 +1388,68 @@ const AddItemsDetailPage = () => {
           onRetake={() => setPreviewItemId(null)}
         />
       )}
+
+      {/* Phase 3-5: Bulk Operations Modals */}
+      <BulkConfirmModal
+        isOpen={bulkConfirmOpen}
+        operation={bulkConfirmData?.operation || ''}
+        affectedCount={selectedItems.size}
+        sampleItems={items
+          .filter((i: any) => selectedItems.has(i.id))
+          .slice(0, 3)
+          .map((i: any) => ({ id: i.id, title: i.title }))}
+        onCancel={() => {
+          setBulkConfirmOpen(false);
+          setBulkConfirmData(null);
+        }}
+        onApply={handleApplyBulkOperation}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkPhotoModal
+        isOpen={bulkPhotoModalOpen}
+        selectedCount={selectedItems.size}
+        onClose={() => setBulkPhotoModalOpen(false)}
+        onApply={handleBulkPhotos}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkTagModal
+        isOpen={bulkTagModalOpen}
+        selectedCount={selectedItems.size}
+        onClose={() => setBulkTagModalOpen(false)}
+        onApply={handleBulkTags}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkCategoryModal
+        isOpen={bulkCategoryModalOpen}
+        selectedCount={selectedItems.size}
+        categories={items.length > 0 ? [...new Set(items.map((i: any) => i.category).filter(Boolean))] : []}
+        onClose={() => setBulkCategoryModalOpen(false)}
+        onApply={handleBulkCategory}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkStatusModal
+        isOpen={bulkStatusModalOpen}
+        selectedCount={selectedItems.size}
+        onClose={() => setBulkStatusModalOpen(false)}
+        onApply={handleBulkStatus}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkOperationErrorModal
+        isOpen={bulkErrorModalOpen}
+        title={bulkErrorData?.title || 'Error'}
+        message={bulkErrorData?.message || ''}
+        errors={bulkErrorData?.errors}
+        itemCount={bulkErrorData?.itemCount}
+        onClose={() => {
+          setBulkErrorModalOpen(false);
+          setBulkErrorData(null);
+        }}
+      />
     </>
   );
 };
