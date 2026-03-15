@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { GetServerSidePropsContext } from 'next';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { io as socketIO, Socket } from 'socket.io-client'; // V1: live bidding
 import api from '../../lib/api';
@@ -17,6 +18,7 @@ import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useHeartAnimation } from '../../hooks/useHeartAnimation';
 import Skeleton from '../../components/Skeleton';
+import ItemOGMeta from '../../components/ItemOGMeta';
 
 interface Item {
   id: string;
@@ -86,7 +88,19 @@ interface BidHistory {
   };
 }
 
-const ItemDetail: React.FC = () => {
+// SSR-fetched data for OG tags — avoids CSR hydration race with Facebook bot
+interface OGItemData {
+  id: string;
+  title: string;
+  description: string;
+  price: number | null;
+  condition: string | null;
+  photoUrl: string | null;
+  saleId: string;
+  saleName: string;
+}
+
+const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
@@ -279,13 +293,33 @@ const ItemDetail: React.FC = () => {
     }
   };
 
+  // Build SSR OG head once — rendered in all return paths so FB bot sees it immediately
+  const ogHead = ogData ? (
+    <ItemOGMeta
+      item={{
+        id: ogData.id,
+        title: ogData.title,
+        description: ogData.description,
+        price: ogData.price ?? undefined,
+        condition: ogData.condition ?? undefined,
+        photos: ogData.photoUrl ? [{ url: ogData.photoUrl }] : [],
+      }}
+      saleName={ogData.saleName}
+      saleId={ogData.saleId}
+      canonicalUrl={`https://finda.sale/items/${ogData.id}`}
+    />
+  ) : null;
+
   if (isItemLoading) {
     return (
-      <div className="p-6">
-        <Skeleton className="h-96 mb-6" />
-        <Skeleton className="h-12 mb-4" />
-        <Skeleton className="h-8 w-1/3" />
-      </div>
+      <>
+        {ogHead}
+        <div className="p-6">
+          <Skeleton className="h-96 mb-6" />
+          <Skeleton className="h-12 mb-4" />
+          <Skeleton className="h-8 w-1/3" />
+        </div>
+      </>
     );
   }
 
@@ -300,21 +334,24 @@ const ItemDetail: React.FC = () => {
 
   return (
     <>
-      <Head>
-        <title>{item.title} - FindA.Sale</title>
-        <meta name="description" content={item.description} />
-        <meta property="og:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
-        <meta property="og:description" content={item.description} />
-        <meta property="og:image" content={item.photoUrls[0] || ''} />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/items/${item.id}`} />
-        <meta property="og:type" content="product" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
-        <meta name="twitter:description" content={item.description} />
-        <meta name="twitter:image" content={item.photoUrls[0] || ''} />
-      </Head>
+      {ogHead ?? (
+        // CSR fallback — used only when getServerSideProps didn't return ogData
+        <Head>
+          <title>{item.title} - FindA.Sale</title>
+          <meta name="description" content={item.description} />
+          <meta property="og:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
+          <meta property="og:description" content={item.description} />
+          <meta property="og:image" content={item.photoUrls[0] || ''} />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/items/${item.id}`} />
+          <meta property="og:type" content="product" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
+          <meta name="twitter:description" content={item.description} />
+          <meta name="twitter:image" content={item.photoUrls[0] || ''} />
+        </Head>
+      )}
 
       <div className="min-h-screen bg-gray-50 pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -581,3 +618,40 @@ const ItemDetail: React.FC = () => {
 };
 
 export default ItemDetail;
+
+/**
+ * Feature #33 — Share Card Factory
+ * Fetch item data server-side so OG meta tags are present in the initial HTML
+ * before client-side React hydration. This is required for Facebook/Twitter bots
+ * which do not execute JavaScript when scraping pages.
+ */
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const { id } = context.params as { id: string };
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+  try {
+    const res = await fetch(`${apiUrl}/items/${id}`);
+    if (!res.ok) {
+      return { props: { ogData: null } };
+    }
+    const item = await res.json();
+
+    const ogData: OGItemData = {
+      id: item.id,
+      title: item.title || '',
+      description: item.description || '',
+      price: typeof item.price === 'number' ? item.price : null,
+      condition: item.condition || null,
+      photoUrl: Array.isArray(item.photoUrls) && item.photoUrls.length > 0
+        ? item.photoUrls[0]
+        : null,
+      saleId: item.sale?.id || '',
+      saleName: item.sale?.title || 'FindA.Sale',
+    };
+
+    return { props: { ogData } };
+  } catch {
+    // Fail open — page still works, OG tags fall back to CSR version
+    return { props: { ogData: null } };
+  }
+}
