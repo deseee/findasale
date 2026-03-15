@@ -337,6 +337,7 @@ If uncertain, suggest B. Return ONLY the single letter (S, A, B, C, or D), no ex
  *   2. Pass those labels + the raw image to Claude Haiku for
  *      structured estate-sale metadata.
  *   3. Map Vision labels → curated tags via Haiku (non-blocking).
+ *   4. Suggest condition grade via Haiku (non-blocking, #64).
  *
  * Returns null if cloud AI is not configured (caller should fall back to Ollama).
  * Throws on API errors so the caller can handle/log them.
