@@ -202,7 +202,9 @@ const EditSalePage = () => {
           </Link>
 
           <div className="flex items-center justify-between gap-4 mb-8">
-            <h1 className="text-3xl font-bold text-warm-900">Edit Sale</h1>
+            <h1 className="text-3xl font-bold text-warm-900">
+              Edit Sale {sale?.status === 'PUBLISHED' ? '(Live)' : '(Draft)'}
+            </h1>
             {sale && (
               <div className="flex items-center gap-3">
                 {sale.status === 'PUBLISHED' ? (
@@ -227,6 +229,14 @@ const EditSalePage = () => {
           </div>
 
           <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-6">
+            {sale?.status === 'PUBLISHED' && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
+                <p className="text-sm text-yellow-800 font-semibold">
+                  ⚠️ This sale is live to shoppers — changes will be visible immediately.
+                </p>
+              </div>
+            )}
+
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
               <p className="text-sm text-blue-700 mb-3">Want to create a similar sale?</p>
               <button
@@ -373,7 +383,7 @@ const EditSalePage = () => {
             </div>
 
             {/* Feature 35: Front Door Locator — entrance/parking pin */}
-            {sale?.lat && sale?.lng && (
+            {sale?.lat && sale?.lng ? (
               <div className="mt-6">
                 <label className="block text-sm font-medium text-warm-700 mb-2">
                   Entrance / Parking Pin <span className="text-warm-400 font-normal">(optional)</span>
@@ -414,6 +424,19 @@ const EditSalePage = () => {
                     </p>
                   </div>
                 )}
+              </div>
+            ) : (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                <p className="text-red-800 font-semibold">
+                  Sale location not found — please verify your address and try saving again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="text-sm bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded mt-3"
+                >
+                  Retry
+                </button>
               </div>
             )}
 

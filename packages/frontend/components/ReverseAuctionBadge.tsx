@@ -4,7 +4,7 @@ interface ReverseAuctionBadgeProps {
   item: {
     title: string;
     price: number;
-    reverseAuction: boolean;
+    listingType?: string; // P2 #6: Use listingType instead of deprecated reverseAuction
     reverseDailyDrop?: number; // in cents
     reverseFloorPrice?: number; // in cents
     reverseStartDate?: string; // ISO date
@@ -12,7 +12,8 @@ interface ReverseAuctionBadgeProps {
 }
 
 const ReverseAuctionBadge: React.FC<ReverseAuctionBadgeProps> = ({ item }) => {
-  if (!item.reverseAuction) {
+  // P2 #6: Check listingType === 'REVERSE_AUCTION' instead of reverseAuction boolean
+  if (item.listingType !== 'REVERSE_AUCTION') {
     return null;
   }
 

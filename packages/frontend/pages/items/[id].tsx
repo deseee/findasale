@@ -418,7 +418,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               {/* Header */}
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  {item.reverseAuction && <ReverseAuctionBadge item={item} />}
+                  {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
+                  {item.listingType === 'REVERSE_AUCTION' && <ReverseAuctionBadge item={item} />}
                   <h1 className="text-3xl font-bold text-gray-900">{item.title}</h1>
                 </div>
                 <div className="text-sm text-gray-500 mb-2">
@@ -455,7 +456,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                     Starting Price: ${item.auctionStartPrice.toFixed(2)}
                   </div>
                 )}
-                {item.reverseAuction && item.reverseFloorPrice && (
+                {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
+                {item.listingType === 'REVERSE_AUCTION' && item.reverseFloorPrice && (
                   <div className="text-sm text-gray-600">
                     Floor Price: ${item.reverseFloorPrice.toFixed(2)}
                   </div>

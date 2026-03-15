@@ -131,10 +131,13 @@ const OrganizerDashboard = () => {
     staleTime: 60_000,
   });
 
-  // Show wizard if onboarding not complete
+  // Show wizard if onboarding not complete (and not dismissed via localStorage)
   useEffect(() => {
     if (orgProfile && !orgProfile.onboardingComplete) {
-      setShowWizard(true);
+      const wizardSeen = localStorage.getItem('onboarding_wizard_seen');
+      if (!wizardSeen) {
+        setShowWizard(true);
+      }
     }
   }, [orgProfile]);
 
@@ -217,6 +220,7 @@ const OrganizerDashboard = () => {
         <OnboardingWizard
           onComplete={() => {
             setShowWizard(false);
+            localStorage.setItem('onboarding_wizard_seen', 'true');
           }}
         />
       )}

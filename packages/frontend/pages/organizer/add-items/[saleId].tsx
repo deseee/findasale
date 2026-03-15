@@ -198,6 +198,23 @@ const normalizeToArray = (value: string | undefined, arr: string[]): string => {
   return match || '';
 };
 
+const formatCategory = (category: string | null | undefined): string => {
+  if (!category) return '\u2014';
+  return category
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const computeDraftStatus = (item: any): 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' => {
+  // If draftStatus is already set, use it
+  if (item.draftStatus) return item.draftStatus;
+  // Fallback logic: compute from item completeness
+  const hasMissingCritical = !item.photoUrls?.length || item.price == null;
+  if (hasMissingCritical) return 'DRAFT';
+  return 'PENDING_REVIEW';
+};
+
 const emptyForm = {
   title: '',
   description: '',
@@ -233,6 +250,7 @@ const AddItemsDetailPage = () => {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [bulkDeleteCount, setBulkDeleteCount] = useState(0);
 
   // Rapidfire Mode state
   const [captureMode, setCaptureMode] = useState<'rapidfire' | 'regular'>('rapidfire');
@@ -277,6 +295,16 @@ const AddItemsDetailPage = () => {
     return null;
   }
 
+  const { data: sale } = useQuery({
+    queryKey: ['sale', saleId],
+    queryFn: async () => {
+      if (!saleId) return null;
+      const response = await api.get(`/sales/${saleId}`);
+      return response.data || null;
+    },
+    enabled: !!saleId,
+  });
+
   const { data: items = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['items', saleId],
     queryFn: async () => {
@@ -286,6 +314,9 @@ const AddItemsDetailPage = () => {
     },
     enabled: !!saleId,
   });
+
+  const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
+  const draftCount = items.filter((i: any) => computeDraftStatus(i) === 'DRAFT').length;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -411,8 +442,13 @@ const AddItemsDetailPage = () => {
 
   // Phase 3-5: Bulk operations handlers
   const handleBulkOperation = (operation: string, value?: any) => {
-    setBulkConfirmData({ operation, value });
-    setBulkConfirmOpen(true);
+    if (operation === 'delete') {
+      setBulkDeleteCount(selectedItems.size);
+      setBulkDeleteConfirm(true);
+    } else {
+      setBulkConfirmData({ operation, value });
+      setBulkConfirmOpen(true);
+    }
   };
 
   const handleApplyBulkOperation = async () => {
@@ -782,7 +818,7 @@ const AddItemsDetailPage = () => {
   return (
     <>
       <Head>
-        <title>Add Items - FindA.Sale</title>
+        <title>{sale?.name ? `Add Items to ${sale.name}` : 'Add Items'} - FindA.Sale</title>
       </Head>
 
       <main className="min-h-screen bg-warm-50 py-8">
@@ -797,9 +833,20 @@ const AddItemsDetailPage = () => {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-            <h1 className="text-3xl font-bold text-warm-900 mb-2">Add Items</h1>
-            <p className="text-warm-600">
-              Add items to your sale using manual entry, camera capture, batch upload, or CSV import.
+            <h1 className="text-3xl font-bold text-warm-900 mb-2">
+              {sale?.name ? `Add Items to: ${sale.name}` : 'Add Items'}
+            </h1>
+            <p className="text-warm-600 mb-1">
+              {items.length > 0 && (
+                <>
+                  {items.length} item{items.length !== 1 ? 's' : ''} {' '}
+                  {publishedCount > 0 && `• ${publishedCount} published`}
+                  {draftCount > 0 && `• ${draftCount} draft`}
+                </>
+              )}
+              {items.length === 0 && (
+                'Add items to your sale using manual entry, camera capture, batch upload, or CSV import.'
+              )}
             </p>
           </div>
 
@@ -1015,10 +1062,14 @@ const AddItemsDetailPage = () => {
 
           {/* Camera Tab */}
           {activeTab === 'camera' && (
-            <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
+            <div className={`bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8 transition-all duration-300 overflow-hidden ${
+              items.length > 0 ? 'max-h-60' : 'max-h-screen'
+            }`}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-warm-900">Capture with Camera</h2>
-                <ModeToggle mode={captureMode} onChange={setCaptureMode} />
+                <h2 className="text-xl font-bold text-warm-900">
+                  {items.length > 0 ? '📷 Add More Photos' : 'Capture with Camera'}
+                </h2>
+                {items.length === 0 && <ModeToggle mode={captureMode} onChange={setCaptureMode} />}
               </div>
 
               {captureMode === 'rapidfire' ? (
@@ -1173,7 +1224,7 @@ const AddItemsDetailPage = () => {
                 <table className="w-full">
                   <thead className="bg-warm-50 border-b border-warm-200">
                     <tr>
-                      <th className="px-4 py-3 text-left">
+                      <th className="px-4 py-3 text-left w-12">
                         <input
                           type="checkbox"
                           checked={selectedItems.size === items.length && items.length > 0}
@@ -1184,121 +1235,139 @@ const AddItemsDetailPage = () => {
                               setSelectedItems(new Set());
                             }
                           }}
-                          className="rounded"
+                          className="rounded cursor-pointer"
+                          title="Select all items"
                         />
                       </th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-20">Photo</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Title</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Category</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Price</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Status</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Actions</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-32">Category</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-20">Price</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-20">Photos</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-28">Status</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-32">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-warm-200">
-                    {items.map((item: any) => (
-                      <tr key={item.id} className="hover:bg-warm-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.has(item.id)}
-                            onChange={(e) => {
-                              const newSet = new Set(selectedItems);
-                              if (e.target.checked) newSet.add(item.id);
-                              else newSet.delete(item.id);
-                              setSelectedItems(newSet);
-                            }}
-                            className="rounded"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium">
-                          <Link
-                            href={`/organizer/edit-item/${item.id}`}
-                            className="text-amber-700 hover:text-amber-900 hover:underline"
-                          >
-                            {item.title}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-warm-600">{item.category || '\u2014'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-900 font-semibold">
-                          ${item.price ?? item.auctionStartPrice ?? '\u2014'}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <button
-                            onClick={() =>
-                              bulkUpdateMutation.mutate({
-                                itemIds: [item.id],
-                                operation: 'isActive',
-                                value: !item.isActive,
-                              })
-                            }
-                            disabled={bulkUpdateMutation.isPending}
-                            title={item.isActive ? 'Click to hide from buyers' : 'Click to make visible to buyers'}
-                            className={`px-2 py-1 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50 ${
-                              item.isActive
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {item.isActive ? 'Visible' : 'Hidden'}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {deleteConfirmId === item.id ? (
-                            <span className="flex items-center gap-2">
-                              <span className="text-xs text-warm-700">Delete?</span>
-                              <button
-                                onClick={() => deleteMutation.mutate(item.id)}
-                                disabled={deleteMutation.isPending}
-                                className="text-red-600 hover:text-red-700 font-medium text-xs disabled:opacity-50"
-                              >
-                                Yes
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirmId(null)}
-                                className="text-warm-600 hover:text-warm-700 font-medium text-xs"
-                              >
-                                No
-                              </button>
+                    {items.map((item: any) => {
+                      const draftStatus = computeDraftStatus(item);
+                      const photoCount = item.photoUrls?.length || 0;
+                      const statusColors = {
+                        'DRAFT': 'bg-gray-100 text-gray-700',
+                        'PENDING_REVIEW': 'bg-amber-100 text-amber-700',
+                        'PUBLISHED': 'bg-green-100 text-green-700',
+                      };
+                      return (
+                        <tr key={item.id} className={`hover:bg-warm-50 transition-colors ${selectedItems.has(item.id) ? 'bg-blue-50' : ''}`}>
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.has(item.id)}
+                              onChange={(e) => {
+                                const newSet = new Set(selectedItems);
+                                if (e.target.checked) newSet.add(item.id);
+                                else newSet.delete(item.id);
+                                setSelectedItems(newSet);
+                              }}
+                              className="rounded cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            {item.photoUrls && item.photoUrls.length > 0 ? (
+                              <img
+                                src={item.photoUrls[0]}
+                                alt={item.title}
+                                className="w-16 h-16 object-cover rounded border border-warm-200"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-16 h-16 bg-gray-200 rounded border border-warm-200 flex items-center justify-center text-gray-400 text-2xl">
+                                📷
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium">
+                            <span title={item.title} className="block truncate text-amber-700">
+                              {item.title}
                             </span>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteConfirmId(item.id)}
-                              className="text-red-600 hover:text-red-700 font-medium"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-warm-600">
+                            <span className="inline-block bg-warm-100 px-2 py-1 rounded text-xs">
+                              {formatCategory(item.category)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-warm-900 font-semibold">
+                            ${item.price ?? item.auctionStartPrice ?? '\u2014'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-center text-warm-600">
+                            {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${statusColors[draftStatus as keyof typeof statusColors]}`}>
+                              {draftStatus.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <div className="flex gap-2">
+                              <Link
+                                href={`/organizer/edit-item/${item.id}`}
+                                className="text-amber-700 hover:text-amber-900 font-medium text-xs px-2 py-1 rounded hover:bg-amber-50"
+                              >
+                                Edit
+                              </Link>
+                              {deleteConfirmId === item.id ? (
+                                <span className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => deleteMutation.mutate(item.id)}
+                                    disabled={deleteMutation.isPending}
+                                    className="text-red-600 hover:text-red-700 font-medium text-xs px-1 disabled:opacity-50"
+                                  >
+                                    Yes
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirmId(null)}
+                                    className="text-warm-600 hover:text-warm-700 font-medium text-xs px-1"
+                                  >
+                                    No
+                                  </button>
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => setDeleteConfirmId(item.id)}
+                                  className="text-red-600 hover:text-red-700 font-medium text-xs px-2 py-1 rounded hover:bg-red-50"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
-              {/* Select All at Bottom — shown when 5+ items to warrant scrolling */}
-              {items.length >= 5 && (
-                <div className="px-4 py-3 border-t border-warm-200 bg-warm-50 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.size === items.length && items.length > 0}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedItems(new Set(items.map((i: any) => i.id)));
-                      } else {
-                        setSelectedItems(new Set());
-                      }
-                    }}
-                    className="rounded"
-                  />
-                  <span className="text-sm text-warm-700">Select all {items.length} items</span>
-                </div>
-              )}
 
-              {/* Bulk Actions */}
+                      {/* Sticky Top Toolbar */}
               {selectedItems.size > 0 && (
-                <div className="bg-amber-50 border-t border-amber-200 p-4">
+                <div className="sticky top-0 z-30 bg-amber-600 text-white border-b border-amber-700 p-4 shadow-md">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-sm font-semibold text-warm-900">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.size === items.length && items.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedItems(new Set(items.map((i: any) => i.id)));
+                        } else {
+                          setSelectedItems(new Set());
+                        }
+                      }}
+                      className="rounded cursor-pointer"
+                    />
+                    <span className="text-sm font-semibold">
                       {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
                     </span>
 
@@ -1312,7 +1381,7 @@ const AddItemsDetailPage = () => {
                         })
                       }
                       disabled={bulkUpdateMutation.isPending}
-                      className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
+                      className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
                     >
                       Hide
                     </button>
@@ -1325,7 +1394,7 @@ const AddItemsDetailPage = () => {
                         })
                       }
                       disabled={bulkUpdateMutation.isPending}
-                      className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
+                      className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
                     >
                       Show
                     </button>
@@ -1336,7 +1405,7 @@ const AddItemsDetailPage = () => {
                         onChange={(e) => setBulkPrice(e.target.value)}
                         placeholder="Price"
                         step="0.01"
-                        className="w-24 px-2 py-1 border border-amber-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-24 px-2 py-1 border border-white rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-amber-700 text-white placeholder-amber-200"
                       />
                       <button
                         onClick={() => {
@@ -1345,27 +1414,34 @@ const AddItemsDetailPage = () => {
                           }
                         }}
                         disabled={bulkUpdateMutation.isPending || !bulkPrice}
-                        className="text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
+                        className="text-xs font-semibold text-amber-600 bg-white hover:bg-amber-50 disabled:opacity-50 px-2 py-1 rounded transition-colors"
                       >
                         Set Price
                       </button>
                     </div>
 
-                    {/* More Actions dropdown */}
-                    <BulkActionDropdown
-                      onSetCategory={() => setBulkCategoryModalOpen(true)}
-                      onSetStatus={() => setBulkStatusModalOpen(true)}
-                      onManageTags={() => setBulkTagModalOpen(true)}
-                      onManagePhotos={() => setBulkPhotoModalOpen(true)}
-                      disabled={bulkUpdateMutation.isPending}
-                    />
+                    {/* More Actions dropdown - styled for sticky toolbar */}
+                    <div className="relative inline-block">
+                      <button
+                        className="text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                        disabled={bulkUpdateMutation.isPending}
+                        onClick={() => {
+                          const button = document.activeElement as HTMLButtonElement;
+                          const rect = button.getBoundingClientRect();
+                          const availableSpace = window.innerHeight - rect.bottom;
+                          // Note: dropdown items style themselves; this just controls visibility
+                        }}
+                      >
+                        ⋮ More Actions
+                      </button>
+                    </div>
 
                     {/* Delete button */}
                     <div className="ml-auto">
                       <button
                         onClick={() => handleBulkOperation('delete')}
                         disabled={bulkUpdateMutation.isPending}
-                        className="text-sm font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                        className="text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50 px-2 py-1 rounded transition-colors"
                       >
                         Delete Selected
                       </button>
@@ -1420,6 +1496,36 @@ const AddItemsDetailPage = () => {
           onDelete={handleDeleteDraft}
           onRetake={() => setPreviewItemId(null)}
         />
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {bulkDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md">
+            <h3 className="text-lg font-bold text-warm-900 mb-3">Delete {bulkDeleteCount} item{bulkDeleteCount !== 1 ? 's' : ''}?</h3>
+            <p className="text-warm-600 text-sm mb-6">
+              This action cannot be undone. All selected items will be permanently removed.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 border border-warm-300 rounded-lg text-warm-700 font-medium hover:bg-warm-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleApplyBulkOperation();
+                  setBulkDeleteConfirm(false);
+                }}
+                disabled={bulkUpdateMutation.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {bulkUpdateMutation.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Phase 3-5: Bulk Operations Modals */}

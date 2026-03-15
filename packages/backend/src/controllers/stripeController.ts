@@ -163,6 +163,81 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// P2 Bug 2: Webhook failure recovery — query Stripe for charge status if Purchase record missing
+export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) {
+      return res.status(400).json({ message: 'paymentIntentId is required' });
+    }
+
+    // Check if Purchase already exists
+    const existingPurchase = await prisma.purchase.findUnique({
+      where: { stripePaymentIntentId: paymentIntentId },
+    });
+
+    if (existingPurchase) {
+      // Purchase already created, return status
+      return res.json({
+        status: existingPurchase.status,
+        purchaseId: existingPurchase.id,
+        message: 'Purchase already recorded',
+      });
+    }
+
+    // Query Stripe API for this payment intent
+    const paymentIntent = await stripe().paymentIntents.retrieve(paymentIntentId);
+
+    // If payment succeeded, create the Purchase record from metadata
+    if (paymentIntent.status === 'succeeded') {
+      const { itemId, saleId, userId } = paymentIntent.metadata || {};
+      if (!itemId || !saleId || !userId) {
+        return res.status(400).json({
+          message: 'Payment intent missing required metadata (itemId, saleId, userId)',
+        });
+      }
+
+      // Create Purchase record retroactively
+      const purchase = await prisma.purchase.create({
+        data: {
+          userId,
+          itemId,
+          saleId,
+          amount: paymentIntent.amount_received / 100,
+          platformFeeAmount: (paymentIntent.application_fee_amount || 0) / 100,
+          stripePaymentIntentId: paymentIntent.id,
+          status: 'PAID',
+        },
+      });
+
+      // Update item status to SOLD
+      await prisma.item.update({
+        where: { id: itemId },
+        data: { status: 'SOLD' },
+      }).catch(err => console.warn('Failed to update item status during recovery:', err));
+
+      return res.json({
+        status: 'PAID',
+        purchaseId: purchase.id,
+        message: 'Purchase recovered from Stripe',
+      });
+    }
+
+    // Payment not yet succeeded or failed
+    return res.json({
+      status: paymentIntent.status,
+      message: `Payment intent status: ${paymentIntent.status}`,
+    });
+  } catch (error: unknown) {
+    console.error('Payment recovery error:', error);
+    res.status(500).json({ message: 'Failed to recover payment intent' });
+  }
+};
+
 // Create a payment intent for purchasing an item
 export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
