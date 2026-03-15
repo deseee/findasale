@@ -4,13 +4,22 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S-171",
+    "sessionId": "S-173",
     "startedAt": "2026-03-15T00:00:00.000Z",
-    "checkpoints": [],
+    "checkpoints": [
+      {
+        "turn": 1,
+        "timestamp": "2026-03-15T00:00:00Z",
+        "estimatedSessionTokens": 20,
+        "filesRead": 7,
+        "toolCalls": 12,
+        "note": "S173 pre-dispatch checkpoint. About to dispatch 3 parallel agents: backend P1 bugs (findasale-dev), frontend P1 bugs (findasale-dev), #6 Seller Performance Dashboard (findasale-architect). Est post-dispatch: ~65k. Well under 150k threshold."
+      }
+    ],
     "compressionEvents": [],
-    "tokensUsed": "~10k (init)",
-    "budgetEstimate": "~40k (governance review — mostly reads + analysis, no subagent dispatches expected unless issues found)",
-    "budgetAvailable": "~190k"
+    "tokensUsed": "~20k (init + file reads)",
+    "budgetEstimate": "~65k (3 parallel agents: 2×dev ~17k avg + architect ~13k + overhead)",
+    "budgetAvailable": "~175k remaining"
   },
   "checkpoints": [
     {
