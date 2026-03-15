@@ -95,8 +95,14 @@ const buildPersonalizedPicks = async (
 
 // Build HTML email template
 const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: string): string => {
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const formatDate = (d: Date) => {
+    const now = new Date();
+    const daysUntil = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    if (daysUntil <= 0) return `${dateStr} (Today)`;
+    if (daysUntil === 1) return `${dateStr} (Tomorrow)`;
+    return `${dateStr} (In ${daysUntil} days)`;
+  };
 
   const itemCards = picks
     .map(
@@ -104,18 +110,27 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: strin
     <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; margin-bottom:12px; background:#fff; overflow:hidden;">
       ${
         item.photoUrls?.[0]
-          ? `<img src="${item.photoUrls[0]}" alt="${item.title}" style="width:100%; max-height:160px; object-fit:cover; border-radius:6px; margin-bottom:10px; display:block;" />`
+          ? `<img src="${item.photoUrls[0]}" alt="${item.title}" style="width:100%; max-height:180px; object-fit:cover; border-radius:6px; margin-bottom:12px; display:block;" />`
           : ''
       }
-      <div style="font-weight:600; font-size:15px; color:#1f2937; margin-bottom:4px;">${item.title}</div>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-weight:600; font-size:15px; color:#1f2937; margin-bottom:4px;">${item.title}</div>
+          ${
+            item.category
+              ? `<div style="display:inline-block; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; margin-bottom:8px;">${item.category}</div>`
+              : ''
+          }
+        </div>
+      </div>
       ${
         item.price
-          ? `<div style="color:#d97706; font-weight:700; font-size:16px; margin-bottom:4px;">$${(item.price / 100).toFixed(2)}</div>`
+          ? `<div style="color:#d97706; font-weight:700; font-size:18px; margin-bottom:8px;">$${(item.price / 100).toFixed(2)}</div>`
           : ''
       }
-      <div style="color:#6b7280; font-size:13px; margin-bottom:2px;">${item.saleName}</div>
-      <div style="color:#6b7280; font-size:12px; margin-bottom:10px;">${item.saleCity} · ${formatDate(item.saleStartDate)}</div>
-      <a href="${FRONTEND_URL}/items/${item.id}" style="display:inline-block; padding:6px 14px; background:#d97706; color:#fff; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">View Item</a>
+      <div style="color:#6b7280; font-size:13px; font-weight:600; margin-bottom:2px;">${item.saleName}</div>
+      <div style="color:#6b7280; font-size:12px; margin-bottom:12px;">${item.saleCity} \u00b7 ${formatDate(item.saleStartDate)}</div>
+      <a href="${FRONTEND_URL}/items/${item.id}" style="display:inline-block; padding:8px 16px; background:#d97706; color:#fff; border-radius:6px; text-decoration:none; font-size:14px; font-weight:600;">View Item</a>
     </div>`
     )
     .join('');
@@ -134,15 +149,15 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: strin
           <tr>
             <td style="background:#d97706; padding:28px 32px; text-align:center;">
               <span style="font-size:26px; font-weight:700; color:#fff;">FindA.Sale</span>
-              <p style="margin:8px 0 0; font-size:15px; color:#fde68a; font-weight:500;">Your weekly estate sale picks 🏡</p>
+              <p style="margin:8px 0 0; font-size:15px; color:#fde68a; font-weight:500;">Your Weekly Estate Sale Picks</p>
             </td>
           </tr>
 
           <!-- Body -->
           <tr>
             <td style="padding:28px 32px;">
-              <p style="font-size:15px; color:#374151; margin:0 0 8px;">Hi ${name},</p>
-              <p style="font-size:15px; color:#374151; margin:0 0 24px;">Here are the best items from upcoming estate sales this week based on your interests. Don't miss out — these won't last long!</p>
+              <p style="font-size:15px; color:#374151; margin:0 0 12px;">Hi ${name},</p>
+              <p style="font-size:15px; color:#374151; margin:0 0 24px;">We found <strong>${picks.length} items</strong> across this week's estate sales that match what you've been looking at. Prices range from $${Math.min(...picks.map(p => p.price || 0)).toFixed(0)} to $${Math.max(...picks.map(p => p.price || 0)).toFixed(0)}. First dibs on these goes quickly.</p>
 
               <div>
                 ${itemCards}
@@ -158,9 +173,10 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: strin
           <tr>
             <td style="padding:20px 32px; background:#f9f7f4; border-top:1px solid #e5e7eb; text-align:center;">
               <p style="font-size:12px; color:#9ca3af; margin:0;">
-                You're receiving this because you have an account at <a href="${FRONTEND_URL}" style="color:#d97706;">FindA.Sale</a>.<br/>
-                <a href="${FRONTEND_URL}/profile" style="color:#9ca3af; text-decoration:none;">Manage email preferences</a> ·
-                <a href="${FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(unsubEmail)}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a>
+                <a href="${FRONTEND_URL}/profile?tab=notifications" style="color:#6b7280; text-decoration:none; font-weight:600;">Manage frequency</a> \u00b7
+                <a href="${FRONTEND_URL}/profile?tab=categories" style="color:#6b7280; text-decoration:none;">Update interests</a> \u00b7
+                <a href="${FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(unsubEmail)}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a><br/>
+                <span style="color:#d1d5db; font-size:11px; margin-top:8px; display:block;">You're receiving this because you have an account at FindA.Sale.</span>
               </p>
             </td>
           </tr>
@@ -181,12 +197,12 @@ const sendWeeklyPicksEmail = async (email: string, name: string, picks: WeeklyPi
     await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
-      subject: 'Your Weekly Estate Sale Picks 🏡',
+      subject: `${picks.length} Estate Sale Finds This Week (New Arrivals)`,
       html,
     });
-    console.log(`✓ Weekly picks email sent to ${email}`);
+    console.log(`\u2713 Weekly picks email sent to ${email}`);
   } catch (err) {
-    console.error(`✗ Failed to send weekly picks email to ${email}:`, err);
+    console.error(`\u2717 Failed to send weekly picks email to ${email}:`, err);
     throw err;
   }
 };
