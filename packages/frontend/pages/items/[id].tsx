@@ -507,7 +507,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   } disabled:opacity-50`}
                 >
-                  {isUserLiked ? '❤️ Liked' : '🤍 Like'}
+                  {isUserLiked ? '❤️ Liked' : '🧡 Like'}
                 </button>
                 <ItemShareButton
                   itemId={item.id}
