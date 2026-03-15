@@ -4,11 +4,11 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S-162",
-    "startedAt": "2026-03-14T00:00:00.000Z",
+    "sessionId": "S-166",
+    "startedAt": "2026-03-15T00:00:00.000Z",
     "checkpoints": [],
     "compressionEvents": [],
-    "tokensUsed": "~50k (est)"
+    "tokensUsed": "~80k (est) — architect dispatch + spec creation + dev dispatch + context maintenance"
   },
   "checkpoints": [
     {
@@ -38,6 +38,17 @@
   ],
   "compressionEvents": [],
   "sessionHistory": [
+    {
+      "sessionId": 166,
+      "date": "2026-03-15",
+      "tokensBurned": "~80k (est)",
+      "checkpointsLogged": 0,
+      "compressions": 0,
+      "subagents": 2,
+      "filesChanged": 1,
+      "budgetDelta": "succeeded-on-plan",
+      "notes": "#27 Listing Factory spec created (3-sprint phased plan). Architect signed off. Sprint 1 dev dispatched. Spec file: listing-factory-spec.md. No schema changes for Sprint 1/2. Context-maintenance: updated STATE.md, session-log.md, next-session-prompt.md, .checkpoint-manifest.json."
+    },
     {
       "sessionId": 162,
       "date": "2026-03-14",
