@@ -80,7 +80,17 @@ One Read call prevents 3 failed deploys.
 **MCP file content rule (Session 167 audit):** `create_or_update_file` replaces
 the entire remote file — it does not merge or append. Always read the full file
 first. Always push the COMPLETE file content, never truncated or partial lines.
-Truncated schema.prisma (Session 166) broke Railway P1012. No exceptions.
+Truncated schema.prisma (Session 166) and itemController.ts (Session 167) both
+broke Railway builds. No exceptions.
+
+**MCP truncation gate (mandatory pre-push check):** Before every
+`create_or_update_file` call, compare: (a) line count of the content you are
+about to push vs. (b) line count of the file currently on GitHub (from the
+`get_file_contents` call you already made for the SHA). If the push content is
+more than 20% shorter than the existing file AND you did not intend to delete
+code, STOP — you are about to truncate. Re-read the local file in full and
+rebuild the push content. This gate catches the #1 cause of production outages
+in this project (Sessions 166–167).
 
 **Standing rules:** STATE.md pushes only at wrap. Wrap-only docs
 (session-log, STATE, next-session-prompt) never MCP-pushed mid-session.
@@ -203,4 +213,4 @@ stub due to unsupervised dispatch on a security-sensitive path.
 
 ---
 
-Status: Behavioral Authority (v4, Session 167 — added MCP full-file rule, push block completeness, conflict re-stage)
+Status: Behavioral Authority (v4.1, Session 167 — MCP full-file rule, truncation gate, push block completeness, conflict re-stage)
