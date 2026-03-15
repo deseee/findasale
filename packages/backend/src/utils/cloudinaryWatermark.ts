@@ -40,6 +40,7 @@ export function getWatermarkedUrl(originalUrl: string): string {
     // Insert transformation before the version segment
     const watermarkedUrl =
       originalUrl.slice(0, versionIndex) +
+      '/' +
       watermarkTransformation +
       originalUrl.slice(versionIndex);
 
