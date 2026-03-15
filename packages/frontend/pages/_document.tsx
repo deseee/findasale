@@ -35,24 +35,12 @@ export default function Document() {
         <meta name="keywords" content="estate sales, auctions, antiques, thrift, local sales" />
         <meta name="author" content="FindA.Sale" />
 
-        {/* Open Graph defaults */}
+        {/* Open Graph structural defaults — page-level <Head> provides og:title, og:description, og:image */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="FindA.Sale" />
-        <meta property="og:title" content="FindA.Sale — Estate Sales Near You" />
-        <meta
-          property="og:description"
-          content="Discover estate sales and auctions. Browse items, save favorites, and buy online."
-        />
-        <meta property="og:image" content="/icons/icon-512x512.png" />
 
-        {/* Twitter card */}
+        {/* Twitter card type default — page-level <Head> provides twitter:title, twitter:description, twitter:image */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="FindA.Sale — Estate Sales Near You" />
-        <meta
-          name="twitter:description"
-          content="Discover estate sales and auctions. Browse items, save favorites, and buy online."
-        />
-        <meta name="twitter:image" content="/icons/icon-512x512.png" />
 
         {/* Viewport is set by Next.js automatically in _app; kept here for completeness */}
         <meta name="format-detection" content="telephone=no" />
