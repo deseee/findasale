@@ -33,7 +33,8 @@ interface Item {
   photoUrls: string[];
   isLiveDrop: boolean; // CD2
   liveDropAt: string | null; // CD2
-  reverseAuction: boolean; // CD2 Phase 4
+  reverseAuction: boolean; // CD2 Phase 4 (deprecated — use listingType)
+  listingType?: string; // P2 #6: canonical field (FIXED | AUCTION | REVERSE_AUCTION | FLASH_DEAL)
   reverseDailyDrop?: number; // CD2 Phase 4
   reverseFloorPrice?: number; // CD2 Phase 4
   reverseStartDate?: string; // CD2 Phase 4
