@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import archiver from 'archiver';
 
 /**
  * Category mapping from FindA.Sale to EstateSales.NET format
@@ -358,3 +359,215 @@ export const exportCraigslistText = async (
     res.status(500).json({ error: 'Export failed' });
   }
 };
+
+/**
+ * Feature #66: Export all organizer data as ZIP with CSVs
+ * GET /api/organizer/export
+ *
+ * Generates three CSV files:
+ * - sales.csv: all organizer's sales
+ * - items.csv: all items across organizer's sales
+ * - purchases.csv: all purchases on organizer's items
+ *
+ * Returns as a ZIP download with filename: findasale-export-{YYYY-MM-DD}.zip
+ */
+export const exportOrganizer = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    // Fetch organizer profile
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      res.status(404).json({ error: 'Organizer profile not found' });
+      return;
+    }
+
+    // Fetch all organizer's sales
+    const sales = await prisma.sale.findMany({
+      where: { organizerId: organizer.id },
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+        city: true,
+        state: true,
+        address: true,
+        description: true,
+        _count: { select: { items: true } },
+      },
+    });
+
+    // Fetch all items across organizer's sales
+    const items = await prisma.item.findMany({
+      where: {
+        sale: { organizerId: organizer.id },
+      },
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        description: true,
+        price: true,
+        status: true,
+        category: true,
+        condition: true,
+        tags: true,
+        photoUrls: true,
+        createdAt: true,
+      },
+    });
+
+    // Fetch all purchases on organizer's items
+    const purchases = await prisma.purchase.findMany({
+      where: {
+        item: { sale: { organizerId: organizer.id } },
+      },
+      select: {
+        id: true,
+        itemId: true,
+        amount: true,
+        platformFeeAmount: true,
+        status: true,
+        createdAt: true,
+        item: { select: { title: true, saleId: true } },
+      },
+    });
+
+    // Build sales.csv
+    const salesHeaders = [
+      'id',
+      'title',
+      'startDate',
+      'endDate',
+      'status',
+      'city',
+      'state',
+      'address',
+      'totalItems',
+      'description',
+    ];
+    const salesRows = sales.map((sale: any) => [
+      escapeCSV(sale.id),
+      escapeCSV(sale.title),
+      sale.startDate ? formatDateISO(sale.startDate) : '',
+      sale.endDate ? formatDateISO(sale.endDate) : '',
+      escapeCSV(sale.status),
+      escapeCSV(sale.city),
+      escapeCSV(sale.state),
+      escapeCSV(sale.address),
+      sale._count?.items || 0,
+      escapeCSV(sale.description),
+    ]);
+    const salesCSV = [
+      salesHeaders.join(','),
+      ...salesRows.map((row) => row.join(',')),
+    ].join('\n');
+
+    // Build items.csv
+    const itemsHeaders = [
+      'id',
+      'saleId',
+      'title',
+      'description',
+      'price',
+      'status',
+      'category',
+      'condition',
+      'tags',
+      'photoUrls',
+      'createdAt',
+    ];
+    const itemsRows = items.map((item: any) => [
+      escapeCSV(item.id),
+      escapeCSV(item.saleId),
+      escapeCSV(item.title),
+      escapeCSV(item.description),
+      item.price ? item.price.toFixed(2) : '',
+      escapeCSV(item.status),
+      escapeCSV(item.category),
+      escapeCSV(item.condition),
+      item.tags && item.tags.length > 0 ? escapeCSV(item.tags.join(';')) : '',
+      item.photoUrls && item.photoUrls.length > 0
+        ? escapeCSV(item.photoUrls.join(';'))
+        : '',
+      item.createdAt ? formatDateISO(item.createdAt) : '',
+    ]);
+    const itemsCSV = [
+      itemsHeaders.join(','),
+      ...itemsRows.map((row) => row.join(',')),
+    ].join('\n');
+
+    // Build purchases.csv
+    const purchasesHeaders = [
+      'id',
+      'itemId',
+      'itemTitle',
+      'saleId',
+      'amount',
+      'platformFee',
+      'status',
+      'createdAt',
+    ];
+    const purchasesRows = purchases.map((purchase: any) => [
+      escapeCSV(purchase.id),
+      escapeCSV(purchase.itemId || ''),
+      escapeCSV(purchase.item?.title || ''),
+      escapeCSV(purchase.item?.saleId || ''),
+      purchase.amount ? purchase.amount.toFixed(2) : '',
+      purchase.platformFeeAmount ? purchase.platformFeeAmount.toFixed(2) : '',
+      escapeCSV(purchase.status),
+      purchase.createdAt ? formatDateISO(purchase.createdAt) : '',
+    ]);
+    const purchasesCSV = [
+      purchasesHeaders.join(','),
+      ...purchasesRows.map((row) => row.join(',')),
+    ].join('\n');
+
+    // Create ZIP archive and stream to response
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    // Set response headers
+    const exportDate = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="findasale-export-${exportDate}.zip"`
+    );
+
+    // Pipe archive to response
+    archive.pipe(res);
+
+    // Add CSV files to archive
+    archive.append(salesCSV, { name: 'sales.csv' });
+    archive.append(itemsCSV, { name: 'items.csv' });
+    archive.append(purchasesCSV, { name: 'purchases.csv' });
+
+    // Finalize archive
+    await archive.finalize();
+  } catch (error) {
+    console.error('exportOrganizer error:', error);
+    res.status(500).json({ error: 'Export failed' });
+  }
+};
+
+/**
+ * Format date to ISO string (YYYY-MM-DD HH:MM:SS UTC)
+ */
+function formatDateISO(date: Date | null | undefined): string {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toISOString().replace('T', ' ').slice(0, 19);
+}

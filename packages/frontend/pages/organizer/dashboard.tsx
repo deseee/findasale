@@ -325,6 +325,13 @@ const OrganizerDashboard = () => {
                 </span>
               )}
             </Link>
+            <button
+              onClick={() => window.open('/api/organizers/export', '_blank')}
+              className="bg-cyan-100 hover:bg-cyan-200 text-cyan-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              title="Download your sales, items, and purchases data"
+            >
+              ↓ Export Data
+            </button>
           </div>
 
           {/* Tab Navigation */}

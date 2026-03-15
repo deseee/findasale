@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
+import { exportOrganizer } from '../controllers/exportController';
 
 const router = Router();
 
@@ -588,5 +589,9 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Feature #66: GET /api/organizers/export
+// Download all organizer data as a ZIP with three CSVs (sales, items, purchases)
+router.get('/export', authenticate, exportOrganizer);
 
 export default router;
