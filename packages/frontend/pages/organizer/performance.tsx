@@ -295,8 +295,8 @@ const PerformanceDashboard = () => {
 
               {/* Recommendations */}
               <RecommendationsPanel
-                seasonalPricingTips={metricsData.metrics.recommendations.seasonalPricingTips}
-                actionItems={metricsData.metrics.recommendations.actionItems}
+                seasonalPricingTips={metricsData.metrics.recommendations?.seasonalPricingTips ?? []}
+                actionItems={metricsData.metrics.recommendations?.actionItems ?? []}
               />
 
               {/* Refresh Info */}
