@@ -120,6 +120,17 @@ const OrganizerDashboard = () => {
     staleTime: 2 * 60_000,
   });
 
+  // #24: Fetch active hold count for dashboard badge
+  const { data: holdCountData } = useQuery({
+    queryKey: ['organizer-hold-count', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/reservations/organizer/count');
+      return response.data as { count: number };
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
   // Show wizard if onboarding not complete
   useEffect(() => {
     if (orgProfile && !orgProfile.onboardingComplete) {
@@ -292,6 +303,17 @@ const OrganizerDashboard = () => {
               className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
               💳 POS
+            </Link>
+            <Link
+              href="/organizer/holds"
+              className="relative bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              🤝 Holds
+              {(holdCountData?.count ?? 0) > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-bold rounded-full h-5 min-w-[1.25rem] flex items-center justify-center px-1">
+                  {holdCountData!.count}
+                </span>
+              )}
             </Link>
           </div>
 

@@ -1,10 +1,11 @@
 /**
- * Phase 21: Organizer hold management page
- * Lists all active reservations across the organizer's sales.
- * Accessible from the organizer dashboard.
+ * Feature #24: Holds-Only Item View
+ * Upgraded organizer hold management page.
+ * Filter by sale, sort by expiry/created, grouped-by-buyer display,
+ * batch actions (release, extend, mark sold), item photos + prices.
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -12,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import HoldTimer from '../../components/HoldTimer';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 interface HoldItem {
@@ -24,6 +26,8 @@ interface HoldItem {
   item: {
     id: string;
     title: string;
+    price: number | null;
+    photoUrls: string[];
     sale: { id: string; title: string };
   };
 }
@@ -34,21 +38,39 @@ const OrganizerHoldsPage = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
+  const [saleFilter, setSaleFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'expiry' | 'created'>('expiry');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
 
+  // Fetch holds with filters
   const { data: holds = [], isLoading: holdsLoading } = useQuery({
-    queryKey: ['organizer-holds'],
+    queryKey: ['organizer-holds', saleFilter, sortBy],
     queryFn: async () => {
-      const response = await api.get('/reservations/organizer');
+      const params = new URLSearchParams({ sort: sortBy });
+      if (saleFilter !== 'all') params.set('saleId', saleFilter);
+      const response = await api.get(`/reservations/organizer?${params}`);
       return response.data as HoldItem[];
     },
     enabled: !!user?.id,
     refetchInterval: 30000,
   });
 
+  // Fetch organizer's sales for filter dropdown
+  const { data: salesData } = useQuery({
+    queryKey: ['organizer-sales-list', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/sales/mine');
+      return response.data.sales as { id: string; title: string }[];
+    },
+    enabled: !!user?.id,
+  });
+
+  // Single hold update (confirm/cancel)
   const updateMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api.patch(`/reservations/${id}`, { status }),
@@ -61,13 +83,67 @@ const OrganizerHoldsPage = () => {
     },
   });
 
-  const timeLeft = (expiresAt: string) => {
-    const diff = new Date(expiresAt).getTime() - Date.now();
-    if (diff <= 0) return 'Expired';
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    return `${h}h ${m}m`;
+  // Batch mutation
+  const batchMutation = useMutation({
+    mutationFn: ({ ids, action }: { ids: string[]; action: string }) =>
+      api.post('/reservations/batch', { ids, action }),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+      setSelectedIds(new Set());
+      showToast(`${res.data.updated} hold(s) updated`, 'success');
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Batch update failed', 'error');
+    },
+  });
+
+  // Group holds by buyer
+  const groupedByBuyer = useMemo(() => {
+    const groups: Record<string, { buyerName: string; buyerEmail: string; holds: HoldItem[] }> = {};
+    for (const hold of holds) {
+      const key = hold.user.id;
+      if (!groups[key]) {
+        groups[key] = { buyerName: hold.user.name, buyerEmail: hold.user.email, holds: [] };
+      }
+      groups[key].holds.push(hold);
+    }
+    return Object.values(groups).sort((a, b) => b.holds.length - a.holds.length);
+  }, [holds]);
+
+  // Selection helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === holds.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(holds.map((h) => h.id)));
+    }
+  };
+
+  const handleBatch = (action: 'release' | 'extend' | 'markSold') => {
+    if (selectedIds.size === 0) return;
+    batchMutation.mutate({ ids: Array.from(selectedIds), action });
+  };
+
+  // Accordion state for buyer groups
+  const [expandedBuyers, setExpandedBuyers] = useState<Set<string>>(new Set());
+  const toggleBuyerExpand = (buyerId: string) => {
+    setExpandedBuyers((prev) => {
+      const next = new Set(prev);
+      next.has(buyerId) ? next.delete(buyerId) : next.add(buyerId);
+      return next;
+    });
+  };
+
+  // Auto-expand all on first load
+  const allExpanded = expandedBuyers.size === 0 && holds.length > 0;
 
   return (
     <>
@@ -75,84 +151,229 @@ const OrganizerHoldsPage = () => {
         <title>Active Holds - FindA.Sale</title>
       </Head>
       <div className="min-h-screen bg-warm-50">
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="flex items-center gap-4 mb-8">
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-6">
             <Link href="/organizer/dashboard" className="text-amber-600 hover:text-amber-800 text-sm">
               ← Dashboard
             </Link>
-            <h1 className="text-2xl font-bold text-warm-900">Active Holds</h1>
+            <h1 className="text-2xl font-bold text-warm-900">
+              Active Holds {holds.length > 0 && <span className="text-lg font-normal text-warm-500">({holds.length})</span>}
+            </h1>
           </div>
 
+          {/* Filters bar */}
+          <div className="flex flex-wrap items-center gap-4 mb-6 bg-white rounded-lg shadow-sm p-4">
+            {/* Sale filter */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="sale-filter" className="text-sm font-medium text-warm-700">Sale:</label>
+              <select
+                id="sale-filter"
+                value={saleFilter}
+                onChange={(e) => { setSaleFilter(e.target.value); setSelectedIds(new Set()); }}
+                className="text-sm border border-warm-300 rounded-md px-3 py-1.5 bg-white text-warm-900 focus:ring-amber-500 focus:border-amber-500"
+              >
+                <option value="all">All sales</option>
+                {salesData?.map((sale) => (
+                  <option key={sale.id} value={sale.id}>{sale.title}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sort toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-warm-700">Sort:</span>
+              <button
+                onClick={() => setSortBy('expiry')}
+                className={`text-sm px-3 py-1 rounded-md transition-colors ${
+                  sortBy === 'expiry'
+                    ? 'bg-amber-100 text-amber-800 font-semibold'
+                    : 'text-warm-600 hover:bg-warm-100'
+                }`}
+              >
+                Expiring Soon
+              </button>
+              <button
+                onClick={() => setSortBy('created')}
+                className={`text-sm px-3 py-1 rounded-md transition-colors ${
+                  sortBy === 'created'
+                    ? 'bg-amber-100 text-amber-800 font-semibold'
+                    : 'text-warm-600 hover:bg-warm-100'
+                }`}
+              >
+                Recently Added
+              </button>
+            </div>
+
+            {/* Select all */}
+            {holds.length > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-sm text-amber-600 hover:text-amber-800 font-medium"
+                >
+                  {selectedIds.size === holds.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Batch action bar */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-3 mb-6 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <span className="text-sm font-medium text-amber-800">{selectedIds.size} selected</span>
+              <div className="flex gap-2 ml-auto">
+                <button
+                  onClick={() => handleBatch('release')}
+                  disabled={batchMutation.isPending}
+                  className="text-sm bg-white border border-red-300 text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
+                >
+                  Release
+                </button>
+                <button
+                  onClick={() => handleBatch('extend')}
+                  disabled={batchMutation.isPending}
+                  className="text-sm bg-white border border-blue-300 text-blue-600 hover:bg-blue-50 px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
+                >
+                  Extend
+                </button>
+                <button
+                  onClick={() => handleBatch('markSold')}
+                  disabled={batchMutation.isPending}
+                  className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
+                >
+                  Mark Sold
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Content */}
           {holdsLoading ? (
             <p className="text-warm-600">Loading holds…</p>
           ) : holds.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-8 text-center">
-              <p className="text-warm-600">No active holds right now.</p>
+              <p className="text-4xl mb-3">🤝</p>
+              <p className="text-warm-600 font-medium">No active holds right now.</p>
+              <p className="text-warm-400 text-sm mt-1">When shoppers place holds on your items, they'll appear here.</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {holds.map((hold) => (
-                <div key={hold.id} className="bg-white rounded-lg shadow-md p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    {/* Hold details */}
-                    <div className="flex-1 min-w-0">
-                      <Link
-                        href={`/items/${hold.item.id}`}
-                        className="font-semibold text-warm-900 hover:text-amber-600 line-clamp-1"
-                      >
-                        {hold.item.title}
-                      </Link>
-                      <p className="text-sm text-warm-500 mt-0.5">
-                        {hold.item.sale.title}
-                      </p>
-                      <p className="text-sm text-warm-700 mt-2">
-                        <span className="font-medium">Shopper:</span> {hold.user.name}{' '}
-                        <span className="text-warm-400">({hold.user.email})</span>
-                      </p>
-                      {hold.note && (
-                        <p className="text-sm text-warm-600 mt-1 italic">"{hold.note}"</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2">
-                        <span
-                          className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            hold.status === 'CONFIRMED'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}
-                        >
-                          {hold.status}
-                        </span>
-                        <span className="text-xs text-warm-500">
-                          Expires in {timeLeft(hold.expiresAt)}
-                        </span>
-                        <span className="text-xs text-warm-400">
-                          Placed {formatDistanceToNow(parseISO(hold.createdAt), { addSuffix: true })}
+              {groupedByBuyer.map((group) => {
+                const buyerKey = group.holds[0].user.id;
+                const isExpanded = allExpanded || expandedBuyers.has(buyerKey);
+
+                return (
+                  <div key={buyerKey} className="bg-white rounded-lg shadow-md overflow-hidden">
+                    {/* Buyer header (accordion toggle) */}
+                    <button
+                      onClick={() => toggleBuyerExpand(buyerKey)}
+                      className="w-full flex items-center justify-between px-5 py-3 bg-warm-50 hover:bg-warm-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-warm-900 font-semibold">{group.buyerName}</span>
+                        <span className="text-warm-400 text-sm">{group.buyerEmail}</span>
+                        <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                          {group.holds.length} {group.holds.length === 1 ? 'hold' : 'holds'}
                         </span>
                       </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2 flex-shrink-0">
-                      {hold.status === 'PENDING' && (
-                        <button
-                          onClick={() => updateMutation.mutate({ id: hold.id, status: 'CONFIRMED' })}
-                          disabled={updateMutation.isPending}
-                          className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded disabled:opacity-50"
-                        >
-                          Confirm
-                        </button>
-                      )}
-                      <button
-                        onClick={() => updateMutation.mutate({ id: hold.id, status: 'CANCELLED' })}
-                        disabled={updateMutation.isPending}
-                        className="text-sm border border-red-400 text-red-600 hover:bg-red-50 px-4 py-1.5 rounded disabled:opacity-50"
+                      <svg
+                        className={`h-5 w-5 text-warm-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        Cancel
-                      </button>
-                    </div>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {/* Hold items */}
+                    {isExpanded && (
+                      <div className="divide-y divide-warm-100">
+                        {group.holds.map((hold) => (
+                          <div key={hold.id} className="flex items-start gap-4 px-5 py-4">
+                            {/* Checkbox */}
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(hold.id)}
+                              onChange={() => toggleSelect(hold.id)}
+                              className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500"
+                            />
+
+                            {/* Item thumbnail */}
+                            <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-warm-100">
+                              {hold.item.photoUrls && hold.item.photoUrls.length > 0 ? (
+                                <img
+                                  src={hold.item.photoUrls[0]}
+                                  alt={hold.item.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-warm-400 text-2xl">📷</div>
+                              )}
+                            </div>
+
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <Link
+                                    href={`/items/${hold.item.id}`}
+                                    className="font-semibold text-warm-900 hover:text-amber-600 line-clamp-1"
+                                  >
+                                    {hold.item.title}
+                                  </Link>
+                                  {hold.item.price != null && (
+                                    <span className="ml-2 text-sm font-medium text-green-700">${hold.item.price.toFixed(2)}</span>
+                                  )}
+                                </div>
+                                {/* Single actions */}
+                                <div className="flex gap-2 flex-shrink-0">
+                                  {hold.status === 'PENDING' && (
+                                    <button
+                                      onClick={() => updateMutation.mutate({ id: hold.id, status: 'CONFIRMED' })}
+                                      disabled={updateMutation.isPending}
+                                      className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded disabled:opacity-50"
+                                    >
+                                      Confirm
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => updateMutation.mutate({ id: hold.id, status: 'CANCELLED' })}
+                                    disabled={updateMutation.isPending}
+                                    className="text-xs border border-red-400 text-red-600 hover:bg-red-50 px-3 py-1 rounded disabled:opacity-50"
+                                  >
+                                    Release
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-warm-500 mt-0.5">{hold.item.sale.title}</p>
+                              {hold.note && (
+                                <p className="text-xs text-warm-600 mt-1 italic">"{hold.note}"</p>
+                              )}
+                              <div className="flex items-center gap-3 mt-2">
+                                <span
+                                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                    hold.status === 'CONFIRMED'
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-amber-100 text-amber-700'
+                                  }`}
+                                >
+                                  {hold.status}
+                                </span>
+                                <HoldTimer expiresAt={hold.expiresAt} />
+                                <span className="text-xs text-warm-400">
+                                  Placed {formatDistanceToNow(parseISO(hold.createdAt), { addSuffix: true })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
