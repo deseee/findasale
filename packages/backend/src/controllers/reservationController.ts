@@ -93,6 +93,7 @@ export const getItemReservation = async (req: AuthRequest, res: Response) => {
 
 // GET /api/reservations/organizer — all active holds across organizer's sales
 // #24: supports ?saleId=xxx&sort=expiry|created query params
+// P2 #11: Added pagination with ?limit=50&offset=0 query params
 export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
@@ -101,7 +102,23 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
     const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
     if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
 
-    const { saleId, sort } = req.query as { saleId?: string; sort?: string };
+    const { saleId, sort, limit, offset } = req.query as { saleId?: string; sort?: string; limit?: string; offset?: string };
+
+    // P2 #11: Parse pagination params with defaults and validation
+    let pageLimit = 50; // default
+    let pageOffset = 0; // default
+    if (limit) {
+      const parsed = parseInt(limit, 10);
+      if (!isNaN(parsed) && parsed > 0 && parsed <= 200) {
+        pageLimit = parsed;
+      }
+    }
+    if (offset) {
+      const parsed = parseInt(offset, 10);
+      if (!isNaN(parsed) && parsed >= 0) {
+        pageOffset = parsed;
+      }
+    }
 
     const where: any = {
       status: { in: ['PENDING', 'CONFIRMED'] },
@@ -116,24 +133,36 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
       ? { createdAt: 'desc' as const }
       : { expiresAt: 'asc' as const }; // default: soonest-expiring first
 
-    const reservations = await prisma.itemReservation.findMany({
-      where,
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        item: {
-          select: {
-            id: true,
-            title: true,
-            price: true,
-            photoUrls: true,
-            sale: { select: { id: true, title: true } },
+    // P2 #11: Fetch total count and paginated results
+    const [reservations, total] = await Promise.all([
+      prisma.itemReservation.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          item: {
+            select: {
+              id: true,
+              title: true,
+              price: true,
+              photoUrls: true,
+              sale: { select: { id: true, title: true } },
+            },
           },
         },
-      },
-      orderBy,
-    });
+        orderBy,
+        take: pageLimit,
+        skip: pageOffset,
+      }),
+      prisma.itemReservation.count({ where }),
+    ]);
 
-    res.json(reservations);
+    res.json({
+      holds: reservations,
+      total,
+      limit: pageLimit,
+      offset: pageOffset,
+      hasMore: pageOffset + pageLimit < total,
+    });
   } catch (error) {
     console.error('[reservations] getOrganizerHolds error:', error);
     res.status(500).json({ message: 'Server error' });

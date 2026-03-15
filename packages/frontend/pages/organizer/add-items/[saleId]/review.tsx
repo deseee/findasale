@@ -492,6 +492,27 @@ const ReviewPage = () => {
                   </div>
                 ) : (
                   <>
+                    {/* Select All Header */}
+                    <div className="bg-white border border-warm-200 rounded-lg p-3 mb-3 flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.size === items.length && items.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedItems(new Set(items.map((i) => i.id)));
+                          } else {
+                            setSelectedItems(new Set());
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium text-warm-700">
+                        {selectedItems.size === 0
+                          ? `Select all ${items.length} item${items.length !== 1 ? 's' : ''}`
+                          : `${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''} selected`}
+                      </span>
+                    </div>
+
                     {selectedItems.size > 0 && (
                       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex flex-wrap items-center gap-3">
                         <span className="text-sm font-medium text-amber-800">{selectedItems.size} selected</span>

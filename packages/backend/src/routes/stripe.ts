@@ -5,6 +5,7 @@ import {
   webhookHandler,
   getPendingPayment,
   createRefund,
+  recoverPaymentIntent,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown } from '../controllers/payoutController';
@@ -26,6 +27,8 @@ router.get('/account-status', authenticate, getAccountStatus);
 // Buyer routes
 router.post('/create-payment-intent', authenticate, createPaymentIntent);
 router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
+// P2 Bug 2: Webhook failure recovery endpoint
+router.post('/recover-payment-intent', authenticate, recoverPaymentIntent);
 
 // Organizer refund
 router.post('/refund/:purchaseId', authenticate, createRefund);

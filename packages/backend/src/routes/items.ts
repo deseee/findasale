@@ -19,6 +19,7 @@ import {
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
+import { CURATED_TAGS } from '../../shared/constants/tagVocabulary'; // P2 #10: Import from shared
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -85,6 +86,16 @@ router.post('/bulk', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'One or more items not found.' });
     }
 
+    // P2 Bug 4: User-friendly error message mapping for internal statuses
+    const statusFriendlyNames: Record<string, string> = {
+      PENDING_REVIEW: 'Item is pending review — you can modify it after review completes.',
+      PUBLISHED: 'Item is published — unpublish it first to make this change.',
+      AVAILABLE: 'Item is available — hold or reserve it before this action.',
+      SOLD: 'Item has been sold and cannot be modified.',
+      RESERVED: 'Item has been reserved — release the hold first.',
+      DRAFT: 'Item is a draft.',
+    };
+
     // Status-safe operation matrix — per spec
     const statusSafeMatrix: Record<string, string[]> = {
       delete: ['AVAILABLE', 'DRAFT'],
@@ -109,9 +120,10 @@ router.post('/bulk', authenticate, async (req, res) => {
     if (safeStatuses) {
       for (const item of items) {
         if (!safeStatuses.includes(item.status)) {
+          const friendlyMsg = statusFriendlyNames[item.status] || `Status is ${item.status}`;
           failed.push({
             itemId: item.id,
-            reason: `Status is ${item.status} — ${operation} only allowed on ${safeStatuses.join('/')} items`,
+            reason: friendlyMsg,
           });
         } else {
           confirmedIds.push(item.id);
@@ -484,20 +496,8 @@ router.post('/bulk', authenticate, async (req, res) => {
           return res.status(400).json({ message: 'Invalid tags operation — action must be "add" or "remove"' });
         }
 
-        // Curated tags constant (mirrors tagController)
-        const CURATED_TAGS = [
-          'mid-century-modern', 'art-deco', 'victorian', 'craftsman', 'industrial',
-          'farmhouse', 'bohemian', 'danish-modern', 'scandinavian', 'atomic-age',
-          'hollywood-regency', 'arts-and-crafts', 'colonial', 'transitional', 'contemporary',
-          'walnut', 'oak', 'teak', 'brass', 'cast-iron',
-          'wicker', 'leather', 'ceramic', 'glass', 'chrome',
-          'hand-painted', 'signed', 'original', 'limited-edition', 'first-edition',
-          'handmade', 'restored', 'vintage-1950s', 'vintage-1960s', 'vintage-1970s',
-          'collectible', 'antique', 'sterling-silver', 'costume-jewelry', 'fine-art',
-          'folk-art', 'architectural-salvage', 'garden-decor', 'holiday-decor', 'musical',
-        ];
-
-        const invalidTags = tagList.filter((t) => !CURATED_TAGS.includes(t.toLowerCase()));
+        // P2 #10: Use shared CURATED_TAGS from tagVocabulary
+        const invalidTags = tagList.filter((t) => !CURATED_TAGS.includes(t.toLowerCase() as any));
         if (invalidTags.length > 0) {
           return res.status(400).json({
             message: `Invalid tag(s): ${invalidTags.join(', ')} — use only curated tags`,
