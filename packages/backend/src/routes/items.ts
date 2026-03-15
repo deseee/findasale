@@ -626,9 +626,10 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
       });
     }
 
-    // Apply mutations
+    // P1-D: Apply mutations and track skipped items
     const confirmedIds: string[] = [];
     const skipped: Array<{ itemId: string; reason: string }> = [];
+    let updatedCount = 0;
 
     if (operation === 'add') {
       for (const item of items) {
@@ -639,7 +640,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
         if (currentCount + newPhotos.length > 5) {
           skipped.push({
             itemId: item.id,
-            reason: 'would exceed 5 photo limit'
+            reason: 'would_exceed_photo_limit'
           });
           continue; // Skip items that would exceed 5 photos
         }
@@ -652,12 +653,14 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
             },
           });
           confirmedIds.push(item.id);
+          updatedCount++;
         }
       }
-      const photoStatus = skipped.length > 0 ? 207 : 200;
+      const photoStatus = (skipped.length > 0 || confirmedIds.length === 0) ? 207 : 200;
       return res.status(photoStatus).json({
-        message: `Added photo(s) to ${confirmedIds.length} item(s)`,
+        message: `Added photo(s) to ${updatedCount} item(s)`,
         succeeded: confirmedIds,
+        updated: updatedCount,
         operation: 'add',
         ...(skipped.length > 0 && { skipped }),
       });
@@ -674,12 +677,15 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
             },
           });
           confirmedIds.push(item.id);
+          updatedCount++;
         }
       }
-      return res.json({
-        message: `Removed photo(s) from ${confirmedIds.length} item(s)`,
+      return res.status(skipped.length > 0 ? 207 : 200).json({
+        message: `Removed photo(s) from ${updatedCount} item(s)`,
         succeeded: confirmedIds,
+        updated: updatedCount,
         operation: 'remove',
+        ...(skipped.length > 0 && { skipped }),
       });
     }
   } catch (error) {

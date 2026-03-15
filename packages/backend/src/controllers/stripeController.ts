@@ -117,40 +117,59 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
 
     res.json({ url: accountLink.url });
   } catch (error: unknown) {
-    // P1 Bug 3: Detect Stripe error types and return appropriate status codes
+    // P1 Bug 3: Detect Stripe error types and return appropriate status codes with user-friendly messages
     let statusCode = 500;
     let message = 'Failed to create Stripe Connect account';
     let type = undefined;
+    let errorCode = undefined;
 
     if (error instanceof Error) {
-      message = error.message;
       type = (error as any).type;
+      errorCode = (error as any).code;
 
       // Check for Stripe validation errors (400)
       if (type === 'invalid_request_error') {
         statusCode = 400;
-        message = error.message; // e.g., "Missing required param: email"
+        // P1-C: Provide actionable error messages for common validation errors
+        if (errorCode === 'missing_field' || error.message?.includes('email')) {
+          message = 'A valid email address is required for Stripe account setup';
+        } else if (errorCode === 'invalid_param') {
+          message = 'One or more account details are invalid. Please check your information and try again.';
+        } else {
+          message = error.message || 'Invalid request parameters';
+        }
       }
       // Check for rate limit errors (503)
       else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Service temporarily unavailable, please try again in a moment';
+        message = 'Too many requests — please try again in a minute';
       }
       // All other errors remain 500
+      else {
+        message = error.message;
+      }
     } else if (error && typeof error === 'object') {
       type = (error as any).type;
+      errorCode = (error as any).code;
 
       if (type === 'invalid_request_error') {
         statusCode = 400;
-        message = (error as any).message || 'Invalid request to Stripe';
+        if (errorCode === 'missing_field' || (error as any).message?.includes('email')) {
+          message = 'A valid email address is required for Stripe account setup';
+        } else if (errorCode === 'invalid_param') {
+          message = 'One or more account details are invalid. Please check your information and try again.';
+        } else {
+          message = (error as any).message || 'Invalid request to Stripe';
+        }
       } else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Service temporarily unavailable, please try again in a moment';
+        message = 'Too many requests — please try again in a minute';
       }
     }
 
     console.error('Stripe Connect account creation error:', {
       type,
+      code: errorCode,
       statusCode,
       message,
       env: {
@@ -159,7 +178,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       }
     });
     if (statusCode === 503) res.set('Retry-After', '60');
-    res.status(statusCode).json({ message });
+    res.status(statusCode).json({ error: 'stripe_' + (type?.replace('_error', '') || 'unknown'), message });
   }
 };
 

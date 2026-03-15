@@ -290,8 +290,20 @@ const AddItemsDetailPage = () => {
     itemCount?: number;
   } | null>(null);
 
+  // P1-A: Validate saleId on route ready
+  useEffect(() => {
+    if (router.isReady && !saleId) {
+      router.replace('/organizer/dashboard');
+    }
+  }, [router.isReady, saleId, router]);
+
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
+    return null;
+  }
+
+  // P1-A: Loading guard — don't render if saleId is falsy
+  if (!saleId) {
     return null;
   }
 
@@ -363,6 +375,7 @@ const AddItemsDetailPage = () => {
     onSuccess: (response: any) => {
       const succeeded = response.data.succeeded || [];
       const failed = response.data.failed || [];
+      const skipped = response.data.skipped || []; // P1-B: Handle skipped items from backend
       const count = response.data.count || succeeded.length || selectedItems.size;
       const operation = bulkConfirmData?.operation || 'update';
       const operationLabel = {
@@ -373,6 +386,13 @@ const AddItemsDetailPage = () => {
         status: 'Updated status for',
         tags: 'Updated tags for',
       }[operation] || 'Updated';
+
+      // P1-B: Show warning toast if items were skipped
+      if (skipped.length > 0) {
+        const skipReasons = skipped.map(s => s.reason).filter(Boolean);
+        const skipMessage = skipReasons.length > 0 ? ` — ${skipReasons[0]}` : '';
+        showToast(`${skipped.length} item(s) skipped${skipMessage}`, 'warning');
+      }
 
       // Check for partial failures (207 response with failed items)
       if (failed.length > 0) {
@@ -386,9 +406,9 @@ const AddItemsDetailPage = () => {
           itemCount: failed.length,
         });
         setBulkErrorModalOpen(true);
-      } else {
-        // All succeeded
-        showToast(`${operationLabel} ${count} item${count !== 1 ? 's' : ''}`, 'success');
+      } else if (succeeded.length > 0) {
+        // All requested items succeeded (no failures, though may have been skipped)
+        showToast(`${operationLabel} ${succeeded.length} item${succeeded.length !== 1 ? 's' : ''}`, 'success');
       }
 
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -1217,12 +1237,20 @@ const AddItemsDetailPage = () => {
                     </span>
                   )}
                 </h2>
-                <Link
-                  href={`/organizer/add-items/${saleId}/review`}
-                  className="text-sm font-medium text-amber-700 hover:text-amber-900 hover:underline"
-                >
-                  Review & Publish &rarr;
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/organizer/add-items/${saleId}/review?preview=true`}
+                    className="text-sm font-medium text-warm-700 hover:text-warm-900 hover:underline px-3 py-1.5 border border-warm-300 rounded-lg hover:bg-warm-50"
+                  >
+                    👁 Buyer Preview
+                  </Link>
+                  <Link
+                    href={`/organizer/add-items/${saleId}/review`}
+                    className="text-sm font-medium text-amber-700 hover:text-amber-900 hover:underline"
+                  >
+                    Review & Publish &rarr;
+                  </Link>
+                </div>
               </div>
 
               {/* Sticky Top Toolbar — positioned ABOVE table for proper sticky behavior */}
