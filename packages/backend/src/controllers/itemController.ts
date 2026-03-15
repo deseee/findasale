@@ -53,6 +53,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         title: true,
         category: true,
         condition: true,
+        conditionGrade: true, // #64
         price: true,
         photoUrls: true,
         draftStatus: true,
@@ -83,6 +84,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         description: null, // TODO: Add description to schema if needed
         tags: item.tags,
         price: item.price,
+        conditionGrade: item.conditionGrade, // #64
       }),
     }));
 

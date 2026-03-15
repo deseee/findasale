@@ -13,6 +13,7 @@ export interface HealthBreakdown {
   description: number; // 0–20
   tags: number; // 0–15
   price: number; // 0–5
+  conditionGrade?: number; // 0–5
 }
 
 export interface HealthResult {
@@ -31,6 +32,7 @@ interface ItemDraft {
   description?: string | null;
   tags?: string[];
   price?: number | null;
+  conditionGrade?: string | null;
 }
 
 /**
@@ -42,6 +44,7 @@ interface ItemDraft {
  * - No description → 0 pts; < 50 chars → 10 pts; ≥ 50 chars → 20 pts
  * - 0 tags → 0 pts; 1–2 tags → 7 pts; 3+ tags → 15 pts
  * - No price → 0 pts; price set → 5 pts
+ * - No conditionGrade → 0 pts; grade set → 5 pts (#64)
  *
  * Gate logic:
  * - score < 40 → 'blocked' (cannot publish)
@@ -55,6 +58,7 @@ export function computeHealthScore(item: ItemDraft): HealthResult {
     description: 0,
     tags: 0,
     price: 0,
+    conditionGrade: 0,
   };
 
   // Photo score (0–40)
@@ -100,8 +104,11 @@ export function computeHealthScore(item: ItemDraft): HealthResult {
   // Price score (0–5)
   breakdown.price = item.price ? 5 : 0;
 
+  // Condition Grade score (0–5) — #64
+  breakdown.conditionGrade = item.conditionGrade ? 5 : 0;
+
   // Total score
-  const score = breakdown.photo + breakdown.title + breakdown.description + breakdown.tags + breakdown.price;
+  const score = breakdown.photo + breakdown.title + breakdown.description + breakdown.tags + breakdown.price + breakdown.conditionGrade;
 
   // Determine grade
   let grade: 'blocked' | 'nudge' | 'clear';
