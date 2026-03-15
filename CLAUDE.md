@@ -160,4 +160,56 @@ Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the ma
 
 ---
 
+## 11. Subagent-First Implementation Gate (CRITICAL)
+
+The main window is an **orchestrator**, not an implementer. All code implementation
+MUST go through subagents. This is not advisory — it is a hard gate.
+
+**GATE (before every Write/Edit that creates or modifies code in `packages/`):**
+
+1. Is this a **single targeted edit** to 1–2 existing files, totaling <20 lines changed?
+   → Inline is acceptable.
+2. Is this **anything else** — new files, multi-file changes, feature implementation,
+   bug fixes, refactors, new controllers/routes/components/utilities?
+   → **MUST dispatch to `findasale-dev` (or appropriate subagent).** No exceptions.
+
+**What counts as "code":** Any `.ts`, `.tsx`, `.js`, `.jsx`, `.css`, `.json` (non-doc),
+`.prisma`, config file, or any file under `packages/`.
+
+**Main window responsibilities (exhaustive):**
+- Read specs, context, and roadmap
+- Decide what needs building
+- Write clear dispatch prompts to subagents (include file paths, spec references, constraints)
+- Receive and review subagent output
+- Coordinate pushes (MCP or Patrick PS1 block)
+- Report to Patrick
+
+**Main window NEVER does:**
+- Write controllers, routes, components, or utilities
+- Create new code files in `packages/`
+- Implement features inline — even "simple" ones
+- Read 500+ lines of code to understand structure for inline implementation
+  (instead, include the file path in the subagent dispatch and let the subagent read it)
+
+**Allowed inline edits (exhaustive list):**
+- Doc files (`.md` in `claude_docs/`, skills, `CLAUDE.md`)
+- `.checkpoint-manifest.json` updates
+- `MESSAGE_BOARD.json` updates
+- Single-line config fixes explicitly requested by Patrick
+- Conversation-defaults and skill SKILL.md files
+
+**Self-check:** If you are about to use the `Read` tool on a code file to understand
+its structure so you can write code based on it — STOP. You are about to violate
+this rule. Dispatch a subagent instead.
+
+**Origin:** Session 170 — main window read 940-line itemController.ts, 393-line
+promote.tsx, 256-line items.ts route, and wrote 4 new code files inline
+(socialController, social route, tagController, tags route) plus 2 index.ts edits.
+Burned ~30k tokens that should have been a subagent dispatch. Patrick flagged it
+as a direct violation of the existing "default to subagents" instruction in global
+CLAUDE.md. This section elevates that instruction to a hard gate with explicit
+allowed/disallowed lists. (Added 2026-03-15, Session 170.)
+
+---
+
 Status: Project Authority Layer

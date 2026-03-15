@@ -89,6 +89,8 @@ import couponsRouter from './routes/coupons';          // Sprint 3: Shopper Loya
 import routeRoutes from './routes/routes';             // D3: Map route planning
 import viewersRouter from './routes/viewers';           // Feature 34: Hype Meter
 import exportRouter from './routes/export';             // Sprint 2: Export features
+import socialRouter from './routes/social';             // Sprint 2: Social template generator
+import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -242,6 +244,8 @@ app.use('/api/coupons', couponsRouter);         // Sprint 3: Shopper Loyalty Cou
 app.use('/api/routes', routeRoutes);            // D3: Map route planning
 app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hype Meter viewer counts
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features
+app.use('/api/social', socialRouter);                            // Sprint 2: Social template generator
+app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
