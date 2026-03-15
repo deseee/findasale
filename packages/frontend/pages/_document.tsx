@@ -38,6 +38,7 @@ export default function Document() {
         {/* Open Graph structural defaults — page-level <Head> provides og:title, og:description, og:image */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="FindA.Sale" />
+        <meta property="fb:app_id" content="4380032288935833" />
 
         {/* Twitter card type default — page-level <Head> provides twitter:title, twitter:description, twitter:image */}
         <meta name="twitter:card" content="summary_large_image" />

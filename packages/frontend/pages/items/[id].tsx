@@ -211,6 +211,13 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   // Animation hook
   const { triggerAnimation: triggerHeartAnimation } = useHeartAnimation();
 
+  // SSR guard — prevents browser-only code from executing during server-side render.
+  // React Query v5 isLoading = isPending && isFetching; during SSR isFetching=false so
+  // isLoading=false, which bypasses the skeleton guard and crashes on undefined `item`.
+  // The mounted flag ensures we only render the full component tree client-side.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   // Setup socket for live bidding
   // Dynamic import prevents socket.io-client from loading during SSR (fixes #33 500 error)
   useEffect(() => {
@@ -316,7 +323,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     />
   ) : null;
 
-  if (isItemLoading) {
+  // Server-side and pre-mount: render only OG meta + skeleton so FB/Twitter bots
+  // get the correct OG tags without any browser-specific code running server-side.
+  if (!mounted || isItemLoading) {
     return (
       <>
         {ogHead}
