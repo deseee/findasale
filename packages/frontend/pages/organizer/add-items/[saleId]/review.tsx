@@ -22,6 +22,7 @@ import Skeleton from '../../../../components/Skeleton';
 import NearMissNudge from '../../../../components/NearMissNudge'; // Feature 61
 import ItemPhotoManager from '../../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Phase 3
+import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
@@ -37,6 +38,21 @@ interface ItemEditState {
   contrast: number;
   backgroundRemoved: boolean;
   autoEnhanced: boolean;
+  tags?: string[];
+}
+
+interface HealthBreakdown {
+  photo: number;
+  title: number;
+  description: number;
+  tags: number;
+  price: number;
+}
+
+interface HealthScore {
+  score: number;
+  grade: 'blocked' | 'nudge' | 'clear';
+  breakdown: HealthBreakdown;
 }
 
 interface Item {
@@ -53,6 +69,9 @@ interface Item {
   backgroundRemoved: boolean;
   autoEnhanced: boolean;
   draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
+  tags?: string[];
+  suggestedTags?: string[];
+  healthScore?: HealthScore;
 }
 
 const CATEGORIES = [
@@ -243,6 +262,7 @@ const ReviewPage = () => {
         condition: editState.condition,
         quantity: editState.quantity,
         backgroundRemoved: editState.backgroundRemoved,
+        tags: editState.tags, // Sprint 1: Save tags
       },
     });
     showToast('Item saved', 'success');
@@ -289,6 +309,35 @@ const ReviewPage = () => {
       return;
     }
     publishMutation.mutate(ids);
+  };
+
+  // Sprint 1: Tag handler functions
+  const handleAddTag = (itemId: string, tag: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const state = getEditState(item);
+    const current = state.tags || [];
+
+    // Max 6 tags total (5 curated + 1 custom)
+    if (current.includes(tag) || current.length >= 6) return;
+
+    handleEditChange(itemId, 'tags', [...current, tag]);
+  };
+
+  const handleRemoveTag = (itemId: string, tag: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const state = getEditState(item);
+    const current = state.tags || [];
+    handleEditChange(itemId, 'tags', current.filter((t) => t !== tag));
+  };
+
+  const handleAddCustomTag = (itemId: string, tag: string) => {
+    const trimmed = tag.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!trimmed) return;
+    handleAddTag(itemId, trimmed);
   };
 
   const previewItems = showBuyerPreview
@@ -390,6 +439,20 @@ const ReviewPage = () => {
                     </span>
                   )}
                 </p>
+
+                {/* Sprint 1: Aggregate health bar */}
+                {items.length > 0 && (() => {
+                  const clearCount = items.filter(i => i.healthScore?.grade === 'clear').length;
+                  const blockedCount = items.filter(i => i.healthScore?.grade === 'blocked').length;
+                  return (
+                    <div className="mb-4 p-3 bg-warm-50 rounded-lg border border-warm-200">
+                      <div className="text-sm text-warm-700">
+                        <span className="font-medium">{clearCount}/{items.length} items ready to publish</span>
+                        {blockedCount > 0 && <span className="ml-2 text-red-600 font-medium">{blockedCount} blocked</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Feature 61: Near-Miss Nudge — encourage completing the listing */}
                 <NearMissNudge
@@ -497,6 +560,31 @@ const ReviewPage = () => {
                               <p className="text-sm text-warm-600">
                                 {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
                               </p>
+                              {/* Sprint 1: Health score bar */}
+                              {item.healthScore && (
+                                <div className="mt-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full transition-all ${
+                                          item.healthScore.grade === 'clear' ? 'bg-green-400' :
+                                          item.healthScore.grade === 'nudge' ? 'bg-amber-400' : 'bg-red-400'
+                                        }`}
+                                        style={{ width: `${item.healthScore.score}%` }}
+                                      />
+                                    </div>
+                                    <span className={`text-xs font-medium ${
+                                      item.healthScore.grade === 'clear' ? 'text-green-600' :
+                                      item.healthScore.grade === 'nudge' ? 'text-amber-600' : 'text-red-600'
+                                    }`}>
+                                      {item.healthScore.score}
+                                    </span>
+                                  </div>
+                                  {item.healthScore.grade === 'blocked' && (
+                                    <p className="text-xs text-red-500 mt-1">Add a photo and title to publish</p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0">
                               <div className={`text-xs font-semibold ${conf.color}`}>
@@ -605,6 +693,76 @@ const ReviewPage = () => {
                                   </div>
                                 </div>
 
+                                {/* Sprint 1: Tag Picker */}
+                                <div className="mt-3">
+                                  <label className="text-sm font-medium text-gray-700 mb-1 block">Tags</label>
+
+                                  {/* AI suggested chips */}
+                                  {item.suggestedTags && item.suggestedTags.length > 0 && (
+                                    <div className="mb-2">
+                                      <span className="text-xs text-gray-500 mr-1">AI suggested:</span>
+                                      {item.suggestedTags.map(tag => (
+                                        <button
+                                          key={tag}
+                                          onClick={() => handleAddTag(item.id, tag)}
+                                          className={`inline-flex items-center mr-1 mb-1 px-2 py-0.5 rounded-full text-xs border transition-colors
+                                            ${(getEditState(item).tags || item.tags || []).includes(tag)
+                                              ? 'bg-indigo-100 border-indigo-400 text-indigo-700'
+                                              : 'bg-gray-50 border-gray-300 text-gray-600 hover:border-indigo-300'
+                                            }`}
+                                        >
+                                          <span className="mr-1 text-indigo-500 font-bold">AI</span>{tag}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Curated tag grid — show top 20 visible, scrollable */}
+                                  <div className="grid grid-cols-3 gap-1 mb-2 max-h-32 overflow-y-auto pb-1">
+                                    {(CURATED_TAGS as readonly string[]).slice(0, 20).map(tag => (
+                                      <button
+                                        key={tag}
+                                        onClick={() => handleAddTag(item.id, tag)}
+                                        className={`text-xs px-2 py-1 rounded border truncate transition-colors
+                                          ${(getEditState(item).tags || item.tags || []).includes(tag)
+                                            ? 'bg-indigo-100 border-indigo-400 text-indigo-700 font-medium'
+                                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-indigo-300'
+                                          }`}
+                                      >
+                                        {tag}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* Custom tag input */}
+                                  <input
+                                    type="text"
+                                    placeholder="Add a custom tag..."
+                                    className="w-full border border-warm-300 rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleAddCustomTag(item.id, (e.target as HTMLInputElement).value);
+                                        (e.target as HTMLInputElement).value = '';
+                                      }
+                                    }}
+                                  />
+
+                                  {/* Current tags display */}
+                                  <div className="flex flex-wrap gap-1">
+                                    {(getEditState(item).tags || item.tags || []).map(tag => (
+                                      <span key={tag} className="inline-flex items-center bg-indigo-50 text-indigo-700 text-xs px-2 py-0.5 rounded-full">
+                                        {tag}
+                                        <button
+                                          onClick={() => handleRemoveTag(item.id, tag)}
+                                          className="ml-1 text-indigo-400 hover:text-indigo-700 font-bold"
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+
                                 {/* Quantity */}
                                 <div className="w-32">
                                   <label className="block text-xs font-medium text-warm-700 mb-1">Quantity</label>
@@ -629,11 +787,11 @@ const ReviewPage = () => {
                                     </Link>
                                     <button
                                       onClick={() => handlePublishItem(item)}
-                                      disabled={updateItemMutation.isPending}
+                                      disabled={updateItemMutation.isPending || item.healthScore?.grade === 'blocked'}
                                       className={`px-3 py-1.5 text-sm font-medium rounded-lg disabled:opacity-50 ${
                                         item.draftStatus === 'PUBLISHED'
                                           ? 'bg-warm-100 text-warm-700 hover:bg-warm-200'
-                                          : 'bg-green-600 hover:bg-green-700 text-white'
+                                          : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400'
                                       }`}
                                     >
                                       {item.draftStatus === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
