@@ -4,11 +4,11 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S-166",
-    "startedAt": "2026-03-15T00:00:00.000Z",
+    "sessionId": "S-167",
+    "startedAt": "2026-03-15T16:00:00.000Z",
     "checkpoints": [],
     "compressionEvents": [],
-    "tokensUsed": "~80k (est) — architect dispatch + spec creation + dev dispatch + context maintenance"
+    "tokensUsed": "~10k (init)"
   },
   "checkpoints": [
     {

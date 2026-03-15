@@ -7,15 +7,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 166 IN PROGRESS (2026-03-15) — #27 LISTING FACTORY SPEC + SPRINT 1:**
-- **Spec created:** `claude_docs/feature-notes/listing-factory-spec.md` — 3-sprint phased plan. Pushed to GitHub (commit pending in this context-maintenance session).
-- **Sprint 1 scope:** AI tag suggestion (45-tag CURATED_TAGS vocab in shared/types.ts), Listing Health Score utility (computed property, no schema migration), tag picker UI + health bar in review.tsx
-- **Sprint 2 scope:** Cloudinary watermark, exportController.ts (3 formats: PDF/CSV/JSON), social template endpoint, promote.tsx UI
-- **Sprint 3 scope:** /tags/[slug] ISR pages + sitemap.xml generation. Optional #64 conditionGrade fold-in, #31 Brand Kit fold-in (deferred to post-Sprint 2 eval).
-- **Schema changes:** None for Sprint 1 or 2. Sprint 3 optional migrations documented in spec (conditionGrade, brandKitId, deprecated fields cleanup).
-- **Patrick decisions locked:** #64 YES (conditionGrade migration in Sprint 1), #31 YES (schema fields now, UI Sprint 3). Remaining: EstateSales.NET CSV format verification (before Sprint 2 dev).
-- **Dev dispatched:** Sprint 1 implementation in progress (findasale-dev agent).
-- **Last Updated:** 2026-03-15 (session 166)
+**Session 168 IN PROGRESS (2026-03-15) — SPRINT 2 ARCHITECTURE DESIGN COMPLETE:**
+- **Architecture Design:** All three Sprint 2 features fully specified (Cloudinary watermark utility, export controller with 3 formats, promote.tsx UI).
+- **Specifications:**
+  - `SPRINT_2_ARCHITECTURE_SPEC.md` — Complete implementation spec (5 files to create, 4 to modify, function signatures, error codes, testing checklist)
+  - `ADR_SPRINT2_EXPORTS.md` — Decision record with rationale, risks, alternatives
+- **Feature 1 - Cloudinary Watermark:** `cloudinaryWatermark.ts` utility, URL-based transformation (no re-upload), pure function, no dependencies
+- **Feature 2 - Export Controller:** 3 endpoints (EstateSales.NET CSV, Facebook JSON, Craigslist text), ownership verification, watermark applied to all images
+- **Feature 3 - Promote Page:** `/promote/[saleId]` UI, download/copy buttons, toast notifications, auth required
+- **Schema:** No changes needed. All features read existing data.
+- **Dependencies:** `csv-stringify` package (if missing from backend)
+- **Ready for:** findasale-dev handoff
+- **Last Updated:** 2026-03-15 (session 168)
+
+---
+
+**Session 167 COMPLETE (2026-03-15) — PRODUCTION UNBLOCK + CORE.MD v4.1:**
+- **Production:** Railway back online (Dockerfile.production pushed; commit bc38ade). Vercel confirmed healthy. Neon at 82 migrations (20260315000001 + 20260315000002 both applied).
+- **Diagnosis & Repair:** MCP schema.prisma truncation in S166 confirmed — itemController.ts also truncated (only getDraftItemsBySaleId remained). Full 939-line itemController restored (all 13 exports) and pushed (commit 1409a51).
+- **CORE.md v4.1 locked:** 4 new MCP push rules added: full-file read-before-push, truncation gate (size-comparison check), complete push instruction blocks, merge conflict re-staging. Pushed commits 5b1d88d + 1f22506.
+- **Production Status:** ✓ Railway green | ✓ Vercel green | ✓ Neon 82/82 migrations applied | ✓ Schema complete + pushed
+- **Sprint 2 starting:** Cloudinary watermark, exportController.ts, promote.tsx. No schema changes.
+- **Last Updated:** 2026-03-15 (session 167)
 
 ---
 

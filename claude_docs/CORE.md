@@ -77,11 +77,36 @@ Tell Patrick `.\push.ps1` for 4+ files, large files, or session wrap.
 TypeScript. Grep entire frontend for a pattern before pushing a build fix.
 One Read call prevents 3 failed deploys.
 
+**MCP file content rule (Session 167 audit):** `create_or_update_file` replaces
+the entire remote file — it does not merge or append. Always read the full file
+first. Always push the COMPLETE file content, never truncated or partial lines.
+Truncated schema.prisma (Session 166) and itemController.ts (Session 167) both
+broke Railway builds. No exceptions.
+
+**MCP truncation gate (mandatory pre-push check):** Before every
+`create_or_update_file` call, compare: (a) line count of the content you are
+about to push vs. (b) line count of the file currently on GitHub (from the
+`get_file_contents` call you already made for the SHA). If the push content is
+more than 20% shorter than the existing file AND you did not intend to delete
+code, STOP — you are about to truncate. Re-read the local file in full and
+rebuild the push content. This gate catches the #1 cause of production outages
+in this project (Sessions 166–167).
+
 **Standing rules:** STATE.md pushes only at wrap. Wrap-only docs
 (session-log, STATE, next-session-prompt) never MCP-pushed mid-session.
 package.json and pnpm-lock.yaml always committed together.
 
+**Complete push instruction blocks (Session 167 audit):** Every push block given
+to Patrick must list ALL modified tracked files, ALL new untracked files, ALL
+merge-conflict-resolved files, and ALL migration files. No partial lists. Incomplete
+instruction blocks caused 4–5 follow-up rounds in Session 166. One complete block per push.
+
 **After MCP push:** Do not edit those files locally without `git fetch` first.
+
+**Merge conflict re-staging (Session 167 audit):** After resolving any merge
+conflict, explicitly re-stage ALL files that were in conflict state before
+committing. Missing re-stage causes "staged but uncommitted" abort loops.
+Always: resolve → `git add [all-conflict-files]` → `git commit` → `.\push.ps1`.
 
 **Commit block format (always):** Any time git commit instructions are given to Patrick — mid-session or at wrap — provide a complete copy-paste block. Never give a file list and stop. The block must always include explicit `git add [file]` lines, a `git commit -m "..."` line, and `.\push.ps1`. Never `git add -A`. Never omit the commit message. Never omit `.\push.ps1`. This rule applies to every git instruction in every session, not just at wrap.
 
@@ -188,4 +213,4 @@ stub due to unsupervised dispatch on a security-sensitive path.
 
 ---
 
-Status: Behavioral Authority (v3, Session 142)
+Status: Behavioral Authority (v4.1, Session 167 — MCP full-file rule, truncation gate, push block completeness, conflict re-stage)

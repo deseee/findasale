@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-14T20:17:55.013Z*
+*Generated at 2026-03-15T15:35:45.661Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -16,8 +16,9 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
-⚠ 1+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/funny-amazing-mendel/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:152:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+⚠ 2+ TODO/FIXME markers in source (showing up to 5):
+  /sessions/sleepy-vibrant-euler/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:927:        description: null, // TODO: Add description to schema if needed
+  /sessions/sleepy-vibrant-euler/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:152:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```
@@ -40,8 +41,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │       └── skill-creator/
 │           └── SKILL.md
 ├── CLAUDE.md
-├── FEATURE_35_IMPLEMENTATION.md
-├── FEATURE_35_WIRING_SNIPPETS.md
+├── MESSAGE_BOARD.json
 ├── README.md
 ├── ai-config/
 │   └── global-instructions.md
@@ -63,7 +63,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── CAMERA_WORKFLOW_V2_ARCHITECTURE.md
 │   │   ├── CASH_FEE_COLLECTION_ARCHITECTURE.md
 │   │   └── CASH_FEE_COLLECTION_SUMMARY.md
-│   ├── feature-notes/ (11 files)
+│   ├── feature-notes/ (12 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (1 files)
 │   ├── logs/ (2 files)
@@ -75,6 +75,8 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── skills-package/ (30 files)
 │   ├── strategy/ (4 files)
 │   └── workflow-retrospectives/ (1 files)
+├── conversation-defaults-SKILL.md
+├── conversation-defaults-SKILL.md.tmp.11729.1773580809690
 ├── next
 ├── package.json
 ├── packages/
@@ -107,7 +109,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── models/ (1 files)
 │   │   │   ├── routes/ (55 files)
 │   │   │   ├── services/ (19 files)
-│   │   │   └── utils/ (2 files)
+│   │   │   └── utils/ (3 files)
 │   │   └── tsconfig.json
 │   ├── database/
 │   │   ├── .env
@@ -117,7 +119,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (79 migrations)
+│   │   │   ├── migrations/ (82 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -152,6 +154,8 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │       ├── CLAUDE.md
 │       ├── package.json
 │       ├── src/
+│       │   ├── constants/
+│       │   │   └── tagVocabulary.ts
 │       │   └── index.ts
 │       └── tsconfig.json
 ├── pnpm

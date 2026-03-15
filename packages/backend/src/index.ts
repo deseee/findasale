@@ -88,6 +88,7 @@ import socialPostRoutes from './routes/socialPost'; // Social media post generat
 import couponsRouter from './routes/coupons';          // Sprint 3: Shopper Loyalty Coupons
 import routeRoutes from './routes/routes';             // D3: Map route planning
 import viewersRouter from './routes/viewers';           // Feature 34: Hype Meter
+import exportRouter from './routes/export';             // Sprint 2: Export features
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -240,6 +241,7 @@ app.use('/api/social-post', socialPostRoutes); // Social media post generator
 app.use('/api/coupons', couponsRouter);         // Sprint 3: Shopper Loyalty Coupons
 app.use('/api/routes', routeRoutes);            // D3: Map route planning
 app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hype Meter viewer counts
+app.use('/api/export', exportRouter);                            // Sprint 2: Export features
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
