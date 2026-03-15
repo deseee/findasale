@@ -11,6 +11,7 @@ import { fireWebhooks } from '../services/webhookService'; // X1
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
+import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -795,13 +796,27 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         autoEnhanced: true,
         createdAt: true,
         updatedAt: true,
+        // Sprint 1: Listing Health Score + AI tag suggestions
+        tags: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
     });
 
-    res.json(items);
+    // Sprint 1: Compute health score for each item
+    const itemsWithHealth = items.map(item => ({
+      ...item,
+      healthScore: computeHealthScore({
+        photoUrls: item.photoUrls,
+        title: item.title,
+        description: null, // TODO: Add description to schema if needed
+        tags: item.tags,
+        price: item.price,
+      }),
+    }));
+
+    res.json(itemsWithHealth);
   } catch (error) {
     console.error('Error fetching draft items:', error);
     res.status(500).json({ message: 'Server error while fetching draft items' });

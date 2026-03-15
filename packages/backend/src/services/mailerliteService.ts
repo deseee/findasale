@@ -64,3 +64,59 @@ export async function markSalePublished(organizerEmail: string): Promise<void> {
     console.error('[mailerlite] Network error updating subscriber field:', err);
   }
 }
+
+/**
+ * addShopperSubscriber — adds a shopper to the Weekly Digest subscribers group.
+ *
+ * Called when a shopper (role === 'USER') registers, to enroll them in the weekly
+ * personalized estate sale picks email digest.
+ *
+ * @param email - the shopper's email address
+ * @param name - the shopper's name
+ */
+export async function addShopperSubscriber(email: string, name: string): Promise<void> {
+  const apiKey = getApiKey();
+  const groupId = process.env.MAILERLITE_SHOPPERS_GROUP_ID;
+
+  if (!apiKey) {
+    console.warn('[mailerlite] MAILERLITE_API_KEY not set — skipping shopper subscription');
+    return;
+  }
+
+  if (!groupId) {
+    console.warn('[mailerlite] MAILERLITE_SHOPPERS_GROUP_ID not set — skipping shopper subscription');
+    return;
+  }
+
+  if (!email) {
+    console.warn('[mailerlite] addShopperSubscriber called with empty email — skipping');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${MAILERLITE_API_URL}/subscribers`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        name,
+        groups: [groupId],
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(`[mailerlite] Failed to add shopper subscriber ${email}: HTTP ${response.status} — ${body}`);
+      return;
+    }
+
+    console.log(`[mailerlite] Shopper ${email} added to weekly digest group`);
+  } catch (err) {
+    // Non-critical — do not throw; log and continue
+    console.error('[mailerlite] Network error adding shopper subscriber:', err);
+  }
+}

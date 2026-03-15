@@ -1,5 +1,8 @@
 // Shared types and utilities will go here
 
+// Sprint 1: Listing Factory tag vocabulary
+export { CURATED_TAGS, MAX_CUSTOM_TAGS, type CuratedTag } from './constants/tagVocabulary';
+
 // B1 ADR: Sale type categories
 export enum SaleType {
   ESTATE = 'ESTATE',
