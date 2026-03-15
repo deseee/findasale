@@ -2,6 +2,14 @@
 
 ## Recent Sessions
 
+### 2026-03-14 · Session 164
+**Worked on:** #24 Holds-Only Item View — full Architect→Dev→QA pipeline. Added `holdDurationHours` to Sale model (48h default, configurable per-sale). Upgraded reservationController with dynamic hold duration, sale filter/sort params, lightweight hold count endpoint, batch operations (release/extend/markSold) with 50-item cap. Full rewrite of organizer holds page: sale filter dropdown, sort toggle, grouped-by-buyer accordion, batch action bar, item photos/prices/HoldTimer. Dashboard hold count badge wired. Neon migration applied (migration 78). QA passed.
+**Decisions:** 48h default hold (was hardcoded 24h). Batch cap at 50. Grouped-by-buyer display with per-item schema (locked session 155).
+**Files changed:** `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260315000000_add_hold_duration_to_sale/migration.sql`, `packages/backend/src/controllers/reservationController.ts`, `packages/backend/src/routes/reservations.ts`, `packages/frontend/pages/organizer/holds.tsx`, `packages/frontend/pages/organizer/dashboard.tsx`
+**Scoreboard:** Files changed: 6 | QA findings: 4 (1 fixed, 3 acceptable) | Subagents: 3 (findasale-architect, findasale-dev, findasale-qa) | Push method: GitHub MCP (3 pushes: 759eec1b, 91252745, 44782d4c)
+**Next up:** #36 Weekly Treasure Digest (MailerLite MCP), or #27 Listing Factory.
+**Blockers:** None. #24 fully shipped.
+
 ### 2026-03-14 · Session 163
 **Worked on:** #33 Share Card Factory — production debugging and full fix. Continued from context-exhausted session. Root cause was NOT React rendering (previous diagnosis) — actual error was a Node.js 24 ESM/CJS interop SyntaxError: `@tanstack/react-query` v5's native ESM build (`build/modern/`) uses `import { jsx } from "react/jsx-runtime"` but React is CJS. Node.js 24 can't resolve named exports from CJS via ESM interop. Fix: `transpilePackages: ['@tanstack/react-query', '@tanstack/query-core']` in `next.config.js` forces webpack to bundle via CJS path. Also fixed: corrupted OG image URL (non-Cloudinary photos used transformation syntax as fake public_id — now falls back to raw URL). Added `fb:app_id` to `_document.tsx` using existing OAuth app ID.
 **Decisions:** `transpilePackages` approach preferred over `serverExternalPackages` (opposite effect). Non-Cloudinary photos use raw URL; Cloudinary photos get branded overlay. Same Facebook App ID works for both OAuth and OG ownership.
@@ -53,5 +61,4 @@
 **Scoreboard:** Files changed: 2 | Build errors fixed: 4 | QA findings: 4 (all resolved) | Subagents: 2 (findasale-qa, findasale-dev) | Push method: MCP (planned)
 **Next up:** Patrick tests POS in simulated mode. If tests pass, POS ready for beta organizers with real hardware.
 **Blockers:** Neon migration `20260312000002_add_purchase_pos_fields` not yet deployed. Patrick still needs to run `pnpm --filter frontend add @stripe/terminal-js` and add env vars.
-
 
