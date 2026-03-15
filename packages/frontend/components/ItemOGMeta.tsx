@@ -81,15 +81,26 @@ export default function ItemOGMeta({
     displayPrice = item.auctionStartPrice;
   }
 
-  // Generate OG image URL
-  const ogImageUrl = generateItemOGImage({
-    cloudName,
-    itemTitle: item.title,
-    saleTitle: saleName,
-    price: displayPrice,
-    condition: item.condition,
-    cloudinaryPublicId,
-  });
+  // Generate OG image URL.
+  // Only use the Cloudinary overlay generator when we have a real Cloudinary public_id.
+  // Seed/external photos (picsum.photos, etc.) don't have a public_id so we use the raw URL
+  // directly — the Cloudinary fallback path was generating an invalid URL (no base public_id).
+  let ogImageUrl: string | undefined;
+  const isCloudinaryImage = !!cloudinaryPublicId;
+  if (cloudinaryPublicId) {
+    ogImageUrl = generateItemOGImage({
+      cloudName,
+      itemTitle: item.title,
+      saleTitle: saleName,
+      price: displayPrice,
+      condition: item.condition,
+      cloudinaryPublicId,
+    });
+  } else if (item.photos && item.photos.length > 0 && item.photos[0].url) {
+    // Non-Cloudinary photo — use raw URL; no branded overlay but no broken image either
+    ogImageUrl = item.photos[0].url;
+  }
+  // If no photo at all: og:image tags are omitted and FB falls back to page content
 
   // Default description
   const metaDescription =
@@ -113,9 +124,9 @@ export default function ItemOGMeta({
       {/* Open Graph (Facebook, LinkedIn, etc.) */}
       <meta property="og:title" content={`${item.title} — FindA.Sale`} />
       <meta property="og:description" content={metaDescription} />
-      <meta property="og:image" content={ogImageUrl} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
+      {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+      {ogImageUrl && isCloudinaryImage && <meta property="og:image:width" content="1200" />}
+      {ogImageUrl && isCloudinaryImage && <meta property="og:image:height" content="630" />}
       <meta property="og:url" content={url} />
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="FindA.Sale" />
@@ -124,7 +135,7 @@ export default function ItemOGMeta({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={`${item.title} — FindA.Sale`} />
       <meta name="twitter:description" content={metaDescription} />
-      <meta name="twitter:image" content={ogImageUrl} />
+      {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
 
       {/* Canonical link */}
       <link rel="canonical" href={url} />
