@@ -147,6 +147,8 @@ model Sale {
   entranceLat   Float?     // Latitude of entrance/parking location
   entranceLng   Float?     // Longitude of entrance/parking location
   entranceNote  String?    @db.VarChar(150) // Optional note: "Side entrance", "Park in back", etc.
+  // Feature #24: Holds-Only Item View — configurable hold duration per sale
+  holdDurationHours  Int        @default(48) // Default 48h hold; organizer can change per sale
   organizerId   String
   organizer     Organizer  @relation(fields: [organizerId], references: [id])
   items         Item[]
