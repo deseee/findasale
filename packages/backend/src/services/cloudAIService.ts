@@ -25,6 +25,7 @@ export interface AITagResult {
   suggestedPrice: number;
   tags: string[];
   confidence?: number; // Camera Workflow v2: AI confidence score (0.0–1.0), defaults to 0.5
+  suggestedTags?: string[]; // Sprint 1: Curated tags suggested by Haiku from Vision labels
 }
 
 // ── CB4: In-memory feedback stats (post-beta: migrate to DB table) ─────────────
@@ -200,6 +201,63 @@ Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: materi
   }
 }
 
+// ── Step 3: Haiku curated tag suggestion from Vision labels ─────────────────
+
+async function suggestCuratedTags(visionLabels: string[]): Promise<string[]> {
+  // Sprint 1: Map Vision labels → curated tags via Haiku
+  const { CURATED_TAGS } = require('../../shared/src/constants/tagVocabulary');
+
+  if (!visionLabels || visionLabels.length === 0) {
+    return [];
+  }
+
+  try {
+    const curatedTagsList = CURATED_TAGS.join(', ');
+
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 100,
+        messages: [
+          {
+            role: 'user',
+            content: `Given these visual labels from an image: ${visionLabels.join(', ')}
+
+Suggest up to 5 tags from this curated vocabulary that are visually evident in the image:
+${curatedTagsList}
+
+Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern", "walnut", "hand-painted"]`,
+          },
+        ],
+      },
+      {
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY as string,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+
+    const content: string = response.data.content?.[0]?.text ?? '';
+    const raw = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(raw) as string[];
+
+    // Return max 5 tags, all valid curated tags
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter(tag => CURATED_TAGS.includes(tag))
+        .slice(0, 5);
+    }
+    return [];
+  } catch {
+    // Tag suggestion is best-effort — return empty array on error (non-blocking)
+    return [];
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -209,6 +267,7 @@ Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: materi
  *   1. Send image to Google Vision for fast label/object detection.
  *   2. Pass those labels + the raw image to Claude Haiku for
  *      structured estate-sale metadata.
+ *   3. Map Vision labels → curated tags via Haiku (non-blocking).
  *
  * Returns null if cloud AI is not configured (caller should fall back to Ollama).
  * Throws on API errors so the caller can handle/log them.
@@ -229,7 +288,17 @@ export async function analyzeItemImage(
     // Vision API unavailable or quota exceeded — Haiku will analyse image alone
   }
 
-  return getHaikuAnalysis(imageBase64, mimeType, visionLabels);
+  const result = await getHaikuAnalysis(imageBase64, mimeType, visionLabels);
+
+  // Sprint 1: Add curated tag suggestions (non-blocking)
+  try {
+    result.suggestedTags = await suggestCuratedTags(visionLabels);
+  } catch {
+    // Tag suggestion failed — set empty array (non-blocking)
+    result.suggestedTags = [];
+  }
+
+  return result;
 }
 
 // ── Sale Description Generator ────────────────────────────────────────────────
