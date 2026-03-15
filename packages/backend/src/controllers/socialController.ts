@@ -1,7 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
-import { CURATED_TAGS } from '@findasale/shared/src/constants/tagVocabulary';
 
 /**
  * Social Template Controller — Sprint 2

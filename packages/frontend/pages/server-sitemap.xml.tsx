@@ -3,10 +3,13 @@ import api from '../lib/api';
 
 export async function getServerSideProps(ctx: any) {
   try {
-    // Fetch all sales to generate URLs
+    // Fetch all sales and tags to generate URLs
     const salesResponse = await api.get('/sales');
     const sales = salesResponse.data.sales || salesResponse.data;
-    
+
+    const tagsResponse = await api.get('/tags/popular');
+    const tags = tagsResponse.data.tags || [];
+
     // Extract unique cities and zips for landing pages
     const cities = Array.from(new Set<string>(sales.map((sale: any) =>
       sale.city.toLowerCase().replace(/\s+/g, '-')
@@ -56,7 +59,15 @@ export async function getServerSideProps(ctx: any) {
       priority: 0.6,
     }));
 
-    const fields = [...staticUrls, ...saleUrls, ...cityUrls, ...zipUrls];
+    // Generate tag URLs
+    const tagUrls = tags.map((tag: any) => ({
+      loc: `${process.env.SITE_URL || 'https://finda.sale'}/tags/${tag.slug}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'weekly',
+      priority: 0.6,
+    }));
+
+    const fields = [...staticUrls, ...saleUrls, ...cityUrls, ...zipUrls, ...tagUrls];
 
     return getServerSideSitemap(ctx, fields);
   } catch (error) {

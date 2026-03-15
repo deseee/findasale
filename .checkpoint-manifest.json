@@ -4,12 +4,12 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S-170",
-    "startedAt": "2026-03-15T23:00:00.000Z",
+    "sessionId": "S-171",
+    "startedAt": "2026-03-15T00:00:00.000Z",
     "checkpoints": [],
     "compressionEvents": [],
     "tokensUsed": "~10k (init)",
-    "budgetEstimate": "~60k (Sprint 2 gap + Sprint 3 backend/frontend)",
+    "budgetEstimate": "~40k (governance review — mostly reads + analysis, no subagent dispatches expected unless issues found)",
     "budgetAvailable": "~190k"
   },
   "checkpoints": [
