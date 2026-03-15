@@ -833,9 +833,14 @@ const AddItemsDetailPage = () => {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-            <h1 className="text-3xl font-bold text-warm-900 mb-2">
-              {sale?.name ? `Add Items to: ${sale.name}` : 'Add Items'}
+            <h1 className="text-3xl font-bold text-warm-900 mb-1">
+              Add Items
             </h1>
+            {sale?.name && (
+              <p className="text-warm-500 text-sm mb-4">
+                {sale.name}
+              </p>
+            )}
             <p className="text-warm-600 mb-1">
               {items.length > 0 && (
                 <>
@@ -1220,6 +1225,105 @@ const AddItemsDetailPage = () => {
                 </Link>
               </div>
 
+              {/* Sticky Top Toolbar — positioned ABOVE table for proper sticky behavior */}
+              {selectedItems.size > 0 && (
+                <div className="sticky top-0 z-30 bg-amber-600 text-white border-b border-amber-700 p-4 shadow-md">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.size === items.length && items.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedItems(new Set(items.map((i: any) => i.id)));
+                        } else {
+                          setSelectedItems(new Set());
+                        }
+                      }}
+                      className="rounded cursor-pointer"
+                    />
+                    <span className="text-sm font-semibold">
+                      {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
+                    </span>
+
+                    {/* Primary actions */}
+                    <button
+                      onClick={() =>
+                        bulkUpdateMutation.mutate({
+                          itemIds: Array.from(selectedItems),
+                          operation: 'isActive',
+                          value: false,
+                        })
+                      }
+                      disabled={bulkUpdateMutation.isPending}
+                      className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                    >
+                      Hide
+                    </button>
+                    <button
+                      onClick={() =>
+                        bulkUpdateMutation.mutate({
+                          itemIds: Array.from(selectedItems),
+                          operation: 'isActive',
+                          value: true,
+                        })
+                      }
+                      disabled={bulkUpdateMutation.isPending}
+                      className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                    >
+                      Show
+                    </button>
+                    <div className="flex gap-1 items-center">
+                      <input
+                        type="number"
+                        value={bulkPrice}
+                        onChange={(e) => setBulkPrice(e.target.value)}
+                        placeholder="Price"
+                        step="0.01"
+                        className="w-24 px-2 py-1 border border-white rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-amber-700 text-white placeholder-amber-200"
+                      />
+                      <button
+                        onClick={() => {
+                          if (bulkPrice) {
+                            handleBulkOperation('price', parseFloat(bulkPrice));
+                          }
+                        }}
+                        disabled={bulkUpdateMutation.isPending || !bulkPrice}
+                        className="text-xs font-semibold text-amber-600 bg-white hover:bg-amber-50 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                      >
+                        Set Price
+                      </button>
+                    </div>
+
+                    {/* More Actions dropdown - styled for sticky toolbar */}
+                    <div className="relative inline-block">
+                      <button
+                        className="text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                        disabled={bulkUpdateMutation.isPending}
+                        onClick={() => {
+                          const button = document.activeElement as HTMLButtonElement;
+                          const rect = button.getBoundingClientRect();
+                          const availableSpace = window.innerHeight - rect.bottom;
+                          // Note: dropdown items style themselves; this just controls visibility
+                        }}
+                      >
+                        ⋮ More Actions
+                      </button>
+                    </div>
+
+                    {/* Delete button */}
+                    <div className="ml-auto">
+                      <button
+                        onClick={() => handleBulkOperation('delete')}
+                        disabled={bulkUpdateMutation.isPending}
+                        className="text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                      >
+                        Delete Selected
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-warm-50 border-b border-warm-200">
@@ -1349,106 +1453,6 @@ const AddItemsDetailPage = () => {
                   </tbody>
                 </table>
               </div>
-
-
-                      {/* Sticky Top Toolbar */}
-              {selectedItems.size > 0 && (
-                <div className="sticky top-0 z-30 bg-amber-600 text-white border-b border-amber-700 p-4 shadow-md">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.size === items.length && items.length > 0}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedItems(new Set(items.map((i: any) => i.id)));
-                        } else {
-                          setSelectedItems(new Set());
-                        }
-                      }}
-                      className="rounded cursor-pointer"
-                    />
-                    <span className="text-sm font-semibold">
-                      {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
-                    </span>
-
-                    {/* Primary actions */}
-                    <button
-                      onClick={() =>
-                        bulkUpdateMutation.mutate({
-                          itemIds: Array.from(selectedItems),
-                          operation: 'isActive',
-                          value: false,
-                        })
-                      }
-                      disabled={bulkUpdateMutation.isPending}
-                      className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
-                    >
-                      Hide
-                    </button>
-                    <button
-                      onClick={() =>
-                        bulkUpdateMutation.mutate({
-                          itemIds: Array.from(selectedItems),
-                          operation: 'isActive',
-                          value: true,
-                        })
-                      }
-                      disabled={bulkUpdateMutation.isPending}
-                      className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
-                    >
-                      Show
-                    </button>
-                    <div className="flex gap-1 items-center">
-                      <input
-                        type="number"
-                        value={bulkPrice}
-                        onChange={(e) => setBulkPrice(e.target.value)}
-                        placeholder="Price"
-                        step="0.01"
-                        className="w-24 px-2 py-1 border border-white rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-amber-700 text-white placeholder-amber-200"
-                      />
-                      <button
-                        onClick={() => {
-                          if (bulkPrice) {
-                            handleBulkOperation('price', parseFloat(bulkPrice));
-                          }
-                        }}
-                        disabled={bulkUpdateMutation.isPending || !bulkPrice}
-                        className="text-xs font-semibold text-amber-600 bg-white hover:bg-amber-50 disabled:opacity-50 px-2 py-1 rounded transition-colors"
-                      >
-                        Set Price
-                      </button>
-                    </div>
-
-                    {/* More Actions dropdown - styled for sticky toolbar */}
-                    <div className="relative inline-block">
-                      <button
-                        className="text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
-                        disabled={bulkUpdateMutation.isPending}
-                        onClick={() => {
-                          const button = document.activeElement as HTMLButtonElement;
-                          const rect = button.getBoundingClientRect();
-                          const availableSpace = window.innerHeight - rect.bottom;
-                          // Note: dropdown items style themselves; this just controls visibility
-                        }}
-                      >
-                        ⋮ More Actions
-                      </button>
-                    </div>
-
-                    {/* Delete button */}
-                    <div className="ml-auto">
-                      <button
-                        onClick={() => handleBulkOperation('delete')}
-                        disabled={bulkUpdateMutation.isPending}
-                        className="text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50 px-2 py-1 rounded transition-colors"
-                      >
-                        Delete Selected
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="text-center py-12 bg-white rounded-lg border border-warm-200">
