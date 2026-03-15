@@ -152,7 +152,14 @@ const ReviewPage = () => {
   const [editStates, setEditStates] = useState<Map<string, ItemEditState>>(new Map());
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkCategory, setBulkCategory] = useState('');
-  const [showBuyerPreview, setShowBuyerPreview] = useState(false);
+  const [showBuyerPreview, setShowBuyerPreview] = useState(router.query.preview === 'true');
+
+  // Auto-enable buyer preview on mount if preview=true in query
+  useEffect(() => {
+    if (router.query.preview === 'true') {
+      setShowBuyerPreview(true);
+    }
+  }, [router.query.preview]);
 
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');

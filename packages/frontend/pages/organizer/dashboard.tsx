@@ -291,6 +291,12 @@ const OrganizerDashboard = () => {
               Insights
             </Link>
             <Link
+              href="/organizer/performance"
+              className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              📊 Performance
+            </Link>
+            <Link
               href="/organizer/print-inventory"
               className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
