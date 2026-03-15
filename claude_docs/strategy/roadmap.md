@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-15 (v30 — Session 165: #36 Weekly Treasure Digest shipped. Personalized picks via Resend, MailerLite Shoppers group auto-sync on registration. Env var required: `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway.)\
+**Last Updated:** 2026-03-15 (v31 — Session 171: #27 Listing Factory complete (Sprints 1–3 shipped S166/S168/S170). Fold-ins: #64 Condition Grading (S166) + #31 Brand Kit schema (S166), UI deferred. Build fix applied.)\
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -65,7 +65,7 @@
 | Priority | # | Feature | Est. | Notes |
 |----------|---|---------|------|-------|
 | ~~1~~ | ~~24~~ | ~~Holds-Only Item View~~ | ✅ Done | Configurable hold duration per sale, batch ops (release/extend/markSold), grouped-by-buyer accordion, dashboard badge. Shipped session 164. |
-| 2 | 27 | Listing Factory (Photo Export + Social + Tags) | 2–3 sprints | **Full listing export engine.** Watermark photos with organizer branding/sale info. AI-generated + organizer-editable item tags ("mid century", "vintage", "Art Deco") for SEO and cross-platform keywords. **Smart tag auto-suggestion:** during Rapidfire, AI detects visual attributes and suggests style/era/material tags (e.g., "teak", "Danish modern", "1960s") — not just "chair." **Listing Health Score:** per-item quality grade (photo count + description completeness + tag count + price set) displayed as progress indicator on review page — nudges organizers to improve weak listings before publishing. Export-ready packages for EstateSales.NET import, organizer websites, Facebook Marketplace, Craigslist. Templated social media posts (Instagram, Facebook) with sale details + hashtags auto-filled from tags. One-click shareable links. Tag-based browsable landing pages (/tags/mid-century-modern) for long-tail SEO. Reduces organizer cross-posting from hours to minutes. Positioning: "Your listing factory — photograph it once, sell it everywhere." |
+| ~~2~~ | ~~27~~ | ~~Listing Factory (Photo Export + Social + Tags)~~ | ✅ Done | **All 3 sprints shipped.** Sprint 1 (S166): AI tag suggestion via Haiku + curated tag vocabulary + health score utility + review.tsx picker UI. Sprint 2 (S168): Cloudinary watermark + export controller (CSV/JSON/text formats) + social templates (3 tones × 2 platforms). Sprint 3 (S170): /tags/[slug] ISR pages, /api/tags/popular endpoint, sitemap. Fold-ins: #64 Condition Grading (S166 migration 20260315000001), #31 Brand Kit schema (S166 migration 20260315000002, UI deferred to standalone session). |
 | 3 | 8 | Batch Operations Toolkit | 1 sprint | Bulk pricing, status updates, photo uploads. Partially covered by Rapidfire batch toolbar (session 146 spec). |
 | 4 | 28 | Neighborhood Heatmap | 0.5–1 sprint | Sale density overlay on shopper map — color-coded zones by active sale count. Helps shoppers plan routes by concentration. Incremental on existing Leaflet map + OSRM route planning (D3, session 114). |
 | 5 | 6 | Seller Performance Dashboard + Price Intelligence | 2–3 sprints | Analytics, benchmarks, pricing recommendations. Merged with #26 (Cross-Sale Price Intelligence) per competitive urgency — EstateFlow already has AI pricing. **Includes Seasonal Pricing Templates:** pre-loaded pricing suggestions by season (holiday decor in Nov/Dec, outdoor furniture in spring, back-to-school in Aug). AI adjusts base price recommendations by time of year and category sell-through rates. |
@@ -80,7 +80,7 @@
 | ~~P4~~ | ~~36~~ | ~~Weekly Treasure Digest~~ | ✅ Done | Personalized weekly shopper digest activated. Sundays 6pm via Resend. MailerLite Shoppers group sync on registration. Shipped session 165. Env var required: `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` |
 | P5 | 37 | Sale Calendar & Reminders | 1 sprint | Calendar view of upcoming sales + "Remind Me" button → push notification or email on sale day. Reduces missed-sale regret. |
 
-*Recently shipped: #33 Share Card Factory (session 163 — SSR OG tags + Cloudinary branded cards, FB clean), #61 Near-Miss Nudges + #34 Hype Meter + #35 Front Door Locator (session 160), Stripe Terminal POS v2 (sessions 150–154), Rapidfire Camera Mode (sessions 135–149). See COMPLETED_PHASES.md.*
+*Recently shipped: #27 Listing Factory (sessions 166/168/170 — 3-sprint complete: AI tags, health score, exports, social templates, ISR tag pages + fold-ins #64 Condition Grading + #31 Brand Kit schema), #36 Weekly Treasure Digest (session 165), #33 Share Card Factory (session 163), #61 Near-Miss Nudges + #34 Hype Meter + #35 Front Door Locator (session 160). See COMPLETED_PHASES.md.*
 
 ### Phase 3 — Weeks 8–16
 | # | Feature | Est. | Notes |
@@ -116,7 +116,7 @@
 | 26 | ~~Cross-Sale Price Intelligence~~ | **Merged into #6** | Promoted session 155 — merged into Seller Performance Dashboard per competitive urgency. |
 | 29 | Shopper Loyalty Passport | 2 sprints | Gamified repeat-visit system — stamps, badges, early-access perks. Drives shopper retention. Steelman: STRONG. Ship post-beta when shopper base exists. (Innovation session 155) |
 | 30 | AI Item Valuation & Comparables | 2 sprints | Price range suggestions from sold-item data + visual embeddings. Leverages existing AI pipeline. Requires 100+ sold items per category to be credible. (Innovation session 155) |
-| 31 | Organizer Brand Kit | 1.5 sprints | Auto-expand organizer colors/logo across all templates, exports, and social posts. Natural extension of Listing Factory (#27). Premium tier upsell path. (Innovation session 155) |
+| 31 | Organizer Brand Kit | 1.5 sprints | Auto-expand organizer colors/logo across all templates, exports, and social posts. Natural extension of Listing Factory (#27). Premium tier upsell path. Schema shipped with Listing Factory Sprint 1 (S166, migration 20260315000002); UI deferred to standalone session. (Innovation session 155) |
 | 32 | Shopper Wishlist Alerts + Smart Follow | 2 sprints | Shoppers set category/tag/organizer preferences → push alerts when matching items list. Foundational for shopper retention and intent data. Ship after Listing Factory drives initial traffic. (Innovation session 155) |
 | 38 | Entrance Pin | 0.5 sprint | Organizer drops a pin for parking/entrance on sale map. Extends Front Door Locator (#35) with richer location data. Reduces shopper confusion at multi-building estates. (Board v26, Tier 2) |
 | 39 | Photo Op Stations | 1 sprint | Designated "selfie spot" markers at sales — branded photo frames, shareable moments. Organizers set locations; shoppers share UGC. Viral loop + fun factor. (Board v26, Tier 2) |
@@ -130,7 +130,7 @@
 | 61 | Near-Miss Nudges | 0.25 sprint | Casino-psychology progress nudges: "You're 1 favorite away from unlocking Early Bird Access!" Layers onto any gamification feature as it ships. Variable-ratio schedule drives 30-40% higher completion. Ethical: real progress only, no manufactured near-misses. (Innovation R3, Casino lens) |
 | 62 | Digital Receipt + Returns | 1-2 sprints | Auto-generate digital receipt with item photos + prices after every POS transaction. Push to shopper's app profile. Optional organizer-set return window (24h/48h/none). Builds trust, enables returns on high-value items, feeds purchase history for ML. Pairs with POS v2 + Loot Log (#50). (Innovation R3, Big Box lens) |
 | 63 | Dark Mode + Accessibility-First | 1.5 sprints | Tailwind dark variant across all components + system preference detection + high-contrast outdoor mode + font sizing controls. WCAG 2.1 AA compliance. Estate sale shoppers skew older — larger fonts, higher contrast, better outdoor visibility are real needs. SEO boost from Lighthouse accessibility scores. (Innovation R3, Mobile lens) |
-| 64 | Condition Grading System | 0.5-1 sprint | Japanese-model standardized S/A/B/C/D grades. AI suggests grade from photo analysis during Rapidfire; organizer confirms. Grades displayed on listings with clear definitions. Builds cross-platform trust at scale. Ships naturally with Listing Factory (#27). (Innovation R3, International lens) |
+| ~~64~~ | ~~Condition Grading System~~ | ✅ Done | Japanese-model standardized S/A/B/C/D grades shipped as fold-in with Listing Factory Sprint 1 (S166). AI suggests grade from photo analysis during Rapidfire; organizer confirms. Grades displayed on listings with clear definitions. Builds cross-platform trust at scale. Migration 20260315000001 applied. (Innovation R3, International lens) |
 | 65 | Organizer Mode Tiers (Simple/Pro/Enterprise) | 2 sprints | Progressive disclosure framework. Simple (5 buttons: create → photo → price → publish → paid). Pro (batch ops, analytics, tags, branding, exports). Enterprise (API access, bulk import/export, webhooks, multi-user teams, white-label). Feature-flag architecture — every future feature gets tagged with its tier. Architectural answer to "simple surface + complex depth." (Innovation R3, Progressive Disclosure lens) |
 | 66 | Open Data Export | 0.5-1 sprint | One-click full data export: items.csv, sales.csv, purchases.csv, analytics.csv, /photos/ (Cloudinary URLs). ZIP background job + email download link. Trust signal + likely CCPA requirement. "Your data is yours." (Innovation R3, GitHub/Open Source lens) |
 | 67 | Social Proof Notifications | 0.5 sprint | Real-time aggregate activity: "47 people viewed this today." Friend activity for connected users. Extends Hype Meter (#34) with individual social connections. Opt-in privacy controls. Ships with Hype Meter. (Innovation R3, Social lens) |
@@ -208,7 +208,7 @@ Proactive tasks assigned to the fleet. Not product features — operational work
 ## Deferred & Long-Term Hold
 
 | Feature | Reason | Revisit |
-|---------|--------|--------|
+|---------|--------|---------|
 | White-label MaaS | Business decision — beta validation first | After beta data |
 | Consignment Integration | Thrift store POS — post-beta complexity | After beta data |
 | QuickBooks Integration | CSV export covers 80% of need | When organizers ask |
@@ -280,7 +280,7 @@ Proactive tasks assigned to the fleet. Not product features — operational work
 
 ## Infrastructure
 
-All infra complete. Backend: Railway. DB: Neon (73 migrations applied as of 2026-03-12). Frontend: Vercel (`finda.sale`). Git: `.\ push.ps1` replaces `git push`. See `claude_docs/CORE.md` and `claude_docs/STACK.md`.
+All infra complete. Backend: Railway. DB: Neon (82 migrations applied as of 2026-03-15). Frontend: Vercel (`finda.sale`). Git: `.\ push.ps1` replaces `git push`. See `claude_docs/CORE.md` and `claude_docs/STACK.md`.
 
 ---
 
