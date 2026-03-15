@@ -52,7 +52,11 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id: req.user.id }, data: { password: hashed } });
+    // P0 Fix 4: Increment tokenVersion to invalidate all old JWTs
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { password: hashed, tokenVersion: { increment: 1 } }
+    });
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
@@ -127,9 +131,15 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);
+    // P0 Fix 4: Increment tokenVersion to invalidate all old JWTs
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed, resetToken: null, resetTokenExpiry: null },
+      data: {
+        password: hashed,
+        resetToken: null,
+        resetTokenExpiry: null,
+        tokenVersion: { increment: 1 }
+      },
     });
 
     res.json({ message: 'Password reset successfully. You can now log in.' });

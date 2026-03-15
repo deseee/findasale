@@ -40,7 +40,7 @@ This document maps **active MCP connectors** against **Phase 3+4 roadmap feature
 | Shopper Wishlist Alerts + Smart Follow | 32 | 3–4 | **Yes** | MailerLite | Segment creation (wishlist category/tag/organizer prefs), automated alert campaigns, email templates |
 | Digital Receipt + Returns | 62 | 4 | **Yes** | MailerLite | Transactional email receipt delivery (new trigger + template) |
 | Dark Mode + Accessibility-First | 63 | 4 | **No** | — | Pure frontend CSS + component work; no external service needed |
-| Organizer Mode Tiers (Simple/Pro/Enterprise) | 65 | 4 | **No** | — | Feature-flag logic is backend + frontend; billing integration would use Stripe MCP (not active) |
+| Organizer Mode Tiers (Simple/Pro/Enterprise) | 65 | 4 | **Yes** | Stripe MCP | Feature-flag logic is backend + frontend; billing integration now uses Stripe MCP (connected S172) |
 | Open Data Export | 66 | 4 | **Partial** | GitHub, Cowork | Track export job status in PRs, schedule background export jobs via Scheduled Tasks |
 | Command Center Dashboard | 68 | 4 | **No** | — | Multi-sale metrics UI; could leverage Vercel logs for performance insights (optional) |
 | Local-First Offline Mode | 69 | 4 | **No** | — | Service worker + IndexedDB is pure frontend; no service dependency |
@@ -59,7 +59,7 @@ This document maps **active MCP connectors** against **Phase 3+4 roadmap feature
 | Shopper Wishlist Alerts | 32 | **Yes** | MailerLite | P1 | Segment builder → alert emails on new items. High-value retention feature. Ready to build. |
 | Digital Receipt + Returns | 62 | **Yes** | MailerLite | P2 | Transactional email (similar to Weekly Digest #36). New email template + trigger. MailerLite webhook on purchase event. |
 | Dark Mode | 63 | **No** | — | P2 | Pure frontend; optional Vercel performance monitoring for Lighthouse score tracking |
-| Organizer Mode Tiers | 65 | **No** | — | P1 | Backend feature flags + billing gates. Stripe MCP would enable subscription management (not active). |
+| Organizer Mode Tiers | 65 | **Yes** | Stripe MCP | P1 | Backend feature flags + billing gates. Stripe MCP connected S172 — unlocks #6, #65 subscription management. |
 | Open Data Export | 66 | **Partial** | Scheduled Tasks, GitHub | P2 | Background job (ZIP generation) scheduled via cron; GitHub tracks deploy status |
 | Command Center | 68 | **Partial** | Vercel | P1 | Multi-sale dashboard. Vercel logs show performance + errors per sale ID. Dashboard is frontend-only. |
 | Offline Mode | 69 | **No** | — | P2 | Service worker + IndexedDB; zero server dependency; pure frontend stack |
@@ -174,7 +174,7 @@ All feasible with existing connectors. Estimated effort: 0.25–0.5 sprint each.
 
 2. **Scheduled Tasks MCP unlocks async features:** Heatmap pre-compute, Reputation recalc, Data export jobs all benefit from nightly crons. Low complexity, high ROI.
 
-3. **Stripe MCP is the #1 gap:** Blocks realistic implementation of #6 Seller Performance Dashboard (needs real payment data, not simulated) and #65 Organizer Mode Tiers (needs subscription billing). High strategic value — recommend adding this session if possible.
+3. **Stripe MCP NOW CONNECTED (S172):** Unlocks #6 Seller Performance Dashboard (real payment data, not simulated) and #65 Organizer Mode Tiers (subscription billing). High strategic value achieved.
 
 4. **Vercel logs are underutilized:** Existing MCP can monitor runtime health for WebSocket-heavy features (#70 Live Sale Feed) and real-time performance. No additional connector needed, just smarter logging queries.
 
@@ -192,7 +192,7 @@ All feasible with existing connectors. Estimated effort: 0.25–0.5 sprint each.
 
 | Connector | Use Case | Phase | Confidence |
 |-----------|----------|-------|------------|
-| **Stripe** | Payment data, subscriptions, billing | Phase 3–4 | **CRITICAL** — blocking #6, #65 |
+| **Stripe** | Payment data, subscriptions, billing | Phase 3–4 | **NOW CONNECTED (S172)** — unlocks #6, #65 |
 | **Sentry** | Error tracking, performance monitoring | Infra | HIGH — post-beta observability |
 | **PostHog / Segment** | User analytics, feature tracking | Phase 4–5 | MEDIUM — optional analytics layer |
 | **Twilio** | SMS alerts, phone notifications | Phase 4 | MEDIUM — enhances #32 Wishlist, #70 Live Feed |

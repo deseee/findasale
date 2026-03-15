@@ -1,6 +1,7 @@
 // SaleMap.tsx — wrapper that disables SSR for the Leaflet map
 // Usage: import SaleMap from '../components/SaleMap'
 import dynamic from 'next/dynamic';
+import type { HeatmapTile } from '../types/heatmap';
 
 export interface SalePin {
   id: string;
@@ -26,6 +27,9 @@ interface SaleMapProps {
   entrancePin?: { lat: number; lng: number; note?: string };
   height?: string;
   userLocation?: { lat: number; lng: number } | null;
+  /** Feature #28: Neighborhood Heatmap tiles */
+  heatmapTiles?: HeatmapTile[];
+  onHeatmapCellClick?: (tile: HeatmapTile) => void;
 }
 
 // Dynamically import the inner map (no SSR) so Leaflet doesn't crash on server

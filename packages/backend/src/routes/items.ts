@@ -81,7 +81,8 @@ router.post('/bulk', authenticate, async (req, res) => {
       (i) => i.sale.organizer.userId !== authReq.user!.id
     );
     if (unauthorised.length > 0) {
-      return res.status(403).json({ message: 'One or more items do not belong to your sales.' });
+      // P0 Fix 1: Hide item existence — return 404 instead of 403 to prevent auth bypass
+      return res.status(404).json({ message: 'One or more items not found.' });
     }
 
     // Status-safe operation matrix — per spec
@@ -353,25 +354,29 @@ router.post('/bulk', authenticate, async (req, res) => {
         }
         const multiplier = 1 + pct / 100;
 
-        const updates = confirmedItems
-          .filter((i) => i.price !== null)
-          .map((i) => {
-            const newPrice = Math.max(0, parseFloat((i.price! * multiplier).toFixed(2)));
-            oldValues[i.id] = i.price;
-            newValues[i.id] = newPrice;
-            return prisma.item.update({
-              where: { id: i.id },
-              data: { price: newPrice },
-            });
+        const validItems = confirmedItems.filter((i) => i.price !== null);
+        const skipped = confirmedItems
+          .filter((i) => i.price === null)
+          .map((i) => ({ itemId: i.id, reason: 'price not set' }));
+
+        const updates = validItems.map((i) => {
+          const newPrice = Math.max(0, parseFloat((i.price! * multiplier).toFixed(2)));
+          oldValues[i.id] = i.price;
+          newValues[i.id] = newPrice;
+          return prisma.item.update({
+            where: { id: i.id },
+            data: { price: newPrice },
           });
+        });
         await Promise.all(updates);
         return res.json({
           message: `Adjusted prices for ${updates.length} item(s) by ${pct}%.`,
           count: updates.length,
-          affectedIds: updates.map((_, i) => confirmedItems.filter((it) => it.price !== null)[i].id),
+          affectedIds: updates.map((_, i) => validItems[i].id),
           operation: 'price_adjust',
           oldValues,
           newValues,
+          ...(skipped.length > 0 && { skipped }),
         });
       }
 
@@ -404,6 +409,8 @@ router.post('/bulk', authenticate, async (req, res) => {
           where: { id: { in: confirmedIds } },
           data: { price: finalPrice },
         });
+        // P0 Fix 2: Report skipped items (those with null price) — no items are actually skipped here
+        // because we update all confirmedIds. This operation applies to all items regardless of price.
         return res.json({
           message: `Updated price to $${finalPrice.toFixed(2)} for ${confirmedIds.length} item(s).`,
           count: confirmedIds.length,
@@ -572,7 +579,8 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
       (i) => i.sale.organizer.userId !== authReq.user!.id
     );
     if (unauthorised.length > 0) {
-      return res.status(403).json({ message: 'One or more items do not belong to your sales.' });
+      // P0 Fix 1: Hide item existence — return 404 instead of 403 to prevent auth bypass
+      return res.status(404).json({ message: 'One or more items not found.' });
     }
 
     // Dry-run mode

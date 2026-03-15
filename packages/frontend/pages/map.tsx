@@ -3,9 +3,12 @@ import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import SaleMap, { SalePin } from '../components/SaleMap';
+import HeatmapLegend from '../components/HeatmapLegend';
 import Skeleton from '../components/Skeleton';
 import { useToast } from '../components/ToastContext';
+import { useHeatmapTiles } from '../hooks/useHeatmapTiles';
 import RouteBuilder from '../components/RouteBuilder';
+import type { HeatmapTile } from '../types/heatmap';
 
 interface Sale {
   id: string;
@@ -36,6 +39,13 @@ const MapPage = () => {
   const [isGeolocationRequested, setIsGeolocationRequested] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [filteredPins, setFilteredPins] = useState<SalePin[]>([]);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+
+  // Feature #28: Fetch heatmap tiles
+  const { data: heatmapData, isLoading: isHeatmapLoading } = useHeatmapTiles({
+    enabled: showHeatmap,
+    days: 7,
+  });
 
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
   const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
@@ -163,6 +173,11 @@ const MapPage = () => {
     }
   };
 
+  const handleHeatmapCellClick = (tile: HeatmapTile) => {
+    // Optional: filter pins to those in the clicked cell
+    // For now, just zoom (already handled by HeatmapOverlay click handler)
+  };
+
   const saleCount = filteredSales.length;
 
   return (
@@ -187,22 +202,43 @@ const MapPage = () => {
                 {isLoading ? '...' : `${saleCount} sale${saleCount !== 1 ? 's' : ''} near you`}
               </p>
             </div>
-            <button
-              onClick={handleUseLocation}
-              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 flex-shrink-0"
-              title="Use your current location"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="hidden sm:inline">My Location</span>
-            </button>
+            <div className="flex gap-2 flex-shrink-0">
+              <button
+                onClick={() => setShowHeatmap(!showHeatmap)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                  showHeatmap
+                    ? 'bg-amber-600 text-white hover:bg-amber-700'
+                    : 'bg-warm-100 text-warm-700 hover:bg-warm-200'
+                }`}
+                title="Toggle neighborhood heatmap overlay"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                  />
+                </svg>
+                <span className="hidden sm:inline">Heatmap</span>
+              </button>
+              <button
+                onClick={handleUseLocation}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 flex-shrink-0"
+                title="Use your current location"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="hidden sm:inline">My Location</span>
+              </button>
+            </div>
           </div>
 
           {/* Filter Chips */}
@@ -225,7 +261,7 @@ const MapPage = () => {
       </section>
 
       {/* Map Container */}
-      <section className="flex-grow overflow-hidden">
+      <section className="flex-grow overflow-hidden relative">
         {isLoading ? (
           <Skeleton className="w-full h-full" />
         ) : isError ? (
@@ -242,13 +278,24 @@ const MapPage = () => {
             </div>
           </div>
         ) : (
-          <SaleMap
-            pins={filteredPins}
-            userLocation={userLocation}
-            height="calc(100vh - 200px)"
-            center={userLocation ? [userLocation.lat, userLocation.lng] : [42.9634, -85.6681]}
-            zoom={userLocation ? 13 : 11}
-          />
+          <>
+            <SaleMap
+              pins={filteredPins}
+              userLocation={userLocation}
+              height="calc(100vh - 200px)"
+              center={userLocation ? [userLocation.lat, userLocation.lng] : [42.9634, -85.6681]}
+              zoom={userLocation ? 13 : 11}
+              heatmapTiles={showHeatmap ? heatmapData?.tiles : undefined}
+              onHeatmapCellClick={handleHeatmapCellClick}
+            />
+            {/* Feature #28: Heatmap legend */}
+            {showHeatmap && heatmapData && (
+              <HeatmapLegend
+                legend={heatmapData.legend}
+                cacheAge={heatmapData.cacheAge}
+              />
+            )}
+          </>
         )}
       </section>
 

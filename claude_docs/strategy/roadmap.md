@@ -39,7 +39,7 @@
 
 ## Connectors
 
-- [x] **Stripe** — query payment data, manage customers, troubleshoot payment issues directly
+- [x] **Stripe** — query payment data, manage customers, troubleshoot payment issues directly. Stripe MCP connected S172 — unlocks #6 Seller Performance Dashboard real payment data + #65 Organizer Mode Tiers subscription billing.
 - [x] **MailerLite** — draft, schedule, and send email campaigns directly from Claude
 
 *CRM deferred — Close requires paid trial. Use spreadsheet/markdown for organizer tracking until beta scale warrants it.*

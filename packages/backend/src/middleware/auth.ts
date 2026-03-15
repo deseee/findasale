@@ -37,14 +37,19 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     const token = authHeader.split(' ')[1];
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error('JWT_SECRET is not set');
-    const decoded = jwt.verify(token, jwtSecret) as { id: string };
-    
+    const decoded = jwt.verify(token, jwtSecret) as { id: string; tokenVersion?: number };
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.id }
     });
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    // P0 Fix 4: Validate tokenVersion — if JWT has stale version, token is invalidated
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({ message: 'Token has been invalidated' });
     }
 
     // Attach user to request
