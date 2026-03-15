@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-14 (v29 — Session 164: #24 Holds-Only Item View shipped. Configurable hold duration per sale, batch operations, grouped-by-buyer UI, dashboard badge. Neon migration 78.)\
+**Last Updated:** 2026-03-15 (v30 — Session 165: #36 Weekly Treasure Digest shipped. Personalized picks via Resend, MailerLite Shoppers group auto-sync on registration. Env var required: `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway.)\
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -21,6 +21,8 @@
 - [x] OAuth credentials (Google, Facebook) → Vercel env vars ✅ Done (2026-03-06)
 - [ ] VAPID keys confirmed in production
 - [x] ~~Confirm 5%/7% platform fee~~ ✅ Locked at **10% flat** (session 106)
+- [ ] **⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway** (session 165)
+- [ ] **⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway** (session 165)
 
 ### Beta Recruitment
 - [ ] Identify 5 target beta organizers (`claude_docs/beta-launch/organizer-outreach.md` ready)
@@ -75,7 +77,7 @@
 | P1 | ~~33~~ | ~~Share Card Factory~~ | ✅ Done | SSR OG tags + Cloudinary branded cards on item pages. FB Sharing Debugger clean. Shipped session 163. |
 | P2 | 34 | Hype Meter | 0.5 sprint | Real-time social proof: "47 people are looking at this sale." Drives FOMO and urgency. Lightweight WebSocket or polling counter. |
 | P3 | 35 | Front Door Locator | 0.5 sprint | Entrance pin on sale detail map — "park here, enter here." Solves #1 shopper friction at large estate sales. Organizer sets pin during sale setup. |
-| P4 | 36 | Weekly Treasure Digest | 1 sprint | MailerLite-powered weekly email: top items, trending sales, new listings in your area. Shopper retention + re-engagement loop. |
+| ~~P4~~ | ~~36~~ | ~~Weekly Treasure Digest~~ | ✅ Done | Personalized weekly shopper digest activated. Sundays 6pm via Resend. MailerLite Shoppers group sync on registration. Shipped session 165. Env var required: `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` |
 | P5 | 37 | Sale Calendar & Reminders | 1 sprint | Calendar view of upcoming sales + "Remind Me" button → push notification or email on sale day. Reduces missed-sale regret. |
 
 *Recently shipped: #33 Share Card Factory (session 163 — SSR OG tags + Cloudinary branded cards, FB clean), #61 Near-Miss Nudges + #34 Hype Meter + #35 Front Door Locator (session 160), Stripe Terminal POS v2 (sessions 150–154), Rapidfire Camera Mode (sessions 135–149). See COMPLETED_PHASES.md.*
@@ -278,7 +280,7 @@ Proactive tasks assigned to the fleet. Not product features — operational work
 
 ## Infrastructure
 
-All infra complete. Backend: Railway. DB: Neon (73 migrations applied as of 2026-03-12). Frontend: Vercel (`finda.sale`). Git: `.\push.ps1` replaces `git push`. See `claude_docs/CORE.md` and `claude_docs/STACK.md`.
+All infra complete. Backend: Railway. DB: Neon (73 migrations applied as of 2026-03-12). Frontend: Vercel (`finda.sale`). Git: `.\ push.ps1` replaces `git push`. See `claude_docs/CORE.md` and `claude_docs/STACK.md`.
 
 ---
 

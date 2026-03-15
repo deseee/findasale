@@ -16,6 +16,24 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+## Session 165 — 2026-03-15 — #36 Weekly Treasure Digest Shipped
+
+**Worked on:** Activated existing but unwired weekly email system (weeklyEmailJob cron, Sundays 6pm). Integrated Resend for personalized shopper digest delivery. Added MailerLite Shoppers group auto-enrollment on user registration (both email + OAuth signup paths). Email UX: dynamic subject lines, category badges, relative date formatting for older audience (15px body, 18px prices). MailerLite group sync is fire-and-forget non-blocking to avoid registration delays.
+
+**Decisions:** Personalization based on purchase + favorite history (8 items per user, category-matched from upcoming PUBLISHED sales within 14 days). Email preference management footer (Manage frequency / Update interests / Unsubscribe) gives shoppers control. MailerLite Shoppers group (ID: 182012431062533831) acts as broadcast list for future campaigns.
+
+**Token efficiency:** Inline feature activation + email template improvements. No subagent dispatches for code work. findasale-records for documentation wrap only. Low-medium burn.
+
+**Token burn:** ~45k tokens (est.), 0 checkpoints.
+
+**Next up:** #27 Listing Factory begins next session. Conversation-defaults skill updated with Rule 23 (No-Pause Checkpoint override) and installed by Patrick — packaged as .skill file, now available to fleet.
+
+**Blockers:** None. Patrick needs to set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` + verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` exist on Railway.
+
+**Files changed:** `packages/backend/src/index.ts`, `packages/backend/src/controllers/authController.ts`, `packages/backend/src/services/mailerliteService.ts`, `packages/backend/src/services/weeklyEmailService.ts` | Compressions: 0 | Subagents: 0 | Push method: MCP (2 commits: 18e7178 + fc2cdd2) | Skill updates: conversation-defaults (Rule 23 added, packaged .skill)
+
+---
+
 ## Session 162 — 2026-03-14 — Comprehensive Review & Publish Page Rebuild + Chrome Audit + P1 Bug Fixes
 
 **Worked on:** (1) Comprehensive inline edit panel rebuild — replaced static 3-field panel (title/price/category) with full feature parity to edit-item page. New fields: ItemPhotoManager (photo upload/reorder/delete), description, condition, quantity, PriceSuggestion AI widget, per-item Publish/Unpublish toggle, Full Edit Page link. (2) draftStatus badge added to each item card collapsed row (Published/Pending/Draft). (3) Item interface and ItemEditState updated to include description, condition, quantity. (4) handleSaveItem and handlePublishItem wired to persist all new fields. (5) Chrome audit of Review & Publish page — all 7 checks passed. (6) Two P1 bugs diagnosed and fixed live: Bug 1 — unicode separator `\u00B7` rendering as literal text (JSX text node issue) fixed with `{' · '}`. Bug 2 — Manual Entry items showing "Low (50%)" instead of "Manual" (root cause: schema `aiConfidence Float @default(0.5)`); fixed using `isAiTagged` field check in confidenceLabel/confidenceBorderClass. (7) CORE.md governance fix — added §3 rule: re-read §4 Push Rules immediately after compression (closes conversation-defaults gap). (8) Merge conflict in review.tsx resolved (kept HEAD/comprehensive version).
@@ -69,43 +87,3 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Token burn:** ~35k tokens (est.), 0 checkpoints.
 **Next up:** Cash collection mechanism decision — how does FindA.Sale collect 10% platform fee on cash sales? Card sales auto-collected via Stripe Connect; cash sales have no fee collection path today. Needs findasale-investor + advisory board analysis before implementing.
 **Blockers:** Business decision on cash fee collection outstanding. Neon migration `20260312000002_add_purchase_pos_fields` still pending deploy.
-
----
-
-## Sessions 147–148 — 2026-03-12 — Rapidfire P1 Fixes + Phase 5 Wiring
-
-**Worked on:** Diagnosed and fixed two bugs in the Rapidfire camera UI that caused "+" buttons and photo-count badges to be invisible on mobile. Bug 1: Outer thumbnail wrapper in `RapidCarousel.tsx` was a `<button>` — browsers eject inner `<button>` elements during HTML parsing (invalid HTML per spec), destroying absolute positioning context. Fix: changed to `<div>`, all touch/mouse handlers preserved. Bug 2: `add-items/[saleId].tsx` had Phase 5 (add-photo-to-item) wired as a stub — `onAddPhotoToItem={() => {}}` was a no-op, `addingToItemId` hardcoded to `null`. Fix: added state, full toggle logic, and Phase 5 append pipeline using `/upload/sale-photos` → `POST /items/:id/photos` (endpoint already existed as `addItemPhoto` controller). Skip optimistic temp entry in append-mode to prevent flicker. Also diagnosed Railway vs Vercel platform confusion — Railway is backend-only and correctly did not redeploy. Vercel appears to have a broken GitHub App integration (deployment predates latest commits).
-**Decisions:** Outer carousel wrapper must be `<div>`, not `<button>` — always check for nested button HTML invalidity when inner buttons don't render. Phase 5 append pipeline uses existing backend endpoint, no backend changes needed. Vercel + Railway use GitHub App integration (under Settings → Applications), not traditional webhooks.
-**Token efficiency:** One subagent dispatch (findasale-records for session wrap). File reads + targeted fixes. Low-medium burn.
-**Token burn:** ~40k tokens (est.), 0 checkpoints.
-**Next up:** Verify Vercel GitHub App reconnect → confirm "+" buttons live on Patrick's phone. Verify migration `20260311000003_add_camera_workflow_v2_fields` deployed to Neon. Fix P0 QA bug in `review.tsx` (draftStatus filter using wrong endpoint).
-**Blockers:** Vercel not auto-deploying — GitHub App integration appears disconnected. Migration `20260311000003` deploy status unknown.
-
----
-
-## Session 141 — 2026-03-11 — Fleet Redesign Proposal v1
-
-**Worked on:** Comprehensive fleet redesign planning session. Drafted, reviewed (2 rounds), and finalized `fleet-redesign-proposal-v1.md` with 22 approved decisions. Round 1 reviewers: architect, qa, hacker, pitchman, power-user, workflow. Round 2 reviewers: architect, hacker, pitchman, power-user. Two open questions resolved mid-session (token budget learning, DA trigger scope).
-**Decisions:** Merge CX+Support → Customer Champion. Merge R&D+Pitchman → Innovation. New agents: sales-ops, devils-advocate, steelman, investor, competitor. Board restructured to 12 seats + 6 subcommittees. Escalation channel with guardrails. Handoff protocol with integrity metadata. Red-flag veto gate. Async voting. Trial/rollback protocol. Cross-agent feedback loops. Daily friction audit. Budget-first sessions with outcome-bucketed learning. decisions-log.md. DA/Steelman scoped to direction-only with preflight checklist. Phased rollout approved.
-**Token efficiency:** Planning-only session. 10 subagent dispatches across 2 review rounds. No code changes. Medium-high burn for high strategic output.
-**Token burn:** ~120k tokens (est.), 0 checkpoints.
-**Next up:** Phase 1 rollout — 6 parallel dispatches (2 merges, escalation channel, handoff protocol, veto gate, decisions-log). QA verification. Then Phase 2.
-**Blockers:** Patrick git push needed for proposal + session docs. Neon migration still pending. Beta-blocking items unchanged.
-
----
-
-## Session 138 — 2026-03-11 — Plugin Skill Fleet Audit & Routing Update
-
-**Cowork Power User audit complete.** All 15 findasale-* SKILL.md files updated with Plugin Skill Delegation sections. Two stale data bugs fixed (5%/7% fee → 10% flat in architect + qa; Docker reference removed from architect). plugin-skill-routing.md created at claude_docs/operations/.
-
-**Advisory board** approved for forward strategic lens: added product-management:roadmap-management and data:create-viz.
-
-**Main session** routing documented: plugin-skill-routing.md is now the routing reference for when to use findasale-* vs. plugin skills directly.
-
-**Deferred for planning session:** findasale-sales-ops agent (organizer outreach, pipeline review, trial-to-insight). Proposed stack: sales:call-prep, sales:pipeline-review, sales:daily-briefing, sales:account-research, customer-support:customer-research, data:explore-data. Patrick to evaluate post-beta.
-
-**Files changed:**
-- /mnt/.skills/skills/findasale-*/SKILL.md (all 15 — delegation sections added)
-- claude_docs/operations/plugin-skill-routing.md (created)
-- claude_docs/logs/session-log.md (this entry)
-
