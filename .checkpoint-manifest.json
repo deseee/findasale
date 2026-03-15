@@ -49,6 +49,17 @@
   "compressionEvents": [],
   "sessionHistory": [
     {
+      "sessionId": 169,
+      "date": "2026-03-15",
+      "tokensBurned": "~90k (est)",
+      "checkpointsLogged": 0,
+      "compressions": 0,
+      "subagents": 9,
+      "filesChanged": 14,
+      "budgetDelta": "succeeded-on-plan",
+      "notes": "Strategic audit + workflow overhaul session. 6 research agents (workflow audit, tool eval, ecosystem audit, communications baseline, manager subagent ADR, qa sprint2) + 3 impl agents (dev fixes, records updates, skill-creator). Push-coordinator skill designed. Conversation-defaults v7 drafted. Patrick push pending. Decisions: subagent push ban S169-171 active, push-coordinator approved, plugins all keep enabled, Claude Code CLI handoff pattern adopted."
+    },
+    {
       "sessionId": 166,
       "date": "2026-03-15",
       "tokensBurned": "~80k (est)",
