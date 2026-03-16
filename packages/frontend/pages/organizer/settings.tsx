@@ -28,6 +28,7 @@ const OrganizerSettingsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [fontSize, setFontSize] = useState(16);
+  const [isSimpleMode, setIsSimpleMode] = useState(false);
   const { highContrast, setHighContrast } = useTheme();
 
   useEffect(() => {
@@ -36,6 +37,10 @@ const OrganizerSettingsPage = () => {
     if (saved) {
       const size = parseInt(saved, 10);
       setFontSize(size);
+    }
+    const simpleModeSaved = localStorage.getItem('findasale_simple_mode');
+    if (simpleModeSaved === 'true') {
+      setIsSimpleMode(true);
     }
   }, []);
 
@@ -244,6 +249,28 @@ const OrganizerSettingsPage = () => {
           {/* Appearance Tab */}
           {activeTab === 'appearance' && (
             <div className="space-y-6">
+              {/* Simple Mode Section */}
+              <div className="card p-6">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Mode</h2>
+                <div className="space-y-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={isSimpleMode}
+                      onChange={(e) => {
+                        setIsSimpleMode(e.target.checked);
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('findasale_simple_mode', e.target.checked ? 'true' : 'false');
+                        }
+                      }}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">Simple Mode</span>
+                  </label>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">Show only essential tools. Great for getting started.</p>
+                </div>
+              </div>
+
               {/* Color Theme Section */}
               <div className="card p-6">
                 <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Color Theme</h2>

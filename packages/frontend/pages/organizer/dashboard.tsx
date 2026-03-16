@@ -18,6 +18,7 @@ import SaleQRCode from '../../components/SaleQRCode';
 import FlashDealForm from '../../components/FlashDealForm';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import OnboardingWizard from '../../components/OnboardingWizard';
+import SimpleModePanel from '../../components/SimpleModePanel';
 import Head from 'next/head';
 import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
@@ -62,6 +63,7 @@ const OrganizerDashboard = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [cloningId, setCloningId] = useState<string | null>(null);
   const [showSaleSelector, setShowSaleSelector] = useState(false);
+  const [isSimpleMode, setIsSimpleMode] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -130,6 +132,15 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id,
     staleTime: 60_000,
   });
+
+  // Read simple mode preference from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const simpleModeSaved = localStorage.getItem('findasale_simple_mode');
+    if (simpleModeSaved === 'true') {
+      setIsSimpleMode(true);
+    }
+  }, []);
 
   // Show wizard if onboarding not complete (and not dismissed via localStorage)
   useEffect(() => {
@@ -234,6 +245,18 @@ const OrganizerDashboard = () => {
         />
       )}
 
+      {/* Simple Mode View */}
+      {isSimpleMode && (
+        <SimpleModePanel
+          onExitSimpleMode={() => {
+            setIsSimpleMode(false);
+            localStorage.setItem('findasale_simple_mode', 'false');
+          }}
+        />
+      )}
+
+      {/* Full Dashboard */}
+      {!isSimpleMode && (
       <div className="min-h-screen bg-warm-50">
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Header */}
@@ -560,6 +583,7 @@ const OrganizerDashboard = () => {
           )}
         </div>
       </div>
+      )}
     </>
   );
 };
