@@ -277,6 +277,43 @@ Flagged by Patrick on 2026-03-11 as a core violation. No exceptions.
 
 ---
 
+## Rule 28: Scheduled task findings triage at session init
+
+After loading STATE.md and session-log at session init (Rule 3, step 1), check for unread scheduled task findings:
+
+**Files to check (most recent of each):**
+- `claude_docs/operations/friction-audit-*.md` — daily workflow scan
+- `claude_docs/health-reports/*.md` — weekly health scout
+- `claude_docs/ux-spotchecks/*.md` — weekly UX spotcheck
+- `claude_docs/operations/MESSAGE_BOARD.json` — agent message board
+
+**Triage protocol:**
+1. Read only the most recent file in each location (not all historical files).
+2. Scan for findings rated 🔴 HIGH or P0/P1. List them.
+3. If any HIGH/P0/P1 findings exist: add them to the session's priority queue BEFORE sprint work begins. Flag to Patrick: "Scheduled task found [X] — adding to priority queue."
+4. If only MEDIUM/P2 findings exist: note them in one sentence. Do not block sprint work.
+5. If no findings or only LOW: proceed without comment.
+
+**Hard rules:**
+- Do NOT read more than the most recent file per location — prevents token waste.
+- Do NOT block session start to read competitor reports, pipeline briefings, or power-user sweep output. Those are advisory, not blocking.
+- Do NOT add findings triage to the token budget announcement — it runs silently unless a HIGH finding is discovered.
+
+**Blocking findings (must triage before sprint work):**
+- 🔴 HIGH in friction audit (workflow-breaking patterns)
+- P0/P1 in health scout (security/critical bugs)
+- P0/P1 in UX spotcheck (broken user flows)
+
+**Non-blocking (note only):**
+- MEDIUM/P2 friction findings
+- Competitor intel
+- Pipeline briefings
+- Power user proposals
+
+Why this exists: Patrick identified (S178) that 11 scheduled tasks generate daily/weekly findings but findings were never being actioned — they accumulated in files. This rule closes the gap between signal generation and signal review. (Added 2026-03-16, Session 178.)
+
+---
+
 ## Fallback: If This Skill Was Not Loaded at Session Start
 
 conversation-defaults requires system injection to fire automatically. If it was
@@ -307,3 +344,4 @@ forward — session init does not need to be re-run.
 | Checkpoint manifest reads/writes | Active (added 2026-03-09, Session 118) |
 | Pre-dispatch checkpoint before 3+ agents | Active (added 2026-03-09, Session 118) |
 | Never output placeholder values | Active (added 2026-03-11, Session 137) |
+| Scheduled task findings triage at session init | Active (added 2026-03-16, Session 178) |
