@@ -16,92 +16,90 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
-## Session 170 — 2026-03-15 — Sprint 2 Gap Closure + Sprint 3 Initiation + CLAUDE.md §11 Enforcement
+## Session 181 — 2026-03-16 — #61 Near-Miss Nudges Shipped + syncTier Bugfix + Roadmap v41
 
-**Worked on:** (1) Sprint 2 gap closure — Social Templates endpoint (`GET /api/social/:itemId/template`) and frontend UI (item picker, tone/platform selectors, live preview, copy button) in promote.tsx. (2) Sprint 3 feature start — Tag SEO Pages with two new endpoints (`GET /api/tags/popular`, `GET /api/tags/:slug/items`) and ISR frontend page with schema JSON-LD and responsive grid. (3) Governance crisis — main window had read 940-line itemController.ts, 393-line promote.tsx, 256-line items.ts route and written 4 new backend code files inline, violating existing "default to subagents" instruction. Burned ~30k tokens. Patrick caught and escalated. (4) CLAUDE.md §11 — created hard gate: ALL code implementation must go through subagents (no inline exceptions except <20 line edits to 1–2 files). Exhaustive allowed/disallowed lists. (5) CLAUDE.md §9 — file delivery rule: all files Patrick needs must be in workspace with computer:// link.
+**Worked on:** (1) #61 Near-Miss Nudges — full build and ship. Backend: `nudgeService.ts` with variable-ratio dispatch (65% daily via MD5 pseudo-randomization), 4 nudge types (FAVORITE_MILESTONE, STREAK_CONTINUATION, TIER_PROGRESS, HUNT_PASS_TEASE), proximity-based triggers. `nudgeController.ts` endpoint (GET /api/nudges), `nudges.ts` route registered in index.ts. Frontend: `useNudges.ts` React Query hook, `NudgeBar.tsx` sage-green toast UI (auto-dismiss 10s, progress bar, above BottomTabNav), wired into _app.tsx globally and self-gates on auth. No schema changes — stateless, reads existing User + Favorite data. (2) syncTier.ts build fix — removed invalid `tokenVersion: { increment: 1 }` reference on Organizer update that was blocking Railway deploys. (3) roadmap.md v41 pushed to GitHub — cleaned #38/#43 duplication (already shipped), removed premature #61 from Shipped, annotated #65 Sprint 1+2 complete, marked env var checklist items done, moved #61 to Shipped after build. (4) STATE.md updated — marked 3 Patrick pre-billing items complete. (5) session-log.md entry added. (6) Records checkpoint — all files recorded.
 
-**Decisions:** Subagent-first is now HARD GATE (CLAUDE.md §11), not advisory. File delivery must always use clickable links. Inline code work prohibited except single targeted edits. Main window is orchestrator only.
+**Decisions:** NudgeBar renders globally but self-gates (no auth = no nudges). Variable-ratio schedule uses MD5-based deterministic pseudo-randomization for repeatability. Nudge types prioritized: Favorite Milestone (highest ROI), Streak Continuation, Tier Progress, Hunt Pass Tease (lowest). No A/B test complexity — ship with 65% baseline, monitor metrics next beta session.
 
-**Token efficiency:** High-efficiency focus on governance vs features. One subagent dispatch for final frontend work (correctly delegated). Documentation+governance updates via findasale-records. Medium burn.
+**Token efficiency:** Dev subagent for #61 implementation, records subagent for doc wrap. Main window handled orchestration, spot-checks, and MCP pushes. Medium burn.
 
-**Token burn:** ~55k tokens (est.), 1 checkpoint (pre-S170 start).
+**Token burn:** ~55k tokens (est.), 1 checkpoint.
 
-**Next up:** Session 171 comprehensive review (S166–170 delivery vs spec, workflow quality, CLAUDE.md enforcement). After review, resume roadmap + plan context-mode strategy.
+**Next up:** #63 Dark Mode + Accessibility (WCAG 2.1 AA, Tailwind dark variants, system preference, high-contrast outdoor mode, larger fonts). OR #67 Social Proof Notifications (extend Hype Meter with real-time aggregate + friend activity). OR #65 Progressive Disclosure UI (Simple mode 5-button surface).
 
-**Blockers:** None. All S170 code pending Patrick push.
+**Blockers:** None. All S181 code pushed to GitHub via MCP.
 
-**Files changed:** CLAUDE.md (§9+11), .checkpoint-manifest.json, packages/backend/src/controllers/{socialController.ts, tagController.ts}, packages/backend/src/routes/{social.ts, tags.ts}, packages/backend/src/index.ts, packages/frontend/pages/{organizer/promote/[saleId].tsx, tags/[slug].tsx} | Compressions: 0 | Subagents: 1 (findasale-dev for promote.tsx + tags page) | Push method: Pending Patrick PS1
-
----
-
-## Session 165 — 2026-03-15 — #36 Weekly Treasure Digest Shipped
-
-**Worked on:** Activated existing but unwired weekly email system (weeklyEmailJob cron, Sundays 6pm). Integrated Resend for personalized shopper digest delivery. Added MailerLite Shoppers group auto-enrollment on user registration (both email + OAuth signup paths). Email UX: dynamic subject lines, category badges, relative date formatting for older audience (15px body, 18px prices). MailerLite group sync is fire-and-forget non-blocking to avoid registration delays.
-
-**Decisions:** Personalization based on purchase + favorite history (8 items per user, category-matched from upcoming PUBLISHED sales within 14 days). Email preference management footer (Manage frequency / Update interests / Unsubscribe) gives shoppers control. MailerLite Shoppers group (ID: 182012431062533831) acts as broadcast list for future campaigns.
-
-**Token efficiency:** Inline feature activation + email template improvements. No subagent dispatches for code work. findasale-records for documentation wrap only. Low-medium burn.
-
-**Token burn:** ~45k tokens (est.), 0 checkpoints.
-
-**Next up:** #27 Listing Factory begins next session. Conversation-defaults skill updated with Rule 23 (No-Pause Checkpoint override) and installed by Patrick — packaged as .skill file, now available to fleet.
-
-**Blockers:** None. Patrick needs to set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` + verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` exist on Railway.
-
-**Files changed:** `packages/backend/src/index.ts`, `packages/backend/src/controllers/authController.ts`, `packages/backend/src/services/mailerliteService.ts`, `packages/backend/src/services/weeklyEmailService.ts` | Compressions: 0 | Subagents: 0 | Push method: MCP (2 commits: 18e7178 + fc2cdd2) | Skill updates: conversation-defaults (Rule 23 added, packaged .skill)
+**Files changed:** packages/backend/src/services/nudgeService.ts (NEW), packages/backend/src/controllers/nudgeController.ts (NEW), packages/backend/src/routes/nudges.ts (NEW), packages/backend/src/index.ts (EDITED — nudge route import), packages/backend/src/lib/syncTier.ts (EDITED — removed tokenVersion), packages/frontend/hooks/useNudges.ts (NEW), packages/frontend/components/NudgeBar.tsx (NEW), packages/frontend/pages/_app.tsx (EDITED — NudgeBar import + render), claude_docs/strategy/roadmap.md (EDITED — v41), claude_docs/STATE.md (EDITED — S181 entry + action items), claude_docs/logs/session-log.md (EDITED — this entry) | Compressions: 1 | Subagents: 2 (findasale-dev, findasale-records) | Push method: MCP (6 commits)
 
 ---
 
-## Session 162 — 2026-03-14 — Comprehensive Review & Publish Page Rebuild + Chrome Audit + P1 Bug Fixes
+## Session 180 — 2026-03-16 — Context Doc Update + Shipping Confirmations
 
-**Worked on:** (1) Comprehensive inline edit panel rebuild — replaced static 3-field panel (title/price/category) with full feature parity to edit-item page. New fields: ItemPhotoManager (photo upload/reorder/delete), description, condition, quantity, PriceSuggestion AI widget, per-item Publish/Unpublish toggle, Full Edit Page link. (2) draftStatus badge added to each item card collapsed row (Published/Pending/Draft). (3) Item interface and ItemEditState updated to include description, condition, quantity. (4) handleSaveItem and handlePublishItem wired to persist all new fields. (5) Chrome audit of Review & Publish page — all 7 checks passed. (6) Two P1 bugs diagnosed and fixed live: Bug 1 — unicode separator `\u00B7` rendering as literal text (JSX text node issue) fixed with `{' · '}`. Bug 2 — Manual Entry items showing "Low (50%)" instead of "Manual" (root cause: schema `aiConfidence Float @default(0.5)`); fixed using `isAiTagged` field check in confidenceLabel/confidenceBorderClass. (7) CORE.md governance fix — added §3 rule: re-read §4 Push Rules immediately after compression (closes conversation-defaults gap). (8) Merge conflict in review.tsx resolved (kept HEAD/comprehensive version).
+**Worked on:** (1) P0-1 confirmed shipped (syncTier tokenVersion). (2) P0-2 confirmed shipped (STRIPE_SECRET_KEY startup guard). (3) #43 OG Image Generator shipped (SaleOGMeta component). (4) #5 Listing Type Schema Debt audited — no changes needed. (5) #38 Entrance Pin audited — already shipped. (6) Session log S171–S177 catch-up (7 sessions reconstructed). (7) Context doc updates: STATE.md, roadmap.md, next-session-prompt.md.
 
-**Decisions:** Full panel parity makes Review & Publish page self-sufficient for all item edits (no Full Edit Page click necessary for most changes). draftStatus badge provides immediate visibility into item readiness. Schema cleanup (change `aiConfidence` to nullable `Float?`) deferred post-beta. Manual items don't show confidence percentages — only AI-tagged items do.
+**Decisions:** S180 was pure documentation/audit session — no code changes. Confirmed 3 features done (#43, #5, #38), 2 P0 fixes shipped.
 
-**Token efficiency:** Comprehensive rebuild inline, one merge conflict resolution. No subagent dispatches. Low-medium burn.
+**Token efficiency:** Records-only session, no dev dispatches. Low burn.
 
-**Token burn:** ~65k tokens (est.), 0 checkpoints.
+**Token burn:** ~30k tokens (est.), 0 checkpoints.
 
-**Next up:** Fix Railway backend restarts (session 160 carry-forward). Validate 4 features (#61, #34, #35, #33) end-to-end on production. Resume roadmap P1: #24 Holds.
+**Next up:** #61 Near-Miss Nudges (0.25 sprint, no schema changes, high ROI).
 
-**Blockers:** Railway unstable (blocks feature validation). P2 thumbnail issue (Cloudinary URLs break on page reload).
+**Blockers:** None.
 
-**Files changed:** packages/frontend/pages/organizer/add-items/[saleId]/review.tsx, packages/backend/src/controllers/itemController.ts, claude_docs/CORE.md | Compressions: 1 | Subagents: 0 | Push method: manual (merge conflict)
+**Files changed:** claude_docs/STATE.md, claude_docs/strategy/roadmap.md, claude_docs/next-session-prompt.md, claude_docs/logs/session-log.md | Compressions: 0 | Subagents: 1 (findasale-records) | Push method: MCP
 
 ---
 
-## Session 162b — 2026-03-14 — Chrome Audit + P1 Bug Fixes
+## Session 179 — 2026-03-16 — Billing QA Pass + Skill Reconstruction + Packaging Protocol
 
-**Worked on:** Chrome audit of Review & Publish page (7 checks). All checks passed: link visible, page loads without errors, 16 items shown, Publish All correctly absent, Back to Capture link works, Visible/Hidden labels correct, Near-Miss Nudge (#61) working. Two P1 bugs diagnosed and fixed live. Bug 1: unicode separator `\u00B7` rendering as literal text (JSX text node issue) — fixed with `{' · '}` character in review.tsx line 415. Bug 2: Manual Entry items showing "Low (50%)" instead of "Manual" — root cause discovered: Prisma schema has `aiConfidence Float @default(0.5)`, every manual item gets 0.5. Fixed using existing `isAiTagged` boolean field — updated `confidenceLabel()` and `confidenceBorderClass()` to check `isAiTagged` first, only show percentage for AI-tagged items. Added `isAiTagged: boolean` to Item interface and backend select clauses. Bug 3 open (P2): thumbnail images break on page reload — Cloudinary URLs load on first visit but fail on subsequent navigation, root cause unknown.
+**Worked on:** (1) GitHub QA audit of S178 changes. (2) Architect sign-off Sprint 2 billing. (3) Hacker security review. (4) findasale-qa Sprint 2 billing. (5) conversation-defaults v5 reconstructed. (6) Skill packaging protocol established.
 
-**Decisions:** Use `isAiTagged` field to distinguish manual vs AI items on frontend. Schema cleanup (change `aiConfidence` to nullable `Float?`) deferred post-beta. Manual items don't need percentage confidence displayed — only AI-tagged items show the confidence percentage.
+**Decisions:** 2 P0 fixes required before Railway deploy (tokenVersion in syncTier, STRIPE_SECRET_KEY startup check). Skill packaging is mandatory — CORE.md §9 updated.
 
-**Token efficiency:** Inline fixes, no subagent dispatches. Two focused edits (frontend + backend), verified live in Chrome. Low burn.
+**Token efficiency:** 4 subagent dispatches (architect, hacker, qa, records). Proper fleet utilization. Medium burn.
+
+**Token burn:** ~45k tokens (est.), 1 checkpoint.
+
+**Next up:** Fix Hacker P0s, then #61 Near-Miss Nudges.
+
+**Blockers:** 2 P0 fixes before billing goes live.
+
+**Files changed:** claude_docs/CORE.md (§9), claude_docs/skills-package/ (2 .skill files), conversation-defaults SKILL.md, findasale-dev SKILL.md | Compressions: 0 | Subagents: 4 | Push method: MCP
+
+---
+
+## Session 178 — 2026-03-16 — #65 Sprint 2 Shipped + Workflow Fixes + Skill Gate
+
+**Worked on:** Full Stripe billing infrastructure (billingController, syncTier, billing route, upgrade page, subscription page, requireTier middleware on 3 routes). MESSAGE_BOARD.json permanently untracked. Schema read gate added to dev skill. Brand voice guide rewritten.
+
+**Decisions:** Billing endpoints use raw body middleware for webhooks. requireTier('PRO') gates batch ops, analytics, export. upgrade.tsx uses organizerTier field.
+
+**Token efficiency:** Dev subagent for billing implementation. Records for doc wrap. Medium-high burn (4 build cycles to fix TS).
+
+**Token burn:** ~60k tokens (est.), 0 checkpoints.
+
+**Next up:** QA Sprint 2 billing, fix P0s, then resume roadmap.
+
+**Blockers:** Skills need reinstall by Patrick.
+
+**Files changed:** 10 code files (3 new backend, 2 new frontend, 5 modified) + skill files + brand voice guide | Compressions: 0 | Subagents: 2 | Push method: MCP
+
+---
+
+## Session 177 — 2026-03-16 — #65 Sprint 1 Shipped + Map Fix + Brand Voice + Stripe Products
+
+**Worked on:** Map CSP fix, #5 build fix (inlined enums), #65 Sprint 1 (schema, tierGate, requireTier, auth JWT embedding), Neon migrations, Stripe products via MCP, brand voice guide, roadmap v38.
+
+**Decisions:** SIMPLE/PRO/TEAMS tier structure. 7-day trial coupon. No founding organizer program.
+
+**Token efficiency:** Architect + dev subagents for tier infrastructure. Medium burn.
 
 **Token burn:** ~50k tokens (est.), 0 checkpoints.
 
-**Next up:** Fix Railway backend restarts (session 160 carry-forward). Then validate 4 features (#61, #34, #35, #33) end-to-end on production. Resume roadmap P1: #24 Holds.
+**Next up:** #65 Sprint 2 (billing endpoints, upgrade UI, subscription management).
 
-**Blockers:** Railway unstable (blocks session 160 feature validation). P2 thumbnail issue needs investigation.
+**Blockers:** 5 Stripe env vars need setting on Railway.
 
----
-
-## Session 158 — 2026-03-13 — Repo Root Cleanup + Token Statusline Research
-
-**Worked on:** (1) Token statusline investigation — confirmed Cowork desktop UI does not pass `context_window` JSON to statusline scripts; bar stays at `Tokens: waiting...` indefinitely. Statusline script stored in `scripts/statusline-token-usage.sh`, CLAUDE.md §4 updated with session-init reinstall block to handle VM ephemerality. Token estimates calibrated from 19 sessions: avg ~13.6k/agent (prior 5k default was 2.6× too low), updated in conversation-defaults Rule 17, packaged as installable .skill. (2) Records audit of repo root — 5 unauthorized orphaned files identified and removed: `AGENT_QUICK_REFERENCE.md`, `CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md`, `STRIPE_WEBHOOK_HARDENING.md`, `fleet-redesign-proposal-v1.md`, `docs/CD2_PHASE2_TREASURE_HUNT.md`. All archived with index entries. `docs/` directory and `skill-updates/` directory removed.
-**Decisions:** Token statusline is a dead end for Cowork (no JSON feed). Per-agent token estimates locked: simple 5–8k, mid-weight 10–15k, heavy 15–25k, unknown 13k average. Repo root should contain only project infrastructure files (CLAUDE.md, README.md, package.json, push.ps1, railway.toml, pnpm files, scripts/, claude_docs/, packages/).
-**Token efficiency:** Two subagent dispatches (findasale-records). Inline research for statusline. Low-medium burn.
-**Token burn:** ~40k tokens (est.), 0 checkpoints.
-**Next up:** Resume feature work — next priority per roadmap is #24 (Holds, 1 sprint). See roadmap.md for Phase 4 queue.
-**Blockers:** Vercel GitHub App integration still needs reconnect (flagged session 149). Migration `20260311000003_add_camera_workflow_v2_fields` deploy status still unclear.
-
----
-
-## Session 152 — 2026-03-12 — POS v2 Post-Go-Live Fixes
-
-**Worked on:** Four targeted fixes to the Stripe Terminal POS after go-live testing revealed issues: (1) **Duplicate itemId guard** — both `createTerminalPaymentIntent` and `cashPayment` now reject duplicate itemIds (each physical item can only be charged once per transaction). (2) **Error messages humanized** — `terminalController.ts` was surfacing raw DB UUIDs in error strings. Fixed to use `item.title` in both payment flows; required adding `title: true` to the cashPayment `dbItems` select since it previously only fetched `id` and `status`. (3) **POS item search fixed** — `getItemsBySaleId` was ignoring all query params except `saleId`. The frontend was already sending the correct `?q=...&status=AVAILABLE&limit=10` — the backend simply discarded them. Fixed with Prisma `contains` + `insensitive` for title/SKU search, status filter, limit cap, and added `sku: true` to select. (4) **Inline cash numpad** — replaced the cash received button (which opened the shared global numpad at top of page) with an always-visible inline 3×4 numpad inside the cash payment card. Independent `cashNumpadValue` state syncs to `cashReceived` via useEffect. Real-time change/short display. Global numpad simplified to price-only.
-**Decisions:** Cash numpad is fully independent from the price numpad — separate state, no mode switching needed. Search bug was entirely backend-side; no frontend changes required. Error humanization required touching both card and cash flows separately since each had its own dbItems select shape.
-**Token efficiency:** All inline work — no subagent dispatches for code. Session wrap via findasale-records. Low burn.
-**Token burn:** ~35k tokens (est.), 0 checkpoints.
-**Next up:** Cash collection mechanism decision — how does FindA.Sale collect 10% platform fee on cash sales? Card sales auto-collected via Stripe Connect; cash sales have no fee collection path today. Needs findasale-investor + advisory board analysis before implementing.
-**Blockers:** Business decision on cash fee collection outstanding. Neon migration `20260312000002_add_purchase_pos_fields` still pending deploy.
+**Files changed:** 7 code files + 3 ADR docs + roadmap + brand voice | Compressions: 0 | Subagents: 2 | Push method: MCP (4 batches)
