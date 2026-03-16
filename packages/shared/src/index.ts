@@ -1,5 +1,8 @@
 // Shared types and utilities will go here
 
+// Feature #65: Subscription tier gating
+export { type SubscriptionTier, hasAccess, TIER_RANK, FEATURE_TIERS } from './tierGate';
+
 // Sprint 1: Listing Factory tag vocabulary
 export { CURATED_TAGS, MAX_CUSTOM_TAGS, type CuratedTag } from './constants/tagVocabulary';
 
