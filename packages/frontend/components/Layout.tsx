@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
+import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
@@ -11,6 +12,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { canAccess } = useOrganizerTier();
   const [isClient, setIsClient] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
@@ -65,9 +67,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           Hi, {user.name || user.email}
         </span>
         {user.role === 'ORGANIZER' && (
-          <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-            Dashboard
-          </Link>
+          <>
+            <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Dashboard
+            </Link>
+            {canAccess('PRO') && (
+              <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                Command Center
+              </Link>
+            )}
+          </>
         )}
         {(user.role === 'USER' || user.role === 'ADMIN') && (
           <>
@@ -162,7 +171,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   <div className="border-l border-warm-300 pl-4 flex items-center gap-2">
                     <span className="text-warm-900 text-sm">Hi, {user.name || user.email}</span>
                     {user.role === 'ORGANIZER' && (
-                      <Link href="/organizer/dashboard" className="text-warm-900 hover:text-amber-600">Dashboard</Link>
+                      <>
+                        <Link href="/organizer/dashboard" className="text-warm-900 hover:text-amber-600">Dashboard</Link>
+                        {canAccess('PRO') && (
+                          <Link href="/organizer/command-center" className="text-warm-900 hover:text-amber-600">Command Center</Link>
+                        )}
+                      </>
                     )}
                     {(user.role === 'USER' || user.role === 'ADMIN') && (
                       <>
