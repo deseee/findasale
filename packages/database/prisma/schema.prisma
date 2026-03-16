@@ -124,6 +124,12 @@ model Organizer {
   brandLogoUrl        String?   // Cloudinary URL for organizer logo
   brandPrimaryColor   String?   // Hex e.g. "#2563EB"
   brandSecondaryColor String?   // Hex e.g. "#1E40AF"
+  // Feature #65: Subscription Tiers
+  subscriptionTier    SubscriptionTier @default(SIMPLE)
+  subscriptionStatus  String?          // active, trialing, past_due, canceled, null
+  trialEndsAt         DateTime?
+  stripeCustomerId    String?
+  stripeSubscriptionId String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -940,4 +946,11 @@ model ProcessedWebhookEvent {
   processedAt DateTime @default(now())
 
   @@index([processedAt])
+}
+
+// Feature #65: Subscription Tier Enum
+enum SubscriptionTier {
+  SIMPLE
+  PRO
+  TEAMS
 }
