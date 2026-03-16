@@ -7,6 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 179 COMPLETE (2026-03-16) — BILLING QA PASS + SKILL RECONSTRUCTION + PACKAGING PROTOCOL:**
+- **GitHub QA audit of S178:** All changes verified — schema gate in dev skill, CORE.md §9, Rule 28, MESSAGE_BOARD gitignored ✅
+- **Architect sign-off Sprint 2 billing (#65):** GO — all tier gates correct, schema accurate, middleware order correct ✅
+- **Hacker security review Sprint 2 billing:** PASS WITH NOTES — 2 P0 fixes required before Railway deploy (not blocking QA) ✅
+- **findasale-qa Sprint 2 billing:** PASS — all 7 files clean, approved for main branch ✅
+- **conversation-defaults v5 reconstructed:** Rules 13+24-26 recovered from v4 package + S169 doc. Rules 14-23 confirmed permanently lost (never in git). Pushed to GitHub ✅
+- **Skill packaging protocol established:** CORE.md §9 updated with mandatory packaging steps. Both skills packaged as .skill ZIPs and pushed to `claude_docs/skills-package/` ✅
+- **Last Updated:** 2026-03-16 (session 179)
+
+**Pending — Patrick action items:**
+- [ ] Install conversation-defaults.skill via Cowork (click "Copy to your skills" card)
+- [ ] Install findasale-dev.skill via Cowork (click "Copy to your skills" card)
+- [ ] Fix Hacker P0-1: increment tokenVersion in syncTier.ts on webhook tier sync → dispatch findasale-dev next session
+- [ ] Fix Hacker P0-2: add STRIPE_SECRET_KEY startup check in index.ts → dispatch findasale-dev next session
+- [ ] Set 5 Stripe env vars on Railway (from STATE.md S177 section)
+- [ ] Set MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831 on Railway
+- [ ] Verify RESEND_API_KEY and RESEND_FROM_EMAIL on Railway
+- [ ] Open Stripe business account (currently on test keys)
+
+**Next session options (ranked):**
+1. **Fix Hacker P0s** (findasale-dev) — tokenVersion increment + STRIPE_SECRET_KEY check — required before billing goes live
+2. **Session log catch-up** (S172, S174, S177 missing from session-log.md)
+3. **Next roadmap batch:** #43 OG Images, #38 Entrance Pin, #61 Near-Miss Nudges
+
+---
+
 **Session 178 COMPLETE (2026-03-16) — #65 SPRINT 2 SHIPPED + WORKFLOW FIXES + SKILL GATE:**
 - **#65 Sprint 2 — SHIPPED:** Full Stripe billing infrastructure built and TS-fixed through 4 build cycles:
   - `packages/backend/src/controllers/billingController.ts` (NEW) — checkout, webhook, subscription GET, cancel
@@ -101,7 +127,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Customer Champion decision:** Insights + Performance consolidation — merged `/organizer/performance` into `/organizer/insights` with per-sale breakdown as expandable section. `/organizer/performance` now redirects. Feature COMPLETE ✅
 - **Insights+Performance consolidation built:** Lifetime stats on top, per-sale drill-down inline. Tested in Railway staging ✅
 - **Buyer preview on capture page:** Confirmed working in staging after last push ✅
-- **#37 Sale Calendar & Reminders:** Added “Remind Me” button to calendar page via `RemindMeButton.tsx` component. Email reminder service was already in place. Feature COMPLETE ✅
+- **#37 Sale Calendar & Reminders:** Added "Remind Me" button to calendar page via `RemindMeButton.tsx` component. Email reminder service was already in place. Feature COMPLETE ✅
 - **P1 bugs fixed (4 remaining, all now complete):**
   1. Draft item count cache race — FIXED: `inMutationFlight` ref guard, enabled guard on items query, `onMutate`/`onSettled` on all 3 mutations, `invalidateQueries` on face upload path
   2. Entrance pin coordinate validation — FIXED: backend `saleController.ts` returns 400 if pin >0.05° from sale; frontend warning threshold tightened to 0.0045°
@@ -109,7 +135,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
   4. Batch hold transaction safety — confirmed already fixed in prior session ✅
 - **P2 bugs fixed (7):**
   1. Bulk delete now requires confirmation modal before executing
-  2. Edit-sale page title conditional: shows “(Live)” + warning banner if sale is PUBLISHED
+  2. Edit-sale page title conditional: shows "(Live)" + warning banner if sale is PUBLISHED
   3. Onboarding wizard: localStorage guard prevents re-launch after completion
   4. Add-items page header: shows sale title + updated `<title>` tag
   5. Entrance pin guard: shows amber warning if geocoding failed (instead of silently hiding)
@@ -126,7 +152,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
   - Fixed `reminders.ts` auth middleware: same auth middleware rename
 - **SaleReminder schema shipped:** Migration 20260315000003 added to Neon (email-reminder tracking). Requires `prisma migrate deploy` on next Railway push.
 - **Roadmap items marked COMPLETE:**
-  - **#37 Sale Calendar & Reminders** — calendar page already existed; “Remind Me” button now added = DONE ✅
+  - **#37 Sale Calendar & Reminders** — calendar page already existed; "Remind Me" button now added = DONE ✅
   - **#6 Seller Performance Dashboard** — was already built live; insights+performance consolidation now done = DONE ✅
   - **#66 Open Data Export** — ZIP export (items.csv, sales.csv, purchases.csv), organizer dashboard button = DONE ✅
 - **Files changed this session:**

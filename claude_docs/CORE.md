@@ -227,6 +227,23 @@ Active skills are read-only at `/sessions/[session-id]/mnt/.skills/skills/`.
 4. **When to do this:** Any session where a SKILL.md edit needs to take effect immediately.
    Without reinstall, the new version only exists in git — the active skill is unchanged.
 
+### Skill Packaging (mandatory for all skill updates)
+
+After any SKILL.md edit is committed to git, the skill MUST be repackaged as a .skill ZIP and pushed to GitHub so Patrick can reinstall it via Cowork UI.
+
+**Process (every time a SKILL.md changes):**
+1. Fix frontmatter: `version` and `last_updated` fields must be nested under `metadata:` — top-level invalid keys fail the packager validator.
+2. Copy skill dir to `/tmp/skill-build/[skill-name]/`
+3. Run: `cd /sessions/[session]/mnt/.skills/skills/skill-creator && python -m scripts.package_skill /tmp/skill-build/[skill-name] /tmp/skill-build`
+4. Copy output to `claude_docs/skills-package/[skill-name].skill`
+5. Push .skill file to GitHub via MCP
+6. Present to Patrick via `mcp__cowork__present_files` — the card shows a "Copy to your skills" install button
+
+**Skills in `.skills/skills/[name]/` path** (conversation-defaults, dev-environment, skill-creator): Read-only in VM. Copy to /tmp, edit, package from copy.
+**Skills in `claude_docs/skills-package/[name]/` path** (all findasale-* skills): Writable. Edit in place, package from there.
+
+**Canonical .skill locations on GitHub:** `claude_docs/skills-package/[name].skill`
+
 ---
 
 ## Reference Docs (load on demand, not at init)
@@ -269,4 +286,4 @@ Checkpoints are observability, not gates. Never stop productive work just becaus
 
 ---
 
-Status: Behavioral Authority (v4.2, Session 169 — post-compression re-read, compression-aware push checklist)
+Status: Behavioral Authority (v4.3, Session 179 — skill packaging rule added)

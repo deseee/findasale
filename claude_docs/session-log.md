@@ -2,6 +2,34 @@
 
 ## Recent Sessions
 
+### 2026-03-16 · Session 179
+
+**Billing QA Pass + Skill Reconstruction + Packaging Protocol**
+
+**Shipped:**
+- GitHub audit of S178 work — all changes verified on main ✅
+- Architect sign-off Sprint 2 billing: GO ✅
+- Hacker security review Sprint 2 billing: PASS WITH NOTES (2 P0s — not blocking QA) ✅
+- findasale-qa Sprint 2 billing: PASS — all 7 files approved ✅
+- conversation-defaults v5 reconstructed: Rule 13 + Rules 24-26 recovered; Rules 14-23 confirmed permanently lost (never committed to git) ✅
+- Skill packaging protocol locked in CORE.md §9 — mandatory repackage after every SKILL.md edit ✅
+- Both skills packaged as .skill ZIPs and presented to Patrick for reinstall ✅
+
+**Decisions:**
+- Rules 14-23 are unrecoverable — were added to Cowork-installed packages in S138-S169 but never committed to git
+- .skill files must be pushed to claude_docs/skills-package/ on GitHub after every skill edit
+- Hacker P0s (tier cache staleness + STRIPE_SECRET_KEY check) do not block QA but block Railway deploy
+
+**Next up:**
+- Patrick installs both .skill files via Cowork
+- Next session: findasale-dev for Hacker P0 fixes, then Railway deploy
+
+**Subagents:** findasale-architect, findasale-hacker, findasale-qa, findasale-records (x2), skill-creator packaging
+
+**Scoreboard:** Files changed: 2 (.skill packages) + 2 (CORE.md, STATE.md, session-log.md) | Push method: MCP ✅ + update docs
+
+---
+
 ### 2026-03-16 · Session 178
 
 **#65 Sprint 2 — Stripe Billing Infrastructure + Workflow Fixes**
