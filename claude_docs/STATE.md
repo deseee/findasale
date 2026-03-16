@@ -7,6 +7,40 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 178 COMPLETE (2026-03-16) — #65 SPRINT 2 SHIPPED + WORKFLOW FIXES + SKILL GATE:**
+- **#65 Sprint 2 — SHIPPED:** Full Stripe billing infrastructure built and TS-fixed through 4 build cycles:
+  - `packages/backend/src/controllers/billingController.ts` (NEW) — checkout, webhook, subscription GET, cancel
+  - `packages/backend/src/lib/syncTier.ts` (NEW) — priceId → SubscriptionTier mapper
+  - `packages/backend/src/routes/billing.ts` (NEW) — billing route registration
+  - `packages/backend/src/index.ts` (MODIFIED) — raw body middleware before json() parser, billing routes registered
+  - `packages/backend/src/routes/items.ts` (MODIFIED) — requireTier('PRO') on /bulk
+  - `packages/backend/src/routes/export.ts` (MODIFIED) — requireTier('PRO') on export routes
+  - `packages/backend/src/routes/insights.ts` (MODIFIED) — requireTier('PRO') on /organizer
+  - `packages/frontend/pages/organizer/upgrade.tsx` (NEW) — tier comparison page, Stripe checkout CTA
+  - `packages/frontend/pages/organizer/subscription.tsx` (NEW) — subscription management page
+  - `packages/frontend/pages/organizer/settings.tsx` (MODIFIED) — subscription tab added
+- **upgrade.tsx TS fix:** `user?.organizerProfile` → `user?.organizerTier` (field doesn't exist on User type; correct field is `organizerTier?: string`) ✅
+- **Recurring push blocker fixed:** MESSAGE_BOARD.json git rm --cached + .gitignore — permanently untracked ✅
+- **Schema read gate added to dev SKILL.md:** Mandatory grep schema.prisma before any Prisma field reference ✅
+- **Skill update process documented:** CORE.md §9 — editing SKILL.md in git ≠ active skill updated; .skill reinstall required ✅
+- **Brand voice guide rewritten:** `claude_docs/brand/brand-voice-guide-2026-03-16.md` — expanded beyond estate sales to all 7 sale types ✅
+- **Last Updated:** 2026-03-16 (session 178)
+
+**Pending — Patrick action items:**
+- [ ] Run push block: `git add packages/frontend/pages/organizer/upgrade.tsx` + commit + `.\push.ps1`
+- [ ] Reinstall updated skills via Cowork (conversation-defaults.skill + findasale-dev.skill)
+- [ ] QA Sprint 2 billing endpoints (mandatory before beta — touches payment flows)
+- [ ] **Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway** (session 165)
+- [ ] **Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway** (session 165)
+- [ ] **Open Stripe business account** (currently on test keys)
+
+**Next session options (ranked):**
+1. **QA Sprint 2** (findasale-qa) — mandatory before production use
+2. **Session log catch-up** (S171–S177, 7 sessions behind — friction audit HIGH)
+3. **Next roadmap batch:** #43 OG Images, #38 Entrance Pin, #61 Near-Miss Nudges
+
+---
+
 **Session 177 COMPLETE (2026-03-16) — #65 SPRINT 1 SHIPPED + MAP FIX + #5 BUILD FIX + BRAND VOICE + STRIPE PRODUCTS:**
 - **Map fix (friend report):** CSP `connect-src`/`img-src` — added `tile.openstreetmap.org` (bare domain) + `maps.googleapis.com`. Added `position: relative` to map container in index.tsx to fix Leaflet z-index bleed ✅
 - **#5 Listing Type Schema Debt — BUILD FIX:** Removed broken `@findasale/shared` imports from `saleController.ts` and `itemController.ts`. Inlined `SaleType` + `ListingType` enums directly. Railway green (commit 6d70efff) ✅

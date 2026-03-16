@@ -2,6 +2,36 @@
 
 ## Recent Sessions
 
+### 2026-03-16 · Session 178
+
+**#65 Sprint 2 — Stripe Billing Infrastructure + Workflow Fixes**
+
+**Shipped:**
+- Full Sprint 2 billing layer: billingController.ts (checkout/webhook/subscription/cancel), syncTier.ts, billing.ts route, index.ts raw-body middleware, requireTier() wired to items/export/insights routes ✅
+- upgrade.tsx (tier comparison page + Stripe checkout CTA) — fixed 4 TS errors across 2 build cycles ✅
+- subscription.tsx (subscription management page) ✅
+- settings.tsx: subscription tab added ✅
+- upgrade.tsx final TS fix: `user?.organizerProfile` → `user?.organizerTier` (wrong nested object; User type has flat `organizerTier?: string`) ✅
+- MESSAGE_BOARD.json permanently untracked (git rm --cached + .gitignore) — recurring push blocker resolved ✅
+- Schema/package read gate added to dev SKILL.md (lines 165–201) — prevents invented field errors ✅
+- Skill update protocol documented in CORE.md §9 — active skills at mnt/.skills/ are read-only, reinstall required ✅
+- Brand voice guide rewritten to cover all 7 sale types (not just estate sales) ✅
+
+**Decisions:**
+- User.organizerProfile does not exist — correct auth field is `organizerTier?: string` (flat on User)
+- MESSAGE_BOARD.json is session bus only — permanently gitignored, never committed
+- Skill SKILL.md edits in git ≠ active skill updated; requires .skill zip packaging + Cowork reinstall
+
+**Next up:**
+- Patrick runs push for upgrade.tsx fix, reinstalls two skills, then QA dispatch for Sprint 2 billing
+
+**Blockers:**
+- upgrade.tsx push pending (Patrick)
+- findasale-dev.skill + conversation-defaults.skill reinstalls pending (Patrick)
+- Session log S171–S177 still 7 sessions behind (friction audit HIGH)
+
+---
+
 ### 2026-03-16 · Session 176
 
 **Full Tier Audit + Pricing Strategy Locked**

@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-16T03:13:45.162Z*
+*Generated at 2026-03-16T14:12:32.544Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -17,10 +17,10 @@ See report for details.
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
 ⚠ 4+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:927:        description: null, // TODO: Add description to schema if needed
-  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/backend/src/routes/items.ts:23:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
-  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:951:        description: null, // TODO: Add description to schema if needed
+  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/backend/src/routes/items.ts:24:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```
@@ -49,6 +49,7 @@ See report for details.
 ├── INSTALL-push-coordinator-SKILL.md
 ├── MESSAGE_BOARD.json
 ├── README.md
+├── SPRINT2-PUSH-INSTRUCTIONS.md
 ├── ai-config/
 │   └── global-instructions.md
 ├── camera-mode-mockup.jsx
@@ -59,10 +60,14 @@ See report for details.
 │   ├── SECURITY.md
 │   ├── STACK.md
 │   ├── STATE.md
+│   ├── architecture/
+│   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
+│   │   ├── ADR-065-PATRICK-DECISIONS.md
+│   │   └── ADR-065-QUICK-REFERENCE.md
 │   ├── archive/ (14 files)
 │   ├── beta-launch/ (5 files)
-│   ├── brand/ (8 files)
-│   ├── competitor-intel/ (1 files)
+│   ├── brand/ (9 files)
+│   ├── competitor-intel/ (2 files)
 │   ├── decisions-log.md
 │   ├── escalation-log.md
 │   ├── feature-decisions/
@@ -76,9 +81,13 @@ See report for details.
 │   ├── feature-notes/ (18 files)
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (4 files)
+│   ├── improvement-memos/ (1 files)
 │   ├── logs/ (2 files)
+│   ├── marketing/
+│   │   └── content-pipeline/
+│   │       └── content-2026-03-16.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (34 files)
+│   ├── operations/ (37 files)
 │   ├── research/ (9 files)
 │   ├── self-healing/ (1 files)
 │   ├── session-log-archive.md
@@ -114,16 +123,16 @@ See report for details.
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (61 files)
+│   │   │   ├── controllers/ (62 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
 │   │   │   ├── instrument.ts
 │   │   │   ├── jobs/ (13 files)
-│   │   │   ├── lib/ (3 files)
-│   │   │   ├── middleware/ (2 files)
+│   │   │   ├── lib/ (4 files)
+│   │   │   ├── middleware/ (3 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (59 files)
+│   │   │   ├── routes/ (60 files)
 │   │   │   ├── services/ (21 files)
 │   │   │   └── utils/ (4 files)
 │   │   └── tsconfig.json
@@ -135,7 +144,7 @@ See report for details.
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (83 migrations)
+│   │   │   ├── migrations/ (84 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -172,7 +181,8 @@ See report for details.
 │       ├── src/
 │       │   ├── constants/
 │       │   │   └── tagVocabulary.ts
-│       │   └── index.ts
+│       │   ├── index.ts
+│       │   └── tierGate.ts
 │       └── tsconfig.json
 ├── pnpm
 ├── pnpm-workspace.yaml
