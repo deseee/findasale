@@ -12,7 +12,16 @@ import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
-import { VALID_LISTING_TYPES } from '@findasale/shared'; // Feature #5: Listing type validation
+
+// Feature #5: Item listing/transaction types (inlined from shared package)
+enum ListingType {
+  FIXED = 'FIXED',
+  AUCTION = 'AUCTION',
+  REVERSE_AUCTION = 'REVERSE_AUCTION',
+  LIVE_DROP = 'LIVE_DROP',
+  POS = 'POS',
+}
+const VALID_LISTING_TYPES = Object.values(ListingType) as string[];
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
