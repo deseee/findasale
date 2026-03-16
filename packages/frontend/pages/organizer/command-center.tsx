@@ -1,11 +1,9 @@
 /**
  * Command Center Dashboard
  *
- * Multi-sale overview for PRO/TEAMS organizers managing 5+ active sales simultaneously.
- * Displays aggregate metrics, status-filtered sales, and pending actions across all sales.
- *
- * Tier gating: PRO tier minimum (SIMPLE users redirected to /organizer/upgrade)
+ * Multi-sale overview for PRO/TEAMS organizers.
  * Route: /organizer/command-center
+ * Tier gating: PRO minimum (SIMPLE redirected to /organizer/upgrade)
  */
 
 import React, { useState } from 'react';
@@ -28,19 +26,16 @@ const CommandCenterPage = () => {
   const { showToast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('active');
 
-  // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
 
-  // Tier gate: SIMPLE users redirected to upgrade page
   if (!authLoading && user && !canAccess('PRO')) {
     router.push('/organizer/upgrade');
     return null;
   }
 
-  // Fetch command center data
   const { data, isLoading, error, refetch } = useCommandCenter(selectedStatus);
 
   if (authLoading) {
@@ -72,7 +67,6 @@ const CommandCenterPage = () => {
     );
   }
 
-  // Loading skeleton state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 py-8">
@@ -81,23 +75,14 @@ const CommandCenterPage = () => {
             <Skeleton className="h-8 w-64 mb-2" />
             <Skeleton className="h-4 w-80" />
           </div>
-          {/* Aggregate stats skeleton */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32" />)}
           </div>
-          {/* Filter tabs skeleton */}
           <div className="flex gap-4 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-10 w-24" />
-            ))}
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-24" />)}
           </div>
-          {/* Cards skeleton */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-64" />
-            ))}
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-64" />)}
           </div>
         </div>
       </div>
@@ -114,7 +99,6 @@ const CommandCenterPage = () => {
       </Head>
 
       <div className="min-h-screen bg-warm-50">
-        {/* Header breadcrumb */}
         <div className="bg-white border-b border-warm-200 px-4 py-4 mb-8">
           <div className="max-w-6xl mx-auto flex items-center gap-3">
             <Link href="/organizer/dashboard" className="text-warm-400 hover:text-warm-600 text-sm">
@@ -126,47 +110,30 @@ const CommandCenterPage = () => {
         </div>
 
         <div className="max-w-6xl mx-auto px-4 py-8">
-          {/* Page title */}
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-warm-900 mb-2">Multi-Sale Command Center</h2>
             <p className="text-warm-600">View all your active sales and manage across multiple listings at once.</p>
           </div>
 
-          {/* Aggregate stats row */}
           {summary && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {/* Total active sales */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
-                  Active Sales
-                </p>
+                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Active Sales</p>
                 <p className="text-3xl font-bold text-warm-900">{summary.totalActiveSales}</p>
                 <p className="text-xs text-warm-500 mt-2">Currently live</p>
               </div>
-
-              {/* Total items */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
-                  Total Items
-                </p>
+                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Total Items</p>
                 <p className="text-3xl font-bold text-warm-900">{summary.totalItems}</p>
                 <p className="text-xs text-warm-500 mt-2">Across all sales</p>
               </div>
-
-              {/* Total revenue */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
-                  Total Revenue
-                </p>
+                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Total Revenue</p>
                 <p className="text-3xl font-bold text-green-700">${summary.totalRevenue.toFixed(2)}</p>
                 <p className="text-xs text-warm-500 mt-2">From all sales</p>
               </div>
-
-              {/* Total pending actions */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
-                  Pending Actions
-                </p>
+                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Pending Actions</p>
                 <p className={`text-3xl font-bold ${summary.totalPendingActions > 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {summary.totalPendingActions}
                 </p>
@@ -175,7 +142,6 @@ const CommandCenterPage = () => {
             </div>
           )}
 
-          {/* Status filter tabs */}
           <div className="flex gap-2 mb-8 border-b border-warm-200">
             {(['active', 'upcoming', 'recent', 'all'] as const).map((status) => (
               <button
@@ -187,12 +153,11 @@ const CommandCenterPage = () => {
                     : 'border-transparent text-warm-600 hover:text-warm-900'
                 }`}
               >
-                {status === 'all' ? 'All' : status === 'active' ? 'Active' : status === 'upcoming' ? 'Upcoming' : 'Recent'}
+                {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
               </button>
             ))}
           </div>
 
-          {/* Sales grid */}
           {sales.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {sales.map((sale) => (
