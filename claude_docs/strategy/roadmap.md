@@ -312,7 +312,7 @@ Spring Content Push, Beta Dry Run, and Support KB Pre-Population all complete. S
 ## Deferred & Long-Term Hold
 
 | Feature | Reason | Revisit |
-|---------|--------|---------|
+|---------|--------|--------|
 | White-label MaaS | [Tier: TEAMS] Business decision — beta validation first | After beta data |
 | Consignment Integration | [Tier: PRO] Thrift store POS — post-beta complexity | After beta data |
 | QuickBooks Integration | [Tier: SIMPLE] CSV export covers 80% of need | When organizers ask |
