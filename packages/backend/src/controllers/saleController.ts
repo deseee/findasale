@@ -10,7 +10,14 @@ import { notifyMatchedBuyers } from '../services/buyerMatchService';
 import { markSalePublished } from '../services/mailerliteService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
-import { SaleType } from '@findasale/shared'; // Feature #5: Use shared enum constant
+
+// Feature #5: Sale type categories (inlined from shared package)
+enum SaleType {
+  ESTATE = 'ESTATE',
+  YARD = 'YARD',
+  AUCTION = 'AUCTION',
+  FLEA_MARKET = 'FLEA_MARKET',
+}
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
