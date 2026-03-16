@@ -92,6 +92,7 @@ import exportRouter from './routes/export';             // Sprint 2: Export feat
 import socialRouter from './routes/social';             // Sprint 2: Social template generator
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
+import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -192,6 +193,7 @@ const contactLimiter = rateLimit({
 
 // Raw body middleware for Stripe webhooks (must come before json parser)
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 
 // JSON parser with 1 MB body size limit to prevent payload attacks
 app.use(express.json({ limit: '1mb' }));
@@ -247,6 +249,7 @@ app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hy
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features
 app.use('/api/social', socialRouter);                            // Sprint 2: Social template generator
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
+app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
 
 // Protected route example

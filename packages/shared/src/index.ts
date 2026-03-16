@@ -1,5 +1,8 @@
 // Shared types and utilities will go here
 
+// Feature #65: Subscription tier gating
+export { type SubscriptionTier, hasAccess, TIER_RANK, FEATURE_TIERS } from './tierGate';
+
 // Sprint 1: Listing Factory tag vocabulary
 export { CURATED_TAGS, MAX_CUSTOM_TAGS, type CuratedTag } from './constants/tagVocabulary';
 
@@ -19,6 +22,18 @@ export enum ListingType {
   LIVE_DROP = 'LIVE_DROP',
   POS = 'POS',
 }
+
+// Feature #5: Validator functions for enum consistency
+export const VALID_SALE_TYPES = Object.values(SaleType) as string[];
+export const VALID_LISTING_TYPES = Object.values(ListingType) as string[];
+
+export const isValidSaleType = (value: any): value is SaleType => {
+  return typeof value === 'string' && VALID_SALE_TYPES.includes(value);
+};
+
+export const isValidListingType = (value: any): value is ListingType => {
+  return typeof value === 'string' && VALID_LISTING_TYPES.includes(value);
+};
 
 export type Sale = {
   id: string;
