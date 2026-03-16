@@ -33,6 +33,12 @@ coverage/
 .env.test
 
 # =========================
+# Session Operational Files
+# =========================
+# Session bus — written by agents at runtime, not source code
+claude_docs/operations/MESSAGE_BOARD.json
+
+# =========================
 # Logs
 # =========================
 npm-debug.log*

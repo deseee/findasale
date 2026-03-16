@@ -200,6 +200,8 @@ on completion listing all files changed."
   - YES → Read MESSAGE_BOARD.json for new messages before responding or continuing.
   - NO → Skip.
 
+**Note:** `MESSAGE_BOARD.json` is in `.gitignore` and is NOT git-tracked. Agents should still read and write it normally — it just won't appear in `git status` or block pushes.
+
 Why this exists: E4 inter-agent communication foundation (session 96). (Added 2026-03-09.)
 
 ---
