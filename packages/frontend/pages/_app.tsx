@@ -12,6 +12,7 @@ import { usePushSubscription } from '../hooks/usePushSubscription';
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
 import OrganizerOnboardingModal from '../components/OrganizerOnboardingModal';
 import ErrorBoundary from '../components/ErrorBoundary';
+import NudgeBar from '../components/NudgeBar';
 
 // SW update notifier — renders a dismissible toast when a new service worker is waiting
 // Registers the user's browser for push notifications once they're logged in
@@ -137,6 +138,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
             <ServiceWorkerUpdateNotifier />
             <PushSubscriber />
             <InstallPrompt />
+            <NudgeBar />
             {/* Phase 31: OAuth → JWT bridge */}
             <OAuthBridge />
             {/* Phase 27: First-time shopper onboarding */}
