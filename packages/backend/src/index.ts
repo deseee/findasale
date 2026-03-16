@@ -102,6 +102,7 @@ import billingRoutes from './routes/billing';             // #65 Sprint 2: Strip
 import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
 import socialProofRoutes from './routes/socialProof';     // Feature 67: Social Proof Notifications
 import snoozeRoutes from './routes/snooze';               // Feature 23: Unsubscribe-to-Snooze
+import commandCenterRoutes from './routes/commandCenter';  // #68 Sprint 1: Command Center Dashboard
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
@@ -269,6 +270,7 @@ app.use('/api/reminders', reminderRoutes);                       // Sale Reminde
 app.use('/api/nudges', nudgeRoutes);                             // Feature 61: Near-Miss Nudges
 app.use('/api/social-proof', socialProofRoutes);                 // Feature 67: Social Proof Notifications
 app.use('/api/snooze', snoozeRoutes);                            // Feature 23: Unsubscribe-to-Snooze
+app.use('/api/organizer/command-center', commandCenterRoutes);    // #68 Sprint 1: Command Center Dashboard
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
