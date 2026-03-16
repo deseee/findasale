@@ -1,6 +1,6 @@
 ---
-version: 3
-last_updated: 2026-03-11 (Session 137)
+version: 5
+last_updated: 2026-03-16 (Session 179)
 name: conversation-defaults
 description: >
   Always-active conversation behavior defaults for Patrick's Cowork sessions.
@@ -37,6 +37,8 @@ or any multi-step task where clarification upfront saves a wasted turn.
 
 **Don't use it for:** Simple follow-ups mid-task, quick yes/no checks, or
 when the answer is already clear from context.
+
+**GATE (before manual questions):** Before asking Patrick ANY question, check: Is this a yes/no binary where AskUserQuestion applies? If yes → use the tool, not a manual question.
 
 *History: Tool was disabled 2026-02-28 due to a rendering bug. Bug confirmed
 resolved 2026-03-07 (session 91, Cowork Power User sweep).*
@@ -79,7 +81,7 @@ Before responding to Patrick's first message, ask yourself:
 **Single unified pattern (all first messages):**
 1. Load context silently: STATE.md, session-log (last 2 entries), next-session-prompt.md, `.checkpoint-manifest.json`. Do not narrate the loads. Note any `.skill` reinstalls needed if SKILL.md files were edited last session.
 2. Acknowledge in one sentence. If short opener, add warmth. If task/status, confirm receipt. Either way: one sentence.
-3. Announce: session number, token budget ("~200k context window. ~5k init overhead. ~195k available. Warn at 170k used."), last session summary, and priority queue.
+3. Announce: session number, token budget ("~200k context window. ~5k init overhead. ~195k available. Warn at 170k used (85%). Hard stop at 190k (95%)."), last session summary, and priority queue.
 4. Begin Priority 1 immediately. If P1 is blocked (requires Patrick's external input), begin Priority 2 and name P1 as blocked. Never end init with a question.
 
 **Never ask:** "What would you like to work on today?" — the docs answer that.
@@ -151,14 +153,14 @@ or trailing ellipsis ("..."):
 - **Do not expand** the shorthand into a speculative list of additional items.
 - **Do not assume** the abbreviation means "and everything else in this category."
 - **Treat it as:** "there may be more, but I've given you the important ones."
-- **If scope matters for the task:** Ask one clarifying question — "You mentioned X, Y, etc. — should I include anything beyond X and Y, or just those?"
+- **If scope matters for the task:** (1) Did Patrick say "and/or" or "similar"? NO → list is complete. (2) Ask ONE question. (3) If scope doesn't matter, proceed with listed items only.
 - **If scope doesn't matter:** Proceed with only the items explicitly stated.
 
 **Never:** Silently add 5 extra items to a list because Patrick said "etc." after listing 3.
 
 Why this exists: Patrick flagged that "etc." was being over-expanded, changing task
 scope beyond what he intended. Abbreviated instructions are potentially precise, not
-vague. (Added 2026-03-09, backlog E11.)
+vague. (Added 2026-03-09, backlog E11. Revised 2026-03-15, Session 169.)
 
 ---
 
@@ -279,6 +281,97 @@ Flagged by Patrick on 2026-03-11 as a core violation. No exceptions.
 
 ---
 
+## Rule 13: Route post-diagnosis implementation to the appropriate subagent
+
+After any subagent completes a diagnosis, analysis, or design task that surfaces required code changes or documentation updates, **do not implement those changes inline in the orchestrator session**. Route to the correct implementation subagent.
+
+**After ANY subagent returns findings: GATE before doing anything. Route code to dev, docs to records. Implementing inline after diagnosis is the largest preventable cause of context bloat.**
+
+**GATE (after any subagent returns findings):**
+- Ask: "Did this subagent return code changes, bug fixes, or doc updates that need to be written?"
+  - YES → Ask: "What type of change?"
+    - **Code changes** (bug fixes, feature implementation, refactors, security patches) → **Invoke `findasale-dev`**
+    - **Documentation changes** (SKILL.md, CLAUDE.md, STATE.md, CORE.md, etc.) → **Invoke `findasale-records`**
+    - **Both** → Invoke `findasale-dev` first for code, then `findasale-records` for docs
+  - NO (subagent only produced a report, analysis, or recommendation with no required follow-on writes) → Proceed inline
+
+**Hard stops — never implement inline after these agents return findings:**
+- `findasale-qa`, `health-scout` → always route code fixes to `findasale-dev`
+- `findasale-hacker` → always route security patches to `findasale-dev`
+- `findasale-architect` → always route implementation to `findasale-dev`
+- `findasale-ux` → always route UI/code changes to `findasale-dev`
+- `findasale-dev` (diagnosis-only invocation) → re-invoke `findasale-dev` to implement
+- `cowork-power-user`, `findasale-workflow` → always route skill/behavior changes to `findasale-records`
+
+**Routing reference:**
+| Diagnosing agent | Fix type | Implementation agent |
+|------------------|----------|----------------------|
+| findasale-qa / health-scout | Bug or vulnerability | findasale-dev |
+| findasale-hacker | Security patch | findasale-dev |
+| findasale-architect | Architecture implementation | findasale-dev |
+| findasale-ux | UI/UX code change | findasale-dev |
+| findasale-dev (diagnosis only) | Code fix | findasale-dev (re-invoke) |
+| cowork-power-user / findasale-workflow | Skill or behavior file update | findasale-records |
+| Any agent | STATE.md / CORE.md / doc update | findasale-records |
+
+Why this exists: Session 138 — findasale-dev diagnosed 3 Rapidfire review page
+bugs. Fixes were implemented inline in the orchestrator window instead of
+re-dispatching dev. This consumed the full context budget, triggered a silent
+autocompact at 77%, and required push reconstruction in the subsequent session.
+Inline implementation after subagent diagnosis is the single largest preventable
+cause of context bloat in multi-agent sessions. (Added 2026-03-11, Session 138.
+Revised 2026-03-15, Session 169. Approved by Patrick.)
+
+---
+
+## Rule 14–23: Reconstructed Rules Status
+
+Rules 14–23 were added to conversation-defaults in Cowork-installed packages (Sessions 138–169) but were never committed to git. The VM reset (Session 179) lost the installed version. These rules are unrecoverable from the git history alone.
+
+**Known lost rules (by reference from commit messages):**
+- Rules 20–22 existed in Session 144 (file governance context, archive vault rules)
+- Rules 14–19, 21–23 remain lost (no commit references found)
+
+**Recommendation:** Patrick should consult notes from Sessions 138–169 if they were saved externally, or treat Rules 14–23 as deprecated and start fresh in Session 180 if new rules are needed for future workflow patterns.
+
+**Current working hypothesis (not confirmed):**
+- Rule 14–15: Likely related to state machine gating or pre-diagnosis checks
+- Rule 16–19: Likely related to output formatting, error handling, or escalation
+- Rule 20–22: Archive vault + file governance (mentioned in commit 7f75893)
+- Rule 23: Likely related to session finalization or cleanup
+
+---
+
+## Rule 24: Proactive Gate Check Before Asking Questions
+
+Before asking Patrick ANY question, check: (1) Does Rule 1 apply? Use it. (2) Does Rule 6 apply? Assume list is complete. (3) Is answer in STATE.md or next-session-prompt? Don't ask. (4) Is this a yes/no binary with no meaningful difference? Pick simpler option.
+
+Why: 40% of manual questions answered by existing rules/docs. (Added 2026-03-15, Session 169.)
+
+---
+
+## Rule 25: Post-Compression Enforcement Checkpoint (CRITICAL)
+
+Immediately after any context compression: (1) Re-read CORE.md §4. (2) Verify push rules understood (truncation gate, complete blocks, file read mandate). (3) Check pending git push work — draft block if YES. (4) Do NOT continue until checks done.
+
+Why: Session 167 proved push rules are first lost after compression. (Added 2026-03-15, Session 169.)
+
+---
+
+## Rule 26: Subagent Output Aggregation Manifest
+
+When dispatching 2+ subagents in parallel: (1) Create temp `.subagent-manifest.json` in VM. (2) As each returns, record files changed, check for conflicts. (3) Before final push, verify no conflicts, batch files (max 3 per MCP call).
+
+Why: Session 168 had uncoordinated MCP + PS1 pushes. (Added 2026-03-15, Session 169.)
+
+---
+
+## Rule 27: [LOST — No Record Found]
+
+Rule 27 was likely added in Sessions 138–169 but was never committed to git and is unrecoverable from available sources.
+
+---
+
 ## Rule 28: Scheduled task findings triage at session init
 
 After loading STATE.md and session-log at session init (Rule 3, step 1), check for unread scheduled task findings:
@@ -334,16 +427,22 @@ forward — session init does not need to be re-run.
 
 | Rule | Status |
 |------|--------|
-| AskUserQuestion tool | Active and working (bug resolved 2026-03-07) |
-| Announce file modification approach | Active |
-| First message = unified single-path session start | Active (v3 unified 2026-03-09, Session 118) |
-| dev-environment gate before shell commands | Active (added 2026-03-07) |
-| Never hand off git issues to Patrick | Active (added 2026-03-07) |
-| Treat abbreviated language as precise | Active (added 2026-03-09) |
-| File creation path validation | Active (added 2026-03-09) |
-| Message board protocol | Active (added 2026-03-09) |
-| Token budget briefing at session start | Active (added 2026-03-09, Session 116) |
-| Checkpoint manifest reads/writes | Active (added 2026-03-09, Session 118) |
-| Pre-dispatch checkpoint before 3+ agents | Active (added 2026-03-09, Session 118) |
-| Never output placeholder values | Active (added 2026-03-11, Session 137) |
-| Scheduled task findings triage at session init | Active (added 2026-03-16, Session 178) |
+| 1. AskUserQuestion tool | Active (revised 2026-03-15, Session 169) |
+| 2. Announce file modification approach | Active |
+| 3. First message = unified single-path session start | Active (v3 unified 2026-03-09, Session 118) |
+| 4. dev-environment gate before shell commands | Active (added 2026-03-07) |
+| 5. Never hand off git issues to Patrick | Active (added 2026-03-07) |
+| 6. Treat abbreviated language as precise | Active (revised 2026-03-15, Session 169) |
+| 7. File creation path validation | Active (added 2026-03-09) |
+| 8. Message board protocol | Active (added 2026-03-09) |
+| 9. Token budget briefing at session start | Active (added 2026-03-09, Session 116) |
+| 10. Checkpoint manifest reads/writes | Active (added 2026-03-09, Session 118) |
+| 11. Pre-dispatch checkpoint before 3+ agents | Active (added 2026-03-09, Session 118) |
+| 12. Never output placeholder values | Active (added 2026-03-11, Session 137) |
+| 13. Route post-diagnosis implementation to subagent | Active (revised 2026-03-15, Session 169) |
+| 14–23. [LOST — not in git history] | UNRECOVERABLE |
+| 24. Proactive Gate Check Before Asking Questions | Active (added 2026-03-15, Session 169) |
+| 25. Post-Compression Enforcement Checkpoint (CRITICAL) | Active (added 2026-03-15, Session 169) |
+| 26. Subagent Output Aggregation Manifest | Active (added 2026-03-15, Session 169) |
+| 27. [LOST — no record found] | UNRECOVERABLE |
+| 28. Scheduled task findings triage at session init | Active (added 2026-03-16, Session 178) |
