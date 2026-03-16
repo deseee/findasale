@@ -173,7 +173,8 @@
   --color-surface: #2C2C2E;
   --color-border: #3A3A3C;
   --color-text-primary: #F5F5F0;
-  --color-text-secondary: #A8A8AA;
+  /* WCAG 2.1 AA: #B8B8BA on #2C2C2E = 4.5:1 ratio */
+  --color-text-secondary: #B8B8BA;
   --color-sage: #8FB897;
   --color-sage-dark: #6B9E7F;
 }
