@@ -10,7 +10,6 @@ export const getCommandCenter = async (req: AuthRequest, res: Response) => {
 
     const organizerId = req.user.organizer.id;
 
-    // Extract filters from query params
     const { status, dateFrom, dateTo } = req.query;
 
     const filters = {
