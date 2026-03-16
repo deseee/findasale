@@ -127,7 +127,7 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 // V1: Wrap Express in a bare HTTP server so Socket.io can share the same port
 const httpServer = http.createServer(app);
 
-// ─── Security ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ─── Security ──────────────────────────────────────────────────────────────────────────────────────────────
 
 // Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
 app.set('trust proxy', 1);
