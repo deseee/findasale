@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useTheme } from '../../hooks/useTheme';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import Tooltip from '../../components/Tooltip';
 import ThemeToggle from '../../components/ThemeToggle';
 import Head from 'next/head';
@@ -23,6 +24,7 @@ const OrganizerSettingsPage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
+  const { tier, isPro } = useOrganizerTier();
   const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -131,17 +133,39 @@ const OrganizerSettingsPage = () => {
 
           {/* Subscription Tab */}
           {activeTab === 'subscription' && (
-            <div className="card p-6">
-              <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Subscription</h2>
-              <p className="text-warm-600 dark:text-gray-400 mb-6">
-                Manage your FindA.Sale subscription and billing information.
-              </p>
-              <Link
-                href="/organizer/subscription"
-                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
-              >
-                View Subscription Details
-              </Link>
+            <div className="space-y-6">
+              <div className="card p-6">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Current Plan</h2>
+                <div className="flex items-center justify-between mb-4 p-4 bg-warm-50 dark:bg-gray-800 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-warm-600 dark:text-gray-400">Your subscription tier:</p>
+                    <p className="text-2xl font-bold text-warm-900 dark:text-gray-100 mt-1">
+                      {tier === 'SIMPLE' ? 'SIMPLE (Free)' : tier === 'PRO' ? 'PRO ($29/mo)' : 'TEAMS (Enterprise)'}
+                    </p>
+                  </div>
+                </div>
+                {tier === 'SIMPLE' && (
+                  <div className="mb-6 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                      Unlock powerful features to grow your business.
+                    </p>
+                    <Link
+                      href="/organizer/upgrade"
+                      className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                    >
+                      Upgrade to PRO
+                    </Link>
+                  </div>
+                )}
+                {tier !== 'SIMPLE' && (
+                  <Link
+                    href="/organizer/subscription"
+                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                  >
+                    Manage Subscription
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 

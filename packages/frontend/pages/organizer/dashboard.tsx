@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge';
@@ -56,6 +57,7 @@ const OrganizerDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
+  const { isSimple, canAccess } = useOrganizerTier();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
@@ -307,42 +309,46 @@ const OrganizerDashboard = () => {
                 </div>
               )}
             </div>
-            <Link
-              href="/organizer/insights"
-              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              Insights
-            </Link>
-            <Link
-              href="/organizer/insights"
-              className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              📊 Insights
-            </Link>
-            <Link
-              href="/organizer/print-inventory"
-              className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              🖨️ Print Inventory
-            </Link>
-            <Link
-              href="/organizer/webhooks"
-              className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              🔗 Webhooks
-            </Link>
-            <Link
-              href="/organizer/pos"
-              className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              💳 POS
-            </Link>
-            <Link
-              href="/organizer/brand-kit"
-              className="bg-pink-100 hover:bg-pink-200 text-pink-900 font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              🎨 Brand Kit
-            </Link>
+            {canAccess('PRO') && (
+              <Link
+                href="/organizer/insights"
+                className="bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                📊 Insights
+              </Link>
+            )}
+            {canAccess('PRO') && (
+              <Link
+                href="/organizer/print-inventory"
+                className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🖨️ Print Inventory
+              </Link>
+            )}
+            {canAccess('TEAMS') && (
+              <Link
+                href="/organizer/webhooks"
+                className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🔗 Webhooks
+              </Link>
+            )}
+            {canAccess('PRO') && (
+              <Link
+                href="/organizer/pos"
+                className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                💳 POS
+              </Link>
+            )}
+            {canAccess('PRO') && (
+              <Link
+                href="/organizer/brand-kit"
+                className="bg-pink-100 hover:bg-pink-200 text-pink-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🎨 Brand Kit
+              </Link>
+            )}
             <Link
               href="/organizer/holds"
               className="relative bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold py-2 px-6 rounded-lg transition-colors"
@@ -354,13 +360,15 @@ const OrganizerDashboard = () => {
                 </span>
               )}
             </Link>
-            <button
-              onClick={() => window.open('/api/organizers/export', '_blank')}
-              className="bg-cyan-100 hover:bg-cyan-200 text-cyan-900 font-bold py-2 px-6 rounded-lg transition-colors"
-              title="Download your sales, items, and purchases data"
-            >
-              ↓ Export Data
-            </button>
+            {canAccess('PRO') && (
+              <button
+                onClick={() => window.open('/api/organizers/export', '_blank')}
+                className="bg-cyan-100 hover:bg-cyan-200 text-cyan-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                title="Download your sales, items, and purchases data"
+              >
+                ↓ Export Data
+              </button>
+            )}
           </div>
 
           {/* Tab Navigation */}
@@ -558,8 +566,12 @@ const OrganizerDashboard = () => {
                             <Link href={`/organizer/add-items/${sale.id}`} className="text-sm text-amber-600 hover:underline">Items</Link>
                             <button onClick={() => setOpenQRSale(openQRSale === sale.id ? null : sale.id)} className="text-sm text-amber-600 hover:underline">{openQRSale === sale.id ? 'Hide QR' : 'QR Code'}</button>
                             <button onClick={() => handleCloneSale(sale.id)} disabled={cloningId === sale.id} className="text-sm text-amber-600 hover:underline disabled:opacity-50">{cloningId === sale.id ? 'Cloning...' : 'Clone'}</button>
-                            <button onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)} className="text-sm text-red-600 hover:underline font-semibold">{flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}</button>
-                            <button onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })} className="text-sm text-sage-600 hover:underline font-semibold">📣 Share</button>
+                            {canAccess('PRO') && (
+                              <button onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)} className="text-sm text-red-600 hover:underline font-semibold">{flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}</button>
+                            )}
+                            {canAccess('PRO') && (
+                              <button onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })} className="text-sm text-sage-600 hover:underline font-semibold">📣 Share</button>
+                            )}
                           </div>
                           {openQRSale === sale.id && (
                             <div className="mt-4 pt-4 border-t border-warm-100">
