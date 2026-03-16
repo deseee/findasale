@@ -99,6 +99,7 @@ import socialRouter from './routes/social';             // Sprint 2: Social temp
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
+import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
 import { authenticate } from './middleware/auth';
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
@@ -123,7 +124,7 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 // V1: Wrap Express in a bare HTTP server so Socket.io can share the same port
 const httpServer = http.createServer(app);
 
-// ─── Security ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ─── Security ──────────────────────────────────────────────────────────────────────────────────────────────
 
 // Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
 app.set('trust proxy', 1);
@@ -257,6 +258,7 @@ app.use('/api/social', socialRouter);                            // Sprint 2: So
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
+app.use('/api/nudges', nudgeRoutes);                             // Feature 61: Near-Miss Nudges
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
