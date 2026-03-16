@@ -1,13 +1,13 @@
 # Dynamic Project Context
-*Generated at 2026-03-15T22:43:22.019Z*
+*Generated at 2026-03-16T03:13:45.162Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
 No recent session found in log.
 
 ## Health Status
-Last scan: records-audit-sessions-110-118-2026-03-09
-3 documentation drift items found. 2 are HIGH priority — features marked as open that
+Last scan: session-175-compaction-analysis-2026-03-15
+See report for details.
 
 ## Environment
 - GitHub CLI: ✗ not authenticated (not required when GitHub MCP is active — check MCP tools at session start)
@@ -17,10 +17,10 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
 ⚠ 4+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:927:        description: null, // TODO: Add description to schema if needed
-  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/backend/src/routes/items.ts:23:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
-  /sessions/charming-dazzling-pasteur/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:927:        description: null, // TODO: Add description to schema if needed
+  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/backend/src/routes/items.ts:23:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/gifted-determined-dirac/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```
@@ -59,7 +59,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   ├── SECURITY.md
 │   ├── STACK.md
 │   ├── STATE.md
-│   ├── archive/ (13 files)
+│   ├── archive/ (14 files)
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (8 files)
 │   ├── competitor-intel/ (1 files)
@@ -73,17 +73,20 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
 │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
 │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
-│   ├── feature-notes/ (17 files)
+│   ├── feature-notes/ (18 files)
 │   ├── guides/ (0 files)
-│   ├── health-reports/ (2 files)
+│   ├── health-reports/ (4 files)
 │   ├── logs/ (2 files)
 │   ├── next-session-prompt.md
-│   ├── operations/ (31 files)
+│   ├── operations/ (34 files)
 │   ├── research/ (9 files)
 │   ├── self-healing/ (1 files)
+│   ├── session-log-archive.md
 │   ├── session-log.md
 │   ├── skills-package/ (30 files)
-│   ├── strategy/ (4 files)
+│   ├── strategic/
+│   │   └── advisory-board-adr-065-pricing-analysis-2026-03-16.md
+│   ├── strategy/ (5 files)
 │   ├── ux-spotchecks/
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
 │   │   └── add-items-ux-audit-2026-03-15.md
@@ -111,7 +114,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (59 files)
+│   │   │   ├── controllers/ (61 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
@@ -120,7 +123,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   │   ├── lib/ (3 files)
 │   │   │   ├── middleware/ (2 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (58 files)
+│   │   │   ├── routes/ (59 files)
 │   │   │   ├── services/ (21 files)
 │   │   │   └── utils/ (4 files)
 │   │   └── tsconfig.json
@@ -132,7 +135,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (82 migrations)
+│   │   │   ├── migrations/ (83 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -143,7 +146,7 @@ Last scan: records-audit-sessions-110-118-2026-03-09
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (113 files)
+│   │   ├── components/ (114 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (1 files)
 │   │   ├── hooks/ (10 files)
