@@ -4,17 +4,9 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S175",
-    "startedAt": "2026-03-15T00:00:00.000Z",
-    "checkpoints": [
-      {
-        "turn": 1,
-        "timestamp": "2026-03-15T23:50:00Z",
-        "estimatedSessionTokens": 8,
-        "filesRead": 4,
-        "toolCalls": 4,
-        "note": "S175 init + documentation updates. Token efficiency rules T1–T7 added to CORE.md. Manifest updated to S175. Session-log entry added. MESSAGE_BOARD entry added."
-      },
+    "sessionId": "S176",
+    "startedAt": "2026-03-15T00:00:00.000Z (placeholder — S176 starts next)",
+    "checkpoints": [],
       {
         "turn": 1,
         "timestamp": "2026-03-15T00:00:00Z",
@@ -73,6 +65,17 @@
   ],
   "compressionEvents": [],
   "sessionHistory": [
+    {
+      "sessionId": 175,
+      "date": "2026-03-15",
+      "tokensBurned": "~60k (est)",
+      "checkpointsLogged": 0,
+      "compressions": 0,
+      "subagents": 0,
+      "filesChanged": 6,
+      "budgetDelta": "succeeded-on-plan",
+      "notes": "#66 routing fix (404→401), P1 CSV injection fix (escapeCSV formula prevention), #31 Brand Kit UI shipped (page + fields + nav link). T1–T7 token efficiency rules added to CORE.md. ADR-065 Organizer Mode Tiers approved (feature matrix decision deferred to S176 first task). Health-scout: 2 P2s logged for S176 (reminderType validation, archiver stream cleanup)."
+    },
     {
       "sessionId": 169,
       "date": "2026-03-15",
