@@ -21,7 +21,7 @@ const OrganizerSettingsPage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
@@ -76,7 +76,7 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200">
-            {['payments', 'notifications', 'profile'].map((tab) => (
+            {['payments', 'subscription', 'notifications', 'profile'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
@@ -108,6 +108,22 @@ const OrganizerSettingsPage = () => {
               >
                 {isConnectingStripe ? 'Redirecting to Stripe...' : 'Setup Stripe Connect'}
               </button>
+            </div>
+          )}
+
+          {/* Subscription Tab */}
+          {activeTab === 'subscription' && (
+            <div className="card p-6">
+              <h2 className="text-xl font-semibold text-warm-900 mb-4">Subscription</h2>
+              <p className="text-warm-600 mb-6">
+                Manage your FindA.Sale subscription and billing information.
+              </p>
+              <Link
+                href="/organizer/subscription"
+                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
+              >
+                View Subscription Details
+              </Link>
             </div>
           )}
 

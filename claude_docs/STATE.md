@@ -7,27 +7,41 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 176 COMPLETE (2026-03-15) — FULL TIER AUDIT + ROADMAP TIER-TAG + PRICING LOCKED:**
-- **Full tier audit completed:** Roadmap.md (v35→v37) audited against GitHub codebase. All 47 features slotted into organizer/user tiers (SIMPLE/PRO/ENTERPRISE). Shipped features moved to separate section and removed from pipeline ✅
-- **Tier framework locked:** SIMPLE (free) / PRO ($29/mo or $290/yr) / ENTERPRISE (defer Q4 2026) ✅
-- **Pricing scheme locked:** Platform fee 10% flat (matches Etsy, below eBay/EstateSales.NET). Hunt Pass $4.99/30d = confirmed intentional monetization ✅
-- **Features tagged + prioritized:** Virtual Queue [SIMPLE], Social Templates [SIMPLE], Flash Deals [SIMPLE] (brand-spreading hooks). Coupons [SIMPLE] 3 active max / [PRO] unlimited. Affiliate [DEFER] ✅
-- **Shoppers tier:** 100% free indefinitely (no gating) ✅
-- **Documentation created (5 new files):**
-  - `claude_docs/strategy/complete-feature-inventory-2026-03-15.md` (47 features with tiers + est. hours)
-  - `claude_docs/strategy/pricing-and-tiers-overview-2026-03-15.md` (framework + tier breakdown)
-  - `claude_docs/operations/pricing-analysis-2026-03-15.md` (10% flat fee rationale + competitor analysis)
-  - `claude_docs/operations/feature-tier-classification-2026-03-16.md` (SIMPLE/PRO/ENTERPRISE matrix)
-  - `claude_docs/feature-notes/feature-tier-matrix-2026-03-15.md` (detailed tier matrix)
-- **Stale docs archived:** `pricing-strategy-STALE-archived-2026-03-15.md` (moved to archive/) ✅
-- **Files changed:** roadmap.md (v37), decisions-log.md (S176 entries), MESSAGE_BOARD.json, .checkpoint-manifest.json, archive-index.json
-- **Last Updated:** 2026-03-16 (session 176)
+**Session 177 COMPLETE (2026-03-16) — #65 SPRINT 1 SHIPPED + MAP FIX + #5 BUILD FIX + BRAND VOICE + STRIPE PRODUCTS:**
+- **Map fix (friend report):** CSP `connect-src`/`img-src` — added `tile.openstreetmap.org` (bare domain) + `maps.googleapis.com`. Added `position: relative` to map container in index.tsx to fix Leaflet z-index bleed ✅
+- **#5 Listing Type Schema Debt — BUILD FIX:** Removed broken `@findasale/shared` imports from `saleController.ts` and `itemController.ts`. Inlined `SaleType` + `ListingType` enums directly. Railway green (commit 6d70efff) ✅
+- **#65 Sprint 1 — SHIPPED:** Full subscription tier infrastructure deployed:
+  - `packages/database/prisma/schema.prisma` — `SubscriptionTier` enum (SIMPLE/PRO/TEAMS) + 5 Organizer fields
+  - `packages/database/prisma/migrations/20260316000000_add_subscription_tiers/migration.sql` — Neon migration applied ✅
+  - `packages/shared/src/tierGate.ts` — `hasAccess()`, `TIER_RANK`, `FEATURE_TIERS`
+  - `packages/shared/src/index.ts` — exports tierGate
+  - `packages/backend/src/middleware/requireTier.ts` — Express middleware factory
+  - `packages/backend/src/middleware/auth.ts` — attaches `organizerProfile` for tier checks
+  - `packages/backend/src/controllers/authController.ts` — JWT embeds `subscriptionTier` on all 3 auth paths
+- **Neon migration applied:** `20260316000000_add_subscription_tiers` + `20260315235851_add_sale_reminder` both applied ✅
+- **Stripe products created (via MCP):** Pro Monthly ($29), Pro Annual ($290), Teams Monthly ($79), Teams Annual ($790), 7-day trial coupon (btQhQIH2)
+- **Brand voice guide created:** `claude_docs/brand/brand-voice-guide-2026-03-16.md` ✅
+- **Roadmap v38:** All [ENT]/[ENTERPRISE] → [TEAMS]. Teams ships on schedule (no deferral). No founding organizer program. 7-day trial approved ✅
+- **ADR-065 docs created:** `ADR-065-IMPLEMENTATION-PLAN.md`, `ADR-065-QUICK-REFERENCE.md`, `ADR-065-PATRICK-DECISIONS.md`
+- **All files on GitHub main** — 4 MCP push batches (7366ea8, e1d940f, fcba9c1, cd5cdc2)
+- **Last Updated:** 2026-03-16 (session 177)
 
-**NEXT SESSION (S177):**
-1. **PRIORITY 1: #65 Organizer Mode Tiers implementation** — Dispatch findasale-dev (tier infrastructure + Stripe MCP for billing). Est. 8–11 hrs
-2. **PRIORITY 2: #5 Listing Type Schema Debt** — Small backend cleanup (confirm no breaking changes)
-3. **PRIORITY 3: Brand Voice session** — Before beta organizer outreach
-4. **Patrick action items:** Set MAILERLITE_SHOPPERS_GROUP_ID on Railway, verify RESEND keys, open Stripe business account
+**NEXT SESSION (S178) — #65 SPRINT 2:**
+1. **Stripe billing endpoints** — checkout session, subscription webhook handler, syncTier utility
+2. **requireTier() applied** — wire PRO/TEAMS middleware to batch ops, analytics, export, brand kit routes
+3. **Upgrade UI** — `/organizer/upgrade` page (tier comparison, Stripe checkout CTA, 7-day trial flow)
+4. **Subscription management page** — current plan, cancel, upgrade/downgrade
+
+**Patrick action items (still pending):**
+- [ ] **Set 5 Stripe env vars on Railway** (Sprint 2 needs these before billing endpoints work):
+  - `STRIPE_PRO_MONTHLY_PRICE_ID=price_1TBZjpLTUdEUnHOTblzuy25L`
+  - `STRIPE_PRO_ANNUAL_PRICE_ID=price_1TBZjuLTUdEUnHOT60xJgL4j`
+  - `STRIPE_TEAMS_MONTHLY_PRICE_ID=price_1TBZjyLTUdEUnHOTVQyBVx0Q`
+  - `STRIPE_TEAMS_ANNUAL_PRICE_ID=price_1TBZk1LTUdEUnHOTRAcyRJ10`
+  - `STRIPE_TRIAL_COUPON_ID=btQhQIH2`
+- [ ] **Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway** (session 165)
+- [ ] **Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway** (session 165)
+- [ ] **Open Stripe business account** (currently on test keys)
 
 ---
 

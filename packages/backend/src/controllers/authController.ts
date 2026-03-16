@@ -191,6 +191,14 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
+    // Load organizer if user is an organizer (for subscriptionTier in JWT)
+    let organizerProfile = null;
+    if (user.role === 'ORGANIZER') {
+      organizerProfile = await prisma.organizer.findUnique({
+        where: { userId: user.id }
+      });
+    }
+
     // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
     const token = jwt.sign(
       {
@@ -201,6 +209,7 @@ export const register = async (req: Request, res: Response) => {
         points: user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
+        subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -265,6 +274,14 @@ export const oauthLogin = async (req: Request, res: Response) => {
       });
     }
 
+    // Load organizer if user is an organizer (for subscriptionTier in JWT)
+    let organizerProfile = null;
+    if (user.role === 'ORGANIZER') {
+      organizerProfile = await prisma.organizer.findUnique({
+        where: { userId: user.id }
+      });
+    }
+
     const token = jwt.sign(
       {
         id:           user.id,
@@ -274,6 +291,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         points:       user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
+        subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -317,6 +335,14 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid credentials - Incorrect password' });
     }
 
+    // Load organizer if user is an organizer (for subscriptionTier in JWT)
+    let organizerProfile = null;
+    if (user.role === 'ORGANIZER') {
+      organizerProfile = await prisma.organizer.findUnique({
+        where: { userId: user.id }
+      });
+    }
+
     // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
     const token = jwt.sign(
       {
@@ -327,6 +353,7 @@ export const login = async (req: Request, res: Response) => {
         points: user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
+        subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }

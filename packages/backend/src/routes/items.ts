@@ -17,6 +17,7 @@ import {
   publishItem,
 } from '../controllers/itemController';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 // P2 #10: CURATED_TAGS — single source of truth (shared package not yet wired into backend tsconfig rootDir)
@@ -51,7 +52,8 @@ router.post('/:itemId/publish', authenticate, publishItem);
 // Declared before /:id to prevent 'bulk' being captured as an item ID.
 // Frontend (add-items.tsx) uses this for delete / status / category / price_adjust / isActive / price / tags.
 // All operations verify organizer ownership + status-safe constraints before mutating.
-router.post('/bulk', authenticate, async (req, res) => {
+// #65 Sprint 2: Gated to PRO tier only (batch operations require paid plan)
+router.post('/bulk', authenticate, requireTier('PRO'), async (req, res) => {
   try {
     const authReq = req as AuthRequest;
     if (!authReq.user || authReq.user.role !== 'ORGANIZER') {

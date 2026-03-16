@@ -14,7 +14,7 @@ FindA.Sale charges a **10% platform fee on every transaction** (unchanged across
 
 ## Organizer Tiers
 
-### SIMPLE (Free — Decision: rename "Essential"?)
+### SIMPLE (Free)
 
 The 19 core features every organizer gets at zero subscription cost:
 
@@ -72,11 +72,11 @@ Everything in SIMPLE, plus:
 
 ---
 
-### ENTERPRISE (Decision: defer to Q4 2026 — rename "Teams"?)
+### TEAMS ($79/month)
 
-**Recommendation from Architect + Board: Do NOT launch at beta. Reassess Q4 2026 after 50+ paying organizers.**
+**Recommendation from Architect + Board: Ships as features are built. No deferral.**
 
-When it ships, Enterprise/Teams will include everything in PRO plus:
+Teams tier will include everything in PRO plus:
 - Multi-user team access (role-based: admin/editor/viewer)
 - API access with OAuth2 auth, rate limiting, versioning
 - Webhooks (new-sale, item-sold, hold-expired events)
@@ -85,7 +85,7 @@ When it ships, Enterprise/Teams will include everything in PRO plus:
 - Priority support SLA
 - Dedicated account manager
 
-**Pricing when it launches:** $199/month or custom annual contract.
+**Pricing:** $79/month or $790/year (locked).
 
 ---
 
@@ -124,15 +124,11 @@ For organizers who don't want a monthly PRO subscription but want specific featu
 
 **60 days before beta ends:** Announce to all beta organizers: "You've been on PRO free during beta. When beta ends on [DATE], the standard plan is $29/month. As a founding organizer, you can lock in a special rate."
 
-**Founding Organizer Program (Decision: approve scope?):**
-- Price: $99/year locked for 12 months (then renews at standard rate)
-- Available to: First 10 beta organizers only (scarcity)
-- Commitment: 1-year upfront
-- Badge: "Founding Organizer" badge visible on organizer profile
-- Revenue impact: $990 immediate vs. hoping for $290/year later
-- Message: "Help us build FindA.Sale — get PRO at 71% off for your first year"
+**Founding Organizer Program: Not Being Pursued**
 
-**Day 1 of paid tier:** Feature lockdown for SIMPLE users (loss aversion drives conversion). New sign-ups get 45-day free PRO trial.
+No founding organizer program. Beta testers get full PRO access during beta period. At beta end, standard pricing ($29/mo PRO, $79/mo Teams) applies to all organizers.
+
+**Day 1 of paid tier:** Feature lockdown for SIMPLE users (loss aversion drives conversion). New sign-ups get 7-day free PRO trial (approved).
 
 ---
 
@@ -167,36 +163,35 @@ Recommended middle ground: Unlimited sales, unlimited items — but no analytics
 
 ---
 
-## 6 Decisions Patrick Needs to Make
+## Locked Tier Decisions
 
-1. **Approve PRO price at $29/month?** (Investor recommendation — 60% below EstateSales.NET)
+**Status: All decisions finalized by Patrick (Session 177+)**
 
-2. **Approve tier naming?** Current: SIMPLE/PRO/ENTERPRISE. Board recommends: Essential/Pro/Teams. (Estate sale organizers are small businesses — "Enterprise" is a mismatch.)
+1. ✅ **PRO price: $29/month or $290/year** (Investor recommendation — 60% below EstateSales.NET)
 
-3. **Founding Organizer program: scope and price?**
-   - Option A: $99/year, first 10 organizers, 12-month lock
-   - Option B: $19/month locked forever, first 25 organizers, 1-year commitment
-   - Option C: No founding program — keep beta fully free, launch full pricing at beta end
+2. ✅ **Tier naming locked: SIMPLE / PRO / TEAMS** (All references to ENTERPRISE are now retired. Estate sale organizers are small businesses — Teams is the right fit.)
 
-4. **Remove Enterprise/Teams from beta launch?** (Board consensus: yes, defer to Q4 2026 after 50+ paying organizers. Simplifies messaging dramatically.)
+3. ✅ **No Founding Organizer program.** Beta testers get full PRO access during beta period. Standard pricing applies at beta end.
 
-5. **Consider fee model inversion?** ($20/month flat + 12–15% fee vs. current 10% + $29/month) — Patrick's call whether to explore this before beta ends or stay the course with current 10% model.
+4. ✅ **Teams tier ships as features are built.** No deferral to Q4 2026. Teams features launch on schedule.
 
-6. **SIMPLE tier friction limits:** Which of these to enforce at launch?
-   - [ ] Cap at 1–3 concurrent active sales (recommended by Board)
-   - [ ] Bulk operations capped at 10 items (recommended by Architect)
-   - [ ] No exports at all (recommended by Architect)
-   - [ ] No analytics (recommended by Architect)
+5. ✅ **Fee model: Stay the course.** Keep 10% platform fee (unchanged across all tiers) + optional $29/month PRO subscription.
+
+6. ✅ **SIMPLE tier friction limits enforced at launch:**
+   - Cap at 1–3 concurrent active sales
+   - Bulk operations capped at 10 items
+   - No exports
+   - No analytics
 
 ---
 
 ## What to Tell Beta Testers
 
-Once Patrick approves decisions above, the beta communication is:
+The beta communication is:
 
-> "You're on FindA.Sale PRO free during beta. All features are unlocked so you can explore everything and give us honest feedback. When beta ends [TARGET DATE], the standard plan is $29/month for PRO. As a founding organizer, you'll have the option to lock in [FOUNDING RATE] — details coming soon. We'll give you 60 days' notice before any features change."
+> "You're on FindA.Sale PRO free during beta. All features are unlocked so you can explore everything and give us honest feedback. When beta ends [TARGET DATE], the standard plan is $29/month for PRO. We'll give you 60 days' notice before any features change."
 
-This sets expectations without locking pricing before Patrick approves. It positions beta testers as insiders, not test subjects.
+This sets expectations clearly. Beta testers get a preview of all PRO features at no cost; standard pricing applies at beta end.
 
 ---
 

@@ -10,7 +10,7 @@
 36 undocumented features discovered in GitHub codebase audit. All classified into ADR-065 tier framework:
 - **SIMPLE (Free):** Core operations, basic organizer tools
 - **PRO ($29/month):** Analytics, batch ops, exports, advanced automation
-- **ENTERPRISE (Future):** Teams, white-label, API
+- **TEAMS (Future):** Teams, white-label, API
 - **FREE_SHOPPER:** All shopper features (network effect priority)
 - **STANDALONE_PAID:** Hunt Pass ($4.99/30d), one-time purchases, usage-based features
 - **INFRASTRUCTURE:** Internal systems, not customer-facing
@@ -28,23 +28,23 @@
 | 3. Flash Deals | PRO | CALLOUT | Amazon, Clearance sites | Time-limited pricing is conversion driver; worth separate marketing mention |
 | 4. Sale Waitlist | SIMPLE | YES | Shopify, EventBrite | Low implementation cost; core visibility tool for sold-out sales; basic tier feature |
 | 5. Message Templates | PRO | NO | Zendesk, Slack | Productivity multiplier (response time +40%); batch communication scales with organizer success |
-| 6. Virtual Queue / Line Management | ENTERPRISE | NO | Ticketmaster, Apple Stores | High-touch, labor-intensive feature; requires support + real-time infrastructure (defer) |
+| 6. Virtual Queue / Line Management | TEAMS | NO | Ticketmaster, Apple Stores | High-touch, labor-intensive feature; requires support + real-time infrastructure (defer) |
 | 7. Organizer Digest Emails | SIMPLE | NO | Shopify, Etsy | Standard platform hygiene; informs organizers of activity, drives retention |
 | 8. Notification Inbox | SIMPLE | YES | Shopify, Stripe | Core UX component; in-app inbox expected at free tier |
 | 9. Reviews (receive + manage) | SIMPLE | YES | Etsy, Airbnb | Reputation system drives trust; organizer credibility is product foundation |
-| 10. Affiliate Program | ENTERPRISE | NO | Shopify, WordPress | High-friction setup, requires referral infrastructure + payouts; defer to post-scale |
+| 10. Affiliate Program | TEAMS | NO | Shopify, WordPress | High-friction setup, requires referral infrastructure + payouts; defer to post-scale |
 | 11. Disputes | SIMPLE | YES | Stripe, PayPal | Trust & safety critical; required for transaction integrity (platform liability) |
 | 12. A/B Testing | INFRASTRUCTURE | NO | Internal tools only | Platform optimization, not customer-facing |
 | 13. Invites | SIMPLE | YES | Slack, Teams | Network growth tool; organizer can invite shoppers/other organizers (viral vector) |
 | 14. Coupons | PRO | YES | Shopify, Etsy | Discount mechanics + rate limiting = analytics + control (PRO lever) |
 | 15. Tiers Backend | INFRASTRUCTURE | NO | ADR-065 operationalization | Gating system, not end-user feature |
-| 16. Webhooks | ENTERPRISE | NO | Stripe, Zapier | For 3rd-party integrations; API maturity defer to post-MVP |
+| 16. Webhooks | TEAMS | NO | Stripe, Zapier | For 3rd-party integrations; API maturity defer to post-MVP |
 | 17. Earnings PDF | PRO | YES | Etsy, Shopify | Financial reporting = professional-grade operations; export mirrors CSV gating |
 
 **Organizer Tier Breakdown:**
 - SIMPLE: 10 features (checklist, waitlist, digest, inbox, reviews, disputes, invites)
 - PRO: 5 features (pickup scheduling, flash deals, message templates, coupons, earnings PDF)
-- ENTERPRISE: 1 feature (virtual queue, affiliate program)
+- TEAMS: 1 feature (virtual queue, affiliate program)
 - INFRASTRUCTURE: 2 features (A/B testing, tiers backend)
 
 ---
@@ -107,7 +107,7 @@
 |------|-------|---------|
 | SIMPLE | 10 | Core organizer operations (no paywall) |
 | PRO | 5 | Analytics, logistics, batch tools ($29/mo) |
-| ENTERPRISE | 2 | Teams, white-label, high-touch (Q4 2026+) |
+| TEAMS | 2 | Teams, white-label, high-touch (Q4 2026+) |
 | FREE_SHOPPER | 17 | All shopper discovery, gamification, messaging (free forever) |
 | STANDALONE_PAID | 3 | Hunt Pass + micro-purchases + referral tracking |
 | INFRASTRUCTURE | 4 | Internal systems, not customer-facing |
@@ -142,7 +142,7 @@
 - **Coupon Management** — Create and distribute discount codes
 - **Earnings PDF Export** — Download financial reports for tax/accounting
 
-### ENTERPRISE (Coming Later)
+### TEAMS (Coming Later)
 **For professional teams and white-label operators**
 
 - Team member access & role management
@@ -198,29 +198,29 @@
 
 ## 3 Decisions for Patrick
 
-### Decision 1: Virtual Queue (Item #6) — ENTERPRISE or DEFER?
+### Decision 1: Virtual Queue (Item #6) — TEAMS or DEFER?
 
-**Current Classification: ENTERPRISE (defer to post-scale)**
+**Current Classification: TEAMS (defer to post-scale)**
 
 **Tradeoff:**
-- **ENTERPRISE tier** signals premium, high-touch feature (real-time SMS, queue management, labor-intensive).
+- **TEAMS tier** signals premium, high-touch feature (real-time SMS, queue management, labor-intensive).
 - **Risk:** Organizers expect this at SIMPLE or PRO tier for high-demand sales. EstateSales.NET doesn't offer it; this is a differentiator.
 - **Alternative:** Move to **PRO** tier if queue management can be fully self-service (no SMS, just in-app). Estimated savings: 40% implementation complexity.
 
-**Recommendation:** Keep ENTERPRISE. It requires real-time infrastructure, SMS integration, and organizer support. Launch core features first; this is a "nice-to-have" in the early market. Revisit when you have 20+ concurrent sales/day organizers.
+**Recommendation:** Keep TEAMS. It requires real-time infrastructure, SMS integration, and organizer support. Launch core features first; this is a "nice-to-have" in the early market. Revisit when you have 20+ concurrent sales/day organizers.
 
 ---
 
-### Decision 2: Affiliate Program (Item #10) — ENTERPRISE or DEFER Further?
+### Decision 2: Affiliate Program (Item #10) — TEAMS or DEFER Further?
 
-**Current Classification: ENTERPRISE (Q4 2026+ if demand)**
+**Current Classification: TEAMS (Q4 2026+ if demand)**
 
 **Tradeoff:**
-- **ENTERPRISE tier** assumes professional ops (payouts, fraud detection, referral attribution).
+- **TEAMS tier** assumes professional ops (payouts, fraud detection, referral attribution).
 - **Risk:** Part-time organizers (your early market) won't care. Referral mechanics work better as **SIMPLE organic feature** (no payouts, reputation-only).
 - **Alternative:** Launch **free referral tracking** (SIMPLE) showing "You invited X organizers" badges. Monetize later via affiliate credits toward PRO subscription.
 
-**Recommendation:** DEFER payouts (ENTERPRISE) until you have 30+ organizers + clear repeat revenue signal. Launch lightweight referral badges (SIMPLE) in S177+ if Founding Organizer program shows adoption.
+**Recommendation:** DEFER payouts (TEAMS) until you have 30+ organizers + clear repeat revenue signal. Launch lightweight referral badges (SIMPLE) in S177+ if Founding Organizer program shows adoption.
 
 ---
 
@@ -242,7 +242,7 @@
 
 - [ ] **Review tier assignments** — any overrides before submission?
 - [ ] **Confirm pricing page language** — read-friendly for estate sale audience?
-- [ ] **Approve 3 decision points** — ENTERPRISE virtual queue, affiliate defer, simple coupons?
+- [ ] **Approve 3 decision points** — TEAMS virtual queue, affiliate defer, simple coupons?
 - [ ] **Finalize Hunt Pass messaging** — prominent upsell location on pricing page?
 - [ ] **Flag organizer tier gates** — which features require backend `checkTierAccess()` retrofit?
 - [ ] **Plan roadmap update** — append this classification to roadmap.md with decision log?

@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-15 (v37 — Session 176 cont.: Pipeline cleanup complete. Done items removed from Feature Pipeline (all now in Shipped Features section). Tier tags added to all remaining untagged items: #13 [ENT], #65 [PRO], #67 [SIMPLE], #68 [PRO], #69 [PRO], #70 [SIMPLE], #71 [SIMPLE], Vision #56 [FREE/PAID_ADDON], #57-59 [FREE], #60 [PRO]. Agent Task Queue done items collapsed. v36: Full GitHub tier audit, Shipped Features section, 31 undocumented features.)
+**Last Updated:** 2026-03-16 (v38 — Session 177: Tier names locked: SIMPLE/PRO/TEAMS (ENTERPRISE retired). All [ENT]/[ENTERPRISE] tags replaced with [TEAMS]. Teams features ship on schedule, no deferral. No founding organizer program. 7-day free trial for Pro approved. v37: Pipeline cleanup complete. Done items removed from Feature Pipeline (all now in Shipped Features section). Tier tags added to all remaining untagged items.)
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -216,7 +216,7 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 ### Phase 4 — Post-16 Weeks
 | # | Feature | Est. | Notes |
 |---|---------|------|-------|
-| 13 | Premium Organizer Tier | 2 sprints | [ENT] Infrastructure — feature gating + billing integration. |
+| 13 | Premium Organizer Tier | 2 sprints | [TEAMS] Infrastructure — feature gating + billing integration. |
 | 14 | Real-Time Status Updates | 1 sprint | [PRO] Organizer mobile widget, SMS/email alerts. |
 | 15 | Shopper Referral Rewards expansion | 1 sprint | [FREE] Viral growth loop. |
 | 16 | Verified Organizer Badge | 1–2 sprints | [PRO] Professional differentiation, trust signal. |
@@ -244,9 +244,9 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 | 61 | Near-Miss Nudges | 0.25 sprint | [SIMPLE] Casino-psychology progress nudges: "You're 1 favorite away from unlocking Early Bird Access!" Layers onto any gamification feature as it ships. Variable-ratio schedule drives 30-40% higher completion. Ethical: real progress only, no manufactured near-misses. (Innovation R3, Casino lens) |
 | 62 | Digital Receipt + Returns | 1-2 sprints | [FREE] Auto-generate digital receipt with item photos + prices after every POS transaction. Push to shopper's app profile. Optional organizer-set return window (24h/48h/none). Builds trust, enables returns on high-value items, feeds purchase history for ML. Pairs with POS v2 + Loot Log (#50). (Innovation R3, Big Box lens) |
 | 63 | Dark Mode + Accessibility-First | 1.5 sprints | [FREE] Tailwind dark variant across all components + system preference detection + high-contrast outdoor mode + font sizing controls. WCAG 2.1 AA compliance. Estate sale shoppers skew older — larger fonts, higher contrast, better outdoor visibility are real needs. SEO boost from Lighthouse accessibility scores. (Innovation R3, Mobile lens) |
-| 65 | Organizer Mode Tiers (Simple/Pro/Enterprise) | 2 sprints | [PRO] Progressive disclosure framework. Simple (5 buttons: create → photo → price → publish → paid). Pro (batch ops, analytics, tags, branding, exports). Enterprise (API access, bulk import/export, webhooks, multi-user teams, white-label). Feature-flag architecture — every future feature gets tagged with its tier. Architectural answer to "simple surface + complex depth." (Innovation R3, Progressive Disclosure lens) |
+| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | 2 sprints | [PRO] Progressive disclosure framework. Simple (5 buttons: create → photo → price → publish → paid). Pro (batch ops, analytics, tags, branding, exports). Teams (API access, bulk import/export, webhooks, multi-user teams, white-label). Feature-flag architecture — every future feature gets tagged with its tier. Architectural answer to "simple surface + complex depth." (Innovation R3, Progressive Disclosure lens) |
 | 67 | Social Proof Notifications | 0.5 sprint | [SIMPLE] Real-time aggregate activity: "47 people viewed this today." Friend activity for connected users. Extends Hype Meter (#34) with individual social connections. Opt-in privacy controls. Ships with Hype Meter. (Innovation R3, Social lens) |
-| 68 | Command Center Dashboard | 2 sprints | [PRO] Multi-sale overview for power organizers managing 2-3+ sales simultaneously. Key metrics per sale, quick-switch, alert feed ("Sale A has 3 expired holds"), customizable widgets for Enterprise tier. Pro/Enterprise Mode feature. (Innovation R3, Progressive Disclosure lens) |
+| 68 | Command Center Dashboard | 2 sprints | [PRO] Multi-sale overview for power organizers managing 2-3+ sales simultaneously. Key metrics per sale, quick-switch, alert feed ("Sale A has 3 expired holds"), customizable widgets for Teams tier. Pro/Teams Mode feature. (Innovation R3, Progressive Disclosure lens) |
 | 69 | Local-First Offline Mode | 3 sprints | [PRO] Full offline capability via service worker + IndexedDB. Catalog items, set prices, take photos with zero internet. Sync on reconnect. Conflict resolution (last-write-wins for fields, merge for photos). Competitive requirement — PROSALE works offline. Estate sales happen in basements/barns with no signal. (Innovation R3, GitHub lens) |
 | 70 | Live Sale Feed | 1 sprint | [SIMPLE] Real-time activity stream during active sales: "Victorian lamp just sold for $45!" "New hold on Eames chair." WebSocket-powered, leverages existing POS infrastructure. 80% of livestream FOMO at 10% of livestream complexity. Ships after POS v2 stabilizes. (Innovation R3, Social lens) |
 | 71 | Organizer Reputation Score | 1.5 sprints | [SIMPLE] Public trust score (1-5 stars) from: response time, sale frequency, photo quality (AI), shopper ratings, dispute rate. Displayed on profile + every listing. "New Organizer" badge for cold-start. Foundational trust infrastructure for marketplace scale. Ship before national expansion. (Innovation R3, Emerging lens) |
@@ -262,7 +262,7 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 | 50 | Loot Log | 1.5 sprints | [FREE] Personal purchase history + "my collection" gallery for shoppers. Social sharing of best finds. Retention through identity investment. |
 | 51 | Sale Ripples | 1 sprint | [FREE] Smart notification algorithm — "A sale just posted 2 miles from a sale you liked." Proximity + preference signals. Drives spontaneous visits. (Innovation bonus, Board v26) |
 | 52 | Estate Sale Encyclopedia | 3 sprints | [FREE] Crowdsourced knowledge base: item identification guides, era/style references, price benchmarks by region. Long-tail SEO moat. Community contribution model. |
-| 53 | Cross-Platform Aggregator | 2 sprints | [ENTERPRISE] Pull listings from EstateSales.NET, Craigslist, Facebook Marketplace into unified search. "Search everywhere from one place." Major moat if executed. Legal review required. |
+| 53 | Cross-Platform Aggregator | 2 sprints | [TEAMS] Pull listings from EstateSales.NET, Craigslist, Facebook Marketplace into unified search. "Search everywhere from one place." Major moat if executed. Legal review required. |
 | 54 | Crowdsourced Appraisal API | 2.5 sprints | [PAID_ADDON] Users submit photos → community + AI estimate value range. Revenue potential as standalone tool or API. Requires critical mass of knowledgeable users. |
 | 55 | Seasonal Discovery Challenges | 1 sprint | [FREE] Time-limited themed challenges — "Holiday Treasure Hunt" (Dec), "Spring Refresh" (Mar). Badges + leaderboard placement. Drives seasonal engagement spikes. |
 
@@ -313,7 +313,7 @@ Spring Content Push, Beta Dry Run, and Support KB Pre-Population all complete. S
 
 | Feature | Reason | Revisit |
 |---------|--------|---------|
-| White-label MaaS | [Tier: ENTERPRISE] Business decision — beta validation first | After beta data |
+| White-label MaaS | [Tier: TEAMS] Business decision — beta validation first | After beta data |
 | Consignment Integration | [Tier: PRO] Thrift store POS — post-beta complexity | After beta data |
 | QuickBooks Integration | [Tier: SIMPLE] CSV export covers 80% of need | When organizers ask |
 | Video-to-inventory | [Tier: FUTURE] Vision models can't reliably segment rooms yet | Late 2026+ |
@@ -326,17 +326,17 @@ Spring Content Push, Beta Dry Run, and Support KB Pre-Population all complete. S
 
 | Instant Flash Auctions | [Tier: PRO] Pre-beta, zero shoppers — no demand signal yet. DA: PAUSE. | After beta + 4–6 wks shopper data |
 | Live Stream Sale Events | [Tier: PRO] Heaviest build (3–4 sprints), requires on-camera organizers. DA: RETHINK. | After beta proves organizer appetite |
-| Verified Organizer Insurance Badge | [Tier: ENTERPRISE] Requires micro-insurance partner — unvalidated market. DA: DEFER. | After beta data + partner conversations |
+| Verified Organizer Insurance Badge | [Tier: TEAMS] Requires micro-insurance partner — unvalidated market. DA: DEFER. | After beta data + partner conversations |
 | Hyper-Local Pop-Up Sale Network | [Tier: FREE] Heatmap (#28) covers density; "pop-up network" is marketing layer on top. DA: RETHINK. | After Heatmap proves cluster value |
 
 | Pokéstop-Style Sale Markers | [Tier: FREE] Gamification mismatch — estate sale shoppers skew older, Pokémon framing alienates core demo. Board rejected 12-0. (Session 156) | Revisit if shopper demo shifts younger |
-| Trader Network | [Tier: ENTERPRISE] P2P trading adds liability, moderation burden, and trust complexity. Not core to organizer value prop. Board rejected. (Session 156) | After platform scale justifies marketplace expansion |
+| Trader Network | [Tier: TEAMS] P2P trading adds liability, moderation burden, and trust complexity. Not core to organizer value prop. Board rejected. (Session 156) | After platform scale justifies marketplace expansion |
 | Egg Hatching Mechanic | [Tier: FREE] Too game-y for audience. Confusing metaphor for non-gamers. Board rejected. (Session 156) | Unlikely — consider lighter gamification instead |
 | Team Rivalries | [Tier: FREE] Competitive team mechanics don't match collaborative sale-shopping culture. Board rejected. (Session 156) | Unlikely — revisit only if community features prove demand |
 | Raid-Style Group Events | [Tier: FREE] Complex coordination + real-time features for uncertain demand. Board rejected. (Session 156) | After community features prove engagement |
-| Professional Certifications | [Tier: ENTERPRISE] Requires industry partnerships, legal review, ongoing administration. Low ROI for beta stage. Board rejected. (Session 156) | After organizer base exceeds 100+ |
+| Professional Certifications | [Tier: TEAMS] Requires industry partnerships, legal review, ongoing administration. Low ROI for beta stage. Board rejected. (Session 156) | After organizer base exceeds 100+ |
 | Mood Boards | [Tier: FREE] Nice-to-have but no clear retention or revenue driver. Board rejected as low priority. (Session 156) | After Collector Passport (#45) proves collection-tracking demand |
-| AR Item Overlay | [Tier: ENTERPRISE] Hardware/browser support still spotty. High build cost for novelty feature. Board rejected. (Session 156) | Late 2027+ when WebXR matures |
+| AR Item Overlay | [Tier: TEAMS] Hardware/browser support still spotty. High build cost for novelty feature. Board rejected. (Session 156) | Late 2027+ when WebXR matures |
 | QR/Barcode Item Labels | [Tier: SIMPLE] Print scannable labels during intake → POS scan for instant lookup/checkout. Patrick flagged high potential from retail experience. Pairs with POS v2 + Rapidfire. Not in board review — added manually. (Session 156) | Strong candidate for Phase 4 promotion when POS sees real usage |
 | City Weekend Landing Pages (Metro Explorer) | [Tier: FREE] SEO-indexed per-metro pages (/grand-rapids-estate-sales). ISR + Schema.org markup. High SEO ROI but slow payoff (6–12 wk indexing). Innovation R1 Gap #4. (Session 156) | After 10+ active sales in GR; start with Tier 2 cities |
 | Featured Listings (Feature Boost) | [Tier: PAID_ADDON] Paid homepage placement ($50–100/sale). Zero value pre-scale — needs 500+ daily shoppers. Innovation R1 Gap #6. (Session 156) | After 500+ organizer accounts + 10+ active sales |
@@ -355,7 +355,7 @@ Spring Content Push, Beta Dry Run, and Support KB Pre-Population all complete. S
 | Brand & Designer Tracking | [Tier: FREE] Follow specific brands/designers (Eames, Hermès). Alerts when matching items post. Authentication partner links. Innovation R2. (Session 156) | After tag system + Wishlist Alerts (#32) ship |
 | FindA.Sale Network (Tier 3 Services) | [Tier: FUTURE] Multi-sided ecosystem: organizers + buyers + restorers + appraisers + shippers + designers. Platform as infrastructure OS. Innovation R2 "Big Bet." (Session 156) | Transformative — after platform proves all 3 tiers viable |
 | AI Buying Agent Scout | [Tier: PRO] Personal AI shopping agent. Learns taste, proactively watches sales, auto-notifies. Premium $9.99/mo. Innovation R2. (Session 156) | After ML pipeline + personalization data exists |
-| Estate Planning Toolkit | [Tier: ENTERPRISE] Heir/executor liquidation assistant: inventory builder, appraisal integration, tax reporting. Upstream demand creation. Innovation R2. (Session 156) | After core organizer features stable + appraiser partnerships |
+| Estate Planning Toolkit | [Tier: TEAMS] Heir/executor liquidation assistant: inventory builder, appraisal integration, tax reporting. Upstream demand creation. Innovation R2. (Session 156) | After core organizer features stable + appraiser partnerships |
 | State of Estate Sales Report | [Tier: PAID_ADDON] Monthly anonymized data report: pricing trends, category velocity, regional hotspots. B2B intelligence product ($199/yr). Innovation R2. (Session 156) | After enough transaction data to be credible (6+ months) |
 
 | Mystery Box Drops | [Tier: FREE] Pre-beta, zero shoppers. Needs gamification scaffold (badges/XP) + shopper base. MI gambling/sweepstakes law review needed. Innovation R3 Casino lens. (Session 157) | After badge/XP system ships + Legal clears sweepstakes compliance |
@@ -369,8 +369,8 @@ Spring Content Push, Beta Dry Run, and Support KB Pre-Population all complete. S
 | Voice Search + Navigation | [Tier: SIMPLE] Web Speech API browser-native. Nice-to-have, not a retention driver. Background noise at busy sales may degrade recognition. Innovation R3 Mobile lens. (Session 157) | After core search is fully polished |
 | RaaS for Organizers (Resale-as-a-Service) | [Tier: FUTURE] Long-term platform vision: full business management suite. Japan/EU circular economy model. Many pieces already on roadmap individually. Innovation R3 International lens. (Session 157) | After individual features prove themselves — 2027+ |
 | Multi-Language Support (Spanish First) | [Tier: SIMPLE] 42M native Spanish speakers in U.S. i18n framework + professional translation + AI description translation. Important for national scale, not urgent for GR beta. Innovation R3 International lens. (Session 157) | Before national expansion push — Q1 2027 |
-| API-First Organizer Toolkit | [Tier: ENTERPRISE] Most endpoints exist internally; need OAuth2 auth, docs, rate limiting, versioning for public API. Behind Premium Tier (#60). Enables Zapier integration. Innovation R3 Progressive Disclosure lens. (Session 157) | After core features stabilize — Q4 2026-Q1 2027 |
-| Zapier/Make.com Integration Hub | [Tier: ENTERPRISE] Requires API-First Toolkit first. Official Zapier app with triggers + actions. 2.2M businesses use Zapier. Innovation R3 Zapier lens. (Session 157) | After API-First ships — Q1-Q2 2027 |
+| API-First Organizer Toolkit | [Tier: TEAMS] Most endpoints exist internally; need OAuth2 auth, docs, rate limiting, versioning for public API. Behind Premium Tier (#60). Enables Zapier integration. Innovation R3 Progressive Disclosure lens. (Session 157) | After core features stabilize — Q4 2026-Q1 2027 |
+| Zapier/Make.com Integration Hub | [Tier: TEAMS] Requires API-First Toolkit first. Official Zapier app with triggers + actions. 2.2M businesses use Zapier. Innovation R3 Zapier lens. (Session 157) | After API-First ships — Q1-Q2 2027 |
 | TikTok-Style Item Reveal Feed | [Tier: FREE] Vertical swipe feed of item reveals. Only works with high photo quality + item volume (100+ items/area). TikTok Shop 4.7% conversion rate proves format. Innovation R3 Social lens. (Session 157) | After Rapidfire + Listing Factory drive photo quality up |
 | Haul Post Gallery (UGC Social Proof) | [Tier: FREE] Post-purchase "show off your finds" with item linking + reactions. Builds on UGC Photo Tags (#47). r/ThriftStoreHauls (3M+ members) proves format. Innovation R3 Reddit lens. (Session 157) | After UGC Photo Tags (#47) ships |
 | Organizer AMAs (Reddit-Style Q&A) | [Tier: FREE] Scheduled pre-sale preview + Q&A sessions. Requires chat infrastructure + organizer willingness + minimum audience. Innovation R3 Reddit lens. (Session 157) | After 10+ active organizers |

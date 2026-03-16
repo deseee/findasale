@@ -44,7 +44,7 @@ Read before any ops work:
 |---------|----------|-------|
 | Backend API | Railway | Node.js, port 5000, exec-form CMD only |
 | Frontend PWA | Vercel | Next.js 14, auto-deploys from main |
-| Database | Neon (PostgreSQL) | 63 migrations applied as of 2026-03-07 |
+| Database | Neon (PostgreSQL) | 82+ migrations applied — see STATE.md for current count |
 | Images | Cloudinary | Upload via backend only |
 | Email | Resend | RESEND_API_KEY in Railway |
 | Monitoring | UptimeRobot | Configured |

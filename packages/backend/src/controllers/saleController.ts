@@ -11,6 +11,14 @@ import { markSalePublished } from '../services/mailerliteService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 
+// Feature #5: Sale type categories (inlined from shared package)
+enum SaleType {
+  ESTATE = 'ESTATE',
+  YARD = 'YARD',
+  AUCTION = 'AUCTION',
+  FLEA_MARKET = 'FLEA_MARKET',
+}
+
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
 const iso8601DatetimeSchema = z.string().regex(
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/,
@@ -44,8 +52,11 @@ const saleCreateSchema = z.object({
   photoUrls: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   isAuctionSale: z.boolean().optional().default(false), // Deprecated: use saleType instead
-  // B1: Sale type — ESTATE | YARD | AUCTION | FLEA_MARKET
-  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET']).optional().default('ESTATE'),
+  // B1: Sale type — Feature #5: Strict validation for enum consistency
+  // Only allow valid SaleType enum values
+  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET'], {
+    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET' })
+  }).optional().default(SaleType.ESTATE),
   neighborhood: z.string().optional(), // U2
   // Feature 35: Front Door Locator
   entranceLat: z.number().optional(),
@@ -582,6 +593,7 @@ export const cloneSale = async (req: AuthRequest, res: Response) => {
     }
 
     // Create a new sale with cloned data
+    // Feature #5: Preserve saleType during clone (not isAuctionSale which is deprecated)
     const clonedSale = await prisma.sale.create({
       data: {
         title: `Copy of ${sourceSale.title}`,
@@ -595,7 +607,7 @@ export const cloneSale = async (req: AuthRequest, res: Response) => {
         neighborhood: sourceSale.neighborhood,
         photoUrls: sourceSale.photoUrls,
         tags: sourceSale.tags,
-        isAuctionSale: sourceSale.isAuctionSale,
+        saleType: sourceSale.saleType,
         status: 'DRAFT',
         startDate: new Date(), // Organizer will fill in dates
         endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default: 7 days from now
