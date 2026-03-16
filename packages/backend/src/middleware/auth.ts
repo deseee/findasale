@@ -4,7 +4,12 @@ import { prisma } from '../lib/prisma';
 
 // Extend Express Request type
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: any & {
+    organizerProfile?: {
+      subscriptionTier?: string;
+      [key: string]: any;
+    };
+  };
 }
 
 export const optionalAuthenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -40,7 +45,8 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     const decoded = jwt.verify(token, jwtSecret) as { id: string; tokenVersion?: number };
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id }
+      where: { id: decoded.id },
+      include: { organizer: true }
     });
 
     if (!user) {
@@ -54,6 +60,10 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
     // Attach user to request
     req.user = user;
+    // Attach organizer profile for tier checks
+    if (user.organizer) {
+      req.user.organizerProfile = user.organizer;
+    }
     next();
   } catch (error) {
     console.error('Authentication error:', error);
