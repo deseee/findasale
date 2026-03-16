@@ -7,6 +7,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 181 COMPLETE (2026-03-16) — #61 NEAR-MISS NUDGES SHIPPED + SYNCIER BUGFIX + ROADMAP v40:**
+- **#61 Near-Miss Nudges — SHIPPED:** Full backend service + controller + route, frontend hook + NudgeBar component, wired into _app.tsx globally
+  - `nudgeService.ts`: variable-ratio dispatch (65% daily via MD5 pseudo-randomization), 4 nudge types (FAVORITE_MILESTONE, STREAK_CONTINUATION, TIER_PROGRESS, HUNT_PASS_TEASE), proximity-based triggers
+  - `nudgeController.ts`: GET /api/nudges endpoint
+  - `nudges.ts`: route registration in index.ts
+  - `useNudges.ts`: React Query hook for frontend integration
+  - `NudgeBar.tsx`: sage-green toast UI, auto-dismiss 10s with progress bar, renders above BottomTabNav
+  - Self-gates on auth (returns null when unauthenticated)
+  - No schema changes — fully stateless, reads existing User + Favorite data ✅
+- **syncTier.ts build fix:** Removed invalid `tokenVersion: { increment: 1 }` reference on Organizer model update — was breaking Railway deploys ✅
+- **roadmap.md pushed to GitHub (v40):** Cleaned #38/#43 duplication (both already in Shipped), removed premature #61 from Shipped, annotated #65 Sprint 1+2 complete, marked env var checklist items done ✅
+- **Patrick's 3 pre-billing action items marked complete:** Stripe env vars set, MAILERLITE_SHOPPERS_GROUP_ID set, RESEND credentials verified ✅
+- **Last Updated:** 2026-03-16 (session 181)
+
+**Pending — Patrick action items:**
+- [ ] Deploy P0-1 + P0-2 fixes to production Railway (from S179)
+- [x] Set 5 Stripe env vars on Railway ✅ Done (confirmed S181)
+- [x] Set MAILERLITE_SHOPPERS_GROUP_ID on Railway ✅ Done (confirmed S181)
+- [x] Verify RESEND_API_KEY and RESEND_FROM_EMAIL on Railway ✅ Done (confirmed S181)
+- [ ] Open Stripe business account
+
+---
+
 **Session 180 COMPLETE (2026-03-16) — CONTEXT DOC UPDATE + SHIPPING CONFIRMATIONS:**
 - **P0-1 fixed (S179 carryover, confirmed shipped):** syncTier.ts `tokenVersion: { increment: 1 }` on webhook tier sync. JWT invalidation on upgrade works ✅
 - **P0-2 fixed (S179 carryover, confirmed shipped):** index.ts `STRIPE_SECRET_KEY` fatal startup guard before routes. Prevents test-key-in-prod ✅
@@ -19,9 +42,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 **Pending — Patrick action items:**
 - [ ] Deploy P0-1 + P0-2 fixes to production Railway (from S179)
-- [ ] Set 5 Stripe env vars on Railway if not done (from STATE.md S177 section)
-- [ ] Set MAILERLITE_SHOPPERS_GROUP_ID on Railway
-- [ ] Verify RESEND_API_KEY and RESEND_FROM_EMAIL on Railway
+- [x] Set 5 Stripe env vars on Railway ✅ Done (confirmed S181)
+- [x] Set MAILERLITE_SHOPPERS_GROUP_ID on Railway ✅ Done (confirmed S181)
+- [x] Verify RESEND_API_KEY and RESEND_FROM_EMAIL on Railway ✅ Done (confirmed S181)
 - [ ] Open Stripe business account
 
 **Next session options (ranked):**

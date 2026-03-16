@@ -9,14 +9,23 @@ import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
 import InstallPrompt from '../components/InstallPrompt';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import { useSentryUserContext } from '../hooks/useSentryUserContext'; // Feature #21: User Impact Scoring
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
 import OrganizerOnboardingModal from '../components/OrganizerOnboardingModal';
 import ErrorBoundary from '../components/ErrorBoundary';
+import NudgeBar from '../components/NudgeBar';
 
 // SW update notifier — renders a dismissible toast when a new service worker is waiting
 // Registers the user's browser for push notifications once they're logged in
 function PushSubscriber() {
   usePushSubscription();
+  return null;
+}
+
+// Feature #21: Sync user context to Sentry on every login/logout
+// Enables prioritization by user impact (tier, points, hunt pass status)
+function SentryUserContextSync() {
+  useSentryUserContext();
   return null;
 }
 
@@ -137,6 +146,9 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
             <ServiceWorkerUpdateNotifier />
             <PushSubscriber />
             <InstallPrompt />
+            <NudgeBar />
+            {/* Feature #21: Sentry user context sync */}
+            <SentryUserContextSync />
             {/* Phase 31: OAuth → JWT bridge */}
             <OAuthBridge />
             {/* Phase 27: First-time shopper onboarding */}

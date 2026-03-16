@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-16 (v39 — Session 180: #5 Listing Type validation confirmed done (no code changes needed), #38 Entrance Pin confirmed done, #43 OG Image Generator wired. P0-1/P0-2 security fixes shipped.)
+**Last Updated:** 2026-03-16 (v41 — Session 181: #61 Near-Miss Nudges shipped → moved to Completed. Removed #38/#43 from Phase 4 (already in Shipped). Annotated #65 Sprint 1+2 done. Marked Stripe/MailerLite/Resend env vars as done.)
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -21,8 +21,8 @@
 - [x] OAuth credentials (Google, Facebook) → Vercel env vars ✅ Done (2026-03-06)
 - [ ] VAPID keys confirmed in production
 - [x] ~~Confirm 5%/7% platform fee~~ ✅ Locked at **10% flat** (session 106)
-- [ ] **⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway** (session 165)
-- [ ] **⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway** (session 165)
+- [x] **Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway** ✅ Done (2026-03-16, session 181)
+- [x] **Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway** ✅ Done (2026-03-16, session 181)
 
 ### Beta Recruitment
 - [ ] Identify 5 target beta organizers (`claude_docs/beta-launch/organizer-outreach.md` ready)
@@ -55,144 +55,6 @@
 - **Heatmap density:** Radius-based (1–3 mile), pre-computed grid tiles every 6h, 7-day rolling window baked in.
 - **Background removal:** On-demand Cloudinary `b_remove` transform only. Primary photo. No batch job.
 - **Holds grouping:** By-item in schema, grouped-by-buyer in display. No junction table.
-
----
-
-## Shipped Features
-
-### Organizer — Core Operations [SIMPLE]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Create / Edit / Publish / Archive Sales | [SIMPLE] | Core workflow |
-| Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | [SIMPLE] | Enum validation + validation matrix (Item #5) |
-| Listing Type Schema Validation | [SIMPLE] | Item #5 — backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS enum consistency |
-| Sale Map with Geocoding | [SIMPLE] | `/api/geocode` |
-| Entrance Pin / Front Door Locator | [SIMPLE] | Item #35 + #38 — shopper convenience, parking + entrance detail on map |
-| Sale Calendar View | [SIMPLE] | Organizer + shopper views |
-| Item Add / Edit / Delete / Status | [SIMPLE] | Core CRUD |
-| Photo Upload (Single + Multi) | [SIMPLE] | `/api/upload` with Cloudinary |
-| Rapidfire Camera Mode | [SIMPLE] | Multi-photo AI draft pipeline |
-| AI Tag Suggestions + Health Score | [SIMPLE] | Haiku-powered |
-| Condition Grading (S/A/B/C/D) | [SIMPLE] | AI + manual override |
-| Item Holds / Reservations | [SIMPLE] | `/api/reservations` with expiry |
-| Hold Duration Configuration | [SIMPLE] | Per-sale configurable |
-| Holds-Only Item View (Batch Ops) | [SIMPLE] | Item #24 — grouped by buyer |
-| Sale Checklist | [SIMPLE] | Per-sale custom checklist (undocumented) |
-| Email Reminders to Shoppers | [SIMPLE] | `/api/reminders` |
-| Push Notification Subscriptions | [SIMPLE] | `/api/push` VAPID |
-| Notification Inbox | [SIMPLE] | In-app notification center (undocumented) |
-| Organizer Digest Emails | [SIMPLE] | Weekly activity summaries (undocumented) |
-| Basic Organizer Profile | [SIMPLE] | businessName, phone, bio, website |
-| Organizer Public Profile Page | [SIMPLE] | `/organizers/[slug]` |
-| Pickup Scheduling | [SIMPLE] | Organizer slots + shopper booking (undocumented) |
-| Sale Waitlist | [SIMPLE] | Shopper join + organizer broadcast (undocumented) |
-| Flash Deals | [SIMPLE] | Time-limited price drops (undocumented) |
-| Reviews (Receive + View) | [SIMPLE] | Shopper → sale + organizer (undocumented) |
-| Contact Form | [SIMPLE] | `/api/contact` |
-| Stripe Terminal POS (v2) | [SIMPLE] | Multi-item + cash, 10% fee parity |
-| Payout Transparency / Earnings Dashboard | [SIMPLE] | Item-level fee breakdown + PDF |
-| Organizer Referral (Fee Bypass) | [SIMPLE] | Item #11 — referralDiscountExpiry |
-| Tiers Backend Infrastructure | [SIMPLE] | `/api/tiers` — getMyTier, syncTier (undocumented) |
-| A/B Testing Infrastructure | [SIMPLE] | Internal optimization tool (undocumented) |
-| Invites | [SIMPLE] | Invite-to-sale / invite-to-platform (undocumented) |
-| Disputes Management | [SIMPLE] | Trust & safety (undocumented) |
-
-### Organizer — Analytics & Intelligence [PRO]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Seller Performance Dashboard | [PRO] | Per-sale analytics + insights |
-| Organizer Insights (Lifetime) | [PRO] | Cross-sale totals + benchmarking |
-| Batch Operations Toolkit | [PRO] | Item #8 — bulk price/status/category/tag/photo |
-| CSV / JSON / Text Listing Exports | [PRO] | Item #27 Sprint 2 — multi-format output |
-| Open Data Export (ZIP) | [PRO] | Item #66 — items/sales/purchases CSV |
-| Payout PDF Export | [PRO] | Financial reporting for tax/accounting |
-| Organizer Item Library (Consignment Rack) | [PRO] | Cross-sale reuse + price history |
-
-### Organizer — Marketing & Brand Amplification [SIMPLE/PRO mixed]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Social Templates (3 tones × 2 platforms) | [SIMPLE] | Item #27 Sprint 2 — Instagram/Facebook copy (brand-spreading) |
-| Cloudinary Watermark on Photo Exports | [SIMPLE] | Item #27 Sprint 2 — brand protection (brand-spreading) |
-| CSV/JSON Listing Exports (Listing Factory) | [SIMPLE] | Item #27 Sprint 2 — multi-platform sharing (brand-spreading) |
-| Brand Kit | [PRO] | Item #31 — colors, logo, socials (auto-propagates) |
-| Share Card Factory (OG Tags) | [SIMPLE] | Item #33 + #43 — branded social previews, dynamic OG images via Cloudinary |
-| Message Templates | [PRO] | Saved organizer reply templates (undocumented) |
-| Hype Meter | [SIMPLE] | Item #34 — real-time social proof |
-| Near-Miss Nudges | [SIMPLE] | Item #61 — gamification progress prompts |
-
-### Organizer — Sales Tools & Workflow [SIMPLE/PRO mixed]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Virtual Queue / Line Management | [SIMPLE] | Item #6 — start/call next/join line + SMS (undocumented). S176 decision: free for all organizers. |
-| Sale Reminders (Calendar + Remind Me) | [SIMPLE] | Item #37 — sale alerts for shoppers |
-| Neighborhood Heatmap | [SIMPLE] | Item #28 — density-based Leaflet overlay |
-| Organizer Reputation Score | [SIMPLE] | Item #71 — 1-5 stars public display |
-
-### Shopper — Discovery & Search [FREE]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Browse Sales (Homepage + Map) | [FREE] | `/map`, `/` |
-| Sale Detail Page | [FREE] | `/sales/[slug]` |
-| Item Detail Page | [FREE] | `/items/[id]` |
-| Full-Text Search | [FREE] | Advanced filters + location |
-| Category Browsing | [FREE] | `/categories` index + `/categories/[slug]` |
-| Tag Browsing | [FREE] | `/tags/[slug]` ISR pages |
-| Surprise Me / Serendipity Search | [FREE] | `/surprise-me` — random item discovery |
-| Sale Calendar (Upcoming) | [FREE] | `/calendar` |
-| Neighborhood Heatmap | [FREE] | Item #28 — visual density map |
-| City Pages | [FREE] | `/cities` + `/city/[slug]` — city-level browsing (undocumented) |
-| Neighborhood Pages | [FREE] | `/neighborhoods/[slug]` — local discovery (undocumented) |
-| Trending Items / Sales | [FREE] | `/trending` page + API (undocumented) |
-| Activity Feed | [FREE] | `/feed` page + API (undocumented) |
-| Route Planning (Multi-Sale) | [FREE] | `/api/routes` — OSRM-based (undocumented) |
-| Price History Tracking | [FREE] | `/api/price-history` — price changes over time (undocumented) |
-
-### Shopper — Engagement & Community [FREE]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Wishlists | [FREE] | Full CRUD, distinct from favorites (undocumented) |
-| Saved Searches with notifyOnNew | [FREE] | `/api/saved-searches` — auto-notify on new matches (undocumented) |
-| Shopper ↔ Organizer Messaging | [FREE] | `/messages/*` — threaded conversations (undocumented) |
-| Buying Pools | [FREE] | `/api/buying-pools` — group buying on items (undocumented) |
-| Bounties (Item Requests) | [FREE] | `/api/bounties` — shopper want-ads (undocumented) |
-| Reviews (Submit Sale / Organizer) | [FREE] | Via `/api/reviews` |
-| User Profile Page | [FREE] | `/profile` |
-| Shopper Public Profiles | [FREE] | `/shoppers/[slug]` — collection showcase (undocumented) |
-| Favorites | [FREE] | Save items for later |
-| Notification Center | [FREE] | `/notifications` page |
-| Unsubscribe / Preferences | [FREE] | `/unsubscribe` + `/api/unsubscribe` |
-| Weekly Treasure Digest (Email) | [FREE] | Item #36 — MailerLite Sunday 6pm |
-| Contact Organizer | [FREE] | Via messaging system |
-| Entrance Pin (Location Detail) | [FREE] | Item #35 — parking + entrance info |
-| Condition Guide | [FREE] | `/condition-guide` — educational page |
-| FAQ / Guide / Terms / Privacy | [FREE] | Legal + help pages |
-| Pickup Booking (Schedule Pickup) | [FREE] | Shopper-side of item #24 (undocumented) |
-
-### Shopper — Gamification [FREE + HUNT_PASS]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Points System | [FREE] | 1 pt/visit/day, tier-based (undocumented) |
-| Streaks (Visit / Save / Purchase) | [FREE] | Daily streak tracking (undocumented) |
-| Treasure Hunt (Daily) | [FREE] | Daily clue + category matching (undocumented) |
-| Leaderboard (Shoppers + Organizers) | [FREE] | Public rankings (undocumented) |
-| **Hunt Pass ($4.99/30 days)** | **[PAID_ADDON]** | **2× streak multiplier, 30-day recurring subscription, Stripe live billing (undocumented)** |
-
-### Platform & AI [FREE/SIMPLE]
-
-| Feature | Tier | Notes |
-|---------|------|-------|
-| AI Sale Planner Chat | [FREE] | `/plan` page, public (no auth), rate-limited — acquisition tool (undocumented) |
-| AI Tag Suggestions (Haiku) | [SIMPLE] | Part of Rapidfire, all tiers |
-| AI Condition Grade Suggestions | [SIMPLE] | S/A/B/C/D from photo |
-| AI SEO Description Optimization | [SIMPLE] | High-intent search term bias |
-| Shopper Referral Dashboard | [FREE] | `/referral-dashboard` — referral tracking (undocumented) |
 
 ---
 
@@ -229,19 +91,16 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 | 30 | AI Item Valuation & Comparables | 2 sprints | [PRO] Price range suggestions from sold-item data + visual embeddings. Leverages existing AI pipeline. Requires 100+ sold items per category to be credible. (Innovation session 155) |
 | 31 | Organizer Brand Kit | 1.5 sprints | [PRO] Auto-expand organizer colors/logo across all templates, exports, and social posts. Natural extension of Listing Factory (#27). Premium tier upsell path. Schema shipped with Listing Factory Sprint 1 (S166, migration 20260315000002); UI deferred to standalone session. (Innovation session 155) |
 | 32 | Shopper Wishlist Alerts + Smart Follow | 2 sprints | [FREE] Shoppers set category/tag/organizer preferences → push alerts when matching items list. Foundational for shopper retention and intent data. Ship after Listing Factory drives initial traffic. (Innovation session 155) |
-| 38 | Entrance Pin | 0.5 sprint | [SIMPLE] Organizer drops a pin for parking/entrance on sale map. Extends Front Door Locator (#35) with richer location data. Reduces shopper confusion at multi-building estates. (Board v26, Tier 2) |
 | 39 | Photo Op Stations | 1 sprint | [PRO] Designated "selfie spot" markers at sales — branded photo frames, shareable moments. Organizers set locations; shoppers share UGC. Viral loop + fun factor. (Board v26, Tier 2) |
 | 40 | Sale Hubs | 1.5 sprints | [PRO] Group nearby sales into a "hub" — shared map, combined route, hub landing page. Weekend sale-hopping made effortless. Builds on Heatmap (#28) density data. (Board v26, Tier 2) |
 | 41 | Flip Report | 1.5 sprints | [PRO] "What sold, what didn't, what to price differently next time." Post-sale analytics PDF/dashboard for organizers. Subscription potential for premium tier. (Board v26, Tier 2) |
 | 42 | Voice-to-Tag | 1 sprint | [PRO] Organizer speaks item description during Rapidfire → AI transcribes + extracts tags automatically. Hands-free cataloging. Leverages existing AI pipeline + Web Speech API. (Board v26, Tier 2) |
-| 43 | OG Image Generator | 0.5 sprint | [SIMPLE] Cloudinary-powered dynamic OG images for every sale/item page. Branded previews in iMessage, Facebook, Twitter shares. Pairs with Share Card Factory (#33). (Board v26, Tier 2) |
 | 44 | Neighborhood Sale Day | 1 sprint | [PRO] Organizers in a neighborhood coordinate a shared sale date. Hub landing page + combined marketing. Community event energy. Builds on Sale Hubs (#40). (Board v26, Tier 2) |
 | 45 | Collector Passport | 1.5 sprints | [FREE] Gamified collection tracker — "I collect depression glass, Fiestaware, mid-century furniture." Personalized alerts when matching items appear. Deeper than Wishlist (#32) — identity-based. (Board v26, Tier 2) |
 | 46 | Treasure Typology Classifier | 2 sprints | [PRO] ML model that classifies items into collector categories (Art Deco, MCM, Americana, etc.) from photos. Powers Collector Passport, tag suggestions, and search refinement. Requires training data from shipped items. (Innovation bonus, Board v26 Tier 2) |
-| 61 | Near-Miss Nudges | 0.25 sprint | [SIMPLE] Casino-psychology progress nudges: "You're 1 favorite away from unlocking Early Bird Access!" Layers onto any gamification feature as it ships. Variable-ratio schedule drives 30-40% higher completion. Ethical: real progress only, no manufactured near-misses. (Innovation R3, Casino lens) |
 | 62 | Digital Receipt + Returns | 1-2 sprints | [FREE] Auto-generate digital receipt with item photos + prices after every POS transaction. Push to shopper's app profile. Optional organizer-set return window (24h/48h/none). Builds trust, enables returns on high-value items, feeds purchase history for ML. Pairs with POS v2 + Loot Log (#50). (Innovation R3, Big Box lens) |
 | 63 | Dark Mode + Accessibility-First | 1.5 sprints | [FREE] Tailwind dark variant across all components + system preference detection + high-contrast outdoor mode + font sizing controls. WCAG 2.1 AA compliance. Estate sale shoppers skew older — larger fonts, higher contrast, better outdoor visibility are real needs. SEO boost from Lighthouse accessibility scores. (Innovation R3, Mobile lens) |
-| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | 2 sprints | [PRO] Progressive disclosure framework. Simple (5 buttons: create → photo → price → publish → paid). Pro (batch ops, analytics, tags, branding, exports). Teams (API access, bulk import/export, webhooks, multi-user teams, white-label). Feature-flag architecture — every future feature gets tagged with its tier. Architectural answer to "simple surface + complex depth." (Innovation R3, Progressive Disclosure lens) |
+| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | 2 sprints | [PRO] **Sprint 1+2 DONE (S177-S178).** Schema, tierGate, requireTier middleware, Stripe billing endpoints, upgrade/subscription UI all shipped. Remaining: Progressive Disclosure UI (Simple mode 5-button surface). (Innovation R3, Progressive Disclosure lens) |
 | 67 | Social Proof Notifications | 0.5 sprint | [SIMPLE] Real-time aggregate activity: "47 people viewed this today." Friend activity for connected users. Extends Hype Meter (#34) with individual social connections. Opt-in privacy controls. Ships with Hype Meter. (Innovation R3, Social lens) |
 | 68 | Command Center Dashboard | 2 sprints | [PRO] Multi-sale overview for power organizers managing 2-3+ sales simultaneously. Key metrics per sale, quick-switch, alert feed ("Sale A has 3 expired holds"), customizable widgets for Teams tier. Pro/Teams Mode feature. (Innovation R3, Progressive Disclosure lens) |
 | 69 | Local-First Offline Mode | 3 sprints | [PRO] Full offline capability via service worker + IndexedDB. Catalog items, set prices, take photos with zero internet. Sync on reconnect. Conflict resolution (last-write-wins for fields, merge for photos). Competitive requirement — PROSALE works offline. Estate sales happen in basements/barns with no signal. (Innovation R3, GitHub lens) |
@@ -398,3 +257,144 @@ Roadmap and session-log are always updated in the same commit.
 
 **Archival Log:**
 - pricing-strategy.md archived 2026-03-15 — superseded by pricing-and-tiers-overview-2026-03-15.md
+
+---
+
+## ✅ Completed Features (Shipped)
+
+*Agents: you may stop reading here if you are not actively slotting newly completed features into this section or seeking information on already shipped features.*
+
+### Organizer — Core Operations [SIMPLE]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| Create / Edit / Publish / Archive Sales | [SIMPLE] | Core workflow |
+| Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | [SIMPLE] | Enum validation + validation matrix (Item #5) |
+| Listing Type Schema Validation | [SIMPLE] | Item #5 — backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS enum consistency |
+| Sale Map with Geocoding | [SIMPLE] | `/api/geocode` |
+| Entrance Pin / Front Door Locator | [SIMPLE] | Item #35 + #38 — shopper convenience, parking + entrance detail on map |
+| Sale Calendar View | [SIMPLE] | Organizer + shopper views |
+| Item Add / Edit / Delete / Status | [SIMPLE] | Core CRUD |
+| Photo Upload (Single + Multi) | [SIMPLE] | `/api/upload` with Cloudinary |
+| Rapidfire Camera Mode | [SIMPLE] | Multi-photo AI draft pipeline |
+| AI Tag Suggestions + Health Score | [SIMPLE] | Haiku-powered |
+| Condition Grading (S/A/B/C/D) | [SIMPLE] | AI + manual override |
+| Item Holds / Reservations | [SIMPLE] | `/api/reservations` with expiry |
+| Hold Duration Configuration | [SIMPLE] | Per-sale configurable |
+| Holds-Only Item View (Batch Ops) | [SIMPLE] | Item #24 — grouped by buyer |
+| Sale Checklist | [SIMPLE] | Per-sale custom checklist (undocumented) |
+| Email Reminders to Shoppers | [SIMPLE] | `/api/reminders` |
+| Push Notification Subscriptions | [SIMPLE] | `/api/push` VAPID |
+| Notification Inbox | [SIMPLE] | In-app notification center (undocumented) |
+| Organizer Digest Emails | [SIMPLE] | Weekly activity summaries (undocumented) |
+| Basic Organizer Profile | [SIMPLE] | businessName, phone, bio, website |
+| Organizer Public Profile Page | [SIMPLE] | `/organizers/[slug]` |
+| Pickup Scheduling | [SIMPLE] | Organizer slots + shopper booking (undocumented) |
+| Sale Waitlist | [SIMPLE] | Shopper join + organizer broadcast (undocumented) |
+| Flash Deals | [SIMPLE] | Time-limited price drops (undocumented) |
+| Reviews (Receive + View) | [SIMPLE] | Shopper → sale + organizer (undocumented) |
+| Contact Form | [SIMPLE] | `/api/contact` |
+| Stripe Terminal POS (v2) | [SIMPLE] | Multi-item + cash, 10% fee parity |
+| Payout Transparency / Earnings Dashboard | [SIMPLE] | Item-level fee breakdown + PDF |
+| Organizer Referral (Fee Bypass) | [SIMPLE] | Item #11 — referralDiscountExpiry |
+| Tiers Backend Infrastructure | [SIMPLE] | `/api/tiers` — getMyTier, syncTier (undocumented) |
+| Stripe Billing (Tiers Sprint 2) | [PRO] | Item #65 Sprint 2 — checkout, webhook, subscription mgmt, cancel, requireTier middleware, upgrade/subscription UI (S178) |
+| A/B Testing Infrastructure | [SIMPLE] | Internal optimization tool (undocumented) |
+| Invites | [SIMPLE] | Invite-to-sale / invite-to-platform (undocumented) |
+| Disputes Management | [SIMPLE] | Trust & safety (undocumented) |
+
+### Organizer — Analytics & Intelligence [PRO]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| Seller Performance Dashboard | [PRO] | Per-sale analytics + insights |
+| Organizer Insights (Lifetime) | [PRO] | Cross-sale totals + benchmarking |
+| Batch Operations Toolkit | [PRO] | Item #8 — bulk price/status/category/tag/photo |
+| CSV / JSON / Text Listing Exports | [PRO] | Item #27 Sprint 2 — multi-format output |
+| Open Data Export (ZIP) | [PRO] | Item #66 — items/sales/purchases CSV |
+| Payout PDF Export | [PRO] | Financial reporting for tax/accounting |
+| Organizer Item Library (Consignment Rack) | [PRO] | Cross-sale reuse + price history |
+
+### Organizer — Marketing & Brand Amplification [SIMPLE/PRO mixed]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| Social Templates (3 tones × 2 platforms) | [SIMPLE] | Item #27 Sprint 2 — Instagram/Facebook copy (brand-spreading) |
+| Cloudinary Watermark on Photo Exports | [SIMPLE] | Item #27 Sprint 2 — brand protection (brand-spreading) |
+| CSV/JSON Listing Exports (Listing Factory) | [SIMPLE] | Item #27 Sprint 2 — multi-platform sharing (brand-spreading) |
+| Brand Kit | [PRO] | Item #31 — colors, logo, socials (auto-propagates) |
+| Share Card Factory (OG Tags) | [SIMPLE] | Item #33 + #43 — branded social previews, dynamic OG images via Cloudinary |
+| Message Templates | [PRO] | Saved organizer reply templates (undocumented) |
+| Hype Meter | [SIMPLE] | Item #34 — real-time social proof |
+
+### Organizer — Sales Tools & Workflow [SIMPLE/PRO mixed]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| Virtual Queue / Line Management | [SIMPLE] | Item #6 — start/call next/join line + SMS (undocumented). S176 decision: free for all organizers. |
+| Sale Reminders (Calendar + Remind Me) | [SIMPLE] | Item #37 — sale alerts for shoppers |
+| Neighborhood Heatmap | [SIMPLE] | Item #28 — density-based Leaflet overlay |
+| Organizer Reputation Score | [SIMPLE] | Item #71 — 1-5 stars public display |
+
+### Shopper — Discovery & Search [FREE]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| Browse Sales (Homepage + Map) | [FREE] | `/map`, `/` |
+| Sale Detail Page | [FREE] | `/sales/[slug]` |
+| Item Detail Page | [FREE] | `/items/[id]` |
+| Full-Text Search | [FREE] | Advanced filters + location |
+| Category Browsing | [FREE] | `/categories` index + `/categories/[slug]` |
+| Tag Browsing | [FREE] | `/tags/[slug]` ISR pages |
+| Surprise Me / Serendipity Search | [FREE] | `/surprise-me` — random item discovery |
+| Sale Calendar (Upcoming) | [FREE] | `/calendar` |
+| Neighborhood Heatmap | [FREE] | Item #28 — visual density map |
+| City Pages | [FREE] | `/cities` + `/city/[slug]` — city-level browsing (undocumented) |
+| Neighborhood Pages | [FREE] | `/neighborhoods/[slug]` — local discovery (undocumented) |
+| Trending Items / Sales | [FREE] | `/trending` page + API (undocumented) |
+| Activity Feed | [FREE] | `/feed` page + API (undocumented) |
+| Route Planning (Multi-Sale) | [FREE] | `/api/routes` — OSRM-based (undocumented) |
+| Price History Tracking | [FREE] | `/api/price-history` — price changes over time (undocumented) |
+
+### Shopper — Engagement & Community [FREE]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| Wishlists | [FREE] | Full CRUD, distinct from favorites (undocumented) |
+| Saved Searches with notifyOnNew | [FREE] | `/api/saved-searches` — auto-notify on new matches (undocumented) |
+| Shopper ↔ Organizer Messaging | [FREE] | `/messages/*` — threaded conversations (undocumented) |
+| Buying Pools | [FREE] | `/api/buying-pools` — group buying on items (undocumented) |
+| Bounties (Item Requests) | [FREE] | `/api/bounties` — shopper want-ads (undocumented) |
+| Reviews (Submit Sale / Organizer) | [FREE] | Via `/api/reviews` |
+| User Profile Page | [FREE] | `/profile` |
+| Shopper Public Profiles | [FREE] | `/shoppers/[slug]` — collection showcase (undocumented) |
+| Favorites | [FREE] | Save items for later |
+| Notification Center | [FREE] | `/notifications` page |
+| Unsubscribe / Preferences | [FREE] | `/unsubscribe` + `/api/unsubscribe` |
+| Weekly Treasure Digest (Email) | [FREE] | Item #36 — MailerLite Sunday 6pm |
+| Contact Organizer | [FREE] | Via messaging system |
+| Entrance Pin (Location Detail) | [FREE] | Item #35 — parking + entrance info |
+| Condition Guide | [FREE] | `/condition-guide` — educational page |
+| FAQ / Guide / Terms / Privacy | [FREE] | Legal + help pages |
+| Pickup Booking (Schedule Pickup) | [FREE] | Shopper-side of item #24 (undocumented) |
+
+### Shopper — Gamification [FREE + HUNT_PASS]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| Points System | [FREE] | 1 pt/visit/day, tier-based (undocumented) |
+| Streaks (Visit / Save / Purchase) | [FREE] | Daily streak tracking (undocumented) |
+| Treasure Hunt (Daily) | [FREE] | Daily clue + category matching (undocumented) |
+| Leaderboard (Shoppers + Organizers) | [FREE] | Public rankings (undocumented) |
+| **Hunt Pass ($4.99/30 days)** | **[PAID_ADDON]** | **2× streak multiplier, 30-day recurring subscription, Stripe live billing (undocumented)** |
+| Near-Miss Nudges | [FREE] | Item #61 — variable-ratio casino-psychology nudges, 4 types, NudgeBar toast (S181) |
+
+### Platform & AI [FREE/SIMPLE]
+
+| Feature | Tier | Notes |
+|---------|------|-------|
+| AI Sale Planner Chat | [FREE] | `/plan` page, public (no auth), rate-limited — acquisition tool (undocumented) |
+| AI Tag Suggestions (Haiku) | [SIMPLE] | Part of Rapidfire, all tiers |
+| AI Condition Grade Suggestions | [SIMPLE] | S/A/B/C/D from photo |
+| AI SEO Description Optimization | [SIMPLE] | High-intent search term bias |
+| Shopper Referral Dashboard | [FREE] | `/referral-dashboard` — referral tracking (undocumented) |

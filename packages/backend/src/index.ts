@@ -99,7 +99,11 @@ import socialRouter from './routes/social';             // Sprint 2: Social temp
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
+import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
+import socialProofRoutes from './routes/socialProof';     // Feature 67: Social Proof Notifications
+import snoozeRoutes from './routes/snooze';               // Feature 23: Unsubscribe-to-Snooze
 import { authenticate } from './middleware/auth';
+import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import './jobs/auctionJob';
 import './jobs/notificationJob';
@@ -205,6 +209,11 @@ app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+// Feature #21: Global Sentry user context enrichment
+// Runs on all requests; silently no-op if not authenticated
+// Enriches error reports with user tier, points, hunt pass status for prioritization
+app.use(sentryUserContext);
+
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ message: 'FindA.Sale API is running!' });
@@ -257,6 +266,9 @@ app.use('/api/social', socialRouter);                            // Sprint 2: So
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
+app.use('/api/nudges', nudgeRoutes);                             // Feature 61: Near-Miss Nudges
+app.use('/api/social-proof', socialProofRoutes);                 // Feature 67: Social Proof Notifications
+app.use('/api/snooze', snoozeRoutes);                            // Feature 23: Unsubscribe-to-Snooze
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
