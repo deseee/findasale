@@ -42,11 +42,11 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const pointsToasts = toasts.filter((t) => t.type === 'points');
 
   const typeClasses: Record<ToastType, string> = {
-    success: 'bg-green-500 text-white',
-    error: 'bg-red-500 text-white',
-    info: 'bg-blue-500 text-white',
-    warning: 'bg-yellow-500 text-white',
-    points: 'bg-amber-500 text-white',
+    success: 'bg-green-500 text-white dark:bg-green-700',
+    error: 'bg-red-500 text-white dark:bg-red-700',
+    info: 'bg-blue-500 text-white dark:bg-blue-700',
+    warning: 'bg-yellow-500 text-white dark:bg-yellow-700',
+    points: 'bg-amber-500 text-white dark:bg-amber-700',
   };
 
   return (
@@ -58,7 +58,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         {standardToasts.map((toast) => (
           <div
             key={toast.id}
-            className={`px-4 py-3 rounded shadow-lg font-medium max-w-xs ${typeClasses[toast.type]}`}
+            className={`px-4 py-3 rounded shadow-lg font-medium max-w-xs dark:shadow-2xl ${typeClasses[toast.type]}`}
           >
             {toast.message}
           </div>
@@ -70,7 +70,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         {pointsToasts.map((toast) => (
           <div
             key={toast.id}
-            className={`px-3 py-2 rounded-lg shadow-lg font-semibold text-sm max-w-xs ${typeClasses.points}`}
+            className={`px-3 py-2 rounded-lg shadow-lg font-semibold text-sm max-w-xs dark:shadow-2xl ${typeClasses.points}`}
           >
             {toast.message}
           </div>

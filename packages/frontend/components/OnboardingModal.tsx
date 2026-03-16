@@ -55,14 +55,14 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
         {/* Step progress dots */}
         <div className="flex justify-center gap-2 mb-6">
           {STEPS.map((_, i) => (
             <div
               key={i}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === step ? 'w-8 bg-amber-600' : 'w-2 bg-warm-200'
+                i === step ? 'w-8 bg-amber-600' : 'w-2 bg-warm-200 dark:bg-gray-700'
               }`}
             />
           ))}
@@ -72,8 +72,8 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
         <div className="text-5xl text-center mb-4">{current.icon}</div>
 
         {/* Content */}
-        <h2 className="text-xl font-bold text-warm-900 text-center mb-3">{current.title}</h2>
-        <p className="text-warm-600 text-center text-sm leading-relaxed mb-6">{current.body}</p>
+        <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 text-center mb-3">{current.title}</h2>
+        <p className="text-warm-600 dark:text-gray-400 text-center text-sm leading-relaxed mb-6">{current.body}</p>
 
         {/* Buttons */}
         <button
@@ -84,7 +84,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
         </button>
         <button
           onClick={onComplete}
-          className="w-full text-warm-400 hover:text-warm-600 text-sm py-2 transition-colors"
+          className="w-full text-warm-400 dark:text-gray-400 hover:text-warm-600 dark:hover:text-gray-300 text-sm py-2 transition-colors"
         >
           {current.secondary}
         </button>

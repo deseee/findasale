@@ -30,11 +30,11 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 px-4 text-center">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 px-4 text-center">
           <div className="max-w-md">
             <div className="text-6xl mb-4">🏚️</div>
-            <h1 className="text-2xl font-bold text-warm-800 mb-2">Something went wrong</h1>
-            <p className="text-warm-600 mb-6">
+            <h1 className="text-2xl font-bold text-warm-800 dark:text-gray-100 mb-2">Something went wrong</h1>
+            <p className="text-warm-600 dark:text-gray-400 mb-6">
               We hit an unexpected error. This has been logged and we'll look into it.
             </p>
             <div className="flex gap-3 justify-center">
@@ -44,14 +44,14 @@ export default class ErrorBoundary extends React.Component<Props, State> {
               >
                 Try Again
               </button>
-              <Link href="/" className="border border-warm-300 text-warm-700 hover:bg-warm-100 font-semibold py-2 px-4 rounded-lg">
+              <Link href="/" className="border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-800 font-semibold py-2 px-4 rounded-lg">
                 Go Home
               </Link>
             </div>
             {process.env.NODE_ENV === 'development' && (
-              <details className="mt-6 text-left bg-red-50 border border-red-200 rounded p-3">
-                <summary className="text-red-700 text-sm cursor-pointer font-medium">Error details (dev only)</summary>
-                <pre className="text-red-600 text-xs mt-2 whitespace-pre-wrap">{this.state.errorMessage}</pre>
+              <details className="mt-6 text-left bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-3">
+                <summary className="text-red-700 dark:text-red-400 text-sm cursor-pointer font-medium">Error details (dev only)</summary>
+                <pre className="text-red-600 dark:text-red-300 text-xs mt-2 whitespace-pre-wrap">{this.state.errorMessage}</pre>
               </details>
             )}
           </div>

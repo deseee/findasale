@@ -56,7 +56,7 @@ const NudgeBar: React.FC = () => {
       }`}
       style={{ bottom: '80px' }} // Above BottomTabNav
     >
-      <div className="mx-4 mb-4 p-4 rounded-lg shadow-lg bg-gradient-to-r from-[#6B8F71] to-[#5a7a60] text-white">
+      <div className="mx-4 mb-4 p-4 rounded-lg shadow-lg bg-gradient-to-r from-[#6B8F71] to-[#5a7a60] dark:from-[#5a7a60] dark:to-[#4a6a50] text-white dark:shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <p className="text-sm font-semibold leading-snug">{topNudge.message}</p>
