@@ -212,7 +212,7 @@ const HomePage = () => {
 
         {/* Map Section */}
         <section className="mb-12">
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="bg-white rounded-lg shadow-md p-6 relative">
             <h2 className="text-2xl font-bold mb-4 text-warm-900">Sales Near You</h2>
             {isLoading ? (
               <Skeleton className="h-96 w-full" />
