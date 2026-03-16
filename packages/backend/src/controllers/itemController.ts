@@ -12,6 +12,7 @@ import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
+import { VALID_LISTING_TYPES } from '@findasale/shared'; // Feature #5: Listing type validation
 
 // U1: Fire-and-forget embedding helper — never throws, non-blocking
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
@@ -302,6 +303,13 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
     const files = req.files as Express.Multer.File[];
 
+    // Feature #5: Validate listing type if provided
+    if (listingType !== undefined && !VALID_LISTING_TYPES.includes(listingType)) {
+      return res.status(400).json({
+        message: `Invalid listing type "${listingType}". Must be one of: ${VALID_LISTING_TYPES.join(', ')}`
+      });
+    }
+
     // Check if sale exists and belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -351,7 +359,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
         shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,
-        // B1: Listing type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
+        // B1: Listing type — Feature #5: Default to FIXED if not provided; already validated above
         listingType: listingType || 'FIXED',
         // CD2 Phase 4: Reverse Auction — deprecated, maintained for backwards compat
         reverseAuction: reverseAuction === true || reverseAuction === 'true',
@@ -390,6 +398,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
     const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+
+    // Feature #5: Validate listing type if provided
+    if (listingType !== undefined && !VALID_LISTING_TYPES.includes(listingType)) {
+      return res.status(400).json({
+        message: `Invalid listing type "${listingType}". Must be one of: ${VALID_LISTING_TYPES.join(', ')}`
+      });
+    }
 
     // Fetch item to verify ownership
     const item = await prisma.item.findUnique({
