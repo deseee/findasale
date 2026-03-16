@@ -162,6 +162,39 @@ follow-up corrections and handoff summaries. No exceptions.
 
 ---
 
+## Schema & Package Read Gate (MANDATORY — S178 hard lesson)
+
+Before writing ANY code that touches Prisma models or imports packages, you MUST read the source of truth first. No guessing. No assuming a field exists.
+
+**Gate 1 — Prisma fields:**
+Before referencing any field on a Prisma model (read OR write):
+```bash
+grep -n "fieldName\|ModelName" $PROJECT_ROOT/packages/database/prisma/schema.prisma
+```
+If the field isn't in the schema, DO NOT USE IT. Do not invent a plausible name. Stop and flag it in your handoff under "Blocked / Flagged".
+
+**Gate 2 — Package imports:**
+Before importing any npm package in frontend or backend:
+```bash
+grep "packageName" $PROJECT_ROOT/packages/frontend/package.json
+grep "packageName" $PROJECT_ROOT/packages/backend/package.json
+```
+If the package isn't listed, DO NOT IMPORT IT. Use what's already installed. Check how existing files handle the same need (e.g., grep for `useToast` or `toast` across the codebase to find the real import pattern).
+
+**Gate 3 — Import paths:**
+Before writing any relative import path (`../../something`), verify it exists:
+```bash
+ls $PROJECT_ROOT/packages/frontend/[the path you're about to import]
+```
+Wrong paths fail silently until Vercel build. Always verify.
+
+**Consequences of skipping this gate:**
+Each missed field or bad import = one full push cycle wasted (commit → push → Railway/Vercel build fail → diagnose → fix → commit → push again). S178 had 4 such cycles in a row. This gate exists to prevent that.
+
+**Origin:** S178 — dev agent used `subscriptionEndsAt` and `stripeCurrentPeriodEnd` (neither exists on Organizer), imported `sonner` (not installed), and used `../../hooks/useAuth` (doesn't exist). Three separate Railway/Vercel build failures resulted. (Added 2026-03-16, Session 178.)
+
+---
+
 ## What Not To Do
 
 - Don't make architectural decisions — flag to findasale-architect.
