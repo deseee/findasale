@@ -59,7 +59,7 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
     <Link href={`/items/${item.id}`}>
       <div className="card overflow-hidden hover:shadow-card-hover transition-shadow flex flex-col">
         {/* ── Image area (60% visual weight) — 1:1 square ── */}
-        <div className="relative aspect-square bg-warm-200 overflow-hidden">
+        <div className="relative aspect-square bg-warm-200 dark:bg-gray-700 overflow-hidden">
           {/* Tier 1: LQIP blurred background */}
           {lqipUrl && !imgError && (
             <div
@@ -75,7 +75,7 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
 
           {/* Tier 2: Skeleton pulse */}
           {!imgLoaded && !imgError && (
-            <Skeleton className="absolute inset-0 rounded-none bg-warm-200/60" />
+            <Skeleton className="absolute inset-0 rounded-none bg-warm-200/60 dark:bg-gray-600/60" />
           )}
 
           {/* Tier 3: Main lazy WebP image */}
@@ -92,7 +92,7 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-warm-400 text-xs">No image</span>
+              <span className="text-warm-400 dark:text-gray-500 text-xs">No image</span>
             </div>
           )}
 
@@ -118,15 +118,15 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
 
         {/* ── Content area (40% visual weight) ── */}
         <div className="flex flex-col flex-1 p-3">
-          <h3 className="font-semibold text-sm text-warm-900 leading-snug line-clamp-1 mb-2">
+          <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-2">
             {item.title}
           </h3>
           <div className="flex items-center justify-between mt-auto">
-            <span className="text-base font-bold text-warm-900">
+            <span className="text-base font-bold text-warm-900 dark:text-gray-100">
               {formatPrice(item.currentBid)}
             </span>
             {countdown && (
-              <span className="text-xs font-semibold text-amber-600">{countdown}</span>
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{countdown}</span>
             )}
           </div>
         </div>

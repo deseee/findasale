@@ -39,6 +39,25 @@
   }
 }
 
+/* #63 Dark Mode — dark selector with overrides */
+.dark {
+  @apply bg-[#1C1C1E] text-[#F5F5F0];
+}
+
+.dark .card {
+  @apply bg-[#2C2C2E] border-[#3A3A3C];
+}
+
+.dark .btn-secondary {
+  @apply bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F0];
+  @apply hover:bg-[#3A3A3C];
+}
+
+.dark .btn-ghost {
+  @apply text-[#A8A8AA];
+  @apply hover:bg-[#3A3A3C];
+}
+
 @layer components {
   /* Card component base */
   .card {
@@ -135,6 +154,50 @@
     opacity: 0;
     transform: translateY(600px) rotateZ(720deg) scale(0.5);
   }
+}
+
+/* #63 Dark Mode — CSS custom properties */
+:root {
+  --color-bg: #F9F7F4;
+  --color-surface: #FFFFFF;
+  --color-border: #E2D9CC;
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #8B7355;
+  --color-sage: #6B9E7F;
+  --color-sage-dark: #52876A;
+  --base-font-size: 16px;
+}
+
+.dark {
+  --color-bg: #1C1C1E;
+  --color-surface: #2C2C2E;
+  --color-border: #3A3A3C;
+  --color-text-primary: #F5F5F0;
+  --color-text-secondary: #A8A8AA;
+  --color-sage: #8FB897;
+  --color-sage-dark: #6B9E7F;
+}
+
+.high-contrast {
+  --color-bg: #000000;
+  --color-surface: #111111;
+  --color-border: #FFFFFF;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #E0E0E0;
+  --color-sage: #AAFFB5;
+  --color-sage-dark: #88EE95;
+}
+
+.dark.high-contrast {
+  --color-bg: #000000;
+  --color-surface: #0D0D0D;
+  --color-border: #FFFFFF;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #E8E8E8;
+}
+
+html {
+  font-size: var(--base-font-size, 16px);
 }
 
 @keyframes slideIn {

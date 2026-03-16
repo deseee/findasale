@@ -149,7 +149,7 @@ const HomePage = () => {
   }, [sales, searchQuery, dateFilter]);
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>FindA.Sale - Find Estate Sales Near You</title>
         <meta name="description" content="Find estate sales and auctions near you" />
@@ -202,7 +202,7 @@ const HomePage = () => {
       <main className="container mx-auto px-4 py-8">
         <section className="mb-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-amber-600 mb-4">Discover Amazing Deals</h1>
-          <p className="text-xl text-warm-700 max-w-2xl mx-auto">
+          <p className="text-xl text-warm-700 dark:text-gray-300 max-w-2xl mx-auto">
             Find estate sales, garage sales, and auctions near you with FindA.Sale
           </p>
         </section>
@@ -212,8 +212,8 @@ const HomePage = () => {
 
         {/* Map Section */}
         <section className="mb-12">
-          <div className="bg-white rounded-lg shadow-md p-6 relative">
-            <h2 className="text-2xl font-bold mb-4 text-warm-900">Sales Near You</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 relative">
+            <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">Sales Near You</h2>
             {isLoading ? (
               <Skeleton className="h-96 w-full" />
             ) : (
@@ -258,7 +258,7 @@ const HomePage = () => {
                 placeholder="Search by title, city, or keyword…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-warm-900"
+                className="w-full pl-10 pr-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -269,7 +269,7 @@ const HomePage = () => {
                   className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                     dateFilter === f
                       ? 'bg-amber-600 text-white border-amber-600'
-                      : 'bg-white text-warm-700 border-warm-300 hover:border-amber-400'
+                      : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border-warm-300 dark:border-gray-700 hover:border-amber-400'
                   }`}
                 >
                   {f === 'all' ? 'All' : f === 'upcoming' ? 'Upcoming' : f === 'this-weekend' ? 'This Weekend' : 'This Month'}

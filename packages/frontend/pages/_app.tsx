@@ -9,11 +9,27 @@ import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
 import InstallPrompt from '../components/InstallPrompt';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import { useTheme } from '../hooks/useTheme'; // #63: Dark Mode
 import { useSentryUserContext } from '../hooks/useSentryUserContext'; // Feature #21: User Impact Scoring
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
 import OrganizerOnboardingModal from '../components/OrganizerOnboardingModal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import NudgeBar from '../components/NudgeBar';
+
+// #63 Dark Mode — Apply theme class on mount to prevent FOUC
+function ThemeInitializer() {
+  useTheme(); // Side effect: applies dark/light class to <html> on mount
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedSize = localStorage.getItem('findasale_font_size');
+    if (savedSize) {
+      document.documentElement.style.setProperty('--base-font-size', savedSize + 'px');
+    }
+  }, []);
+
+  return null;
+}
 
 // SW update notifier — renders a dismissible toast when a new service worker is waiting
 // Registers the user's browser for push notifications once they're logged in
@@ -137,6 +153,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
       <ToastProvider>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
+            <ThemeInitializer />
             <ErrorBoundary key={router.asPath}>
               <Layout>
                 <Component {...pageProps} />
