@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +24,7 @@ import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import ActivityFeed from '../../components/ActivityFeed';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
+import SaleOGMeta from '../../components/SaleOGMeta'; // Feature #43: OG Image Generator
 
 interface Sale {
   id: string;
@@ -255,66 +255,15 @@ const SaleDetailPage = () => {
   const saleHasStarted = now >= saleStartDate;
   const saleHasEnded = now >= saleEndDate;
 
-  const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'https://findasale.com');
-  const ogImageUrl = `${siteUrl}/api/og?${new URLSearchParams({
-    type: 'sale',
-    title: sale.title,
-    date: `${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}`,
-    location: `${sale.city}, ${sale.state}`,
-    itemCount: sale.items?.length?.toString() || '0',
-    organizer: sale.organizer?.businessName || '',
-  }).toString()}`;
+  // Feature #43: OG Image Generator — transform photoUrls to photos format for SaleOGMeta
+  const saleForOGMeta = {
+    ...sale,
+    photos: sale.photoUrls.map(url => ({ url })),
+  };
 
   return (
     <div className="min-h-screen bg-warm-50">
-      <Head>
-        <title>{sale.title} - FindA.Sale</title>
-        <meta name="description" content={`${sale.title} in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}.`} />
-        <meta property="og:title" content={`${sale.title} \u2014 FindA.Sale`} />
-        <meta property="og:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}`} />
-        <meta property="og:image" content={ogImageUrl} />
-        <meta property="og:url" content={`${siteUrl}/sales/${sale.id}`} />
-        <meta property="og:type" content="website" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${sale.title} \u2014 FindA.Sale`} />
-        <meta name="twitter:description" content={`Estate sale in ${sale.city}, ${sale.state}. ${sale.items?.length || 0} items. ${format(saleStartDate, 'MMM d')}\u2013${format(saleEndDate, 'MMM d, yyyy')}`} />
-        <meta name="twitter:image" content={ogImageUrl} />
-        {/* Structured data \u2014 Event schema for Google rich results */}
-        {sale && (
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
-                '@context': 'https://schema.org',
-                '@type': 'Event',
-                name: sale.title || '',
-                description: sale.description || '',
-                startDate: sale.startDate || '',
-                endDate: sale.endDate || '',
-                eventStatus: 'https://schema.org/EventScheduled',
-                eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-                location: {
-                  '@type': 'Place',
-                  name: sale.title || '',
-                  address: {
-                    '@type': 'PostalAddress',
-                    streetAddress: sale.address || '',
-                    addressLocality: sale.city || '',
-                    addressRegion: sale.state || '',
-                    addressCountry: 'US',
-                  },
-                },
-                organizer: {
-                  '@type': 'Organization',
-                  name: sale.organizer?.businessName || 'Estate Sale Organizer',
-                },
-                url: `https://finda.sale/sales/${sale.id}`,
-                image: sale.photoUrls?.[0] || '',
-              }),
-            }}
-          />
-        )}
-      </Head>
+      <SaleOGMeta sale={saleForOGMeta} />
 
       <main className="container mx-auto px-4 py-8">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
