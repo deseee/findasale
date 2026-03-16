@@ -14,6 +14,7 @@ import ReverseAuctionBadge from '../../components/ReverseAuctionBadge'; // CD2 P
 import BuyingPoolCard from '../../components/BuyingPoolCard';
 import { useToast } from '../../components/ToastContext';
 import ItemShareButton from '../../components/ItemShareButton';
+import SocialProofMessage from '../../components/SocialProofMessage'; // Feature #54
 import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useHeartAnimation } from '../../hooks/useHeartAnimation';
@@ -464,6 +465,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   </div>
                 )}
               </div>
+
+              {/* Feature #54: Social Proof Messaging */}
+              <SocialProofMessage itemId={item.id} className="mb-2" />
 
               {/* Condition & Category */}
               <div className="grid grid-cols-2 gap-4 text-sm">
