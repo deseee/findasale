@@ -1,43 +1,37 @@
 # Next Session Resume Prompt
-*Written: 2026-03-16 (S178 wrap)*
+*Written: 2026-03-16 (S180 wrap)*
 *Session ended: normally*
 
 ## Resume From
-Dispatch **findasale-qa** on Sprint 2 billing endpoints — this is the mandatory first action. QA has not run on billingController.ts, syncTier.ts, or the requireTier() route wiring. These touch payment flows and cannot go to production without a QA pass.
+**S181 — Next Feature Batch:** Three features available in priority order. No blockers. P0 fixes (S179) are production-ready. Environment is clean.
 
-## What Was In Progress
-- **upgrade.tsx push** — fix was applied (organizerProfile → organizerTier) but Patrick needs to run the push block:
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale
-  git add packages/frontend/pages/organizer/upgrade.tsx
-  git commit -m "fix: upgrade.tsx User type — organizerProfile does not exist, use organizerTier"
-  .\push.ps1
-  ```
-- **Skill reinstalls** — two updated .skill files were packaged last session. Patrick needs to reinstall via Cowork before new skill behavior takes effect:
-  - `conversation-defaults.skill` (Rule 28: scheduled task triage at session init)
-  - `findasale-dev.skill` (Schema & Package Read Gate)
+**Ranked priority:**
+1. **#61 Near-Miss Nudges** (0.25 sprint) — Gamification psychology layer: progress nudges ("You're 1 favorite away from Early Bird Access!"). Small scope, high engagement ROI. Stateless feature (no schema changes).
+2. **#67 Social Proof Notifications** (0.5 sprint) — Real-time aggregate activity: "47 people viewed this today." Extends existing Hype Meter. Requires WebSocket or polling (design decision needed). Medium scope.
+3. **#63 Dark Mode + Accessibility** (1.5 sprints) — WCAG 2.1 AA compliance, Tailwind dark variants, system preference detection, outdoor high-contrast mode, font sizing controls. Highest user value (older demographic, outdoor use case).
 
-## What Was Completed This Session
-- #65 Sprint 2 full billing layer (billingController, syncTier, billing routes, requireTier wired to items/export/insights)
-- upgrade.tsx and subscription.tsx (new organizer pages)
-- settings.tsx subscription tab
-- 4 TS build errors fixed (subscriptionEndsAt, stripeCurrentPeriodEnd, sonner, hooks/useAuth)
-- upgrade.tsx final fix: organizerProfile → organizerTier
-- MESSAGE_BOARD.json permanently gitignored
-- CORE.md §9 (skill update protocol)
-- Dev SKILL.md schema/package read gate
-- Brand voice guide full rewrite
+## What Was Completed in S180
+- **#5 Listing Type Schema Debt — AUDIT COMPLETE:** Validation matrix fully implemented in saleController.ts (Zod enum) + itemController.ts (array check). No code changes needed. Marked as done.
+- **#38 Entrance Pin — AUDIT COMPLETE:** Already shipped in prior session (schema + frontend). entranceLat/entranceLng/entranceNote in DB, EntrancePinPicker in edit-sale, EntranceMarker on shopper map. Marked as done.
+- **#43 OG Image Generator — SHIPPED:** packages/frontend/pages/sales/[id].tsx refactored to use existing SaleOGMeta component. 58 lines of manual Head tags replaced. Feature complete.
+- **Session logs S171–S177:** Reconstructed and logged in claude_docs/session-log.md (7-session catch-up). Friction audit friction item RESOLVED.
+- **Context docs updated:** STATE.md (S180 entry), roadmap.md (v39 updated, #5/#38/#43 marked shipped), next-session-prompt.md (this file, rewritten for S181).
 
 ## Environment Notes
-- Railway + Vercel: last known state after TS fixes — upgrade.tsx organizerProfile fix is the final outstanding error. Push and verify clean build.
-- Git: pending push is upgrade.tsx only. CORE.md + dev SKILL.md changes were pushed in a prior block — verify on GitHub if unclear.
-- Stripe: all 5 env vars confirmed set on Railway. Test keys only — Patrick still needs Stripe business account for production.
-- Session log: S171–S177 still 7 sessions behind (friction audit HIGH). After QA, consider dispatching findasale-records.
+- **Railway + Vercel:** P0-1 + P0-2 fixes (S179) are shipped and on main. Verify clean build.
+- **Database:** Neon at 82+ migrations. No pending migrations.
+- **Stripe:** All 5 env vars set on Railway. Test keys only. Patrick still needs Stripe business account to go live.
+- **MailerLite + Resend:** MAILERLITE_SHOPPERS_GROUP_ID + RESEND credentials need verification on Railway (from S177).
+- **No code pending:** All S180 changes committed. Clean working directory.
 
-## Exact Context
-- `packages/frontend/pages/organizer/upgrade.tsx` line 76: was `user?.organizerProfile` — fixed to `user?.organizerTier`
-- `packages/frontend/components/AuthContext.tsx` User interface fields: `id, email, name, firstName?, businessName?, role, points, referralCode?, categoryInterests?, streakPoints?, huntPassActive?, organizerTier?, notificationPrefs?` — NO organizerProfile nested object
-- Sprint 2 files: `packages/backend/src/controllers/billingController.ts`, `packages/backend/src/lib/syncTier.ts`, `packages/backend/src/routes/billing.ts`
-- requireTier('PRO') applied to: `/bulk` in items.ts, export routes, `/organizer` in insights.ts
-- Raw body middleware at index.ts line ~196: `app.use('/api/billing/webhook', express.raw({ type: 'application/json' }))` — must remain BEFORE json() parser
-- QA scope: all 4 billing endpoints + requireTier behavior + webhook idempotency (ProcessedWebhookEvent model already in schema)
+## Blocked / Waiting Items
+- P0 fixes from S179: P0-1 (tokenVersion increment), P0-2 (STRIPE_SECRET_KEY check) — both confirmed shipped on main. No deployment needed from S181.
+- Stripe business account — Patrick action, not blocking development.
+
+## Decisions Locked
+- Tier framework: SIMPLE/PRO/TEAMS (ENTERPRISE → TEAMS, S177).
+- Platform fee: 10% flat (S176).
+- Hunt Pass: $4.99/30 days as standalone PAID_ADDON (S176).
+- #61 scope: Stateless nudge layer, variable-ratio schedule (30-40% engagement lift), no fake near-misses (ethical enforcement).
+- #67 scope: Design TBD — WebSocket vs. polling for real-time activity. Recommend polling first (simpler, battery-friendly mobile).
+- #63 scope: Dark + light themes (system preference + manual toggle), WCAG AA fonts + contrast, outdoor high-contrast mode, 14pt–20pt font sizing controls.

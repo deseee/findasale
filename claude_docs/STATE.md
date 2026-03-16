@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 180 COMPLETE (2026-03-16) — CONTEXT DOC UPDATE + SHIPPING CONFIRMATIONS:**
+- **P0-1 fixed (S179 carryover, confirmed shipped):** syncTier.ts `tokenVersion: { increment: 1 }` on webhook tier sync. JWT invalidation on upgrade works ✅
+- **P0-2 fixed (S179 carryover, confirmed shipped):** index.ts `STRIPE_SECRET_KEY` fatal startup guard before routes. Prevents test-key-in-prod ✅
+- **#43 OG Image Generator — SHIPPED:** packages/frontend/pages/sales/[id].tsx refactored to use existing SaleOGMeta component. 58 lines manual Head tags → component. Item detail page already wired. Feature complete ✅
+- **#5 Listing Type Schema Debt — AUDIT COMPLETE, NO CHANGES NEEDED:** Validation matrix fully implemented in both controllers (saleController.ts Zod enum, itemController.ts array check). No debt remains. Mark as done ✅
+- **#38 Entrance Pin — AUDIT COMPLETE, ALREADY SHIPPED:** entranceLat/entranceLng/entranceNote in schema, EntrancePinPicker in edit-sale, EntranceMarker on shopper map. Mark as done ✅
+- **Session log S171–S177 — CATCH-UP COMPLETE:** 7 sessions reconstructed and logged in claude_docs/session-log.md ✅
+- **Context doc updates executed:** STATE.md (S180 entry), roadmap.md (move #5/#38/#43 to Shipped, update version tag), next-session-prompt.md (rewrite for S181) ✅
+- **Last Updated:** 2026-03-16 (session 180)
+
+**Pending — Patrick action items:**
+- [ ] Deploy P0-1 + P0-2 fixes to production Railway (from S179)
+- [ ] Set 5 Stripe env vars on Railway if not done (from STATE.md S177 section)
+- [ ] Set MAILERLITE_SHOPPERS_GROUP_ID on Railway
+- [ ] Verify RESEND_API_KEY and RESEND_FROM_EMAIL on Railway
+- [ ] Open Stripe business account
+
+**Next session options (ranked):**
+1. **#61 Near-Miss Nudges** (0.25 sprint) — simple gamification nudge layer, high engagement ROI
+2. **#63 Dark Mode + Accessibility** (1.5 sprints) — WCAG 2.1 AA compliance, Lighthouse boost
+3. **#67 Social Proof Notifications** (0.5 sprint) — extend Hype Meter with real-time activity aggregation
+
+---
+
 **Session 179 COMPLETE (2026-03-16) — BILLING QA PASS + SKILL RECONSTRUCTION + PACKAGING PROTOCOL:**
 - **GitHub QA audit of S178:** All changes verified — schema gate in dev skill, CORE.md §9, Rule 28, MESSAGE_BOARD gitignored ✅
 - **Architect sign-off Sprint 2 billing (#65):** GO — all tier gates correct, schema accurate, middleware order correct ✅

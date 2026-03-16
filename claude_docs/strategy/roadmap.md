@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-16 (v38 — Session 177: Tier names locked: SIMPLE/PRO/TEAMS (ENTERPRISE retired). All [ENT]/[ENTERPRISE] tags replaced with [TEAMS]. Teams features ship on schedule, no deferral. No founding organizer program. 7-day free trial for Pro approved. v37: Pipeline cleanup complete. Done items removed from Feature Pipeline (all now in Shipped Features section). Tier tags added to all remaining untagged items.)
+**Last Updated:** 2026-03-16 (v39 — Session 180: #5 Listing Type validation confirmed done (no code changes needed), #38 Entrance Pin confirmed done, #43 OG Image Generator wired. P0-1/P0-2 security fixes shipped.)
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -65,9 +65,10 @@
 | Feature | Tier | Notes |
 |---------|------|-------|
 | Create / Edit / Publish / Archive Sales | [SIMPLE] | Core workflow |
-| Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | [SIMPLE] | Enum validation |
+| Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | [SIMPLE] | Enum validation + validation matrix (Item #5) |
+| Listing Type Schema Validation | [SIMPLE] | Item #5 — backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS enum consistency |
 | Sale Map with Geocoding | [SIMPLE] | `/api/geocode` |
-| Entrance Pin / Front Door Locator | [SIMPLE] | Item #35 — shopper convenience |
+| Entrance Pin / Front Door Locator | [SIMPLE] | Item #35 + #38 — shopper convenience, parking + entrance detail on map |
 | Sale Calendar View | [SIMPLE] | Organizer + shopper views |
 | Item Add / Edit / Delete / Status | [SIMPLE] | Core CRUD |
 | Photo Upload (Single + Multi) | [SIMPLE] | `/api/upload` with Cloudinary |
@@ -117,7 +118,7 @@
 | Cloudinary Watermark on Photo Exports | [SIMPLE] | Item #27 Sprint 2 — brand protection (brand-spreading) |
 | CSV/JSON Listing Exports (Listing Factory) | [SIMPLE] | Item #27 Sprint 2 — multi-platform sharing (brand-spreading) |
 | Brand Kit | [PRO] | Item #31 — colors, logo, socials (auto-propagates) |
-| Share Card Factory (OG Tags) | [SIMPLE] | Item #33 — branded social previews |
+| Share Card Factory (OG Tags) | [SIMPLE] | Item #33 + #43 — branded social previews, dynamic OG images via Cloudinary |
 | Message Templates | [PRO] | Saved organizer reply templates (undocumented) |
 | Hype Meter | [SIMPLE] | Item #34 — real-time social proof |
 | Near-Miss Nudges | [SIMPLE] | Item #61 — gamification progress prompts |
@@ -199,11 +200,7 @@
 
 ### Next Up (Priority Order)
 
-| Priority | # | Feature | Est. | Notes |
-|----------|---|---------|------|-------|
-| 1 | 5 | Listing Type Schema Debt | 0.5–1 sprint | [SIMPLE] Backend validation matrix for enum consistency (ESTATE/CHARITY/BUSINESS/CORPORATE). Optional: tier-based listing type restrictions (Premium-only for CORPORATE). Deferred from bug blitz. |
-
-*All prior Next Up items shipped — see Shipped Features section above. See COMPLETED_PHASES.md for full history.*
+*All priority items currently shipped. See Shipped Features section above. See COMPLETED_PHASES.md for full history.*
 
 ### Phase 3 — Weeks 8–16
 
