@@ -293,6 +293,11 @@ router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, re
   }
 });
 
+// Feature #66: GET /api/organizers/export
+// Download all organizer data as a ZIP with three CSVs (sales, items, purchases)
+// Must be registered BEFORE /:id to avoid Express matching 'export' as an id param
+router.get('/export', authenticate, exportOrganizer);
+
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -589,9 +594,5 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-// Feature #66: GET /api/organizers/export
-// Download all organizer data as a ZIP with three CSVs (sales, items, purchases)
-router.get('/export', authenticate, exportOrganizer);
 
 export default router;
