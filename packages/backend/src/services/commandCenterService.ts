@@ -34,7 +34,6 @@ export async function getCommandCenterSummary(
   let whereClause: any = { organizerId };
 
   if (status === 'active') {
-    // NOW >= startDate AND NOW <= endDate AND status='PUBLISHED'
     whereClause = {
       ...whereClause,
       startDate: { lte: now },
@@ -42,23 +41,19 @@ export async function getCommandCenterSummary(
       status: 'PUBLISHED',
     };
   } else if (status === 'upcoming') {
-    // startDate > NOW AND (status='PUBLISHED' OR status='DRAFT')
     whereClause = {
       ...whereClause,
       startDate: { gt: now },
       status: { in: ['PUBLISHED', 'DRAFT'] },
     };
   } else if (status === 'recent') {
-    // endDate < NOW AND status='ENDED'
     whereClause = {
       ...whereClause,
       endDate: { lt: now },
       status: 'ENDED',
     };
   }
-  // else: 'all' — no additional filters
 
-  // Apply date range filters if provided
   if (filters?.dateFrom) {
     whereClause.startDate = {
       ...whereClause.startDate,
@@ -72,7 +67,6 @@ export async function getCommandCenterSummary(
     };
   }
 
-  // Fetch all sales for this organizer matching filters
   const sales = await prisma.sale.findMany({
     where: whereClause,
     select: {
@@ -85,7 +79,7 @@ export async function getCommandCenterSummary(
       _count: {
         select: {
           items: {
-            where: { draftStatus: { not: 'DRAFT' } }, // published items only
+            where: { draftStatus: { not: 'DRAFT' } },
           },
           favorites: true,
           purchases: true,
@@ -97,7 +91,6 @@ export async function getCommandCenterSummary(
 
   const saleIds = sales.map((s) => s.id);
 
-  // If no sales, return empty response
   if (saleIds.length === 0) {
     const emptyResponse: CommandCenterResponse = {
       success: true,
@@ -112,7 +105,6 @@ export async function getCommandCenterSummary(
       },
       sales: [],
     };
-    // Cache even empty response
     try {
       await redis.setex(cacheKey, 300, JSON.stringify(emptyResponse));
     } catch (err) {
@@ -121,7 +113,6 @@ export async function getCommandCenterSummary(
     return emptyResponse;
   }
 
-  // Batch query for item metrics
   const itemMetrics = await prisma.item.groupBy({
     by: ['saleId'],
     where: {
@@ -133,7 +124,6 @@ export async function getCommandCenterSummary(
     _avg: { price: true },
   });
 
-  // Item status breakdown
   const itemStatus = await prisma.item.groupBy({
     by: ['saleId', 'status'],
     where: {
@@ -143,7 +133,6 @@ export async function getCommandCenterSummary(
     _count: { id: true },
   });
 
-  // Revenue (paid purchases only)
   const revenue = await prisma.purchase.groupBy({
     by: ['saleId'],
     where: {
@@ -153,7 +142,6 @@ export async function getCommandCenterSummary(
     _sum: { amount: true },
   });
 
-  // Pending holds (reservations)
   const reservations = await prisma.itemReservation.groupBy({
     by: ['saleId'],
     where: {
@@ -163,7 +151,6 @@ export async function getCommandCenterSummary(
     _count: { id: true },
   });
 
-  // Unpaid purchases
   const unpaid = await prisma.purchase.groupBy({
     by: ['saleId'],
     where: {
@@ -173,7 +160,6 @@ export async function getCommandCenterSummary(
     _count: { id: true },
   });
 
-  // Items needing photos (photoUrls is empty array)
   const noPhotos = await prisma.item.groupBy({
     by: ['saleId'],
     where: {
@@ -184,14 +170,12 @@ export async function getCommandCenterSummary(
     _count: { id: true },
   });
 
-  // Build lookup maps for easier access
   const itemMetricsMap = new Map(itemMetrics.map((m) => [m.saleId, m]));
   const revenueMap = new Map(revenue.map((r) => [r.saleId, r._sum.amount || 0]));
   const reservationMap = new Map(reservations.map((r) => [r.saleId, r._count.id]));
   const unpaidMap = new Map(unpaid.map((u) => [u.saleId, u._count.id]));
   const noPhotosMap = new Map(noPhotos.map((n) => [n.saleId, n._count.id]));
 
-  // Build status map: { saleId: { SOLD: 5, AVAILABLE: 10, ... } }
   const statusMap = new Map<string, Record<string, number>>();
   itemStatus.forEach((s) => {
     if (!statusMap.has(s.saleId)) {
@@ -200,7 +184,6 @@ export async function getCommandCenterSummary(
     statusMap.get(s.saleId)![s.status] = s._count.id;
   });
 
-  // Transform sales into SaleMetrics
   const saleMetrics: SaleMetrics[] = sales.map((sale) => {
     const metrics = itemMetricsMap.get(sale.id);
     const statusData = statusMap.get(sale.id) || {};
@@ -215,10 +198,7 @@ export async function getCommandCenterSummary(
     const pendingHolds = reservationMap.get(sale.id) || 0;
     const unpaidPurchases = unpaidMap.get(sale.id) || 0;
     const totalPendingActions = itemsNeedingPhotos + pendingHolds + unpaidPurchases;
-
-    // Days until start: (startDate - now) / 86400000 ms
-    const daysUntilStart =
-      (sale.startDate.getTime() - now.getTime()) / 86400000;
+    const daysUntilStart = (sale.startDate.getTime() - now.getTime()) / 86400000;
 
     return {
       id: sale.id,
@@ -232,7 +212,7 @@ export async function getCommandCenterSummary(
       itemsAvailable,
       itemsReserved,
       revenue: Number(saleRevenue),
-      conversionRate: Math.round(conversionRate * 100) / 100, // 2 decimal places
+      conversionRate: Math.round(conversionRate * 100) / 100,
       avgItemPrice: Math.round(avgPrice * 100) / 100,
       favoritesCount: sale._count.favorites,
       viewsCount: sale.qrScanCount || 0,
@@ -245,7 +225,6 @@ export async function getCommandCenterSummary(
     };
   });
 
-  // Calculate aggregates
   const totalActiveSales = saleMetrics.filter(
     (s) =>
       new Date(s.startDate) <= now &&
@@ -277,27 +256,20 @@ export async function getCommandCenterSummary(
     sales: saleMetrics,
   };
 
-  // Cache result in Redis
   try {
-    await redis.setex(cacheKey, 300, JSON.stringify(response)); // 5 min TTL
+    await redis.setex(cacheKey, 300, JSON.stringify(response));
   } catch (err) {
     console.warn('Redis cache set failed:', err);
-    // Continue anyway — cache is optional
   }
 
   return response;
 }
 
-/**
- * Invalidate Command Center cache for an organizer
- * Called when mutations affect sales/items/purchases
- */
 export async function invalidateCommandCenterCache(organizerId: string): Promise<void> {
   const cacheKey = `command-center:${organizerId}`;
   try {
     await redis.del(cacheKey);
   } catch (err) {
     console.warn('Redis cache delete failed:', err);
-    // Non-fatal — cache will expire naturally
   }
 }
