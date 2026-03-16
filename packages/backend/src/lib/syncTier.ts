@@ -17,12 +17,13 @@ export async function syncTier(
     // Determine subscription status
     const subscriptionStatus = status === 'canceled' ? 'canceled' : status;
 
-    // Update organizer
+    // Update organizer and increment tokenVersion to invalidate JWT
     await prisma.organizer.update({
       where: { id: organizerId },
       data: {
         subscriptionTier: tier,
         subscriptionStatus,
+        tokenVersion: { increment: 1 },
       },
     });
 

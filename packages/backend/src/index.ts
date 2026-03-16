@@ -42,6 +42,12 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+// P0-2: Fail fast if STRIPE_SECRET_KEY is missing — prevents accidental use of test key in production
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('FATAL: STRIPE_SECRET_KEY not set');
+  process.exit(1);
+}
+
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
