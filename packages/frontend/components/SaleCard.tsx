@@ -70,7 +70,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   return (
     <div className="card overflow-hidden hover:shadow-card-hover transition-shadow flex flex-col">
       {/* ── Image area (60% visual weight) — 1:1 square ── */}
-      <Link href={`/sales/${sale.id}`} className="block relative aspect-square bg-warm-200 overflow-hidden">
+      <Link href={`/sales/${sale.id}`} className="block relative aspect-square bg-warm-200 dark:bg-gray-700 overflow-hidden">
         {/* Tier 1: LQIP blurred background (loads instantly) */}
         {lqipUrl && !imgError && (
           <div
@@ -86,7 +86,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
 
         {/* Tier 2: Skeleton pulse (shown until main image loads) */}
         {!imgLoaded && !imgError && (
-          <Skeleton className="absolute inset-0 rounded-none bg-warm-200/60" />
+          <Skeleton className="absolute inset-0 rounded-none bg-warm-200/60 dark:bg-gray-600/60" />
         )}
 
         {/* Tier 3: Main lazy WebP image (fades in on load) */}
@@ -146,10 +146,10 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
       {/* ── Content area (40% visual weight) ── */}
       <div className="flex flex-col flex-1 p-3">
         <Link href={`/sales/${sale.id}`} className="flex-1">
-          <h3 className="font-semibold text-sm text-warm-900 leading-snug line-clamp-1 mb-1">
+          <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-1">
             {sale.title}
           </h3>
-          <p className="text-xs text-warm-500">
+          <p className="text-xs text-warm-500 dark:text-gray-400">
             {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
           </p>
         </Link>
@@ -166,7 +166,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             )}
           </div>
           {typeof sale.favoriteCount === 'number' && sale.favoriteCount > 0 && (
-            <span className="text-xs text-warm-400 flex-shrink-0 ml-1">
+            <span className="text-xs text-warm-400 dark:text-gray-500 flex-shrink-0 ml-1">
               ♥ {sale.favoriteCount}
             </span>
           )}

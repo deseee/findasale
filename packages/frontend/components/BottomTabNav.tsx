@@ -121,7 +121,7 @@ const BottomTabNav = () => {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-warm-200 shadow-nav pb-safe"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 shadow-nav pb-safe"
       aria-label="Bottom navigation"
     >
       <div className="flex items-center justify-around h-14">
@@ -135,7 +135,7 @@ const BottomTabNav = () => {
               className={`flex flex-col items-center justify-center flex-1 h-full min-w-touch transition-colors duration-150 ${
                 active
                   ? 'text-amber-600'
-                  : 'text-warm-500 hover:text-warm-900'
+                  : 'text-warm-500 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-100'
               }`}
               aria-current={active ? 'page' : undefined}
             >

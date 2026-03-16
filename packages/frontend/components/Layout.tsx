@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
+import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -125,7 +126,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       </a>
 
       {/* ── HEADER ── fixed, 48px mobile / 64px desktop */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-header">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-header dark:shadow-gray-800/50">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-12 md:h-16">
             <Link href="/" className="text-xl md:text-2xl font-bold text-amber-600 font-heading flex-shrink-0">
@@ -174,7 +175,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       <Link href="/admin" className="text-warm-900 hover:text-amber-600 font-medium">Admin Panel</Link>
                     )}
                     <NotificationBell />
-                    <button onClick={handleLogout} className="text-warm-900 hover:text-amber-600">Logout</button>
+                    <ThemeToggle compact={true} />
+                    <button onClick={handleLogout} className="text-warm-900 dark:text-warm-300 hover:text-amber-600">Logout</button>
                   </div>
                 </>
               ) : (
@@ -185,9 +187,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               )}
             </div>
 
-            {/* Mobile: notification bell (if logged in) + hamburger */}
+            {/* Mobile: notification bell (if logged in) + theme toggle + hamburger */}
             <div className="md:hidden flex items-center gap-1">
               {isClient && user && <NotificationBell />}
+              <ThemeToggle compact={true} />
               <button
                 className="p-2 rounded-md text-warm-500 hover:text-amber-600 hover:bg-warm-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 onClick={() => setMenuOpen(!menuOpen)}
@@ -211,7 +214,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       </header>
 
       {/* ── MOBILE PERSISTENT SEARCH BAR ── fixed below header, mobile only */}
-      <div className="md:hidden fixed top-12 left-0 right-0 z-40 bg-white border-b border-warm-200 px-3 py-1.5">
+      <div className="md:hidden fixed top-12 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 px-3 py-1.5">
         <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 pointer-events-none" aria-hidden="true">
@@ -225,7 +228,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               onChange={(e) => setHeaderSearch(e.target.value)}
               placeholder="Search sales &amp; items…"
               aria-label="Search sales and items"
-              className="w-full pl-9 pr-4 py-1.5 text-sm border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50"
+              className="w-full pl-9 pr-4 py-1.5 text-sm border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
             />
           </div>
         </form>
@@ -248,12 +251,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
-        className={`md:hidden fixed top-0 right-0 bottom-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`md:hidden fixed top-0 right-0 bottom-0 z-50 w-72 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col ${
           menuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Drawer header */}
-        <div className="flex items-center justify-between px-4 h-12 border-b border-warm-200">
+        <div className="flex items-center justify-between px-4 h-12 border-b border-warm-200 dark:border-gray-700">
           <span className="font-bold text-amber-600 font-heading text-lg">FindA.Sale</span>
           <button
             onClick={() => setMenuOpen(false)}
@@ -274,8 +277,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               href={href}
               className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                 router.pathname === href
-                  ? 'bg-amber-50 text-amber-600'
-                  : 'text-warm-900 hover:text-amber-600 hover:bg-warm-100'
+                  ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600'
+                  : 'text-warm-900 dark:text-gray-200 hover:text-amber-600 hover:bg-warm-100 dark:hover:bg-gray-800'
               }`}
             >
               {label}
@@ -303,7 +306,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <BottomTabNav />
 
       {/* Footer */}
-      <footer className="bg-warm-800 text-white py-8">
+      <footer className="bg-warm-800 dark:bg-gray-950 text-white py-8">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
