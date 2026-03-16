@@ -241,7 +241,7 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       res.json({
         tier: organizer.subscriptionTier,
         status: organizer.subscriptionStatus,
-        currentPeriodEnd: organizer.stripeCurrentPeriodEnd,
+        currentPeriodEnd: null,
         cancelAtPeriodEnd: organizer.subscriptionStatus === 'scheduled_for_cancellation',
         priceId: null,
         billingInterval: null,
@@ -285,7 +285,6 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
       where: { id: organizer.id },
       data: {
         subscriptionStatus: 'scheduled_for_cancellation',
-        stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
       },
     });
 

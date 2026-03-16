@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { useAuth } from '../../hooks/useAuth';
-import { toast } from 'sonner';
+import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 
 interface Tier {
   name: string;
@@ -66,6 +66,7 @@ const TIERS: Tier[] = [
 export default function UpgradePage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<string>('SIMPLE');
@@ -80,20 +81,20 @@ export default function UpgradePage() {
   // Handle query params for toast
   useEffect(() => {
     if (router.query.success === 'true') {
-      toast.success('Welcome to PRO! Your subscription is active.');
+      showToast('Welcome to PRO! Your subscription is active.', 'success');
     } else if (router.query.canceled === 'true') {
-      toast.info('Checkout canceled. Feel free to upgrade anytime.');
+      showToast('Checkout canceled. Feel free to upgrade anytime.');
     }
   }, [router.query]);
 
   const handleUpgrade = async (tier: Tier) => {
     if (!user?.id) {
-      toast.error('Please log in first');
+      showToast('Please log in first');
       return;
     }
 
     if (tier.tier === 'SIMPLE') {
-      toast.info('You\'re already on the free plan');
+      showToast('You\'re already on the free plan');
       return;
     }
 
@@ -112,7 +113,7 @@ export default function UpgradePage() {
     }
 
     if (!priceId) {
-      toast.error('Price configuration missing. Please contact support.');
+      showToast('Price configuration missing. Please contact support.', 'error');
       return;
     }
 
@@ -127,7 +128,7 @@ export default function UpgradePage() {
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.message || 'Failed to create checkout session');
+        showToast(data.message || 'Failed to create checkout session', 'error');
         setLoadingPriceId(null);
         return;
       }
@@ -138,7 +139,7 @@ export default function UpgradePage() {
       }
     } catch (error) {
       console.error('Checkout error:', error);
-      toast.error('Failed to start checkout');
+      showToast('Failed to start checkout', 'error');
       setLoadingPriceId(null);
     }
   };

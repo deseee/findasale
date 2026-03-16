@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
-import { toast } from 'sonner';
+import { useToast } from '../../components/ToastContext';
 
 interface Subscription {
   tier: 'SIMPLE' | 'PRO' | 'TEAMS';
@@ -15,6 +15,7 @@ interface Subscription {
 
 export default function SubscriptionPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
@@ -34,11 +35,11 @@ export default function SubscriptionPage() {
         const data = await response.json();
         setSubscription(data);
       } else {
-        toast.error('Failed to load subscription');
+        showToast('Failed to load subscription', 'error');
       }
     } catch (error) {
       console.error('Error fetching subscription:', error);
-      toast.error('Failed to load subscription');
+      showToast('Failed to load subscription', 'error');
     } finally {
       setLoading(false);
     }
@@ -56,15 +57,15 @@ export default function SubscriptionPage() {
         const updated = await response.json();
         setSubscription(updated);
         setShowCancelConfirm(false);
-        toast.success('Subscription canceled. Your plan will remain active until the end of the current period.');
+        showToast('Subscription canceled. Your plan will remain active until the end of the current period.', 'success');
         // Refresh to get updated data
         setTimeout(fetchSubscription, 1000);
       } else {
-        toast.error('Failed to cancel subscription');
+        showToast('Failed to cancel subscription', 'error');
       }
     } catch (error) {
       console.error('Error canceling subscription:', error);
-      toast.error('Failed to cancel subscription');
+      showToast('Failed to cancel subscription', 'error');
     } finally {
       setCanceling(false);
     }
