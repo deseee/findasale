@@ -73,8 +73,8 @@ export default function UpgradePage() {
 
   // Read from JWT
   useEffect(() => {
-    if (user?.organizerProfile) {
-      setCurrentTier(user.organizerProfile.subscriptionTier || 'SIMPLE');
+    if (user?.organizerTier) {
+      setCurrentTier(user.organizerTier);
     }
   }, [user]);
 
