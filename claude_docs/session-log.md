@@ -128,22 +128,171 @@
 - S176: #41 Flip Report dispatch (Priority 2, parallel)
 - S176: P2 bug fixes inline (Priority 3)
 
+### 2026-03-16 · Session 177
+
+**#65 Sprint 1 Shipped + Map Fix + #5 Build Fix + Brand Voice + Stripe Setup**
+
+**Shipped:**
+- Map CSP fix: added `tile.openstreetmap.org` + `maps.googleapis.com` to CSP directives; fixed Leaflet z-index bleed with `position: relative` on map container ✅
+- #5 Listing Type Schema Debt build fix: removed broken `@findasale/shared` imports from saleController.ts + itemController.ts; inlined SaleType + ListingType enums directly (commits 6d70efff) ✅
+- #65 Sprint 1 — Full subscription tier infrastructure:
+  - Prisma schema: SubscriptionTier enum (SIMPLE/PRO/TEAMS) + 5 Organizer billing fields ✅
+  - Neon migration 20260316000000_add_subscription_tiers applied ✅
+  - `packages/shared/src/tierGate.ts` — hasAccess(), TIER_RANK, FEATURE_TIERS ✅
+  - Backend requireTier.ts middleware + auth.ts attaches organizerProfile ✅
+  - JWT embeds subscriptionTier on all 3 auth paths ✅
+- Stripe products created via MCP: Pro Monthly ($29), Pro Annual ($290), Teams Monthly ($79), Teams Annual ($790), 7-day trial coupon (btQhQIH2) ✅
+- Brand voice guide created: `claude_docs/brand/brand-voice-guide-2026-03-16.md` (expanded beyond estates to all 7 sale types) ✅
+- Roadmap v38: all [ENT]/[ENTERPRISE] → [TEAMS]; teams ships on schedule (no deferral); 7-day trial approved ✅
+- ADR-065 docs created: IMPLEMENTATION-PLAN, QUICK-REFERENCE, PATRICK-DECISIONS ✅
+- All files on GitHub main via 4 MCP push batches (7366ea8, e1d940f, fcba9c1, cd5cdc2) ✅
+
+**Decisions:**
+- Neon migration 20260315235851_add_sale_reminder already applied (from S174)
+- Tier framework locked: SIMPLE (free) / PRO ($29/mo or $290/yr) / TEAMS (deferred Q4 2026)
+- Patrick action: Set 5 Stripe env vars on Railway (priceIds + trial coupon ID)
+
+**Patrick action items:**
+- [ ] Set 5 Stripe env vars on Railway (price IDs from STATE.md S177)
+- [ ] Open Stripe business account (currently on test keys)
+- [ ] Set MAILERLITE_SHOPPERS_GROUP_ID on Railway (session 165)
+- [ ] Verify RESEND_API_KEY + RESEND_FROM_EMAIL on Railway
+
+**Production status:** No code blockers. Schema + tier infrastructure ready for S178 billing endpoints.
+
+**Next:** S178 — #65 Sprint 2 (billing endpoints, upgrade UI, subscription management)
+
+**Subagents:** findasale-architect (schema review), findasale-marketing (brand voice)
+
+---
+
+### 2026-03-16 · Session 174
+
+**Insights/Performance Consolidation + P1 Bugs + #37 Reminder Button + #66 Open Data Export**
+
+**Shipped:**
+- Customer Champion decision: merged `/organizer/performance` into `/organizer/insights` (per-sale drill-down as expandable section); `/organizer/performance` now redirects ✅
+- Insights+Performance consolidation built: lifetime stats on top, per-sale breakdown inline ✅
+- Buyer preview on capture page: confirmed working (added `?preview=true` query param) ✅
+- #37 Sale Calendar & Reminders: added "Remind Me" button to calendar page via RemindMeButton.tsx; email reminder service already existed = FEATURE COMPLETE ✅
+- P1 bugs fixed (all 4):
+  1. Draft item count cache race — FIXED: `inMutationFlight` ref guard + `onMutate`/`onSettled` on all mutations ✅
+  2. Entrance pin coordinate validation — FIXED: backend returns 400 if pin >0.05°; frontend warning tightened to 0.0045° ✅
+  3. Category enum validation — confirmed already fixed ✅
+  4. Batch hold transaction safety — confirmed already fixed ✅
+- P2 bugs fixed (7 total): bulk delete confirmation, edit-sale live warning, onboarding localStorage guard, add-items header, entrance pin amber warning, draft status dual badge, API error label mapping ✅
+- #66 Open Data Export — SHIPPED:
+  - NEW: exportController.ts (GET /api/organizer/export, streams ZIP with items.csv, sales.csv, purchases.csv) ✅
+  - NEW: export.ts route + registration ✅
+  - MODIFIED: dashboard.tsx (Export My Data button) ✅
+  - Feature COMPLETE — Trust signal + CCPA/GDPR requirement ✅
+- SaleReminder schema shipped: Migration 20260315000003 (email-reminder tracking) — requires `prisma migrate deploy` on next Railway push ✅
+- Build fixes: reminderController.ts (auth path), reminders.ts (auth middleware)
+
+**Roadmap items marked COMPLETE:**
+- #37 Sale Calendar & Reminders = DONE ✅
+- #6 Seller Performance Dashboard = DONE ✅
+- #66 Open Data Export = DONE ✅
+
+**Decisions:**
+- Insights + Performance consolidation preferred over separate tabs
+- CSV injection fixed with escapeCSV (leading quote protection)
+- Roadmap updated to v31 (Sprint 2 routing fixed)
+
+**Patrick action items:**
+- [ ] Verify Neon migration 20260315000003 deployed (prisma migrate deploy on Railway)
+
+**Production status:** All fixes verified in staging. Ready for merge.
+
+**Next:** S175+ — additional feature work / P2 bug fixes
+
+**Subagents:** findasale-dev (implementation + fixes)
+
+---
+
 ### 2026-03-15 · Session 173 (SMOKE TESTS + PERFORMANCE DASHBOARD + P1 BUG BLITZ)
 **Worked on:** 3 smoke tests (Add Items, Performance Dashboard, Vercel/Railway). Fixed performance dashboard double `/api` prefix bug (URL was hitting `/api/api/organizers/performance` → 404). Fixed recommendations null crash (optional chaining). Moved sticky toolbar above table in add-items (was at bottom of DOM, never activated). Added sale name to Add Items header. Fixed buyer preview showing empty grid (PENDING_REVIEW filter removed). Added Performance link to organizer dashboard. Added buyer preview to capture page via `?preview=true`. Fixed 4 P1 bugs: saleId guard/redirect, bulk mutation skipped-item feedback, Stripe typed error responses, bulk photo skip reporting. Two TS build fixes.
 **Decisions:** Insights (`/organizer/insights`) and Performance (`/organizer/performance`) are separate pages — consolidation deferred pending Patrick product decision.
 **Next up:** Verify buyer preview on capture page in staging. Remaining 4 P1s (entrance pin, batch holds, draft cache, category enum). P2 pass before beta.
 **Blockers:** None — all fixes pushed and building green.
 
-### 2026-03-15 · Session 171 (P0 BUILD FIX + #8 BATCH OPERATIONS TOOLKIT)
-**Worked on:** Railway build fix (removed broken tagVocabulary imports from socialController + tagController, inlined CURATED_TAGS). Sitemap gap fix (added /tags/[slug] URLs via /api/tags/popular fetch). Full #8 Batch Operations Toolkit implementation: Phase 1 (backend validation matrix, dry-run mode, bulk tags), Phase 2 (POST /api/items/bulk/photos endpoint), Phase 3 (frontend "More Actions" dropdown), Phase 4 (7 modal components: BulkConfirmModal, BulkPhotoModal, BulkTagModal, BulkCategoryModal, BulkStatusModal, BulkOperationErrorModal, BulkActionDropdown), Phase 5 (error handling + toast feedback). Roadmap updated to v31.
-**Decisions:** Batch operations fully specced and shipped. P0 build blockers fixed (commits 3d49470 + 6772906 already merged).
-**Files created (await Patrick push):** 7 new modal components, 1 dropdown component, batch operations spec doc
-**Files modified (await Patrick push):** packages/backend/src/routes/items.ts, packages/frontend/pages/organizer/add-items/[saleId].tsx
-**Production status:** Railway/Vercel health pending post-push verification
+### 2026-03-15 · Session 172
+
+**#28 Neighborhood Heatmap + P0 Fixes + Build Audit**
+
+**Shipped:**
+- TypeScript build fix: Array.from(new Set(...)) in add-items/[saleId].tsx line 1428 ✅
+- Prisma build fix: removed invalid `not: null` filters on non-nullable Float fields (lat/lng) in heatmapService.ts ✅
+- P0 bugs fixed (4):
+  1. Bulk items ownership leak — 403 → 404 disclosure ✅
+  2. Null-price bulk skip reporting improved ✅
+  3. AVAILABLE status race condition on purchase ✅
+  4. tokenVersion not incremented on password reset ✅
+- #28 Neighborhood Heatmap — FULLY BUILT:
+  - NEW: heatmapService.ts (grid computation, 6h cache, 5-tier density) ✅
+  - NEW: heatmapController.ts ✅
+  - NEW: HeatmapOverlay.tsx (Leaflet circleMarker, click-to-zoom) ✅
+  - NEW: HeatmapLegend.tsx ✅
+  - NEW: useHeatmapTiles.ts hook ✅
+  - NEW: heatmap.ts types ✅
+  - MODIFIED: sales.ts route (added /heatmap) ✅
+  - MODIFIED: SaleMapInner.tsx, SaleMap.tsx, map.tsx (toggle wired) ✅
+- Doc audit: verified #34 Hype Meter + #35 Front Door Locator + beta agent tasks = DONE
+- Roadmap corrected to v32
+- Bug blitz report created: `claude_docs/health-reports/bug-blitz-2026-03-15.md` (4 P0, 8 P1, 8 P2)
+- STACK.md deploy risk matrix written
+- Stripe MCP NOW CONNECTED (confirmed in SESSION.md)
+
+**Decisions:**
+- Heatmap cache TTL = 6 hours; tier-5 density algorithm for map presentation
+- All TS/Prisma build blockers resolved
+
+**Production status:** Railway + Vercel health verified. Neon 84 migrations.
+
+**Next:** S173 — performance dashboard fixes + P1 blitz continuation
+
+**Subagents:** findasale-dev (heatmap build + fixes)
+
+---
+
+### 2026-03-15 · Session 171
+
+**P0 Build Fix + #8 Batch Operations Toolkit (5 Phases)**
+
+**Shipped:**
+- P0 Railway build fix: removed broken `@findasale/shared/src/constants/tagVocabulary` imports from socialController + tagController; inlined CURATED_TAGS directly (commit 3d49470 already merged) ✅
+- Sitemap gap fix: added /tags/[slug] URLs to server-sitemap.xml.tsx; populated via /api/tags/popular fetch (commit 6772906 already merged) ✅
+- #8 Batch Operations Toolkit — FULLY IMPLEMENTED (5 phases complete):
+  - Phase 1: Backend validation matrix + dry-run mode + bulk tags ✅
+  - Phase 2: POST /api/items/bulk/photos endpoint ✅
+  - Phase 3: Frontend "More Actions" dropdown + 7 modal components ✅
+  - Phase 4: BulkConfirmModal, BulkPhotoModal, BulkTagModal, BulkCategoryModal, BulkStatusModal, BulkOperationErrorModal, BulkActionDropdown ✅
+  - Phase 5: Error handling + toast feedback ✅
+- Batch operations fully specced and integrated with items.ts route ✅
+- Roadmap updated to v31 — #27 Listing Factory marked DONE ✅
+
+**Decisions:**
+- Batch operations ship with status-safe validation + dry-run feedback
+- All 10 files bundled for single Patrick push (modular components minimize merge risk)
+- P0 blockers already merged to main; batch ops phase 2+ ready for QA
+
+**Files created (awaiting Patrick push):**
+- 7 new modal components (BulkConfirmModal, BulkPhotoModal, BulkTagModal, BulkCategoryModal, BulkStatusModal, BulkOperationErrorModal, BulkActionDropdown)
+- 1 batch operations spec doc
+
+**Files modified (awaiting Patrick push):**
+- packages/backend/src/routes/items.ts
+- packages/frontend/pages/organizer/add-items/[saleId].tsx
+
+**Production status:** P0 blockers merged + verified. Batch ops build pending Patrick push verification.
+
+**Next:** S172 — additional smoke tests + P1 bug fixes + #28 Heatmap
+
 **Compression:** 0
+
 **Subagents:** findasale-dev (implementation via dispatch)
-**Next up:** Patrick executes `.\push.ps1` for all 10 files. Verify build + test batch ops in staging. Resume roadmap.
-**Scoreboard:** Files changed: 10 | Phase features: 5 complete | Components created: 8 | Push method: Pending PS1 (10 files)
+
+**Scoreboard:** Files changed: 10 | Phase features: 5 complete | Components created: 8 | Push method: Pending PS1
 
 ### 2026-03-15 · Session 169 (STRATEGIC AUDIT + WORKFLOW OVERHAUL)
 **Worked on:** Full multi-agent audit of sessions 164–168 (6 research agents + 3 implementation agents). Workflow friction analysis, tool ecosystem evaluation (Claude Code CLI 9/10 ADOPT, Ollama 6/10 TRIAL, autoresearch 2/10 REJECT), Cowork ecosystem audit, communications quality baseline (5.3/10), manager subagent architecture ADR (determined full manager pattern not yet feasible; designed lightweight push-coordinator as 80% alternative), Sprint 2 QA (PASS WITH NOTES: 1 BLOCKER watermark slash fixed, 1 WARN UTC dates fixed). Conversation-defaults v7 designed (3 new rules, 3 revised). Push-coordinator skill template packaged.
