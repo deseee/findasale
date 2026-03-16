@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
 import archiver from 'archiver';
 
