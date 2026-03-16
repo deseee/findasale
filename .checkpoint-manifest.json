@@ -4,14 +4,14 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S179",
-    "startedAt": "2026-03-16T14:30:00.000Z",
+    "sessionId": "S180",
+    "startedAt": "2026-03-16T00:00:00.000Z",
     "checkpoints": [
       {
-        "turn": 3,
-        "timestamp": "2026-03-16T14:45:00Z",
-        "estimatedSessionTokens": 28,
-        "note": "S179 pre-dispatch checkpoint. GitHub QA review complete (S178 work verified). About to dispatch 2 parallel agents: findasale-architect + findasale-hacker (Sprint 2 billing sign-off). QA to follow. Est post-dispatch: ~48k. Well under 150k threshold."
+        "turn": 1,
+        "timestamp": "2026-03-16T00:00:00Z",
+        "estimatedSessionTokens": 22,
+        "note": "S180 init checkpoint. Loaded STATE.md, session-log (2 entries), next-session-prompt, manifest, MESSAGE_BOARD. S179 QA PASSED (msg-196). 2 P0 Hacker findings pending dev fix (tier cache staleness + STRIPE_SECRET_KEY startup check). Session log S171-S177 still 7 sessions behind (HIGH). Priority: P0 fixes → session log catch-up."
       },
       {
         "turn": 1,
