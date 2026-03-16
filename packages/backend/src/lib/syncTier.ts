@@ -1,3 +1,4 @@
+import { SubscriptionTier } from '@prisma/client';
 import { prisma } from './prisma';
 
 /**
@@ -22,7 +23,6 @@ export async function syncTier(
       data: {
         subscriptionTier: tier,
         subscriptionStatus,
-        subscriptionEndsAt: status === 'canceled' ? new Date() : null,
       },
     });
 
@@ -36,7 +36,7 @@ export async function syncTier(
 /**
  * Helper: Map Stripe price ID to tier (PRO, TEAMS, or SIMPLE)
  */
-function getTierFromPriceId(priceId: string | null): string {
+function getTierFromPriceId(priceId: string | null): SubscriptionTier {
   if (!priceId) return 'SIMPLE';
 
   const proMonthly = process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
@@ -44,7 +44,7 @@ function getTierFromPriceId(priceId: string | null): string {
   const teamsMonthly = process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID;
   const teamsAnnual = process.env.STRIPE_TEAMS_ANNUAL_PRICE_ID;
 
-  if (priceId === proMonthly || priceId === proAnnual) return 'PRO';
-  if (priceId === teamsMonthly || priceId === teamsAnnual) return 'TEAMS';
+  if (priceId === proMonthly || priceId === proAnnual) return 'PRO' as SubscriptionTier;
+  if (priceId === teamsMonthly || priceId === teamsAnnual) return 'TEAMS' as SubscriptionTier;
   return 'SIMPLE';
 }
