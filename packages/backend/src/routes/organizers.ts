@@ -88,7 +88,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
-    const { businessName, phone, bio, onboardingComplete } = req.body;
+    const { businessName, phone, bio, onboardingComplete, website, facebook, instagram, etsy, brandLogoUrl, brandPrimaryColor, brandSecondaryColor } = req.body;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -105,6 +105,13 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(phone && { phone }),
         ...(bio !== undefined && { bio }),
         ...(onboardingComplete !== undefined && { onboardingComplete }),
+        ...(website !== undefined && { website }),
+        ...(facebook !== undefined && { facebook }),
+        ...(instagram !== undefined && { instagram }),
+        ...(etsy !== undefined && { etsy }),
+        ...(brandLogoUrl !== undefined && { brandLogoUrl }),
+        ...(brandPrimaryColor !== undefined && { brandPrimaryColor }),
+        ...(brandSecondaryColor !== undefined && { brandSecondaryColor }),
       },
     });
 
@@ -292,6 +299,11 @@ router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, re
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Feature #66: GET /api/organizers/export
+// Download all organizer data as a ZIP with three CSVs (sales, items, purchases)
+// Must be registered BEFORE /:id to avoid Express matching 'export' as an id param
+router.get('/export', authenticate, exportOrganizer);
 
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 router.get('/:id', async (req: Request, res: Response) => {
@@ -589,9 +601,5 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-// Feature #66: GET /api/organizers/export
-// Download all organizer data as a ZIP with three CSVs (sales, items, purchases)
-router.get('/export', authenticate, exportOrganizer);
 
 export default router;

@@ -4,9 +4,17 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S-173",
+    "sessionId": "S175",
     "startedAt": "2026-03-15T00:00:00.000Z",
     "checkpoints": [
+      {
+        "turn": 1,
+        "timestamp": "2026-03-15T23:50:00Z",
+        "estimatedSessionTokens": 8,
+        "filesRead": 4,
+        "toolCalls": 4,
+        "note": "S175 init + documentation updates. Token efficiency rules T1–T7 added to CORE.md. Manifest updated to S175. Session-log entry added. MESSAGE_BOARD entry added."
+      },
       {
         "turn": 1,
         "timestamp": "2026-03-15T00:00:00Z",

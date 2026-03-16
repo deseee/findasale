@@ -38,10 +38,13 @@ function mapCategory(category: string | null | undefined): string {
 function escapeCSV(value: string | null | undefined): string {
   if (!value) return '';
   const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
+  // Neutralize CSV formula injection: prefix =,+,-,@ with a single quote so
+  // Excel/Sheets treats the cell as text, not an executable formula.
+  const safe = /^[=+\-@]/.test(str) ? `'${str}` : str;
+  if (safe.includes(',') || safe.includes('"') || safe.includes('\n')) {
+    return `"${safe.replace(/"/g, '""')}"`;
   }
-  return str;
+  return safe;
 }
 
 /**

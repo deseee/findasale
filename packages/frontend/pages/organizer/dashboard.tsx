@@ -315,6 +315,12 @@ const OrganizerDashboard = () => {
               💳 POS
             </Link>
             <Link
+              href="/organizer/brand-kit"
+              className="bg-pink-100 hover:bg-pink-200 text-pink-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              🎨 Brand Kit
+            </Link>
+            <Link
               href="/organizer/holds"
               className="relative bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
