@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { SubscriptionTier } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { getStripe } from '../utils/stripe';
 import { prisma } from '../lib/prisma';
@@ -240,7 +241,7 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       res.json({
         tier: organizer.subscriptionTier,
         status: organizer.subscriptionStatus,
-        currentPeriodEnd: organizer.subscriptionEndsAt,
+        currentPeriodEnd: organizer.stripeCurrentPeriodEnd,
         cancelAtPeriodEnd: organizer.subscriptionStatus === 'scheduled_for_cancellation',
         priceId: null,
         billingInterval: null,
@@ -284,7 +285,7 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
       where: { id: organizer.id },
       data: {
         subscriptionStatus: 'scheduled_for_cancellation',
-        subscriptionEndsAt: new Date(subscription.current_period_end * 1000),
+        stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
       },
     });
 
@@ -321,7 +322,7 @@ async function getOrganizerIdFromStripeCustomer(customerId: string): Promise<str
 /**
  * Helper: Map Stripe price ID to tier (PRO, TEAMS, or SIMPLE)
  */
-function getTierFromPriceId(priceId: string | null): string {
+function getTierFromPriceId(priceId: string | null): SubscriptionTier {
   if (!priceId) return 'SIMPLE';
 
   const proMonthly = process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
@@ -329,7 +330,7 @@ function getTierFromPriceId(priceId: string | null): string {
   const teamsMonthly = process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID;
   const teamsAnnual = process.env.STRIPE_TEAMS_ANNUAL_PRICE_ID;
 
-  if (priceId === proMonthly || priceId === proAnnual) return 'PRO';
-  if (priceId === teamsMonthly || priceId === teamsAnnual) return 'TEAMS';
+  if (priceId === proMonthly || priceId === proAnnual) return 'PRO' as SubscriptionTier;
+  if (priceId === teamsMonthly || priceId === teamsAnnual) return 'TEAMS' as SubscriptionTier;
   return 'SIMPLE';
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthContext';
 import { toast } from 'sonner';
 
 interface Subscription {
