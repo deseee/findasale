@@ -7,7 +7,31 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 181 COMPLETE (2026-03-16) — #61 NEAR-MISS NUDGES SHIPPED + SYNCIER BUGFIX + ROADMAP v40:**
+**Session 181 COMPLETE (2026-03-16 — continued) — #67 SOCIAL PROOF + #23 UNSUBSCRIBE-TO-SNOOZE + #21 USER IMPACT SCORING SHIPPED:**
+- **#67 Social Proof Notifications — SHIPPED:** Full backend service + controller + route, frontend hook + component, wired into sales/items detail pages
+  - `socialProofService.ts`: item-level (favorites, bids, holds) and sale-level aggregation
+  - `socialProofController.ts`: GET /api/social-proof/item/:itemId, GET /api/social-proof/sale/:saleId
+  - `socialProof.ts`: route registration in index.ts
+  - `useSocialProof.ts`: React Query hook (30s stale time)
+  - `SocialProofBadge.tsx`: compact/full variants, sage-green theme, no auth required (self-gates on anonymous)
+  - No schema changes — fully stateless ✅
+- **#23 Unsubscribe-to-Snooze (MailerLite) — SHIPPED:** Intercepts MailerLite unsubscribe webhook, sets 30-day snooze via custom field instead of permanent removal. Preserves seasonal organizers.
+  - `snoozeService.ts`: snooze/reactivate via MailerLite API
+  - `snoozeController.ts`: webhook handler (unauthenticated), status check, manual reactivation (authenticated)
+  - `snooze.ts`: route registration (/api/snooze/webhook, /api/snooze/status, /api/snooze/reactivate)
+  - No schema changes — uses MailerLite custom fields only ✅
+  - Patrick task: Create `snooze_until` date field in MailerLite dashboard and point webhook to /api/snooze/webhook
+- **#21 User Impact Scoring in Sentry — SHIPPED:** Infrastructure feature for error prioritization by user impact
+  - `sentryUserContext.ts`: middleware enriches Sentry errors with user tier, points, hunt pass status, impact_level (HIGH/MEDIUM/LOW)
+  - `useSentryUserContext.ts`: hook syncs context to browser Sentry
+  - Wired globally (index.ts middleware + _app.tsx SentryUserContextSync component)
+  - No schema changes ✅
+- **roadmap.md v42:** Moved #67, #23, #21 to Shipped Features, removed from Phase 4 table
+- **Last Updated:** 2026-03-16 (session 181 continued)
+
+---
+
+**Session 181 COMPLETE (2026-03-16) — #61 NEAR-MISS NUDGES SHIPPED + SYNCIER BUGFIX + ROADMAP v41:**
 - **#61 Near-Miss Nudges — SHIPPED:** Full backend service + controller + route, frontend hook + NudgeBar component, wired into _app.tsx globally
   - `nudgeService.ts`: variable-ratio dispatch (65% daily via MD5 pseudo-randomization), 4 nudge types (FAVORITE_MILESTONE, STREAK_CONTINUATION, TIER_PROGRESS, HUNT_PASS_TEASE), proximity-based triggers
   - `nudgeController.ts`: GET /api/nudges endpoint
@@ -48,9 +72,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - [ ] Open Stripe business account
 
 **Next session options (ranked):**
-1. **#63 Dark Mode + Accessibility** (1.5 sprints) — WCAG 2.1 AA compliance, Lighthouse boost
-2. **#67 Social Proof Notifications** (0.5 sprint) — extend Hype Meter with real-time activity aggregation
-3. **#65 Progressive Disclosure UI** (remaining from Sprint 1+2) — Simple mode 5-button surface
+1. **#63 Dark Mode + Accessibility** (1.5 sprints) — WCAG 2.1 AA compliance, Lighthouse boost, system preference detection, high-contrast outdoor mode
+2. **#65 Progressive Disclosure UI** (1 sprint) — Simple mode 5-button surface (remaining from #65 Sprint 1+2)
+3. **#68 Command Center Dashboard** (2 sprints) — multi-sale overview for power organizers
 
 ---
 

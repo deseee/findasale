@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-16 (v41 — Session 181: #61 Near-Miss Nudges shipped → moved to Completed. Removed #38/#43 from Phase 4 (already in Shipped). Annotated #65 Sprint 1+2 done. Marked Stripe/MailerLite/Resend env vars as done.)
+**Last Updated:** 2026-03-16 (v42 — Session 181 continued: #67 Social Proof Notifications, #23 Unsubscribe-to-Snooze, #21 User Impact Scoring in Sentry all shipped. Moved to Completed.)
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -83,9 +83,7 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 | 18 | Post Performance Analytics | 1 sprint | [PRO] UTM tracking on social template downloads → "your Instagram post got 200 clicks" in organizer dashboard. (Innovation sweep) |
 | 19 | Passkey / WebAuthn Support | 1–2 sprints | [SIMPLE] Phishing-resistant auth alongside OAuth. Phase in early before scale. (Innovation sweep) |
 | 20 | Proactive Degradation Mode | 1 sprint | [PRO] Latency > 2s → auto-drop analytics collection, reduce image quality, preserve core buy/sell flow. (Innovation sweep) |
-| 21 | User Impact Scoring in Sentry | 0.5 sprints | Infrastructure — correlate errors with affected user IDs + transaction value. Prioritize by user damage, not raw error count. (Innovation sweep) |
 | 22 | Low-Bandwidth Mode (PWA) | 1 sprint | [SIMPLE] Detect slow connections, auto-reduce photo quality, disable video previews. Organizers on job sites often have 2G. (Innovation sweep) |
-| 23 | Unsubscribe-to-Snooze (MailerLite) | 0.5 sprints | [SIMPLE] Pause emails 30 days instead of full unsubscribe. Preserves seasonal organizers. (Innovation sweep) |
 | 25 | Organizer Item Library (Consignment Rack) | 2 sprints | [PRO] Upload once, reuse across sales. Items become compounding assets. Full cross-sale search, price history, sold vs. unsold analytics. (Innovation session 129) |
 | 29 | Shopper Loyalty Passport | 2 sprints | [FREE] Gamified repeat-visit system — stamps, badges, early-access perks. Drives shopper retention. Steelman: STRONG. Ship post-beta when shopper base exists. (Innovation session 155) |
 | 30 | AI Item Valuation & Comparables | 2 sprints | [PRO] Price range suggestions from sold-item data + visual embeddings. Leverages existing AI pipeline. Requires 100+ sold items per category to be credible. (Innovation session 155) |
@@ -101,7 +99,6 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 | 62 | Digital Receipt + Returns | 1-2 sprints | [FREE] Auto-generate digital receipt with item photos + prices after every POS transaction. Push to shopper's app profile. Optional organizer-set return window (24h/48h/none). Builds trust, enables returns on high-value items, feeds purchase history for ML. Pairs with POS v2 + Loot Log (#50). (Innovation R3, Big Box lens) |
 | 63 | Dark Mode + Accessibility-First | 1.5 sprints | [FREE] Tailwind dark variant across all components + system preference detection + high-contrast outdoor mode + font sizing controls. WCAG 2.1 AA compliance. Estate sale shoppers skew older — larger fonts, higher contrast, better outdoor visibility are real needs. SEO boost from Lighthouse accessibility scores. (Innovation R3, Mobile lens) |
 | 65 | Organizer Mode Tiers (Simple/Pro/Teams) | 2 sprints | [PRO] **Sprint 1+2 DONE (S177-S178).** Schema, tierGate, requireTier middleware, Stripe billing endpoints, upgrade/subscription UI all shipped. Remaining: Progressive Disclosure UI (Simple mode 5-button surface). (Innovation R3, Progressive Disclosure lens) |
-| 67 | Social Proof Notifications | 0.5 sprint | [SIMPLE] Real-time aggregate activity: "47 people viewed this today." Friend activity for connected users. Extends Hype Meter (#34) with individual social connections. Opt-in privacy controls. Ships with Hype Meter. (Innovation R3, Social lens) |
 | 68 | Command Center Dashboard | 2 sprints | [PRO] Multi-sale overview for power organizers managing 2-3+ sales simultaneously. Key metrics per sale, quick-switch, alert feed ("Sale A has 3 expired holds"), customizable widgets for Teams tier. Pro/Teams Mode feature. (Innovation R3, Progressive Disclosure lens) |
 | 69 | Local-First Offline Mode | 3 sprints | [PRO] Full offline capability via service worker + IndexedDB. Catalog items, set prices, take photos with zero internet. Sync on reconnect. Conflict resolution (last-write-wins for fields, merge for photos). Competitive requirement — PROSALE works offline. Estate sales happen in basements/barns with no signal. (Innovation R3, GitHub lens) |
 | 70 | Live Sale Feed | 1 sprint | [SIMPLE] Real-time activity stream during active sales: "Victorian lamp just sold for $45!" "New hold on Eames chair." WebSocket-powered, leverages existing POS infrastructure. 80% of livestream FOMO at 10% of livestream complexity. Ships after POS v2 stabilizes. (Innovation R3, Social lens) |
@@ -326,6 +323,7 @@ Roadmap and session-log are always updated in the same commit.
 | Share Card Factory (OG Tags) | [SIMPLE] | Item #33 + #43 — branded social previews, dynamic OG images via Cloudinary |
 | Message Templates | [PRO] | Saved organizer reply templates (undocumented) |
 | Hype Meter | [SIMPLE] | Item #34 — real-time social proof |
+| Social Proof Notifications | [SIMPLE] | Item #67 — stateless engagement aggregation (favorites, bids, holds) at item + sale level. Backend: socialProofService (aggregation logic), socialProofController (GET endpoints), socialProof route. Frontend: useSocialProof hook (React Query, 30s stale), SocialProofBadge component (compact/full, sage-green). No schema changes (S181) |
 
 ### Organizer — Sales Tools & Workflow [SIMPLE/PRO mixed]
 
@@ -388,6 +386,7 @@ Roadmap and session-log are always updated in the same commit.
 | Leaderboard (Shoppers + Organizers) | [FREE] | Public rankings (undocumented) |
 | **Hunt Pass ($4.99/30 days)** | **[PAID_ADDON]** | **2× streak multiplier, 30-day recurring subscription, Stripe live billing (undocumented)** |
 | Near-Miss Nudges | [FREE] | Item #61 — variable-ratio casino-psychology nudges, 4 types, NudgeBar toast (S181) |
+| Unsubscribe-to-Snooze (MailerLite) | [SIMPLE] | Item #23 — intercepts MailerLite unsubscribe webhook, sets 30-day snooze via custom field instead of permanent removal. Backend: snoozeService (snooze/reactivate via MailerLite API), snoozeController (webhook + status/reactivate endpoints), snooze route (/api/snooze/webhook unauthenticated, /api/snooze/status + /api/snooze/reactivate authenticated). No schema changes; uses MailerLite custom fields only (S181). Patrick task: create snooze_until date field in MailerLite dashboard, point webhook to /api/snooze/webhook |
 
 ### Platform & AI [FREE/SIMPLE]
 
@@ -397,4 +396,5 @@ Roadmap and session-log are always updated in the same commit.
 | AI Tag Suggestions (Haiku) | [SIMPLE] | Part of Rapidfire, all tiers |
 | AI Condition Grade Suggestions | [SIMPLE] | S/A/B/C/D from photo |
 | AI SEO Description Optimization | [SIMPLE] | High-intent search term bias |
+| User Impact Scoring in Sentry | [Infrastructure] | Item #21 — correlates errors with user tier, points, hunt pass status; impact_level (HIGH/MEDIUM/LOW) for prioritization. Backend: sentryUserContext middleware enriches Sentry errors. Frontend: useSentryUserContext hook syncs context to browser Sentry. Wired globally (index.ts middleware + _app.tsx SentryUserContextSync component). No schema changes (S181) |
 | Shopper Referral Dashboard | [FREE] | `/referral-dashboard` — referral tracking (undocumented) |
