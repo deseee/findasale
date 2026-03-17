@@ -31,7 +31,7 @@ export function useOfflineSync() {
 
   // Initialize offline DB on mount
   useEffect(() => {
-    initOfflineDB().catch(err => console.error('[Offline] DB init failed:', err));
+    initOfflineDB().catch((err: any) => console.error('[Offline] DB init failed:', err));
   }, []);
 
   // Update pending count periodically
@@ -89,7 +89,7 @@ export function useOfflineSync() {
     setSyncError(null);
 
     try {
-      const operations = pending.map(entry => ({
+      const operations = pending.map((entry: any) => ({
         type: entry.operation,
         localId: entry.localId,
         itemId: entry.itemId,
@@ -116,12 +116,12 @@ export function useOfflineSync() {
             await mapLocalToServerId(syncedItem.localId, syncedItem.itemId);
           }
         }
-        await markSyncConfirmed(synced.map(s => s.localId));
+        await markSyncConfirmed(synced.map((s: any) => s.localId));
       }
 
       // Handle failures
       if (failed && failed.length > 0) {
-        const failureMsg = failed.map(f => `${f.localId}: ${f.error}`).join(', ');
+        const failureMsg = failed.map((f: any) => `${f.localId}: ${f.error}`).join(', ');
         setSyncError(`Failed to sync: ${failureMsg}`);
         showToast(`Sync error: ${failureMsg}`, 'error');
       }

@@ -41,8 +41,8 @@ export const useNetworkQuality = (): UseNetworkQualityReturn => {
       return;
     }
 
-    // @ts-ignore - navigator.connection is not in standard TypeScript
-    const connection = navigator.connection;
+    // Network Information API is not in standard TypeScript types
+    const connection = (navigator as any).connection as any;
     if (!connection) {
       setNetworkType('unknown');
       setIsLowBandwidth(false);
@@ -63,8 +63,7 @@ export const useNetworkQuality = (): UseNetworkQualityReturn => {
 
     // Listen for connection change events
     const handleConnectionChange = () => {
-      // @ts-ignore
-      const conn = navigator.connection;
+      const conn = (navigator as any).connection as any;
       if (!conn) return;
 
       const newEffectiveType = conn.effectiveType || 'unknown';
@@ -79,11 +78,9 @@ export const useNetworkQuality = (): UseNetworkQualityReturn => {
       setIsLowBandwidth(newIsLow);
     };
 
-    // @ts-ignore
     connection.addEventListener('change', handleConnectionChange);
 
     return () => {
-      // @ts-ignore
       connection.removeEventListener('change', handleConnectionChange);
     };
   }, []);

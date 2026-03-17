@@ -12,11 +12,15 @@ import { useAuth } from '../components/AuthContext';
  *   4. Run: npx web-push generate-vapid-keys
  */
 
-const urlBase64ToUint8Array = (base64String: string): Uint8Array<ArrayBuffer> => {
+const urlBase64ToUint8Array = (base64String: string) => {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = atob(base64);
-  return Uint8Array.from(rawData.split('').map(c => c.charCodeAt(0)));
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 };
 
 export const usePushSubscription = () => {
@@ -45,10 +49,10 @@ export const usePushSubscription = () => {
           if (result !== 'granted') return;
         }
 
-        // Subscribe
+        // Subscribe — cast to any to avoid TS5 Uint8Array<ArrayBufferLike> vs BufferSource mismatch
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey: urlBase64ToUint8Array(publicKey) as any,
         });
 
         // Send to backend
