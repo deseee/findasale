@@ -2,113 +2,38 @@
 *Written: 2026-03-17T00:00:00Z*
 *Session ended: normally*
 
-## ⚠️ Patrick Must Do Before Any Dev Work
+## Resume From
+Run `node scripts/update-context.js` then read `context.md` and `claude_docs/STATE.md`. Session 190 completed cleanly — no in-flight work. Choose from Next Steps below.
 
-### 1. Push S189 code (40+ files)
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/index.ts
-git add packages/backend/src/services/flipReportService.ts
-git add packages/backend/src/controllers/flipReportController.ts
-git add packages/backend/src/routes/flipReport.ts
-git add packages/frontend/hooks/useFlipReport.ts
-git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
-git add packages/backend/src/controllers/verificationController.ts
-git add packages/backend/src/routes/verification.ts
-git add packages/frontend/components/VerifiedBadge.tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/backend/src/controllers/lootLogController.ts
-git add packages/backend/src/routes/lootLog.ts
-git add packages/frontend/hooks/useLootLog.ts
-git add packages/frontend/pages/shopper/loot-log.tsx
-git add packages/frontend/pages/shopper/loot-log/[purchaseId].tsx
-git add packages/frontend/pages/shopper/loot-log/public/[userId].tsx
-git add packages/frontend/components/UGCPhotoGallery.tsx
-git add packages/frontend/components/UGCPhotoSubmitButton.tsx
-git add packages/frontend/pages/organizer/ugc-moderation.tsx
-git add packages/backend/src/controllers/ugcPhotoController.ts
-git add packages/backend/src/routes/ugcPhotos.ts
-git add packages/frontend/hooks/useUGCPhotos.ts
-git add packages/backend/src/controllers/collectorPassportController.ts
-git add packages/backend/src/routes/collectorPassport.ts
-git add packages/backend/src/services/collectorPassportService.ts
-git add packages/frontend/hooks/useCollectorPassport.ts
-git add packages/frontend/pages/shopper/collector-passport.tsx
-git add packages/backend/src/controllers/challengeController.ts
-git add packages/backend/src/routes/challenges.ts
-git add packages/backend/src/services/challengeService.ts
-git add packages/frontend/hooks/useChallenges.ts
-git add packages/frontend/components/ChallengeCard.tsx
-git add packages/frontend/pages/shopper/challenges.tsx
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260317000900_add_seasonal_challenges/
-git add packages/database/prisma/migrations/20260317000950_add_collector_passport/
-git add packages/database/prisma/migrations/20260317001100_add_organizer_verification/
-git add packages/database/prisma/migrations/20260317001200_add_ugc_photos/
-git add claude_docs/STATE.md
-git add claude_docs/logs/session-log.md
-git add claude_docs/next-session-prompt.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S189: Wave 3 — #41 Flip Report, #45 Collector Passport, #50 Loot Log, #16 Verified Badge, #55 Seasonal Challenges, #47 UGC Photos"
-.\push.ps1
-```
+## What Was In Progress
+Nothing in flight. All Wave 4 migrations applied, all files pushed.
 
-### 2. Run 4 new Neon migrations
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-Migrations being applied:
-- `20260317000900_add_seasonal_challenges` — ChallengeBadge, ChallengeProgress, ShopperStamp models
-- `20260317000950_add_collector_passport` — CollectorPassport model
-- `20260317001100_add_organizer_verification` — verificationStatus/Notes/verifiedAt on Organizer
-- `20260317001200_add_ugc_photos` — UGCPhoto + UGCPhotoLike models
-
----
-
-## What Was Completed This Session (S189)
-
-Wave 3 — 6 features built:
-
-| # | Feature | Tier | Status |
-|---|---------|------|--------|
-| #41 | Flip Report | PRO | SHIPPED — QA pending |
-| #45 | Collector Passport | FREE | SHIPPED — QA pending |
-| #50 | Loot Log | FREE | SHIPPED — QA pending |
-| #16 | Verified Organizer Badge | PRO | SHIPPED — QA pending |
-| #55 | Seasonal Challenges | FREE | SHIPPED — QA pending |
-| #47 | UGC Photo Submissions | FREE | SHIPPED — QA pending |
-
-Total QA pending across all sessions: ~18 features. Patrick deferred QA — can be run in batch.
-
----
-
-## Next Session Priority Order
-
-Patrick reordered the roadmap. At session start, read `claude_docs/strategy/roadmap.md` for the current priority order. Build from the top of the unbuilt items.
-
-**Likely next build candidates (verify against roadmap before dispatching):**
-- Phase 4 items not yet built: #25 Organizer Item Library, #29 Shopper Loyalty Passport, #31 Organizer Brand Kit, #32 Shopper Wishlist Alerts
-- Phase 5 items not yet built: #49 City Heat Index, #51 Sale Ripples, and others
-
-**Session start dispatch pattern:** Fire all dev subagents simultaneously in the opening message. Each feature is independent. Return all file changes to main context — do NOT push from subagents.
-
----
+## What Was Completed This Session
+- **Wave 4 parallel build** — 13 features shipped via 3 subagent batches: #13 TEAMS Workspace, #15 Referral expansion, #17 Fraud/Bid Bot, #19 Passkeys/WebAuthn, #20 Degradation Mode, #22 Low-Bandwidth, #30 Item Valuation, #39 Photo Op Stations, #40+#44 Sale Hubs, #48 Treasure Trail, #57 Rarity Badges, #58+#59 Achievements+Streaks
+- **ADR specs written** for #46 (Treasure Typology), #52 (Encyclopedia), #54 (Crowdsourced Appraisal)
+- **#53 BLOCKED** — legal review required before any cross-platform aggregator work
+- **All 13 Neon migrations applied** (Wave 3: 000900–001200, Wave 4: 001300–003000)
+- **Railway env vars set:** WEBAUTHN_RP_ID, WEBAUTHN_ORIGIN
+- **Migration bugs resolved + documented** in claude_docs/self_healing_skills.md (Patterns 3–6)
+- **Context docs updated:** STATE.md S190, roadmap.md v46, session-log.md, self_healing_skills.md (new)
 
 ## Environment Notes
+- Vercel + Railway both auto-deploy from main — both should be building from HEAD d91077c
+- No pending git pushes from S190 work
+- self_healing_skills.md is a NEW file not yet in git — push it:
+  git add claude_docs/self_healing_skills.md
+  git commit -m "docs: add self_healing_skills.md with 6 recurring bug patterns"
+  .\push.ps1
 
-- Frontend on Vercel, backend on Railway — both auto-deploy on push to main
-- Neon migrations run by Patrick manually (schema changes don't auto-deploy)
-- No pending Patrick actions blocking dev work once push + migrations above are done
-- QA deferred by Patrick — skip QA passes unless Patrick requests
+## Next Steps (Priority Order)
+1. **QA Wave 4** — dispatch findasale-qa. Start with #19 Passkeys, #17 Fraud, #30 Valuation (security-sensitive / PRO-gated)
+2. **#71 Organizer Reputation Score** — next unspecced feature, 1.5 sprints. Dispatch findasale-architect first.
+3. **#46 Treasure Typology Classifier** — ADR spec ready at claude_docs/architecture/ADR-030-046-069-AI-OFFLINE-SPEC.md
+4. **#60 Premium Tier Bundle** — TEAMS workspace shipped; still needs PRO bundle marketing polish + TEAMS onboarding flow
+5. **Open Stripe business account** — test keys still in production (recurring)
 
----
-
-## Dispatch Template
-
-Use for each dev subagent:
-
-> "You are the FindA.Sale Senior Developer. Project root: `/sessions/[SESSION]/mnt/FindaSale`. Read `claude_docs/STATE.md` and `claude_docs/strategy/roadmap.md` before starting. Implement feature #[N] — [name]. [Tier: X]. [1-line scope]. Return all new/modified file paths + content. Do NOT push to GitHub — main context will coordinate pushes."
+## Exact Context
+- Roadmap v46. Features in queue: #71 (unspecced), #46 (spec ready), #69 (spec ready), #52 (spec ready), #54 (spec ready), #53 (blocked legal)
+- self_healing_skills.md has 6 patterns — NOT yet committed to git (see push note above)
+- ADR files in claude_docs/architecture/: ADR-013-060, ADR-017-019, ADR-030-046-069, ADR-040-044-048, ADR-052-053-054 (spec + quick reference)
+- Migration count: 103 total in Prisma migrations directory

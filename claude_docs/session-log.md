@@ -2,6 +2,32 @@
 
 ## Recent Sessions
 
+### 2026-03-17 · Session 190
+
+**Wave 4 Parallel Build — 13 Features + 4 ADR Specs + Migration Repair Loop**
+
+**Shipped:**
+- 13 features via 3 parallel subagent batches (4–8 agents each): #13 TEAMS Workspace, #15 Referral expansion, #17 Fraud/Bid Bot Detector, #19 Passkeys/WebAuthn, #20 Proactive Degradation Mode, #22 Low-Bandwidth Mode, #30 AI Item Valuation, #39 Photo Op Stations, #40+#44 Sale Hubs, #48 Treasure Trail, #57 Rarity Badges, #58 Achievement Badges, #59 Streak Rewards ✅
+- ADR architecture specs written for #46 (Treasure Typology), #52 (Encyclopedia), #54 (Crowdsourced Appraisal) ✅
+- #53 Cross-Platform Aggregator: BLOCKED pending legal review of ToS/scraping ✅
+- All 9 Wave 4 Neon migrations applied (001300–003000). All 4 Wave 3 migrations also applied this session (000900–001200) ✅
+- Railway env vars set: WEBAUTHN_RP_ID + WEBAUTHN_ORIGIN ✅
+
+**Migration bugs fixed (recurring pattern — now documented):**
+- `DATETIME` type does not exist in PostgreSQL → must use `TIMESTAMPTZ` (affected 4 migrations)
+- Inline `UNIQUE` column constraint + explicit `CREATE UNIQUE INDEX` with same name = duplicate index error → remove inline UNIQUE, keep explicit CREATE UNIQUE INDEX
+- Partially-applied migrations leave stale tables/indexes → add `DROP TABLE IF EXISTS` + `CREATE INDEX IF NOT EXISTS` guards to all Wave 4 migrations
+
+**Decisions:**
+- #53 held at BLOCKED — legal must clear scraping legality before any work begins
+- Subagent agent-type limitation confirmed: `findasale-dev` not available in Agent tool — must use `general-purpose` with SKILL.md embedded in prompt
+
+**Next up:** QA Wave 4 features, implement #46 Treasure Typology Classifier (spec ready), #71 Organizer Reputation Score
+
+**Blockers:** None. #53 legal hold ongoing.
+
+---
+
 ### 2026-03-17 · Session 188
 
 **Production Recovery + TypeScript Build Stabilization + Railway Unblock**
@@ -114,31 +140,6 @@
 
 **Scoreboard:** Files shipped: 14 (2 new, 12 edited) | No code changes by agent (feature built externally, verified) | Push method: Patrick .\push.ps1 (frontend-only)
 
----
-
-### 2026-03-16 · Session 179
-
-**Billing QA Pass + Skill Reconstruction + Packaging Protocol**
-
-**Shipped:**
-- GitHub audit of S178 work — all changes verified on main ✅
-- Architect sign-off Sprint 2 billing: GO ✅
-- Hacker security review Sprint 2 billing: PASS WITH NOTES (2 P0s — not blocking QA) ✅
-- findasale-qa Sprint 2 billing: PASS — all 7 files approved ✅
-- conversation-defaults v5 reconstructed: Rule 13 + Rules 24-26 recovered; Rules 14-23 confirmed permanently lost (never committed to git) ✅
-- Skill packaging protocol locked in CORE.md §9 — mandatory repackage after every SKILL.md edit ✅
-- Both skills packaged as .skill ZIPs and presented to Patrick for reinstall ✅
-
-**Decisions:**
-- Rules 14-23 are unrecoverable — were added to Cowork-installed packages in S138-S169 but never committed to git
-- .skill files must be pushed to claude_docs/skills-package/ on GitHub after every skill edit
-- Hacker P0s (tier cache staleness + STRIPE_SECRET_KEY check) do not block QA but block Railway deploy
-
-**Next up:**
-- Patrick installs both .skill files via Cowork
-- Next session: findasale-dev for Hacker P0 fixes, then Railway deploy
-
-**Subagents:** findasale-architect, findasale-hacker, findasale-qa, findasale-records (x2), skill-creator packaging
 
 **Scoreboard:** Files changed: 2 (.skill packages) + 2 (CORE.md, STATE.md, session-log.md) | Push method: MCP ✅ + update docs
 

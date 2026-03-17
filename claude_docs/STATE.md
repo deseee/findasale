@@ -7,6 +7,22 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 190 COMPLETE (2026-03-17) — WAVE 4 BUILD: 14 NEW FEATURES SHIPPED + 4 ADR SPECS WRITTEN:**
+- **Features shipped:** #13 TEAMS Workspace, #15 Referral expansion (Web Share API), #17 Fraud/Bid Bot, #19 Passkeys/WebAuthn, #20 Proactive Degradation Mode, #22 Low-Bandwidth Mode, #30 AI Item Valuation, #39 Photo Op Stations, #40+#44 Sale Hubs, #48 Treasure Trail, #57 Rarity Badges, #58 Achievement Badges, #59 Streak Rewards ✅
+- **ADR specs written (not yet implemented):** #46 Treasure Typology Classifier, #52 Estate Sale Encyclopedia, #54 Crowdsourced Appraisal API — at `claude_docs/architecture/` ✅
+- **Blocked:** #53 Cross-Platform Aggregator — legal review required (scraping ToS risk)
+- **All Wave 3 + Wave 4 Neon migrations applied** ✅ (13 migrations total: 000900–003000)
+- **Railway env vars set:** `WEBAUTHN_RP_ID=finda.sale`, `WEBAUTHN_ORIGIN=https://finda.sale` ✅
+- **pnpm install run** — @simplewebauthn/server + @simplewebauthn/browser added ✅
+- **Migration bugs resolved this session:** DATETIME→TIMESTAMPTZ fix (PostgreSQL), inline UNIQUE + explicit CREATE UNIQUE INDEX duplicate, DROP TABLE IF EXISTS guards added to all partially-run migrations
+- **Last Updated:** 2026-03-17 (session 190)
+
+**Pending — Patrick action items (S190):**
+- [ ] QA Wave 4 features (deferred — same as Wave 3 "qa later")
+- [ ] Open Stripe business account (test keys still in production — recurring)
+
+---
+
 **Session 189 COMPLETE (2026-03-17) — WAVE 3 BUILD: 6 NEW FEATURES (#41 #45 #50 #16 #55 #47):**
 - **All 7 S187 Neon migrations confirmed applied by Patrick at session start** ✅
 - **Duplicate migration number fixed:** `20260317000900_add_collector_passport` renamed → `20260317000950_add_collector_passport` (was conflicting with `000900_add_seasonal_challenges`) ✅
@@ -20,16 +36,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **End state:** All 6 features fully implemented, files on disk, push block ready for Patrick. 4 new Neon migrations needed.
 - **Last Updated:** 2026-03-17 (session 189)
 
-**Pending — Patrick action items (S189):**
-- [ ] Run git push block (see session end message) — adds 6 wave 3 features to GitHub
-- [ ] Run 4 NEW Neon migrations after push:
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-  $env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
-  npx prisma migrate deploy
-  npx prisma generate
-  ```
-  Migrations: 000900_add_seasonal_challenges, 000950_add_collector_passport, 001100_add_organizer_verification, 001200_add_ugc_photos
+**Patrick action items (S189) — ALL COMPLETE:**
+- [x] Git push block — 6 wave 3 features on GitHub ✅
+- [x] 4 Neon migrations applied (000900, 000950, 001100, 001200) ✅
 - [ ] QA wave 3 features (deferred — Patrick said "qa later")
 
 ---
