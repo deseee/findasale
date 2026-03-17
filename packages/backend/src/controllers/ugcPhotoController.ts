@@ -42,8 +42,8 @@ export const submitPhoto = async (req: AuthRequest, res: Response) => {
         photoUrl,
         caption: caption || null,
         tags: tags || [],
-        itemId: itemId || null,
-        saleId: saleId || null,
+        itemId: itemId ? String(itemId) : null,
+        saleId: saleId ? String(saleId) : null,
         status: 'PENDING',
         likesCount: 0,
       },
@@ -65,7 +65,7 @@ export const getApprovedPhotosForSale = async (req: Request, res: Response) => {
 
     const photos = await prisma.uGCPhoto.findMany({
       where: {
-        saleId: parseInt(saleId),
+        saleId,
         status: 'APPROVED',
       },
       include: {
@@ -97,7 +97,7 @@ export const getApprovedPhotosForItem = async (req: Request, res: Response) => {
 
     const photos = await prisma.uGCPhoto.findMany({
       where: {
-        itemId: parseInt(itemId),
+        itemId,
         status: 'APPROVED',
       },
       include: {

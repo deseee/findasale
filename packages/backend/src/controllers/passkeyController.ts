@@ -48,7 +48,7 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
         residentKey: 'discouraged',
         userVerification: 'preferred',
       },
-      attestation: 'none',
+      attestationFormats: ['none'],
       timeout: 60000,
     });
 
@@ -256,17 +256,14 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         expectedChallenge: challenge,
         expectedOrigin: WEBAUTHN_ORIGIN,
         expectedRPID: WEBAUTHN_RP_ID,
-        credential: {
-          id: Buffer.from(
-            credentialIdBase64url
-              .replace(/-/g, '+')
-              .replace(/_/g, '/'),
-            'base64'
-          ),
-          publicKey: publicKeyBuffer,
-          counter: credential.counter,
-          transports: [], // Not tracked in this implementation
-        },
+        credentialID: Buffer.from(
+          credentialIdBase64url
+            .replace(/-/g, '+')
+            .replace(/_/g, '/'),
+          'base64'
+        ),
+        credentialPublicKey: publicKeyBuffer,
+        credentialCounter: credential.counter,
       });
 
       if (!verified.verified) {

@@ -201,11 +201,11 @@ export async function classifyItem(itemId: string): Promise<any> {
     }
 
     // If primary confidence < 0.5, clear secondary category
-    let secondaryCategory = classification.secondaryCategory;
-    let secondaryConfidence = classification.secondaryConfidence;
+    let secondaryCategory: string | undefined = classification.secondaryCategory;
+    let secondaryConfidence: number | undefined = classification.secondaryConfidence;
     if (classification.confidence < 0.5) {
-      secondaryCategory = null;
-      secondaryConfidence = null;
+      secondaryCategory = undefined;
+      secondaryConfidence = undefined;
     }
 
     // Store in DB
@@ -213,17 +213,17 @@ export async function classifyItem(itemId: string): Promise<any> {
       where: { itemId },
       create: {
         itemId,
-        primaryCategory: classification.category,
+        primaryCategory: classification.category as any,
         primaryConfidence: classification.confidence,
-        secondaryCategory: secondaryCategory || null,
-        secondaryConfidence: secondaryConfidence || null,
+        secondaryCategory: secondaryCategory as any,
+        secondaryConfidence: secondaryConfidence,
         rawResponse: classification as any,
       },
       update: {
-        primaryCategory: classification.category,
+        primaryCategory: classification.category as any,
         primaryConfidence: classification.confidence,
-        secondaryCategory: secondaryCategory || null,
-        secondaryConfidence: secondaryConfidence || null,
+        secondaryCategory: secondaryCategory as any,
+        secondaryConfidence: secondaryConfidence,
         rawResponse: classification as any,
         updatedAt: new Date(),
       },
@@ -332,7 +332,7 @@ export async function updateTypology(
       where: { itemId },
       data: {
         organizer_reviewed: true,
-        organizer_correctedTo: correctedTo,
+        organizer_correctedTo: correctedTo as any,
         correctionReason: reason || null,
         updatedAt: new Date(),
       },
