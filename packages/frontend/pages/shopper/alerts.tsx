@@ -1,14 +1,8 @@
 /**
  * Feature #32: Shopper Wishlist Alerts Page
- *
- * Page: /shopper/alerts
- * - Displays list of user's wishlist alerts
- * - "Add Alert" button opens modal form
- * - Each alert shows name, keywords, category, price range, radius
- * - Edit and delete actions per alert
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
@@ -41,13 +35,13 @@ function AlertsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
 
-  // Redirect if not authenticated
-  if (!authLoading && !user) {
-    router.push('/login');
-    return null;
-  }
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
 
-  if (authLoading) {
+  if (authLoading || !user) {
     return (
       <Layout>
         <div className="text-center py-8">
@@ -85,38 +79,31 @@ function AlertsPage() {
 
       <Layout>
         <div className="max-w-4xl mx-auto py-8 px-4">
-          {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Wishlist Alerts</h1>
               <p className="text-gray-600 mt-2">Get notified when sales match your saved searches</p>
             </div>
             <button
-              onClick={() => {
-                setEditingAlert(null);
-                setIsFormOpen(true);
-              }}
+              onClick={() => { setEditingAlert(null); setIsFormOpen(true); }}
               className="rounded-lg bg-[#8fb897] text-white px-6 py-2 font-medium hover:bg-[#7ba680]"
             >
               + Add Alert
             </button>
           </div>
 
-          {/* Loading State */}
           {isLoading && (
             <div className="text-center py-8">
               <p className="text-gray-600">Loading alerts...</p>
             </div>
           )}
 
-          {/* Error State */}
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
               Error loading alerts: {error.message}
             </div>
           )}
 
-          {/* Empty State */}
           {alerts && alerts.length === 0 && !isLoading && (
             <div className="rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No alerts yet</h3>
@@ -130,7 +117,6 @@ function AlertsPage() {
             </div>
           )}
 
-          {/* Alerts List */}
           {alerts && alerts.length > 0 && (
             <div className="space-y-4">
               {alerts.map((alert) => (
@@ -138,52 +124,24 @@ function AlertsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900">{alert.name}</h3>
-
-                      {/* Alert Details */}
                       <div className="mt-3 text-sm text-gray-600 space-y-1">
-                        {alert.query.q && (
-                          <p>
-                            <span className="font-medium">Keywords:</span> {alert.query.q}
-                          </p>
-                        )}
-                        {alert.query.category && (
-                          <p>
-                            <span className="font-medium">Category:</span> {alert.query.category}
-                          </p>
-                        )}
+                        {alert.query.q && <p><span className="font-medium">Keywords:</span> {alert.query.q}</p>}
+                        {alert.query.category && <p><span className="font-medium">Category:</span> {alert.query.category}</p>}
                         {(alert.query.minPrice !== undefined || alert.query.maxPrice !== undefined) && (
-                          <p>
-                            <span className="font-medium">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '\u221e'}
-                          </p>
+                          <p><span className="font-medium">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '\u221e'}</p>
                         )}
-                        {alert.query.radiusMiles && (
-                          <p>
-                            <span className="font-medium">Radius:</span> {alert.query.radiusMiles} miles
-                          </p>
-                        )}
-                        {alert.query.tags && alert.query.tags.length > 0 && (
-                          <p>
-                            <span className="font-medium">Tags:</span> {alert.query.tags.join(', ')}
-                          </p>
-                        )}
+                        {alert.query.radiusMiles && <p><span className="font-medium">Radius:</span> {alert.query.radiusMiles} miles</p>}
                       </div>
-
-                      {/* Tags */}
                       {alert.query.tags && alert.query.tags.length > 0 && (
                         <div className="mt-4 flex flex-wrap gap-2">
                           {alert.query.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="inline-block bg-[#f0fdf4] text-[#166534] px-3 py-1 rounded-full text-xs font-medium"
-                            >
+                            <span key={tag} className="inline-block bg-[#f0fdf4] text-[#166534] px-3 py-1 rounded-full text-xs font-medium">
                               {tag}
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
-
-                    {/* Actions */}
                     <div className="flex gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleEdit(alert)}
@@ -207,7 +165,6 @@ function AlertsPage() {
         </div>
       </Layout>
 
-      {/* Alert Form Modal */}
       <WishlistAlertForm
         isOpen={isFormOpen}
         onClose={handleCloseForm}
