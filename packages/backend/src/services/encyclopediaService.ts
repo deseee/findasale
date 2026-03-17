@@ -137,7 +137,7 @@ export const getEntryBySlug = async (
 
   return {
     ...entry,
-    userVote: entry.votes && entry.votes.length > 0 ? entry.votes[0].helpful : null,
+    userVote: entry.votes && (entry.votes as any[]).length > 0 ? (entry.votes as any[])[0].helpful : null,
     related
   };
 };
@@ -208,7 +208,7 @@ export const listEntries = async (
     isFeatured: e.isFeatured,
     createdAt: e.createdAt,
     updatedAt: e.updatedAt,
-    userVote: e.votes && e.votes.length > 0 ? e.votes[0].helpful : null
+    userVote: e.votes && (e.votes as any[]).length > 0 ? (e.votes as any[])[0].helpful : null
   }));
 
   return {
