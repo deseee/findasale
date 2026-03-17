@@ -101,9 +101,13 @@ export const updateAlert = async (alertId: string, userId: string, input: Partia
   });
   if (!existing) throw new Error('Alert not found');
 
-  // Merge with existing query
+  // Merge with existing query — cast JsonValue to Record to allow spread
+  const existingQuery = (typeof existing.query === 'object' && existing.query !== null
+    ? existing.query
+    : {}) as Record<string, any>;
+
   const updatedQuery = {
-    ...(existing.query || {}),
+    ...existingQuery,
     ...(input.q !== undefined && { q: input.q }),
     ...(input.category !== undefined && { category: input.category }),
     ...(input.minPrice !== undefined && { minPrice: input.minPrice }),
