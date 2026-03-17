@@ -77,7 +77,7 @@ export const updateMyPassport = async (req: AuthRequest, res: Response) => {
  * Get public collector profile
  * Returns 404 if passport doesn't exist or is not public
  */
-export const getPublicPassport = async (req: Request, res: Response) => {
+export const getPublicPassportEndpoint = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 

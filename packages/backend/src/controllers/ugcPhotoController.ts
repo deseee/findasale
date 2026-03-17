@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import prisma from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth';
+import { prisma } from '../lib/prisma';
 
 // Types for request bodies
 interface SubmitPhotoRequest {
@@ -17,9 +18,9 @@ interface ModeratePhotoRequest {
 /**
  * Submit a new UGC photo (creates with PENDING status)
  */
-export const submitPhoto = async (req: Request, res: Response) => {
+export const submitPhoto = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.id) {
+    if (!(req as any).user?.id) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -37,7 +38,7 @@ export const submitPhoto = async (req: Request, res: Response) => {
 
     const photo = await prisma.uGCPhoto.create({
       data: {
-        userId: req.user.id,
+        userId: (req as any).user.id,
         photoUrl,
         caption: caption || null,
         tags: tags || [],
@@ -122,15 +123,15 @@ export const getApprovedPhotosForItem = async (req: Request, res: Response) => {
 /**
  * Get authenticated user's submitted photos (all statuses)
  */
-export const getMyPhotos = async (req: Request, res: Response) => {
+export const getMyPhotos = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.id) {
+    if (!(req as any).user?.id) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const photos = await prisma.uGCPhoto.findMany({
       where: {
-        userId: req.user.id,
+        userId: (req as any).user.id,
       },
       orderBy: {
         createdAt: 'desc',
@@ -147,9 +148,9 @@ export const getMyPhotos = async (req: Request, res: Response) => {
 /**
  * Like a photo (creates UGCPhotoLike and increments likesCount)
  */
-export const likePhoto = async (req: Request, res: Response) => {
+export const likePhoto = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.id) {
+    if (!(req as any).user?.id) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -161,12 +162,12 @@ export const likePhoto = async (req: Request, res: Response) => {
       prisma.uGCPhotoLike.upsert({
         where: {
           userId_photoId: {
-            userId: req.user.id,
+            userId: (req as any).user.id,
             photoId: photoIdNum,
           },
         },
         create: {
-          userId: req.user.id,
+          userId: (req as any).user.id,
           photoId: photoIdNum,
         },
         update: {}, // No-op if already exists
@@ -191,9 +192,9 @@ export const likePhoto = async (req: Request, res: Response) => {
 /**
  * Unlike a photo (deletes UGCPhotoLike and decrements likesCount)
  */
-export const unlikePhoto = async (req: Request, res: Response) => {
+export const unlikePhoto = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.id) {
+    if (!(req as any).user?.id) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -205,7 +206,7 @@ export const unlikePhoto = async (req: Request, res: Response) => {
       prisma.uGCPhotoLike.delete({
         where: {
           userId_photoId: {
-            userId: req.user.id,
+            userId: (req as any).user.id,
             photoId: photoIdNum,
           },
         },
@@ -230,9 +231,9 @@ export const unlikePhoto = async (req: Request, res: Response) => {
 /**
  * Moderate a photo (approve or reject) - organizer only
  */
-export const moderatePhoto = async (req: Request, res: Response) => {
+export const moderatePhoto = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.id || !req.user?.organizerProfile?.id) {
+    if (!(req as any).user?.id || !(req as any).user?.organizerProfile?.id) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -268,7 +269,7 @@ export const moderatePhoto = async (req: Request, res: Response) => {
 
     // Verify organizer ownership
     const ownedSaleId = photo.sale?.organizerId || photo.item?.sale?.organizerId;
-    if (ownedSaleId !== req.user.organizerProfile.id) {
+    if (ownedSaleId !== (req as any).user.organizerProfile.id) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -277,7 +278,7 @@ export const moderatePhoto = async (req: Request, res: Response) => {
       data: {
         status,
         reviewedAt: new Date(),
-        reviewedBy: req.user.id,
+        reviewedBy: (req as any).user.id,
       },
     });
 
@@ -291,9 +292,9 @@ export const moderatePhoto = async (req: Request, res: Response) => {
 /**
  * Get pending photos for organizer's sales
  */
-export const getPendingPhotosForOrganizer = async (req: Request, res: Response) => {
+export const getPendingPhotosForOrganizer = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.id || !req.user?.organizerProfile?.id) {
+    if (!(req as any).user?.id || !(req as any).user?.organizerProfile?.id) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -304,13 +305,13 @@ export const getPendingPhotosForOrganizer = async (req: Request, res: Response) 
         OR: [
           {
             sale: {
-              organizerId: req.user.organizerProfile.id,
+              organizerId: (req as any).user.organizerProfile.id,
             },
           },
           {
             item: {
               sale: {
-                organizerId: req.user.organizerProfile.id,
+                organizerId: (req as any).user.organizerProfile.id,
               },
             },
           },

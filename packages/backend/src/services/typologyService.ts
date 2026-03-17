@@ -106,11 +106,11 @@ Respond ONLY with valid JSON (no markdown, no explanation):
     const parsed = JSON.parse(raw) as ClassificationResult;
 
     return {
-      category: parsed.primaryCategory,
-      confidence: parsed.primaryConfidence,
-      secondaryCategory: parsed.secondaryCategory,
-      secondaryConfidence: parsed.secondaryConfidence,
-      reasoning: parsed.reasoning,
+      category: parsed.primaryCategory as string,
+      confidence: parsed.primaryConfidence as number,
+      secondaryCategory: parsed.secondaryCategory as string | undefined,
+      secondaryConfidence: parsed.secondaryConfidence as number | undefined,
+      reasoning: parsed.reasoning as string | undefined,
     };
   } catch (error: any) {
     if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {

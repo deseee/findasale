@@ -71,7 +71,7 @@ export const createEntry = async (
     },
     include: {
       author: {
-        select: { id: true, name: true, profilePhoto: true }
+        select: { id: true, name: true }
       },
       references: true
     }
@@ -91,7 +91,7 @@ export const getEntryBySlug = async (
     where: { slug },
     include: {
       author: {
-        select: { id: true, name: true, profilePhoto: true }
+        select: { id: true, name: true }
       },
       benchmarks: true,
       references: true,
