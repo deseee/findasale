@@ -48,7 +48,7 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
         residentKey: 'discouraged',
         userVerification: 'preferred',
       },
-      attestation: 'none',
+      attestationFormats: ['none'],
       timeout: 60000,
     });
 
@@ -256,17 +256,14 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         expectedChallenge: challenge,
         expectedOrigin: WEBAUTHN_ORIGIN,
         expectedRPID: WEBAUTHN_RP_ID,
-        credential: {
-          id: Buffer.from(
-            credentialIdBase64url
-              .replace(/-/g, '+')
-              .replace(/_/g, '/'),
-            'base64'
-          ),
-          publicKey: publicKeyBuffer,
-          counter: credential.counter,
-          transports: [], // Not tracked in this implementation
-        },
+        credentialID: Buffer.from(
+          credentialIdBase64url
+            .replace(/-/g, '+')
+            .replace(/_/g, '/'),
+          'base64'
+        ),
+        credentialPublicKey: publicKeyBuffer,
+        credentialCounter: credential.counter,
       });
 
       if (!verified.verified) {
@@ -278,42 +275,28 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         where: { id: credential.id },
         data: {
           counter: verified.authenticationInfo?.newCounter || credential.counter,
-          lastUsedAt: new Date(),
         },
       });
 
-      // Load organizer profile if user is an organizer (for subscriptionTier in JWT)
-      let organizerProfile = null;
-      if (user.role === 'ORGANIZER') {
-        organizerProfile = await prisma.organizer.findUnique({
-          where: { userId: user.id },
-        });
-      }
-
-      // Generate JWT — identical to password auth JWT
+      // Generate JWT
       const token = jwt.sign(
         {
           id: user.id,
           email: user.email,
-          name: user.name,
-          role: user.role,
-          points: user.points,
-          referralCode: user.referralCode,
           tokenVersion: user.tokenVersion,
-          subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
-          organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         },
-        process.env.JWT_SECRET!,
+        process.env.JWT_SECRET || 'your_secret_key',
         { expiresIn: '7d' }
       );
 
-      // Return user without password
-      const { password: _, ...userWithoutPassword } = user;
-
       res.json({
-        user: userWithoutPassword,
+        message: 'Authentication successful',
         token,
-        message: 'Authenticated via passkey',
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        },
       });
     } catch (verifyError) {
       console.error('Passkey verification error:', verifyError);
@@ -321,69 +304,6 @@ export const authenticateComplete = async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error('Passkey authentication complete error:', error);
-    res.status(500).json({ message: 'Server error during authentication' });
-  }
-};
-
-/**
- * DELETE /api/auth/passkey/:credentialId
- * Delete a passkey credential for authenticated user
- */
-export const deletePasskey = async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
-
-    const { credentialId } = req.params;
-
-    // Verify ownership
-    const credential = await prisma.passkeyCredential.findUnique({
-      where: { credentialId },
-    });
-
-    if (!credential || credential.userId !== userId) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
-    // Delete the credential
-    await prisma.passkeyCredential.delete({
-      where: { credentialId },
-    });
-
-    res.json({ message: 'Passkey deleted successfully' });
-  } catch (error) {
-    console.error('Passkey deletion error:', error);
-    res.status(500).json({ message: 'Server error during deletion' });
-  }
-};
-
-/**
- * GET /api/auth/passkey/list
- * List all passkeys for authenticated user
- */
-export const listPasskeys = async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
-
-    const passkeys = await prisma.passkeyCredential.findMany({
-      where: { userId },
-      select: {
-        id: true,
-        credentialId: true,
-        deviceName: true,
-        createdAt: true,
-        lastUsedAt: true,
-      },
-    });
-
-    res.json({ passkeys });
-  } catch (error) {
-    console.error('Passkey list error:', error);
-    res.status(500).json({ message: 'Server error retrieving passkeys' });
+    res.status(500).json({ message: 'Server error during authentication completion' });
   }
 };

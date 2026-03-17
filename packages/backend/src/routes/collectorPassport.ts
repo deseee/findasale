@@ -7,7 +7,7 @@ import { authenticate } from '../middleware/auth';
 import {
   getMyPassport,
   updateMyPassport,
-  getPublicPassport,
+  getPublicPassportEndpoint,
   getMyMatches,
 } from '../controllers/collectorPassportController';
 
@@ -19,6 +19,6 @@ router.patch('/my', authenticate, updateMyPassport);
 router.get('/matches', authenticate, getMyMatches);
 
 // Public routes
-router.get('/users/:userId', getPublicPassport);
+router.get('/users/:userId', getPublicPassportEndpoint);
 
 export default router;
