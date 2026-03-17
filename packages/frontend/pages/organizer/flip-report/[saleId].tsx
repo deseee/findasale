@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import { useFlipReport } from '../../../hooks/useFlipReport';
-import { Skeleton } from '../../../components/Skeleton';
+import Skeleton from '../../../components/Skeleton';
 
 export default function FlipReportPage() {
   const router = useRouter();
