@@ -30,7 +30,7 @@ export default function PublicTrailPage() {
     return (
       <Layout>
         <div className="max-w-2xl mx-auto px-4 py-8">
-          <EmptyState title="Trail Not Found" description="This treasure trail no longer exists or has been made private." />
+          <EmptyState heading="Trail Not Found" subtext="This treasure trail no longer exists or has been made private." />
         </div>
       </Layout>
     );
