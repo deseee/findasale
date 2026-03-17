@@ -103,7 +103,7 @@ export const updateAlert = async (alertId: string, userId: string, input: Partia
 
   // Merge with existing query
   const updatedQuery = {
-    ...existing.query,
+    ...(existing.query || {}),
     ...(input.q !== undefined && { q: input.q }),
     ...(input.category !== undefined && { category: input.category }),
     ...(input.minPrice !== undefined && { minPrice: input.minPrice }),

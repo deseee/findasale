@@ -229,7 +229,7 @@ export const voiceExtract = async (req: Request, res: Response) => {
     const name = extractItemName(transcript);
     const category = detectCategory(transcript);
     const tags = extractTags(transcript);
-    const estimatedPrice = estimatePrice(transcript, category);
+    const estimatedPrice = estimatePrice(transcript, category) ?? 0;
 
     if (!name) {
       return res.status(400).json({ message: 'Could not extract item name from transcript' });
