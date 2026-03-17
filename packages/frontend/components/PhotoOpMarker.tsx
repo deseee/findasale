@@ -30,7 +30,7 @@ const PhotoOpMarker: React.FC<PhotoOpMarkerProps> = ({ station, onShare }) => {
         click: () => setPopupOpen(true),
       }}
     >
-      <Popup onClose={() => setPopupOpen(false)}>
+      <Popup eventHandlers={{ remove: () => setPopupOpen(false) }}>
         <div className="photo-op-popup p-3" style={{ minWidth: '200px' }}>
           <h3 className="font-semibold text-sm mb-2">{station.name}</h3>
           {station.description && (

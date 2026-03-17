@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
 import {
   getItemTypology,
@@ -20,7 +20,7 @@ const router = Router();
  */
 router.get(
   '/items/:itemId/typology',
-  authMiddleware,
+  authenticate,
   requireTier('PRO'),
   getItemTypology
 );
@@ -31,7 +31,7 @@ router.get(
  */
 router.post(
   '/items/:itemId/classify',
-  authMiddleware,
+  authenticate,
   requireTier('PRO'),
   classifyItemEndpoint
 );
@@ -42,7 +42,7 @@ router.post(
  */
 router.post(
   '/sales/:saleId/classify-all',
-  authMiddleware,
+  authenticate,
   requireTier('PRO'),
   batchClassifySale
 );
@@ -53,7 +53,7 @@ router.post(
  */
 router.patch(
   '/items/:itemId/typology',
-  authMiddleware,
+  authenticate,
   requireTier('PRO'),
   updateItemTypology
 );
