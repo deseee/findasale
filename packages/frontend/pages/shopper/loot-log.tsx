@@ -1,31 +1,31 @@
 import { useRouter } from 'next/router';
-import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useAuth } from '../../components/AuthContext';
 import { useLootLog, useLootLogStats } from '../../hooks/useLootLog';
 
 export default function LootLogPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { user, isLoading: authLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState(1);
 
   const { data: statsData, isLoading: statsLoading } = useLootLogStats();
   const { data: lootLogData, isLoading: logsLoading } = useLootLog(currentPage);
 
   // Redirect to login if not authenticated
-  if (status === 'unauthenticated') {
+  if (!authLoading && !user) {
     router.push('/auth/login');
     return null;
   }
 
-  if (status === 'loading') {
+  if (authLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
   const handleShare = () => {
-    const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/shopper/loot-log/public/${session?.user?.id}`;
+    const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/shopper/loot-log/public/${user?.id}`;
     navigator.clipboard.writeText(shareUrl);
     alert('Loot Log link copied to clipboard!');
   };
@@ -90,10 +90,11 @@ export default function LootLogPage() {
             <div className="text-center py-24">
               <p className="text-2xl font-semibold text-slate-700 mb-4">No treasures found yet</p>
               <p className="text-slate-600 mb-8">Start attending sales and making purchases to build your loot log!</p>
-              <Link href="/sales">
-                <a className="px-6 py-3 bg-[#8FB897] text-white rounded-lg hover:bg-opacity-90 transition inline-block">
-                  Browse Sales
-                </a>
+              <Link
+                href="/sales"
+                className="px-6 py-3 bg-[#8FB897] text-white rounded-lg hover:bg-opacity-90 transition inline-block"
+              >
+                Browse Sales
               </Link>
             </div>
           ) : (
@@ -103,30 +104,29 @@ export default function LootLogPage() {
                   <Link
                     key={purchase.id}
                     href={`/shopper/loot-log/${purchase.id}`}
+                    className="group cursor-pointer"
                   >
-                    <a className="group cursor-pointer">
-                      <div className="relative w-full h-48 bg-slate-200 rounded-lg overflow-hidden mb-3">
-                        {purchase.item.imageUrl ? (
-                          <Image
-                            src={purchase.item.imageUrl}
-                            alt={purchase.item.title}
-                            layout="fill"
-                            objectFit="cover"
-                            className="group-hover:scale-105 transition"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 text-white text-sm">
-                            No image
-                          </div>
-                        )}
-                      </div>
-                      <h3 className="font-semibold text-slate-900 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">
-                        {purchase.item.title}
-                      </h3>
-                      <p className="text-sm text-slate-600 mb-1">{purchase.item.category}</p>
-                      <p className="text-lg font-bold text-[#8FB897] mb-1">${purchase.amount.toFixed(2)}</p>
-                      <p className="text-xs text-slate-500">{purchase.sale.title}</p>
-                    </a>
+                    <div className="relative w-full h-48 bg-slate-200 rounded-lg overflow-hidden mb-3">
+                      {purchase.item.imageUrl ? (
+                        <Image
+                          src={purchase.item.imageUrl}
+                          alt={purchase.item.title}
+                          layout="fill"
+                          objectFit="cover"
+                          className="group-hover:scale-105 transition"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 text-white text-sm">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                    <h3 className="font-semibold text-slate-900 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">
+                      {purchase.item.title}
+                    </h3>
+                    <p className="text-sm text-slate-600 mb-1">{purchase.item.category}</p>
+                    <p className="text-lg font-bold text-[#8FB897] mb-1">${purchase.amount.toFixed(2)}</p>
+                    <p className="text-xs text-slate-500">{purchase.sale.title}</p>
                   </Link>
                 ))}
               </div>
