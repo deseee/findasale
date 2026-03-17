@@ -51,6 +51,7 @@ import BulkActionDropdown from '../../../components/BulkActionDropdown';
 import BulkCategoryModal from '../../../components/BulkCategoryModal';
 import BulkStatusModal from '../../../components/BulkStatusModal';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
+import ValuationWidget from '../../../components/ValuationWidget';
 
 /**
  * Phase 3: On-Device Image Processing Utilities
@@ -192,6 +193,16 @@ const CATEGORIES = [
 
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 
+// Feature #57: Rarity tiers — empty string means auto-assign from price
+const RARITY_OPTIONS = [
+  { value: '', label: 'Auto-assign from price' },
+  { value: 'COMMON', label: 'Common' },
+  { value: 'UNCOMMON', label: 'Uncommon' },
+  { value: 'RARE', label: 'Rare' },
+  { value: 'ULTRA_RARE', label: 'Ultra Rare' },
+  { value: 'LEGENDARY', label: 'Legendary' },
+];
+
 const normalizeToArray = (value: string | undefined, arr: string[]): string => {
   if (!value) return '';
   const lowerValue = value.toLowerCase();
@@ -224,6 +235,7 @@ const emptyForm = {
   price: '',
   quantity: 1,
   listingType: 'FIXED',
+  rarity: '', // Feature #57: Rarity — empty means auto-assign from price
   startingBid: '',
   reservePrice: '',
   reverseDailyDrop: '',
@@ -1034,6 +1046,28 @@ const AddItemsDetailPage = () => {
                       className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                       placeholder="0.00"
                     />
+                    {editingItem && editingItem.id && (
+                      <ValuationWidget
+                        itemId={editingItem.id}
+                        currentPrice={formData.price ? parseInt(formData.price) * 100 : undefined}
+                        onPriceSelect={(priceInCents) => setFormData({ ...formData, price: (priceInCents / 100).toFixed(2) })}
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 mb-2">Rarity Badge</label>
+                    <select
+                      value={formData.rarity}
+                      onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}
+                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    >
+                      {RARITY_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>

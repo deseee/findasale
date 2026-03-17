@@ -20,6 +20,7 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
+import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
 // P2 #10: CURATED_TAGS — single source of truth (shared package not yet wired into backend tsconfig rootDir)
 // TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
 const CURATED_TAGS = [
@@ -761,5 +762,12 @@ router.post('/ai/price-suggest', authenticate, async (req, res) => {
     });
   }
 });
+
+// Feature #30: AI Item Valuation endpoints
+// GET /api/items/:itemId/valuation — Get valuation for an item (PRO gated)
+router.get('/:itemId/valuation', authenticate, requireTier('PRO'), getItemValuation);
+
+// POST /api/items/:itemId/valuation/generate — Generate fresh valuation (PRO gated)
+router.post('/:itemId/valuation/generate', authenticate, requireTier('PRO'), generateItemValuation);
 
 export default router;

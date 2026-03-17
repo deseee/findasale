@@ -2,6 +2,7 @@
 // Usage: import SaleMap from '../components/SaleMap'
 import dynamic from 'next/dynamic';
 import type { HeatmapTile } from '../types/heatmap';
+import type { PhotoOpStation } from '../hooks/usePhotoOps';
 
 export interface SalePin {
   id: string;
@@ -30,6 +31,8 @@ interface SaleMapProps {
   /** Feature #28: Neighborhood Heatmap tiles */
   heatmapTiles?: HeatmapTile[];
   onHeatmapCellClick?: (tile: HeatmapTile) => void;
+  /** Feature #39: Photo Op Stations */
+  photoOpStations?: PhotoOpStation[];
 }
 
 // Dynamically import the inner map (no SSR) so Leaflet doesn't crash on server

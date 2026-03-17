@@ -15,9 +15,11 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useTheme } from '../../hooks/useTheme';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { useNetworkQuality } from '../../hooks/useNetworkQuality';
 import Tooltip from '../../components/Tooltip';
 import ThemeToggle from '../../components/ThemeToggle';
 import VerifiedBadge from '../../components/VerifiedBadge';
+import PasskeyManager from '../../components/PasskeyManager';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -27,7 +29,8 @@ const OrganizerSettingsPage = () => {
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
   const { tier, isPro } = useOrganizerTier();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification'>('payments');
+  const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
@@ -118,12 +121,12 @@ const OrganizerSettingsPage = () => {
           <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-8">Settings</h1>
 
           {/* Tabs */}
-          <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700">
-            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'appearance'].map((tab) => (
+          <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
+            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
-                className={`pb-2 font-medium capitalize ${
+                className={`pb-2 font-medium capitalize whitespace-nowrap ${
                   activeTab === tab
                     ? 'border-b-2 border-amber-600 text-amber-600'
                     : 'text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
@@ -284,6 +287,11 @@ const OrganizerSettingsPage = () => {
                 )}
               </div>
             </div>
+          )}
+
+          {/* Security Tab */}
+          {activeTab === 'security' && (
+            <PasskeyManager />
           )}
 
           {/* Notifications Tab */}
@@ -463,6 +471,31 @@ const OrganizerSettingsPage = () => {
                     <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">High Contrast (Outdoor Mode)</span>
                   </label>
                   <p className="text-sm text-warm-600 dark:text-gray-400">Boosts contrast for bright outdoor conditions</p>
+                </div>
+              </div>
+
+              {/* Low-Bandwidth Mode Section */}
+              <div className="card p-6">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Low-Bandwidth Mode</h2>
+                <div className="space-y-4">
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+                      <strong>Detected network:</strong> {networkType || 'unknown'}
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      {isLowBandwidth ? 'Low-bandwidth connection detected. Photos are optimized for faster loading.' : 'You have a good network connection. Full-quality photos are displayed.'}
+                    </p>
+                  </div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={isLowBandwidth}
+                      onChange={(e) => toggleLowBandwidth(e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">Enable Low-Bandwidth Mode</span>
+                  </label>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">Manually override automatic detection. When enabled, photo quality is reduced to improve load times on slow connections.</p>
                 </div>
               </div>
             </div>

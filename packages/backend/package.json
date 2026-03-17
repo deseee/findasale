@@ -15,6 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "@sentry/node": "^8.0.0",
+    "@simplewebauthn/server": "^10.0.0",
     "@prisma/client": "^5.0.0",
     "archiver": "^7.0.0",
     "axios": "^1.13.5",

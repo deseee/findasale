@@ -72,6 +72,16 @@ const toNumber = (value: string | undefined | null): number | null => {
   return isNaN(num) ? null : num;
 };
 
+// Feature #57: Helper to assign item rarity based on price
+// Auto-assignment tiers: price >= 500 → LEGENDARY, >= 200 → ULTRA_RARE, >= 75 → RARE, >= 25 → UNCOMMON, else → COMMON
+const assignRarity = (price: number | undefined | null): string => {
+  if (!price || price < 25) return 'COMMON';
+  if (price >= 500) return 'LEGENDARY';
+  if (price >= 200) return 'ULTRA_RARE';
+  if (price >= 75) return 'RARE';
+  return 'UNCOMMON';
+};
+
 // Simulated image upload function - replace with your actual upload logic
 const uploadImages = async (files: Express.Multer.File[]): Promise<string[]> => {
   // Example: upload to Cloudinary and return URLs
@@ -311,7 +321,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // Feature #5: Validate listing type if provided
@@ -352,6 +362,18 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     // Organizers review suggestions before saving — no silent pre-fill.
     const suggestedTags: string[] = [];
 
+    // Feature #57: Validate and assign rarity
+    let assignedRarity = rarity;
+    if (!assignedRarity) {
+      // Auto-assign rarity based on price if not provided
+      const parsedPrice = price ? parseFloat(price) : null;
+      assignedRarity = assignRarity(parsedPrice);
+    } else if (!['COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE', 'LEGENDARY'].includes(assignedRarity)) {
+      return res.status(400).json({
+        message: `Invalid rarity "${assignedRarity}". Must be one of: COMMON, UNCOMMON, RARE, ULTRA_RARE, LEGENDARY`
+      });
+    }
+
     // Create the item in database
     const item = await prisma.item.create({
       data: {
@@ -366,6 +388,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         status: status || 'AVAILABLE',
         category: category || null,
         condition: condition || null,
+        rarity: assignedRarity,
         photoUrls,
         // W1: Shipping
         shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
@@ -413,7 +436,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity } = req.body;
 
     // Feature #5: Validate listing type if provided
     if (listingType !== undefined && !VALID_LISTING_TYPES.includes(listingType)) {
@@ -443,6 +466,20 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     if (price !== undefined) updateData.price = price ? parseFloat(price) : null;
+
+    // Feature #57: Handle rarity — auto-reassign if price changes and no explicit rarity provided
+    if (rarity !== undefined) {
+      if (!['COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE', 'LEGENDARY'].includes(rarity)) {
+        return res.status(400).json({
+          message: `Invalid rarity "${rarity}". Must be one of: COMMON, UNCOMMON, RARE, ULTRA_RARE, LEGENDARY`
+        });
+      }
+      updateData.rarity = rarity;
+    } else if (price !== undefined) {
+      // Auto-reassign rarity if price changes and no explicit rarity provided
+      const newPrice = price ? parseFloat(price) : null;
+      updateData.rarity = assignRarity(newPrice);
+    }
     if (auctionStartPrice !== undefined) updateData.auctionStartPrice = auctionStartPrice ? parseFloat(auctionStartPrice) : null;
     if (auctionReservePrice !== undefined) updateData.auctionReservePrice = auctionReservePrice ? parseFloat(auctionReservePrice) : null;
     if (bidIncrement !== undefined) updateData.bidIncrement = bidIncrement ? parseFloat(bidIncrement) : null;

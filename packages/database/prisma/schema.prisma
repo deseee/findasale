@@ -98,6 +98,16 @@ model User {
   // Feature #47: UGC Photo Tags — user-generated content with tagging and likes
   ugcPhotos      UGCPhoto[]
   ugcPhotoLikes  UGCPhotoLike[]
+  // Features #58-59: Achievement Badges & Streak Rewards
+  achievements   UserAchievement[] @relation("UserAchievements")
+  streak         VisitStreak?      @relation("UserStreak")
+  // Feature #19: Passkey/WebAuthn Support
+  passkeys       PasskeyCredential[] @relation("UserPasskeys")
+  // Feature #17: Bid Bot Detector — fraud signals and reviews given
+  fraudSignals   FraudSignal[]     @relation("UserFraudSignals")
+  fraudReviewsGiven FraudSignal[]  @relation("FraudReviewsBy")
+  // Feature #48: Treasure Trail Route Builder — user-created trails
+  trails         TreasureTrail[]   @relation("UserTrails")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -159,6 +169,11 @@ model Organizer {
   stripeSubscriptionId String?
   // SECURITY FIX P0-1: Token version for invalidating tier JWTs on subscription upgrade
   tokenVersion    Int     @default(0)    // Increment on tier upgrade to invalidate stale tier claims in JWT
+  // Feature #40: Sale Hubs — hubs created by this organizer
+  hubs            SaleHub[] @relation("OrganizerHubs")
+  // Feature #13: TEAMS Multi-User Workspace relations
+  workspace       OrganizerWorkspace?  @relation("WorkspaceOwner")
+  workspaceMemberships WorkspaceMember[] @relation("OrganizerWorkspaces")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -211,6 +226,12 @@ model Sale {
   linkClicks        LinkClick[]  // #18: Post Performance Analytics
   // Feature #47: UGC Photo Tags — user-generated content linked to sales
   ugcPhotos         UGCPhoto[]
+  // Feature #39: Photo Op Stations — branded selfie spots, shareable UGC moments
+  photoOpStations   PhotoOpStation[] @relation("SalePhotoOps")
+  // Feature #17: Bid Bot Detector — fraud signals for this sale
+  fraudSignals      FraudSignal[]
+  // Feature #40: Sale Hubs — membership in coordinated hubs
+  hubMemberships    SaleHubMembership[] @relation("SaleHubMemberships")
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -230,6 +251,7 @@ model Item {
   category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
   condition        String?   // mint, excellent, good, fair, poor
   conditionGrade   String?   // S | A | B | C | D — null for items not yet graded
+  rarity           ItemRarity @default(COMMON) // Feature #57: Shiny/Rare badges
   photoUrls        String[]
   // U1: Ollama nomic-embed-text 768-dim vector for semantic search
   embedding        Float[]
@@ -285,6 +307,12 @@ model Item {
   earlyAccessUntil DateTime?                      // Items hidden from non-Hunt-Pass shoppers until this time
   // Feature #47: UGC Photo Tags — user-generated content linked to items
   ugcPhotos        UGCPhoto[]
+  // Feature #17: Bid Bot Detector — fraud signals for this item
+  fraudSignals     FraudSignal[]
+  // Feature #48: Treasure Trail Route Builder — items highlighted on trails
+  trailHighlights  TrailHighlight[]
+  // Feature #30: AI Item Valuation — comparable sales valuation
+  valuation        ItemValuation?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1037,6 +1065,15 @@ enum ReturnStatus {
   DENIED
 }
 
+// Feature #57: Shiny/Rare Item Badges
+enum ItemRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  ULTRA_RARE
+  LEGENDARY
+}
+
 model DigitalReceipt {
   id          Int         @id @default(autoincrement())
   purchaseId  String      @unique
@@ -1114,6 +1151,38 @@ model StampMilestone {
 
   @@unique([userId, milestone])
   @@index([userId])
+}
+
+// Feature #13: TEAMS Multi-User Workspace
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model OrganizerWorkspace {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  ownerId     String             @unique
+  createdAt   DateTime           @default(now())
+  owner       Organizer          @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     WorkspaceMember[]
+}
+
+model WorkspaceMember {
+  id          String             @id @default(cuid())
+  workspaceId String
+  organizerId String
+  role        WorkspaceRole      @default(MEMBER)
+  invitedAt   DateTime           @default(now())
+  acceptedAt  DateTime?
+  workspace   OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organizer   Organizer          @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, organizerId])
+  @@index([workspaceId])
+  @@index([organizerId])
 }
 
 // Feature #65: Subscription Tier Enum
@@ -1214,4 +1283,226 @@ model UGCPhotoLike {
   @@unique([userId, photoId])
   @@index([userId])
   @@index([photoId])
+}
+
+// Feature #39: Photo Op Stations — branded selfie spots for sales
+model PhotoOpStation {
+  id            String         @id @default(cuid())
+  saleId        String
+  sale          Sale           @relation("SalePhotoOps", fields: [saleId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  lat           Float
+  lng           Float
+  frameImageUrl String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  shares        PhotoOpShare[]
+
+  @@index([saleId])
+}
+
+model PhotoOpShare {
+  id         String         @id @default(cuid())
+  stationId  String
+  station    PhotoOpStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  userId     String?
+  photoUrl   String
+  caption    String?
+  likesCount Int            @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([stationId])
+  @@index([userId])
+}
+
+// Features #58-59: Achievement Badges & Streak Rewards
+enum AchievementCategory {
+  SHOPPER
+  ORGANIZER
+  SHARED
+}
+
+model Achievement {
+  id          String              @id @default(cuid())
+  key         String              @unique
+  name        String
+  description String
+  icon        String
+  category    AchievementCategory
+  targetValue Int                 @default(1)
+  createdAt   DateTime            @default(now())
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime    @default(now())
+  progress      Int         @default(0)
+  user          User        @relation("UserAchievements", fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+model VisitStreak {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  currentStreak       Int      @default(0)
+  longestStreak       Int      @default(0)
+  lastVisitWeek       String?
+  earlyAccessUnlocked Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+  user                User     @relation("UserStreak", fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model PasskeyCredential {
+  id           String   @id @default(cuid())
+  userId       String
+  credentialId String   @unique  // base64url encoded
+  publicKey    String   // stored as base64url
+  counter      Int      @default(0)
+  deviceName   String?
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime?
+  updatedAt    DateTime @updatedAt
+  user         User     @relation("UserPasskeys", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Feature #17: Bid Bot Detector — fraud signal tracking and organizer review
+model FraudSignal {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation("UserFraudSignals", fields: [userId], references: [id])
+  itemId          String?
+  item            Item?     @relation(fields: [itemId], references: [id])
+  saleId          String
+  sale            Sale      @relation(fields: [saleId], references: [id])
+
+  // Signal type enum: what triggered the flag
+  signalType      String    // RAPID_BID | BID_CANCEL_PATTERN | HIGH_CANCELLATION_RATE | VELOCITY_SPIKE | NEW_ACCOUNT_ACTIVITY
+
+  // Fraud confidence: 0-100, higher = more suspicious
+  confidenceScore Int       @default(0)
+
+  // Metadata
+  detectedAt      DateTime  @default(now())
+  reviewedAt      DateTime?
+  reviewedByAdminId String?
+  reviewedByAdmin User?     @relation("FraudReviewsBy", fields: [reviewedByAdminId], references: [id])
+
+  // Admin review outcome
+  reviewOutcome   String?   // PENDING | DISMISSED | CONFIRMED
+  notes           String?   // Admin notes or auto-generated details
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, itemId, signalType])
+  @@index([saleId])
+  @@index([userId])
+  @@index([confidenceScore])
+  @@index([reviewOutcome])
+}
+
+// Feature #40: Sale Hubs — groups nearby sales into discoverable hubs
+model SaleHub {
+  id          String           @id @default(cuid())
+  name        String
+  slug        String           @unique
+  description String?
+  organizerId String
+  lat         Float
+  lng         Float
+  radiusKm    Float            @default(5.0)
+  isActive    Boolean          @default(true)
+  // Feature #44: Neighborhood Sale Day — coordinated event date
+  saleDate    DateTime?
+  eventName   String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  organizer   Organizer        @relation("OrganizerHubs", fields: [organizerId], references: [id])
+  memberships SaleHubMembership[]
+
+  @@index([organizerId])
+  @@index([lat, lng])
+  @@index([isActive])
+}
+
+// Feature #40: Sale Hubs — many-to-many membership between Sales and Hubs
+model SaleHubMembership {
+  id      String   @id @default(cuid())
+  hubId   String
+  saleId  String
+  addedAt DateTime @default(now())
+  hub     SaleHub  @relation(fields: [hubId], references: [id], onDelete: Cascade)
+  sale    Sale     @relation("SaleHubMemberships", fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@unique([hubId, saleId])
+  @@index([hubId])
+  @@index([saleId])
+}
+
+// Feature #48: Treasure Trail Route Builder — shopper's custom route through multiple sales
+model TreasureTrail {
+  id               String         @id @default(cuid())
+  userId           String
+  user             User           @relation("UserTrails", fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?        @db.VarChar(500)
+  stops            Json           @default("[]") // [{saleId, order, timeEstimateMin, highlightItemIds: []}]
+  totalDistanceKm  Float?         // Cached from OSRM call
+  totalDurationMin Int?           // Cached from OSRM call
+  isPublic         Boolean        @default(false)
+  shareToken       String?        @unique @db.VarChar(32) // Random token for public link
+  completedSaleIds String[]       @default([])
+  isCompleted      Boolean        @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  highlights       TrailHighlight[]
+
+  @@index([userId])
+  @@index([isPublic])
+}
+
+// Feature #48: Track items highlighted on trails
+model TrailHighlight {
+  id        String        @id @default(cuid())
+  trailId   String
+  itemId    String
+  saleId    String
+  note      String?
+  trail     TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  item      Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@unique([trailId, itemId])
+  @@index([trailId])
+  @@index([itemId])
+}
+
+// Feature #30: AI Item Valuation — comparable sales pricing
+model ItemValuation {
+  id               String   @id @default(cuid())
+  itemId           String   @unique
+  item             Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  priceLow         Float    // cents
+  priceHigh        Float    // cents
+  priceMedian      Float    // cents (median of comparables)
+  confidenceScore  Int      // 0-100 based on sample size
+  comparableCount  Int      // Number of sold items used
+  method           String   @default("STATISTICAL") // STATISTICAL | EMBEDDING
+  generatedAt      DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([itemId])
+  @@index([generatedAt])
 }

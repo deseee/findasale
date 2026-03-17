@@ -1,309 +1,135 @@
 import { prisma } from '../lib/prisma';
+import { checkAndAward } from './achievementService';
 
 /**
- * Checks if a given date is yesterday or today (consecutive day).
- * Used to determine if a streak should continue.
+ * Get ISO week string: "2026-W12"
  */
-export const isConsecutiveDay = (lastDate: Date | null): boolean => {
-  if (!lastDate) return true; // First activity
-  const now = new Date();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setHours(0, 0, 0, 0);
-  lastDate.setHours(0, 0, 0, 0);
-  return lastDate.getTime() >= yesterday.getTime();
+const getISOWeek = (date: Date = new Date()): string => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(
+    ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
+  );
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 };
 
 /**
- * Get the point multiplier based on Hunt Pass status.
+ * Record a weekend visit for a user
+ * Calculates streak and unlocks early access if streak >= 3
+ * Also checks and awards weekend visit achievements
  */
-export const getMultiplier = (huntPassActive: boolean): number => {
-  return huntPassActive ? 2 : 1;
-};
+export const recordVisit = async (userId: string): Promise<void> => {
+  try {
+    const currentWeek = getISOWeek();
 
-/**
- * Awards bonus points at certain streak milestones.
- * Visit: 7-day streak = +10 bonus
- */
-export const getBonusPoints = (type: string, streak: number): number => {
-  if (type === 'visit' && streak === 7) return 10;
-  return 0;
-};
-
-/**
- * Records a visit streak activity.
- * Checks if today is a consecutive day to current streak.
- * Awards 5 base points + Hunt Pass multiplier + 7-day bonus.
- */
-export const recordVisit = async (userId: string): Promise<{ pointsAwarded: number; streakContinued: boolean }> => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      huntPassActive: true,
-      lastVisitDate: true,
-    },
-  });
-
-  if (!user) throw new Error('User not found');
-
-  // Get or create the visit streak record
-  let userStreak = await prisma.userStreak.findUnique({
-    where: { userId_type: { userId, type: 'visit' } },
-  });
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  let currentStreak = userStreak?.currentStreak ?? 0;
-  let pointsAwarded = 0;
-
-  // Check if activity already recorded today
-  if (userStreak?.lastActivityDate) {
-    const lastActivityDay = new Date(userStreak.lastActivityDate);
-    lastActivityDay.setHours(0, 0, 0, 0);
-    if (lastActivityDay.getTime() === today.getTime()) {
-      // Already recorded today, don't double-count
-      return { pointsAwarded: 0, streakContinued: true };
-    }
-  }
-
-  // Determine if streak continues
-  if (isConsecutiveDay(userStreak?.lastActivityDate ?? null)) {
-    currentStreak = (userStreak?.currentStreak ?? 0) + 1;
-  } else {
-    // Streak broken, reset
-    currentStreak = 1;
-  }
-
-  // Award points: 5 base + multiplier
-  const basePoints = 5;
-  const multiplier = getMultiplier(user.huntPassActive);
-  pointsAwarded = basePoints * multiplier;
-
-  // Add 7-day bonus
-  const bonus = getBonusPoints('visit', currentStreak);
-  pointsAwarded += bonus;
-
-  // Update streak record and user points
-  if (!userStreak) {
-    // Create new streak record
-    userStreak = await prisma.userStreak.create({
-      data: {
-        userId,
-        type: 'visit',
-        currentStreak,
-        longestStreak: currentStreak,
-        lastActivityDate: now,
-      },
+    // Get or create streak record
+    let streak = await prisma.visitStreak.findUnique({
+      where: { userId },
     });
-  } else {
-    // Update existing streak record
-    await prisma.userStreak.update({
-      where: { id: userStreak.id },
-      data: {
-        currentStreak,
-        longestStreak: Math.max(userStreak.longestStreak, currentStreak),
-        lastActivityDate: now,
-      },
-    });
-  }
 
-  // Award points to user
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      streakPoints: { increment: pointsAwarded },
-      points: { increment: pointsAwarded },
-      lastVisitDate: now,
-      visitStreak: currentStreak,
-    },
-  });
-
-  return { pointsAwarded, streakContinued: true };
-};
-
-/**
- * Records a save (favorite) activity.
- * Awards 10 points per save (Hunt Pass: 20).
- * Does not use streaks, only one-off awards.
- */
-export const recordSave = async (userId: string): Promise<{ pointsAwarded: number }> => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { huntPassActive: true },
-  });
-
-  if (!user) throw new Error('User not found');
-
-  const basePoints = 10;
-  const multiplier = getMultiplier(user.huntPassActive);
-  const pointsAwarded = basePoints * multiplier;
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      streakPoints: { increment: pointsAwarded },
-      points: { increment: pointsAwarded },
-    },
-  });
-
-  return { pointsAwarded };
-};
-
-/**
- * Records a purchase/buy streak activity.
- * Checks if today is a consecutive day to current streak.
- * Awards 50 base points + Hunt Pass multiplier.
- */
-export const recordPurchase = async (userId: string): Promise<{ pointsAwarded: number; streakContinued: boolean }> => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { huntPassActive: true },
-  });
-
-  if (!user) throw new Error('User not found');
-
-  // Get or create the buy streak record
-  let userStreak = await prisma.userStreak.findUnique({
-    where: { userId_type: { userId, type: 'buy' } },
-  });
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  let currentStreak = userStreak?.currentStreak ?? 0;
-  let pointsAwarded = 0;
-
-  // Check if activity already recorded today
-  if (userStreak?.lastActivityDate) {
-    const lastActivityDay = new Date(userStreak.lastActivityDate);
-    lastActivityDay.setHours(0, 0, 0, 0);
-    if (lastActivityDay.getTime() === today.getTime()) {
-      // Already recorded today, but allow multiple purchases
-      // Just award points without incrementing streak
-      const basePoints = 50;
-      const multiplier = getMultiplier(user.huntPassActive);
-      pointsAwarded = basePoints * multiplier;
-
-      await prisma.user.update({
-        where: { id: userId },
+    if (!streak) {
+      // First visit — create streak with 1
+      await prisma.visitStreak.create({
         data: {
-          streakPoints: { increment: pointsAwarded },
-          points: { increment: pointsAwarded },
+          userId,
+          currentStreak: 1,
+          longestStreak: 1,
+          lastVisitWeek: currentWeek,
+          earlyAccessUnlocked: false,
+        },
+      });
+    } else if (streak.lastVisitWeek !== currentWeek) {
+      // Different week — check if consecutive
+      let newStreak = 1;
+      let newLongest = streak.longestStreak;
+      let earlyAccessUnlocked = false;
+
+      if (streak.lastVisitWeek) {
+        // Calculate if previous week was consecutive
+        // Simple heuristic: if last visit was within ~8 days, consider it consecutive
+        const lastWeekParts = streak.lastVisitWeek.split('-W');
+        const lastYear = parseInt(lastWeekParts[0], 10);
+        const lastWeek = parseInt(lastWeekParts[1], 10);
+
+        const currentWeekParts = currentWeek.split('-W');
+        const currentYear = parseInt(currentWeekParts[0], 10);
+        const currentWeekNum = parseInt(currentWeekParts[1], 10);
+
+        // Consecutive if same year and week difference is 1, or year changed and it's expected
+        const isConsecutive =
+          (currentYear === lastYear && currentWeekNum === lastWeek + 1) ||
+          (currentYear === lastYear + 1 &&
+            lastWeek >= 51 &&
+            currentWeekNum <= 2);
+
+        if (isConsecutive) {
+          newStreak = streak.currentStreak + 1;
+          newLongest = Math.max(newStreak, streak.longestStreak);
+        }
+      }
+
+      // Unlock early access if streak >= 3
+      if (newStreak >= 3) {
+        earlyAccessUnlocked = true;
+      }
+
+      // Update streak
+      await prisma.visitStreak.update({
+        where: { userId },
+        data: {
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          lastVisitWeek: currentWeek,
+          earlyAccessUnlocked,
         },
       });
 
-      return { pointsAwarded, streakContinued: true };
+      // Award weekend visit achievements (fire-and-forget)
+      checkAndAward(userId, 'WEEKEND_VISIT').catch((err) =>
+        console.warn('[streak] Failed to award visit achievement:', err)
+      );
     }
+    // If same week, no-op (already visited this week)
+  } catch (error) {
+    console.error('[Streak] Failed to record visit:', error);
   }
-
-  // Determine if streak continues
-  if (isConsecutiveDay(userStreak?.lastActivityDate ?? null)) {
-    currentStreak = (userStreak?.currentStreak ?? 0) + 1;
-  } else {
-    // Streak broken, reset
-    currentStreak = 1;
-  }
-
-  // Award points: 50 base + multiplier
-  const basePoints = 50;
-  const multiplier = getMultiplier(user.huntPassActive);
-  pointsAwarded = basePoints * multiplier;
-
-  // Update streak record and user points
-  if (!userStreak) {
-    // Create new streak record
-    userStreak = await prisma.userStreak.create({
-      data: {
-        userId,
-        type: 'buy',
-        currentStreak,
-        longestStreak: currentStreak,
-        lastActivityDate: now,
-      },
-    });
-  } else {
-    // Update existing streak record
-    await prisma.userStreak.update({
-      where: { id: userStreak.id },
-      data: {
-        currentStreak,
-        longestStreak: Math.max(userStreak.longestStreak, currentStreak),
-        lastActivityDate: now,
-      },
-    });
-  }
-
-  // Award points to user
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      streakPoints: { increment: pointsAwarded },
-      points: { increment: pointsAwarded },
-    },
-  });
-
-  return { pointsAwarded, streakContinued: true };
 };
 
 /**
- * Fetches the user's complete streak profile.
- * Returns all streak types, current/longest streaks, and Hunt Pass status.
+ * Get or create a streak record for a user
  */
-export const getStreakProfile = async (userId: string) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      streakPoints: true,
-      visitStreak: true,
-      huntPassActive: true,
-      huntPassExpiry: true,
-      userStreaks: true,
-    },
-  });
+export const getStreak = async (userId: string) => {
+  try {
+    let streak = await prisma.visitStreak.findUnique({
+      where: { userId },
+    });
 
-  if (!user) throw new Error('User not found');
+    if (!streak) {
+      // Create default streak
+      streak = await prisma.visitStreak.create({
+        data: {
+          userId,
+          currentStreak: 0,
+          longestStreak: 0,
+          lastVisitWeek: null,
+          earlyAccessUnlocked: false,
+        },
+      });
+    }
 
-  // Build a clean response
-  const streakMap: Record<string, any> = {};
-  for (const streak of user.userStreaks) {
-    streakMap[streak.type] = {
+    return {
       currentStreak: streak.currentStreak,
       longestStreak: streak.longestStreak,
-      lastActivityDate: streak.lastActivityDate,
+      earlyAccessUnlocked: streak.earlyAccessUnlocked,
+    };
+  } catch (error) {
+    console.error('[Streak] Failed to get streak:', error);
+    return {
+      currentStreak: 0,
+      longestStreak: 0,
+      earlyAccessUnlocked: false,
     };
   }
-
-  return {
-    userId: user.id,
-    name: user.name,
-    streakPoints: user.streakPoints,
-    visitStreak: user.visitStreak,
-    huntPassActive: user.huntPassActive,
-    huntPassExpiry: user.huntPassExpiry,
-    streaks: streakMap,
-  };
-};
-
-/**
- * Gets the top 20 users by streak points (public leaderboard).
- */
-export const getLeaderboard = async () => {
-  const users = await prisma.user.findMany({
-    where: { streakPoints: { gt: 0 } },
-    select: {
-      id: true,
-      name: true,
-      streakPoints: true,
-      visitStreak: true,
-      huntPassActive: true,
-    },
-    orderBy: { streakPoints: 'desc' },
-    take: 20,
-  });
-
-  return users;
 };

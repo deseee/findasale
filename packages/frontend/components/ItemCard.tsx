@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
+import { useNetworkQuality } from '../hooks/useNetworkQuality';
+import RarityBadge from './RarityBadge';
 
 interface Item {
   id: string;
@@ -13,6 +15,7 @@ interface Item {
   auctionEndTime?: string;
   photoUrl?: string;
   isAiTagged?: boolean;
+  rarity?: string | null;
 }
 
 interface ItemCardProps {
@@ -22,6 +25,7 @@ interface ItemCardProps {
 const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const { isLowBandwidth } = useNetworkQuality();
 
   const getCountdownText = (): string => {
     if (!item.auctionEndTime) return '';
@@ -51,7 +55,8 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
   };
 
   const lqipUrl = item.photoUrl ? getLqipUrl(item.photoUrl) : null;
-  const optimizedUrl = item.photoUrl ? getOptimizedUrl(item.photoUrl) : null;
+  const imageQuality = isLowBandwidth ? 40 : 75;
+  const optimizedUrl = item.photoUrl ? getOptimizedUrl(item.photoUrl, imageQuality) : null;
   const badge = getStatusBadge();
   const countdown = getCountdownText();
 
@@ -103,6 +108,13 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
             >
               {badge.label}
             </span>
+          )}
+
+          {/* Feature #57: Rarity badge — top-right */}
+          {item.rarity && item.rarity !== 'COMMON' && (
+            <div className="absolute top-2 right-2">
+              <RarityBadge rarity={item.rarity} size="sm" />
+            </div>
           )}
 
           {/* B2: AI tagging disclosure badge — bottom-right */}
