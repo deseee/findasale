@@ -108,6 +108,19 @@ model User {
   fraudReviewsGiven FraudSignal[]  @relation("FraudReviewsBy")
   // Feature #48: Treasure Trail Route Builder — user-created trails
   trails         TreasureTrail[]   @relation("UserTrails")
+  // Feature #52: Estate Sale Encyclopedia
+  encyclopediaEntries EncyclopediaEntry[] @relation("EncyclopediaAuthor")
+  encyclopediaRevisions EncyclopediaRevision[] @relation("EncyclopediaRevisionAuthor")
+  encyclopediaVotes EncyclopediaVote[] @relation("EncyclopediaVote")
+  // Feature #71: Organizer Reputation Score
+  reputation OrganizerReputation?
+  // Feature #54: Crowdsourced Appraisal API
+  appraisalRequests    AppraisalRequest[]
+  appraisalResponses   AppraisalResponse[]
+  appraisalAIRequests  AppraisalAIRequest[]
+  appraisalDisputes    AppraisalDispute[]
+  // Feature #60: TEAMS Onboarding Wizard completion flag
+  teamsOnboardingComplete Boolean @default(false)
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -313,6 +326,8 @@ model Item {
   trailHighlights  TrailHighlight[]
   // Feature #30: AI Item Valuation — comparable sales valuation
   valuation        ItemValuation?
+  // Feature #46: Treasure Typology Classifier — collector category classification
+  typology         ItemTypology?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1325,6 +1340,21 @@ enum AchievementCategory {
   SHARED
 }
 
+// Feature #46: Treasure Typology Classifier — collector category taxonomy
+enum TypologyCategory {
+  ART_DECO
+  MID_CENTURY_MODERN
+  AMERICANA
+  VICTORIAN
+  INDUSTRIAL
+  FARMHOUSE
+  RETRO_ATOMIC
+  PRIMITIVE_FOLK_ART
+  ART_NOUVEAU
+  CONTEMPORARY
+  OTHER
+}
+
 model Achievement {
   id          String              @id @default(cuid())
   key         String              @unique
@@ -1505,4 +1535,261 @@ model ItemValuation {
 
   @@index([itemId])
   @@index([generatedAt])
+}
+
+// Feature #46: Treasure Typology Classifier — AI-powered item collector category classification
+model ItemTypology {
+  id                    String            @id @default(cuid())
+  itemId                String            @unique
+  item                  Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Primary classification result
+  primaryCategory       TypologyCategory
+  primaryConfidence     Float             // 0.0–1.0
+  secondaryCategory     TypologyCategory?
+  secondaryConfidence   Float?            // 0.0–1.0
+
+  // Raw AI response for audit trail
+  rawResponse           Json?             // Full Haiku response: { category, confidence, reasoning }
+
+  // Organizer feedback & correction
+  organizer_reviewed    Boolean           @default(false)
+  organizer_correctedTo TypologyCategory?
+  correctionReason      String?           // Organizer note (diagnostic)
+
+  classifiedAt          DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([itemId])
+  @@index([primaryCategory])
+}
+
+// Feature #52: Estate Sale Encyclopedia — Crowdsourced knowledge base
+model EncyclopediaEntry {
+  id          String   @id @default(cuid())
+  slug        String   @unique // URL-friendly: "depression-glass-101"
+  title       String
+  subtitle    String?
+  content     String   // Markdown format
+  category    String   // Art Deco, MCM, Americana, Victorian, Tools, Toys, etc.
+  tags        String[] @default([])
+
+  authorId    String
+  author      User     @relation("EncyclopediaAuthor", fields: [authorId], references: [id])
+
+  status      String   @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED | FLAGGED
+  isFeatured  Boolean  @default(false)
+
+  viewCount   Int      @default(0)
+  helpfulCount Int     @default(0)
+
+  // Versioning — keep full history of edits
+  revisions   EncyclopediaRevision[]
+
+  // Price benchmarks
+  benchmarks  PriceBenchmark[]
+
+  // External references
+  references  EncyclopediaReference[]
+
+  // Vote tracking (one vote per user)
+  votes       EncyclopediaVote[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([authorId])
+}
+
+model EncyclopediaRevision {
+  id          String   @id @default(cuid())
+  entryId     String
+  entry       EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  title       String
+  content     String
+  category    String
+  tags        String[]
+
+  authorId    String
+  author      User     @relation("EncyclopediaRevisionAuthor", fields: [authorId], references: [id])
+
+  changeNote  String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([entryId])
+  @@index([authorId])
+}
+
+model PriceBenchmark {
+  id          String   @id @default(cuid())
+  entryId     String
+  entry       EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  condition   String   // mint, excellent, good, fair, poor
+  region      String   // Northeast, Midwest, South, West, National
+
+  priceRangeLow   Int
+  priceRangeHigh  Int
+
+  dataSource  String?  // AskPrice, SOLD listing, Comps, Appraiser
+  updatedAt   DateTime @updatedAt
+
+  @@index([entryId])
+}
+
+model EncyclopediaReference {
+  id          String   @id @default(cuid())
+  entryId     String
+  entry       EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  title       String
+  url         String
+  source      String?  // Smithsonian, Museum of Modern Art, etc.
+
+  createdAt   DateTime @default(now())
+
+  @@index([entryId])
+}
+
+model EncyclopediaVote {
+  id          String   @id @default(cuid())
+  entryId     String
+  entry       EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  userId      String
+  user        User     @relation("EncyclopediaVote", fields: [userId], references: [id])
+
+  helpful     Boolean  // true = helpful, false = not helpful
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([entryId, userId])
+  @@index([entryId])
+  @@index([userId])
+}
+
+// Feature #71: Organizer Reputation Score — computed from response time, sale frequency, photo quality
+model OrganizerReputation {
+  id              String   @id @default(cuid())
+  organizerId     String   @unique
+  organizer       User     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  score           Float    @default(0)        // 0–5 star rating
+  responseTimeAvg Float    @default(0)        // average hours from inquiry to first reply (stub)
+  saleCount       Int      @default(0)        // total published sales count
+  photoQualityAvg Float    @default(0)        // average photos per item (0–1 scale, converted to 0–5)
+  shopperRating   Float?                      // stub for future crowdsourced ratings
+  disputeRate     Float    @default(0)        // stub for future dispute tracking
+  isNew           Boolean  @default(true)     // true if saleCount < 3
+  lastCalculated  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizerId])
+}
+
+// Feature #54: Crowdsourced Appraisal API — Sprint 1
+model AppraisalRequest {
+  id          String @id @default(cuid())
+  submittedByUserId String
+  submittedBy User @relation("AppraisalRequests", fields: [submittedByUserId], references: [id])
+  itemTitle   String
+  itemDescription String?
+  itemCategory String?
+  photos      AppraisalPhoto[]
+  status      String @default("PENDING") // PENDING | IN_REVIEW | COMPLETED | EXPIRED | DISPUTED
+  communityResponses AppraisalResponse[] @relation("CommunityAppraisals")
+  aiAppraisalRequest AppraisalAIRequest?
+  consensus   AppraisalConsensus?
+  disputes    AppraisalDispute[]
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([submittedByUserId])
+  @@index([status])
+}
+
+model AppraisalPhoto {
+  id          String @id @default(cuid())
+  requestId   String
+  request     AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  cloudinaryUrl String
+  uploadedAt  DateTime @default(now())
+
+  @@index([requestId])
+}
+
+model AppraisalResponse {
+  id          String @id @default(cuid())
+  requestId   String
+  request     AppraisalRequest @relation("CommunityAppraisals", fields: [requestId], references: [id], onDelete: Cascade)
+  responderId String
+  responder   User @relation("AppraisalResponses", fields: [responderId], references: [id])
+  estimatedLow Int
+  estimatedHigh Int
+  confidence  String @default("COMMUNITY")
+  expertise   String?
+  reasoning   String
+  helpfulVotes Int @default(0)
+  notHelpfulVotes Int @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([requestId, responderId])
+  @@index([requestId])
+  @@index([responderId])
+}
+
+model AppraisalConsensus {
+  id          String @id @default(cuid())
+  requestId   String @unique
+  request     AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  finalLow    Int
+  finalHigh   Int
+  confidenceScore Int
+  methodology String
+  aiModelVersion String?
+  aiConfidence Float?
+  responseCount Int @default(0)
+  completedAt DateTime @default(now())
+
+  @@index([requestId])
+}
+
+model AppraisalAIRequest {
+  id          String @id @default(cuid())
+  requestId   String @unique
+  request     AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User @relation("AppraisalAIRequests", fields: [userId], references: [id])
+  pricePaidCents Int
+  paymentStatus String @default("PENDING")
+  stripePaymentIntentId String?
+  completedAt DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AppraisalDispute {
+  id          String @id @default(cuid())
+  requestId   String
+  request     AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  raisedByUserId String
+  raisedBy    User @relation("AppraisalDisputes", fields: [raisedByUserId], references: [id])
+  reason      String
+  notes       String?
+  status      String @default("OPEN")
+  resolution  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([requestId])
 }

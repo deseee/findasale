@@ -128,6 +128,10 @@ import achievementRoutes from './routes/achievements';        // Features #58-59
 import fraudRoutes from './routes/fraud';                     // Feature #17: Bid Bot Detector
 import trailRoutes from './routes/trails';                    // Feature #48: Treasure Trail Route Builder
 import workspaceRoutes from './routes/workspace';              // Feature #13: TEAMS Multi-User Workspace
+import encyclopediaRoutes from './routes/encyclopedia';        // Feature #52: Estate Sale Encyclopedia
+import appraisalRoutes from './routes/appraisals';            // Feature #54: Crowdsourced Appraisal API
+import typologyRoutes from './routes/typology';               // Feature #46: Treasure Typology Classifier
+import syncRoutes from './routes/sync';                        // Feature #69: Local-First Offline Mode
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -331,6 +335,10 @@ app.use('/api/achievements', achievementRoutes);                     // Features
 app.use('/api/fraud', fraudRoutes);                                  // Feature #17: Bid Bot Detector
 app.use('/api/trails', trailRoutes);                                 // Feature #48: Treasure Trail Route Builder
 app.use('/api/workspace', workspaceRoutes);                          // Feature #13: TEAMS Multi-User Workspace
+app.use('/api/encyclopedia', encyclopediaRoutes);                     // Feature #52: Estate Sale Encyclopedia
+app.use('/api/appraisals', appraisalRoutes);                          // Feature #54: Crowdsourced Appraisal API
+app.use('/api', typologyRoutes);                                       // Feature #46: Treasure Typology Classifier
+app.use('/api/sync', syncRoutes);                                    // Feature #69: Local-First Offline Mode
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
