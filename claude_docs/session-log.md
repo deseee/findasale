@@ -2,6 +2,33 @@
 
 ## Recent Sessions
 
+### 2026-03-16 · Session 186
+
+**Dark Mode Audit + Completion — Live Chrome Audit, All Pages Swept**
+
+**Shipped:**
+- Live Chrome dark mode audit (Claude in Chrome): confirmed `dark` class on `<html>`, identified missing `dark:` variants as root cause across all pages ✅
+- Dark mode sweep Wave 1 — Layout.tsx (all nav links + header divider + mobile drawer), index.tsx (Leaflet map overflow-hidden fix), organizer/dashboard.tsx (bg, cards, stat text, progress bars, tabs) ✅
+- Tier gating corrections: POS, Print Inventory, Share buttons incorrectly gated PRO in S183 sweep — removed `canAccess('PRO')` wrappers, restored to SIMPLE tier ✅
+- Listing Factory button routing fix: was `href="/organizer/add-items"` (dead route) → converted to button using `showSaleSelector` state, navigates to `/organizer/add-items/${sale.id}` ✅
+- Holds page P0 crash fix: `response.data as HoldItem[]` → `response.data.holds as HoldItem[]` (API returns `{ holds, total, limit, offset, hasMore }` envelope — frontend was iterating the object, triggering TypeError) ✅
+- Dark mode sweep Wave 2 — organizer/pos.tsx, organizer/print-inventory.tsx, organizer/holds.tsx, organizer/insights.tsx ✅
+- Dark mode sweep Wave 3 — organizer/brand-kit.tsx, organizer/command-center.tsx, organizer/settings.tsx, organizer/edit-sale/[id].tsx, calendar.tsx, sales/[id].tsx (157 dark: classes added) ✅
+- CLAUDE.md §4 updated: clarified Frontend=Vercel / Backend=Railway, no manual redeploy buttons on either, trivial commit pattern for forced redeploy ✅
+
+**Decisions:**
+- POS and Share are SIMPLE tier features — S183 mass-gating was too aggressive. Tier classification doc (`claude_docs/operations/feature-tier-classification-2026-03-16.md`) is authoritative.
+- Holds crash root cause: API response envelope pattern must always be unwrapped; queryFn must return `response.data.[key]`, not `response.data` directly.
+- Vercel is the frontend deployment platform (not Railway). Railway hosts backend only.
+
+**Files changed:** 11 total (Layout.tsx, index.tsx, dashboard.tsx, holds.tsx, pos.tsx, print-inventory.tsx, insights.tsx, brand-kit.tsx, command-center.tsx, settings.tsx, edit-sale/[id].tsx, calendar.tsx, sales/[id].tsx + CLAUDE.md)
+
+**Next:** Phase 3/4/5 roadmap — parallel subagent dispatch
+
+**Scoreboard:** Pages dark-mode audited: 13 | Tier gates corrected: 3 | P0 crash fixed: 1 | Platform confusion resolved: 1
+
+---
+
 ### 2026-03-16 · Session 185
 
 **#70 Live Sale Feed + P0-1 tokenVersion JWT Cache Invalidation + #68 QA PASS**

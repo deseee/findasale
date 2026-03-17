@@ -70,7 +70,7 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 
 | # | Feature | Est. | Notes |
 |---|---------|------|-------|
-| 7 | Shopper Referral Rewards | 1–2 sprints | [FREE] Referral tracking, rewards distribution, email notifications. Deferred — no shoppers yet. |
+| 7 | Shopper Referral Rewards | 1–2 sprints | [FREE] Referral tracking, rewards distribution, email notifications. |
 
 ### Phase 4 — Post-16 Weeks
 | # | Feature | Est. | Notes |

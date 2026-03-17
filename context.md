@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-16T14:12:32.544Z*
+*Generated at 2026-03-17T03:56:33.097Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -16,11 +16,12 @@ See report for details.
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
-⚠ 4+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:951:        description: null, // TODO: Add description to schema if needed
-  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/backend/src/routes/items.ts:24:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
-  /sessions/inspiring-practical-faraday/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+⚠ 5+ TODO/FIXME markers in source (showing up to 5):
+  /sessions/happy-adoring-goodall/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/happy-adoring-goodall/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:989:        description: null, // TODO: Add description to schema if needed
+  /sessions/happy-adoring-goodall/mnt/FindaSale/packages/backend/src/routes/items.ts:24:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/happy-adoring-goodall/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
+  /sessions/happy-adoring-goodall/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:159:// TODO: Implement face detection with @tensorflow-models/coco-ssd
 
 ## Project File Tree
 ```
@@ -43,12 +44,14 @@ See report for details.
 │       └── skill-creator/
 │           └── SKILL.md
 ├── CLAUDE.md
+├── FEATURE_54_COMPLETION.md
 ├── IMPLEMENTATION_SUMMARY.md
 ├── INSTALL-conversation-defaults-SKILL.md
 ├── INSTALL-conversation-defaults-rule27.md
 ├── INSTALL-push-coordinator-SKILL.md
 ├── MESSAGE_BOARD.json
 ├── README.md
+├── S184-PUSH-INSTRUCTIONS.md
 ├── SPRINT2-PUSH-INSTRUCTIONS.md
 ├── ai-config/
 │   └── global-instructions.md
@@ -63,7 +66,10 @@ See report for details.
 │   ├── architecture/
 │   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
 │   │   ├── ADR-065-PATRICK-DECISIONS.md
-│   │   └── ADR-065-QUICK-REFERENCE.md
+│   │   ├── ADR-065-QUICK-REFERENCE.md
+│   │   ├── ADR-068-COMMAND-CENTER-DASHBOARD.md
+│   │   ├── ADR-068-QUICK-REFERENCE.md
+│   │   └── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
 │   ├── archive/ (14 files)
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (9 files)
@@ -87,21 +93,20 @@ See report for details.
 │   │   └── content-pipeline/
 │   │       └── content-2026-03-16.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (37 files)
+│   ├── operations/ (38 files)
 │   ├── research/ (9 files)
 │   ├── self-healing/ (1 files)
 │   ├── session-log-archive.md
 │   ├── session-log.md
-│   ├── skills-package/ (30 files)
+│   ├── skills-package/ (29 files)
 │   ├── strategic/
 │   │   └── advisory-board-adr-065-pricing-analysis-2026-03-16.md
-│   ├── strategy/ (5 files)
+│   ├── strategy/ (6 files)
 │   ├── ux-spotchecks/
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
 │   │   └── add-items-ux-audit-2026-03-15.md
 │   └── workflow-retrospectives/ (2 files)
 ├── conversation-defaults-SKILL.md
-├── conversation-defaults-SKILL.md.tmp.11729.1773580809690
 ├── next
 ├── package.json
 ├── packages/
@@ -123,17 +128,18 @@ See report for details.
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (62 files)
+│   │   │   ├── controllers/ (65 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
 │   │   │   ├── instrument.ts
 │   │   │   ├── jobs/ (13 files)
-│   │   │   ├── lib/ (4 files)
-│   │   │   ├── middleware/ (3 files)
+│   │   │   ├── lib/ (5 files)
+│   │   │   ├── middleware/ (4 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (60 files)
-│   │   │   ├── services/ (21 files)
+│   │   │   ├── routes/ (64 files)
+│   │   │   ├── services/ (26 files)
+│   │   │   ├── types/ (1 files)
 │   │   │   └── utils/ (4 files)
 │   │   └── tsconfig.json
 │   ├── database/
@@ -144,7 +150,7 @@ See report for details.
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (84 migrations)
+│   │   │   ├── migrations/ (85 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -155,10 +161,10 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (114 files)
+│   │   ├── components/ (121 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (1 files)
-│   │   ├── hooks/ (10 files)
+│   │   ├── hooks/ (17 files)
 │   │   ├── lib/ (4 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
@@ -173,7 +179,7 @@ See report for details.
 │   │   ├── styles/ (2 files)
 │   │   ├── tailwind.config.js
 │   │   ├── tsconfig.json
-│   │   ├── types/ (4 files)
+│   │   ├── types/ (5 files)
 │   │   └── utils/ (1 files)
 │   └── shared/
 │       ├── CLAUDE.md
@@ -182,7 +188,8 @@ See report for details.
 │       │   ├── constants/
 │       │   │   └── tagVocabulary.ts
 │       │   ├── index.ts
-│       │   └── tierGate.ts
+│       │   ├── tierGate.ts
+│       │   └── types/ (1 files)
 │       └── tsconfig.json
 ├── pnpm
 ├── pnpm-workspace.yaml

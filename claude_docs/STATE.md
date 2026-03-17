@@ -7,6 +7,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 186 COMPLETE (2026-03-16) — DARK MODE AUDIT COMPLETE (ALL 13 PAGES), HOLDS P0 CRASH FIXED, LISTING FACTORY ROUTING FIXED, TIER GATES CORRECTED:**
+- **Dark mode audit — COMPLETE:** Live Chrome inspection + 3-wave sweep. All 13 user-facing pages now have full `dark:` variant coverage. Total ~200 dark: classes added across Layout.tsx, index.tsx, dashboard.tsx, holds.tsx, pos.tsx, print-inventory.tsx, insights.tsx, brand-kit.tsx, command-center.tsx, settings.tsx, edit-sale/[id].tsx, calendar.tsx, sales/[id].tsx ✅
+- **Holds page P0 crash fixed:** `response.data as HoldItem[]` → `response.data.holds as HoldItem[]`. Root cause: API returns `{ holds, total, limit, offset, hasMore }` envelope; queryFn was iterating the envelope object → TypeError in useMemo groupedByBuyer ✅
+- **Listing Factory button routing fixed:** Dead `href="/organizer/add-items"` → button using `showSaleSelector` state, navigates to `/organizer/add-items/${sale.id}` ✅
+- **Tier gating corrections:** POS, Print Inventory, Share incorrectly gated PRO in S183. Removed `canAccess('PRO')` wrappers — restored to SIMPLE tier ✅
+- **CLAUDE.md §4 updated:** Frontend=Vercel / Backend=Railway. No manual redeploy buttons on either. Trivial commit pattern for forced redeploy ✅
+- **All changes deployed:** Vercel production on commit `7cef97d` (current). All 13 pages live ✅
+- **Last Updated:** 2026-03-16 (session 186)
+
+**Pending — Patrick action items:**
+- [ ] Open Stripe business account (test keys still in production)
+- [ ] VAPID keys confirmed in production
+- [ ] Beta organizer recruitment (5 targets in `claude_docs/beta-launch/organizer-outreach.md`)
+- [ ] Push CLAUDE.md update (trivial — can batch with next session's first push)
+
+---
+
 **Session 185 COMPLETE (2026-03-16) — #70 LIVE SALE FEED SHIPPED + P0-1 TOKENVERSION JWT CACHE INVALIDATION SHIPPED + #68 QA PASS:**
 - **#70 Live Sale Feed — SHIPPED:** Real-time Socket.io event service + frontend widget
   - `packages/backend/src/services/liveFeedService.ts` (NEW) — in-memory ring buffer (max 20 events, 2h TTL), Socket.io event emitter

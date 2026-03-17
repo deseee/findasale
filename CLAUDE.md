@@ -56,6 +56,7 @@ No API formatting outside backend.
 
 - Never use `git add -A` — stage files explicitly by name
 - **Git push**: Patrick uses `.\push.ps1` from PowerShell (NOT `git push` directly). The script self-heals: clears index.lock, CRLF phantoms, fetches + merges (never rebases — rebase is broken with `core.autocrlf=true` on Windows). See `push.ps1` in repo root.
+- **Deployments**: Frontend is on **Vercel**, backend is on **Railway**. Both auto-deploy only when a new commit is pushed to `main` — there are no manual redeploy buttons on either platform. To force a redeploy with no pending changes, make a trivial commit (e.g. add a comment) and push via MCP `push_files`. Never tell Patrick to click a redeploy button on either platform.
 - Full safety and backup rules: `claude_docs/SECURITY.md`
 - **Statusline reinstall (session init):** The Cowork VM resets each session. At session start, silently run:
   ```bash
