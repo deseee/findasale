@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
 import TierBadge from './TierBadge'; // Phase 22
+import { useNetworkQuality } from '../hooks/useNetworkQuality';
 
 interface Sale {
   id: string;
@@ -37,6 +38,7 @@ interface SaleCardProps {
 const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const { isLowBandwidth } = useNetworkQuality();
 
   const formatSaleDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'TBA';
@@ -64,7 +66,8 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
   const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
   const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
-  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl) : null;
+  const imageQuality = isLowBandwidth ? 40 : 75;
+  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl, imageQuality) : null;
   const showToday = isHappeningToday();
 
   return (

@@ -13,6 +13,7 @@ import SaleShareButton from '../../components/SaleShareButton';
 import SaleQRCode from '../../components/SaleQRCode';
 import SaleMap from '../../components/SaleMap';
 import Skeleton from '../../components/Skeleton';
+import { usePhotoOpStations } from '../../hooks/usePhotoOps';
 import BadgeDisplay from '../../components/BadgeDisplay';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
 import AuctionCountdown from '../../components/AuctionCountdown';
@@ -143,6 +144,9 @@ const SaleDetailPage = () => {
     },
     enabled: !!id,
   });
+
+  // Feature #39: Fetch photo op stations for this sale
+  const { data: photoOpStations = [] } = usePhotoOpStations(id as string);
 
   const handleBuyNow = (itemId: string, itemTitle: string) => {
     setCheckoutItem({ id: itemId, title: itemTitle });
@@ -567,6 +571,7 @@ const SaleDetailPage = () => {
                 lng: sale.entranceLng,
                 note: sale.entranceNote,
               } : undefined}
+              photoOpStations={photoOpStations}
               height="360px"
             />
           ) : (

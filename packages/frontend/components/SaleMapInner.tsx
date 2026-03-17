@@ -3,11 +3,13 @@ import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import EntranceMarker from './EntranceMarker'; // Feature 35: Front Door Locator
 import HeatmapOverlay from './HeatmapOverlay'; // Feature #28
+import PhotoOpMarker from './PhotoOpMarker'; // Feature #39: Photo Op Stations
 import L from 'leaflet';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import type { SalePin } from './SaleMap';
 import type { HeatmapTile } from '../types/heatmap';
+import type { PhotoOpStation } from '../hooks/usePhotoOps';
 
 // Fix Leaflet's default icon paths (broken in webpack/Next.js builds)
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -83,6 +85,8 @@ interface SaleMapInnerProps {
   /** Feature #28: Neighborhood Heatmap tiles */
   heatmapTiles?: HeatmapTile[];
   onHeatmapCellClick?: (tile: HeatmapTile) => void;
+  /** Feature #39: Photo Op Stations */
+  photoOpStations?: PhotoOpStation[];
 }
 
 const SaleMapInner = ({
@@ -98,6 +102,7 @@ const SaleMapInner = ({
   userLocation,
   heatmapTiles,
   onHeatmapCellClick,
+  photoOpStations = [],
 }: SaleMapInnerProps) => {
   const formatDate = (d: string) => {
     try { return format(new Date(d), 'MMM d, yyyy'); } catch { return 'TBA'; }
@@ -149,6 +154,11 @@ const SaleMapInner = ({
             entranceNote={entrancePin.note}
           />
         )}
+
+        {/* Feature #39: Photo Op Stations — selfie spot markers */}
+        {singlePin && photoOpStations && photoOpStations.map((station) => (
+          <PhotoOpMarker key={station.id} station={station} />
+        ))}
 
         {/* Multi-pin mode (homepage / search / map page) */}
         {!singlePin && pins.map((pin) => {

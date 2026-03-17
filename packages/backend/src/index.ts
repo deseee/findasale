@@ -54,6 +54,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
+import passkeyRoutes from './routes/passkey';
 import saleRoutes from './routes/sales';
 import itemRoutes from './routes/items';
 import favoriteRoutes from './routes/favorites';
@@ -97,9 +98,11 @@ import viewersRouter from './routes/viewers';           // Feature 34: Hype Mete
 import exportRouter from './routes/export';             // Sprint 2: Export features
 import socialRouter from './routes/social';             // Sprint 2: Social template generator
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
+import hubRoutes from './routes/hubs';                  // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
+import healthRoutes from './routes/health';              // Feature #20: Proactive Degradation Mode
 import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
 import socialProofRoutes from './routes/socialProof';     // Feature 67: Social Proof Notifications
 import snoozeRoutes from './routes/snooze';               // Feature 23: Unsubscribe-to-Snooze
@@ -120,8 +123,14 @@ import flipReportRoutes from './routes/flipReport';           // Feature #41: Fl
 import verificationRoutes from './routes/verification';       // Feature #16: Verified Organizer Badge
 import lootLogRoutes from './routes/lootLog';                 // Feature #50: Loot Log
 import ugcPhotoRoutes from './routes/ugcPhotos';              // Feature #47: UGC Photo Tags
+import photoOpRoutes from './routes/photoOps';                // Feature #39: Photo Op Stations
+import achievementRoutes from './routes/achievements';        // Features #58-59: Achievement Badges & Streak Rewards
+import fraudRoutes from './routes/fraud';                     // Feature #17: Bid Bot Detector
+import trailRoutes from './routes/trails';                    // Feature #48: Treasure Trail Route Builder
+import workspaceRoutes from './routes/workspace';              // Feature #13: TEAMS Multi-User Workspace
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
+import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import { initLiveFeed } from './services/liveFeedService'; // Feature #70: Live Sale Feed
 import './jobs/auctionJob';
@@ -136,6 +145,7 @@ import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly 
 import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
 import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper digest — Sundays 6 PM
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
+import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -236,6 +246,10 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Enriches error reports with user tier, points, hunt pass status for prioritization
 app.use(sentryUserContext);
 
+// Feature #20: Proactive Degradation Mode
+// Monitors latency and adds degradation headers when threshold exceeded
+app.use(degradationMode);
+
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ message: 'FindA.Sale API is running!' });
@@ -243,6 +257,7 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authLimiter, authRoutes); // stricter rate limit on auth
+app.use('/api/auth/passkey', authLimiter, passkeyRoutes); // Feature #19: Passkey/WebAuthn routes
 app.use('/api/sales', saleRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/favorites', favoriteRoutes);
@@ -286,6 +301,7 @@ app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hy
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features
 app.use('/api/social', socialRouter);                            // Sprint 2: Social template generator
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
+app.use(hubRoutes);                                              // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 app.use('/api/voice', voiceRoutes);                              // Feature #42: Voice-to-tag extraction
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
@@ -309,6 +325,12 @@ app.use('/api/flip-report', flipReportRoutes);                       // Feature 
 app.use('/api/verification', verificationRoutes);                    // Feature #16: Verified Organizer Badge
 app.use('/api/loot-log', lootLogRoutes);                             // Feature #50: Loot Log
 app.use('/api/ugc-photos', ugcPhotoRoutes);                          // Feature #47: UGC Photo Tags
+app.use('/api/photo-ops', photoOpRoutes);                            // Feature #39: Photo Op Stations
+app.use('/api/health', healthRoutes);                                // Feature #20: Proactive Degradation Mode
+app.use('/api/achievements', achievementRoutes);                     // Features #58-59: Achievement Badges & Streak Rewards
+app.use('/api/fraud', fraudRoutes);                                  // Feature #17: Bid Bot Detector
+app.use('/api/trails', trailRoutes);                                 // Feature #48: Treasure Trail Route Builder
+app.use('/api/workspace', workspaceRoutes);                          // Feature #13: TEAMS Multi-User Workspace
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
@@ -348,6 +370,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Phase 2B: Register cleanup cron for stale DRAFT items
   scheduleCleanupCron();
+
+  // Features #58-59: Initialize achievements from code
+  syncAchievements();
 
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 
@@ -38,12 +39,14 @@ const TIERS: Tier[] = [
     annualPrice: 290,
     features: [
       'Everything in SIMPLE',
-      'Batch operations (edit 100s of items at once)',
-      'Sales analytics & performance insights',
-      'Data export (CSV format)',
-      'Brand kit (custom colors, logo)',
-      'Advanced coupons & promotions',
-      'Social templates for marketing',
+      'Brand Kit (custom colors, logo, socials)',
+      'Flip Report (post-sale analytics PDF)',
+      'Command Center (multi-sale dashboard)',
+      'Batch Operations (edit 100s of items at once)',
+      'Sales Analytics (performance dashboard)',
+      'Data Export (CSV/ZIP for accounting)',
+      'Social Templates (Instagram/Facebook copy)',
+      'Priority Support (24h email response)',
     ],
     ctaText: 'Upgrade to PRO',
   },
@@ -163,6 +166,12 @@ export default function UpgradePage() {
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Every plan includes everything you need to run your estate sales successfully.
             </p>
+            <Link
+              href="/organizer/pro-features"
+              className="inline-block mt-4 text-sage-600 hover:text-sage-700 font-semibold underline"
+            >
+              Explore PRO Features →
+            </Link>
           </div>
 
           {/* Billing Toggle */}
@@ -255,12 +264,20 @@ export default function UpgradePage() {
 
                   {/* CTA Button */}
                   {tier.tier === 'TEAMS' ? (
-                    <a
-                      href="mailto:patrick@finda.sale?subject=FindA.Sale TEAMS Tier Inquiry"
-                      className="block w-full bg-gray-900 text-white py-3 px-4 rounded-lg font-semibold text-center hover:bg-black transition mb-8"
-                    >
-                      Contact Sales
-                    </a>
+                    currentTier === tier.tier ? (
+                      <Link href="/organizer/workspace">
+                        <a className="block w-full bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold text-center hover:bg-sage-700 transition mb-8">
+                          Manage Team Workspace
+                        </a>
+                      </Link>
+                    ) : (
+                      <a
+                        href="mailto:patrick@finda.sale?subject=FindA.Sale TEAMS Tier Inquiry"
+                        className="block w-full bg-gray-900 text-white py-3 px-4 rounded-lg font-semibold text-center hover:bg-black transition mb-8"
+                      >
+                        Contact Sales
+                      </a>
+                    )
                   ) : (
                     <button
                       onClick={() => handleUpgrade(tier)}

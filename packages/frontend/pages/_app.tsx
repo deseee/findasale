@@ -15,6 +15,9 @@ import OnboardingModal from '../components/OnboardingModal'; // Phase 27
 import OrganizerOnboardingModal from '../components/OrganizerOnboardingModal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import NudgeBar from '../components/NudgeBar';
+import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
+import DegradationBanner from '../components/DegradationBanner'; // Feature #20: Proactive Degradation Mode
+import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20: Proactive Degradation Mode
 
 // #63 Dark Mode — Apply theme class on mount to prevent FOUC
 function ThemeInitializer() {
@@ -134,6 +137,14 @@ function OrganizerOnboardingShower() {
 }
 
 /**
+ * Feature #20: Monitor server degradation and update global state
+ */
+function DegradationMonitor() {
+  useDegradationMode(); // Polls every 10s when authenticated
+  return null;
+}
+
+/**
  * #18: Capture and record UTM parameters on page load
  * Fires a silent pixel call to record social link clicks
  */
@@ -187,29 +198,34 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
     <SessionProvider session={session}>
       <ToastProvider>
         <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <ThemeInitializer />
-            <ErrorBoundary key={router.asPath}>
-              <Layout>
-                <Component {...pageProps} />
-              </Layout>
-            </ErrorBoundary>
-            {/* PWA helpers */}
-            <ServiceWorkerUpdateNotifier />
-            <PushSubscriber />
-            <InstallPrompt />
-            <NudgeBar />
-            {/* #18: UTM capture for social link clicks */}
-            <UTMCapture />
-            {/* Feature #21: Sentry user context sync */}
-            <SentryUserContextSync />
-            {/* Phase 31: OAuth → JWT bridge */}
-            <OAuthBridge />
-            {/* Phase 27: First-time shopper onboarding */}
-            <OnboardingShower />
-            {/* Organizer post-registration onboarding */}
-            <OrganizerOnboardingShower />
-          </QueryClientProvider>
+          <DegradationProvider>
+            <QueryClientProvider client={queryClient}>
+              <ThemeInitializer />
+              <ErrorBoundary key={router.asPath}>
+                <Layout>
+                  <Component {...pageProps} />
+                </Layout>
+              </ErrorBoundary>
+              {/* PWA helpers */}
+              <ServiceWorkerUpdateNotifier />
+              <PushSubscriber />
+              <InstallPrompt />
+              <NudgeBar />
+              {/* Feature #20: Proactive Degradation Mode */}
+              <DegradationMonitor />
+              <DegradationBanner />
+              {/* #18: UTM capture for social link clicks */}
+              <UTMCapture />
+              {/* Feature #21: Sentry user context sync */}
+              <SentryUserContextSync />
+              {/* Phase 31: OAuth → JWT bridge */}
+              <OAuthBridge />
+              {/* Phase 27: First-time shopper onboarding */}
+              <OnboardingShower />
+              {/* Organizer post-registration onboarding */}
+              <OrganizerOnboardingShower />
+            </QueryClientProvider>
+          </DegradationProvider>
         </AuthProvider>
       </ToastProvider>
     </SessionProvider>

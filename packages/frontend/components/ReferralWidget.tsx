@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useReferral } from '../hooks/useReferral';
 
 const ReferralWidget: React.FC = () => {
   const { data, isLoading, isError, claimReward, isClaimingReward } = useReferral();
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+
+  useEffect(() => {
+    // Check if Web Share API is available (mobile browsers, some desktop)
+    setCanShare(typeof navigator !== 'undefined' && !!navigator.share);
+  }, []);
 
   const handleCopyCode = () => {
     if (data?.referralCode) {
@@ -101,6 +107,25 @@ const ReferralWidget: React.FC = () => {
           >
             {copiedLink ? 'Copied!' : 'Copy'}
           </button>
+          {canShare && (
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.share({
+                    title: 'Join FindA.Sale',
+                    text: `Check out this estate sale on FindA.Sale! Use my referral code ${data?.referralCode} to get rewards.`,
+                    url: data?.referralLink || '',
+                  });
+                } catch (err) {
+                  // User cancelled or share failed silently
+                }
+              }}
+              className="px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white"
+              title="Share with native share options"
+            >
+              Share
+            </button>
+          )}
         </div>
       </div>
 

@@ -37,13 +37,16 @@ export const getThumbnailUrl = (url: string): string => {
 };
 
 /**
- * Get an optimized URL (800w, WebP, auto quality).
+ * Get an optimized URL (800w, WebP, optional quality control).
  * For listing cards, sale detail pages.
+ * @param url Image URL
+ * @param quality Optional quality (1-100). If not specified, uses q_auto.
  */
-export const getOptimizedUrl = (url: string): string => {
+export const getOptimizedUrl = (url: string, quality?: number): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
-  return insertTransform(url, 'w_800,c_limit,q_auto,f_webp');
+  const qualityParam = quality ? `q_${quality}` : 'q_auto';
+  return insertTransform(url, `w_800,c_limit,${qualityParam},f_webp`);
 };
 
 /**

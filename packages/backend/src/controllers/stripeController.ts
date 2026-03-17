@@ -15,6 +15,7 @@ import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
 import { sendItemSoldAlert } from '../services/saleAlertEmailService';
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
+import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -621,6 +622,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
         if (!isPOS && purchase.userId) {
           // Award purchase badge
           await handlePurchaseBadge(purchase.userId);
+
+          // Features #58-59: Check and award achievements for purchase
+          checkAndAward(purchase.userId, 'PURCHASE_MADE')
+            .catch(err => console.warn('[achievement] Failed to award purchase achievement:', err));
 
           // Phase 19: Award 10 points for purchase
           awardPoints(

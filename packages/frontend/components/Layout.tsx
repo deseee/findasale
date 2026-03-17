@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
+import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
@@ -13,6 +14,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { canAccess } = useOrganizerTier();
+  const { isLowBandwidth } = useNetworkQuality();
   const [isClient, setIsClient] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
@@ -189,6 +191,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                       <Link href="/admin" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 font-medium">Admin Panel</Link>
                     )}
                     <NotificationBell />
+                    {isLowBandwidth && (
+                      <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Low-Bandwidth Mode enabled — photos optimized for slow connections">
+                        Low BW
+                      </span>
+                    )}
                     <ThemeToggle compact={true} />
                     <button onClick={handleLogout} className="text-warm-900 dark:text-warm-300 hover:text-amber-600">Logout</button>
                   </div>

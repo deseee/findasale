@@ -12,6 +12,7 @@
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
     "@sentry/nextjs": "^8.0.0",
+    "@simplewebauthn/browser": "^10.0.0",
     "@stripe/react-stripe-js": "^5.6.0",
     "@stripe/stripe-js": "^8.8.0",
     "@stripe/terminal-js": "^0.26.0",

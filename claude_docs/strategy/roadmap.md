@@ -18,7 +18,6 @@
 ### Credentials + Services
 - [ ] VAPID keys confirmed in production
 
-
 ### Beta Recruitment
 - [ ] Identify 5 target beta organizers (`claude_docs/beta-launch/organizer-outreach.md` ready)
 - [ ] Schedule 1-on-1 onboarding sessions
@@ -65,7 +64,6 @@
 | 70 | Live Sale Feed | 1 sprint | [SIMPLE] Real-time activity stream during active sales: "Victorian lamp just sold for $45!" "New hold on Eames chair." WebSocket-powered, leverages existing POS infrastructure. 80% of livestream FOMO at 10% of livestream complexity. Ships after POS v2 stabilizes. (Innovation R3, Social lens) |
 | 71 | Organizer Reputation Score | 1.5 sprints | [SIMPLE] Public trust score (1-5 stars) from: response time, sale frequency, photo quality (AI), shopper ratings, dispute rate. Displayed on profile + every listing. "New Organizer" badge for cold-start. Foundational trust infrastructure for marketplace scale. Ship before national expansion. (Innovation R3, Emerging lens) |
 | 48 | Treasure Trail Route Builder | 1.5 sprints | [FREE] Shoppers build multi-sale route plans with time estimates, drive order, and "don't miss" item highlights. Extends existing OSRM route planning (session 114). Gamified "complete the trail" element. |
-| 51 | Sale Ripples | 1 sprint | **SHIPPED S187 — QA pending.** [FREE] Smart notification algorithm — "A sale just posted 2 miles from a sale you liked." Proximity + preference signals. (Innovation bonus, Board v26) |
 | 52 | Estate Sale Encyclopedia | 3 sprints | [FREE] Crowdsourced knowledge base: item identification guides, era/style references, price benchmarks by region. Long-tail SEO moat. Community contribution model. |
 | 53 | Cross-Platform Aggregator | 2 sprints | [TEAMS] Pull listings from EstateSales.NET, Craigslist, Facebook Marketplace into unified search. "Search everywhere from one place." Major moat if executed. Legal review required. |
 | 54 | Crowdsourced Appraisal API | 2.5 sprints | [PAID_ADDON] Users submit photos → community + AI estimate value range. Revenue potential as standalone tool or API. Requires critical mass of knowledgeable users. |
@@ -78,9 +76,6 @@
 | # | Feature | Est. | Notes |
 |---|---------|------|-------|
 | 7 | Shopper Referral Rewards | 1–2 sprints | **SHIPPED S187 — QA pending.** [FREE] Referral tracking, rewards distribution, email notifications. |
-
-
-
 | 14 | Real-Time Status Updates | 1 sprint | **SHIPPED S187 — QA pending.** [PRO] Organizer mobile widget, SMS/email alerts. |
 | 16 | Verified Organizer Badge | 1–2 sprints | **SHIPPED S189 — QA pending.** [PRO] Professional differentiation, trust signal. |
 | 18 | Post Performance Analytics | 1 sprint | **SHIPPED S187 — QA pending.** [PRO] UTM tracking on social template downloads → "your Instagram post got 200 clicks" in organizer dashboard. (Innovation sweep) |
@@ -94,6 +89,7 @@
 | 62 | Digital Receipt + Returns | 1-2 sprints | **SHIPPED S187 — QA pending.** [FREE] Auto-generate digital receipt with item photos + prices after every POS transaction. Optional return window. (Innovation R3, Big Box lens) |
 | 65 | Organizer Mode Tiers (Simple/Pro/Teams) | 2 sprints | [PRO] **FULLY COMPLETE (S177-S183).** Sprint 1: schema, tierGate, requireTier middleware (S177). Sprint 2: Stripe billing, upgrade/subscription UI (S178). Sprint 3: Progressive Disclosure UI — useOrganizerTier hook, SIMPLE/PRO gating on dashboard + settings (S183). MOVED TO SHIPPED. |
 | 68 | Command Center Dashboard | 2 sprints | [PRO] **Sprint 1+2 COMPLETE (S183) — QA pending.** Backend: commandCenterService.ts, commandCenterController.ts, routes/commandCenter.ts, shared/types/commandCenter.ts, index.ts. Frontend: useCommandCenter.ts hook, CommandCenterCard.tsx, command-center.tsx page, Layout.tsx (PRO-gated nav link). HEAD: c997bd7. QA pass required before promoting to users. |
+| 51 | Sale Ripples | 1 sprint | **SHIPPED S187 — QA pending.** [FREE] Smart notification algorithm — "A sale just posted 2 miles from a sale you liked." Proximity + preference signals. (Innovation bonus, Board v26) |
 
 |---|---------|------|-------|
 | 47 | UGC Photo Tags | 1.5 sprints | **SHIPPED S189 — QA pending.** [FREE] Shoppers tag and share photos of finds. Social proof + free content marketing. Moderation queue for organizers. Builds community around sales. |

@@ -5,6 +5,7 @@ import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
 import { sendHoldPlacedAlert } from '../services/saleAlertEmailService';
+import { checkForFraud } from '../services/fraudDetectionService';
 
 const DEFAULT_HOLD_HOURS = 48; // #24: default hold duration (was 24h)
 
@@ -52,6 +53,17 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       });
     } catch (err) {
       console.warn('[liveFeed] Failed to emit hold placed event:', err);
+    }
+
+    // Feature #17: Check for fraud (fire-and-forget)
+    try {
+      setImmediate(() => {
+        checkForFraud(req.user!.id, itemId, item.saleId).catch(err =>
+          console.error('[fraud] Fraud check error:', err)
+        );
+      });
+    } catch (err) {
+      console.warn('[fraud] Failed to trigger fraud check:', err);
     }
 
     // Feature #14: Push sale status update
