@@ -6,9 +6,9 @@ CREATE TABLE "PasskeyCredential" (
     "publicKey" TEXT NOT NULL,
     "counter" INTEGER NOT NULL DEFAULT 0,
     "deviceName" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "lastUsedAt" DATETIME,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastUsedAt" TIMESTAMPTZ,
+    "updatedAt" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "PasskeyCredential_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE
 );
 

@@ -1,4 +1,5 @@
 -- CreateTable "FraudSignal"
+DROP TABLE IF EXISTS "FraudSignal";
 CREATE TABLE "FraudSignal" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
@@ -6,13 +7,13 @@ CREATE TABLE "FraudSignal" (
     "saleId" TEXT NOT NULL,
     "signalType" TEXT NOT NULL,
     "confidenceScore" INTEGER NOT NULL DEFAULT 0,
-    "detectedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "reviewedAt" DATETIME,
+    "detectedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedAt" TIMESTAMPTZ,
     "reviewedByAdminId" TEXT,
     "reviewOutcome" TEXT,
     "notes" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "FraudSignal_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id"),
     CONSTRAINT "FraudSignal_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id"),
     CONSTRAINT "FraudSignal_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sale" ("id"),
