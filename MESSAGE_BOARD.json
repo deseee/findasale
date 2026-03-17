@@ -1,6 +1,15 @@
 {
   "messages": [
     {
+      "id": "msg-170-findasale-dev-commandcenter-fixes-complete",
+      "from": "findasale-dev",
+      "to": "patrick",
+      "timestamp": "2026-03-16T12:15:00Z",
+      "type": "task-complete",
+      "message": "COMMAND CENTER TYPE IMPORT FIXES COMPLETE. All @findasale/shared import errors resolved. Files changed: (1) packages/shared/src/index.ts — removed commandCenter export, (2) packages/backend/src/types/commandCenter.ts — new local copy, (3) packages/backend/src/services/commandCenterService.ts — import from '../types/commandCenter', (4) packages/frontend/types/commandCenter.ts — new local copy, (5) packages/frontend/components/CommandCenterCard.tsx — import from '../types/commandCenter', (6) packages/frontend/hooks/useCommandCenter.ts — import from '../types/commandCenter', (7) packages/backend/src/controllers/stripeController.ts — removed invalidateCommandCenterCache call + import (organizerId property bug fixed by deletion). Verification: grep confirms zero @findasale/shared in commandCenter files.",
+      "feedbackLoop": null
+    },
+    {
       "id": "msg-169-records-audit-complete",
       "from": "findasale-records",
       "to": "patrick",
