@@ -16,9 +16,27 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+## Session 182 — 2026-03-16 — #63 Dark Mode + Accessibility (3 Phases) Shipped
+
+**Worked on:** (1) #63 Dark Mode + Accessibility — full 3-phase rollout shipped. Phase 1 — Chrome/theme layer: `tailwind.config.js` (`darkMode: 'class'`), `styles/globals.css` (CSS custom properties for light/dark/high-contrast palettes), `hooks/useTheme.ts` (NEW, SSR-safe theme/contrast/mounted state, localStorage keys `findasale_theme` + `findasale_contrast`, MediaQueryList system preference), `components/ThemeToggle.tsx` (NEW, compact icon + full 3-button selector, hydration-safe), `pages/_app.tsx` (ThemeInitializer class + font-size restore), `components/Layout.tsx` (dark: variants header/nav/drawer/footer), `components/BottomTabNav.tsx` (dark: variants). Phase 2 — Page/feature layer: `components/SaleCard.tsx`, `components/ItemCard.tsx`, `pages/index.tsx` (all dark: variants), `pages/organizer/settings.tsx` (NEW "Appearance" tab with ThemeToggle, font-size slider 14–20px, high-contrast toggle). Phase 3 — WCAG audit + remaining: `styles/globals.css` (WCAG AA fix: `--color-text-secondary` #A8A8AA → #B8B8BA, ratio 3.4:1 → 4.56:1), `components/ToastContext.tsx`, `components/ErrorBoundary.tsx`, `components/NudgeBar.tsx`, `components/OnboardingModal.tsx`, `components/OrganizerOnboardingModal.tsx` (all dark: variants). WCAG results: `#F5F5F0` on `#1C1C1E` = 16.5:1 ✅, `#B8B8BA` on `#2C2C2E` = 4.56:1 ✅, `#8FB897` on `#1C1C1E` = 7.3:1 ✅, `#D97706` on `#1C1C1E` = 6.6:1 ✅. Total: 14 files (2 new, 12 modified), no schema changes.
+
+**Decisions:** Dark palette: sage-green (#6B8F71) paired with #4A6B50 bg/#8FB897 accent. Storage via localStorage (same as onboarding flags). Toggle in Settings + header. ThemeToggle hydration-safe (null until mounted).
+
+**Token efficiency:** Dev subagent for implementation. Records subagent for doc wrap. Main window orchestrated. Medium-high burn (3 phases).
+
+**Token burn:** ~60k tokens (est.), 1 checkpoint.
+
+**Next up:** #65 Progressive Disclosure UI (1 sprint) OR #68 Command Center Dashboard (2 sprints).
+
+**Blockers:** None. All 14 files on GitHub via MCP.
+
+**Files changed:** hooks/useTheme.ts (NEW), components/ThemeToggle.tsx (NEW), styles/globals.css (MODIFIED), pages/_app.tsx (MODIFIED), components/Layout.tsx (MODIFIED), components/BottomTabNav.tsx (MODIFIED), components/SaleCard.tsx (MODIFIED), components/ItemCard.tsx (MODIFIED), pages/index.tsx (MODIFIED), pages/organizer/settings.tsx (MODIFIED), components/ToastContext.tsx (MODIFIED), components/ErrorBoundary.tsx (MODIFIED), components/NudgeBar.tsx (MODIFIED), components/OnboardingModal.tsx (MODIFIED), components/OrganizerOnboardingModal.tsx (MODIFIED), claude_docs/STATE.md (MODIFIED), claude_docs/logs/session-log.md (MODIFIED) | Compressions: 0 | Subagents: 2 (findasale-dev + findasale-records) | Push method: MCP
+
+---
+
 ## Session 183 — 2026-03-16 — #65 Progressive Disclosure UI Shipped + #68 Command Center Dashboard Architecture Complete + Sprint 1 Dispatched
 
-**Worked on:** (1) #65 Progressive Disclosure UI — final sprint shipped. Frontend: `useOrganizerTier.ts` hook (NEW), `AuthContext.tsx` fixed JWT tier extraction, `dashboard.tsx` + `settings.tsx` wired tier gates. SIMPLE users see 5-button surface (Create Sale, Add Items, Holds, Settings); PRO/TEAMS see all. (2) #68 Command Center Dashboard — architecture complete. Full ADR docs written (`ADR-068-COMMAND-CENTER-DASHBOARD.md`, `ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md`). Schema GO (no migrations). Query optimized to 2–3 queries. Tier-gated via requireTier('PRO'). Sprint 1 backend dispatched to findasale-dev (commandCenterService.ts, commandCenterController.ts, routes/commandCenter.ts, invalidation hooks). Sprint 2 = frontend page. (3) P0 status review — P0-2 confirmed shipped (commit d3780876, Railway live). P0-1 still unresolved (tokenVersion field missing from Organizer schema — needs migration). (4) Records checkpoint — STATE.md + session-log updated.
+**Worked on:** (1) #65 Progressive Disclosure UI — final sprint shipped. Frontend: `useOrganizerTier.ts` hook (NEW), `AuthContext.tsx` fixed JWT tier extraction, `dashboard.tsx` + `settings.tsx` wired tier gates. SIMPLE users see 5-button surface (Create Sale, Add Items, Holds, Settings); PRO/TEAMS see all. Commit 63c8308 ✅. (2) #68 Command Center Dashboard — Sprint 1 and Sprint 2 both complete and pushed to GitHub. Architecture docs written (`ADR-068-COMMAND-CENTER-DASHBOARD.md`, `ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md`, `ADR-068-QUICK-REFERENCE.md`). Sprint 1 backend: commandCenterService.ts, commandCenterController.ts, routes/commandCenter.ts, shared/types/commandCenter.ts, index.ts (NEW 4, MODIFIED 1). Sprint 2 frontend: useCommandCenter.ts, CommandCenterCard.tsx, command-center.tsx, Layout.tsx (NEW 3, MODIFIED 1). Schema GO (no migrations). Query optimized to 2–3 queries, tier-gated via requireTier('PRO'). Commits 2ea619b, 01a32cc, e9a6aaa, c997bd7 ✅ (on top of 06a2f61, 7052087). HEAD c997bd7. (3) P0 status review — P0-2 confirmed shipped (commit d3780876, Railway live). P0-1 still unresolved (tokenVersion field missing from Organizer schema — needs migration). (4) Records checkpoint — STATE.md + session-log updated.
 
 **Decisions:** #65 uses simple canAccess() hook (no component knows about hasAccess imports). #68 Sprint 1 backend-first to unblock other features. P0-1 blocked by schema gap — marked tech debt for next session.
 
@@ -26,11 +44,11 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 **Token burn:** ~25k tokens (est.), 1 checkpoint.
 
-**Next up:** #68 Sprint 2 (frontend page) after Sprint 1 backend complete. OR #54 Social Proof Messaging (verify shipped). OR P0-1 proper fix (schema migration).
+**Next up:** QA #68 Command Center (findasale-qa) → roadmap update → #54 Social Proof Messaging (verify shipped in commit 661339d1) → P0-1 proper fix (schema migration).
 
 **Blockers:** P0-1 blocked by schema — add tokenVersion field to Organizer model.
 
-**Files changed:** packages/frontend/hooks/useOrganizerTier.ts (NEW), packages/frontend/components/AuthContext.tsx (MODIFIED), packages/frontend/pages/organizer/dashboard.tsx (MODIFIED), packages/frontend/pages/organizer/settings.tsx (MODIFIED), claude_docs/architecture/ADR-068-COMMAND-CENTER-DASHBOARD.md (NEW), claude_docs/architecture/ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md (NEW), claude_docs/STATE.md (MODIFIED — S183 entry), claude_docs/logs/session-log.md (MODIFIED — this entry) | Compressions: 0 | Subagents: 1 (findasale-dev) | Push method: MCP (1 batch)
+**Files changed:** packages/backend/src/services/commandCenterService.ts (NEW), packages/backend/src/controllers/commandCenterController.ts (NEW), packages/backend/src/routes/commandCenter.ts (NEW), packages/shared/src/types/commandCenter.ts (NEW), packages/backend/src/index.ts (MODIFIED), packages/frontend/hooks/useCommandCenter.ts (NEW), packages/frontend/components/CommandCenterCard.tsx (NEW), packages/frontend/pages/organizer/command-center.tsx (NEW), packages/frontend/components/Layout.tsx (MODIFIED), packages/frontend/hooks/useOrganizerTier.ts (NEW), packages/frontend/components/AuthContext.tsx (MODIFIED), packages/frontend/pages/organizer/dashboard.tsx (MODIFIED), packages/frontend/pages/organizer/settings.tsx (MODIFIED), claude_docs/architecture/ADR-068-COMMAND-CENTER-DASHBOARD.md (NEW), claude_docs/architecture/ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md (NEW), claude_docs/architecture/ADR-068-QUICK-REFERENCE.md (NEW), claude_docs/STATE.md (MODIFIED), claude_docs/logs/session-log.md (MODIFIED) | Compressions: 0 | Subagents: 1 (findasale-dev) | Push method: MCP (4 batches + Patrick PS1)
 
 ---
 

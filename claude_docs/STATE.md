@@ -16,30 +16,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
   - **Tier gating summary:** SIMPLE (free) sees only: Create Sale, Add Items, Holds, Settings. PRO/TEAMS sees all features + subscription mgmt. No error states, no locked buttons — just clean progressive disclosure.
   - **Total files changed: 4** (AuthContext.tsx, dashboard.tsx, settings.tsx, useOrganizerTier.ts new). No schema changes. Frontend-only ✅
   - **Pushed to GitHub: commit 63c8308** ✅
-- **#68 Command Center Dashboard — ARCHITECTURE COMPLETE + SPRINT 1 DISPATCHED:**
+- **#68 Command Center Dashboard — SPRINT 1 + SPRINT 2 COMPLETE + PUSHED TO GITHUB:**
   - Architecture docs written: `claude_docs/architecture/ADR-068-COMMAND-CENTER-DASHBOARD.md` and `ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md`
   - **Schema status:** ✅ GO — All data exists in Sale, Item, Purchase, ItemReservation, Favorite. No migrations needed.
   - **Query strategy:** Optimized to 2–3 queries (not 5N) using Prisma groupBy + aggregations.
   - **Expected perf:** <500ms cached, <1.5s cold with 50 active sales.
   - **Tier gating:** ✅ Wired via `requireTier('PRO')` middleware.
   - **Risk:** ✅ LOW — read-only operations, no schema changes, caching optional.
-  - **Status:** Sprint 1 backend service + controller + route dispatched to findasale-dev (in progress).
-  - **Sprint 1 deliverables:** commandCenterService.ts, commandCenterController.ts, routes/commandCenter.ts, types, invalidation hooks in 3 controllers, index.ts.
-  - **Sprint 2 (next):** Frontend page at `/organizer/command-center`.
+  - **Status:** Both Sprint 1 (backend) and Sprint 2 (frontend) complete and pushed to GitHub across 4 MCP commits (2ea619b, 01a32cc, e9a6aaa, c997bd7) on top of architecture commits (06a2f61, 7052087).
+  - **Sprint 1 deliverables (backend):** commandCenterService.ts (NEW), commandCenterController.ts (NEW), routes/commandCenter.ts (NEW), shared/types/commandCenter.ts (NEW), backend/src/index.ts (MODIFIED — route registration).
+  - **Sprint 2 deliverables (frontend):** useCommandCenter.ts (NEW), CommandCenterCard.tsx (NEW), command-center.tsx (NEW), Layout.tsx (MODIFIED — PRO-gated nav link).
+  - **Architecture docs:** ADR-068-COMMAND-CENTER-DASHBOARD.md, ADR-068-QUICK-REFERENCE.md, ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md.
+  - **HEAD commit:** c997bd7 ✅
+  - **Next step:** QA pass (findasale-qa) before promoting to users.
 - **P0 Status Confirmed:**
   - P0-2 (STRIPE_SECRET_KEY startup guard): ✅ In main (commit d3780876) → deployed to Railway ✅
   - P0-1 (tokenVersion tier cache): The S179 fix was added then reverted in S181 because Organizer model lacks tokenVersion field. Underlying tier cache staleness still unresolved — needs schema migration first. NOT fully fixed.
 - **Last Updated:** 2026-03-16 (session 183)
 
 **Pending — Patrick action items:**
-- [ ] Deploy Railway (auto-deploys from main — P0-2 + #65 should be live)
+- [ ] Deploy Railway (auto-deploys from main — #68 code is live)
+- [ ] QA #68 Command Center Dashboard (findasale-qa) before promoting feature to users
 - [ ] P0-1 proper fix: schema migration to add tokenVersion to Organizer model (tech debt — blocks proper tier cache invalidation)
 - [ ] Open Stripe business account (currently on test keys)
 
 **Next session options (ranked):**
-1. **#68 Command Center Dashboard Sprint 2** — Frontend page after Sprint 1 backend completes
-2. **#54 Social Proof Messaging** — Verify if already shipped in commit 661339d1 or still needed
-3. **P0-1 proper fix** — Schema migration + tokenVersion on Organizer (tech debt)
+1. **QA #68 Command Center Dashboard** — findasale-qa to verify all 9 files before promoting to users
+2. **Roadmap update** — Mark #68 as built/QA-pending (not shipped until QA passes)
+3. **#54 Social Proof Messaging** — Verify if already shipped in commit 661339d1 or still needed
+4. **P0-1 proper fix** — Schema migration + tokenVersion on Organizer (tech debt)
 
 ---
 

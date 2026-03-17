@@ -4,9 +4,15 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S183",
+    "sessionId": "S184",
     "startedAt": "2026-03-16T00:00:00.000Z",
     "checkpoints": [
+      {
+        "turn": 1,
+        "timestamp": "2026-03-16T00:00:00Z",
+        "estimatedSessionTokens": 25,
+        "note": "S184 init. STATE + manifest loaded. Origin/main UP TO DATE — #68 Sprints 1+2 already pushed (commits 06a2f61, 7052087). Stale index.lock present (0 bytes) — push.ps1 self-heals. P0-1 (tokenVersion schema migration) still open. #54 Social Proof needs status check. MCP push disabled this session — all pushes via Patrick PS1."
+      },
       {
         "turn": 1,
         "timestamp": "2026-03-16T00:00:00Z",

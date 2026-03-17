@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-16 (v42 — Session 181 continued: #67 Social Proof Notifications, #23 Unsubscribe-to-Snooze, #21 User Impact Scoring in Sentry all shipped. Moved to Completed.)
+**Last Updated:** 2026-03-16 (v43 — Session 182: #63 Dark Mode + Accessibility shipped. Session 183: #65 Organizer Mode Tiers fully complete (Sprint 3 Progressive Disclosure UI shipped), #68 Command Center Sprint 1+2 built (QA pending).)
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -97,9 +97,8 @@ All Phase 3 features shipped. See Shipped Features section above and COMPLETED_P
 | 45 | Collector Passport | 1.5 sprints | [FREE] Gamified collection tracker — "I collect depression glass, Fiestaware, mid-century furniture." Personalized alerts when matching items appear. Deeper than Wishlist (#32) — identity-based. (Board v26, Tier 2) |
 | 46 | Treasure Typology Classifier | 2 sprints | [PRO] ML model that classifies items into collector categories (Art Deco, MCM, Americana, etc.) from photos. Powers Collector Passport, tag suggestions, and search refinement. Requires training data from shipped items. (Innovation bonus, Board v26 Tier 2) |
 | 62 | Digital Receipt + Returns | 1-2 sprints | [FREE] Auto-generate digital receipt with item photos + prices after every POS transaction. Push to shopper's app profile. Optional organizer-set return window (24h/48h/none). Builds trust, enables returns on high-value items, feeds purchase history for ML. Pairs with POS v2 + Loot Log (#50). (Innovation R3, Big Box lens) |
-| 63 | Dark Mode + Accessibility-First | 1.5 sprints | [FREE] Tailwind dark variant across all components + system preference detection + high-contrast outdoor mode + font sizing controls. WCAG 2.1 AA compliance. Estate sale shoppers skew older — larger fonts, higher contrast, better outdoor visibility are real needs. SEO boost from Lighthouse accessibility scores. (Innovation R3, Mobile lens) |
-| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | 2 sprints | [PRO] **Sprint 1+2 DONE (S177-S178).** Schema, tierGate, requireTier middleware, Stripe billing endpoints, upgrade/subscription UI all shipped. Remaining: Progressive Disclosure UI (Simple mode 5-button surface). (Innovation R3, Progressive Disclosure lens) |
-| 68 | Command Center Dashboard | 2 sprints | [PRO] Multi-sale overview for power organizers managing 2-3+ sales simultaneously. Key metrics per sale, quick-switch, alert feed ("Sale A has 3 expired holds"), customizable widgets for Teams tier. Pro/Teams Mode feature. (Innovation R3, Progressive Disclosure lens) |
+| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | 2 sprints | [PRO] **FULLY COMPLETE (S177-S183).** Sprint 1: schema, tierGate, requireTier middleware (S177). Sprint 2: Stripe billing, upgrade/subscription UI (S178). Sprint 3: Progressive Disclosure UI — useOrganizerTier hook, SIMPLE/PRO gating on dashboard + settings (S183). MOVED TO SHIPPED. |
+| 68 | Command Center Dashboard | 2 sprints | [PRO] **Sprint 1+2 COMPLETE (S183) — QA pending.** Backend: commandCenterService.ts, commandCenterController.ts, routes/commandCenter.ts, shared/types/commandCenter.ts, index.ts. Frontend: useCommandCenter.ts hook, CommandCenterCard.tsx, command-center.tsx page, Layout.tsx (PRO-gated nav link). HEAD: c997bd7. QA pass required before promoting to users. |
 | 69 | Local-First Offline Mode | 3 sprints | [PRO] Full offline capability via service worker + IndexedDB. Catalog items, set prices, take photos with zero internet. Sync on reconnect. Conflict resolution (last-write-wins for fields, merge for photos). Competitive requirement — PROSALE works offline. Estate sales happen in basements/barns with no signal. (Innovation R3, GitHub lens) |
 | 70 | Live Sale Feed | 1 sprint | [SIMPLE] Real-time activity stream during active sales: "Victorian lamp just sold for $45!" "New hold on Eames chair." WebSocket-powered, leverages existing POS infrastructure. 80% of livestream FOMO at 10% of livestream complexity. Ships after POS v2 stabilizes. (Innovation R3, Social lens) |
 | 71 | Organizer Reputation Score | 1.5 sprints | [SIMPLE] Public trust score (1-5 stars) from: response time, sale frequency, photo quality (AI), shopper ratings, dispute rate. Displayed on profile + every listing. "New Organizer" badge for cold-start. Foundational trust infrastructure for marketplace scale. Ship before national expansion. (Innovation R3, Emerging lens) |
@@ -295,7 +294,7 @@ Roadmap and session-log are always updated in the same commit.
 | Payout Transparency / Earnings Dashboard | [SIMPLE] | Item-level fee breakdown + PDF |
 | Organizer Referral (Fee Bypass) | [SIMPLE] | Item #11 — referralDiscountExpiry |
 | Tiers Backend Infrastructure | [SIMPLE] | `/api/tiers` — getMyTier, syncTier (undocumented) |
-| Stripe Billing (Tiers Sprint 2) | [PRO] | Item #65 Sprint 2 — checkout, webhook, subscription mgmt, cancel, requireTier middleware, upgrade/subscription UI (S178) |
+| Organizer Mode Tiers (Simple/Pro/Teams) | [PRO] | Item #65 — Full tier infrastructure: SubscriptionTier enum (SIMPLE/PRO/TEAMS), tierGate.ts, requireTier middleware, Stripe billing (checkout, webhook, cancel), upgrade/subscription UI, Progressive Disclosure UI (SIMPLE sees 5-button surface, PRO/TEAMS see all features). Sprints 1+2 S177-S178, Sprint 3 S183. useOrganizerTier hook, AuthContext JWT tier extraction. |
 | A/B Testing Infrastructure | [SIMPLE] | Internal optimization tool (undocumented) |
 | Invites | [SIMPLE] | Invite-to-sale / invite-to-platform (undocumented) |
 | Disputes Management | [SIMPLE] | Trust & safety (undocumented) |
@@ -323,6 +322,7 @@ Roadmap and session-log are always updated in the same commit.
 | Share Card Factory (OG Tags) | [SIMPLE] | Item #33 + #43 — branded social previews, dynamic OG images via Cloudinary |
 | Message Templates | [PRO] | Saved organizer reply templates (undocumented) |
 | Hype Meter | [SIMPLE] | Item #34 — real-time social proof |
+| Dark Mode + Accessibility | [FREE] | Item #63 — Tailwind dark variants (system preference + manual toggle), high-contrast outdoor mode, WCAG 2.1 AA compliant (all ratios passing). useTheme hook (SSR-safe), ThemeToggle component, Appearance settings tab with font size slider (14–20px) + high-contrast toggle. 14 files, 3 phases (S182) |
 | Social Proof Notifications | [SIMPLE] | Item #67 — stateless engagement aggregation (favorites, bids, holds) at item + sale level. Backend: socialProofService (aggregation logic), socialProofController (GET endpoints), socialProof route. Frontend: useSocialProof hook (React Query, 30s stale), SocialProofBadge component (compact/full, sage-green). No schema changes (S181) |
 
 ### Organizer — Sales Tools & Workflow [SIMPLE/PRO mixed]

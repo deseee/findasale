@@ -1,73 +1,50 @@
 # Next Session Resume Prompt
-*Written: 2026-03-16 (S181 wrap)*
+*Written: 2026-03-16 (S183 wrap)*
 *Session ended: normally*
 
 ## Resume From
-**S182 — #63 Dark Mode + Accessibility-First (1.5 sprints).** Patrick confirmed this as the next build. All blockers cleared. Environment clean.
+**S184 — QA #68 Command Center Dashboard + Roadmap Update + #54 Status Check.** All blockers cleared. Environment clean. Railway auto-deployed #68 code (live now).
 
-## What Was Completed in S181
-Session 181 was a high-output session — 4 features shipped across 3 parallel dev dispatches:
+## What Was Completed in S183
+Session 183 shipped two major features:
 
-1. **#61 Near-Miss Nudges** (0.25 sprint) — Casino-psychology gamification. Backend: nudgeService.ts (variable-ratio 65% MD5 dispatch, 4 nudge types), nudgeController.ts, nudges route. Frontend: useNudges hook, NudgeBar toast (sage-green, auto-dismiss 10s). Stateless, no schema changes.
+1. **#65 Progressive Disclosure UI** (final sprint) — SIMPLE-tier organizers now see streamlined UI. Frontend: `useOrganizerTier.ts` hook (NEW), `AuthContext.tsx` fixed JWT tier extraction, `dashboard.tsx` + `settings.tsx` wired tier gates. SIMPLE sees 5-button surface (Create Sale, Add Items, Holds, Settings); PRO/TEAMS see all. Commit 63c8308 ✅.
 
-2. **#67 Social Proof Notifications** (0.5 sprint) — Stateless engagement aggregation. Backend: socialProofService.ts (item + sale level favorites/bids/holds), socialProofController.ts, socialProof route (/api/social-proof/item/:id, /sale/:id). Frontend: useSocialProof hook (30s stale), SocialProofBadge component (compact/full variants). No schema changes.
+2. **#68 Command Center Dashboard** (Sprint 1 + Sprint 2 complete) — Multi-sale overview for power organizers. Architecture docs: `ADR-068-COMMAND-CENTER-DASHBOARD.md`, `ADR-068-QUICK-REFERENCE.md`, `ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md`. Sprint 1 backend: `commandCenterService.ts`, `commandCenterController.ts`, `routes/commandCenter.ts`, `shared/types/commandCenter.ts`, index.ts (4 new, 1 modified). Sprint 2 frontend: `useCommandCenter.ts`, `CommandCenterCard.tsx`, `command-center.tsx`, `Layout.tsx` (3 new, 1 modified). Schema GO (no migrations). 2–3 query optimization, tier-gated requireTier('PRO'). Commits 2ea619b, 01a32cc, e9a6aaa, c997bd7 ✅ on top of 06a2f61, 7052087. HEAD c997bd7.
 
-3. **#23 Unsubscribe-to-Snooze** (0.5 sprint) — MailerLite webhook intercept. Backend: snoozeService.ts (30-day snooze via custom field), snoozeController.ts (webhook + status + reactivate), snooze route (/api/snooze/webhook unauthenticated). No schema changes. **Patrick action needed:** Create `snooze_until` date field in MailerLite dashboard, point subscriber.unsubscribed webhook to production /api/snooze/webhook.
+## S184 Immediate Tasks (Ranked)
 
-4. **#21 User Impact Scoring in Sentry** (0.5 sprint) — Infrastructure. Backend: sentryUserContext.ts middleware (enriches errors with tier/points/huntPass/impactLevel). Frontend: useSentryUserContext hook. Both wired globally. No schema changes.
+1. **QA #68 Command Center Dashboard (findasale-qa)** — Verify all 9 files (4 backend + 3 frontend + 2 architecture docs) before promoting to users. Check endpoint performance, tier gating, response shape, authorization. FLAG: Cache invalidation hooks (optional per ADR, can integrate later).
 
-- syncTier.ts P0 fix (tokenVersion on Organizer — Railway build blocker)
-- roadmap.md bumped to v42 with all 4 features in Shipped
-- All pushed to GitHub (MCP + Patrick PS1)
+2. **Roadmap update** — Mark #68 as built/QA-pending (not "shipped" until QA passes). Move to new "QA Pipeline" section if exists, else add one. Update phase table.
 
-## #63 Dark Mode + Accessibility — Pre-Work Reference
+3. **#54 Social Proof Messaging status check** — Verify if already shipped in commit 661339d1 or still needed. If shipped, close it. If not, queue for next sprint.
 
-**Roadmap entry:** "Tailwind dark variant across all components + system preference detection + high-contrast outdoor mode + font sizing controls. WCAG 2.1 AA compliance. Estate sale shoppers skew older — larger fonts, higher contrast, better outdoor visibility are real needs. SEO boost from Lighthouse accessibility scores."
-
-**Estimated: 1.5 sprints.** Recommend phased approach:
-
-### Phase 1 (Sprint 1 — start in S182)
-- Tailwind `darkMode: 'class'` config in tailwind.config.ts
-- `useTheme` hook (system preference detection via `prefers-color-scheme`, manual override, localStorage persistence)
-- ThemeToggle component (light/dark/system selector)
-- Dark variants on Layout, Nav, BottomTabNav, Header — the chrome components
-- CSS custom properties for sage-green palette dark equivalents
-
-### Phase 2 (Sprint 1 continued)
-- Dark variants on all page-level components (sale cards, item cards, search, map)
-- High-contrast outdoor mode (boosted contrast ratios, thicker borders, larger touch targets)
-- Font sizing controls (14pt–20pt slider, stored in localStorage)
-
-### Phase 3 (Sprint 2 — may need S183)
-- WCAG 2.1 AA audit across all components (color contrast, focus indicators, aria labels)
-- Lighthouse accessibility score baseline + improvements
-- Dark mode for modals, toasts, NudgeBar, SocialProofBadge, forms
-
-**Key decisions to lock early:**
-- Dark palette: sage-green (#6B8F71) needs a dark equivalent — suggest #4A6B50 bg with #8FB897 accent
-- Storage: localStorage for theme preference (same as onboarding flags)
-- Toggle placement: Settings page + header icon
-
-**Files that will need dark variants (high-traffic):**
-- components/Layout.tsx, components/Nav.tsx, components/BottomTabNav.tsx
-- components/SaleCard.tsx, components/ItemCard.tsx
-- pages/index.tsx, pages/sales/[id].tsx, pages/items/[id].tsx
-- pages/map.tsx, pages/search.tsx
-- All modal components, toast components, form components
+4. **P0-1 tech debt** — tokenVersion on Organizer requires schema migration. This blocks proper tier cache invalidation. Decision: Skip if low-priority, OR dispatch findasale-dev to add field + migration + deploy.
 
 ## Environment Notes
-- **Railway + Vercel:** All S181 code on main. Verify clean build before starting #63.
-- **Database:** Neon at 82+ migrations. No pending migrations needed for #63.
-- **No code pending:** Clean working directory after S181 push.
+- **Railway + Vercel:** All S183 code on main, auto-deployed. #68 code is live now.
+- **Database:** Neon at 82+ migrations. P0-1 fix requires new migration (add tokenVersion field to Organizer).
+- **Clean working directory:** After S183 MCP pushes.
+- **Stale index.lock:** 0 bytes (harmless). push.ps1 self-heals on next run.
+
+## Push Instructions for S184
+Patrick to push all context doc updates (STATE.md, session-log.md, next-session-prompt.md) via:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md claude_docs/logs/session-log.md claude_docs/next-session-prompt.md
+git commit -m "chore(s184): fix context docs — #68 complete status, add S182 session-log entry, rewrite next-session-prompt for S184"
+.\push.ps1
+```
 
 ## Blocked / Waiting Items
-- Patrick: Create MailerLite `snooze_until` custom field + webhook endpoint
+- Patrick: QA #68 Command Center (findasale-qa) — required before feature promotion
+- Patrick: Create MailerLite `snooze_until` custom field + webhook endpoint (S181 action)
 - Patrick: Open Stripe business account (not blocking dev)
-- Patrick: VAPID keys confirmed in production
-- Patrick: Google Business Profile, business cards, Google Search Console, Google Voice
+- Patrick: Do NOT push via MCP this session — use manual .\push.ps1 block above
 
 ## Decisions Locked
-- Tier framework: SIMPLE/PRO/TEAMS
-- Platform fee: 10% flat
-- Hunt Pass: $4.99/30 days
-- #63 scope: Dark + light + system preference + outdoor high-contrast + font sizing + WCAG AA
+- Tier framework: SIMPLE/PRO/TEAMS ✅
+- Platform fee: 10% flat ✅
+- Hunt Pass: $4.99/30 days ✅
+- #68 scope: Multi-sale overview, PRO-tier, cache-aside with Redis, 2–3 query optimization ✅
