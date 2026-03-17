@@ -26,7 +26,13 @@ export async function syncTier(
       },
     });
 
-    console.log(`[syncTier] Updated organizer ${organizerId} to tier ${tier} with status ${subscriptionStatus}`);
+    // Increment tokenVersion to invalidate stale tier JWTs
+    await prisma.organizer.update({
+      where: { id: organizerId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+
+    console.log(`[syncTier] Updated organizer ${organizerId} to tier ${tier} with status ${subscriptionStatus} and incremented tokenVersion`);
   } catch (error) {
     console.error(`[syncTier] Error updating organizer ${organizerId}:`, error);
     // Don't throw — let webhook handler deal with it

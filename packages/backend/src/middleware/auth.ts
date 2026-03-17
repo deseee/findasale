@@ -42,7 +42,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     const token = authHeader.split(' ')[1];
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error('JWT_SECRET is not set');
-    const decoded = jwt.verify(token, jwtSecret) as { id: string; tokenVersion?: number };
+    const decoded = jwt.verify(token, jwtSecret) as { id: string; role?: string; tokenVersion?: number; organizerTokenVersion?: number };
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
@@ -56,6 +56,13 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     // P0 Fix 4: Validate tokenVersion — if JWT has stale version, token is invalidated
     if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
       return res.status(401).json({ message: 'Token has been invalidated' });
+    }
+
+    // P0-1 Fix: Validate organizerTokenVersion for organizers — invalidate stale tier claims
+    if (decoded.role === 'ORGANIZER' && decoded.organizerTokenVersion !== undefined && user.organizer) {
+      if (decoded.organizerTokenVersion !== user.organizer.tokenVersion) {
+        return res.status(401).json({ message: 'Session invalidated — please log in again.' });
+      }
     }
 
     // Attach user to request

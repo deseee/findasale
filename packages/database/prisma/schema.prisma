@@ -130,6 +130,8 @@ model Organizer {
   trialEndsAt         DateTime?
   stripeCustomerId    String?
   stripeSubscriptionId String?
+  // SECURITY FIX P0-1: Token version for invalidating tier JWTs on subscription upgrade
+  tokenVersion    Int     @default(0)    // Increment on tier upgrade to invalidate stale tier claims in JWT
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

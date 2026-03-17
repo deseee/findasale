@@ -210,6 +210,7 @@ export const register = async (req: Request, res: Response) => {
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -292,6 +293,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -354,6 +356,7 @@ export const login = async (req: Request, res: Response) => {
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
