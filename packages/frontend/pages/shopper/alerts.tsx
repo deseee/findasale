@@ -14,7 +14,7 @@ import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import WishlistAlertForm from '@/components/WishlistAlertForm';
 import { useWishlistAlerts, useDeleteAlert } from '@/hooks/useWishlistAlerts';
-import { withAuth } from '@/lib/withAuth';
+import { useAuth } from '@/components/AuthContext';
 
 interface Alert {
   id: string;
@@ -35,10 +35,27 @@ interface Alert {
 
 function AlertsPage() {
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const { data: alerts, isLoading, error } = useWishlistAlerts();
   const deleteAlert = useDeleteAlert();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
+
+  // Redirect if not authenticated
+  if (!authLoading && !user) {
+    router.push('/login');
+    return null;
+  }
+
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="text-center py-8">
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </Layout>
+    );
+  }
 
   const handleEdit = (alert: Alert) => {
     setEditingAlert(alert);
@@ -136,7 +153,7 @@ function AlertsPage() {
                         )}
                         {(alert.query.minPrice !== undefined || alert.query.maxPrice !== undefined) && (
                           <p>
-                            <span className="font-medium">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '∞'}
+                            <span className="font-medium">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '\u221e'}
                           </p>
                         )}
                         {alert.query.radiusMiles && (
@@ -201,4 +218,4 @@ function AlertsPage() {
   );
 }
 
-export default withAuth(AlertsPage, ['USER']);
+export default AlertsPage;
