@@ -7,7 +7,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useHub } from '../../hooks/useHubs';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthContext';
 
 export default function HubDetailPage() {
   const router = useRouter();
