@@ -9,6 +9,8 @@ import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { buildEmail } from '../services/emailTemplateService';
 import { issueLoyaltyCoupon, markCouponUsed } from './couponController';
+import { getIO } from '../lib/socket';
+import { pushEvent } from '../services/liveFeedService';
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -234,10 +236,26 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       });
 
       // Update item status to SOLD
-      await prisma.item.update({
+      const updatedItem = await prisma.item.update({
         where: { id: itemId },
         data: { status: 'SOLD' },
       }).catch(err => console.warn('Failed to update item status during recovery:', err));
+
+      // Feature #70: Emit live feed event
+      if (updatedItem) {
+        try {
+          const io = getIO();
+          pushEvent(io, updatedItem.saleId, {
+            type: 'SOLD',
+            itemTitle: updatedItem.title,
+            amount: updatedItem.price || undefined,
+            saleId: updatedItem.saleId,
+            timestamp: new Date(),
+          });
+        } catch (err) {
+          console.warn('[liveFeed] Failed to emit sold event:', err);
+        }
+      }
 
       return res.json({
         status: 'PAID',
@@ -529,10 +547,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
             break;
           }
 
-          await prisma.item.update({
+          const soldItem = await prisma.item.update({
             where: { id: paymentIntent.metadata.itemId },
             data: { status: 'SOLD' },
           });
+
+          // Feature #70: Emit live feed event
+          if (soldItem) {
+            try {
+              const io = getIO();
+              pushEvent(io, soldItem.saleId, {
+                type: 'SOLD',
+                itemTitle: soldItem.title,
+                amount: soldItem.price || undefined,
+                saleId: soldItem.saleId,
+                timestamp: new Date(),
+              });
+            } catch (err) {
+              console.warn('[liveFeed] Failed to emit sold event:', err);
+            }
+          }
         }
 
         if (purchase.affiliateLinkId) {

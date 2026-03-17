@@ -10,6 +10,7 @@ import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
+import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sale Feed
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
@@ -462,6 +463,22 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: updateData
     });
+
+    // Feature #70: Emit price drop event if price was reduced
+    if (price !== undefined && item.price && updateData.price !== undefined && updateData.price < item.price) {
+      try {
+        const io = getIO();
+        pushEvent(io, item.saleId, {
+          type: 'PRICE_DROP',
+          itemTitle: updatedItem.title,
+          amount: updateData.price || undefined,
+          saleId: item.saleId,
+          timestamp: new Date(),
+        });
+      } catch (err) {
+        console.warn('[liveFeed] Failed to emit price drop event:', err);
+      }
+    }
 
     res.json(updatedItem);
 
