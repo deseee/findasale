@@ -7,6 +7,7 @@ import SaleMap, { SalePin } from '../components/SaleMap';
 import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
 import TreasureHuntBanner from '../components/TreasureHuntBanner';
+import CityHeatBanner from '../components/CityHeatBanner';
 
 interface Sale {
   id: string;
@@ -206,6 +207,9 @@ const HomePage = () => {
             Find estate sales, garage sales, and auctions near you with FindA.Sale
           </p>
         </section>
+
+        {/* Phase 5: #49 City Heat Index Banner */}
+        <CityHeatBanner />
 
         {/* CD2 Phase 2: Treasure Hunt Banner */}
         <TreasureHuntBanner />

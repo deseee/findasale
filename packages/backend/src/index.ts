@@ -97,12 +97,23 @@ import viewersRouter from './routes/viewers';           // Feature 34: Hype Mete
 import exportRouter from './routes/export';             // Sprint 2: Export features
 import socialRouter from './routes/social';             // Sprint 2: Social template generator
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
+import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
 import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
 import socialProofRoutes from './routes/socialProof';     // Feature 67: Social Proof Notifications
 import snoozeRoutes from './routes/snooze';               // Feature 23: Unsubscribe-to-Snooze
 import commandCenterRoutes from './routes/commandCenter';  // #68 Sprint 1: Command Center Dashboard
+import reputationRoutes from './routes/reputation';        // #71: Organizer Reputation Score
+import cityHeatRoutes from './routes/cityHeat';              // Phase 5: #49 City Heat Index
+import linkClickRoutes from './routes/linkClicks';           // #18: Post Performance Analytics
+import receiptRoutes from './routes/receipts';               // #62: Digital Receipts
+import returnRoutes from './routes/returns';                 // #62: Return Requests
+import itemLibraryRoutes from './routes/itemLibrary';         // Feature #25: Item Library (Consignment Rack)
+import brandKitRoutes from './routes/brandKit';               // #31 Brand Kit expansion
+import wishlistAlertRoutes from './routes/wishlistAlerts';     // Feature #32: Wishlist Alerts
+import smartFollowRoutes from './routes/smartFollows';         // Feature #32: Smart Follow
+import loyaltyRoutes from './routes/loyalty';                 // Feature #29: Loyalty Passport
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
@@ -269,12 +280,23 @@ app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hy
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features
 app.use('/api/social', socialRouter);                            // Sprint 2: Social template generator
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
+app.use('/api/voice', voiceRoutes);                              // Feature #42: Voice-to-tag extraction
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
 app.use('/api/nudges', nudgeRoutes);                             // Feature 61: Near-Miss Nudges
 app.use('/api/social-proof', socialProofRoutes);                 // Feature 67: Social Proof Notifications
 app.use('/api/snooze', snoozeRoutes);                            // Feature 23: Unsubscribe-to-Snooze
 app.use('/api/organizer/command-center', commandCenterRoutes);    // #68 Sprint 1: Command Center Dashboard
+app.use('/api', reputationRoutes);                                 // #71: Organizer Reputation Score
+app.use('/api/city-heat', cityHeatRoutes);                         // Phase 5: #49 City Heat Index
+app.use('/api/link-clicks', linkClickRoutes);                      // #18: Post Performance Analytics
+app.use('/api/receipts', receiptRoutes);                             // #62: Digital Receipts
+app.use('/api/returns', returnRoutes);                               // #62: Return Requests
+app.use('/api/item-library', itemLibraryRoutes);                     // Feature #25: Item Library
+app.use('/api/brand-kit', brandKitRoutes);                           // #31 Brand Kit expansion
+app.use('/api/wishlist-alerts', wishlistAlertRoutes);                // Feature #32: Wishlist Alerts
+app.use('/api/smart-follows', smartFollowRoutes);                    // Feature #32: Smart Follow
+app.use('/api/loyalty', loyaltyRoutes);                              // Feature #29: Loyalty Passport
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

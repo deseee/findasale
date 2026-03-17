@@ -23,6 +23,7 @@ import TopItemsTable from '../../components/PerformanceDashboard/TopItemsTable';
 import CategoryBreakdownChart from '../../components/PerformanceDashboard/CategoryBreakdownChart';
 import HoldMetricsCard from '../../components/PerformanceDashboard/HoldMetricsCard';
 import RecommendationsPanel from '../../components/PerformanceDashboard/RecommendationsPanel';
+import PostPerformanceCard from '../../components/PostPerformanceCard'; // #18: Post Performance Analytics
 
 interface Insights {
   totalSalesCount: number;
@@ -174,6 +175,17 @@ const OrganizerInsightsPage = () => {
     },
     enabled: !!selectedSaleId && !!user?.id,
     staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch post performance stats for the selected sale (#18)
+  const { data: clickStats, isLoading: clickStatsLoading } = useQuery({
+    queryKey: ['click-stats', selectedSaleId],
+    queryFn: async () => {
+      if (!selectedSaleId) return null;
+      const response = await api.get(`/link-clicks/stats/${selectedSaleId}`);
+      return response.data?.stats || null;
+    },
+    enabled: !!selectedSaleId && !!user?.id,
   });
 
   // Fetch organizer's sales to pre-select first sale
@@ -547,6 +559,13 @@ const OrganizerInsightsPage = () => {
 
                 {/* Hold Metrics */}
                 <HoldMetricsCard data={metricsData.metrics.holdMetrics} />
+
+                {/* Post Performance Card — #18 */}
+                <PostPerformanceCard
+                  saleId={selectedSaleId}
+                  stats={clickStats}
+                  isLoading={clickStatsLoading}
+                />
 
                 {/* Recommendations */}
                 <RecommendationsPanel

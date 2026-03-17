@@ -81,6 +81,15 @@ model User {
   saleWaitlist      SaleWaitlist[]
   saleReminders     SaleReminder[]
   coupons           Coupon[]
+  // Task #7: Shopper Referral Rewards
+  referralRewardsGiven   ReferralReward[] @relation("ReferralRewardsGiven")
+  referralRewardsReceived ReferralReward[] @relation("ReferralRewardsReceived")
+  // Feature #32: Wishlist Alerts + Smart Follow
+  wishlistAlerts    WishlistAlert[]
+  smartFollows      SmartFollow[]
+  // Feature #29: Loyalty Passport
+  stamps            ShopperStamp[]
+  stampMilestones   StampMilestone[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -110,6 +119,8 @@ model Organizer {
   totalSales      Int      @default(0)
   followers       Follow[]
   conversations   Conversation[]
+  // Feature #32: Smart Follow — shoppers following this organizer for sale alerts
+  smartFollowers  SmartFollow[]
   // Phase 31: Organizer Tier Rewards (BRONZE | SILVER | GOLD) — fee benefits based on activity
   tier            String   @default("BRONZE")
   tierUpdatedAt   DateTime?
@@ -124,6 +135,10 @@ model Organizer {
   brandLogoUrl        String?   // Cloudinary URL for organizer logo
   brandPrimaryColor   String?   // Hex e.g. "#2563EB"
   brandSecondaryColor String?   // Hex e.g. "#1E40AF"
+  customStorefrontSlug  String?  @unique  // Unique slug for organizer storefront e.g. "janes-estate-sales"
+  brandFontFamily       String?  // Font family e.g. "Georgia" (PRO tier)
+  brandBannerImageUrl   String?  // Cloudinary URL for organizer banner (PRO tier)
+  brandAccentColor      String?  // Hex for accent color (PRO tier)
   // Feature #65: Subscription Tiers
   subscriptionTier    SubscriptionTier @default(SIMPLE)
   subscriptionStatus  String?          // active, trialing, past_due, canceled, null
@@ -162,6 +177,8 @@ model Sale {
   entranceNote  String?    @db.VarChar(150) // Optional note: "Side entrance", "Park in back", etc.
   // Feature #24: Holds-Only Item View — configurable hold duration per sale
   holdDurationHours  Int        @default(48) // Default 48h hold; organizer can change per sale
+  // #62: Digital Receipt + Returns — return window in hours
+  returnWindowHours Int?
   organizerId   String
   organizer     Organizer  @relation(fields: [organizerId], references: [id])
   items         Item[]
@@ -179,6 +196,7 @@ model Sale {
   checklist     SaleChecklist?
   saleWaitlist      SaleWaitlist[]
   saleReminders     SaleReminder[]
+  linkClicks        LinkClick[]  // #18: Post Performance Analytics
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -244,12 +262,21 @@ model Item {
   faceDetected     Boolean    @default(false)   // Face detected in image
   autoEnhanced     Boolean    @default(false)   // Auto-enhancement applied
   photos           Photo[]                       // Multi-photo support (forward-looking)
+  // Feature #25: Item Library — organizer-owned items across sales
+  libraryId        String?                       // Links to future LibraryItem table; for now just namespace
+  inLibrary        Boolean   @default(false)    // Cached: is this item in organizer's library?
+  priceVariants    Json?                        // { saleId: price } for per-sale pricing (Phase 5)
+  organizerId      String?                       // Denormalized from sale.organizerId for library queries
+  // Feature #29: Loyalty Passport — Hunt Pass early access embargo
+  earlyAccessUntil DateTime?                      // Items hidden from non-Hunt-Pass shoppers until this time
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@unique([saleId, sku])
   @@index([draftStatus])
   @@index([saleId, draftStatus])
+  @@index([libraryId])
+  @@index([organizerId, inLibrary])
 }
 
 // Camera Workflow v2: Photo model for multi-photo support (forward-looking schema)
@@ -308,6 +335,8 @@ model Purchase {
   affiliateLink         AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
   source                String         @default("ONLINE") // ONLINE | POS
   buyerEmail            String?        // POS only: optional email for receipt delivery
+  digitalReceipt        DigitalReceipt?
+  returnRequests        ReturnRequest[]
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 }
@@ -948,6 +977,127 @@ model ProcessedWebhookEvent {
   processedAt DateTime @default(now())
 
   @@index([processedAt])
+}
+
+// Task #7: Shopper Referral Rewards — track reward transactions between referrers and referred users
+model ReferralReward {
+  id                String   @id @default(cuid())
+  referrerId        String
+  referrer          User     @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId    String
+  referredUser      User     @relation("ReferralRewardsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  rewardType        String   // "POINTS" | "CREDIT"
+  rewardValue       Float
+  awardedAt         DateTime @default(now())
+  redeemedAt        DateTime?
+  createdAt         DateTime @default(now())
+
+  @@unique([referrerId, referredUserId])
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([awardedAt])
+}
+
+// #18: Post Performance Analytics — track social link clicks with UTM parameters
+model LinkClick {
+  id              String   @id @default(cuid())
+  saleId          String
+  sale            Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  utmSource       String?  // e.g. "findasale"
+  utmMedium       String?  // e.g. "share", "social"
+  utmCampaign     String?  // e.g. "listing"
+  utmContent      String?  // e.g. saleId for A/B testing
+  ipHash          String?  // SHA256 hash of IP for dedup (first 16 chars)
+  clickedAt       DateTime @default(now())
+
+  @@index([saleId, clickedAt])
+  @@index([saleId, utmSource])
+}
+
+// #62: Digital Receipt + Returns
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+model DigitalReceipt {
+  id          Int         @id @default(autoincrement())
+  purchaseId  String      @unique
+  purchase    Purchase    @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  items       Json        // Array of { itemTitle: string; photoUrl?: string; price: float }
+  total       Float
+  issuedAt    DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+}
+
+model ReturnRequest {
+  id          Int         @id @default(autoincrement())
+  purchaseId  String
+  purchase    Purchase    @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  reason      String      // User-provided reason for return
+  status      ReturnStatus @default(PENDING)
+  requestedAt DateTime    @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+}
+
+// Feature #32: Wishlist Alerts — saved searches with notification triggers
+model WishlistAlert {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String   // User-friendly name: "Mid-Century Furniture Under $200"
+  query         Json     // { q: string; category: string; minPrice: int; maxPrice: int; tags: string[]; radius: int; lat: float; lng: float }
+  notifyEmail   Boolean  @default(true)
+  notifyPush    Boolean  @default(true)
+  isActive      Boolean  @default(true)
+  lastNotifiedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, isActive])
+}
+
+// Feature #32: Smart Follow — shoppers following organizers for sale notifications
+model SmartFollow {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizerId   String
+  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  notifyEmail   Boolean   @default(true)
+  notifyPush    Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@unique([userId, organizerId])
+  @@index([userId])
+}
+
+// Feature #29: Shopper Loyalty Passport — stamp tracking and milestones
+model ShopperStamp {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // ATTEND_SALE | MAKE_PURCHASE | WRITE_REVIEW | REFER_FRIEND
+  count     Int      @default(1)
+  awardedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+model StampMilestone {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestone Int      // 5, 20, 50
+  badgeType String   // BRONZE | SILVER | GOLD
+  earnedAt  DateTime @default(now())
+
+  @@unique([userId, milestone])
+  @@index([userId])
 }
 
 // Feature #65: Subscription Tier Enum

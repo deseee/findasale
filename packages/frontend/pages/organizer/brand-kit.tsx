@@ -27,6 +27,10 @@ interface BrandData {
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSecondaryColor: string | null;
+  customStorefrontSlug: string | null;
+  brandFontFamily: string | null;
+  brandBannerImageUrl: string | null;
+  brandAccentColor: string | null;
 }
 
 const BrandKitPage = () => {
@@ -48,6 +52,10 @@ const BrandKitPage = () => {
     brandLogoUrl: '',
     brandPrimaryColor: '',
     brandSecondaryColor: '',
+    customStorefrontSlug: '',
+    brandFontFamily: '',
+    brandBannerImageUrl: '',
+    brandAccentColor: '',
   });
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -80,6 +88,10 @@ const BrandKitPage = () => {
           brandLogoUrl: orgData.brandLogoUrl || '',
           brandPrimaryColor: orgData.brandPrimaryColor || '',
           brandSecondaryColor: orgData.brandSecondaryColor || '',
+          customStorefrontSlug: orgData.customStorefrontSlug || '',
+          brandFontFamily: orgData.brandFontFamily || '',
+          brandBannerImageUrl: orgData.brandBannerImageUrl || '',
+          brandAccentColor: orgData.brandAccentColor || '',
         });
 
         if (orgData.brandLogoUrl) {
@@ -137,6 +149,10 @@ const BrandKitPage = () => {
         brandLogoUrl: formData.brandLogoUrl,
         brandPrimaryColor: formData.brandPrimaryColor,
         brandSecondaryColor: formData.brandSecondaryColor,
+        customStorefrontSlug: formData.customStorefrontSlug,
+        brandFontFamily: formData.brandFontFamily,
+        brandBannerImageUrl: formData.brandBannerImageUrl,
+        brandAccentColor: formData.brandAccentColor,
       });
       showToast('Brand Kit updated successfully', 'success');
     } catch (error: any) {
@@ -310,6 +326,28 @@ const BrandKitPage = () => {
                 </div>
               </div>
 
+              {/* Storefront Slug Section */}
+              <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Storefront URL</h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                  Create a custom URL slug for your organizer storefront (e.g., findasale.local/storefronts/your-slug)
+                </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Custom Slug</label>
+                    <input
+                      type="text"
+                      name="customStorefrontSlug"
+                      value={formData.customStorefrontSlug || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g., janes-estate-sales"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
+                    />
+                    <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Use lowercase letters, numbers, and hyphens only</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Brand Colors Section */}
               <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
                 <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Brand Colors</h2>
@@ -359,6 +397,62 @@ const BrandKitPage = () => {
                         title={formData.brandSecondaryColor}
                       />
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* PRO Features Section */}
+              <div className="border-t border-warm-200 dark:border-gray-700 pt-8 bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
+                  <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-0.5 rounded">PRO</span>
+                  Advanced Brand Customization
+                </h2>
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-6">
+                  These features are available to PRO and TEAMS tier subscribers. Upgrade your plan to customize fonts, banners, and accent colors.
+                </p>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Font Family</label>
+                    <input
+                      type="text"
+                      name="brandFontFamily"
+                      value={formData.brandFontFamily || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g., Georgia"
+                      disabled
+                      className="w-full px-4 py-2 border border-blue-300 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 disabled:opacity-75"
+                    />
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your brand font</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Banner Image URL</label>
+                    <input
+                      type="url"
+                      name="brandBannerImageUrl"
+                      value={formData.brandBannerImageUrl || ''}
+                      onChange={handleInputChange}
+                      placeholder="https://example.com/banner.jpg"
+                      disabled
+                      className="w-full px-4 py-2 border border-blue-300 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 disabled:opacity-75"
+                    />
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to add a custom banner image</p>
+                  </div>
+
+                  <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Accent Color</label>
+                      <input
+                        type="text"
+                        name="brandAccentColor"
+                        value={formData.brandAccentColor || ''}
+                        onChange={handleInputChange}
+                        placeholder="#FF6B6B"
+                        disabled
+                        className="w-full px-4 py-2 border border-blue-300 dark:border-blue-700 rounded-lg font-mono text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 disabled:opacity-75"
+                      />
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your accent color</p>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -11,6 +11,10 @@ import { markSalePublished } from '../services/mailerliteService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
+import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #51 Sale Ripples
+import { getIO } from '../lib/socket'; // V1: Socket.io instance
+import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
+import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -423,6 +427,15 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
         console.error('[buyerMatch] Failed to notify matched buyers:', err);
       });
 
+      // Phase 5: #51 Sale Ripples — notify nearby favorites
+      notifyNearbyFavorites(updated.id, getIO()).catch((err) => {
+        console.error('[rippleService] Failed to notify nearby favorites:', err);
+      });
+
+      // Feature #32: Check wishlist alerts and smart follows
+      checkAlertsForNewSale(updated.id).catch(console.error);
+      checkFollowsForNewSale(updated).catch(console.error);
+
       // MailerLite: set sale_published custom field so onboarding automation exits
       prisma.organizer.findUnique({
         where: { id: updated.organizerId },
@@ -759,5 +772,29 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
   } catch (error) {
     console.error('Error generating sale description:', error);
     res.status(500).json({ error: 'Failed to generate description' });
+  }
+};
+
+/**
+ * Feature #14: Get real-time sale status (items sold, holds, remaining, revenue)
+ * GET /api/sales/:id/status
+ * Public endpoint (no auth required)
+ */
+export const getSaleStatus = async (req: express.Request, res: express.Response) => {
+  try {
+    const { id: saleId } = req.params;
+    if (!saleId) {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+
+    const { getSaleStatus: getSaleStatusService } = await import('../services/saleStatusService');
+    const status = await getSaleStatusService(saleId);
+    res.json(status);
+  } catch (error: any) {
+    console.error('[sale-status] Error:', error);
+    if (error.message?.includes('not found')) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+    res.status(500).json({ message: 'Server error' });
   }
 };

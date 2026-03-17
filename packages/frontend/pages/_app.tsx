@@ -133,6 +133,41 @@ function OrganizerOnboardingShower() {
   return <OrganizerOnboardingModal onClose={handleClose} />;
 }
 
+/**
+ * #18: Capture and record UTM parameters on page load
+ * Fires a silent pixel call to record social link clicks
+ */
+function UTMCapture() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const { utm_source, utm_medium, utm_campaign, utm_content, saleId } = router.query;
+
+    // Only fire if we have UTM params
+    if (!utm_source && !utm_medium && !utm_campaign && !utm_content) {
+      return;
+    }
+
+    if (!saleId || typeof saleId !== 'string') {
+      return;
+    }
+
+    // Fire-and-forget pixel call (no await, silent failure)
+    const params = new URLSearchParams();
+    params.append('saleId', saleId);
+    if (typeof utm_source === 'string') params.append('utm_source', utm_source);
+    if (typeof utm_medium === 'string') params.append('utm_medium', utm_medium);
+    if (typeof utm_campaign === 'string') params.append('utm_campaign', utm_campaign);
+    if (typeof utm_content === 'string') params.append('utm_content', utm_content);
+
+    fetch(`/api/link-clicks/record?${params}`, { method: 'GET' }).catch(() => {}); // Silent fail
+  }, [router.query]);
+
+  return null;
+}
+
 function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
   const router = useRouter();
   const [queryClient] = useState(
@@ -164,6 +199,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
             <PushSubscriber />
             <InstallPrompt />
             <NudgeBar />
+            {/* #18: UTM capture for social link clicks */}
+            <UTMCapture />
             {/* Feature #21: Sentry user context sync */}
             <SentryUserContextSync />
             {/* Phase 31: OAuth → JWT bridge */}

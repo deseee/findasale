@@ -25,6 +25,7 @@ import PickupBookingCard from '../../components/PickupBookingCard';
 import ActivityFeed from '../../components/ActivityFeed';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
 import SaleOGMeta from '../../components/SaleOGMeta'; // Feature #43: OG Image Generator
+import OrganizerReputation from '../../components/OrganizerReputation'; // #71: Organizer Reputation Score
 
 interface Sale {
   id: string;
@@ -310,6 +311,10 @@ const SaleDetailPage = () => {
                 )}
               </div>
               <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">{sale.organizer.phone}</p>
+              {/* #71: Organizer Reputation Score */}
+              <div className="mb-4">
+                <OrganizerReputation organizerId={sale.organizer.id} />
+              </div>
               {sale.organizer.avgRating && (
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-sm font-medium text-warm-700 dark:text-gray-300">Rating:</span>

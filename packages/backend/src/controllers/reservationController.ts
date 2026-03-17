@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
+import { pushSaleStatus } from '../services/saleStatusService';
+import { sendHoldPlacedAlert } from '../services/saleAlertEmailService';
 
 const DEFAULT_HOLD_HOURS = 48; // #24: default hold duration (was 24h)
 
@@ -52,6 +54,36 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       console.warn('[liveFeed] Failed to emit hold placed event:', err);
     }
 
+    // Feature #14: Push sale status update
+    try {
+      const io = getIO();
+      await pushSaleStatus(io, item.saleId);
+    } catch (err) {
+      console.warn('[saleStatus] Failed to push status update:', err);
+    }
+
+    // Feature #14: Send organizer alert email (fire-and-forget)
+    try {
+      const sale = (item.sale as any);
+      const organizer = await prisma.organizer.findUnique({
+        where: { id: sale?.organizerId },
+        include: { user: { select: { email: true, name: true } } },
+      });
+      if (organizer?.user) {
+        setImmediate(() => {
+          sendHoldPlacedAlert({
+            organizerEmail: organizer.user.email,
+            organizerName: organizer.user.name,
+            itemTitle: item.title,
+            saleTitle: sale?.title || 'Sale',
+            saleId: item.saleId,
+          }).catch(err => console.warn('[alert] Failed to send hold placed email:', err));
+        });
+      }
+    } catch (err) {
+      console.warn('[alert] Failed to fetch organizer for hold alert:', err);
+    }
+
     res.status(201).json(reservation);
   } catch (error: any) {
     if (error.code === 'P2002') {
@@ -99,6 +131,14 @@ export const cancelHold = async (req: AuthRequest, res: Response) => {
         });
       } catch (err) {
         console.warn('[liveFeed] Failed to emit hold released event:', err);
+      }
+
+      // Feature #14: Push sale status update
+      try {
+        const io = getIO();
+        await pushSaleStatus(io, item.saleId);
+      } catch (err) {
+        console.warn('[saleStatus] Failed to push status update:', err);
       }
     }
 

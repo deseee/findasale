@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import ReferralWidget from '../components/ReferralWidget';
 
 interface Bid {
   id: string;
@@ -308,6 +309,9 @@ const ProfilePage = () => {
             </div>
           )}
         </div>
+
+        {/* Task #7: Referral Rewards Widget */}
+        <ReferralWidget />
 
         {/* Sale Interests Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">

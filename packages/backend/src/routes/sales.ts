@@ -15,6 +15,7 @@ import {
   cloneSale,
   getSaleActivity,
   generateSaleDescriptionHandler,
+  getSaleStatus,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
@@ -34,6 +35,7 @@ router.get('/mine', authenticate, getMySales);
 
 router.get('/:id', getSale);
 router.get('/:id/activity', getSaleActivity); // Real-time activity feed (public)
+router.get('/:id/status', getSaleStatus); // Feature #14: Real-time status (public)
 router.post('/', authenticate, createSale);
 router.put('/:id', authenticate, updateSale);
 router.patch('/:id/status', authenticate, updateSaleStatus);

@@ -43,6 +43,7 @@ import CaptureButton from '../../../components/camera/CaptureButton';
 import RapidCarousel from '../../../components/camera/RapidCarousel';
 import PreviewModal from '../../../components/camera/PreviewModal';
 import { useUploadQueue } from '../../../hooks/useUploadQueue';
+import { useVoiceInput } from '../../../hooks/useVoiceInput';
 import BulkConfirmModal from '../../../components/BulkConfirmModal';
 import BulkPhotoModal from '../../../components/BulkPhotoModal';
 import BulkTagModal from '../../../components/BulkTagModal';
@@ -239,6 +240,10 @@ const AddItemsDetailPage = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const inMutationFlight = useRef<boolean>(false);
+
+  // Feature #42: Voice-to-tag input
+  const { isSupported: voiceSupported, isListening, transcript, startListening, stopListening } = useVoiceInput();
+  const [voiceLoading, setVoiceLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('camera');
   const [formData, setFormData] = useState(emptyForm);
@@ -789,6 +794,43 @@ const AddItemsDetailPage = () => {
     }));
   };
 
+  const handleVoiceExtract = async () => {
+    if (!transcript.trim()) {
+      showToast('No speech detected. Try again.', 'error');
+      return;
+    }
+
+    setVoiceLoading(true);
+    try {
+      const response = await api.post('/voice/extract', { transcript });
+      const { name, category, estimatedPrice } = response.data;
+
+      setFormData((prev) => ({
+        ...prev,
+        title: name || prev.title,
+        category: category || prev.category,
+        price: estimatedPrice ? estimatedPrice.toString() : prev.price,
+      }));
+
+      showToast(`Heard: "${transcript}"`, 'success');
+    } catch (error) {
+      console.error('[voice] Error extracting data:', error);
+      showToast('Failed to process voice input', 'error');
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const handleVoiceToggle = async () => {
+    if (isListening) {
+      await stopListening();
+      // Auto-extract after a short delay to let speech recognition finalize
+      setTimeout(handleVoiceExtract, 500);
+    } else {
+      await startListening();
+    }
+  };
+
   const handleDeleteDraft = async (itemId: string) => {
     setRapidItems((prev) => prev.filter((i) => i.id !== itemId));
   };
@@ -923,13 +965,31 @@ const AddItemsDetailPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-warm-700 mb-2">Title *</label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      placeholder="Item title"
-                    />
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="flex-1 px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        placeholder="Item title"
+                      />
+                      {voiceSupported && user?.organizerTier === 'PRO' && (
+                        <button
+                          type="button"
+                          onClick={handleVoiceToggle}
+                          disabled={voiceLoading}
+                          className={`px-3 py-2 rounded-lg text-xl font-semibold transition-all ${
+                            isListening
+                              ? 'bg-red-600 text-white animate-pulse ring-2 ring-red-400'
+                              : 'bg-warm-200 text-warm-900 hover:bg-warm-300'
+                          } disabled:opacity-50`}
+                          title="Record item description"
+                          aria-label={isListening ? 'Stop recording' : 'Start recording'}
+                        >
+                          🎤
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div>

@@ -9,8 +9,12 @@ import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { buildEmail } from '../services/emailTemplateService';
 import { issueLoyaltyCoupon, markCouponUsed } from './couponController';
+import { generateReceipt } from '../services/receiptService'; // #62: Digital receipts
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
+import { pushSaleStatus } from '../services/saleStatusService';
+import { sendItemSoldAlert } from '../services/saleAlertEmailService';
+import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -519,6 +523,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
           data: { status: 'PAID' },
         });
 
+        // #62: Generate digital receipt (fire-and-forget)
+        setImmediate(() => {
+          generateReceipt(purchase.id).catch(err => console.error('[receipt] Failed to generate receipt:', err));
+        });
+
         // Feature: Abandoned Checkout Recovery — mark this checkout as completed
         await prisma.checkoutAttempt.updateMany({
           where: { paymentIntent: paymentIntent.id },
@@ -566,6 +575,36 @@ export const webhookHandler = async (req: Request, res: Response) => {
             } catch (err) {
               console.warn('[liveFeed] Failed to emit sold event:', err);
             }
+
+            // Feature #14: Push sale status update
+            try {
+              const io = getIO();
+              await pushSaleStatus(io, soldItem.saleId);
+            } catch (err) {
+              console.warn('[saleStatus] Failed to push status update:', err);
+            }
+
+            // Feature #14: Send organizer alert email (fire-and-forget)
+            try {
+              const saleData = await prisma.sale.findUnique({
+                where: { id: soldItem.saleId },
+                include: { organizer: { include: { user: { select: { email: true, name: true } } } } },
+              });
+              if (saleData?.organizer?.user) {
+                setImmediate(() => {
+                  sendItemSoldAlert({
+                    organizerEmail: saleData.organizer.user.email,
+                    organizerName: saleData.organizer.user.name,
+                    itemTitle: soldItem.title,
+                    saleTitle: saleData.title,
+                    price: soldItem.price || 0,
+                    saleId: soldItem.saleId,
+                  }).catch(err => console.warn('[alert] Failed to send item sold email:', err));
+                });
+              }
+            } catch (err) {
+              console.warn('[alert] Failed to fetch sale for item sold alert:', err);
+            }
           }
         }
 
@@ -592,6 +631,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
             paymentIntent.metadata?.itemId,
             'Purchased an item',
           ).catch(err => console.warn('[points] Failed to award purchase points:', err));
+
+          // Feature #29: Award MAKE_PURCHASE stamp (fire-and-forget)
+          awardStamp(purchase.userId, 'MAKE_PURCHASE', purchase.saleId ?? undefined)
+            .catch(err => console.warn('[loyalty] Failed to award purchase stamp:', err));
 
           // Sprint 3: Issue loyalty coupon (fire-and-forget)
           issueLoyaltyCoupon(purchase.userId, purchase.id)
