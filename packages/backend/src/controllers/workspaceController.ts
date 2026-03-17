@@ -377,7 +377,7 @@ export const listMembers = async (req: AuthRequest, res: Response) => {
       where: { workspaceId: workspace.id },
       include: {
         organizer: {
-          select: { id: true, businessName: true, profilePhoto: true, email: true },
+          select: { id: true, businessName: true, profilePhoto: true },
         },
       },
       orderBy: { invitedAt: 'desc' },

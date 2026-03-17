@@ -91,7 +91,6 @@ export async function calculateConfidenceScore(
     const allHoldsInWeek = await prisma.itemReservation.count({
       where: {
         userId,
-        saleId,
         createdAt: { gte: sevenDaysAgo },
       },
     });
@@ -99,7 +98,6 @@ export async function calculateConfidenceScore(
     const cancelledInWeek = await prisma.itemReservation.count({
       where: {
         userId,
-        saleId,
         status: 'CANCELLED',
         createdAt: { gte: sevenDaysAgo },
       },
@@ -118,7 +116,6 @@ export async function calculateConfidenceScore(
     const holdsInDay = await prisma.itemReservation.count({
       where: {
         userId,
-        saleId,
         createdAt: { gte: twentyFourHoursAgo },
       },
     });
