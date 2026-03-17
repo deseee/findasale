@@ -97,3 +97,25 @@ appears, apply the fix directly without investigation.
 3. Include it in the next commit before pushing
 **Edge Cases:** If `acorn-import-attributes` package.json is corrupt (ERR_PNPM_JSON_PARSE warning), this is a non-fatal warning — pnpm install still completes. Don't retry.
 **Confidence:** 100%
+
+---
+
+## Pattern 7: S192-Style New-Page Type Errors (Auth, SSR, Component Props)
+
+**Trigger:** Vercel build fails on new pages added by a large wave-build session with TypeScript errors referencing non-existent modules, wrong auth patterns, or wrong component prop names.
+**Environment:** Vercel (Next.js frontend build)
+**Pattern:** AI-generated wave builds commonly introduce a cluster of the same errors across multiple new pages. Fixing one at a time is slow — do a proactive full scan first.
+**Known instances:** S192 (15+ pages), S193 (recovery)
+**Steps:**
+1. **Do NOT fix one error per Vercel build cycle.** Run a proactive scan across all new/modified pages first.
+2. Check for `hooks/useAuth` imports → must be `import { useAuth } from '../../components/AuthContext'` (depth varies)
+3. Check for `useSession` from `next-auth/react` → app uses custom `useAuth`, not NextAuth
+4. Check `user.organizerId` references → correct field is `user.id`
+5. Check `AuthContextType` destructure: `isLoading` not `loading`
+6. Check `<EmptyState>` props: `heading`/`subtext`/`cta` — NOT `title`/`description`/`action`
+7. Check `<Layout>` props: only accepts `{ children }` — no `title` prop; titles go in `<Head>` from `next/head`
+8. Check `Skeleton` import: default import only (`import Skeleton from '...'`, NOT `import { Skeleton }`)
+9. Check for synchronous `router.push()` at component top level → must be inside `useEffect`; also move all hooks BEFORE any conditional returns
+10. Batch fixes by file grouping (≤3 files per MCP push) and push to GitHub
+**Edge Cases:** `tsc --skipLibCheck` locally does NOT catch these errors — Next.js plugin + module resolution differ. Only Vercel build output is authoritative.
+**Confidence:** 100%
