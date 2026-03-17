@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useActiveChallenges, useMyChallengeProgress, useLeaderboard } from '../hooks/useChallenges';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../components/AuthContext';
 import { ChallengeBadge } from '../components/ChallengeBadge';
 import Layout from '../components/Layout';
 
