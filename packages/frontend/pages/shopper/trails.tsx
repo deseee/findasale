@@ -9,7 +9,7 @@ import Skeleton from '../../components/Skeleton';
 import Layout from '../../components/Layout';
 
 export default function MyTrailsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const { data, isLoading } = useMyTrails();
 
