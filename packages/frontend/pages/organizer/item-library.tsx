@@ -4,7 +4,7 @@ import Head from 'next/head';
 import Layout from '../../components/Layout';
 import LibraryItemCard from '../../components/LibraryItemCard';
 import useItemLibrary from '../../hooks/useItemLibrary';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../components/AuthContext';
 import { Search, Filter } from 'lucide-react';
 
 interface PullModalState {
