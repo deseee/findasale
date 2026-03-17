@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useAuth } from '../lib/withAuth';
+import { useAuth } from './AuthContext';
 
 interface ValuationData {
   priceLow: number;

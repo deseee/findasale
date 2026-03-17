@@ -36,7 +36,7 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
 
     const challenge = generateAndStoreChallenge(userId);
 
-    const options = generateRegistrationOptions({
+    const options = await generateRegistrationOptions({
       rpID: WEBAUTHN_RP_ID,
       rpName: WEBAUTHN_RP_NAME,
       userID: userId,
@@ -48,7 +48,6 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
         residentKey: 'discouraged',
         userVerification: 'preferred',
       },
-      attestationFormats: ['none'],
       timeout: 60000,
     });
 
@@ -111,21 +110,18 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
           .json({ message: 'Registration verification failed' });
       }
 
-      const credentialPublicKey = verified.registrationInfo?.credentialPublicKey;
-      const credentialId = verified.registrationInfo?.credentialID;
+      // v10: registrationInfo.credential contains { id, publicKey, counter }
+      const regCredential = verified.registrationInfo?.credential;
 
-      if (!credentialPublicKey || !credentialId) {
+      if (!regCredential?.id || !regCredential?.publicKey) {
         return res.status(400).json({ message: 'Invalid credential data' });
       }
 
-      // Convert credentialID to base64url
-      const credentialIdBase64url = Buffer.from(credentialId).toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
+      // v10: credential.id is already a Base64URLString
+      const credentialIdBase64url = regCredential.id;
 
-      // Store public key as base64url
-      const publicKeyBase64url = credentialPublicKey.toString('base64')
+      // Store public key as base64url (publicKey is Uint8Array)
+      const publicKeyBase64url = Buffer.from(regCredential.publicKey).toString('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=/g, '');
@@ -145,7 +141,7 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
           userId,
           credentialId: credentialIdBase64url,
           publicKey: publicKeyBase64url,
-          counter: verified.registrationInfo?.counter || 0,
+          counter: regCredential.counter || 0,
           deviceName: deviceName || 'Passkey',
         },
       });
@@ -177,7 +173,7 @@ export const authenticateBegin = async (req: Request, res: Response) => {
 
     // For now, we don't know which user is logging in, so allowCredentials is empty
     // The browser will use the resident key (discoverable credential) flow
-    const options = generateAuthenticationOptions({
+    const options = await generateAuthenticationOptions({
       rpID: WEBAUTHN_RP_ID,
       timeout: 60000,
       userVerification: 'preferred',
@@ -193,6 +189,69 @@ export const authenticateBegin = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Passkey authentication begin error:', error);
     res.status(500).json({ message: 'Server error during authentication setup' });
+  }
+};
+
+/**
+ * DELETE /api/auth/passkey/:credentialId
+ * Delete a passkey credential (requires authentication)
+ */
+export const deletePasskey = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const { credentialId } = req.params;
+
+    // Verify the credential belongs to the authenticated user
+    const credential = await prisma.passkeyCredential.findUnique({
+      where: { credentialId },
+    });
+
+    if (!credential || credential.userId !== userId) {
+      return res.status(404).json({ message: 'Passkey not found' });
+    }
+
+    // Delete the credential
+    await prisma.passkeyCredential.delete({
+      where: { credentialId },
+    });
+
+    res.json({ message: 'Passkey deleted successfully' });
+  } catch (error) {
+    console.error('Passkey deletion error:', error);
+    res.status(500).json({ message: 'Server error during passkey deletion' });
+  }
+};
+
+/**
+ * GET /api/auth/passkey/list
+ * List all passkeys for authenticated user
+ */
+export const listPasskeys = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const credentials = await prisma.passkeyCredential.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        credentialId: true,
+        deviceName: true,
+        createdAt: true,
+        counter: true,
+      },
+    });
+
+    res.json({ credentials });
+  } catch (error) {
+    console.error('Passkey list error:', error);
+    res.status(500).json({ message: 'Server error retrieving passkeys' });
   }
 };
 
@@ -250,20 +309,17 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         'base64'
       );
 
-      // Verify authentication response
+      // Verify authentication response (v10: uses nested credential object)
       const verified = await verifyAuthenticationResponse({
         response: clientResponse,
         expectedChallenge: challenge,
         expectedOrigin: WEBAUTHN_ORIGIN,
         expectedRPID: WEBAUTHN_RP_ID,
-        credentialID: Buffer.from(
-          credentialIdBase64url
-            .replace(/-/g, '+')
-            .replace(/_/g, '/'),
-          'base64'
-        ),
-        credentialPublicKey: publicKeyBuffer,
-        credentialCounter: credential.counter,
+        credential: {
+          id: credentialIdBase64url,
+          publicKey: publicKeyBuffer,
+          counter: credential.counter,
+        },
       });
 
       if (!verified.verified) {
