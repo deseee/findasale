@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useAuth } from '../lib/withAuth';
+import { useAuth } from './AuthContext';
 
 interface ValuationData {
   priceLow: number;
@@ -29,8 +29,7 @@ export default function ValuationWidget({
   const [showWidget, setShowWidget] = useState(false);
 
   // Check if organizer is PRO tier
-  const isPro = user?.organizerProfile?.subscriptionTier === 'PRO' ||
-    user?.organizerTier === 'PRO';
+  const isPro = user?.organizerTier === 'PRO';
 
   if (!isPro) {
     return (

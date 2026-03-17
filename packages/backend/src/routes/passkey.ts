@@ -20,7 +20,7 @@ router.post('/authenticate/begin', authenticateBegin);
 router.post('/authenticate/complete', authenticateComplete);
 
 // Management — requires authentication
-router.delete('/:credentialId', authenticate, deletePasskey);
 router.get('/list', authenticate, listPasskeys);
+router.delete('/:credentialId', authenticate, deletePasskey);
 
 export default router;
