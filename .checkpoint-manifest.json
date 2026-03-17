@@ -4,32 +4,38 @@
   "description": "Persistent token checkpoint store. Survives context compressions and session transitions. Written by Claude at init, each checkpoint, compression events, and wrap.",
   "created": "2026-03-09",
   "currentSession": {
-    "sessionId": "S184",
+    "sessionId": "S185",
     "startedAt": "2026-03-16T00:00:00.000Z",
     "checkpoints": [
+      {
+        "turn": "pre-dispatch",
+        "timestamp": "2026-03-16T00:00:00Z",
+        "estimatedSessionTokens": 55,
+        "note": "S185 pre-dispatch checkpoint. Builds green (Railway+Vercel). useOrganizerTier fix pushed. commandCenterController status type fixed. About to dispatch 3 parallel agents: (1) findasale-qa #68, (2) findasale-architect P0-1 tokenVersion migration, (3) findasale-dev #70 Live Sale Feed. Est post-dispatch: ~55k + 3x15k = ~100k. Under 150k threshold."
+      },
       {
         "turn": 1,
         "timestamp": "2026-03-16T00:00:00Z",
         "estimatedSessionTokens": 25,
-        "note": "S184 init. STATE + manifest loaded. Origin/main UP TO DATE — #68 Sprints 1+2 already pushed (commits 06a2f61, 7052087). Stale index.lock present (0 bytes) — push.ps1 self-heals. P0-1 (tokenVersion schema migration) still open. #54 Social Proof needs status check. MCP push disabled this session — all pushes via Patrick PS1."
+        "note": "S184 init. STATE + manifest loaded. Origin/main UP TO DATE \u2014 #68 Sprints 1+2 already pushed (commits 06a2f61, 7052087). Stale index.lock present (0 bytes) \u2014 push.ps1 self-heals. P0-1 (tokenVersion schema migration) still open. #54 Social Proof needs status check. MCP push disabled this session \u2014 all pushes via Patrick PS1."
       },
       {
         "turn": 1,
         "timestamp": "2026-03-16T00:00:00Z",
         "estimatedSessionTokens": 20,
-        "note": "S183 init. STATE loaded. S182 complete — #63 Dark Mode + Accessibility (3-phase, 14 files, WCAG 2.1 AA). Patrick push pending (14 frontend files). Priority 1: #65 Progressive Disclosure UI. Priority 2: #68 Command Center. P0s from S179 shipped. Stripe Stripe env vars confirmed set."
+        "note": "S183 init. STATE loaded. S182 complete \u2014 #63 Dark Mode + Accessibility (3-phase, 14 files, WCAG 2.1 AA). Patrick push pending (14 frontend files). Priority 1: #65 Progressive Disclosure UI. Priority 2: #68 Command Center. P0s from S179 shipped. Stripe Stripe env vars confirmed set."
       },
       {
         "turn": 1,
         "timestamp": "2026-03-16T00:00:00Z",
         "estimatedSessionTokens": 25,
-        "note": "S182 init. STATE loaded. S181 complete — #61 Near-Miss Nudges, #67 Social Proof, #23 Snooze, #21 Sentry scoring all shipped. Priority 1: #63 Dark Mode + Accessibility (1.5 sprints). Dispatching findasale-ux + findasale-architect in parallel now."
+        "note": "S182 init. STATE loaded. S181 complete \u2014 #61 Near-Miss Nudges, #67 Social Proof, #23 Snooze, #21 Sentry scoring all shipped. Priority 1: #63 Dark Mode + Accessibility (1.5 sprints). Dispatching findasale-ux + findasale-architect in parallel now."
       },
       {
         "turn": 1,
         "timestamp": "2026-03-16T00:00:00Z",
         "estimatedSessionTokens": 22,
-        "note": "S180 init checkpoint. Loaded STATE.md, session-log (2 entries), next-session-prompt, manifest, MESSAGE_BOARD. S179 QA PASSED (msg-196). 2 P0 Hacker findings pending dev fix (tier cache staleness + STRIPE_SECRET_KEY startup check). Session log S171-S177 still 7 sessions behind (HIGH). Priority: P0 fixes → session log catch-up."
+        "note": "S180 init checkpoint. Loaded STATE.md, session-log (2 entries), next-session-prompt, manifest, MESSAGE_BOARD. S179 QA PASSED (msg-196). 2 P0 Hacker findings pending dev fix (tier cache staleness + STRIPE_SECRET_KEY startup check). Session log S171-S177 still 7 sessions behind (HIGH). Priority: P0 fixes \u2192 session log catch-up."
       },
       {
         "turn": 2,
@@ -51,12 +57,12 @@
         "estimatedSessionTokens": 25,
         "filesRead": 12,
         "toolCalls": 18,
-        "note": "S173 pre-dispatch checkpoint. About to dispatch 2 parallel agents: (1) UX audit critical+high+select-all fix on add-items/review pages, (2) #6 Phase 2 frontend Recharts components. Est post-dispatch: ~65k. Third dispatch (P2 bug-blitz) to follow. Total est: ~78k — under threshold."
+        "note": "S173 pre-dispatch checkpoint. About to dispatch 2 parallel agents: (1) UX audit critical+high+select-all fix on add-items/review pages, (2) #6 Phase 2 frontend Recharts components. Est post-dispatch: ~65k. Third dispatch (P2 bug-blitz) to follow. Total est: ~78k \u2014 under threshold."
       }
     ],
     "compressionEvents": [],
     "tokensUsed": "~20k (init + file reads)",
-    "budgetEstimate": "~65k (3 parallel agents: 2×dev ~17k avg + architect ~13k + overhead)",
+    "budgetEstimate": "~65k (3 parallel agents: 2\u00d7dev ~17k avg + architect ~13k + overhead)",
     "budgetAvailable": "~175k remaining"
   },
   "checkpoints": [
@@ -104,7 +110,7 @@
       "subagents": 0,
       "filesChanged": 6,
       "budgetDelta": "succeeded-on-plan",
-      "notes": "#66 routing fix (404→401), P1 CSV injection fix (escapeCSV formula prevention), #31 Brand Kit UI shipped (page + fields + nav link). T1–T7 token efficiency rules added to CORE.md. ADR-065 Organizer Mode Tiers approved (feature matrix decision deferred to S176 first task). Health-scout: 2 P2s logged for S176 (reminderType validation, archiver stream cleanup)."
+      "notes": "#66 routing fix (404\u2192401), P1 CSV injection fix (escapeCSV formula prevention), #31 Brand Kit UI shipped (page + fields + nav link). T1\u2013T7 token efficiency rules added to CORE.md. ADR-065 Organizer Mode Tiers approved (feature matrix decision deferred to S176 first task). Health-scout: 2 P2s logged for S176 (reminderType validation, archiver stream cleanup)."
     },
     {
       "sessionId": 169,
@@ -157,7 +163,7 @@
       "compressions": 0,
       "subagents": 7,
       "filesChanged": 5,
-      "notes": "Context loss audit. 6 parallel agents + advisory board. 5 fixes shipped. Manifest created this session — first full session to use it will be 119."
+      "notes": "Context loss audit. 6 parallel agents + advisory board. 5 fixes shipped. Manifest created this session \u2014 first full session to use it will be 119."
     },
     {
       "sessionId": 142,
