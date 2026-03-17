@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Head from 'next/head';
 import { useActiveChallenges, useMyChallengeProgress, useLeaderboard } from '../hooks/useChallenges';
 import { useAuth } from '../components/AuthContext';
 import { ChallengeBadge } from '../components/ChallengeBadge';
@@ -50,7 +51,10 @@ export default function ChallengesPage() {
   }, [myProgress]);
 
   return (
-    <Layout title="Challenges">
+    <Layout>
+      <Head>
+        <title>Challenges | FindA.Sale</title>
+      </Head>
       <div className="min-h-screen bg-white dark:bg-gray-900">
         {/* Header */}
         <div className="bg-gradient-to-r from-sage-green/10 to-sage-green/5 dark:from-gray-800 dark:to-gray-900 py-12 px-4">
@@ -225,7 +229,7 @@ export default function ChallengesPage() {
               )}
 
               {/* No Challenges Message */}
-              {!activeChallenges || activeChallenges.length === 0 && (
+              {(!activeChallenges || activeChallenges.length === 0) && (
                 <div className="text-center py-16">
                   <p className="text-gray-600 dark:text-gray-400 text-lg">
                     No active challenges right now. Check back soon for seasonal challenges!
