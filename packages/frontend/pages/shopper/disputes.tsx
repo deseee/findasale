@@ -1,14 +1,8 @@
 /**
  * Shopper Dispute History Page
- *
- * Displays a buyer's submitted disputes with:
- * - Dispute date, item name, reason, status, resolution
- * - Status color-coded badges
- * - Pagination support
- * - Link back to shopper dashboard
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -26,10 +20,7 @@ interface Dispute {
   resolution?: string;
   createdAt: string;
   updatedAt: string;
-  seller: {
-    name: string;
-    email: string;
-  };
+  seller: { name: string; email: string };
 }
 
 interface PaginationData {
@@ -41,14 +32,9 @@ interface PaginationData {
 
 const ShopperDisputesPage = () => {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState(1);
   const [filterStatus, setFilterStatus] = useState<string>('');
-
-  if (!isLoading && !user) {
-    router.push('/login');
-    return null;
-  }
 
   const { data, isLoading: isLoadingDisputes } = useQuery({
     queryKey: ['shopper-disputes', currentPage, filterStatus],
@@ -61,29 +47,33 @@ const ShopperDisputesPage = () => {
     enabled: !!user?.id,
   });
 
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  if (authLoading || !user) {
+    return null;
+  }
+
   const disputes: Dispute[] = data?.disputes || [];
   const pagination: PaginationData = data?.pagination || { page: 1, limit: 20, total: 0, pages: 0 };
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'open':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'under_review':
-        return 'bg-blue-100 text-blue-800';
-      case 'resolved':
-        return 'bg-green-100 text-green-800';
-      case 'closed':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'open': return 'bg-yellow-100 text-yellow-800';
+      case 'under_review': return 'bg-blue-100 text-blue-800';
+      case 'resolved': return 'bg-green-100 text-green-800';
+      case 'closed': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
-  };
+  const getStatusLabel = (status: string) =>
+    status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
 
-  const getReasionLabel = (reason: string) => {
+  const getReasonLabel = (reason: string) => {
     const labels: Record<string, string> = {
       condition_mismatch: 'Condition Mismatch',
       item_missing: 'Item Missing',
@@ -93,39 +83,23 @@ const ShopperDisputesPage = () => {
     return labels[reason] || reason;
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
-  if (!isLoading && !isLoadingDisputes && disputes.length === 0) {
+  if (!isLoadingDisputes && disputes.length === 0) {
     return (
       <>
-        <Head>
-          <title>My Disputes | FindA.Sale</title>
-        </Head>
+        <Head><title>My Disputes | FindA.Sale</title></Head>
         <div className="min-h-screen bg-warm-50 py-8">
           <div className="max-w-4xl mx-auto px-4">
             <div className="mb-6 flex items-center justify-between">
               <h1 className="text-3xl font-bold text-warm-900">My Disputes</h1>
-              <Link
-                href="/shopper/dashboard"
-                className="text-amber-600 hover:text-amber-700 font-medium"
-              >
-                Back to Dashboard
-              </Link>
+              <Link href="/shopper/dashboard" className="text-amber-600 hover:text-amber-700 font-medium">Back to Dashboard</Link>
             </div>
-
             <EmptyState
               heading="No Disputes"
               subtext="You haven't reported any issues yet. If you encounter a problem with an item, you can report it here."
-              cta={{
-                label: 'View My Purchases',
-                href: '/shopper/dashboard',
-              }}
+              cta={{ label: 'View My Purchases', href: '/shopper/dashboard' }}
             />
           </div>
         </div>
@@ -135,37 +109,21 @@ const ShopperDisputesPage = () => {
 
   return (
     <>
-      <Head>
-        <title>My Disputes | FindA.Sale</title>
-      </Head>
+      <Head><title>My Disputes | FindA.Sale</title></Head>
       <div className="min-h-screen bg-warm-50 py-8">
         <div className="max-w-4xl mx-auto px-4">
-          {/* Header */}
           <div className="mb-6 flex items-center justify-between">
             <h1 className="text-3xl font-bold text-warm-900">My Disputes</h1>
-            <Link
-              href="/shopper/dashboard"
-              className="text-amber-600 hover:text-amber-700 font-medium"
-            >
-              Back to Dashboard
-            </Link>
+            <Link href="/shopper/dashboard" className="text-amber-600 hover:text-amber-700 font-medium">Back to Dashboard</Link>
           </div>
 
-          {/* Status Filter */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-warm-700 mb-2">
-              Filter by Status
-            </label>
+            <label className="block text-sm font-medium text-warm-700 mb-2">Filter by Status</label>
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => {
-                  setFilterStatus('');
-                  setCurrentPage(1);
-                }}
+                onClick={() => { setFilterStatus(''); setCurrentPage(1); }}
                 className={`px-4 py-2 rounded-lg font-medium transition ${
-                  filterStatus === ''
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-white text-warm-700 border border-warm-300 hover:bg-warm-50'
+                  filterStatus === '' ? 'bg-amber-600 text-white' : 'bg-white text-warm-700 border border-warm-300 hover:bg-warm-50'
                 }`}
               >
                 All
@@ -173,14 +131,9 @@ const ShopperDisputesPage = () => {
               {['open', 'under_review', 'resolved', 'closed'].map((status) => (
                 <button
                   key={status}
-                  onClick={() => {
-                    setFilterStatus(status);
-                    setCurrentPage(1);
-                  }}
+                  onClick={() => { setFilterStatus(status); setCurrentPage(1); }}
                   className={`px-4 py-2 rounded-lg font-medium transition ${
-                    filterStatus === status
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-white text-warm-700 border border-warm-300 hover:bg-warm-50'
+                    filterStatus === status ? 'bg-amber-600 text-white' : 'bg-white text-warm-700 border border-warm-300 hover:bg-warm-50'
                   }`}
                 >
                   {getStatusLabel(status)}
@@ -189,7 +142,6 @@ const ShopperDisputesPage = () => {
             </div>
           </div>
 
-          {/* Disputes Table */}
           {isLoadingDisputes ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin">
@@ -214,20 +166,11 @@ const ShopperDisputesPage = () => {
                     <tbody className="divide-y divide-warm-200">
                       {disputes.map((dispute) => (
                         <tr key={dispute.id} className="hover:bg-warm-50 transition">
-                          <td className="px-6 py-4 text-sm text-warm-700">
-                            {formatDate(dispute.createdAt)}
-                          </td>
+                          <td className="px-6 py-4 text-sm text-warm-700">{formatDate(dispute.createdAt)}</td>
                           <td className="px-6 py-4 text-sm text-warm-900 font-medium">
-                            <Link
-                              href={`/item/${dispute.itemId}`}
-                              className="text-amber-600 hover:text-amber-700 underline"
-                            >
-                              View Item
-                            </Link>
+                            <Link href={`/item/${dispute.itemId}`} className="text-amber-600 hover:text-amber-700 underline">View Item</Link>
                           </td>
-                          <td className="px-6 py-4 text-sm text-warm-700">
-                            {getReasionLabel(dispute.reason)}
-                          </td>
+                          <td className="px-6 py-4 text-sm text-warm-700">{getReasonLabel(dispute.reason)}</td>
                           <td className="px-6 py-4">
                             <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadgeColor(dispute.status)}`}>
                               {getStatusLabel(dispute.status)}
@@ -236,14 +179,10 @@ const ShopperDisputesPage = () => {
                           <td className="px-6 py-4 text-sm text-warm-600">
                             {dispute.resolution ? (
                               <details>
-                                <summary className="cursor-pointer text-amber-600 hover:text-amber-700">
-                                  View
-                                </summary>
+                                <summary className="cursor-pointer text-amber-600 hover:text-amber-700">View</summary>
                                 <p className="mt-2 text-warm-700 text-xs">{dispute.resolution}</p>
                               </details>
-                            ) : (
-                              <span className="text-warm-400">—</span>
-                            )}
+                            ) : <span className="text-warm-400">—</span>}
                           </td>
                         </tr>
                       ))}
@@ -252,7 +191,6 @@ const ShopperDisputesPage = () => {
                 </div>
               </div>
 
-              {/* Pagination */}
               {pagination.pages > 1 && (
                 <div className="mt-6 flex items-center justify-center gap-2">
                   <button
@@ -262,23 +200,19 @@ const ShopperDisputesPage = () => {
                   >
                     Previous
                   </button>
-
                   <div className="flex gap-1">
                     {Array.from({ length: pagination.pages }, (_, i) => i + 1).map((page) => (
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
                         className={`px-3 py-2 rounded-lg font-medium transition ${
-                          page === currentPage
-                            ? 'bg-amber-600 text-white'
-                            : 'border border-warm-300 text-warm-700 hover:bg-warm-50'
+                          page === currentPage ? 'bg-amber-600 text-white' : 'border border-warm-300 text-warm-700 hover:bg-warm-50'
                         }`}
                       >
                         {page}
                       </button>
                     ))}
                   </div>
-
                   <button
                     onClick={() => setCurrentPage(Math.min(pagination.pages, currentPage + 1))}
                     disabled={currentPage === pagination.pages}
