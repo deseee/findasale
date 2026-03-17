@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
-import type { CommandCenterResponse } from '@findasale/shared/types/commandCenter';
+import type { CommandCenterResponse } from '@findasale/shared';
 
 type StatusFilter = 'active' | 'upcoming' | 'recent' | 'all';
 

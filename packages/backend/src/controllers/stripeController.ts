@@ -9,6 +9,7 @@ import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { buildEmail } from '../services/emailTemplateService';
 import { issueLoyaltyCoupon, markCouponUsed } from './couponController';
+import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -500,6 +501,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
           where: { stripePaymentIntentId: paymentIntent.id },
           data: { status: 'PAID' },
         });
+
+        // P2-3: Invalidate command center cache after purchase marked as PAID
+        if (purchase.sale?.organizerId) {
+          invalidateCommandCenterCache(purchase.sale.organizerId).catch((err) =>
+            console.warn('Failed to invalidate command center cache:', err)
+          );
+        }
 
         // Feature: Abandoned Checkout Recovery — mark this checkout as completed
         await prisma.checkoutAttempt.updateMany({

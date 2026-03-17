@@ -20,8 +20,15 @@ function hasAccess(organizerTier: SubscriptionTier, requiredTier: SubscriptionTi
  */
 export function requireTier(minTier: SubscriptionTier) {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
-    // Default to SIMPLE if no organizer profile or no tier set
-    const tier = (req.user?.organizerProfile?.subscriptionTier ?? 'SIMPLE') as SubscriptionTier;
+    // Fail if organizer profile is not attached
+    if (!req.user?.organizerProfile) {
+      return res.status(401).json({
+        success: false,
+        error: 'Organizer profile not found. Please log in again.',
+      });
+    }
+
+    const tier = (req.user.organizerProfile.subscriptionTier ?? 'SIMPLE') as SubscriptionTier;
 
     if (!hasAccess(tier, minTier)) {
       return res.status(403).json({

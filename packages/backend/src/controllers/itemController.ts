@@ -12,6 +12,7 @@ import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
+import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -391,6 +392,11 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       suggestedTags, // optional
     });
 
+    // P2-3: Invalidate command center cache after item creation
+    invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
+      console.warn('Failed to invalidate command center cache:', err)
+    );
+
     // U1: Queue embedding generation (non-blocking — after response sent)
     scheduleItemEmbedding(item.id, [title, description, category].filter(Boolean).join(' '));
   } catch (error) {
@@ -458,6 +464,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     });
 
     res.json(updatedItem);
+
+    // P2-3: Invalidate command center cache after item update
+    invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
+      console.warn('Failed to invalidate command center cache:', err)
+    );
   } catch (error) {
     console.error('Error updating item:', error);
     res.status(500).json({ message: 'Server error while updating item' });
@@ -491,6 +502,11 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
     });
 
     res.json({ message: 'Item deleted successfully' });
+
+    // P2-3: Invalidate command center cache after item deletion
+    invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
+      console.warn('Failed to invalidate command center cache:', err)
+    );
   } catch (error) {
     console.error('Error deleting item:', error);
     res.status(500).json({ message: 'Server error while deleting item' });
@@ -876,6 +892,11 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     }).catch(err => console.error('Webhook fire error:', err));
 
     res.json(updatedItem);
+
+    // P2-3: Invalidate command center cache after item publish (status change)
+    invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
+      console.warn('Failed to invalidate command center cache:', err)
+    );
   } catch (error) {
     console.error('Error publishing item:', error);
     res.status(500).json({ message: 'Server error while publishing item' });

@@ -26,26 +26,33 @@ const CommandCenterPage = () => {
   const { showToast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('active');
 
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+  // Show loading spinner during auth check
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-warm-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto mb-4"></div>
+          <p className="text-warm-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect if not authenticated or not organizer
+  if (!user || user.role !== 'ORGANIZER') {
     router.push('/login');
     return null;
   }
 
-  if (!authLoading && user && !canAccess('PRO')) {
+  // Redirect if PRO tier not available
+  if (!canAccess('PRO')) {
     router.push('/organizer/upgrade');
     return null;
   }
 
   const { data, isLoading, error, refetch } = useCommandCenter(selectedStatus);
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-warm-600">Loading...</div>
-      </div>
-    );
-  }
-
+  // Handle API errors
   if (error) {
     return (
       <div className="min-h-screen bg-warm-50 py-8">

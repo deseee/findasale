@@ -5,7 +5,7 @@ import type {
   CommandCenterFilters,
   SaleMetrics,
   CommandCenterSummary,
-} from '@findasale/shared/types/commandCenter';
+} from '@findasale/shared';
 
 /**
  * Get Command Center summary for an organizer
@@ -28,7 +28,11 @@ export async function getCommandCenterSummary(
   }
 
   const now = new Date();
-  const status = (filters?.status ?? 'active').toLowerCase();
+  // P2-1: Validate status filter, default to 'active' if invalid
+  const validStatuses = ['active', 'upcoming', 'recent', 'all'];
+  const status = validStatuses.includes((filters?.status ?? 'active').toLowerCase())
+    ? (filters?.status ?? 'active').toLowerCase()
+    : 'active';
 
   // Build where clause based on status filter
   let whereClause: any = { organizerId };
@@ -87,6 +91,7 @@ export async function getCommandCenterSummary(
       },
     },
     orderBy: { startDate: 'desc' },
+    take: 50, // P2-2: Pagination limit
   });
 
   const saleIds = sales.map((s) => s.id);
@@ -142,14 +147,22 @@ export async function getCommandCenterSummary(
     _sum: { amount: true },
   });
 
-  const reservations = await prisma.itemReservation.groupBy({
-    by: ['saleId'],
+  // ItemReservation has no saleId — join through Item to aggregate holds per sale
+  const activeHolds = await prisma.itemReservation.findMany({
     where: {
-      saleId: { in: saleIds },
-      status: 'PENDING',
+      item: { saleId: { in: saleIds } },
+      status: { in: ['PENDING', 'CONFIRMED'] },
+      expiresAt: { gt: new Date() },
     },
-    _count: { id: true },
+    include: { item: { select: { saleId: true } } },
   });
+  const reservations = Object.entries(
+    activeHolds.reduce<Record<string, number>>((acc, r) => {
+      const sid = r.item.saleId;
+      acc[sid] = (acc[sid] ?? 0) + 1;
+      return acc;
+    }, {})
+  ).map(([saleId, count]) => ({ saleId, _count: { id: count } }));
 
   const unpaid = await prisma.purchase.groupBy({
     by: ['saleId'],

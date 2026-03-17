@@ -23,6 +23,9 @@ export enum ListingType {
   POS = 'POS',
 }
 
+// Feature #68: Command Center types
+export * from './types/commandCenter';
+
 // Feature #5: Validator functions for enum consistency
 export const VALID_SALE_TYPES = Object.values(SaleType) as string[];
 export const VALID_LISTING_TYPES = Object.values(ListingType) as string[];

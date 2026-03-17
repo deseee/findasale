@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import type { SaleMetrics } from '@findasale/shared/types/commandCenter';
+import type { SaleMetrics } from '@findasale/shared';
 
 interface CommandCenterCardProps {
   sale: SaleMetrics;

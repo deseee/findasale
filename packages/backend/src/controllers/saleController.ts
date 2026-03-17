@@ -10,6 +10,7 @@ import { notifyMatchedBuyers } from '../services/buyerMatchService';
 import { markSalePublished } from '../services/mailerliteService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
+import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -443,6 +444,11 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     }
 
     res.json(convertDecimalsToNumbers(updated));
+
+    // P2-3: Invalidate command center cache after sale status change
+    invalidateCommandCenterCache(updated.organizerId).catch((err) =>
+      console.warn('Failed to invalidate command center cache:', err)
+    );
   } catch (error) {
     console.error('Error updating sale status:', error);
     res.status(500).json({ message: 'Server error while updating sale status' });
