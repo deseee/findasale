@@ -3,6 +3,15 @@
 // Feature #65: Subscription tier gating
 export { type SubscriptionTier, hasAccess, TIER_RANK, FEATURE_TIERS } from './tierGate';
 
+// Feature #68: Command Center Dashboard types
+export type {
+  CommandCenterResponse,
+  CommandCenterFilters,
+  CommandCenterSummary,
+  SaleMetrics,
+  PendingActions,
+} from './types/commandCenter';
+
 // Sprint 1: Listing Factory tag vocabulary
 export { CURATED_TAGS, MAX_CUSTOM_TAGS, type CuratedTag } from './constants/tagVocabulary';
 
