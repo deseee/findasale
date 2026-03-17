@@ -4,6 +4,10 @@ import api from '../lib/api';
 export interface UGCPhoto {
   id: number;
   userId: string;
+  user?: {
+    id: string;
+    name: string;
+  };
   itemId: number | null;
   saleId: number | null;
   photoUrl: string;
