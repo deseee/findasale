@@ -90,6 +90,14 @@ model User {
   // Feature #29: Loyalty Passport
   stamps            ShopperStamp[]
   stampMilestones   StampMilestone[]
+  // Feature #55: Seasonal Discovery Challenges
+  challengeProgress ChallengeProgress[]
+  challengeBadges   ChallengeBadge[]
+  // Feature #45: Collector Passport — identity-based collection tracking
+  collectorPassport CollectorPassport?
+  // Feature #47: UGC Photo Tags — user-generated content with tagging and likes
+  ugcPhotos      UGCPhoto[]
+  ugcPhotoLikes  UGCPhotoLike[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -124,6 +132,10 @@ model Organizer {
   // Phase 31: Organizer Tier Rewards (BRONZE | SILVER | GOLD) — fee benefits based on activity
   tier            String   @default("BRONZE")
   tierUpdatedAt   DateTime?
+  // Feature #16: Verified Organizer Badge
+  verificationStatus String   @default("NONE") // NONE | PENDING | VERIFIED | REJECTED
+  verificationNotes  String?
+  verifiedAt         DateTime?
   // Onboarding wizard
   onboardingComplete Boolean @default(false)
   // Feature #11: Referral discount — fee waived for 3 months when referred by/referring another organizer
@@ -197,6 +209,8 @@ model Sale {
   saleWaitlist      SaleWaitlist[]
   saleReminders     SaleReminder[]
   linkClicks        LinkClick[]  // #18: Post Performance Analytics
+  // Feature #47: UGC Photo Tags — user-generated content linked to sales
+  ugcPhotos         UGCPhoto[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -269,6 +283,8 @@ model Item {
   organizerId      String?                       // Denormalized from sale.organizerId for library queries
   // Feature #29: Loyalty Passport — Hunt Pass early access embargo
   earlyAccessUntil DateTime?                      // Items hidden from non-Hunt-Pass shoppers until this time
+  // Feature #47: UGC Photo Tags — user-generated content linked to items
+  ugcPhotos        UGCPhoto[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1105,4 +1121,97 @@ enum SubscriptionTier {
   SIMPLE
   PRO
   TEAMS
+}
+
+// Feature #55: Seasonal Discovery Challenges — time-limited gamification for shoppers
+model ChallengeProgress {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId     String   // matches Challenge.id in code config (e.g., 'spring-2026')
+  objectiveId     String   // matches Objective.id in code config
+  progress        Int      @default(0)  // current count towards target
+  completed       Boolean  @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, challengeId, objectiveId])
+  @@index([userId, challengeId])
+}
+
+model ChallengeBadge {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId String   // which challenge was completed (e.g., 'spring-2026')
+  earnedAt    DateTime @default(now())
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+}
+
+// Feature #45: Collector Passport — identity-based collection tracking
+// Shoppers define what they collect with keywords + categories, get personalized alerts
+model CollectorPassport {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Collector identity
+  bio         String?  // "Passionate collector of mid-century modern furniture"
+  specialties String[] // ["mid-century modern", "depression glass", "fiestaware"]
+  categories  String[] // ["Furniture", "Kitchenware", "Art & Decor"]
+  keywords    String[] // ["eames", "pyrex", "homer laughlin", "walnut"]
+
+  // Notification preferences
+  notifyEmail Boolean  @default(true)
+  notifyPush  Boolean  @default(true)
+
+  // Stats (computed fields updated periodically)
+  totalFinds  Int      @default(0)  // number of matching items purchased
+  isPublic    Boolean  @default(true) // can other shoppers view this collector's profile
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Feature #47: UGC Photo Tags — user-generated content with tagging and moderation
+model UGCPhoto {
+  id         Int        @id @default(autoincrement())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId     Int?
+  item       Item?      @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  saleId     String?
+  sale       Sale?      @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  photoUrl   String
+  caption    String?
+  tags       String[]   @default([])
+  status     String     @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedAt DateTime?
+  reviewedBy String?
+  likesCount Int        @default(0)
+  likes      UGCPhotoLike[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([saleId])
+}
+
+model UGCPhotoLike {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photoId   Int
+  photo     UGCPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, photoId])
+  @@index([userId])
+  @@index([photoId])
 }

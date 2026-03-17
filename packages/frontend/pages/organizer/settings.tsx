@@ -17,21 +17,44 @@ import { useTheme } from '../../hooks/useTheme';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import Tooltip from '../../components/Tooltip';
 import ThemeToggle from '../../components/ThemeToggle';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const OrganizerSettingsPage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
   const { tier, isPro } = useOrganizerTier();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [fontSize, setFontSize] = useState(16);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const { highContrast, setHighContrast } = useTheme();
+  const queryClient = useQueryClient();
+
+  // Verification status query
+  const { data: verStatus, isLoading: verStatusLoading } = useQuery({
+    queryKey: ['verification-status'],
+    queryFn: () => api.get('/api/verification/status').then(r => r.data),
+    enabled: !!user
+  });
+
+  // Request verification mutation
+  const requestMutation = useMutation({
+    mutationFn: () => api.post('/api/verification/request'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['verification-status'] });
+      showToast('Verification request submitted', 'success');
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to submit verification request';
+      showToast(msg, 'error');
+    }
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -96,7 +119,7 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700">
-            {['payments', 'subscription', 'notifications', 'profile', 'appearance'].map((tab) => (
+            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'appearance'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
@@ -164,6 +187,100 @@ const OrganizerSettingsPage = () => {
                   >
                     Manage Subscription
                   </Link>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Verification Tab */}
+          {activeTab === 'verification' && (
+            <div className="space-y-6">
+              <div className="card p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Verified Organizer Badge</h2>
+                  <VerifiedBadge status={verStatus?.status} size="md" />
+                </div>
+                <p className="text-warm-600 dark:text-gray-400 mb-6">
+                  A verified badge builds trust with shoppers. Only PRO organizers can request verification.
+                </p>
+
+                {verStatus?.status === 'NONE' && (
+                  <>
+                    {tier !== 'PRO' ? (
+                      <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                          Upgrade to PRO to request verification.
+                        </p>
+                        <Link
+                          href="/organizer/upgrade"
+                          className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                        >
+                          Upgrade to PRO
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                        <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                          Request verification to add a badge to your profile. Our team will review your information.
+                        </p>
+                        <button
+                          onClick={() => requestMutation.mutate()}
+                          disabled={requestMutation.isPending}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
+                        >
+                          {requestMutation.isPending ? 'Submitting...' : 'Request Verification'}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {verStatus?.status === 'PENDING' && (
+                  <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse" />
+                      <p className="font-semibold text-amber-800 dark:text-amber-200">Verification Pending</p>
+                    </div>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      Our team is reviewing your request. We'll notify you when a decision is made.
+                    </p>
+                  </div>
+                )}
+
+                {verStatus?.status === 'VERIFIED' && (
+                  <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <p className="font-semibold text-green-800 dark:text-green-200">Verified</p>
+                    </div>
+                    {verStatus?.verifiedAt && (
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        Verified on {new Date(verStatus.verifiedAt).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {verStatus?.status === 'REJECTED' && (
+                  <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <p className="font-semibold text-red-800 dark:text-red-200 mb-2">Not Verified</p>
+                    {verStatus?.verificationNotes && (
+                      <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                        <strong>Reason:</strong> {verStatus.verificationNotes}
+                      </p>
+                    )}
+                    {tier === 'PRO' && (
+                      <button
+                        onClick={() => requestMutation.mutate()}
+                        disabled={requestMutation.isPending}
+                        className="text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-4 rounded-lg disabled:opacity-50 transition"
+                      >
+                        {requestMutation.isPending ? 'Submitting...' : 'Try Again'}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

@@ -15,6 +15,7 @@ import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #
 import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
 import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
+import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -435,6 +436,9 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       // Feature #32: Check wishlist alerts and smart follows
       checkAlertsForNewSale(updated.id).catch(console.error);
       checkFollowsForNewSale(updated).catch(console.error);
+
+      // Feature #45: Check collector passports for matching items
+      checkPassportMatchForNewSale(updated.id).catch(console.error);
 
       // MailerLite: set sale_published custom field so onboarding automation exits
       prisma.organizer.findUnique({

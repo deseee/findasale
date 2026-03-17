@@ -107,6 +107,8 @@ import commandCenterRoutes from './routes/commandCenter';  // #68 Sprint 1: Comm
 import reputationRoutes from './routes/reputation';        // #71: Organizer Reputation Score
 import cityHeatRoutes from './routes/cityHeat';              // Phase 5: #49 City Heat Index
 import linkClickRoutes from './routes/linkClicks';           // #18: Post Performance Analytics
+import collectorPassportRoutes from './routes/collectorPassport'; // Feature #45: Collector Passport
+import challengeRoutes from './routes/challenges';               // Feature #55: Seasonal Discovery Challenges
 import receiptRoutes from './routes/receipts';               // #62: Digital Receipts
 import returnRoutes from './routes/returns';                 // #62: Return Requests
 import itemLibraryRoutes from './routes/itemLibrary';         // Feature #25: Item Library (Consignment Rack)
@@ -114,6 +116,10 @@ import brandKitRoutes from './routes/brandKit';               // #31 Brand Kit e
 import wishlistAlertRoutes from './routes/wishlistAlerts';     // Feature #32: Wishlist Alerts
 import smartFollowRoutes from './routes/smartFollows';         // Feature #32: Smart Follow
 import loyaltyRoutes from './routes/loyalty';                 // Feature #29: Loyalty Passport
+import flipReportRoutes from './routes/flipReport';           // Feature #41: Flip Report
+import verificationRoutes from './routes/verification';       // Feature #16: Verified Organizer Badge
+import lootLogRoutes from './routes/lootLog';                 // Feature #50: Loot Log
+import ugcPhotoRoutes from './routes/ugcPhotos';              // Feature #47: UGC Photo Tags
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
@@ -297,6 +303,12 @@ app.use('/api/brand-kit', brandKitRoutes);                           // #31 Bran
 app.use('/api/wishlist-alerts', wishlistAlertRoutes);                // Feature #32: Wishlist Alerts
 app.use('/api/smart-follows', smartFollowRoutes);                    // Feature #32: Smart Follow
 app.use('/api/loyalty', loyaltyRoutes);                              // Feature #29: Loyalty Passport
+app.use('/api/collector-passport', collectorPassportRoutes);        // Feature #45: Collector Passport
+app.use('/api/challenges', challengeRoutes);                         // Feature #55: Seasonal Discovery Challenges
+app.use('/api/flip-report', flipReportRoutes);                       // Feature #41: Flip Report
+app.use('/api/verification', verificationRoutes);                    // Feature #16: Verified Organizer Badge
+app.use('/api/loot-log', lootLogRoutes);                             // Feature #50: Loot Log
+app.use('/api/ugc-photos', ugcPhotoRoutes);                          // Feature #47: UGC Photo Tags
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

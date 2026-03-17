@@ -4,7 +4,7 @@ import Head from 'next/head';
 import Layout from '../../components/Layout';
 import LibraryItemCard from '../../components/LibraryItemCard';
 import useItemLibrary from '../../hooks/useItemLibrary';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../components/AuthContext';
 import { Search, Filter } from 'lucide-react';
 
 interface PullModalState {
@@ -41,7 +41,7 @@ const ItemLibraryPage: React.FC = () => {
   const [sales, setSales] = useState<Array<{ id: string; title: string }>>([]);
 
   const { libraryItems, loading, isRemovingFromLibrary, isPullingFromLibrary, removeFromLibrary, pullFromLibrary, getPriceHistory } =
-    useItemLibrary(user?.organizerProfile?.id);
+    useItemLibrary(user?.role === 'ORGANIZER' ? user?.id : undefined);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -103,7 +103,7 @@ const ItemLibraryPage: React.FC = () => {
   };
 
   // Check authorization
-  if (!user?.organizerProfile) {
+  if (!user || user.role !== 'ORGANIZER') {
     return (
       <Layout>
         <div className="text-center py-12">

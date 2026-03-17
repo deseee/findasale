@@ -75,7 +75,7 @@ export default function PostPerformanceCard({
               <XAxis
                 dataKey="date"
                 tick={{ fontSize: 11, fill: '#8FB897' }}
-                tickFormatter={(val) => {
+                tickFormatter={(val: string) => {
                   const date = new Date(val);
                   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 }}
