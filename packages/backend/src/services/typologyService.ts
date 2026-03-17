@@ -20,6 +20,8 @@ interface ClassificationResult {
   secondaryCategory?: string;
   secondaryConfidence?: number;
   reasoning?: string;
+  primaryCategory?: string;
+  primaryConfidence?: number;
 }
 
 /**
@@ -106,11 +108,11 @@ Respond ONLY with valid JSON (no markdown, no explanation):
     const parsed = JSON.parse(raw) as ClassificationResult;
 
     return {
-      category: parsed.primaryCategory,
-      confidence: parsed.primaryConfidence,
-      secondaryCategory: parsed.secondaryCategory,
-      secondaryConfidence: parsed.secondaryConfidence,
-      reasoning: parsed.reasoning,
+      category: (parsed.primaryCategory || parsed.category) as string,
+      confidence: (parsed.primaryConfidence || parsed.confidence) as number,
+      secondaryCategory: parsed.secondaryCategory as string | undefined,
+      secondaryConfidence: parsed.secondaryConfidence as number | undefined,
+      reasoning: parsed.reasoning as string | undefined,
     };
   } catch (error: any) {
     if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {
@@ -215,14 +217,14 @@ export async function classifyItem(itemId: string): Promise<any> {
         primaryConfidence: classification.confidence,
         secondaryCategory: secondaryCategory || null,
         secondaryConfidence: secondaryConfidence || null,
-        rawResponse: classification,
+        rawResponse: classification as any,
       },
       update: {
         primaryCategory: classification.category,
         primaryConfidence: classification.confidence,
         secondaryCategory: secondaryCategory || null,
         secondaryConfidence: secondaryConfidence || null,
-        rawResponse: classification,
+        rawResponse: classification as any,
         updatedAt: new Date(),
       },
     });

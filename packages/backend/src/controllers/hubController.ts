@@ -83,10 +83,13 @@ export const discoverHubs = async (req: Request, res: Response) => {
     }
 
     // No location provided: return all active hubs
+    const pageNum = parseInt(String(page) || '1');
+    const limitNum = parseInt(String(limit) || '20');
+
     const hubs = await prisma.saleHub.findMany({
       where: { isActive: true },
-      skip: (parseInt(page as string) || 1 - 1) * parseInt(limit as string || 20),
-      take: parseInt(limit as string || 20),
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
       include: {
         memberships: { select: { id: true } },
         organizer: { select: { businessName: true } },
@@ -108,8 +111,8 @@ export const discoverHubs = async (req: Request, res: Response) => {
         eventName: hub.eventName,
       })),
       total,
-      page: parseInt(page as string) || 1,
-      limit: parseInt(limit as string || 20),
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (error) {
     console.error('Error discovering hubs:', error);
