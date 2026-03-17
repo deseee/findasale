@@ -250,15 +250,15 @@ const OrganizerInsightsPage = () => {
         <title>Insights - FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white border-b border-warm-200 px-4 py-4">
+        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">
           <div className="max-w-6xl mx-auto flex items-center gap-3">
-            <Link href="/organizer/dashboard" className="text-warm-400 hover:text-warm-600 text-sm">
+            <Link href="/organizer/dashboard" className="text-warm-400 dark:text-warm-500 hover:text-warm-600 dark:hover:text-warm-400 text-sm">
               ← Dashboard
             </Link>
-            <span className="text-warm-300">/</span>
-            <h1 className="text-lg font-semibold text-warm-900">Insights</h1>
+            <span className="text-warm-300 dark:text-gray-700">/</span>
+            <h1 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Insights</h1>
           </div>
         </div>
 
@@ -266,21 +266,21 @@ const OrganizerInsightsPage = () => {
           {/* Title + Sale Filter */}
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-warm-900">Your Sales Analytics</h2>
-              <p className="text-warm-600 text-sm mt-1">
+              <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Your Sales Analytics</h2>
+              <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
                 {selectedSaleId ? 'Filtered to one sale' : 'Overview of all your sales'}
               </p>
             </div>
             {insights?.salesList && insights.salesList.length > 1 && (
               <div className="flex items-center gap-2">
-                <label htmlFor="sale-filter" className="text-sm font-medium text-warm-700 whitespace-nowrap">
+                <label htmlFor="sale-filter" className="text-sm font-medium text-warm-700 dark:text-warm-300 whitespace-nowrap">
                   Filter by sale:
                 </label>
                 <select
                   id="sale-filter"
                   value={selectedSaleId}
                   onChange={(e) => setSelectedSaleId(e.target.value)}
-                  className="border border-warm-300 rounded-lg px-3 py-2 text-sm bg-white text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 max-w-xs"
+                  className="border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 max-w-xs"
                 >
                   <option value="">All Sales</option>
                   {insights.salesList.map((s) => (
@@ -296,48 +296,48 @@ const OrganizerInsightsPage = () => {
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* Total Sales */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Total Sales
               </p>
-              <p className="text-3xl font-bold text-warm-900">{insights.totalSalesCount}</p>
-              <p className="text-xs text-warm-500 mt-2">All time</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalSalesCount}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">All time</p>
             </div>
 
             {/* Active Sales */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Active Sales
               </p>
-              <p className="text-3xl font-bold text-amber-600">{insights.activeSalesCount}</p>
-              <p className="text-xs text-warm-500 mt-2">Currently live</p>
+              <p className="text-3xl font-bold text-amber-600 dark:text-amber-500">{insights.activeSalesCount}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Currently live</p>
             </div>
 
             {/* Items Listed */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Items Listed
               </p>
-              <p className="text-3xl font-bold text-warm-900">{insights.totalItems}</p>
-              <p className="text-xs text-warm-500 mt-2">All items</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalItems}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">All items</p>
             </div>
 
             {/* Items Sold */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Items Sold
               </p>
-              <p className="text-3xl font-bold text-green-600">{insights.totalItemsSold}</p>
-              <p className="text-xs text-warm-500 mt-2">Completed sales</p>
+              <p className="text-3xl font-bold text-green-600 dark:text-green-500">{insights.totalItemsSold}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Completed sales</p>
             </div>
 
             {/* Total Revenue */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Total Revenue
               </p>
-              <p className="text-3xl font-bold text-green-700">${insights.totalRevenue.toFixed(2)}</p>
-              <p className="text-xs text-warm-500 mt-2">From sold items</p>
+              <p className="text-3xl font-bold text-green-700 dark:text-green-500">${insights.totalRevenue.toFixed(2)}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">From sold items</p>
             </div>
           </div>
 

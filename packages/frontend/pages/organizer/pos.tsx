@@ -423,12 +423,12 @@ export default function POSPage() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-warm-50 p-4 md:p-6 max-w-2xl mx-auto">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4 md:p-6 max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-warm-900 font-fraunces">POS</h1>
-          <p className="text-sm text-warm-500">In-person payments</p>
+          <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 font-fraunces">POS</h1>
+          <p className="text-sm text-warm-500 dark:text-warm-400">In-person payments</p>
         </div>
         <span className={`text-xs px-3 py-1 rounded-full font-medium ${readerBadge.color}`}>
           {readerBadge.label}
@@ -453,7 +453,7 @@ export default function POSPage() {
 
       {/* Sale selector */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-warm-700 mb-1">Sale</label>
+        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Sale</label>
         {sales.length === 0 ? (
           <p className="text-sm text-warm-500 italic">No active sales. Publish a sale first.</p>
         ) : (
@@ -464,7 +464,7 @@ export default function POSPage() {
               setItemSearch('');
               setSearchResults([]);
             }}
-            className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sage-500"
+            className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
           >
             <option value="">Select a sale…</option>
             {sales.map(s => (
@@ -479,26 +479,26 @@ export default function POSPage() {
       {/* Item search + results */}
       {selectedSaleId && (
         <div className="mb-4">
-          <label className="block text-sm font-medium text-warm-700 mb-1">Add items</label>
+          <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Add items</label>
           <div className="flex gap-2">
             <input
               type="text"
               value={itemSearch}
               onChange={e => setItemSearch(e.target.value)}
               placeholder="Search by title or SKU…"
-              className="flex-1 border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500"
+              className="flex-1 border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
             />
           </div>
 
           {searchResults.length > 0 && (
-            <ul className="mt-1 border border-warm-200 rounded-lg bg-white shadow-sm divide-y divide-warm-100 max-h-40 overflow-y-auto">
+            <ul className="mt-1 border border-warm-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm divide-y divide-warm-100 dark:divide-gray-700 max-h-40 overflow-y-auto">
               {searchResults.map(item => (
                 <li key={item.id}>
                   <button
                     onClick={() => addToCart(item)}
-                    className="w-full text-left px-3 py-2 hover:bg-warm-50 flex items-center justify-between"
+                    className="w-full text-left px-3 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 flex items-center justify-between"
                   >
-                    <span className="text-sm text-warm-900 truncate">{item.title}</span>
+                    <span className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</span>
                     <span className="text-sm font-semibold text-sage-700 ml-2 shrink-0">
                       +${item.price?.toFixed(2) ?? '—'}
                     </span>
@@ -509,7 +509,7 @@ export default function POSPage() {
           )}
 
           {itemSearch.trim().length > 1 && searchResults.length === 0 && (
-            <p className="mt-1 text-xs text-warm-400 italic">No available items match that search.</p>
+            <p className="mt-1 text-xs text-warm-400 dark:text-warm-500 italic">No available items match that search.</p>
           )}
         </div>
       )}
@@ -517,13 +517,13 @@ export default function POSPage() {
       {/* Quick-add misc buttons */}
       {selectedSaleId && (
         <div className="mb-4">
-          <p className="text-xs font-medium text-warm-600 mb-2">Quick add misc items:</p>
+          <p className="text-xs font-medium text-warm-600 dark:text-warm-400 mb-2">Quick add misc items:</p>
           <div className="grid grid-cols-3 gap-2">
             {[0.25, 0.5, 1.0, 2.0, 5.0, 10.0].map(amount => (
               <button
                 key={amount}
                 onClick={() => quickAddMisc(amount)}
-                className="py-2 rounded-lg bg-warm-200 hover:bg-warm-300 text-warm-800 text-sm font-semibold transition"
+                className="py-2 rounded-lg bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-800 dark:text-warm-200 text-sm font-semibold transition"
               >
                 {amount >= 1 ? `$${amount.toFixed(0)}` : amount === 0.25 ? '25¢' : '50¢'}
               </button>
@@ -539,7 +539,7 @@ export default function POSPage() {
             setNumpadOpen(prev => !prev);
             setNumpadValue('');
           }}
-          className="w-full mb-4 py-2 rounded-lg bg-warm-100 border border-warm-300 text-warm-700 text-sm font-medium hover:bg-warm-200 transition"
+          className="w-full mb-4 py-2 rounded-lg bg-warm-100 dark:bg-gray-800 border border-warm-300 dark:border-gray-700 text-warm-700 dark:text-warm-300 text-sm font-medium hover:bg-warm-200 dark:hover:bg-gray-700 transition"
         >
           Custom amount
         </button>
@@ -547,10 +547,10 @@ export default function POSPage() {
 
       {/* Numpad (price / custom amount only) */}
       {numpadOpen && (
-        <div className="mb-4 p-4 rounded-xl bg-white border border-warm-200 shadow-md">
-          <div className="mb-3 p-2 rounded-lg bg-warm-50 border border-warm-200 text-center">
-            <p className="text-xs text-warm-600">Custom Amount</p>
-            <p className="text-2xl font-bold text-warm-900">
+        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-md">
+          <div className="mb-3 p-2 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 text-center">
+            <p className="text-xs text-warm-600 dark:text-warm-400">Custom Amount</p>
+            <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">
               ${(parseInt(numpadValue || '0', 10) / 100).toFixed(2)}
             </p>
           </div>
@@ -560,7 +560,7 @@ export default function POSPage() {
               <button
                 key={key}
                 onClick={() => handleNumpadKey(key)}
-                className="py-2 rounded-lg bg-warm-100 hover:bg-warm-200 text-warm-900 text-sm font-semibold transition active:bg-warm-300"
+                className="py-2 rounded-lg bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 text-sm font-semibold transition active:bg-warm-300 dark:active:bg-gray-600"
               >
                 {key === 'backspace' ? '⌫' : key}
               </button>
@@ -573,7 +573,7 @@ export default function POSPage() {
                 setNumpadValue('');
                 setNumpadOpen(false);
               }}
-              className="flex-1 py-2 rounded-lg bg-warm-200 text-warm-700 text-sm font-medium hover:bg-warm-300 transition"
+              className="flex-1 py-2 rounded-lg bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-medium hover:bg-warm-300 dark:hover:bg-gray-600 transition"
             >
               Cancel
             </button>
@@ -590,13 +590,13 @@ export default function POSPage() {
 
       {/* Cart display */}
       {cart.length > 0 && (
-        <div className="mb-4 p-4 rounded-xl bg-white border border-sage-200">
-          <h3 className="text-sm font-semibold text-warm-900 mb-3">Cart ({cart.length})</h3>
+        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-sage-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Cart ({cart.length})</h3>
           <ul className="space-y-2 mb-3 max-h-48 overflow-y-auto">
             {cart.map(item => (
               <li
                 key={item.id}
-                className="flex items-center justify-between p-2 rounded-lg bg-warm-50 border border-warm-100"
+                className="flex items-center justify-between p-2 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-100 dark:border-gray-600"
               >
                 <div className="min-w-0 flex-1">
                   {item.photoUrl && (
@@ -606,7 +606,7 @@ export default function POSPage() {
                       className="w-8 h-8 rounded mb-1 object-cover"
                     />
                   )}
-                  <p className="text-sm text-warm-900 truncate">{item.title}</p>
+                  <p className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
                 </div>
                 <div className="flex items-center gap-3 ml-2">
                   <span className="text-sm font-semibold text-sage-700">
@@ -623,8 +623,8 @@ export default function POSPage() {
             ))}
           </ul>
 
-          <div className="border-t border-warm-200 pt-3 text-sm">
-            <div className="flex justify-between font-semibold text-warm-900 mb-1">
+          <div className="border-t border-warm-200 dark:border-gray-700 pt-3 text-sm">
+            <div className="flex justify-between font-semibold text-warm-900 dark:text-warm-100 mb-1">
               <span>Total:</span>
               <span>${cartTotal.toFixed(2)}</span>
             </div>
@@ -635,15 +635,15 @@ export default function POSPage() {
       {/* Buyer email */}
       {cart.length > 0 && (
         <div className="mb-4">
-          <label className="block text-sm font-medium text-warm-700 mb-1">
-            Buyer email <span className="text-warm-400 font-normal">(optional — for receipt)</span>
+          <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+            Buyer email <span className="text-warm-400 dark:text-warm-500 font-normal">(optional — for receipt)</span>
           </label>
           <input
             type="email"
             value={buyerEmail}
             onChange={e => setBuyerEmail(e.target.value)}
             placeholder="buyer@email.com"
-            className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500"
+            className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
           />
         </div>
       )}
@@ -683,26 +683,26 @@ export default function POSPage() {
 
       {/* Error / success messages */}
       {errorMessage && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
           {errorMessage}
         </div>
       )}
 
       {successMessage && paymentStatus === 'success' && (
-        <div className="mb-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
+        <div className="mb-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 text-sm font-medium">
           {successMessage}
           
           {/* Cash fee details section */}
           {paymentMode === 'cash' && lastCashFee && (
-            <div className="mt-3 pt-3 border-t border-emerald-200 space-y-2">
+            <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800 space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-emerald-700">Platform fee:</span>
-                <span className="font-semibold text-emerald-900">${lastCashFee.platformFee.toFixed(2)}</span>
+                <span className="text-emerald-700 dark:text-emerald-400">Platform fee:</span>
+                <span className="font-semibold text-emerald-900 dark:text-emerald-300">${lastCashFee.platformFee.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-emerald-700 italic">This fee will be deducted from your next payout.</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 italic">This fee will be deducted from your next payout.</p>
               {lastCashFee.cashFeeBalance > 0 && (
-                <div className="mt-2 pt-2 border-t border-emerald-200">
-                  <p className="text-xs text-emerald-700">
+                <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
                     <span className="font-semibold">Pending fee balance:</span> ${lastCashFee.cashFeeBalance.toFixed(2)} total
                   </p>
                 </div>
@@ -742,7 +742,7 @@ export default function POSPage() {
               {['waiting_for_card', 'creating'].includes(paymentStatus) && (
                 <button
                   onClick={handleCancel}
-                  className="w-full py-2 rounded-xl border border-warm-300 text-warm-600 text-sm hover:bg-warm-100 transition"
+                  className="w-full py-2 rounded-xl border border-warm-300 dark:border-gray-700 text-warm-600 dark:text-warm-400 text-sm hover:bg-warm-100 dark:hover:bg-gray-700 transition"
                 >
                   Cancel
                 </button>
@@ -751,10 +751,10 @@ export default function POSPage() {
           ) : (
             <>
               {/* Inline cash received numpad */}
-              <div className="p-4 rounded-xl bg-white border border-warm-200 shadow-sm">
+              <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-warm-700">Cash Received</p>
-                  <p className="text-2xl font-bold text-warm-900">
+                  <p className="text-sm font-medium text-warm-700 dark:text-warm-300">Cash Received</p>
+                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">
                     ${(parseInt(cashNumpadValue || '0', 10) / 100).toFixed(2)}
                   </p>
                 </div>
@@ -763,13 +763,13 @@ export default function POSPage() {
                   <div
                     className={`mb-3 p-2 rounded-lg text-center ${
                       cashReceived >= cartTotal
-                        ? 'bg-emerald-50 border border-emerald-200'
-                        : 'bg-warm-50 border border-warm-200'
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800'
+                        : 'bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600'
                     }`}
                   >
                     <p
                       className={`text-sm font-semibold ${
-                        cashReceived >= cartTotal ? 'text-emerald-700' : 'text-warm-500'
+                        cashReceived >= cartTotal ? 'text-emerald-700 dark:text-emerald-400' : 'text-warm-500 dark:text-warm-400'
                       }`}
                     >
                       {cashReceived >= cartTotal
@@ -790,7 +790,7 @@ export default function POSPage() {
                           setCashNumpadValue(prev => prev + key);
                         }
                       }}
-                      className="py-3 rounded-lg bg-warm-100 hover:bg-warm-200 text-warm-900 text-sm font-semibold transition active:bg-warm-300"
+                      className="py-3 rounded-lg bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 text-sm font-semibold transition active:bg-warm-300 dark:active:bg-gray-600"
                     >
                       {key === 'backspace' ? '⌫' : key}
                     </button>
@@ -814,14 +814,14 @@ export default function POSPage() {
 
       {/* Platform fee note */}
       {cart.length > 0 && paymentMode === 'card' && paymentStatus === 'idle' && (
-        <p className="mt-4 text-xs text-warm-400 text-center">
+        <p className="mt-4 text-xs text-warm-400 dark:text-warm-500 text-center">
           Platform fee (10%) applied. Net payout: ~${(cartTotal * 0.9 * 0.971).toFixed(2)} after Stripe fees.
         </p>
       )}
 
       {/* Back link */}
       <div className="mt-8 text-center">
-        <a href="/organizer/dashboard" className="text-sm text-warm-400 hover:text-warm-600">
+        <a href="/organizer/dashboard" className="text-sm text-warm-400 dark:text-warm-500 hover:text-warm-600 dark:hover:text-warm-400">
           ← Back to Dashboard
         </a>
       </div>

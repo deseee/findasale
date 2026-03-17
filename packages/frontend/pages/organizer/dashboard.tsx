@@ -275,12 +275,22 @@ const OrganizerDashboard = () => {
             >
               + Create New Sale
             </Link>
-            <Link
-              href="/organizer/add-items"
+            <button
+              onClick={() => {
+                if (salesData && salesData.length > 0) {
+                  if (salesData.length === 1) {
+                    router.push(`/organizer/add-items/${salesData[0].id}`);
+                  } else {
+                    setShowSaleSelector(!showSaleSelector);
+                  }
+                } else {
+                  showToast('Please create a sale first', 'error');
+                }
+              }}
               className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg border border-warm-300 dark:border-gray-600 transition-colors"
             >
               📋 Listing Factory
-            </Link>
+            </button>
             <div className="relative">
               <button
                 onClick={() => {

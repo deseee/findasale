@@ -54,7 +54,7 @@ const OrganizerHoldsPage = () => {
       const params = new URLSearchParams({ sort: sortBy });
       if (saleFilter !== 'all') params.set('saleId', saleFilter);
       const response = await api.get(`/reservations/organizer?${params}`);
-      return response.data as HoldItem[];
+      return (response.data.holds ?? []) as HoldItem[];
     },
     enabled: !!user?.id,
     refetchInterval: 30000,
@@ -150,28 +150,28 @@ const OrganizerHoldsPage = () => {
       <Head>
         <title>Active Holds - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-5xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex items-center gap-4 mb-6">
-            <Link href="/organizer/dashboard" className="text-amber-600 hover:text-amber-800 text-sm">
+            <Link href="/organizer/dashboard" className="text-amber-600 dark:text-amber-500 hover:text-amber-800 dark:hover:text-amber-400 text-sm">
               ← Dashboard
             </Link>
-            <h1 className="text-2xl font-bold text-warm-900">
-              Active Holds {holds.length > 0 && <span className="text-lg font-normal text-warm-500">({holds.length})</span>}
+            <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">
+              Active Holds {holds.length > 0 && <span className="text-lg font-normal text-warm-500 dark:text-warm-400">({holds.length})</span>}
             </h1>
           </div>
 
           {/* Filters bar */}
-          <div className="flex flex-wrap items-center gap-4 mb-6 bg-white rounded-lg shadow-sm p-4">
+          <div className="flex flex-wrap items-center gap-4 mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
             {/* Sale filter */}
             <div className="flex items-center gap-2">
-              <label htmlFor="sale-filter" className="text-sm font-medium text-warm-700">Sale:</label>
+              <label htmlFor="sale-filter" className="text-sm font-medium text-warm-700 dark:text-warm-300">Sale:</label>
               <select
                 id="sale-filter"
                 value={saleFilter}
                 onChange={(e) => { setSaleFilter(e.target.value); setSelectedIds(new Set()); }}
-                className="text-sm border border-warm-300 rounded-md px-3 py-1.5 bg-white text-warm-900 focus:ring-amber-500 focus:border-amber-500"
+                className="text-sm border border-warm-300 dark:border-gray-700 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-amber-500 focus:border-amber-500"
               >
                 <option value="all">All sales</option>
                 {salesData?.map((sale) => (
@@ -182,13 +182,13 @@ const OrganizerHoldsPage = () => {
 
             {/* Sort toggle */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-warm-700">Sort:</span>
+              <span className="text-sm font-medium text-warm-700 dark:text-warm-300">Sort:</span>
               <button
                 onClick={() => setSortBy('expiry')}
                 className={`text-sm px-3 py-1 rounded-md transition-colors ${
                   sortBy === 'expiry'
-                    ? 'bg-amber-100 text-amber-800 font-semibold'
-                    : 'text-warm-600 hover:bg-warm-100'
+                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 font-semibold'
+                    : 'text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700'
                 }`}
               >
                 Expiring Soon
@@ -197,8 +197,8 @@ const OrganizerHoldsPage = () => {
                 onClick={() => setSortBy('created')}
                 className={`text-sm px-3 py-1 rounded-md transition-colors ${
                   sortBy === 'created'
-                    ? 'bg-amber-100 text-amber-800 font-semibold'
-                    : 'text-warm-600 hover:bg-warm-100'
+                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 font-semibold'
+                    : 'text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700'
                 }`}
               >
                 Recently Added
@@ -210,7 +210,7 @@ const OrganizerHoldsPage = () => {
               <div className="ml-auto flex items-center gap-2">
                 <button
                   onClick={toggleSelectAll}
-                  className="text-sm text-amber-600 hover:text-amber-800 font-medium"
+                  className="text-sm text-amber-600 dark:text-amber-500 hover:text-amber-800 dark:hover:text-amber-400 font-medium"
                 >
                   {selectedIds.size === holds.length ? 'Deselect All' : 'Select All'}
                 </button>
@@ -220,8 +220,8 @@ const OrganizerHoldsPage = () => {
 
           {/* Batch action bar */}
           {selectedIds.size > 0 && (
-            <div className="flex items-center gap-3 mb-6 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <span className="text-sm font-medium text-amber-800">{selectedIds.size} selected</span>
+            <div className="flex items-center gap-3 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-400">{selectedIds.size} selected</span>
               <div className="flex gap-2 ml-auto">
                 <button
                   onClick={() => handleBatch('release')}
@@ -250,12 +250,12 @@ const OrganizerHoldsPage = () => {
 
           {/* Content */}
           {holdsLoading ? (
-            <p className="text-warm-600">Loading holds…</p>
+            <p className="text-warm-600 dark:text-warm-400">Loading holds…</p>
           ) : holds.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
               <p className="text-4xl mb-3">🤝</p>
-              <p className="text-warm-600 font-medium">No active holds right now.</p>
-              <p className="text-warm-400 text-sm mt-1">When shoppers place holds on your items, they'll appear here.</p>
+              <p className="text-warm-600 dark:text-warm-400 font-medium">No active holds right now.</p>
+              <p className="text-warm-400 dark:text-warm-500 text-sm mt-1">When shoppers place holds on your items, they'll appear here.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -264,21 +264,21 @@ const OrganizerHoldsPage = () => {
                 const isExpanded = allExpanded || expandedBuyers.has(buyerKey);
 
                 return (
-                  <div key={buyerKey} className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div key={buyerKey} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                     {/* Buyer header (accordion toggle) */}
                     <button
                       onClick={() => toggleBuyerExpand(buyerKey)}
-                      className="w-full flex items-center justify-between px-5 py-3 bg-warm-50 hover:bg-warm-100 transition-colors"
+                      className="w-full flex items-center justify-between px-5 py-3 bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-warm-900 font-semibold">{group.buyerName}</span>
-                        <span className="text-warm-400 text-sm">{group.buyerEmail}</span>
+                        <span className="text-warm-900 dark:text-warm-100 font-semibold">{group.buyerName}</span>
+                        <span className="text-warm-400 dark:text-warm-500 text-sm">{group.buyerEmail}</span>
                         <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                           {group.holds.length} {group.holds.length === 1 ? 'hold' : 'holds'}
                         </span>
                       </div>
                       <svg
-                        className={`h-5 w-5 text-warm-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        className={`h-5 w-5 text-warm-400 dark:text-warm-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -289,7 +289,7 @@ const OrganizerHoldsPage = () => {
 
                     {/* Hold items */}
                     {isExpanded && (
-                      <div className="divide-y divide-warm-100">
+                      <div className="divide-y divide-warm-100 dark:divide-gray-700">
                         {group.holds.map((hold) => (
                           <div key={hold.id} className="flex items-start gap-4 px-5 py-4">
                             {/* Checkbox */}
@@ -301,7 +301,7 @@ const OrganizerHoldsPage = () => {
                             />
 
                             {/* Item thumbnail */}
-                            <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-warm-100">
+                            <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-warm-100 dark:bg-gray-700">
                               {hold.item.photoUrls && hold.item.photoUrls.length > 0 ? (
                                 <img
                                   src={hold.item.photoUrls[0]}
@@ -309,7 +309,7 @@ const OrganizerHoldsPage = () => {
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-warm-400 text-2xl">📷</div>
+                                <div className="w-full h-full flex items-center justify-center text-warm-400 dark:text-warm-500 text-2xl">📷</div>
                               )}
                             </div>
 
@@ -319,7 +319,7 @@ const OrganizerHoldsPage = () => {
                                 <div>
                                   <Link
                                     href={`/items/${hold.item.id}`}
-                                    className="font-semibold text-warm-900 hover:text-amber-600 line-clamp-1"
+                                    className="font-semibold text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 line-clamp-1"
                                   >
                                     {hold.item.title}
                                   </Link>
@@ -347,22 +347,22 @@ const OrganizerHoldsPage = () => {
                                   </button>
                                 </div>
                               </div>
-                              <p className="text-xs text-warm-500 mt-0.5">{hold.item.sale.title}</p>
+                              <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">{hold.item.sale.title}</p>
                               {hold.note && (
-                                <p className="text-xs text-warm-600 mt-1 italic">"{hold.note}"</p>
+                                <p className="text-xs text-warm-600 dark:text-warm-400 mt-1 italic">"{hold.note}"</p>
                               )}
                               <div className="flex items-center gap-3 mt-2">
                                 <span
                                   className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                     hold.status === 'CONFIRMED'
-                                      ? 'bg-green-100 text-green-700'
-                                      : 'bg-amber-100 text-amber-700'
+                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                      : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                                   }`}
                                 >
                                   {hold.status}
                                 </span>
                                 <HoldTimer expiresAt={hold.expiresAt} />
-                                <span className="text-xs text-warm-400">
+                                <span className="text-xs text-warm-400 dark:text-warm-500">
                                   Placed {formatDistanceToNow(parseISO(hold.createdAt), { addSuffix: true })}
                                 </span>
                               </div>

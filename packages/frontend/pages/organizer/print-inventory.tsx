@@ -170,13 +170,13 @@ const PrintInventoryPage = () => {
         }
       `}</style>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header - Hidden in print */}
-        <div className="no-print bg-white border-b border-warm-200 px-4 py-4">
+        <div className="no-print bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-warm-900">Print Inventory</h1>
-              <p className="text-warm-600 text-sm mt-1">
+              <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Print Inventory</h1>
+              <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
                 All items grouped by sale and category
               </p>
             </div>
@@ -201,15 +201,15 @@ const PrintInventoryPage = () => {
         <div className="max-w-7xl mx-auto px-4 py-8">
           {isLoading ? (
             <div className="text-center py-12">
-              <p className="text-warm-600">Loading inventory...</p>
+              <p className="text-warm-600 dark:text-warm-400">Loading inventory...</p>
             </div>
           ) : itemsError ? (
-            <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-700">Failed to load inventory. Please try again.</p>
+            <div className="p-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-red-700 dark:text-red-400">Failed to load inventory. Please try again.</p>
             </div>
           ) : totalItems === 0 ? (
             <div className="text-center py-12">
-              <p className="text-warm-600 mb-4">No items in your inventory yet.</p>
+              <p className="text-warm-600 dark:text-warm-400 mb-4">No items in your inventory yet.</p>
               <Link
                 href="/organizer/add-items"
                 className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg"
@@ -220,22 +220,22 @@ const PrintInventoryPage = () => {
           ) : (
             <div className="print-container space-y-8">
               {/* Summary */}
-              <div className="no-print bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-lg font-semibold text-warm-900 mb-4">Summary</h2>
+              <div className="no-print bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Summary</h2>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <p className="text-warm-600 text-sm">Total Sales</p>
-                    <p className="text-3xl font-bold text-warm-900">
+                    <p className="text-warm-600 dark:text-warm-400 text-sm">Total Sales</p>
+                    <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">
                       {Object.keys(groupedData).length}
                     </p>
                   </div>
                   <div>
-                    <p className="text-warm-600 text-sm">Total Items</p>
-                    <p className="text-3xl font-bold text-amber-600">{totalItems}</p>
+                    <p className="text-warm-600 dark:text-warm-400 text-sm">Total Items</p>
+                    <p className="text-3xl font-bold text-amber-600 dark:text-amber-500">{totalItems}</p>
                   </div>
                   <div>
-                    <p className="text-warm-600 text-sm">Total Value</p>
-                    <p className="text-3xl font-bold text-green-600">
+                    <p className="text-warm-600 dark:text-warm-400 text-sm">Total Value</p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-green-500">
                       $
                       {Object.values(groupedData)
                         .reduce((sum, sale) =>
@@ -264,13 +264,13 @@ const PrintInventoryPage = () => {
                 );
 
                 return (
-                  <div key={saleId} className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div key={saleId} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                     {/* Sale title */}
-                    <div className="bg-amber-50 border-b border-amber-200 px-6 py-4">
-                      <h2 className="text-xl font-bold text-amber-900">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-4">
+                      <h2 className="text-xl font-bold text-amber-900 dark:text-amber-400">
                         {saleData.saleTitle}
                       </h2>
-                      <p className="text-sm text-amber-700 mt-1">
+                      <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
                         {saleItemCount} item{saleItemCount !== 1 ? 's' : ''} • {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'}
                       </p>
                     </div>
@@ -279,8 +279,8 @@ const PrintInventoryPage = () => {
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-warm-200 bg-warm-50">
-                            <th className="text-left py-3 px-4 font-semibold text-warm-700">
+                          <tr className="border-b border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-700">
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
                               Title
                             </th>
                             <th className="text-left py-3 px-4 font-semibold text-warm-700">
@@ -303,8 +303,8 @@ const PrintInventoryPage = () => {
                             return (
                               <React.Fragment key={category}>
                                 {/* Category header row */}
-                                <tr className="category-header border-b border-warm-200 bg-warm-100">
-                                  <td colSpan={5} className="py-2 px-4 text-sm font-semibold text-warm-900">
+                                <tr className="category-header border-b border-warm-200 dark:border-gray-700 bg-warm-100 dark:bg-gray-700">
+                                  <td colSpan={5} className="py-2 px-4 text-sm font-semibold text-warm-900 dark:text-warm-200">
                                     {category}
                                   </td>
                                 </tr>
@@ -313,18 +313,18 @@ const PrintInventoryPage = () => {
                                 {items.map((item) => (
                                   <tr
                                     key={item.id}
-                                    className="border-b border-warm-100 hover:bg-warm-50"
+                                    className="border-b border-warm-100 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700"
                                   >
-                                    <td className="py-3 px-4 text-warm-900 font-medium">
+                                    <td className="py-3 px-4 text-warm-900 dark:text-warm-200 font-medium">
                                       {item.title}
                                     </td>
-                                    <td className="py-3 px-4 text-warm-600 capitalize">
+                                    <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">
                                       {category}
                                     </td>
-                                    <td className="py-3 px-4 text-warm-600 capitalize">
+                                    <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">
                                       {item.condition || '—'}
                                     </td>
-                                    <td className="py-3 px-4 text-right font-semibold text-warm-900">
+                                    <td className="py-3 px-4 text-right font-semibold text-warm-900 dark:text-warm-200">
                                       $
                                       {(item.price || item.auctionStartPrice || 0).toFixed(2)}
                                     </td>
