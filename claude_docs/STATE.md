@@ -7,6 +7,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 191 COMPLETE (2026-03-17) — WAVE 5 BUILD: 6 NEW FEATURES SHIPPED (ALL SPRINT 1) + 5 NEON MIGRATIONS APPLIED:**
+- **Features shipped:** #71 Organizer Reputation Score (SIMPLE), #60 Premium Tier Bundle (PRO), #52 Estate Sale Encyclopedia (FREE), #54 Crowdsourced Appraisal API (PAID_ADDON), #46 Treasure Typology Classifier (PRO), #69 Local-First Offline Mode (PRO) ✅
+- **All 6 features Sprint 1 COMPLETE** — backend services, schema, controllers, routes, migrations
+- **Neon migrations applied (5 total):** 20260317003100_add_organizer_reputation, 20260317110000_add_teams_onboarding_complete, 20260317100000_add_encyclopedia, 20260317120000_add_appraisals, 20260317_add_item_typology ✅
+- **pnpm install + prisma generate clean** ✅
+- **Schema fix:** Named @relation annotations for appraisal User fields (commit 307b979) ✅
+- **Commits:** 7ebcfb5, 307b979 (Wave 5 build + schema fix) ✅
+- **Last Updated:** 2026-03-17 (session 191)
+
+**Pending — Patrick action items (S191):**
+- [ ] QA Wave 5 features Sprint 1 (6 features: #46 #52 #54 #60 #69 #71 — backend + migrations only)
+- [ ] Implement Sprint 2 for each Wave 5 feature (frontend UI + user-facing flow)
+- [ ] QA Waves 2–4 features (S187–S190, 30+ features awaiting QA pass before promotion to users)
+- [ ] Open Stripe business account (test keys still in production — recurring)
+
+---
+
 **Session 190 COMPLETE (2026-03-17) — WAVE 4 BUILD: 14 NEW FEATURES SHIPPED + 4 ADR SPECS WRITTEN:**
 - **Features shipped:** #13 TEAMS Workspace, #15 Referral expansion (Web Share API), #17 Fraud/Bid Bot, #19 Passkeys/WebAuthn, #20 Proactive Degradation Mode, #22 Low-Bandwidth Mode, #30 AI Item Valuation, #39 Photo Op Stations, #40+#44 Sale Hubs, #48 Treasure Trail, #57 Rarity Badges, #58 Achievement Badges, #59 Streak Rewards ✅
 - **ADR specs written (not yet implemented):** #46 Treasure Typology Classifier, #52 Estate Sale Encyclopedia, #54 Crowdsourced Appraisal API — at `claude_docs/architecture/` ✅
@@ -18,170 +35,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Last Updated:** 2026-03-17 (session 190)
 
 **Pending — Patrick action items (S190):**
-- [ ] QA Wave 4 features (deferred — same as Wave 3 "qa later")
+- [ ] QA Wave 4 features (14 features: #13 #15 #17 #19 #20 #22 #30 #39 #40 #44 #48 #57 #58 #59 — all shipped, QA pending)
 - [ ] Open Stripe business account (test keys still in production — recurring)
 
 ---
 
-**Session 189 COMPLETE (2026-03-17) — WAVE 3 BUILD: 6 NEW FEATURES (#41 #45 #50 #16 #55 #47):**
-- **All 7 S187 Neon migrations confirmed applied by Patrick at session start** ✅
-- **Duplicate migration number fixed:** `20260317000900_add_collector_passport` renamed → `20260317000950_add_collector_passport` (was conflicting with `000900_add_seasonal_challenges`) ✅
-- **#41 Flip Report [PRO]** — Post-sale analytics dashboard. Sell-through rate, revenue, top performers, category breakdown, pricing insights, recommendations. Print-friendly. `/organizer/flip-report/[saleId]`. No schema changes. ✅
-- **#45 Collector Passport [FREE]** — Identity-based collection tracker. Shoppers define specialties, categories, keywords. Personalized alerts on new matching sales. Schema: `CollectorPassport` model. ✅
-- **#50 Loot Log [FREE]** — Shopper purchase history gallery. Stats (total finds, spend, sales attended, fave category). Shareable public URL. No schema changes. ✅
-- **#16 Verified Organizer Badge [PRO]** — Trust signal on organizer profiles. PRO organizers request verification; admin approves/rejects. Blue checkmark component. Schema: 3 fields on `Organizer` (verificationStatus, verificationNotes, verifiedAt). ✅
-- **#55 Seasonal Discovery Challenges [FREE]** — 4 seasonal challenges (Spring/Summer/Fall/Holiday). Objectives (visit, purchase, favorite). Progress tracking, badges, leaderboard. Schema: `ChallengeProgress` + `ChallengeBadge` models. ✅
-- **#47 UGC Photo Tags [FREE]** — Shoppers submit photos of finds linked to sales/items. Like/unlike. Organizer moderation queue. Schema: `UGCPhoto` + `UGCPhotoLike` models. ✅
-- **index.ts updated** with 6 new route registrations (challenges, flipReport, verification, lootLog, ugcPhotos — collectorPassport already registered) ✅
-- **End state:** All 6 features fully implemented, files on disk, push block ready for Patrick. 4 new Neon migrations needed.
-- **Last Updated:** 2026-03-17 (session 189)
+**Session 189 (S189) — Wave 3: #41 #45 #50 #16 #55 #47 shipped, migration dedup fixed, 4 Neon applied.** See COMPLETED_PHASES.md Wave 3 section.
 
-**Patrick action items (S189) — ALL COMPLETE:**
-- [x] Git push block — 6 wave 3 features on GitHub ✅
-- [x] 4 Neon migrations applied (000900, 000950, 001100, 001200) ✅
-- [ ] QA wave 3 features (deferred — Patrick said "qa later")
+**Session 188 (S188) — Production recovery: 7 TS errors fixed, pnpm lockfile mismatch, Railway Docker unblock, CLAUDE.md §4 Railway rule added.** See git log for details.
+
+**Session 187 (S187) — Wave 2: 12 features shipped (#7 #14 #18 #25 #29 #31 #32 #42 #49 #51 #62 + 1). Major push, 80+ files, Railway/Vercel stabilized in S188.** See COMPLETED_PHASES.md Wave 2 section.
+
+**Session 186 (S186) — Dark mode audit complete (200+ dark: classes, all 13 pages). P0 holds crash fixed. Tier gating corrections (POS, Print Inventory, Share → SIMPLE). Vercel live.** See git log.
+
+**Session 185 (S185) — #70 Live Sale Feed shipped. P0-1 tokenVersion JWT invalidation (requireTier.ts, authController.ts, syncTier.ts). CLAUDE.md §5–6 migration protocol docs.** See git log.
+
+**Session 184 (S184) — #68 Command Center Dashboard TS build fixes (redis.ts in-memory cache, local type copies, import paths). Social Proof (#54) confirmed shipped. P2 tech debt: useOrganizerTier.ts still broken @findasale/shared.** See git log.
+
+**Session 183 (S183) — #65 Progressive Disclosure UI (SIMPLE tier streamlined, PRO/TEAMS full access). #68 Command Center architecture + Sprint 1+2 both shipped (commandCenterService.ts, frontend hooks, ADR docs).** See git log.
 
 ---
 
-**Session 188 COMPLETE (2026-03-17) — PRODUCTION RECOVERY + TYPESCRIPT BUILD FIX + RAILWAY DOCKER UNBLOCK:**
-- **Railway + Vercel both failing after S187 large push (80+ files, 12 features shipped)** — Fixed 7 TypeScript compilation errors across backend/frontend + pnpm lockfile mismatch (ERR_PNPM_OUTDATED_LOCKFILE)
-- **Backend TypeScript fixes (5 files):**
-  - `packages/backend/src/controllers/saleController.ts` — express.Request/Response namespace → imported types ✅
-  - `packages/backend/src/controllers/voiceController.ts` — estimatedPrice possibly undefined → ?? 0 ✅
-  - `packages/backend/src/services/receiptService.ts` — ReceiptItem[] not assignable to Prisma Json → cast as any ✅
-  - `packages/backend/src/services/wishlistAlertService.ts` — spread of Prisma JsonValue → cast to Record<string, any> before spread ✅
-- **Frontend TypeScript fixes (2 files):**
-  - `packages/frontend/components/PostPerformanceCard.tsx` — implicit any on tickFormatter val param → explicit param type ✅
-  - `packages/frontend/pages/organizer/item-library.tsx` — wrong AuthContext import path + organizerProfile doesn't exist on User type (fixed to `user.role === 'ORGANIZER' ? user.id : undefined`) ✅
-  - `packages/frontend/pages/shopper/alerts.tsx` — @/lib/withAuth doesn't exist → replaced with useAuth hook; WishlistAlertForm initialData missing name field ✅
-- **pnpm lockfile mismatch fixed:** Removed erroneous pnpm devDependency from package.json, regenerated lockfile, added packageManager field ✅
-- **Railway Docker cache stuck issue:** Pushed trivial Dockerfile.production cache-bust comment (comment update with date). Railway immediately unblocked ✅
-- **CLAUDE.md §4 permanently updated:** Added Railway stuck behavior rule — "If Railway hasn't picked up recent commits or is looping on a stale error, DO NOT ask Patrick to check webhooks, GitHub settings, or Railway dashboards. Immediately push a trivial change to `packages/backend/Dockerfile.production` — update the cache-bust comment at line 1 with today's date. This always unblocks Railway." ✅
-- **End state:** Vercel GREEN ✅, Railway GREEN ✅
-- **Neon migrations:** All 7 S187 migrations confirmed applied by Patrick at S189 start ✅
-- **Last Updated:** 2026-03-17 (session 188)
-
-**S187 Features shipped (now marked as deployed after S188 stabilization fixes):**
-Features #7, #14, #18, #25, #29, #31, #32, #42, #49, #51, #62 + one more (12 total per commit message) ✅
-
-**Pending — Patrick action items:**
-- [ ] Run 7 Neon migrations (see CLAUDE.md §6 for the exact $env:DATABASE_URL override + commands)
-- [ ] Verify Vercel + Railway remain GREEN (both should be healthy now)
-- [ ] Next session: Phase 4 and Phase 5 features
-
----
-
-**Session 186 COMPLETE (2026-03-16) — DARK MODE AUDIT COMPLETE (ALL 13 PAGES), HOLDS P0 CRASH FIXED, LISTING FACTORY ROUTING FIXED, TIER GATES CORRECTED:**
-- **Dark mode audit — COMPLETE:** Live Chrome inspection + 3-wave sweep. All 13 user-facing pages now have full `dark:` variant coverage. Total ~200 dark: classes added across Layout.tsx, index.tsx, dashboard.tsx, holds.tsx, pos.tsx, print-inventory.tsx, insights.tsx, brand-kit.tsx, command-center.tsx, settings.tsx, edit-sale/[id].tsx, calendar.tsx, sales/[id].tsx ✅
-- **Holds page P0 crash fixed:** `response.data as HoldItem[]` → `response.data.holds as HoldItem[]`. Root cause: API returns `{ holds, total, limit, offset, hasMore }` envelope; queryFn was iterating the envelope object → TypeError in useMemo groupedByBuyer ✅
-- **Listing Factory button routing fixed:** Dead `href="/organizer/add-items"` → button using `showSaleSelector` state, navigates to `/organizer/add-items/${sale.id}` ✅
-- **Tier gating corrections:** POS, Print Inventory, Share incorrectly gated PRO in S183. Removed `canAccess('PRO')` wrappers — restored to SIMPLE tier ✅
-- **CLAUDE.md §4 updated:** Frontend=Vercel / Backend=Railway. No manual redeploy buttons on either. Trivial commit pattern for forced redeploy ✅
-- **All changes deployed:** Vercel production on commit `7cef97d` (current). All 13 pages live ✅
-- **Last Updated:** 2026-03-16 (session 186)
-
-**Pending — Patrick action items:**
-- [ ] Open Stripe business account (test keys still in production)
-- [ ] VAPID keys confirmed in production
-- [ ] Beta organizer recruitment (5 targets in `claude_docs/beta-launch/organizer-outreach.md`)
-- [ ] Push CLAUDE.md update (trivial — can batch with next session's first push)
-
----
-
-**Session 185 COMPLETE (2026-03-16) — #70 LIVE SALE FEED SHIPPED + P0-1 TOKENVERSION JWT CACHE INVALIDATION SHIPPED + #68 QA PASS:**
-- **#70 Live Sale Feed — SHIPPED:** Real-time Socket.io event service + frontend widget
-  - `packages/backend/src/services/liveFeedService.ts` (NEW) — in-memory ring buffer (max 20 events, 2h TTL), Socket.io event emitter
-  - `packages/frontend/hooks/useLiveFeed.ts` (NEW) — Socket.io-client hook, join/leave sale rooms
-  - `packages/frontend/components/LiveFeedWidget.tsx` (NEW) — sage-green scrollable feed, event type icons
-  - `packages/backend/src/lib/socket.ts` (MODIFIED) — JOIN_SALE_FEED / LEAVE_SALE_FEED handlers
-  - `packages/backend/src/index.ts` (MODIFIED) — initLiveFeed(io) call
-  - `packages/backend/src/controllers/reservationController.ts` (MODIFIED) — emits HOLD_PLACED / HOLD_RELEASED
-  - `packages/backend/src/controllers/stripeController.ts` (MODIFIED) — emits SOLD at 2 locations
-  - `packages/backend/src/controllers/itemController.ts` (MODIFIED) — emits PRICE_DROP
-- **P0-1 tokenVersion JWT Cache Invalidation — SHIPPED:** Organizer tier upgrades now invalidate existing JWTs immediately
-  - `packages/database/prisma/schema.prisma` (MODIFIED) — added `tokenVersion Int @default(0)` to Organizer
-  - `packages/database/prisma/migrations/20260316000001_add_organizer_token_version/migration.sql` (NEW)
-  - `packages/backend/src/lib/syncTier.ts` (MODIFIED) — increments tokenVersion after tier update via webhook
-  - `packages/backend/src/controllers/authController.ts` (MODIFIED) — embeds `organizerTokenVersion` in JWT at login/register/refresh
-  - `packages/backend/src/middleware/auth.ts` (MODIFIED) — validates tokenVersion on each organizer request
-  - **Incident resolved:** P2022 — Neon was missing tokenVersion column. Root cause: `prisma migrate deploy` ran against localhost (packages/database/.env). Fixed with explicit `$env:DATABASE_URL` override pointing to Neon non-pooled URL. Pattern documented in CLAUDE.md §6.
-- **#68 Command Center Dashboard — QA PASS:** findasale-qa returned PASS WITH NOTES. No blockers. Ship-ready.
-- **TypeScript Build Fixes (S185 opening):** Fixed 3 errors carried from S184:
-  - `packages/backend/src/controllers/commandCenterController.ts` — fixed `status: string | undefined` not assignable to literal union (was Prisma enum mismatch)
-  - `packages/frontend/hooks/useCommandCenter.ts` — fixed import path `../../lib/api` → `../lib/api` (directory traversal error)
-  - `packages/frontend/hooks/useOrganizerTier.ts` — removed broken `@findasale/shared` import, inlined `hasAccess` logic directly
-- **CLAUDE.md Updates:**
-  - §5 updated: MCP push default is ≤3 files; >3 files or >25k tokens → compile PS1 block for Patrick
-  - §6 NEW: Schema Change Protocol with full Neon URL override (`$env:DATABASE_URL`), localhost trap warning, CRITICAL note on `prisma migrate deploy` order
-  - Sections renumbered §1–§12
-- **Last Updated:** 2026-03-16 (session 185) — SHIPPED to main branch
-
-**Pending — Patrick action items:**
-- [ ] Confirm Railway build passes (auto-deploys from main after S185 push)
-- [ ] Confirm P0-1 tokenVersion working (organizer login, tier display correct)
-- [ ] Continue dark mode audit (S186 priority)
-
----
-
-**Session 184 COMPLETE (2026-03-16) — #68 COMMAND CENTER DASHBOARD BUILD FIXED (ALL TS ERRORS RESOLVED):**
-- **#68 Build Fix — ALL TypeScript errors resolved:**
-  - `packages/backend/src/lib/redis.ts` (NEW) — In-memory TTL Map cache. Drop-in redis replacement. No npm dependency.
-  - `packages/backend/src/types/commandCenter.ts` (NEW) — Local type copy (CommandCenterResponse, SaleMetrics, etc.)
-  - `packages/frontend/types/commandCenter.ts` (NEW) — Same local type copy for frontend
-  - `commandCenterService.ts` — Fixed: (1) import from local types; (2) ItemReservation groupBy → findMany+include+reduce (no saleId field on schema); (3) status enum + pagination
-  - `commandCenterController.ts` — Fixed import path
-  - `itemController.ts`, `saleController.ts` — Added invalidateCommandCenterCache calls
-  - `stripeController.ts` — Removed invalidateCommandCenterCache (used `purchase.sale?.organizerId` which Prisma query doesn't select)
-  - `requireTier.ts` — Added 401 fail-fast if organizerProfile not attached
-  - `CommandCenterCard.tsx`, `useCommandCenter.ts`, `command-center.tsx` — Fixed import paths + loading state
-  - `shared/src/index.ts` — Reverted (shared is not a declared workspace dep)
-- **#54 Social Proof Messaging — CONFIRMED SHIPPED:** commit 661339d. No work needed.
-- **Context doc audit complete:** STATE.md, session-log.md (S182 entry added), next-session-prompt.md, roadmap.md v43 all corrected.
-- **Deleted 3 temp files:** conversation-defaults-SKILL.md.tmp, claude_docs/skills-package/ziphWYrR, exportController_clean.ts
-- **Last Updated:** 2026-03-16 (session 184)
-- **P2 tech debt — useOrganizerTier.ts:** Still imports from `@findasale/shared` — same broken pattern as #68 fixes. Won't break prod currently but needs fixing.
-
-**Pending — Patrick action items:**
-- [ ] Push S184 code: see push block in next-session-prompt.md
-- [ ] Verify Railway build passes (auto-deploys from main after push)
-- [ ] QA #68 Command Center Dashboard (findasale-qa) before promoting feature to users
-- [ ] Fix useOrganizerTier.ts @findasale/shared import (P2 — dispatch findasale-dev S185)
-- [ ] P0-1 proper fix: schema migration to add tokenVersion to Organizer model (tech debt)
-- [ ] Open Stripe business account (currently on test keys)
-
-**Next session options (ranked):**
-1. **Verify Railway build + QA #68** — confirm TypeScript errors gone, run findasale-qa before promoting
-2. **Fix useOrganizerTier.ts** — P2 tech debt, same @findasale/shared broken pattern
-3. **P0-1 proper fix** — schema migration + tokenVersion on Organizer
-4. **Next roadmap feature** — pick from Phase 4 remaining
-
----
-
-**Session 183 COMPLETE (2026-03-16) — #65 PROGRESSIVE DISCLOSURE UI SHIPPED + #68 COMMAND CENTER DASHBOARD ARCHITECTURE COMPLETE + SPRINT 1 DISPATCHED:**
-- **#65 Progressive Disclosure UI — SHIPPED (Sprint 3, final):** SIMPLE-tier organizers now see streamlined UI without PRO-locked features cluttering view.
-  - `packages/frontend/hooks/useOrganizerTier.ts` — NEW. Custom hook wrapping `hasAccess()` from @findasale/shared. Exposes: `tier`, `canAccess(requiredTier)`, `isSimple`, `isPro`, `isTeams`. No component knows `hasAccess()` import; all checks route through hook.
-  - `packages/frontend/components/AuthContext.tsx` — MODIFIED. Fixed JWT decoding to extract `organizerTier` (defaults to SIMPLE). Added `organizerTier` to payload parsing in both `login()` and `useEffect` hooks.
-  - `packages/frontend/pages/organizer/dashboard.tsx` — MODIFIED. Wrapped action buttons (Insights, Print Inventory, Webhooks, POS, Brand Kit, Export Data, Flash Deal, Share) in `canAccess('PRO')` or `canAccess('TEAMS')` guards. SIMPLE users see clean UI with only core actions (Create Sale, Add Items, Holds).
-  - `packages/frontend/pages/organizer/settings.tsx` — MODIFIED. Subscription tab now shows current tier in prominent badge + upgrade CTA for SIMPLE users linking to /organizer/upgrade (already built S178). PRO users see 'Manage Subscription' link instead.
-  - **Tier gating summary:** SIMPLE (free) sees only: Create Sale, Add Items, Holds, Settings. PRO/TEAMS sees all features + subscription mgmt. No error states, no locked buttons — just clean progressive disclosure.
-  - **Total files changed: 4** (AuthContext.tsx, dashboard.tsx, settings.tsx, useOrganizerTier.ts new). No schema changes. Frontend-only ✅
-  - **Pushed to GitHub: commit 63c8308** ✅
-- **#68 Command Center Dashboard — SPRINT 1 + SPRINT 2 COMPLETE + PUSHED TO GITHUB:**
-  - Architecture docs written: `claude_docs/architecture/ADR-068-COMMAND-CENTER-DASHBOARD.md` and `ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md`
-  - **Schema status:** ✅ GO — All data exists in Sale, Item, Purchase, ItemReservation, Favorite. No migrations needed.
-  - **Query strategy:** Optimized to 2–3 queries (not 5N) using Prisma groupBy + aggregations.
-  - **Expected perf:** <500ms cached, <1.5s cold with 50 active sales.
-  - **Tier gating:** ✅ Wired via `requireTier('PRO')` middleware.
-  - **Risk:** ✅ LOW — read-only operations, no schema changes, caching optional.
-  - **Status:** Both Sprint 1 (backend) and Sprint 2 (frontend) complete and pushed to GitHub across 4 MCP commits (2ea619b, 01a32cc, e9a6aaa, c997bd7) on top of architecture commits (06a2f61, 7052087).
-  - **Sprint 1 deliverables (backend):** commandCenterService.ts (NEW), commandCenterController.ts (NEW), routes/commandCenter.ts (NEW), shared/types/commandCenter.ts (NEW), backend/src/index.ts (MODIFIED — route registration).
-  - **Sprint 2 deliverables (frontend):** useCommandCenter.ts (NEW), CommandCenterCard.tsx (NEW), command-center.tsx (NEW), Layout.tsx (MODIFIED — PRO-gated nav link).
-  - **Architecture docs:** ADR-068-COMMAND-CENTER-DASHBOARD.md, ADR-068-QUICK-REFERENCE.md, ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md.
-  - **HEAD commit:** c997bd7 ✅
-  - **Next step:** QA pass (findasale-qa) before promoting to users.
-- **P0 Status Confirmed:**
-  - P0-2 (STRIPE_SECRET_KEY startup guard): ✅ In main (commit d3780876) → deployed to Railway ✅
-  - P0-1 (tokenVersion tier cache): The S179 fix was added then reverted in S181 because Organizer model lacks tokenVersion field. Underlying tier cache staleness still unresolved — needs schema migration first. NOT fully fixed.
+**Sessions 42–182 (Phases 1–13 + Waves 1–2 partial):** Full completion history in `claude_docs/strategy/COMPLETED_PHASES.md` Phases 1–13 Legacy section (verified 2026-03-05). ~110 sessions of shipping documented at phase/session level.
 - **Last Updated:** 2026-03-16 (session 183)
 
 **Pending — Patrick action items:**
