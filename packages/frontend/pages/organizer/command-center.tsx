@@ -29,10 +29,10 @@ const CommandCenterPage = () => {
   // Show loading spinner during auth check
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-warm-50">
+      <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto mb-4"></div>
-          <p className="text-warm-600">Loading...</p>
+          <p className="text-warm-600 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     );
@@ -55,13 +55,13 @@ const CommandCenterPage = () => {
   // Handle API errors
   if (error) {
     return (
-      <div className="min-h-screen bg-warm-50 py-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm mb-4 inline-block">
             ← Dashboard
           </Link>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <p className="text-red-700 font-semibold mb-4">Failed to load Command Center</p>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+            <p className="text-red-700 dark:text-red-200 font-semibold mb-4">Failed to load Command Center</p>
             <button
               onClick={() => refetch()}
               className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
@@ -76,7 +76,7 @@ const CommandCenterPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-warm-50 py-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <div className="mb-8">
             <Skeleton className="h-8 w-64 mb-2" />
@@ -105,59 +105,59 @@ const CommandCenterPage = () => {
         <title>Command Center - FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
-        <div className="bg-white border-b border-warm-200 px-4 py-4 mb-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
           <div className="max-w-6xl mx-auto flex items-center gap-3">
-            <Link href="/organizer/dashboard" className="text-warm-400 hover:text-warm-600 text-sm">
+            <Link href="/organizer/dashboard" className="text-warm-400 hover:text-warm-600 dark:text-gray-400 dark:hover:text-gray-300 text-sm">
               ← Dashboard
             </Link>
-            <span className="text-warm-300">/</span>
-            <h1 className="text-lg font-semibold text-warm-900">Command Center</h1>
+            <span className="text-warm-300 dark:text-gray-600">/</span>
+            <h1 className="text-lg font-semibold text-warm-900 dark:text-gray-100">Command Center</h1>
           </div>
         </div>
 
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold text-warm-900 mb-2">Multi-Sale Command Center</h2>
-            <p className="text-warm-600">View all your active sales and manage across multiple listings at once.</p>
+            <h2 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-2">Multi-Sale Command Center</h2>
+            <p className="text-warm-600 dark:text-gray-400">View all your active sales and manage across multiple listings at once.</p>
           </div>
 
           {summary && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Active Sales</p>
-                <p className="text-3xl font-bold text-warm-900">{summary.totalActiveSales}</p>
-                <p className="text-xs text-warm-500 mt-2">Currently live</p>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+                <p className="text-warm-600 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Active Sales</p>
+                <p className="text-3xl font-bold text-warm-900 dark:text-gray-100">{summary.totalActiveSales}</p>
+                <p className="text-xs text-warm-500 dark:text-gray-400 mt-2">Currently live</p>
               </div>
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Total Items</p>
-                <p className="text-3xl font-bold text-warm-900">{summary.totalItems}</p>
-                <p className="text-xs text-warm-500 mt-2">Across all sales</p>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+                <p className="text-warm-600 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Total Items</p>
+                <p className="text-3xl font-bold text-warm-900 dark:text-gray-100">{summary.totalItems}</p>
+                <p className="text-xs text-warm-500 dark:text-gray-400 mt-2">Across all sales</p>
               </div>
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Total Revenue</p>
-                <p className="text-3xl font-bold text-green-700">${summary.totalRevenue.toFixed(2)}</p>
-                <p className="text-xs text-warm-500 mt-2">From all sales</p>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+                <p className="text-warm-600 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Total Revenue</p>
+                <p className="text-3xl font-bold text-green-700 dark:text-green-400">${summary.totalRevenue.toFixed(2)}</p>
+                <p className="text-xs text-warm-500 dark:text-gray-400 mt-2">From all sales</p>
               </div>
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">Pending Actions</p>
-                <p className={`text-3xl font-bold ${summary.totalPendingActions > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+                <p className="text-warm-600 dark:text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Pending Actions</p>
+                <p className={`text-3xl font-bold ${summary.totalPendingActions > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                   {summary.totalPendingActions}
                 </p>
-                <p className="text-xs text-warm-500 mt-2">Across all sales</p>
+                <p className="text-xs text-warm-500 dark:text-gray-400 mt-2">Across all sales</p>
               </div>
             </div>
           )}
 
-          <div className="flex gap-2 mb-8 border-b border-warm-200">
+          <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700">
             {(['active', 'upcoming', 'recent', 'all'] as const).map((status) => (
               <button
                 key={status}
                 onClick={() => setSelectedStatus(status)}
                 className={`pb-3 px-1 font-medium capitalize border-b-2 transition-colors ${
                   selectedStatus === status
-                    ? 'border-amber-600 text-amber-600'
-                    : 'border-transparent text-warm-600 hover:text-warm-900'
+                    ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+                    : 'border-transparent text-warm-600 hover:text-warm-900 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
               >
                 {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -172,8 +172,8 @@ const CommandCenterPage = () => {
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center">
-              <p className="text-warm-600 mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-12 text-center">
+              <p className="text-warm-600 dark:text-gray-400 mb-6">
                 {selectedStatus === 'active' && 'No active sales right now. Create one to get started.'}
                 {selectedStatus === 'upcoming' && 'No upcoming sales. Schedule a sale to see it here.'}
                 {selectedStatus === 'recent' && 'No recent sales. Your completed sales will appear here.'}

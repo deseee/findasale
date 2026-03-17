@@ -111,7 +111,7 @@ const CalendarPage = () => {
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>Sale Calendar - FindA.Sale</title>
         <meta name="description" content="Browse upcoming estate sales on our interactive calendar" />
@@ -121,25 +121,25 @@ const CalendarPage = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl md:text-5xl font-bold text-amber-600 mb-2">Sale Calendar</h1>
-          <p className="text-lg text-warm-700">Browse upcoming estate sales month by month</p>
+          <p className="text-lg text-warm-700 dark:text-gray-400">Browse upcoming estate sales month by month</p>
         </div>
 
         {/* Month Navigation */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={handlePrevMonth}
-              className="px-4 py-2 border border-warm-300 rounded-lg hover:bg-warm-100 transition text-warm-900 font-medium"
+              className="px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-700 transition text-warm-900 dark:text-gray-100 font-medium"
               aria-label="Previous month"
             >
               ← Prev
             </button>
-            <h2 className="text-2xl md:text-3xl font-bold text-warm-900">
+            <h2 className="text-2xl md:text-3xl font-bold text-warm-900 dark:text-gray-100">
               {format(currentDate, 'MMMM yyyy')}
             </h2>
             <button
               onClick={handleNextMonth}
-              className="px-4 py-2 border border-warm-300 rounded-lg hover:bg-warm-100 transition text-warm-900 font-medium"
+              className="px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-700 transition text-warm-900 dark:text-gray-100 font-medium"
               aria-label="Next month"
             >
               Next →
@@ -152,17 +152,17 @@ const CalendarPage = () => {
             </div>
           ) : isError || !sales || sales.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-warm-600">No sales found. Try adjusting your dates.</p>
+              <p className="text-warm-600 dark:text-gray-400">No sales found. Try adjusting your dates.</p>
             </div>
           ) : isMobile ? (
             // Mobile: Vertical list grouped by date
             <div className="space-y-4">
               {mobileListDays.length === 0 ? (
-                <p className="text-center text-warm-600 py-6">No sales this month</p>
+                <p className="text-center text-warm-600 dark:text-gray-400 py-6">No sales this month</p>
               ) : (
                 mobileListDays.map(({ date, sales: daySales }) => (
-                  <div key={format(date, 'yyyy-MM-dd')} className="border border-warm-200 rounded-lg p-4">
-                    <h3 className="font-bold text-warm-900 mb-3">
+                  <div key={format(date, 'yyyy-MM-dd')} className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 dark:bg-gray-800">
+                    <h3 className="font-bold text-warm-900 dark:text-gray-100 mb-3">
                       {format(date, 'EEEE, MMMM d, yyyy')}
                     </h3>
                     <div className="space-y-2">
@@ -191,14 +191,14 @@ const CalendarPage = () => {
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-0 mb-2 text-center">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="py-2 font-bold text-warm-700 text-sm">
+                  <div key={day} className="py-2 font-bold text-warm-700 dark:text-gray-400 text-sm">
                     {day}
                   </div>
                 ))}
               </div>
 
               {/* Calendar grid */}
-              <div className="grid grid-cols-7 gap-px bg-warm-200 rounded-lg overflow-hidden border border-warm-300">
+              <div className="grid grid-cols-7 gap-px bg-warm-200 dark:bg-gray-700 rounded-lg overflow-hidden border border-warm-300 dark:border-gray-600">
                 {gridDays.map((day, idx) => {
                   const dateKey = format(day, 'yyyy-MM-dd');
                   const daySales = salesByDate.get(dateKey) || [];
@@ -210,14 +210,14 @@ const CalendarPage = () => {
                       key={idx}
                       className={`min-h-24 p-2 ${
                         isCurrentMonth
-                          ? 'bg-white'
-                          : 'bg-warm-50'
+                          ? 'bg-white dark:bg-gray-800'
+                          : 'bg-warm-50 dark:bg-gray-900'
                       } ${isToday ? 'border-2 border-amber-600' : ''}`}
                     >
                       <div className={`text-sm font-semibold mb-2 ${
                         isCurrentMonth
-                          ? isToday ? 'text-amber-600' : 'text-warm-900'
-                          : 'text-warm-400'
+                          ? isToday ? 'text-amber-600 dark:text-amber-400' : 'text-warm-900 dark:text-gray-100'
+                          : 'text-warm-400 dark:text-gray-500'
                       }`}>
                         {format(day, 'd')}
                       </div>
@@ -247,7 +247,7 @@ const CalendarPage = () => {
                 })}
               </div>
 
-              <p className="text-xs text-warm-500 mt-4 text-center">
+              <p className="text-xs text-warm-500 dark:text-gray-400 mt-4 text-center">
                 Showing {sales.length} sales this month
               </p>
             </>
@@ -255,9 +255,9 @@ const CalendarPage = () => {
         </div>
 
         {/* Info section */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold text-warm-900 mb-4">How to use this calendar</h2>
-          <ul className="space-y-2 text-warm-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+          <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-4">How to use this calendar</h2>
+          <ul className="space-y-2 text-warm-700 dark:text-gray-400">
             <li className="flex gap-2">
               <span className="text-amber-600">•</span>
               <span>Click on any sale title to view full details</span>

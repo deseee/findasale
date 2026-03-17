@@ -149,7 +149,7 @@ const BrandKitPage = () => {
 
   if (isLoading_) {
     return (
-      <div className="min-h-screen bg-warm-50 py-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-4xl mx-auto px-4">
           <p>Loading...</p>
         </div>
@@ -162,14 +162,14 @@ const BrandKitPage = () => {
       <Head>
         <title>Brand Kit - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
             Back to dashboard
           </Link>
 
-          <h1 className="text-3xl font-bold text-warm-900 mb-2">Brand Kit</h1>
-          <p className="text-warm-600 mb-8">
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-2">Brand Kit</h1>
+          <p className="text-warm-600 dark:text-gray-400 mb-8">
             Customize your business branding and social presence. These details appear on your organizer profile and sale listings.
           </p>
 
@@ -177,10 +177,10 @@ const BrandKitPage = () => {
             <div className="space-y-8">
               {/* Business Information Section */}
               <div>
-                <h2 className="text-xl font-semibold text-warm-900 mb-4">Business Information</h2>
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Business Information</h2>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
                       Business Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -189,12 +189,12 @@ const BrandKitPage = () => {
                       value={formData.businessName}
                       onChange={handleInputChange}
                       placeholder="Enter your business name"
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
                       Phone <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -203,105 +203,105 @@ const BrandKitPage = () => {
                       value={formData.phone}
                       onChange={handleInputChange}
                       placeholder="Enter your phone number"
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">Bio</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bio</label>
                     <textarea
                       name="bio"
                       value={formData.bio || ''}
                       onChange={handleInputChange}
                       placeholder="Tell shoppers about your business and specialties..."
                       rows={4}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">Website URL</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Website URL</label>
                     <input
                       type="url"
                       name="website"
                       value={formData.website || ''}
                       onChange={handleInputChange}
                       placeholder="https://example.com"
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Social Links Section */}
-              <div className="border-t border-warm-200 pt-8">
-                <h2 className="text-xl font-semibold text-warm-900 mb-4">Social & Marketplace Links</h2>
+              <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Social & Marketplace Links</h2>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">Facebook Page URL</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Facebook Page URL</label>
                     <input
                       type="url"
                       name="facebook"
                       value={formData.facebook || ''}
                       onChange={handleInputChange}
                       placeholder="https://facebook.com/yourpage"
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">Instagram Profile URL</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Instagram Profile URL</label>
                     <input
                       type="url"
                       name="instagram"
                       value={formData.instagram || ''}
                       onChange={handleInputChange}
                       placeholder="https://instagram.com/yourprofile"
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">Etsy Shop URL</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Etsy Shop URL</label>
                     <input
                       type="url"
                       name="etsy"
                       value={formData.etsy || ''}
                       onChange={handleInputChange}
                       placeholder="https://etsy.com/shop/yourshop"
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Logo Section */}
-              <div className="border-t border-warm-200 pt-8">
-                <h2 className="text-xl font-semibold text-warm-900 mb-4">Logo</h2>
-                <p className="text-sm text-warm-600 mb-4">
+              <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Logo</h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
                   Provide a URL to your logo image (Cloudinary or similar CDN). Recommended size: 200x200px or larger, PNG or JPG.
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-1">Logo URL</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Logo URL</label>
                     <input
                       type="url"
                       name="brandLogoUrl"
                       value={formData.brandLogoUrl || ''}
                       onChange={handleLogoChange}
                       placeholder="https://example.com/logo.png"
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
                     />
                   </div>
 
                   {logoPreview && (
                     <div className="flex items-center gap-4">
                       <div>
-                        <p className="text-xs font-semibold text-warm-600 mb-2">Preview</p>
+                        <p className="text-xs font-semibold text-warm-600 dark:text-gray-400 mb-2">Preview</p>
                         <img
                           src={logoPreview}
                           alt="Logo preview"
-                          className="h-24 w-24 object-contain border border-warm-200 rounded-lg p-2 bg-white"
+                          className="h-24 w-24 object-contain border border-warm-200 dark:border-gray-600 rounded-lg p-2 bg-white dark:bg-gray-700"
                           onError={() => setLogoPreview(null)}
                         />
                       </div>
@@ -311,28 +311,28 @@ const BrandKitPage = () => {
               </div>
 
               {/* Brand Colors Section */}
-              <div className="border-t border-warm-200 pt-8">
-                <h2 className="text-xl font-semibold text-warm-900 mb-4">Brand Colors</h2>
-                <p className="text-sm text-warm-600 mb-6">
+              <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Brand Colors</h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-6">
                   Choose your primary and secondary brand colors. These will appear on your sale listings and organizer profile.
                 </p>
                 <div className="space-y-6">
                   <div className="flex items-end gap-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-warm-700 mb-1">Primary Color</label>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Primary Color</label>
                       <input
                         type="text"
                         name="brandPrimaryColor"
                         value={formData.brandPrimaryColor || ''}
                         onChange={handleColorChange}
                         placeholder="#2563EB"
-                        className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-mono text-sm"
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-mono text-sm dark:bg-gray-700 dark:text-warm-100"
                       />
-                      <p className="text-xs text-warm-500 mt-1">Hex format (e.g., #2563EB)</p>
+                      <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Hex format (e.g., #2563EB)</p>
                     </div>
                     {formData.brandPrimaryColor && (
                       <div
-                        className="h-12 w-12 rounded-lg border-2 border-warm-300 flex-shrink-0"
+                        className="h-12 w-12 rounded-lg border-2 border-warm-300 dark:border-gray-600 flex-shrink-0"
                         style={{ backgroundColor: formData.brandPrimaryColor }}
                         title={formData.brandPrimaryColor}
                       />
@@ -341,20 +341,20 @@ const BrandKitPage = () => {
 
                   <div className="flex items-end gap-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-warm-700 mb-1">Secondary Color</label>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Secondary Color</label>
                       <input
                         type="text"
                         name="brandSecondaryColor"
                         value={formData.brandSecondaryColor || ''}
                         onChange={handleColorChange}
                         placeholder="#1E40AF"
-                        className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-mono text-sm"
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-mono text-sm dark:bg-gray-700 dark:text-warm-100"
                       />
-                      <p className="text-xs text-warm-500 mt-1">Hex format (e.g., #1E40AF)</p>
+                      <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Hex format (e.g., #1E40AF)</p>
                     </div>
                     {formData.brandSecondaryColor && (
                       <div
-                        className="h-12 w-12 rounded-lg border-2 border-warm-300 flex-shrink-0"
+                        className="h-12 w-12 rounded-lg border-2 border-warm-300 dark:border-gray-600 flex-shrink-0"
                         style={{ backgroundColor: formData.brandSecondaryColor }}
                         title={formData.brandSecondaryColor}
                       />
@@ -364,7 +364,7 @@ const BrandKitPage = () => {
               </div>
 
               {/* Save Button */}
-              <div className="border-t border-warm-200 pt-8">
+              <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
                 <button
                   onClick={handleSave}
                   disabled={isSaving}

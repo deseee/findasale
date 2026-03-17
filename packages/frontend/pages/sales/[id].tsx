@@ -216,7 +216,7 @@ const SaleDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <main className="container mx-auto px-4 py-8">
           <Skeleton className="h-5 w-28 mb-6" />
           <div className="bg-white rounded-lg shadow-md p-6 mb-8"></div>
@@ -236,10 +236,10 @@ const SaleDetailPage = () => {
 
   if (isError || !sale) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-warm-50">
+      <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-warm-900 mb-2">Sale not found</h1>
-          <p className="text-warm-600 mb-6">The sale you're looking for doesn't exist.</p>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-2">Sale not found</h1>
+          <p className="text-warm-600 dark:text-gray-400 mb-6">The sale you're looking for doesn't exist.</p>
           <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium">
             Back to browse sales
           </Link>
@@ -262,7 +262,7 @@ const SaleDetailPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <SaleOGMeta sale={saleForOGMeta} />
 
       <main className="container mx-auto px-4 py-8">
@@ -271,14 +271,14 @@ const SaleDetailPage = () => {
         </Link>
 
         {/* Sale Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             <div className="flex-1">
-              <h1 className="text-4xl font-bold text-warm-900 mb-2">{sale.title}</h1>
-              <p className="text-lg text-warm-700 mb-4">
+              <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-2">{sale.title}</h1>
+              <p className="text-lg text-warm-700 dark:text-gray-400 mb-4">
                 {sale.address}, {sale.city}, {sale.state} {sale.zip}
               </p>
-              <p className="text-sm text-warm-600 mb-4">
+              <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
                 {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
               </p>
               {sale.status && (
@@ -298,23 +298,23 @@ const SaleDetailPage = () => {
         </div>
 
         {/* Organizer Info Card */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h2 className="text-xl font-bold text-warm-900 mb-2">Organized by</h2>
+              <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-2">Organized by</h2>
               <div className="flex items-center gap-2 mb-2">
-                <p className="text-lg font-semibold text-warm-800">{sale.organizer.businessName}</p>
+                <p className="text-lg font-semibold text-warm-800 dark:text-gray-200">{sale.organizer.businessName}</p>
                 {/* Phase 31: Show tier badge if SILVER or GOLD */}
                 {sale.organizer.tier && (sale.organizer.tier === 'SILVER' || sale.organizer.tier === 'GOLD') && (
                   <OrganizerTierBadge tier={sale.organizer.tier} />
                 )}
               </div>
-              <p className="text-sm text-warm-600 mb-4">{sale.organizer.phone}</p>
+              <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">{sale.organizer.phone}</p>
               {sale.organizer.avgRating && (
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="text-sm font-medium text-warm-700">Rating:</span>
-                  <span className="text-sm text-warm-600">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
-                  <span className="text-sm text-warm-500">({sale.organizer.reviewCount || 0} reviews)</span>
+                  <span className="text-sm font-medium text-warm-700 dark:text-gray-300">Rating:</span>
+                  <span className="text-sm text-warm-600 dark:text-gray-400">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
+                  <span className="text-sm text-warm-500 dark:text-gray-500">({sale.organizer.reviewCount || 0} reviews)</span>
                 </div>
               )}
               <BadgeDisplay badges={sale.organizer.badges || []} />
@@ -407,8 +407,8 @@ const SaleDetailPage = () => {
           {/* Sidebar */}
           <div className="lg:col-span-1">
             {/* Share Buttons */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-              <h2 className="text-lg font-bold text-warm-900 mb-4">Share</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Share</h2>
               <div className="flex flex-col gap-2">
                 {/* Facebook Share */}
                 <button
@@ -447,20 +447,20 @@ const SaleDetailPage = () => {
             </div>
 
             {/* CD2-P2: QR Code for print marketing */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-              <h2 className="text-lg font-bold text-warm-900 mb-2">QR Code</h2>
-              <p className="text-xs text-warm-400 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-2">QR Code</h2>
+              <p className="text-xs text-warm-400 dark:text-gray-500 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
               <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
             </div>
 
             {/* Organizer Contact */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-              <h2 className="text-lg font-bold text-warm-900 mb-4">Contact Info</h2>
-              <p className="text-sm text-warm-600 mb-2">
-                <span className="font-medium text-warm-900">Phone:</span> {sale.organizer.phone}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Contact Info</h2>
+              <p className="text-sm text-warm-600 dark:text-gray-400 mb-2">
+                <span className="font-medium text-warm-900 dark:text-gray-200">Phone:</span> {sale.organizer.phone}
               </p>
-              <p className="text-sm text-warm-600 mb-4">
-                <span className="font-medium text-warm-900">Address:</span> {sale.organizer.address}
+              <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                <span className="font-medium text-warm-900 dark:text-gray-200">Address:</span> {sale.organizer.address}
               </p>
 
               {/* Route Planning Button */}
@@ -517,7 +517,7 @@ const SaleDetailPage = () => {
                 <button
                   key={i}
                   onClick={() => { setCurrentPhotoIndex(i); setLightboxOpen(true); }}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-warm-200 bg-warm-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="group relative aspect-square overflow-hidden rounded-lg border border-warm-200 dark:border-gray-700 bg-warm-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   aria-label={`View photo ${i + 1} of ${sale.photoUrls.length}`}
                 >
                   <img
@@ -542,14 +542,14 @@ const SaleDetailPage = () => {
         )}
 
         {/* Description */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold text-warm-900 mb-4">About</h2>
-          <p className="text-warm-700 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-4">About</h2>
+          <p className="text-warm-700 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
         </div>
 
         {/* Map Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-warm-900">Location</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">Location</h2>
           {sale.lat && sale.lng ? (
             <SaleMap
               singlePin={{
@@ -565,19 +565,19 @@ const SaleDetailPage = () => {
               height="360px"
             />
           ) : (
-            <div className="h-72 bg-warm-100 rounded-lg flex items-center justify-center">
-              <p className="text-warm-500">Location not available</p>
+            <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+              <p className="text-warm-500 dark:text-gray-400">Location not available</p>
             </div>
           )}
-          <p className="mt-3 text-sm text-warm-500">
+          <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
             {sale.address}, {sale.city}, {sale.state} {sale.zip}
           </p>
         </div>
 
         {/* Items Section */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-warm-900">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100">
               {sale.isAuctionSale ? 'Auction Items' : 'Items for Sale'}
             </h2>
             {isOrganizer && sale.items.length > 0 && (
@@ -609,21 +609,21 @@ const SaleDetailPage = () => {
                     All items sold or reserved
                   </span>
                 ) : isLowStock ? (
-                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-sm font-bold px-3 py-1.5 rounded-full ring-1 ring-red-200 animate-pulse">
+                  <span className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 text-sm font-bold px-3 py-1.5 rounded-full ring-1 ring-red-200 dark:ring-red-800 animate-pulse">
                     \ud83d\udd25 Only {availableCount} left!
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-sm font-semibold px-3 py-1.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-sm font-semibold px-3 py-1.5 rounded-full">
                     \u2713 {availableCount} available
                   </span>
                 )}
                 {soldCount > 0 && (
-                  <span className="text-sm text-warm-500">
+                  <span className="text-sm text-warm-500 dark:text-gray-400">
                     {soldCount} sold
                   </span>
                 )}
                 {reservedCount > 0 && (
-                  <span className="text-sm text-amber-600 font-medium">
+                  <span className="text-sm text-amber-600 dark:text-amber-400 font-medium">
                     {reservedCount} on hold
                   </span>
                 )}
@@ -634,14 +634,14 @@ const SaleDetailPage = () => {
           {/* Category Filter */}
           {sale.items && sale.items.some((item) => item.category) && (
             <div className="mb-6">
-              <p className="text-sm font-medium text-warm-700 mb-2">Filter by category:</p>
+              <p className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Filter by category:</p>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedCategory(null)}
                   className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                     selectedCategory === null
                       ? 'bg-amber-600 text-white'
-                      : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+                      : 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
                   }`}
                 >
                   All ({sale.items.length})
@@ -656,7 +656,7 @@ const SaleDetailPage = () => {
                         className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                           selectedCategory === category
                             ? 'bg-amber-600 text-white'
-                            : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+                            : 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
                         }`}
                       >
                         {(category as string).charAt(0).toUpperCase() + (category as string).slice(1)} ({count})
@@ -670,7 +670,7 @@ const SaleDetailPage = () => {
 
           {sale.items.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-warm-600 mb-4">No items listed for this sale yet.</p>
+              <p className="text-warm-600 dark:text-gray-400 mb-4">No items listed for this sale yet.</p>
               {isOrganizer && (
                 <Link 
                   href={`/organizer/add-items/${sale.id}`}
@@ -691,7 +691,7 @@ const SaleDetailPage = () => {
                     selectedCategory === null || item.category === selectedCategory
                 )
                 .map((item) => (
-                <div key={item.id} className="border rounded-lg overflow-hidden bg-white">
+                <div key={item.id} className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
                   <Link href={`/items/${item.id}`} className="block">
                     {item.photoUrls.length > 0 ? (
                       <img
@@ -700,41 +700,41 @@ const SaleDetailPage = () => {
                         className="w-full h-48 object-cover"
                        loading="lazy"/>
                     ) : (
-                      <div className="bg-warm-200 h-48 flex items-center justify-center">
-                        <span className="text-warm-500">No image</span>
+                      <div className="bg-warm-200 dark:bg-gray-700 h-48 flex items-center justify-center">
+                        <span className="text-warm-500 dark:text-gray-400">No image</span>
                       </div>
                     )}
                   </Link>
                   <div className="p-4">
-                    <h3 className="font-bold text-lg mb-2 text-warm-900">{item.title}</h3>
-                    <p className="text-warm-600 text-sm mb-3 line-clamp-2">{item.description}</p>
+                    <h3 className="font-bold text-lg mb-2 text-warm-900 dark:text-gray-100">{item.title}</h3>
+                    <p className="text-warm-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">{item.description}</p>
 
                     {/* Category, Condition, Auction, and Status badges */}
                     {(item.category || item.condition || item.auctionEndTime || item.status === 'RESERVED' || item.status === 'SOLD' || item.status === 'PENDING') && (
                       <div className="flex flex-wrap gap-2 mb-3">
                         {/* CD2: Status social-proof badges */}
                         {item.status === 'RESERVED' && (
-                          <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
+                          <span className="inline-block bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
                             \ud83d\udd12 On Hold
                           </span>
                         )}
                         {(item.status === 'SOLD' || item.status === 'PENDING') && (
-                          <span className="inline-block bg-warm-700 text-white px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
+                          <span className="inline-block bg-warm-700 dark:bg-gray-700 text-white dark:text-gray-200 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
                             \u2713 Sold
                           </span>
                         )}
                         {item.auctionEndTime && (
-                          <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
+                          <span className="inline-block bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
                             \ud83d\udd28 Auction
                           </span>
                         )}
                         {item.category && (
-                          <span className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-medium">
+                          <span className="inline-block bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-2 py-1 rounded text-xs font-medium">
                             {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
                           </span>
                         )}
                         {item.condition && (
-                          <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                          <span className="inline-block bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-2 py-1 rounded text-xs font-medium">
                             {item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}
                           </span>
                         )}
@@ -746,8 +746,8 @@ const SaleDetailPage = () => {
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <div>
-                            <span className="text-sm text-warm-600">Current Bid:</span>
-                            <span className="font-bold text-amber-600 ml-1">
+                            <span className="text-sm text-warm-600 dark:text-gray-400">Current Bid:</span>
+                            <span className="font-bold text-amber-600 dark:text-amber-400 ml-1">
                               {formatPrice(item.currentBid || item.auctionStartPrice)}
                             </span>
                           </div>
@@ -760,7 +760,7 @@ const SaleDetailPage = () => {
                         </div>
                         
                         <div className="mb-2">
-                          <span className="text-sm text-warm-600">
+                          <span className="text-sm text-warm-600 dark:text-gray-400">
                             Minimum bid: {formatPrice((item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1))}
                           </span>
                         </div>
@@ -773,7 +773,7 @@ const SaleDetailPage = () => {
                               min={(item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1)}
                               value={bidAmounts[item.id] || ''}
                               onChange={(e) => handleBidAmountChange(item.id, e.target.value)}
-                              className="flex-grow px-2 py-1 border border-warm-300 rounded-l text-sm text-warm-900"
+                              className="flex-grow px-2 py-1 border border-warm-300 dark:border-gray-600 rounded-l text-sm text-warm-900 dark:bg-gray-700 dark:text-warm-100"
                               placeholder="Enter bid amount"
                             />
                             <button
@@ -787,13 +787,13 @@ const SaleDetailPage = () => {
                         )}
                         
                         {item.status === 'AUCTION_ENDED' && (
-                          <div className="text-sm text-center py-2 bg-warm-100 rounded text-warm-600">
+                          <div className="text-sm text-center py-2 bg-warm-100 dark:bg-gray-700 rounded text-warm-600 dark:text-gray-400">
                             Auction ended
                           </div>
                         )}
-                        
+
                         {item.status === 'SOLD' && (
-                          <div className="text-sm text-center py-2 bg-green-100 text-green-800 rounded">
+                          <div className="text-sm text-center py-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded">
                             Item sold
                           </div>
                         )}
@@ -801,23 +801,23 @@ const SaleDetailPage = () => {
                     ) : (
                       /* Regular sale item */
                       <div className="flex justify-between items-center">
-                        <span className="font-bold text-amber-600">
+                        <span className="font-bold text-amber-600 dark:text-amber-400">
                           {formatPrice(item.price)}
                         </span>
                         {item.currentBid && (
-                          <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                          <span className="text-sm bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
                             Current bid: {formatPrice(item.currentBid)}
                           </span>
                         )}
                       </div>
                     )}
-                    
+
                     <div className="mt-2 flex justify-between items-center">
                       <span className={`px-2 py-1 rounded text-xs ${
-                        item.status === 'AVAILABLE' ? 'bg-green-100 text-green-800' :
-                        item.status === 'SOLD' ? 'bg-red-100 text-red-800' :
-                        item.status === 'AUCTION_ENDED' ? 'bg-warm-100 text-warm-800' :
-                        'bg-warm-100 text-warm-800'
+                        item.status === 'AVAILABLE' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' :
+                        item.status === 'SOLD' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' :
+                        item.status === 'AUCTION_ENDED' ? 'bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-gray-300' :
+                        'bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-gray-300'
                       }`}>
                         {item.status.replace(/_/g, ' ')}
                       </span>
