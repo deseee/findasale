@@ -29,6 +29,19 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
         socket.leave(`item:${itemId}`);
       }
     });
+
+    // Feature #70: Live Sale Feed — join/leave sale activity rooms
+    socket.on('JOIN_SALE_FEED', (saleId: unknown) => {
+      if (typeof saleId === 'string' && saleId.length > 0 && saleId.length < 128) {
+        socket.join(`sale:${saleId}`);
+      }
+    });
+
+    socket.on('LEAVE_SALE_FEED', (saleId: unknown) => {
+      if (typeof saleId === 'string') {
+        socket.leave(`sale:${saleId}`);
+      }
+    });
   });
 
   return _io;
