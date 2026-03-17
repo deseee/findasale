@@ -82,6 +82,8 @@ Use `mcp__github__push_files` for **small targeted changes only** with two hard 
 
 The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for small batches.
 
+**Default for tasks >3 files:** Compile a `.\push.ps1` block for Patrick rather than using MCP push. MCP coordination is reserved for urgent hotfix batches where Patrick cannot run the script manually.
+
 **Bulk pushes (>5 files OR >25k tokens) must always be done manually by Patrick from PowerShell:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
