@@ -5,7 +5,7 @@ import type {
   CommandCenterFilters,
   SaleMetrics,
   CommandCenterSummary,
-} from '@findasale/shared';
+} from '../types/commandCenter';
 
 /**
  * Get Command Center summary for an organizer
