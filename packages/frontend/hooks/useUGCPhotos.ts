@@ -10,6 +10,14 @@ export interface UGCPhoto {
   };
   itemId: number | null;
   saleId: number | null;
+  sale?: {
+    id: number;
+    title: string;
+  } | null;
+  item?: {
+    id: number;
+    title: string;
+  } | null;
   photoUrl: string;
   caption: string | null;
   tags: string[];
