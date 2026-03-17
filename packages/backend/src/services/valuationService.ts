@@ -139,13 +139,13 @@ export async function getValuation(itemId: string) {
     // If no valuation exists, try to generate it
     if (!valuation) {
       const result = await generateValuation(itemId);
-      if (result.insufficient_data) {
+      if ('insufficient_data' in result && result.insufficient_data) {
         return {
           status: 'INSUFFICIENT_DATA',
-          comparableCount: result.comparableCount,
+          comparableCount: (result as any).comparableCount,
         };
       }
-      valuation = result;
+      valuation = result as any;
     }
 
     return {

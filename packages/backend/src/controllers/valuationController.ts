@@ -70,7 +70,7 @@ export const generateItemValuation = async (req: AuthRequest, res: Response) => 
     // Generate fresh valuation
     const result = await generateValuation(itemId);
 
-    if (result.insufficient_data) {
+    if ('insufficient_data' in result && result.insufficient_data) {
       return res.status(200).json({
         status: 'INSUFFICIENT_DATA',
         message: `Need 10+ comparable sales to generate valuation. Found ${result.comparableCount}.`,
