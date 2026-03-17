@@ -175,7 +175,7 @@ const EditSalePage = () => {
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-white py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
         <div className="max-w-2xl mx-auto px-4">
           <Skeleton className="h-10 w-48 mb-8" />
           <div className="space-y-4">
@@ -195,14 +195,14 @@ const EditSalePage = () => {
       <Head>
         <title>Edit Sale - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
             Back to dashboard
           </Link>
 
           <div className="flex items-center justify-between gap-4 mb-8">
-            <h1 className="text-3xl font-bold text-warm-900">
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">
               Edit Sale {sale?.status === 'PUBLISHED' ? '(Live)' : '(Draft)'}
             </h1>
             {sale && (
@@ -212,7 +212,7 @@ const EditSalePage = () => {
                     \u25cf LIVE
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-full px-3 py-1 text-sm font-semibold">
+                  <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold">
                     \u25cc DRAFT
                   </span>
                 )}
@@ -230,15 +230,15 @@ const EditSalePage = () => {
 
           <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-6">
             {sale?.status === 'PUBLISHED' && (
-              <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
-                <p className="text-sm text-yellow-800 font-semibold">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200 font-semibold">
                   ⚠️ This sale is live to shoppers — changes will be visible immediately.
                 </p>
               </div>
             )}
 
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-              <p className="text-sm text-blue-700 mb-3">Want to create a similar sale?</p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded">
+              <p className="text-sm text-blue-700 dark:text-blue-200 mb-3">Want to create a similar sale?</p>
               <button
                 type="button"
                 onClick={handleCloneSale}
@@ -250,19 +250,19 @@ const EditSalePage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">Title</label>
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Title</label>
               <input
                 type="text"
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
               />
             </div>
 
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <label className="block text-sm font-medium text-warm-700">Description</label>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Description</label>
                 <button
                   type="button"
                   onClick={handleGenerateDescription}
@@ -277,73 +277,73 @@ const EditSalePage = () => {
                 value={formData.description}
                 onChange={handleChange}
                 rows={4}
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">Start Date</label>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Date</label>
                 <input
                   type="date"
                   name="startDate"
                   value={formData.startDate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">End Date</label>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
                 <input
                   type="date"
                   name="endDate"
                   value={formData.endDate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">Address</label>
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Address</label>
               <input
                 type="text"
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
               />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">City</label>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">City</label>
                 <input
                   type="text"
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">State</label>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">State</label>
                 <input
                   type="text"
                   name="state"
                   value={formData.state}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">ZIP</label>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">ZIP</label>
                 <input
                   type="text"
                   name="zip"
                   value={formData.zip}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 />
               </div>
             </div>
@@ -361,7 +361,7 @@ const EditSalePage = () => {
                 value={formData.neighborhood}
                 onChange={handleChange}
                 placeholder="Start typing or select..."
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 autoComplete="off"
               />
               <datalist id="neighborhood-list">
@@ -385,10 +385,10 @@ const EditSalePage = () => {
             {/* Feature 35: Front Door Locator — entrance/parking pin */}
             {sale?.lat && sale?.lng ? (
               <div className="mt-6">
-                <label className="block text-sm font-medium text-warm-700 mb-2">
-                  Entrance / Parking Pin <span className="text-warm-400 font-normal">(optional)</span>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
+                  Entrance / Parking Pin <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
                 </label>
-                <p className="text-sm text-warm-500 mb-3">
+                <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
                   Drop a pin to show shoppers exactly where to park or enter — especially useful for large properties.
                 </p>
                 <EntrancePinPicker
@@ -418,16 +418,16 @@ const EditSalePage = () => {
 
                 {/* Distance warning banner */}
                 {entrancePinTooFar && (
-                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <p className="text-sm text-yellow-800">
+                  <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
                       ⚠️ Entrance pin is far from the sale address. Make sure this is correct.
                     </p>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                <p className="text-red-800 font-semibold">
+              <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded">
+                <p className="text-red-800 dark:text-red-200 font-semibold">
                   Sale location not found — please verify your address and try saving again.
                 </p>
                 <button
