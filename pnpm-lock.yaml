@@ -208,6 +208,9 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
+      lucide-react:
+        specifier: ^0.263.1
+        version: 0.263.1(react@18.3.1)
       next:
         specifier: 14.0.0
         version: 14.0.0(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@18.3.1)(react@18.3.1)
@@ -6799,6 +6802,14 @@ packages:
     engines: {node: '>=10'}
     dependencies:
       yallist: 4.0.0
+    dev: false
+
+  /lucide-react@0.263.1(react@18.3.1):
+    resolution: {integrity: sha512-keqxAx97PlaEN89PXZ6ki1N8nRjGWtDa4021GFYLNj0RgruM5odbpl8GHTExj0hhPq3sF6Up0gnxt6TSHu+ovw==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0
+    dependencies:
+      react: 18.3.1
     dev: false
 
   /magic-string@0.25.9:

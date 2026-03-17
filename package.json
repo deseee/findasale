@@ -7,7 +7,6 @@
     "context:update": "node scripts/update-context.js"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
-    "pnpm": "^9.15.9"
+    "concurrently": "^9.2.1"
   }
 }
