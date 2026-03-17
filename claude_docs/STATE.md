@@ -7,6 +7,41 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 185 COMPLETE (2026-03-16) — #70 LIVE SALE FEED SHIPPED + P0-1 TOKENVERSION JWT CACHE INVALIDATION SHIPPED + #68 QA PASS:**
+- **#70 Live Sale Feed — SHIPPED:** Real-time Socket.io event service + frontend widget
+  - `packages/backend/src/services/liveFeedService.ts` (NEW) — in-memory ring buffer (max 20 events, 2h TTL), Socket.io event emitter
+  - `packages/frontend/hooks/useLiveFeed.ts` (NEW) — Socket.io-client hook, join/leave sale rooms
+  - `packages/frontend/components/LiveFeedWidget.tsx` (NEW) — sage-green scrollable feed, event type icons
+  - `packages/backend/src/lib/socket.ts` (MODIFIED) — JOIN_SALE_FEED / LEAVE_SALE_FEED handlers
+  - `packages/backend/src/index.ts` (MODIFIED) — initLiveFeed(io) call
+  - `packages/backend/src/controllers/reservationController.ts` (MODIFIED) — emits HOLD_PLACED / HOLD_RELEASED
+  - `packages/backend/src/controllers/stripeController.ts` (MODIFIED) — emits SOLD at 2 locations
+  - `packages/backend/src/controllers/itemController.ts` (MODIFIED) — emits PRICE_DROP
+- **P0-1 tokenVersion JWT Cache Invalidation — SHIPPED:** Organizer tier upgrades now invalidate existing JWTs immediately
+  - `packages/database/prisma/schema.prisma` (MODIFIED) — added `tokenVersion Int @default(0)` to Organizer
+  - `packages/database/prisma/migrations/20260316000001_add_organizer_token_version/migration.sql` (NEW)
+  - `packages/backend/src/lib/syncTier.ts` (MODIFIED) — increments tokenVersion after tier update via webhook
+  - `packages/backend/src/controllers/authController.ts` (MODIFIED) — embeds `organizerTokenVersion` in JWT at login/register/refresh
+  - `packages/backend/src/middleware/auth.ts` (MODIFIED) — validates tokenVersion on each organizer request
+  - **Incident resolved:** P2022 — Neon was missing tokenVersion column. Root cause: `prisma migrate deploy` ran against localhost (packages/database/.env). Fixed with explicit `$env:DATABASE_URL` override pointing to Neon non-pooled URL. Pattern documented in CLAUDE.md §6.
+- **#68 Command Center Dashboard — QA PASS:** findasale-qa returned PASS WITH NOTES. No blockers. Ship-ready.
+- **TypeScript Build Fixes (S185 opening):** Fixed 3 errors carried from S184:
+  - `packages/backend/src/controllers/commandCenterController.ts` — fixed `status: string | undefined` not assignable to literal union (was Prisma enum mismatch)
+  - `packages/frontend/hooks/useCommandCenter.ts` — fixed import path `../../lib/api` → `../lib/api` (directory traversal error)
+  - `packages/frontend/hooks/useOrganizerTier.ts` — removed broken `@findasale/shared` import, inlined `hasAccess` logic directly
+- **CLAUDE.md Updates:**
+  - §5 updated: MCP push default is ≤3 files; >3 files or >25k tokens → compile PS1 block for Patrick
+  - §6 NEW: Schema Change Protocol with full Neon URL override (`$env:DATABASE_URL`), localhost trap warning, CRITICAL note on `prisma migrate deploy` order
+  - Sections renumbered §1–§12
+- **Last Updated:** 2026-03-16 (session 185) — SHIPPED to main branch
+
+**Pending — Patrick action items:**
+- [ ] Confirm Railway build passes (auto-deploys from main after S185 push)
+- [ ] Confirm P0-1 tokenVersion working (organizer login, tier display correct)
+- [ ] Continue dark mode audit (S186 priority)
+
+---
+
 **Session 184 COMPLETE (2026-03-16) — #68 COMMAND CENTER DASHBOARD BUILD FIXED (ALL TS ERRORS RESOLVED):**
 - **#68 Build Fix — ALL TypeScript errors resolved:**
   - `packages/backend/src/lib/redis.ts` (NEW) — In-memory TTL Map cache. Drop-in redis replacement. No npm dependency.

@@ -2,6 +2,36 @@
 
 ## Recent Sessions
 
+### 2026-03-16 · Session 185
+
+**#70 Live Sale Feed + P0-1 tokenVersion JWT Cache Invalidation + #68 QA PASS**
+
+**Shipped:**
+- #70 Live Sale Feed (real-time Socket.io service): NEW liveFeedService.ts (in-memory ring buffer 20 events, 2h TTL), NEW useLiveFeed.ts hook, NEW LiveFeedWidget.tsx (sage-green scrollable feed), modified socket.ts + index.ts + reservationController + stripeController + itemController to emit SOLD/HOLD_PLACED/HOLD_RELEASED/PRICE_DROP events ✅
+- P0-1 tokenVersion JWT Cache Invalidation (fixes tier-upgrade staleness): NEW schema.prisma `tokenVersion Int @default(0)` + migration 20260316000001, modified syncTier.ts (increments on webhook), modified authController.ts (embeds tokenVersion in JWT), modified auth.ts (validates tokenVersion per request) ✅
+- #68 Command Center Dashboard QA: PASS WITH NOTES (no blockers, ship-ready) ✅
+- Resolved P2022 production incident: P0-1 migration ran against localhost (packages/database/.env), missed Neon column. Fixed: explicit `$env:DATABASE_URL` override to Neon non-pooled URL. Pattern now documented in CLAUDE.md §6 Schema Change Protocol ✅
+- Fixed 3 TypeScript build errors: commandCenterController status enum type, useCommandCenter import path ../../lib/api → ../lib/api, useOrganizerTier removed @findasale/shared import + inlined hasAccess ✅
+- CLAUDE.md §5 updated (MCP push default ≤3 files + >25k token limit); §6 NEW (Schema Change Protocol with Neon URL + localhost trap warning) ✅
+
+**Decisions:**
+- Live feed uses in-memory ring buffer (not persistent) — supports real-time but 20-event window per sale
+- tokenVersion pattern: increment on tier sync webhook, embed in JWT, validate per organizer request → invalidates all old JWTs on upgrade
+- prisma migrate deploy ALWAYS requires explicit $env:DATABASE_URL override to Neon (never run against localhost for production)
+- P0-1 incident pattern: schema migrations run against wrong DB → column mismatch. Prevention: CLAUDE.md §6 §11 mandatory override.
+
+**Files changed:** 16 (5 new: liveFeedService.ts, useLiveFeed.ts, LiveFeedWidget.tsx, schema migration, types) + 11 modified (socket.ts, index.ts, reservationController, stripeController, itemController, syncTier.ts, authController.ts, auth.ts, commandCenterController, useCommandCenter, useOrganizerTier + docs)
+
+**Production status:** Railway + Vercel building clean. Neon now has tokenVersion column + migration applied. P2022 resolved.
+
+**Next:** S186 — Dark mode audit using Claude in Chrome (browser automation)
+
+**Subagents:** None — all shipping to main branch directly
+
+**Scoreboard:** Features shipped: 2 (#70, P0-1) | QA pass: #68 | Build fixes: 3 | Incidents resolved: 1 (P2022) | Documentation updates: 2 (CLAUDE.md sections)
+
+---
+
 ### 2026-03-16 · Session 182
 
 **#63 Dark Mode + Accessibility — WCAG 2.1 AA Compliance + Outdoor High-Contrast Mode (3 Phases)**
