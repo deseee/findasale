@@ -110,18 +110,19 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
           .json({ message: 'Registration verification failed' });
       }
 
-      // v10: registrationInfo.credential contains { id, publicKey, counter }
-      const regCredential = verified.registrationInfo?.credential;
+      // Extract credential data from registrationInfo (pre-v11 API shape)
+      const regCredentialID = verified.registrationInfo?.credentialID;
+      const regCredentialPublicKey = verified.registrationInfo?.credentialPublicKey;
 
-      if (!regCredential?.id || !regCredential?.publicKey) {
+      if (!regCredentialID || !regCredentialPublicKey) {
         return res.status(400).json({ message: 'Invalid credential data' });
       }
 
-      // v10: credential.id is already a Base64URLString
-      const credentialIdBase64url = regCredential.id;
+      // credentialID is a Base64URLString
+      const credentialIdBase64url = regCredentialID;
 
-      // Store public key as base64url (publicKey is Uint8Array)
-      const publicKeyBase64url = Buffer.from(regCredential.publicKey).toString('base64')
+      // Store public key as base64url (credentialPublicKey is Uint8Array)
+      const publicKeyBase64url = Buffer.from(regCredentialPublicKey).toString('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=/g, '');
@@ -141,7 +142,7 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
           userId,
           credentialId: credentialIdBase64url,
           publicKey: publicKeyBase64url,
-          counter: regCredential.counter || 0,
+          counter: verified.registrationInfo?.counter || 0,
           deviceName: deviceName || 'Passkey',
         },
       });
@@ -309,15 +310,15 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         'base64'
       );
 
-      // Verify authentication response (v10: uses nested credential object)
+      // Verify authentication response (pre-v11 API: uses authenticator object)
       const verified = await verifyAuthenticationResponse({
         response: clientResponse,
         expectedChallenge: challenge,
         expectedOrigin: WEBAUTHN_ORIGIN,
         expectedRPID: WEBAUTHN_RP_ID,
-        credential: {
-          id: credentialIdBase64url,
-          publicKey: publicKeyBuffer,
+        authenticator: {
+          credentialID: credentialIdBase64url,
+          credentialPublicKey: publicKeyBuffer,
           counter: credential.counter,
         },
       });

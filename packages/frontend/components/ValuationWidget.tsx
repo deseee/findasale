@@ -29,8 +29,7 @@ export default function ValuationWidget({
   const [showWidget, setShowWidget] = useState(false);
 
   // Check if organizer is PRO tier
-  const isPro = user?.organizerProfile?.subscriptionTier === 'PRO' ||
-    user?.organizerTier === 'PRO';
+  const isPro = user?.organizerTier === 'PRO';
 
   if (!isPro) {
     return (
