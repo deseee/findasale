@@ -8,7 +8,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useCreateHub } from '../../../hooks/useHubs';
-import { useAuth } from '../../../hooks/useAuth';
+import { useAuth } from '../../../components/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 
 function generateSlug(name: string): string {

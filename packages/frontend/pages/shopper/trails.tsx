@@ -9,7 +9,7 @@ import Skeleton from '../../components/Skeleton';
 import Layout from '../../components/Layout';
 
 export default function MyTrailsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const { data, isLoading } = useMyTrails();
 
@@ -61,9 +61,9 @@ export default function MyTrailsPage() {
 
         {trails.length === 0 ? (
           <EmptyState
-            title="No Treasure Trails Yet"
-            description="Create your first custom route through nearby sales to find your treasures."
-            action={{
+            heading="No Treasure Trails Yet"
+            subtext="Create your first custom route through nearby sales to find your treasures."
+            cta={{
               label: 'Create Trail',
               href: '/shopper/trails/create',
             }}

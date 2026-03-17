@@ -80,7 +80,7 @@ export default function TrailDetailPage() {
     return (
       <Layout>
         <div className="max-w-2xl mx-auto px-4 py-8">
-          <EmptyState title="Trail Not Found" />
+          <EmptyState heading="Trail Not Found" />
         </div>
       </Layout>
     );

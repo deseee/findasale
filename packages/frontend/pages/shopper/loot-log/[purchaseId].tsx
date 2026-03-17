@@ -1,15 +1,15 @@
 import { useRouter } from 'next/router';
-import { useSession } from 'next-auth/react';
 import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../../../components/AuthContext';
 import api from '../../../lib/api';
 
 export default function PurchaseDetailPage() {
   const router = useRouter();
   const { purchaseId } = router.query;
-  const { data: session, status } = useSession();
+  const { user, isLoading: authLoading } = useAuth();
 
   const { data: purchase, isLoading, error } = useQuery({
     queryKey: ['purchase', purchaseId],
@@ -17,16 +17,16 @@ export default function PurchaseDetailPage() {
       const { data } = await api.get(`/api/loot-log/${purchaseId}`);
       return data;
     },
-    enabled: !!purchaseId && status === 'authenticated',
+    enabled: !!purchaseId && !!user,
   });
 
   // Redirect to login if not authenticated
-  if (status === 'unauthenticated') {
+  if (!authLoading && !user) {
     router.push('/auth/login');
     return null;
   }
 
-  if (status === 'loading' || isLoading) {
+  if (authLoading || isLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
@@ -35,8 +35,11 @@ export default function PurchaseDetailPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <p className="text-xl text-slate-700 mb-4">Purchase not found</p>
-          <Link href="/shopper/loot-log">
-            <a className="px-6 py-2 bg-[#8FB897] text-white rounded-lg">Back to Loot Log</a>
+          <Link
+            href="/shopper/loot-log"
+            className="px-6 py-2 bg-[#8FB897] text-white rounded-lg"
+          >
+            Back to Loot Log
           </Link>
         </div>
       </div>
@@ -58,10 +61,11 @@ export default function PurchaseDetailPage() {
       <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
         <div className="max-w-2xl mx-auto px-4 py-12">
           {/* Back Link */}
-          <Link href="/shopper/loot-log">
-            <a className="text-[#8FB897] font-semibold mb-8 inline-flex items-center">
-              ← Back to Loot Log
-            </a>
+          <Link
+            href="/shopper/loot-log"
+            className="text-[#8FB897] font-semibold mb-8 inline-flex items-center"
+          >
+            ← Back to Loot Log
           </Link>
 
           {/* Detail Card */}

@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import { useMyAchievements } from '../../hooks/useAchievements';
@@ -6,28 +7,25 @@ import { AchievementBadge } from '../../components/AchievementBadge';
 
 export default function AchievementsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { data, isLoading, error } = useMyAchievements();
 
-  // Redirect if not authenticated
-  if (!user) {
-    router.push('/auth/login');
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/auth/login');
+    }
+  }, [user, authLoading, router]);
+
+  if (authLoading || !user) {
     return null;
   }
 
   const achievements = data?.achievements ?? [];
   const streak = data?.streak;
 
-  // Group achievements by category
-  const shoppingAchievements = achievements.filter(
-    (a) => a.category === 'SHOPPER'
-  );
-  const organizerAchievements = achievements.filter(
-    (a) => a.category === 'ORGANIZER'
-  );
-  const sharedAchievements = achievements.filter(
-    (a) => a.category === 'SHARED'
-  );
+  const shoppingAchievements = achievements.filter((a) => a.category === 'SHOPPER');
+  const organizerAchievements = achievements.filter((a) => a.category === 'ORGANIZER');
+  const sharedAchievements = achievements.filter((a) => a.category === 'SHARED');
 
   if (isLoading) {
     return (
@@ -57,48 +55,31 @@ export default function AchievementsPage() {
 
       <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-emerald-900 mb-2">
-              Achievements
-            </h1>
+            <h1 className="text-4xl font-bold text-emerald-900 mb-2">Achievements</h1>
             <p className="text-gray-600">
               {unlockedCount} of {totalCount} achievements unlocked
             </p>
           </div>
 
-          {/* Streak Display */}
           {streak && (
             <div className="bg-white rounded-lg border-2 border-amber-300 shadow-lg p-6 mb-8 text-center">
               <div className="text-6xl mb-2">🔥</div>
-              <h2 className="text-2xl font-bold text-amber-700 mb-2">
-                Current Streak
-              </h2>
-              <p className="text-3xl font-bold text-amber-600 mb-4">
-                {streak.currentStreak} weekends
-              </p>
-              <p className="text-gray-600 mb-2">
-                Longest streak: {streak.longestStreak} weekends
-              </p>
+              <h2 className="text-2xl font-bold text-amber-700 mb-2">Current Streak</h2>
+              <p className="text-3xl font-bold text-amber-600 mb-4">{streak.currentStreak} weekends</p>
+              <p className="text-gray-600 mb-2">Longest streak: {streak.longestStreak} weekends</p>
               {streak.earlyAccessUnlocked && (
                 <div className="mt-4 bg-emerald-100 border-2 border-emerald-500 rounded-lg p-3">
-                  <p className="text-emerald-700 font-bold">
-                    ✨ Early Access Unlocked!
-                  </p>
-                  <p className="text-sm text-emerald-600">
-                    You get early access to upcoming sales
-                  </p>
+                  <p className="text-emerald-700 font-bold">✨ Early Access Unlocked!</p>
+                  <p className="text-sm text-emerald-600">You get early access to upcoming sales</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Shopper Achievements */}
           {shoppingAchievements.length > 0 && (
             <section className="mb-8">
-              <h2 className="text-2xl font-bold text-emerald-900 mb-4">
-                🛍️ Shopper Achievements
-              </h2>
+              <h2 className="text-2xl font-bold text-emerald-900 mb-4">🛍️ Shopper Achievements</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {shoppingAchievements.map((achievement) => (
                   <AchievementBadge
@@ -112,12 +93,9 @@ export default function AchievementsPage() {
             </section>
           )}
 
-          {/* Organizer Achievements */}
           {organizerAchievements.length > 0 && (
             <section className="mb-8">
-              <h2 className="text-2xl font-bold text-emerald-900 mb-4">
-                📦 Organizer Achievements
-              </h2>
+              <h2 className="text-2xl font-bold text-emerald-900 mb-4">📦 Organizer Achievements</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {organizerAchievements.map((achievement) => (
                   <AchievementBadge
@@ -131,12 +109,9 @@ export default function AchievementsPage() {
             </section>
           )}
 
-          {/* Shared Achievements */}
           {sharedAchievements.length > 0 && (
             <section className="mb-8">
-              <h2 className="text-2xl font-bold text-emerald-900 mb-4">
-                ⭐ Shared Achievements
-              </h2>
+              <h2 className="text-2xl font-bold text-emerald-900 mb-4">⭐ Shared Achievements</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sharedAchievements.map((achievement) => (
                   <AchievementBadge
