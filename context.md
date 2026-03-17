@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-17T15:26:21.076Z*
+*Generated at 2026-03-17T23:21:11.109Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -16,16 +16,984 @@ See report for details.
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
-⚠ 5+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/nifty-compassionate-dijkstra/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/nifty-compassionate-dijkstra/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
-  /sessions/nifty-compassionate-dijkstra/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
-  /sessions/nifty-compassionate-dijkstra/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
-  /sessions/nifty-compassionate-dijkstra/mnt/FindaSale/packages/frontend/pages/organizer/add-items/[saleId].tsx:161:// TODO: Implement face detection with @tensorflow-models/coco-ssd
+⚠ 6+ TODO/FIXME markers in source (showing up to 5):
+  /sessions/bold-dazzling-cori/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
+  /sessions/bold-dazzling-cori/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/bold-dazzling-cori/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
+  /sessions/bold-dazzling-cori/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/bold-dazzling-cori/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
 
 ## Project File Tree
 ```
 ├── .checkpoint-manifest.json
+├── .claude/
+│   └── worktrees/
+│       ├── agent-a149904c/
+│       │   ├── .checkpoint-manifest.json
+│       │   ├── .claude/
+│       │   ├── .env.example
+│       │   ├── .gitattributes
+│       │   ├── .githooks/
+│       │   │   ├── pre-commit
+│       │   │   └── pre-push
+│       │   ├── .gitignore
+│       │   ├── .skills/
+│       │   │   └── skills/
+│       │   │       ├── conversation-defaults/
+│       │   │       │   └── SKILL.md
+│       │   │       ├── dev-environment/
+│       │   │       │   └── SKILL.md
+│       │   │       └── skill-creator/
+│       │   │           └── SKILL.md
+│       │   ├── CLAUDE.md
+│       │   ├── INSTALL-conversation-defaults-SKILL.md
+│       │   ├── INSTALL-push-coordinator-SKILL.md
+│       │   ├── MESSAGE_BOARD.json
+│       │   ├── README.md
+│       │   ├── ai-config/
+│       │   │   └── global-instructions.md
+│       │   ├── camera-mode-mockup.jsx
+│       │   ├── claude_docs/
+│       │   │   ├── .last-wrap
+│       │   │   ├── CORE.md
+│       │   │   ├── RECOVERY.md
+│       │   │   ├── SECURITY.md
+│       │   │   ├── STACK.md
+│       │   │   ├── STATE.md
+│       │   │   ├── architecture/
+│       │   │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
+│       │   │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
+│       │   │   │   ├── ADR-030-046-069-AI-OFFLINE-SPEC.md
+│       │   │   │   ├── ADR-040-044-048-HUBS-TRAIL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-ENCYCLOPEDIA-AGGREGATOR-APPRAISAL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
+│       │   │   │   ├── ADR-065-PATRICK-DECISIONS.md
+│       │   │   │   ├── ADR-065-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-COMMAND-CENTER-DASHBOARD.md
+│       │   │   │   ├── ADR-068-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
+│       │   │   │   └── ADR-PHASE4-BRIEF.md
+│       │   │   ├── archive/ (14 files)
+│       │   │   ├── beta-launch/ (4 files)
+│       │   │   ├── brand/ (9 files)
+│       │   │   ├── competitor-intel/ (1 files)
+│       │   │   ├── decisions-log.md
+│       │   │   ├── escalation-log.md
+│       │   │   ├── feature-decisions/
+│       │   │   │   ├── FINDASALE_PUSH_COORDINATOR_SKILL_TEMPLATE.md
+│       │   │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
+│       │   │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
+│       │   │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
+│       │   │   ├── feature-notes/ (14 files)
+│       │   │   ├── health-reports/ (2 files)
+│       │   │   ├── logs/ (2 files)
+│       │   │   ├── next-session-brief.md
+│       │   │   ├── next-session-prompt.md
+│       │   │   ├── operations/ (28 files)
+│       │   │   ├── research/ (5 files)
+│       │   │   ├── self-healing/ (1 files)
+│       │   │   ├── self_healing_skills.md
+│       │   │   ├── session-log-archive.md
+│       │   │   ├── session-log.md
+│       │   │   ├── skills-package/ (27 files)
+│       │   │   ├── strategy/ (5 files)
+│       │   │   ├── ux-spotchecks/
+│       │   │   │   └── add-items-ux-audit-2026-03-15.md
+│       │   │   └── workflow-retrospectives/ (1 files)
+│       │   ├── package.json
+│       │   ├── packages/
+│       │   │   ├── backend/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── Dockerfile.production
+│       │   │   │   ├── docs/
+│       │   │   │   │   └── EMAIL_SMS_REMINDERS.md
+│       │   │   │   ├── nodemon.json
+│       │   │   │   ├── package.json
+│       │   │   │   ├── src/
+│       │   │   │   │   ├── __tests__/
+│       │   │   │   │   │   ├── emailReminders.e2e.ts
+│       │   │   │   │   │   ├── stripe.e2e.ts
+│       │   │   │   │   │   └── weeklyDigest.e2e.ts
+│       │   │   │   │   ├── _triggerDigest.ts
+│       │   │   │   │   ├── config/
+│       │   │   │   │   │   └── regionConfig.ts
+│       │   │   │   │   ├── controllers/ (92 files)
+│       │   │   │   │   ├── helpers/
+│       │   │   │   │   │   └── itemQueries.ts
+│       │   │   │   │   ├── index.ts
+│       │   │   │   │   ├── instrument.ts
+│       │   │   │   │   ├── jobs/ (13 files)
+│       │   │   │   │   ├── lib/ (7 files)
+│       │   │   │   │   ├── middleware/ (5 files)
+│       │   │   │   │   ├── models/ (1 files)
+│       │   │   │   │   ├── routes/ (91 files)
+│       │   │   │   │   ├── services/ (45 files)
+│       │   │   │   │   ├── types/ (1 files)
+│       │   │   │   │   └── utils/ (4 files)
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── database/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── index.ts
+│       │   │   │   ├── package.json
+│       │   │   │   ├── prisma/
+│       │   │   │   │   ├── migrations/ (105 migrations)
+│       │   │   │   │   ├── schema.prisma
+│       │   │   │   │   └── seed.ts
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── frontend/
+│       │   │   │   ├── .env.local.example
+│       │   │   │   ├── .gitignore
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── components/ (144 files)
+│       │   │   │   ├── context/ (1 files)
+│       │   │   │   ├── contexts/ (2 files)
+│       │   │   │   ├── hooks/ (37 files)
+│       │   │   │   ├── lib/ (8 files)
+│       │   │   │   ├── next-env.d.ts
+│       │   │   │   ├── next-sitemap.config.js
+│       │   │   │   ├── next.config.js
+│       │   │   │   ├── package.json
+│       │   │   │   ├── pages/ (52 files)
+│       │   │   │   ├── postcss.config.js
+│       │   │   │   ├── public/ (6 files)
+│       │   │   │   ├── sentry.client.config.ts
+│       │   │   │   ├── sentry.edge.config.ts
+│       │   │   │   ├── sentry.server.config.ts
+│       │   │   │   ├── styles/ (2 files)
+│       │   │   │   ├── tailwind.config.js
+│       │   │   │   ├── tsconfig.json
+│       │   │   │   ├── types/ (5 files)
+│       │   │   │   └── utils/ (1 files)
+│       │   │   └── shared/
+│       │   │       ├── CLAUDE.md
+│       │   │       ├── package.json
+│       │   │       ├── src/
+│       │   │       │   ├── constants/
+│       │   │       │   │   └── tagVocabulary.ts
+│       │   │       │   ├── index.ts
+│       │   │       │   ├── tierGate.ts
+│       │   │       │   └── types/ (1 files)
+│       │   │       └── tsconfig.json
+│       │   ├── pnpm-workspace.yaml
+│       │   ├── push.ps1
+│       │   ├── railway.toml
+│       │   └── scripts/
+│       │       ├── health-check.ts
+│       │       ├── session-wrap-check.ps1
+│       │       ├── session-wrap-check.sh
+│       │       ├── statusline-token-usage.sh
+│       │       ├── stress-test.js
+│       │       └── update-context.js
+│       ├── agent-a29f7731/
+│       │   ├── .checkpoint-manifest.json
+│       │   ├── .claude/
+│       │   ├── .env.example
+│       │   ├── .gitattributes
+│       │   ├── .githooks/
+│       │   │   ├── pre-commit
+│       │   │   └── pre-push
+│       │   ├── .gitignore
+│       │   ├── .skills/
+│       │   │   └── skills/
+│       │   │       ├── conversation-defaults/
+│       │   │       │   └── SKILL.md
+│       │   │       ├── dev-environment/
+│       │   │       │   └── SKILL.md
+│       │   │       └── skill-creator/
+│       │   │           └── SKILL.md
+│       │   ├── CLAUDE.md
+│       │   ├── INSTALL-conversation-defaults-SKILL.md
+│       │   ├── INSTALL-push-coordinator-SKILL.md
+│       │   ├── MESSAGE_BOARD.json
+│       │   ├── README.md
+│       │   ├── ai-config/
+│       │   │   └── global-instructions.md
+│       │   ├── camera-mode-mockup.jsx
+│       │   ├── claude_docs/
+│       │   │   ├── .last-wrap
+│       │   │   ├── CORE.md
+│       │   │   ├── RECOVERY.md
+│       │   │   ├── SECURITY.md
+│       │   │   ├── STACK.md
+│       │   │   ├── STATE.md
+│       │   │   ├── architecture/
+│       │   │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
+│       │   │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
+│       │   │   │   ├── ADR-030-046-069-AI-OFFLINE-SPEC.md
+│       │   │   │   ├── ADR-040-044-048-HUBS-TRAIL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-ENCYCLOPEDIA-AGGREGATOR-APPRAISAL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
+│       │   │   │   ├── ADR-065-PATRICK-DECISIONS.md
+│       │   │   │   ├── ADR-065-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-COMMAND-CENTER-DASHBOARD.md
+│       │   │   │   ├── ADR-068-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
+│       │   │   │   └── ADR-PHASE4-BRIEF.md
+│       │   │   ├── archive/ (14 files)
+│       │   │   ├── beta-launch/ (4 files)
+│       │   │   ├── brand/ (9 files)
+│       │   │   ├── competitor-intel/ (1 files)
+│       │   │   ├── decisions-log.md
+│       │   │   ├── escalation-log.md
+│       │   │   ├── feature-decisions/
+│       │   │   │   ├── FINDASALE_PUSH_COORDINATOR_SKILL_TEMPLATE.md
+│       │   │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
+│       │   │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
+│       │   │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
+│       │   │   ├── feature-notes/ (14 files)
+│       │   │   ├── health-reports/ (2 files)
+│       │   │   ├── logs/ (2 files)
+│       │   │   ├── next-session-brief.md
+│       │   │   ├── next-session-prompt.md
+│       │   │   ├── operations/ (28 files)
+│       │   │   ├── research/ (5 files)
+│       │   │   ├── self-healing/ (1 files)
+│       │   │   ├── self_healing_skills.md
+│       │   │   ├── session-log-archive.md
+│       │   │   ├── session-log.md
+│       │   │   ├── skills-package/ (27 files)
+│       │   │   ├── strategy/ (5 files)
+│       │   │   ├── ux-spotchecks/
+│       │   │   │   └── add-items-ux-audit-2026-03-15.md
+│       │   │   └── workflow-retrospectives/ (1 files)
+│       │   ├── package.json
+│       │   ├── packages/
+│       │   │   ├── backend/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── Dockerfile.production
+│       │   │   │   ├── docs/
+│       │   │   │   │   └── EMAIL_SMS_REMINDERS.md
+│       │   │   │   ├── nodemon.json
+│       │   │   │   ├── package.json
+│       │   │   │   ├── src/
+│       │   │   │   │   ├── __tests__/
+│       │   │   │   │   │   ├── emailReminders.e2e.ts
+│       │   │   │   │   │   ├── stripe.e2e.ts
+│       │   │   │   │   │   └── weeklyDigest.e2e.ts
+│       │   │   │   │   ├── _triggerDigest.ts
+│       │   │   │   │   ├── config/
+│       │   │   │   │   │   └── regionConfig.ts
+│       │   │   │   │   ├── controllers/ (91 files)
+│       │   │   │   │   ├── helpers/
+│       │   │   │   │   │   └── itemQueries.ts
+│       │   │   │   │   ├── index.ts
+│       │   │   │   │   ├── instrument.ts
+│       │   │   │   │   ├── jobs/ (13 files)
+│       │   │   │   │   ├── lib/ (7 files)
+│       │   │   │   │   ├── middleware/ (5 files)
+│       │   │   │   │   ├── models/ (1 files)
+│       │   │   │   │   ├── routes/ (90 files)
+│       │   │   │   │   ├── services/ (45 files)
+│       │   │   │   │   ├── types/ (1 files)
+│       │   │   │   │   └── utils/ (4 files)
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── database/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── index.ts
+│       │   │   │   ├── package.json
+│       │   │   │   ├── prisma/
+│       │   │   │   │   ├── migrations/ (105 migrations)
+│       │   │   │   │   ├── schema.prisma
+│       │   │   │   │   └── seed.ts
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── frontend/
+│       │   │   │   ├── .env.local.example
+│       │   │   │   ├── .gitignore
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── components/ (142 files)
+│       │   │   │   ├── context/ (1 files)
+│       │   │   │   ├── contexts/ (2 files)
+│       │   │   │   ├── hooks/ (36 files)
+│       │   │   │   ├── lib/ (5 files)
+│       │   │   │   ├── next-env.d.ts
+│       │   │   │   ├── next-sitemap.config.js
+│       │   │   │   ├── next.config.js
+│       │   │   │   ├── package.json
+│       │   │   │   ├── pages/ (52 files)
+│       │   │   │   ├── postcss.config.js
+│       │   │   │   ├── public/ (5 files)
+│       │   │   │   ├── sentry.client.config.ts
+│       │   │   │   ├── sentry.edge.config.ts
+│       │   │   │   ├── sentry.server.config.ts
+│       │   │   │   ├── styles/ (2 files)
+│       │   │   │   ├── tailwind.config.js
+│       │   │   │   ├── tsconfig.json
+│       │   │   │   ├── types/ (5 files)
+│       │   │   │   └── utils/ (1 files)
+│       │   │   └── shared/
+│       │   │       ├── CLAUDE.md
+│       │   │       ├── package.json
+│       │   │       ├── src/
+│       │   │       │   ├── constants/
+│       │   │       │   │   └── tagVocabulary.ts
+│       │   │       │   ├── index.ts
+│       │   │       │   ├── tierGate.ts
+│       │   │       │   └── types/ (1 files)
+│       │   │       └── tsconfig.json
+│       │   ├── pnpm-workspace.yaml
+│       │   ├── push.ps1
+│       │   ├── railway.toml
+│       │   └── scripts/
+│       │       ├── health-check.ts
+│       │       ├── session-wrap-check.ps1
+│       │       ├── session-wrap-check.sh
+│       │       ├── statusline-token-usage.sh
+│       │       ├── stress-test.js
+│       │       └── update-context.js
+│       ├── agent-a2b4ad92/
+│       │   ├── .checkpoint-manifest.json
+│       │   ├── .claude/
+│       │   ├── .env.example
+│       │   ├── .gitattributes
+│       │   ├── .githooks/
+│       │   │   ├── pre-commit
+│       │   │   └── pre-push
+│       │   ├── .gitignore
+│       │   ├── .skills/
+│       │   │   └── skills/
+│       │   │       ├── conversation-defaults/
+│       │   │       │   └── SKILL.md
+│       │   │       ├── dev-environment/
+│       │   │       │   └── SKILL.md
+│       │   │       └── skill-creator/
+│       │   │           └── SKILL.md
+│       │   ├── CLAUDE.md
+│       │   ├── INSTALL-conversation-defaults-SKILL.md
+│       │   ├── INSTALL-push-coordinator-SKILL.md
+│       │   ├── MESSAGE_BOARD.json
+│       │   ├── README.md
+│       │   ├── ai-config/
+│       │   │   └── global-instructions.md
+│       │   ├── camera-mode-mockup.jsx
+│       │   ├── claude_docs/
+│       │   │   ├── .last-wrap
+│       │   │   ├── CORE.md
+│       │   │   ├── RECOVERY.md
+│       │   │   ├── SECURITY.md
+│       │   │   ├── STACK.md
+│       │   │   ├── STATE.md
+│       │   │   ├── architecture/
+│       │   │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
+│       │   │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
+│       │   │   │   ├── ADR-030-046-069-AI-OFFLINE-SPEC.md
+│       │   │   │   ├── ADR-040-044-048-HUBS-TRAIL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-ENCYCLOPEDIA-AGGREGATOR-APPRAISAL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
+│       │   │   │   ├── ADR-065-PATRICK-DECISIONS.md
+│       │   │   │   ├── ADR-065-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-COMMAND-CENTER-DASHBOARD.md
+│       │   │   │   ├── ADR-068-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
+│       │   │   │   └── ADR-PHASE4-BRIEF.md
+│       │   │   ├── archive/ (14 files)
+│       │   │   ├── beta-launch/ (4 files)
+│       │   │   ├── brand/ (9 files)
+│       │   │   ├── competitor-intel/ (1 files)
+│       │   │   ├── decisions-log.md
+│       │   │   ├── escalation-log.md
+│       │   │   ├── feature-decisions/
+│       │   │   │   ├── FINDASALE_PUSH_COORDINATOR_SKILL_TEMPLATE.md
+│       │   │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
+│       │   │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
+│       │   │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
+│       │   │   ├── feature-notes/ (14 files)
+│       │   │   ├── health-reports/ (2 files)
+│       │   │   ├── logs/ (2 files)
+│       │   │   ├── next-session-brief.md
+│       │   │   ├── next-session-prompt.md
+│       │   │   ├── operations/ (28 files)
+│       │   │   ├── research/ (5 files)
+│       │   │   ├── self-healing/ (1 files)
+│       │   │   ├── self_healing_skills.md
+│       │   │   ├── session-log-archive.md
+│       │   │   ├── session-log.md
+│       │   │   ├── skills-package/ (27 files)
+│       │   │   ├── strategy/ (5 files)
+│       │   │   ├── ux-spotchecks/
+│       │   │   │   └── add-items-ux-audit-2026-03-15.md
+│       │   │   └── workflow-retrospectives/ (1 files)
+│       │   ├── package.json
+│       │   ├── packages/
+│       │   │   ├── backend/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── Dockerfile.production
+│       │   │   │   ├── docs/
+│       │   │   │   │   └── EMAIL_SMS_REMINDERS.md
+│       │   │   │   ├── nodemon.json
+│       │   │   │   ├── package.json
+│       │   │   │   ├── src/
+│       │   │   │   │   ├── __tests__/
+│       │   │   │   │   │   ├── emailReminders.e2e.ts
+│       │   │   │   │   │   ├── stripe.e2e.ts
+│       │   │   │   │   │   └── weeklyDigest.e2e.ts
+│       │   │   │   │   ├── _triggerDigest.ts
+│       │   │   │   │   ├── config/
+│       │   │   │   │   │   └── regionConfig.ts
+│       │   │   │   │   ├── controllers/ (91 files)
+│       │   │   │   │   ├── helpers/
+│       │   │   │   │   │   └── itemQueries.ts
+│       │   │   │   │   ├── index.ts
+│       │   │   │   │   ├── instrument.ts
+│       │   │   │   │   ├── jobs/ (13 files)
+│       │   │   │   │   ├── lib/ (7 files)
+│       │   │   │   │   ├── middleware/ (5 files)
+│       │   │   │   │   ├── models/ (1 files)
+│       │   │   │   │   ├── routes/ (90 files)
+│       │   │   │   │   ├── services/ (45 files)
+│       │   │   │   │   ├── types/ (1 files)
+│       │   │   │   │   └── utils/ (4 files)
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── database/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── index.ts
+│       │   │   │   ├── package.json
+│       │   │   │   ├── prisma/
+│       │   │   │   │   ├── migrations/ (105 migrations)
+│       │   │   │   │   ├── schema.prisma
+│       │   │   │   │   └── seed.ts
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── frontend/
+│       │   │   │   ├── .env.local.example
+│       │   │   │   ├── .gitignore
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── components/ (142 files)
+│       │   │   │   ├── context/ (1 files)
+│       │   │   │   ├── contexts/ (2 files)
+│       │   │   │   ├── hooks/ (36 files)
+│       │   │   │   ├── lib/ (5 files)
+│       │   │   │   ├── next-env.d.ts
+│       │   │   │   ├── next-sitemap.config.js
+│       │   │   │   ├── next.config.js
+│       │   │   │   ├── package.json
+│       │   │   │   ├── pages/ (52 files)
+│       │   │   │   ├── postcss.config.js
+│       │   │   │   ├── public/ (5 files)
+│       │   │   │   ├── sentry.client.config.ts
+│       │   │   │   ├── sentry.edge.config.ts
+│       │   │   │   ├── sentry.server.config.ts
+│       │   │   │   ├── styles/ (2 files)
+│       │   │   │   ├── tailwind.config.js
+│       │   │   │   ├── tsconfig.json
+│       │   │   │   ├── types/ (5 files)
+│       │   │   │   └── utils/ (1 files)
+│       │   │   └── shared/
+│       │   │       ├── CLAUDE.md
+│       │   │       ├── package.json
+│       │   │       ├── src/
+│       │   │       │   ├── constants/
+│       │   │       │   │   └── tagVocabulary.ts
+│       │   │       │   ├── index.ts
+│       │   │       │   ├── tierGate.ts
+│       │   │       │   └── types/ (1 files)
+│       │   │       └── tsconfig.json
+│       │   ├── pnpm-workspace.yaml
+│       │   ├── push.ps1
+│       │   ├── railway.toml
+│       │   └── scripts/
+│       │       ├── health-check.ts
+│       │       ├── session-wrap-check.ps1
+│       │       ├── session-wrap-check.sh
+│       │       ├── statusline-token-usage.sh
+│       │       ├── stress-test.js
+│       │       └── update-context.js
+│       ├── agent-a39344c2/
+│       │   ├── .checkpoint-manifest.json
+│       │   ├── .claude/
+│       │   ├── .env.example
+│       │   ├── .gitattributes
+│       │   ├── .githooks/
+│       │   │   ├── pre-commit
+│       │   │   └── pre-push
+│       │   ├── .gitignore
+│       │   ├── .skills/
+│       │   │   └── skills/
+│       │   │       ├── conversation-defaults/
+│       │   │       │   └── SKILL.md
+│       │   │       ├── dev-environment/
+│       │   │       │   └── SKILL.md
+│       │   │       └── skill-creator/
+│       │   │           └── SKILL.md
+│       │   ├── CLAUDE.md
+│       │   ├── INSTALL-conversation-defaults-SKILL.md
+│       │   ├── INSTALL-push-coordinator-SKILL.md
+│       │   ├── MESSAGE_BOARD.json
+│       │   ├── README.md
+│       │   ├── ai-config/
+│       │   │   └── global-instructions.md
+│       │   ├── camera-mode-mockup.jsx
+│       │   ├── claude_docs/
+│       │   │   ├── .last-wrap
+│       │   │   ├── CORE.md
+│       │   │   ├── RECOVERY.md
+│       │   │   ├── SECURITY.md
+│       │   │   ├── STACK.md
+│       │   │   ├── STATE.md
+│       │   │   ├── architecture/
+│       │   │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
+│       │   │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
+│       │   │   │   ├── ADR-030-046-069-AI-OFFLINE-SPEC.md
+│       │   │   │   ├── ADR-040-044-048-HUBS-TRAIL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-ENCYCLOPEDIA-AGGREGATOR-APPRAISAL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
+│       │   │   │   ├── ADR-065-PATRICK-DECISIONS.md
+│       │   │   │   ├── ADR-065-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-COMMAND-CENTER-DASHBOARD.md
+│       │   │   │   ├── ADR-068-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
+│       │   │   │   └── ADR-PHASE4-BRIEF.md
+│       │   │   ├── archive/ (14 files)
+│       │   │   ├── beta-launch/ (4 files)
+│       │   │   ├── brand/ (9 files)
+│       │   │   ├── competitor-intel/ (1 files)
+│       │   │   ├── decisions-log.md
+│       │   │   ├── escalation-log.md
+│       │   │   ├── feature-decisions/
+│       │   │   │   ├── FINDASALE_PUSH_COORDINATOR_SKILL_TEMPLATE.md
+│       │   │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
+│       │   │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
+│       │   │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
+│       │   │   ├── feature-notes/ (14 files)
+│       │   │   ├── health-reports/ (2 files)
+│       │   │   ├── logs/ (2 files)
+│       │   │   ├── next-session-brief.md
+│       │   │   ├── next-session-prompt.md
+│       │   │   ├── operations/ (28 files)
+│       │   │   ├── research/ (5 files)
+│       │   │   ├── self-healing/ (1 files)
+│       │   │   ├── self_healing_skills.md
+│       │   │   ├── session-log-archive.md
+│       │   │   ├── session-log.md
+│       │   │   ├── skills-package/ (27 files)
+│       │   │   ├── strategy/ (5 files)
+│       │   │   ├── ux-spotchecks/
+│       │   │   │   └── add-items-ux-audit-2026-03-15.md
+│       │   │   └── workflow-retrospectives/ (1 files)
+│       │   ├── package.json
+│       │   ├── packages/
+│       │   │   ├── backend/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── Dockerfile.production
+│       │   │   │   ├── docs/
+│       │   │   │   │   └── EMAIL_SMS_REMINDERS.md
+│       │   │   │   ├── nodemon.json
+│       │   │   │   ├── package.json
+│       │   │   │   ├── src/
+│       │   │   │   │   ├── __tests__/
+│       │   │   │   │   │   ├── emailReminders.e2e.ts
+│       │   │   │   │   │   ├── stripe.e2e.ts
+│       │   │   │   │   │   └── weeklyDigest.e2e.ts
+│       │   │   │   │   ├── _triggerDigest.ts
+│       │   │   │   │   ├── config/
+│       │   │   │   │   │   └── regionConfig.ts
+│       │   │   │   │   ├── controllers/ (91 files)
+│       │   │   │   │   ├── helpers/
+│       │   │   │   │   │   └── itemQueries.ts
+│       │   │   │   │   ├── index.ts
+│       │   │   │   │   ├── instrument.ts
+│       │   │   │   │   ├── jobs/ (13 files)
+│       │   │   │   │   ├── lib/ (7 files)
+│       │   │   │   │   ├── middleware/ (5 files)
+│       │   │   │   │   ├── models/ (1 files)
+│       │   │   │   │   ├── routes/ (90 files)
+│       │   │   │   │   ├── services/ (45 files)
+│       │   │   │   │   ├── types/ (1 files)
+│       │   │   │   │   └── utils/ (4 files)
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── database/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── index.ts
+│       │   │   │   ├── package.json
+│       │   │   │   ├── prisma/
+│       │   │   │   │   ├── migrations/ (105 migrations)
+│       │   │   │   │   ├── schema.prisma
+│       │   │   │   │   └── seed.ts
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── frontend/
+│       │   │   │   ├── .env.local.example
+│       │   │   │   ├── .gitignore
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── components/ (142 files)
+│       │   │   │   ├── context/ (1 files)
+│       │   │   │   ├── contexts/ (2 files)
+│       │   │   │   ├── hooks/ (36 files)
+│       │   │   │   ├── lib/ (5 files)
+│       │   │   │   ├── next-env.d.ts
+│       │   │   │   ├── next-sitemap.config.js
+│       │   │   │   ├── next.config.js
+│       │   │   │   ├── package.json
+│       │   │   │   ├── pages/ (52 files)
+│       │   │   │   ├── postcss.config.js
+│       │   │   │   ├── public/ (5 files)
+│       │   │   │   ├── sentry.client.config.ts
+│       │   │   │   ├── sentry.edge.config.ts
+│       │   │   │   ├── sentry.server.config.ts
+│       │   │   │   ├── styles/ (2 files)
+│       │   │   │   ├── tailwind.config.js
+│       │   │   │   ├── tsconfig.json
+│       │   │   │   ├── types/ (5 files)
+│       │   │   │   └── utils/ (1 files)
+│       │   │   └── shared/
+│       │   │       ├── CLAUDE.md
+│       │   │       ├── package.json
+│       │   │       ├── src/
+│       │   │       │   ├── constants/
+│       │   │       │   │   └── tagVocabulary.ts
+│       │   │       │   ├── index.ts
+│       │   │       │   ├── tierGate.ts
+│       │   │       │   └── types/ (1 files)
+│       │   │       └── tsconfig.json
+│       │   ├── pnpm-workspace.yaml
+│       │   ├── push.ps1
+│       │   ├── railway.toml
+│       │   └── scripts/
+│       │       ├── health-check.ts
+│       │       ├── session-wrap-check.ps1
+│       │       ├── session-wrap-check.sh
+│       │       ├── statusline-token-usage.sh
+│       │       ├── stress-test.js
+│       │       └── update-context.js
+│       ├── agent-ad41a56d/
+│       │   ├── .checkpoint-manifest.json
+│       │   ├── .claude/
+│       │   ├── .env.example
+│       │   ├── .gitattributes
+│       │   ├── .githooks/
+│       │   │   ├── pre-commit
+│       │   │   └── pre-push
+│       │   ├── .gitignore
+│       │   ├── .skills/
+│       │   │   └── skills/
+│       │   │       ├── conversation-defaults/
+│       │   │       │   └── SKILL.md
+│       │   │       ├── dev-environment/
+│       │   │       │   └── SKILL.md
+│       │   │       └── skill-creator/
+│       │   │           └── SKILL.md
+│       │   ├── CLAUDE.md
+│       │   ├── INSTALL-conversation-defaults-SKILL.md
+│       │   ├── INSTALL-push-coordinator-SKILL.md
+│       │   ├── MESSAGE_BOARD.json
+│       │   ├── README.md
+│       │   ├── ai-config/
+│       │   │   └── global-instructions.md
+│       │   ├── camera-mode-mockup.jsx
+│       │   ├── claude_docs/
+│       │   │   ├── .last-wrap
+│       │   │   ├── CORE.md
+│       │   │   ├── RECOVERY.md
+│       │   │   ├── SECURITY.md
+│       │   │   ├── STACK.md
+│       │   │   ├── STATE.md
+│       │   │   ├── architecture/
+│       │   │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
+│       │   │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
+│       │   │   │   ├── ADR-030-046-069-AI-OFFLINE-SPEC.md
+│       │   │   │   ├── ADR-040-044-048-HUBS-TRAIL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-ENCYCLOPEDIA-AGGREGATOR-APPRAISAL-SPEC.md
+│       │   │   │   ├── ADR-052-053-054-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
+│       │   │   │   ├── ADR-065-PATRICK-DECISIONS.md
+│       │   │   │   ├── ADR-065-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-COMMAND-CENTER-DASHBOARD.md
+│       │   │   │   ├── ADR-068-QUICK-REFERENCE.md
+│       │   │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
+│       │   │   │   └── ADR-PHASE4-BRIEF.md
+│       │   │   ├── archive/ (14 files)
+│       │   │   ├── beta-launch/ (4 files)
+│       │   │   ├── brand/ (9 files)
+│       │   │   ├── competitor-intel/ (1 files)
+│       │   │   ├── decisions-log.md
+│       │   │   ├── escalation-log.md
+│       │   │   ├── feature-decisions/
+│       │   │   │   ├── FINDASALE_PUSH_COORDINATOR_SKILL_TEMPLATE.md
+│       │   │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
+│       │   │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
+│       │   │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
+│       │   │   ├── feature-notes/ (14 files)
+│       │   │   ├── health-reports/ (2 files)
+│       │   │   ├── logs/ (2 files)
+│       │   │   ├── next-session-brief.md
+│       │   │   ├── next-session-prompt.md
+│       │   │   ├── operations/ (28 files)
+│       │   │   ├── research/ (5 files)
+│       │   │   ├── self-healing/ (1 files)
+│       │   │   ├── self_healing_skills.md
+│       │   │   ├── session-log-archive.md
+│       │   │   ├── session-log.md
+│       │   │   ├── skills-package/ (27 files)
+│       │   │   ├── strategy/ (5 files)
+│       │   │   ├── ux-spotchecks/
+│       │   │   │   └── add-items-ux-audit-2026-03-15.md
+│       │   │   └── workflow-retrospectives/ (1 files)
+│       │   ├── package.json
+│       │   ├── packages/
+│       │   │   ├── backend/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── Dockerfile.production
+│       │   │   │   ├── docs/
+│       │   │   │   │   └── EMAIL_SMS_REMINDERS.md
+│       │   │   │   ├── nodemon.json
+│       │   │   │   ├── package.json
+│       │   │   │   ├── src/
+│       │   │   │   │   ├── __tests__/
+│       │   │   │   │   │   ├── emailReminders.e2e.ts
+│       │   │   │   │   │   ├── stripe.e2e.ts
+│       │   │   │   │   │   └── weeklyDigest.e2e.ts
+│       │   │   │   │   ├── _triggerDigest.ts
+│       │   │   │   │   ├── config/
+│       │   │   │   │   │   └── regionConfig.ts
+│       │   │   │   │   ├── controllers/ (91 files)
+│       │   │   │   │   ├── helpers/
+│       │   │   │   │   │   └── itemQueries.ts
+│       │   │   │   │   ├── index.ts
+│       │   │   │   │   ├── instrument.ts
+│       │   │   │   │   ├── jobs/ (13 files)
+│       │   │   │   │   ├── lib/ (7 files)
+│       │   │   │   │   ├── middleware/ (5 files)
+│       │   │   │   │   ├── models/ (1 files)
+│       │   │   │   │   ├── routes/ (90 files)
+│       │   │   │   │   ├── services/ (45 files)
+│       │   │   │   │   ├── types/ (1 files)
+│       │   │   │   │   └── utils/ (4 files)
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── database/
+│       │   │   │   ├── .env.example
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── index.ts
+│       │   │   │   ├── package.json
+│       │   │   │   ├── prisma/
+│       │   │   │   │   ├── migrations/ (105 migrations)
+│       │   │   │   │   ├── schema.prisma
+│       │   │   │   │   └── seed.ts
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── frontend/
+│       │   │   │   ├── .env.local.example
+│       │   │   │   ├── .gitignore
+│       │   │   │   ├── CLAUDE.md
+│       │   │   │   ├── Dockerfile
+│       │   │   │   ├── components/ (142 files)
+│       │   │   │   ├── context/ (1 files)
+│       │   │   │   ├── contexts/ (2 files)
+│       │   │   │   ├── hooks/ (36 files)
+│       │   │   │   ├── lib/ (5 files)
+│       │   │   │   ├── next-env.d.ts
+│       │   │   │   ├── next-sitemap.config.js
+│       │   │   │   ├── next.config.js
+│       │   │   │   ├── package.json
+│       │   │   │   ├── pages/ (52 files)
+│       │   │   │   ├── postcss.config.js
+│       │   │   │   ├── public/ (5 files)
+│       │   │   │   ├── sentry.client.config.ts
+│       │   │   │   ├── sentry.edge.config.ts
+│       │   │   │   ├── sentry.server.config.ts
+│       │   │   │   ├── styles/ (2 files)
+│       │   │   │   ├── tailwind.config.js
+│       │   │   │   ├── tsconfig.json
+│       │   │   │   ├── types/ (5 files)
+│       │   │   │   └── utils/ (1 files)
+│       │   │   └── shared/
+│       │   │       ├── CLAUDE.md
+│       │   │       ├── package.json
+│       │   │       ├── src/
+│       │   │       │   ├── constants/
+│       │   │       │   │   └── tagVocabulary.ts
+│       │   │       │   ├── index.ts
+│       │   │       │   ├── tierGate.ts
+│       │   │       │   └── types/ (1 files)
+│       │   │       └── tsconfig.json
+│       │   ├── pnpm-workspace.yaml
+│       │   ├── push.ps1
+│       │   ├── railway.toml
+│       │   └── scripts/
+│       │       ├── health-check.ts
+│       │       ├── session-wrap-check.ps1
+│       │       ├── session-wrap-check.sh
+│       │       ├── statusline-token-usage.sh
+│       │       ├── stress-test.js
+│       │       └── update-context.js
+│       └── agent-ada8ad64/
+│           ├── .checkpoint-manifest.json
+│           ├── .claude/
+│           ├── .env.example
+│           ├── .gitattributes
+│           ├── .githooks/
+│           │   ├── pre-commit
+│           │   └── pre-push
+│           ├── .gitignore
+│           ├── .skills/
+│           │   └── skills/
+│           │       ├── conversation-defaults/
+│           │       │   └── SKILL.md
+│           │       ├── dev-environment/
+│           │       │   └── SKILL.md
+│           │       └── skill-creator/
+│           │           └── SKILL.md
+│           ├── CLAUDE.md
+│           ├── INSTALL-conversation-defaults-SKILL.md
+│           ├── INSTALL-push-coordinator-SKILL.md
+│           ├── MESSAGE_BOARD.json
+│           ├── README.md
+│           ├── ai-config/
+│           │   └── global-instructions.md
+│           ├── camera-mode-mockup.jsx
+│           ├── claude_docs/
+│           │   ├── .last-wrap
+│           │   ├── CORE.md
+│           │   ├── RECOVERY.md
+│           │   ├── SECURITY.md
+│           │   ├── STACK.md
+│           │   ├── STATE.md
+│           │   ├── architecture/
+│           │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
+│           │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
+│           │   │   ├── ADR-030-046-069-AI-OFFLINE-SPEC.md
+│           │   │   ├── ADR-040-044-048-HUBS-TRAIL-SPEC.md
+│           │   │   ├── ADR-052-053-054-ENCYCLOPEDIA-AGGREGATOR-APPRAISAL-SPEC.md
+│           │   │   ├── ADR-052-053-054-QUICK-REFERENCE.md
+│           │   │   ├── ADR-065-IMPLEMENTATION-PLAN.md
+│           │   │   ├── ADR-065-PATRICK-DECISIONS.md
+│           │   │   ├── ADR-065-QUICK-REFERENCE.md
+│           │   │   ├── ADR-068-COMMAND-CENTER-DASHBOARD.md
+│           │   │   ├── ADR-068-QUICK-REFERENCE.md
+│           │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
+│           │   │   └── ADR-PHASE4-BRIEF.md
+│           │   ├── archive/ (14 files)
+│           │   ├── beta-launch/ (4 files)
+│           │   ├── brand/ (9 files)
+│           │   ├── competitor-intel/ (1 files)
+│           │   ├── decisions-log.md
+│           │   ├── escalation-log.md
+│           │   ├── feature-decisions/
+│           │   │   ├── FINDASALE_PUSH_COORDINATOR_SKILL_TEMPLATE.md
+│           │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
+│           │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
+│           │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
+│           │   ├── feature-notes/ (14 files)
+│           │   ├── health-reports/ (2 files)
+│           │   ├── logs/ (2 files)
+│           │   ├── next-session-brief.md
+│           │   ├── next-session-prompt.md
+│           │   ├── operations/ (28 files)
+│           │   ├── research/ (5 files)
+│           │   ├── self-healing/ (1 files)
+│           │   ├── self_healing_skills.md
+│           │   ├── session-log-archive.md
+│           │   ├── session-log.md
+│           │   ├── skills-package/ (27 files)
+│           │   ├── strategy/ (5 files)
+│           │   ├── ux-spotchecks/
+│           │   │   └── add-items-ux-audit-2026-03-15.md
+│           │   └── workflow-retrospectives/ (1 files)
+│           ├── package.json
+│           ├── packages/
+│           │   ├── backend/
+│           │   │   ├── .env.example
+│           │   │   ├── CLAUDE.md
+│           │   │   ├── Dockerfile
+│           │   │   ├── Dockerfile.production
+│           │   │   ├── docs/
+│           │   │   │   └── EMAIL_SMS_REMINDERS.md
+│           │   │   ├── nodemon.json
+│           │   │   ├── package.json
+│           │   │   ├── src/
+│           │   │   │   ├── __tests__/
+│           │   │   │   │   ├── emailReminders.e2e.ts
+│           │   │   │   │   ├── stripe.e2e.ts
+│           │   │   │   │   └── weeklyDigest.e2e.ts
+│           │   │   │   ├── _triggerDigest.ts
+│           │   │   │   ├── config/
+│           │   │   │   │   └── regionConfig.ts
+│           │   │   │   ├── controllers/ (91 files)
+│           │   │   │   ├── helpers/
+│           │   │   │   │   └── itemQueries.ts
+│           │   │   │   ├── index.ts
+│           │   │   │   ├── instrument.ts
+│           │   │   │   ├── jobs/ (13 files)
+│           │   │   │   ├── lib/ (7 files)
+│           │   │   │   ├── middleware/ (5 files)
+│           │   │   │   ├── models/ (1 files)
+│           │   │   │   ├── routes/ (90 files)
+│           │   │   │   ├── services/ (45 files)
+│           │   │   │   ├── types/ (1 files)
+│           │   │   │   └── utils/ (4 files)
+│           │   │   └── tsconfig.json
+│           │   ├── database/
+│           │   │   ├── .env.example
+│           │   │   ├── CLAUDE.md
+│           │   │   ├── index.ts
+│           │   │   ├── package.json
+│           │   │   ├── prisma/
+│           │   │   │   ├── migrations/ (105 migrations)
+│           │   │   │   ├── schema.prisma
+│           │   │   │   └── seed.ts
+│           │   │   └── tsconfig.json
+│           │   ├── frontend/
+│           │   │   ├── .env.local.example
+│           │   │   ├── .gitignore
+│           │   │   ├── CLAUDE.md
+│           │   │   ├── Dockerfile
+│           │   │   ├── components/ (142 files)
+│           │   │   ├── context/ (1 files)
+│           │   │   ├── contexts/ (2 files)
+│           │   │   ├── hooks/ (36 files)
+│           │   │   ├── lib/ (5 files)
+│           │   │   ├── next-env.d.ts
+│           │   │   ├── next-sitemap.config.js
+│           │   │   ├── next.config.js
+│           │   │   ├── package.json
+│           │   │   ├── pages/ (52 files)
+│           │   │   ├── postcss.config.js
+│           │   │   ├── public/ (5 files)
+│           │   │   ├── sentry.client.config.ts
+│           │   │   ├── sentry.edge.config.ts
+│           │   │   ├── sentry.server.config.ts
+│           │   │   ├── styles/ (2 files)
+│           │   │   ├── tailwind.config.js
+│           │   │   ├── tsconfig.json
+│           │   │   ├── types/ (5 files)
+│           │   │   └── utils/ (1 files)
+│           │   └── shared/
+│           │       ├── CLAUDE.md
+│           │       ├── package.json
+│           │       ├── src/
+│           │       │   ├── constants/
+│           │       │   │   └── tagVocabulary.ts
+│           │       │   ├── index.ts
+│           │       │   ├── tierGate.ts
+│           │       │   └── types/ (1 files)
+│           │       └── tsconfig.json
+│           ├── pnpm-workspace.yaml
+│           ├── push.ps1
+│           ├── railway.toml
+│           └── scripts/
+│               ├── health-check.ts
+│               ├── session-wrap-check.ps1
+│               ├── session-wrap-check.sh
+│               ├── statusline-token-usage.sh
+│               ├── stress-test.js
+│               └── update-context.js
 ├── .env
 ├── .env.example
 ├── .gitattributes
@@ -107,7 +1075,7 @@ See report for details.
 │   │       └── content-2026-03-16.md
 │   ├── next-session-brief.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (42 files)
+│   ├── operations/ (43 files)
 │   ├── research/ (9 files)
 │   ├── self-healing/ (1 files)
 │   ├── self_healing_skills.md
@@ -140,11 +1108,12 @@ See report for details.
 │   │   │   ├── __tests__/
 │   │   │   │   ├── emailReminders.e2e.ts
 │   │   │   │   ├── stripe.e2e.ts
+│   │   │   │   ├── typologyClassifier.integration.ts
 │   │   │   │   └── weeklyDigest.e2e.ts
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (91 files)
+│   │   │   ├── controllers/ (95 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
@@ -153,8 +1122,8 @@ See report for details.
 │   │   │   ├── lib/ (7 files)
 │   │   │   ├── middleware/ (5 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (90 files)
-│   │   │   ├── services/ (45 files)
+│   │   │   ├── routes/ (94 files)
+│   │   │   ├── services/ (48 files)
 │   │   │   ├── types/ (1 files)
 │   │   │   └── utils/ (4 files)
 │   │   └── tsconfig.json
@@ -166,7 +1135,7 @@ See report for details.
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (105 migrations)
+│   │   │   ├── migrations/ (110 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -177,11 +1146,11 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (142 files)
+│   │   ├── components/ (146 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (2 files)
-│   │   ├── hooks/ (36 files)
-│   │   ├── lib/ (5 files)
+│   │   ├── hooks/ (37 files)
+│   │   ├── lib/ (8 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
 │   │   ├── next.config.js
@@ -205,7 +1174,7 @@ See report for details.
 │       │   │   └── tagVocabulary.ts
 │       │   ├── index.ts
 │       │   ├── tierGate.ts
-│       │   └── types/ (1 files)
+│       │   └── types/ (3 files)
 │       └── tsconfig.json
 ├── pnpm
 ├── pnpm-workspace.yaml

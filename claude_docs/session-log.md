@@ -2,6 +2,22 @@
 
 ## Recent Sessions
 
+### 2026-03-17 · Sessions 192+193
+
+**Vercel Build Recovery — S192 TypeScript Sweep Aftermath**
+
+**Worked on:** Full recovery of Vercel build broken by S192's new page additions. Fixed 15+ TypeScript errors across 15+ frontend files: wrong auth import paths (`hooks/useAuth` → `components/AuthContext`), NextAuth `useSession` replaced with app's `useAuth` in all shopper pages, wrong type property references (`user.organizerId` → `user.id`, `isLoading` not `loading`), wrong EmptyState prop names (`heading`/`subtext`/`cta` not `title`/`description`/`action`), default vs named import mismatch for Skeleton, SSR prerender crash on 6 shopper pages (moved `router.push` into `useEffect`, hoisted hooks before auth guard), optional relation types added to UGCPhoto interface. All 8 MCP commits pushed to main. Vercel build confirmed READY on commit `0626821`.
+
+**Decisions:**
+- S192 shipped pages without validating against actual component/type contracts — proactive schema+type scan now the correct approach for any wave-build aftermath
+- SSR prerender pattern: `router.push` MUST be in `useEffect`, never called synchronously at component render time
+
+**Next up:** Wave 5 Sprint 2 (frontend UI for 6 new features) + Chrome QA sweep verifying all Wave 4+5 features have proper frontend routes, pages, and nav wiring
+
+**Blockers:** None — Vercel clean, Railway unaffected (all changes were frontend-only)
+
+---
+
 ### 2026-03-17 · Session 191
 
 **Wave 5 Parallel Build — 6 Features Sprint 1 + Schema Fix**
@@ -439,27 +455,3 @@
 
 **Scoreboard:** Files changed: 10 | Phase features: 5 complete | Components created: 8 | Push method: Pending PS1
 
-### 2026-03-15 · Session 169 (STRATEGIC AUDIT + WORKFLOW OVERHAUL)
-**Worked on:** Full multi-agent audit of sessions 164–168 (6 research agents + 3 implementation agents). Workflow friction analysis, tool ecosystem evaluation (Claude Code CLI 9/10 ADOPT, Ollama 6/10 TRIAL, autoresearch 2/10 REJECT), Cowork ecosystem audit, communications quality baseline (5.3/10), manager subagent architecture ADR (determined full manager pattern not yet feasible; designed lightweight push-coordinator as 80% alternative), Sprint 2 QA (PASS WITH NOTES: 1 BLOCKER watermark slash fixed, 1 WARN UTC dates fixed). Conversation-defaults v7 designed (3 new rules, 3 revised). Push-coordinator skill template packaged.
-**Decisions:** Subagent push ban S169–171 locked in CLAUDE.md §10. Plugin categories keep ALL enabled (Patrick override). Claude Code CLI adopted as handoff with Cowork. Push-coordinator skill (not full manager) approved.
-**Files created (awaiting Patrick push):** conversation-defaults v7 INSTALL, push-coordinator INSTALL, claude_docs/workflow-audit-s164-s168.md, tool-ecosystem-evaluation, cowork-ecosystem-audit, communications-quality-assessment, qa-sprint2-verdict, patrick-language-map, push-coordinator-protocol, 3 manager subagent architecture docs
-**Files modified (MCP-pushed this session):** cloudinaryWatermark.ts (URL slash fix), exportController.ts (UTC date fix)
-**Files modified (await Patrick push):** CORE.md v4.2, CLAUDE.md (§9 push block guarantee + §10 subagent push ban)
-**Production status:** Sprint 2 verified PASS (watermark + export fixes shipped by dev agent)
-**Compression:** 0
-**Subagents:** 9 total (workflow, innovation, power-user, advisory-board, architect, qa, dev, records, skill-creator)
-**Next up:** Patrick pushes all pending files, installs new skills, verifies Railway/Vercel, tests push-coordinator, resumes feature work.
-**Scoreboard:** Files changed: 14+ | Compressions: 0 | Subagents: 9 | Push method: MCP (sprint2 fixes) + pending PS1 (bulk)
-
-### 2026-03-15 · Session 167–168 (combined — context compaction mid-session)
-**Worked on:** (Phase 1 / S167) Production recovery from S166 MCP truncations. Restored itemController.ts (939 lines, 13 exports), Railway redeployed, CORE.md v4.1 locked with 4 MCP safety rules. (Phase 2 / S168) Sprint 2 fully implemented: Cloudinary watermark utility, exportController.ts (3 formats: EstateSales.NET CSV, Facebook JSON, Craigslist text), promote.tsx UI with download/copy buttons. Export route registered in index.ts. All Sprint 2 code pushed to GitHub via MCP (8 commits total).
-**Decisions:** MCP truncation gate in CORE.md (mechanical size-comparison check). Watermark via Cloudinary URL transformation (no re-upload). CSV uses manual string building (no csv-stringify dep). All export endpoints require auth + ownership verification + PUBLISHED items only.
-**Production status:** ✓ Railway healthy | ✓ Vercel healthy | ✓ Neon 82 migrations
-**Files created (MCP-pushed):** `packages/backend/src/utils/cloudinaryWatermark.ts`, `packages/backend/src/controllers/exportController.ts`, `packages/backend/src/routes/export.ts`, `packages/frontend/pages/organizer/promote/[saleId].tsx`
-**Files modified (local, pending push):** `packages/backend/src/index.ts` (export route registration), context docs
-**MCP commits:** 5b1d88d, 1f22506, bc38ade, 1409a51, 7d8facc, 6f521b5, dc37800 + index.ts local commit b3b389e
-**Compression:** 1 auto-compaction (context window full after Sprint 2 implementation). Post-compaction: lost subagent dispatch details, kept all file paths and commit SHAs.
-**Blocker at wrap:** `.\push.ps1` merge conflict — `[saleId].tsx` not deleted locally (PowerShell bracket escaping). Fix: `Remove-Item -LiteralPath "packages\frontend\pages\organizer\promote\[saleId].tsx"` then `.\push.ps1`.
-**Patrick feedback (critical for next session):** Recurring pain points — errors repeat across sessions despite CORE.md rules, context docs go stale mid-session, session wraps require multiple push attempts, compaction drops working rulesets. Wants: manager subagent pattern, outsourcing research (Ollama, autoresearch, Claude Code Playground), CLAUDE.md improvements for session smoothness, communication/workflow audit.
-**Next up:** Strategic audit session — see next-session-prompt.md for full scope.
-**Scoreboard:** Files changed: 10+ | Compressions: 1 | Subagents: findasale-architect, findasale-dev, context-maintenance | Push method: MCP (7 commits) + PS1 (pending)
