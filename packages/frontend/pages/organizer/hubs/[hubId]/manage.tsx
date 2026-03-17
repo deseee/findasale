@@ -8,7 +8,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useHub, useUpdateHub, useSetHubEvent, useJoinHub, useLeaveHub } from '../../../../hooks/useHubs';
-import { useAuth } from '../../../../hooks/useAuth';
+import { useAuth } from '../../../../components/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function HubManagePage() {
