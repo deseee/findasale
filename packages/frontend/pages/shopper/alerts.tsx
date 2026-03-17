@@ -212,7 +212,7 @@ function AlertsPage() {
         isOpen={isFormOpen}
         onClose={handleCloseForm}
         alertId={editingAlert?.id}
-        initialData={editingAlert ? editingAlert.query : undefined}
+        initialData={editingAlert ? { name: editingAlert.name, ...editingAlert.query } : undefined}
       />
     </>
   );
