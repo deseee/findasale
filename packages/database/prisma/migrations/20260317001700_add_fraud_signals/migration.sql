@@ -21,16 +21,16 @@ CREATE TABLE "FraudSignal" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "FraudSignal_userId_itemId_signalType_key" ON "FraudSignal"("userId", "itemId", "signalType");
+CREATE UNIQUE INDEX IF NOT EXISTS "FraudSignal_userId_itemId_signalType_key" ON "FraudSignal"("userId", "itemId", "signalType");
 
 -- CreateIndex
-CREATE INDEX "FraudSignal_saleId_idx" ON "FraudSignal"("saleId");
+CREATE INDEX IF NOT EXISTS "FraudSignal_saleId_idx" ON "FraudSignal"("saleId");
 
 -- CreateIndex
-CREATE INDEX "FraudSignal_userId_idx" ON "FraudSignal"("userId");
+CREATE INDEX IF NOT EXISTS "FraudSignal_userId_idx" ON "FraudSignal"("userId");
 
 -- CreateIndex
-CREATE INDEX "FraudSignal_confidenceScore_idx" ON "FraudSignal"("confidenceScore");
+CREATE INDEX IF NOT EXISTS "FraudSignal_confidenceScore_idx" ON "FraudSignal"("confidenceScore");
 
 -- CreateIndex
-CREATE INDEX "FraudSignal_reviewOutcome_idx" ON "FraudSignal"("reviewOutcome");
+CREATE INDEX IF NOT EXISTS "FraudSignal_reviewOutcome_idx" ON "FraudSignal"("reviewOutcome");

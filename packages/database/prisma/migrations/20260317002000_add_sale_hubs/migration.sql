@@ -17,13 +17,13 @@ CREATE TABLE "SaleHub" (
 );
 
 -- CreateIndex
-CREATE INDEX "SaleHub_organizerId_idx" ON "SaleHub"("organizerId");
+CREATE INDEX IF NOT EXISTS "SaleHub_organizerId_idx" ON "SaleHub"("organizerId");
 
 -- CreateIndex
-CREATE INDEX "SaleHub_lat_lng_idx" ON "SaleHub"("lat", "lng");
+CREATE INDEX IF NOT EXISTS "SaleHub_lat_lng_idx" ON "SaleHub"("lat", "lng");
 
 -- CreateIndex
-CREATE INDEX "SaleHub_isActive_idx" ON "SaleHub"("isActive");
+CREATE INDEX IF NOT EXISTS "SaleHub_isActive_idx" ON "SaleHub"("isActive");
 
 -- CreateTable "SaleHubMembership"
 CREATE TABLE "SaleHubMembership" (
@@ -36,10 +36,10 @@ CREATE TABLE "SaleHubMembership" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "SaleHubMembership_hubId_saleId_key" ON "SaleHubMembership"("hubId", "saleId");
+CREATE UNIQUE INDEX IF NOT EXISTS "SaleHubMembership_hubId_saleId_key" ON "SaleHubMembership"("hubId", "saleId");
 
 -- CreateIndex
-CREATE INDEX "SaleHubMembership_hubId_idx" ON "SaleHubMembership"("hubId");
+CREATE INDEX IF NOT EXISTS "SaleHubMembership_hubId_idx" ON "SaleHubMembership"("hubId");
 
 -- CreateIndex
-CREATE INDEX "SaleHubMembership_saleId_idx" ON "SaleHubMembership"("saleId");
+CREATE INDEX IF NOT EXISTS "SaleHubMembership_saleId_idx" ON "SaleHubMembership"("saleId");

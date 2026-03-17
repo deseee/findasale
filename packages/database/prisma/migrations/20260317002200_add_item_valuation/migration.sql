@@ -15,7 +15,7 @@ CREATE TABLE "ItemValuation" (
 );
 
 -- CreateIndex
-CREATE INDEX "ItemValuation_itemId_idx" ON "ItemValuation"("itemId");
+CREATE INDEX IF NOT EXISTS "ItemValuation_itemId_idx" ON "ItemValuation"("itemId");
 
 -- CreateIndex
-CREATE INDEX "ItemValuation_generatedAt_idx" ON "ItemValuation"("generatedAt");
+CREATE INDEX IF NOT EXISTS "ItemValuation_generatedAt_idx" ON "ItemValuation"("generatedAt");

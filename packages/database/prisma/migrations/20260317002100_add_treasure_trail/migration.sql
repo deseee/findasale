@@ -10,7 +10,7 @@ CREATE TABLE "TreasureTrail" (
   "totalDistanceKm" DOUBLE PRECISION,
   "totalDurationMin" INTEGER,
   "isPublic" BOOLEAN NOT NULL DEFAULT false,
-  "shareToken" VARCHAR(32) UNIQUE,
+  "shareToken" VARCHAR(32),
   "completedSaleIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   "isCompleted" BOOLEAN NOT NULL DEFAULT false,
   "completedAt" TIMESTAMP(3),
@@ -32,19 +32,19 @@ CREATE TABLE "TrailHighlight" (
 );
 
 -- CreateIndex
-CREATE INDEX "TreasureTrail_userId_idx" ON "TreasureTrail"("userId");
+CREATE INDEX IF NOT EXISTS "TreasureTrail_userId_idx" ON "TreasureTrail"("userId");
 
 -- CreateIndex
-CREATE INDEX "TreasureTrail_isPublic_idx" ON "TreasureTrail"("isPublic");
+CREATE INDEX IF NOT EXISTS "TreasureTrail_isPublic_idx" ON "TreasureTrail"("isPublic");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TreasureTrail_shareToken_key" ON "TreasureTrail"("shareToken");
+CREATE UNIQUE INDEX IF NOT EXISTS "TreasureTrail_shareToken_key" ON "TreasureTrail"("shareToken");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TrailHighlight_trailId_itemId_key" ON "TrailHighlight"("trailId", "itemId");
+CREATE UNIQUE INDEX IF NOT EXISTS "TrailHighlight_trailId_itemId_key" ON "TrailHighlight"("trailId", "itemId");
 
 -- CreateIndex
-CREATE INDEX "TrailHighlight_trailId_idx" ON "TrailHighlight"("trailId");
+CREATE INDEX IF NOT EXISTS "TrailHighlight_trailId_idx" ON "TrailHighlight"("trailId");
 
 -- CreateIndex
-CREATE INDEX "TrailHighlight_itemId_idx" ON "TrailHighlight"("itemId");
+CREATE INDEX IF NOT EXISTS "TrailHighlight_itemId_idx" ON "TrailHighlight"("itemId");

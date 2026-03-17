@@ -13,4 +13,4 @@ CREATE TABLE "PasskeyCredential" (
 );
 
 -- CreateIndex
-CREATE INDEX "PasskeyCredential_userId_idx" ON "PasskeyCredential"("userId");
+CREATE INDEX IF NOT EXISTS "PasskeyCredential_userId_idx" ON "PasskeyCredential"("userId");

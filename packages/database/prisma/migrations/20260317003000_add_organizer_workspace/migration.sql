@@ -28,7 +28,7 @@ CREATE TABLE "WorkspaceMember" (
 );
 
 -- CreateIndex
-CREATE INDEX "WorkspaceMember_workspaceId_idx" ON "WorkspaceMember"("workspaceId");
+CREATE INDEX IF NOT EXISTS "WorkspaceMember_workspaceId_idx" ON "WorkspaceMember"("workspaceId");
 
 -- CreateIndex
-CREATE INDEX "WorkspaceMember_organizerId_idx" ON "WorkspaceMember"("organizerId");
+CREATE INDEX IF NOT EXISTS "WorkspaceMember_organizerId_idx" ON "WorkspaceMember"("organizerId");
