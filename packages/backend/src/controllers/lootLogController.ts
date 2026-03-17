@@ -28,7 +28,7 @@ export const getMyLootLog = async (req: Request, res: Response) => {
               title: true,
               price: true,
               category: true,
-              imageUrl: true,
+              photoUrls: true,
             },
           },
           sale: {
@@ -101,6 +101,7 @@ export const getLootLogStats = async (req: Request, res: Response) => {
     // Find favorite category (most purchased)
     const categoryCount: Record<string, number> = {};
     purchases.forEach((p) => {
+      if (!p.item) return;
       const category = p.item.category || 'Uncategorized';
       categoryCount[category] = (categoryCount[category] || 0) + 1;
     });
@@ -108,7 +109,7 @@ export const getLootLogStats = async (req: Request, res: Response) => {
       Object.entries(categoryCount).sort(([, a], [, b]) => b - a)[0]?.[0] || null;
 
     // Count unique sales
-    const uniqueSaleIds = new Set(purchases.map((p) => p.sale.id));
+    const uniqueSaleIds = new Set(purchases.map((p) => p.sale?.id).filter(Boolean));
     const uniqueSales = uniqueSaleIds.size;
 
     res.json({
@@ -175,18 +176,17 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 12;
     const skip = (page - 1) * limit;
 
-    // Check if user exists and has public profile/loot log
+    // Check if user exists
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         name: true,
-        profilePublic: true,
       },
     });
 
-    if (!user || !user.profilePublic) {
-      return res.status(404).json({ error: 'User profile not found or is private' });
+    if (!user) {
+      return res.status(404).json({ error: 'User profile not found' });
     }
 
     const [purchases, total] = await Promise.all([
@@ -201,7 +201,7 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
               id: true,
               title: true,
               category: true,
-              imageUrl: true,
+              photoUrls: true,
             },
           },
           sale: {

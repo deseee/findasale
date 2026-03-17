@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { nanoid } from 'nanoid';
+import { randomBytes } from 'crypto';
 
 /**
  * POST /api/trails
@@ -21,7 +21,7 @@ export const createTrail = async (req: AuthRequest, res: Response) => {
     }
 
     // Generate share token (8-char alphanumeric)
-    const shareToken = nanoid(8);
+    const shareToken = randomBytes(6).toString('hex').slice(0, 8);
 
     // Create trail
     const trail = await prisma.treasureTrail.create({
