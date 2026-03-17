@@ -100,7 +100,21 @@ start announcement so Patrick knows what's available without having to ask.
 
 ---
 
-## 6. Context Checkpoints — No-Pause Rule
+## 6. Schema Change Protocol (Prisma)
+
+Any session that modifies `schema.prisma` or adds a migration SQL file **MUST** include these two Patrick manual actions in the handoff — no exceptions:
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+npx prisma migrate deploy   # applies SQL to Neon, records in _prisma_migrations
+npx prisma generate         # regenerates TypeScript client with new fields
+```
+
+`migrate deploy` runs first — without it the live DB is out of sync. `prisma generate` follows — without it new fields throw TypeScript errors at runtime. Railway deploys code automatically but does **not** run migrations.
+
+---
+
+## 7. Context Checkpoints — No-Pause Rule
 
 Agent handoff templates include "Context Checkpoint: yes/no." This is internal bookkeeping, not a stopping point.
 
@@ -110,7 +124,7 @@ Agent handoff templates include "Context Checkpoint: yes/no." This is internal b
 
 ---
 
-## 7. Context Discipline
+## 8. Context Discipline
 
 Do not restate:
 - Tech stack
@@ -122,7 +136,7 @@ Reference authoritative file instead.
 
 ---
 
-## 8. Skill Roster (Token Efficiency)
+## 9. Skill Roster (Token Efficiency)
 
 Custom `findasale-*` skills always preferred over generic plugin equivalents.
 Full routing rules: CORE.md §9.
@@ -133,7 +147,7 @@ enterprise-search, productivity. Full analysis: `claude_docs/operations/skill-ro
 
 ---
 
-## 9. Push Instruction Complete Block Guarantee
+## 10. Push Instruction Complete Block Guarantee
 
 Every git instruction block provided to Patrick must be copy-paste-ready and include:
 1. `cd` to project root (if needed)
@@ -150,7 +164,7 @@ without also providing the link. Patrick should never have to hunt for a file.
 
 ---
 
-## 10. Subagent Push Ban (Experimental, S169–171)
+## 11. Subagent Push Ban (Experimental, S169–171)
 
 Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the main session may execute `push_files` calls.
 
@@ -165,7 +179,7 @@ Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the ma
 
 ---
 
-## 11. Subagent-First Implementation Gate (CRITICAL)
+## 12. Subagent-First Implementation Gate (CRITICAL)
 
 The main window is an **orchestrator**, not an implementer. All code implementation
 MUST go through subagents. This is not advisory — it is a hard gate.

@@ -106,6 +106,7 @@ import commandCenterRoutes from './routes/commandCenter';  // #68 Sprint 1: Comm
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
+import { initLiveFeed } from './services/liveFeedService'; // Feature #70: Live Sale Feed
 import './jobs/auctionJob';
 import './jobs/notificationJob';
 import './jobs/emailReminderJob';
@@ -147,7 +148,10 @@ app.use(
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
 
 // V1: Initialize Socket.io on the shared HTTP server — mirrors the Express CORS policy
-initSocket(httpServer, allowedOrigins);
+const io = initSocket(httpServer, allowedOrigins);
+
+// Feature #70: Initialize live feed service for real-time activity streams
+initLiveFeed(io);
 
 app.use(
   cors({

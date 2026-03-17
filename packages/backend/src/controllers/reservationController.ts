@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { getIO } from '../lib/socket';
+import { pushEvent } from '../services/liveFeedService';
 
 const DEFAULT_HOLD_HOURS = 48; // #24: default hold duration (was 24h)
 
@@ -37,6 +39,19 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       return r;
     });
 
+    // Feature #70: Emit live feed event
+    try {
+      const io = getIO();
+      pushEvent(io, item.saleId, {
+        type: 'HOLD_PLACED',
+        itemTitle: item.title,
+        saleId: item.saleId,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      console.warn('[liveFeed] Failed to emit hold placed event:', err);
+    }
+
     res.status(201).json(reservation);
   } catch (error: any) {
     if (error.code === 'P2002') {
@@ -61,10 +76,31 @@ export const cancelHold = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Fetch item details for live feed event
+    const item = await prisma.item.findUnique({
+      where: { id: reservation.itemId },
+      select: { id: true, title: true, saleId: true },
+    });
+
     await prisma.$transaction(async (tx) => {
       await tx.itemReservation.update({ where: { id }, data: { status: 'CANCELLED' } });
       await tx.item.update({ where: { id: reservation.itemId }, data: { status: 'AVAILABLE' } });
     });
+
+    // Feature #70: Emit live feed event
+    if (item) {
+      try {
+        const io = getIO();
+        pushEvent(io, item.saleId, {
+          type: 'HOLD_RELEASED',
+          itemTitle: item.title,
+          saleId: item.saleId,
+          timestamp: new Date(),
+        });
+      } catch (err) {
+        console.warn('[liveFeed] Failed to emit hold released event:', err);
+      }
+    }
 
     res.json({ message: 'Hold cancelled' });
   } catch (error) {

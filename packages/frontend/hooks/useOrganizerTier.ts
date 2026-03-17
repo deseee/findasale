@@ -1,11 +1,20 @@
 import { useAuth } from '../components/AuthContext';
-import { hasAccess as hasAccessBackend } from '@findasale/shared';
 
 export type SubscriptionTier = 'SIMPLE' | 'PRO' | 'TEAMS';
 
+const TIER_RANK: Record<SubscriptionTier, number> = {
+  SIMPLE: 0,
+  PRO: 1,
+  TEAMS: 2,
+};
+
+function hasAccess(organizerTier: SubscriptionTier, requiredTier: SubscriptionTier): boolean {
+  return TIER_RANK[organizerTier] >= TIER_RANK[requiredTier];
+}
+
 /**
  * Hook to check organizer subscription tier access.
- * Wraps hasAccess() from @findasale/shared with the current user's tier.
+ * Tier logic is inlined — shared package is not a frontend dependency.
  * Frontend-only hook — use in components to conditionally render features.
  */
 export function useOrganizerTier() {
@@ -24,7 +33,7 @@ export function useOrganizerTier() {
      * @returns true if organizer's tier >= requiredTier
      */
     canAccess: (requiredTier: SubscriptionTier): boolean => {
-      return hasAccessBackend(tier, requiredTier);
+      return hasAccess(tier, requiredTier);
     },
 
     /**
