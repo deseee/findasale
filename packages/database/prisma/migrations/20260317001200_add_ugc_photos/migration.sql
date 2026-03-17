@@ -1,8 +1,10 @@
 -- Feature #47: UGC Photo Tags — user-generated content tables
+DROP TABLE IF EXISTS "UGCPhotoLike";
+DROP TABLE IF EXISTS "UGCPhoto";
 CREATE TABLE "UGCPhoto" (
     "id" SERIAL NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
-    "itemId" INTEGER,
+    "itemId" TEXT,
     "saleId" TEXT,
     "photoUrl" TEXT NOT NULL,
     "caption" TEXT,

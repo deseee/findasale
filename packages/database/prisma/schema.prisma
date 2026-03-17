@@ -1252,7 +1252,7 @@ model UGCPhoto {
   id         Int        @id @default(autoincrement())
   userId     String
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  itemId     Int?
+  itemId     String?
   item       Item?      @relation(fields: [itemId], references: [id], onDelete: SetNull)
   saleId     String?
   sale       Sale?      @relation(fields: [saleId], references: [id], onDelete: SetNull)
