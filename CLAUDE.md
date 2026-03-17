@@ -57,6 +57,7 @@ No API formatting outside backend.
 - Never use `git add -A` — stage files explicitly by name
 - **Git push**: Patrick uses `.\push.ps1` from PowerShell (NOT `git push` directly). The script self-heals: clears index.lock, CRLF phantoms, fetches + merges (never rebases — rebase is broken with `core.autocrlf=true` on Windows). See `push.ps1` in repo root.
 - **Deployments**: Frontend is on **Vercel**, backend is on **Railway**. Both auto-deploy only when a new commit is pushed to `main` — there are no manual redeploy buttons on either platform. To force a redeploy with no pending changes, make a trivial commit (e.g. add a comment) and push via MCP `push_files`. Never tell Patrick to click a redeploy button on either platform.
+- **Railway stuck / not rebuilding**: If Railway hasn't picked up recent commits or is looping on a stale error, DO NOT ask Patrick to check webhooks, GitHub settings, or Railway dashboards. Immediately push a trivial change to `packages/backend/Dockerfile.production` — update the cache-bust comment at line 1 with today's date (e.g. `# S188 — cache bust 2026-03-17`). This always unblocks Railway. Use Chrome MCP (`mcp__Claude_in_Chrome__*`) to inspect Railway build logs directly if needed. This situation has recurred every session — the fix is always the same: push something.
 - Full safety and backup rules: `claude_docs/SECURITY.md`
 - **Statusline reinstall (session init):** The Cowork VM resets each session. At session start, silently run:
   ```bash
