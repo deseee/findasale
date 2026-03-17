@@ -115,10 +115,10 @@ model User {
   // Feature #71: Organizer Reputation Score
   reputation OrganizerReputation?
   // Feature #54: Crowdsourced Appraisal API
-  appraisalRequests    AppraisalRequest[]
-  appraisalResponses   AppraisalResponse[]
-  appraisalAIRequests  AppraisalAIRequest[]
-  appraisalDisputes    AppraisalDispute[]
+  appraisalRequests    AppraisalRequest[]  @relation("AppraisalRequests")
+  appraisalResponses   AppraisalResponse[] @relation("AppraisalResponses")
+  appraisalAIRequests  AppraisalAIRequest[] @relation("AppraisalAIRequests")
+  appraisalDisputes    AppraisalDispute[]  @relation("AppraisalDisputes")
   // Feature #60: TEAMS Onboarding Wizard completion flag
   teamsOnboardingComplete Boolean @default(false)
 
