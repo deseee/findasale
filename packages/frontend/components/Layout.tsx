@@ -7,6 +7,7 @@ import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
+import OfflineIndicator from './OfflineIndicator'; // Feature #69: Local-First Offline Mode
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -128,6 +129,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <OfflineIndicator /> {/* Feature #69: Local-First Offline Mode */}
       {/* Skip to main content — keyboard/screen reader accessibility */}
       <a
         href="#main-content"

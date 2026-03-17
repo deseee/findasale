@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
 import TierBadge from './TierBadge'; // Phase 22
+import ReputationBadge from './ReputationBadge'; // Feature #71
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 
 interface Sale {
@@ -21,6 +22,8 @@ interface Sale {
     id: string;
     businessName: string;
     reputationTier?: string; // Phase 22
+    reputationScore?: number; // Feature #71
+    reputationIsNew?: boolean; // Feature #71
   };
   status?: string;
   isAuctionSale?: boolean;
@@ -157,7 +160,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           </p>
         </Link>
         <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-1 min-w-0">
+          <div className="flex items-center gap-1 min-w-0 flex-wrap">
             <Link
               href={`/organizers/${sale.organizer.id}`}
               className="text-xs font-medium text-amber-600 hover:underline line-clamp-1"
@@ -166,6 +169,15 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             </Link>
             {sale.organizer.reputationTier && (
               <TierBadge tier={sale.organizer.reputationTier} />
+            )}
+            {typeof sale.organizer.reputationScore === 'number' && (
+              <div className="text-xs">
+                <ReputationBadge
+                  score={sale.organizer.reputationScore}
+                  isNew={sale.organizer.reputationIsNew}
+                  size="small"
+                />
+              </div>
             )}
           </div>
           {typeof sale.favoriteCount === 'number' && sale.favoriteCount > 0 && (

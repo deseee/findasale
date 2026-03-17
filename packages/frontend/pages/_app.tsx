@@ -18,6 +18,7 @@ import NudgeBar from '../components/NudgeBar';
 import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
 import DegradationBanner from '../components/DegradationBanner'; // Feature #20: Proactive Degradation Mode
 import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20: Proactive Degradation Mode
+import { useOfflineSync } from '../hooks/useOfflineSync'; // Feature #69: Local-First Offline Mode
 
 // #63 Dark Mode — Apply theme class on mount to prevent FOUC
 function ThemeInitializer() {
@@ -45,6 +46,12 @@ function PushSubscriber() {
 // Enables prioritization by user impact (tier, points, hunt pass status)
 function SentryUserContextSync() {
   useSentryUserContext();
+  return null;
+}
+
+// Feature #69: Initialize offline sync on app mount
+function OfflineSyncInitializer() {
+  useOfflineSync(); // Initialize IndexedDB, register online/offline listeners, auto-sync on reconnect
   return null;
 }
 
@@ -218,6 +225,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <UTMCapture />
               {/* Feature #21: Sentry user context sync */}
               <SentryUserContextSync />
+              {/* Feature #69: Offline sync initialization */}
+              <OfflineSyncInitializer />
               {/* Phase 31: OAuth → JWT bridge */}
               <OAuthBridge />
               {/* Phase 27: First-time shopper onboarding */}

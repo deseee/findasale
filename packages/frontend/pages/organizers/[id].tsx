@@ -8,6 +8,7 @@ import { getOptimizedUrl, getLqipUrl } from '../../lib/imageUtils';
 import BadgeDisplay from '../../components/BadgeDisplay';
 import FollowButton from '../../components/FollowButton';
 import ReputationTier from '../../components/ReputationTier';
+import ReputationBadge from '../../components/ReputationBadge'; // Feature #71
 import Skeleton from '../../components/Skeleton';
 
 interface Sale {
@@ -38,6 +39,8 @@ interface OrganizerProfile {
   phone: string;
   address: string;
   reputationTier: string;
+  reputationScore?: number; // Feature #71
+  reputationIsNew?: boolean; // Feature #71
   sales: Sale[];
   badges?: Badge[];
   avgRating?: number;
@@ -88,6 +91,16 @@ const OrganizerProfilePage = () => {
                 <h1 className="text-3xl font-bold text-warm-900">{organizer.businessName}</h1>
                 <ReputationTier tier={organizer.reputationTier} size="sm" />
               </div>
+              {typeof organizer.reputationScore === 'number' && (
+                <div className="mb-3 flex items-center gap-2">
+                  <ReputationBadge
+                    score={organizer.reputationScore}
+                    isNew={organizer.reputationIsNew}
+                    size="large"
+                    showCount={false}
+                  />
+                </div>
+              )}
               {organizer.badges && organizer.badges.length > 0 && (
                 <div className="mb-3">
                   <BadgeDisplay badges={organizer.badges} size="md" />

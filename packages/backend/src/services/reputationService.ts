@@ -182,3 +182,130 @@ export async function computeReputationScore(organizerId: string): Promise<Reput
     salesCount,
   };
 }
+
+/**
+ * Feature #71: Calculate and store organizer reputation score in OrganizerReputation model
+ * Simplified calculation: saleCount (30% weight) + photoQualityAvg (70% weight)
+ *
+ * Score formula (0–5 stars):
+ *   saleCount_factor = min(saleCount / 10, 1) * 5 * 0.3  (30% of score)
+ *   photoQuality_factor = photoQualityAvg * 5 * 0.7      (70% of score)
+ *   score = saleCount_factor + photoQuality_factor, capped at 5
+ */
+export async function calculateOrganizerReputationScore(organizerId: string): Promise<void> {
+  try {
+    // Find user associated with this organizer
+    const user = await prisma.user.findFirst({
+      where: { organizer: { id: organizerId } },
+      select: { id: true },
+    });
+
+    if (!user) {
+      console.warn(`[reputationService] User not found for organizer ${organizerId}`);
+      return;
+    }
+
+    // Fetch all published sales for this organizer with their items
+    const sales = await prisma.sale.findMany({
+      where: { organizerId, status: 'PUBLISHED' },
+      select: {
+        id: true,
+        items: {
+          select: { photoUrls: true },
+        },
+      },
+    });
+
+    const saleCount = sales.length;
+
+    // Calculate average photo quality across all items
+    let totalItems = 0;
+    let itemsWithPhotos = 0;
+
+    for (const sale of sales) {
+      for (const item of sale.items) {
+        totalItems++;
+        if (item.photoUrls && item.photoUrls.length > 0) {
+          itemsWithPhotos++;
+        }
+      }
+    }
+
+    const photoQualityAvg = totalItems > 0 ? itemsWithPhotos / totalItems : 0;
+
+    // Calculate weighted score (0–5)
+    const saleCountFactor = Math.min(saleCount / 10, 1) * 5 * 0.3;  // 30% weight
+    const photoQualityFactor = photoQualityAvg * 5 * 0.7;             // 70% weight
+    const score = Math.min(saleCountFactor + photoQualityFactor, 5);  // Cap at 5
+
+    const isNew = saleCount < 3;
+
+    // Upsert OrganizerReputation record
+    await prisma.organizerReputation.upsert({
+      where: { organizerId: user.id },
+      create: {
+        organizerId: user.id,
+        score,
+        responseTimeAvg: 0, // stub for now
+        saleCount,
+        photoQualityAvg,
+        shopperRating: null,
+        disputeRate: 0, // stub for now
+        isNew,
+        lastCalculated: new Date(),
+      },
+      update: {
+        score,
+        responseTimeAvg: 0,
+        saleCount,
+        photoQualityAvg,
+        isNew,
+        lastCalculated: new Date(),
+      },
+    });
+
+    console.log(
+      `[reputationService] Reputation for organizer ${organizerId}: score=${score.toFixed(2)}, ` +
+      `saleCount=${saleCount}, photoQualityAvg=${(photoQualityAvg * 100).toFixed(0)}%, isNew=${isNew}`
+    );
+  } catch (err) {
+    console.error(`[reputationService] Error calculating reputation for ${organizerId}:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Get or update reputation from OrganizerReputation — cached if < 24h old, else recalculates
+ */
+export async function getOrUpdateOrganizerReputation(organizerId: string) {
+  try {
+    // Find user associated with this organizer
+    const user = await prisma.user.findFirst({
+      where: { organizer: { id: organizerId } },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    // Fetch existing reputation record
+    let reputation = await prisma.organizerReputation.findUnique({
+      where: { organizerId: user.id },
+    });
+
+    // If no reputation record exists, or > 24h old, recalculate
+    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+    if (!reputation || new Date().getTime() - reputation.lastCalculated.getTime() > twentyFourHoursMs) {
+      await calculateOrganizerReputationScore(organizerId);
+      reputation = await prisma.organizerReputation.findUnique({
+        where: { organizerId: user.id },
+      });
+    }
+
+    return reputation;
+  } catch (err) {
+    console.error(`[reputationService] Error in getOrUpdateOrganizerReputation for ${organizerId}:`, err);
+    throw err;
+  }
+}
