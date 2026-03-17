@@ -153,7 +153,7 @@ function AlertsPage() {
                         )}
                         {(alert.query.minPrice !== undefined || alert.query.maxPrice !== undefined) && (
                           <p>
-                            <span className="font-medium">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '∞'}
+                            <span className="font-medium">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '\u221e'}
                           </p>
                         )}
                         {alert.query.radiusMiles && (
@@ -212,7 +212,7 @@ function AlertsPage() {
         isOpen={isFormOpen}
         onClose={handleCloseForm}
         alertId={editingAlert?.id}
-        initialData={editingAlert ? editingAlert.query : undefined}
+        initialData={editingAlert ? { name: editingAlert.name, ...editingAlert.query } : undefined}
       />
     </>
   );

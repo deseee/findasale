@@ -66,14 +66,11 @@ const ItemLibraryPage: React.FC = () => {
 
   const handlePullClick = (itemId: string, itemTitle: string) => {
     setPullModal({ isOpen: true, libraryItemId: itemId, itemTitle });
-    // Fetch user's sales on demand
     fetchUserSales();
   };
 
   const fetchUserSales = async () => {
     try {
-      // This is a stub — would normally fetch from API
-      // For MVP, we'll use a placeholder
       setSales([]);
     } catch (error) {
       console.error('Error fetching sales:', error);
@@ -85,7 +82,6 @@ const ItemLibraryPage: React.FC = () => {
       alert('Please select a sale');
       return;
     }
-
     const price = priceOverride ? parseFloat(priceOverride) : undefined;
     pullFromLibrary(pullModal.libraryItemId, selectedSaleId, price);
     setPullModal({ isOpen: false });
@@ -118,19 +114,14 @@ const ItemLibraryPage: React.FC = () => {
       <Head>
         <title>Item Library | FindA.Sale</title>
       </Head>
-
       <Layout>
         <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Item Library</h1>
             <p className="text-gray-600 dark:text-gray-400">Manage your consignment rack and pull items into sales.</p>
           </div>
-
-          {/* Search & Filters */}
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-              {/* Search */}
               <div className="lg:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Search</label>
                 <div className="relative">
@@ -144,15 +135,9 @@ const ItemLibraryPage: React.FC = () => {
                   />
                 </div>
               </div>
-
-              {/* Category */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Category</label>
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                >
+                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100">
                   <option value="">All</option>
                   <option value="furniture">Furniture</option>
                   <option value="decor">Decor</option>
@@ -161,15 +146,9 @@ const ItemLibraryPage: React.FC = () => {
                   <option value="other">Other</option>
                 </select>
               </div>
-
-              {/* Condition */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Condition</label>
-                <select
-                  value={conditionFilter}
-                  onChange={(e) => setConditionFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                >
+                <select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100">
                   <option value="">All</option>
                   <option value="mint">Mint</option>
                   <option value="excellent">Excellent</option>
@@ -178,15 +157,9 @@ const ItemLibraryPage: React.FC = () => {
                   <option value="poor">Poor</option>
                 </select>
               </div>
-
-              {/* Status */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Status</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                >
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100">
                   <option value="">All</option>
                   <option value="AVAILABLE">Available</option>
                   <option value="IN_SALE">In Sale</option>
@@ -194,46 +167,25 @@ const ItemLibraryPage: React.FC = () => {
                 </select>
               </div>
             </div>
-
-            {/* Price Range */}
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Min Price</label>
-                <input
-                  type="number"
-                  placeholder="$"
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                />
+                <input type="number" placeholder="$" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Max Price</label>
-                <input
-                  type="number"
-                  placeholder="$"
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                />
+                <input type="number" placeholder="$" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100" />
               </div>
             </div>
           </div>
-
-          {/* Results */}
           <div>
             <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
               {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
             </div>
-
             {loading ? (
-              <div className="text-center py-12">
-                <p className="text-gray-600 dark:text-gray-400">Loading library...</p>
-              </div>
+              <div className="text-center py-12"><p className="text-gray-600 dark:text-gray-400">Loading library...</p></div>
             ) : filteredItems.length === 0 ? (
-              <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-lg">
-                <p className="text-gray-600 dark:text-gray-400">No items match your filters.</p>
-              </div>
+              <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-lg"><p className="text-gray-600 dark:text-gray-400">No items match your filters.</p></div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {filteredItems.map((item) => (
@@ -249,67 +201,34 @@ const ItemLibraryPage: React.FC = () => {
               </div>
             )}
           </div>
-
-          {/* Pull Modal */}
           {pullModal.isOpen && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Pull to Sale</h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">{pullModal.itemTitle}</p>
-
                 <div className="mb-4">
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Select Sale</label>
-                  <select
-                    value={selectedSaleId}
-                    onChange={(e) => setSelectedSaleId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                  >
+                  <select value={selectedSaleId} onChange={(e) => setSelectedSaleId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100">
                     <option value="">Choose a sale...</option>
-                    {sales.map((sale) => (
-                      <option key={sale.id} value={sale.id}>
-                        {sale.title}
-                      </option>
-                    ))}
+                    {sales.map((sale) => (<option key={sale.id} value={sale.id}>{sale.title}</option>))}
                   </select>
                 </div>
-
                 <div className="mb-6">
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Price Override (optional)</label>
-                  <input
-                    type="number"
-                    placeholder="$0.00"
-                    value={priceOverride}
-                    onChange={(e) => setPriceOverride(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                  />
+                  <input type="number" placeholder="$0.00" value={priceOverride} onChange={(e) => setPriceOverride(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100" />
                 </div>
-
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => setPullModal({ isOpen: false })}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 font-semibold hover:bg-gray-50 dark:hover:bg-slate-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleConfirmPull}
-                    disabled={!selectedSaleId || isPullingFromLibrary}
-                    className="flex-1 px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg disabled:opacity-50"
-                  >
-                    Pull Item
-                  </button>
+                  <button onClick={() => setPullModal({ isOpen: false })} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 font-semibold hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
+                  <button onClick={handleConfirmPull} disabled={!selectedSaleId || isPullingFromLibrary} className="flex-1 px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg disabled:opacity-50">Pull Item</button>
                 </div>
               </div>
             </div>
           )}
-
-          {/* History Modal */}
           {historyModal.isOpen && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Price History</h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">{historyModal.itemTitle}</p>
-
                 <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
                   {historyModal.history && historyModal.history.length > 0 ? (
                     historyModal.history.map((entry, idx) => (
@@ -322,13 +241,7 @@ const ItemLibraryPage: React.FC = () => {
                     <p className="text-gray-600 dark:text-gray-400 text-sm">No price history</p>
                   )}
                 </div>
-
-                <button
-                  onClick={() => setHistoryModal({ isOpen: false })}
-                  className="w-full px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg"
-                >
-                  Close
-                </button>
+                <button onClick={() => setHistoryModal({ isOpen: false })} className="w-full px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg">Close</button>
               </div>
             </div>
           )}
