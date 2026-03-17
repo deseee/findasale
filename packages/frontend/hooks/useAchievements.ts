@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from './useAuth';
+import { useAuth } from '../components/AuthContext';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -31,7 +31,7 @@ export interface AchievementsResponse {
  * Fetch all achievements and streak for the authenticated user
  */
 export const useMyAchievements = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
 
   return useQuery({
     queryKey: ['achievements', 'me', user?.id],
@@ -50,7 +50,7 @@ export const useMyAchievements = () => {
 
       return res.json();
     },
-    enabled: isAuthenticated,
+    enabled: !!user,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 };

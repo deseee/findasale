@@ -1,16 +1,16 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthContext';
 import { useMyAchievements } from '../../hooks/useAchievements';
 import { AchievementBadge } from '../../components/AchievementBadge';
 
 export default function AchievementsPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { data, isLoading, error } = useMyAchievements();
 
   // Redirect if not authenticated
-  if (!isAuthenticated) {
+  if (!user) {
     router.push('/auth/login');
     return null;
   }
