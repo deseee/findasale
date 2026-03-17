@@ -275,6 +275,12 @@ const OrganizerDashboard = () => {
             >
               + Create New Sale
             </Link>
+            <Link
+              href="/organizer/add-items"
+              className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg border border-warm-300 dark:border-gray-600 transition-colors"
+            >
+              📋 Listing Factory
+            </Link>
             <div className="relative">
               <button
                 onClick={() => {
@@ -317,14 +323,12 @@ const OrganizerDashboard = () => {
                 📊 Insights
               </Link>
             )}
-            {canAccess('PRO') && (
-              <Link
-                href="/organizer/print-inventory"
-                className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                🖨️ Print Inventory
-              </Link>
-            )}
+            <Link
+              href="/organizer/print-inventory"
+              className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              🖨️ Print Inventory
+            </Link>
             {canAccess('TEAMS') && (
               <Link
                 href="/organizer/webhooks"
@@ -333,14 +337,12 @@ const OrganizerDashboard = () => {
                 🔗 Webhooks
               </Link>
             )}
-            {canAccess('PRO') && (
-              <Link
-                href="/organizer/pos"
-                className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                💳 POS
-              </Link>
-            )}
+            <Link
+              href="/organizer/pos"
+              className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              💳 POS
+            </Link>
             {canAccess('PRO') && (
               <Link
                 href="/organizer/brand-kit"
@@ -569,9 +571,7 @@ const OrganizerDashboard = () => {
                             {canAccess('PRO') && (
                               <button onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)} className="text-sm text-red-600 hover:underline font-semibold">{flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}</button>
                             )}
-                            {canAccess('PRO') && (
-                              <button onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })} className="text-sm text-sage-600 hover:underline font-semibold">📣 Share</button>
-                            )}
+                            <button onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })} className="text-sm text-sage-600 hover:underline font-semibold">📣 Share</button>
                           </div>
                           {openQRSale === sale.id && (
                             <div className="mt-4 pt-4 border-t border-warm-100">
