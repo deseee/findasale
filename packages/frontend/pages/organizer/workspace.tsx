@@ -130,7 +130,7 @@ export default function WorkspacePage() {
     }
   };
 
-  const isOwner = workspace && workspace.ownerId === user.organizerId;
+  const isOwner = workspace && workspace.ownerId === user.id;
   const members = membersData?.members || [];
 
   return (
