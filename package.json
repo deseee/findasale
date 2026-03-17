@@ -2,6 +2,7 @@
   "name": "findasale-monorepo",
   "private": true,
   "version": "1.0.0",
+  "packageManager": "pnpm@8.15.5",
   "scripts": {
     "dev": "concurrently \"pnpm --filter ./packages/backend dev\" \"pnpm --filter ./packages/frontend dev\"",
     "context:update": "node scripts/update-context.js"
