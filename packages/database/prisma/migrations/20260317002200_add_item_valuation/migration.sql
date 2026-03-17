@@ -1,4 +1,5 @@
 -- CreateTable ItemValuation
+DROP TABLE IF EXISTS "ItemValuation";
 CREATE TABLE "ItemValuation" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "itemId" TEXT NOT NULL UNIQUE,

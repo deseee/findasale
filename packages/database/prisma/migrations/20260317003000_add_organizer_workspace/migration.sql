@@ -1,4 +1,7 @@
 -- CreateEnum: WorkspaceRole
+DROP TABLE IF EXISTS "WorkspaceMember";
+DROP TABLE IF EXISTS "OrganizerWorkspace";
+DROP TYPE IF EXISTS "WorkspaceRole";
 CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'ADMIN', 'MEMBER');
 
 -- CreateTable: OrganizerWorkspace

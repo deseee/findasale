@@ -1,4 +1,6 @@
 -- CreateTable TreasureTrail
+DROP TABLE IF EXISTS "TrailHighlight";
+DROP TABLE IF EXISTS "TreasureTrail";
 CREATE TABLE "TreasureTrail" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "userId" TEXT NOT NULL,
