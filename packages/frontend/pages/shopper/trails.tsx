@@ -61,9 +61,9 @@ export default function MyTrailsPage() {
 
         {trails.length === 0 ? (
           <EmptyState
-            title="No Treasure Trails Yet"
-            description="Create your first custom route through nearby sales to find your treasures."
-            action={{
+            heading="No Treasure Trails Yet"
+            subtext="Create your first custom route through nearby sales to find your treasures."
+            cta={{
               label: 'Create Trail',
               href: '/shopper/trails/create',
             }}
