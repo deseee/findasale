@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { getCommandCenterSummary } from '../services/commandCenterService';
+import type { CommandCenterFilters } from '../types/commandCenter';
 
 export const getCommandCenter = async (req: AuthRequest, res: Response) => {
   try {
@@ -12,8 +13,8 @@ export const getCommandCenter = async (req: AuthRequest, res: Response) => {
 
     const { status, dateFrom, dateTo } = req.query;
 
-    const filters = {
-      status: (status as string)?.toLowerCase() || undefined,
+    const filters: CommandCenterFilters = {
+      status: (status as CommandCenterFilters['status']) || undefined,
       dateFrom: (dateFrom as string) || undefined,
       dateTo: (dateTo as string) || undefined,
     };
