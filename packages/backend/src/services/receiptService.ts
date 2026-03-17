@@ -63,7 +63,7 @@ export const generateReceipt = async (purchaseId: string): Promise<void> => {
     await prisma.digitalReceipt.create({
       data: {
         purchaseId,
-        items: receiptItems,
+        items: receiptItems as any,
         total: purchase.amount,
       },
     });

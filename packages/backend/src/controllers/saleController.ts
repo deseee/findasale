@@ -780,7 +780,7 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
  * GET /api/sales/:id/status
  * Public endpoint (no auth required)
  */
-export const getSaleStatus = async (req: express.Request, res: express.Response) => {
+export const getSaleStatus = async (req: Request, res: Response) => {
   try {
     const { id: saleId } = req.params;
     if (!saleId) {
