@@ -46,7 +46,7 @@ export default function OfflineIndicator({ className = '' }: OfflineIndicatorPro
 
             <div>
               <p className={`font-semibold ${isError ? 'text-red-800' : isOffline ? 'text-yellow-800' : 'text-blue-800'}`}>
-                {isError ? 'Sync Error' : isSyncing ? 'Syncing...' : isOffline ? 'You're Offline' : 'Offline Changes Pending'}
+                {isError ? 'Sync Error' : isSyncing ? 'Syncing...' : isOffline ? "You're Offline" : 'Offline Changes Pending'}
               </p>
               {(isOffline || isSyncing || isError) && (
                 <p className={`text-sm ${isError ? 'text-red-700' : isOffline ? 'text-yellow-700' : 'text-blue-700'}`}>
