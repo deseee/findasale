@@ -88,7 +88,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
-    const { businessName, phone, bio, onboardingComplete, website, facebook, instagram, etsy, brandLogoUrl, brandPrimaryColor, brandSecondaryColor } = req.body;
+    const { businessName, phone, bio, onboardingComplete, website, facebook, instagram, etsy, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor } = req.body;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -112,6 +112,10 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(brandLogoUrl !== undefined && { brandLogoUrl }),
         ...(brandPrimaryColor !== undefined && { brandPrimaryColor }),
         ...(brandSecondaryColor !== undefined && { brandSecondaryColor }),
+        ...(customStorefrontSlug !== undefined && { customStorefrontSlug }),
+        ...(brandFontFamily !== undefined && { brandFontFamily }),
+        ...(brandBannerImageUrl !== undefined && { brandBannerImageUrl }),
+        ...(brandAccentColor !== undefined && { brandAccentColor }),
       },
     });
 
