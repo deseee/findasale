@@ -160,6 +160,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <Link href="/shopper/receipts" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Receipts
             </Link>
+            <Link href="/challenges" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Challenges
+            </Link>
+            <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Live Sale Feed
+            </Link>
+            <Link href="/encyclopedia" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Encyclopedia
+            </Link>
             <hr className="my-2 border-warm-200" />
             <Link href="/shopper/settings" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Settings
@@ -280,6 +289,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         <Link href="/shopper/dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">My Profile</Link>
                         <Link href="/wishlists" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">My Wishlists</Link>
                         <Link href="/referral-dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Referrals</Link>
+                        <Link href="/challenges" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Challenges</Link>
+                        <Link href="/feed" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Live Feed</Link>
+                        <Link href="/encyclopedia" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Encyclopedia</Link>
                         <div className="border-l border-warm-300 dark:border-gray-700 pl-2 ml-2">
                           <Link href="/shopper/collector-passport" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Collection</Link>
                           <Link href="/shopper/loyalty" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Loyalty</Link>
