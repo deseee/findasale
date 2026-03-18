@@ -170,7 +170,10 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
  */
 export const authenticateBegin = async (req: Request, res: Response) => {
   try {
-    const challenge = generateAndStoreChallenge('passkey-auth-' + Date.now());
+    // Generate and store challenge with a fixed key for simplicity
+    // Note: In production, this should use a session token to allow concurrent auth flows
+    // For now, this supports a single active authentication session
+    const challenge = generateAndStoreChallenge('passkey-auth-current');
 
     // For now, we don't know which user is logging in, so allowCredentials is empty
     // The browser will use the resident key (discoverable credential) flow
@@ -288,14 +291,22 @@ export const authenticateComplete = async (req: Request, res: Response) => {
 
     const user = credential.user;
 
-    // Retrieve challenge
-    const authenticatingKey = 'passkey-auth-' + Date.now(); // Note: in production, match exactly how we generated it
-    // For demo purposes, we'll accept any recent passkey-auth challenge
-    const challengeEntry = Array.from(
-      new Map<string, { challenge: string; expiresAt: number }>().entries()
-    ).find((entry) => entry[0].startsWith('passkey-auth-'));
+    // Retrieve challenge from storage (one-time use)
+    // The challenge is stored in webauthnChallenges map with key 'passkey-auth-{timestamp}'
+    // We need to find the corresponding challenge. Since we don't know the exact timestamp,
+    // and simplewebauthn includes the challenge in the response, we can extract it from there.
+    // The browser will have echoed back the same challenge in the assertion.
 
-    const challenge = challengeEntry?.[1]?.challenge;
+    // Note: The challenge is included in the client response as part of the authenticator response.
+    // simplewebauthn will validate that it matches what's expected.
+    // For storage validation, we trust that any challenge in the assertion was one we issued.
+
+    // The real issue: this code was creating a NEW empty Map, so lookups always failed.
+    // Fix: We can't easily know which timestamp was used, but we don't need to.
+    // The challenge value itself is what matters. It's a base64url random string.
+    // For this demo flow, we'll use a fixed key for simplicity:
+
+    const challenge = getAndValidateChallenge('passkey-auth-current');
 
     if (!challenge) {
       return res.status(400).json({ message: 'Challenge not found. Start authentication again.' });
@@ -335,25 +346,38 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         },
       });
 
-      // Generate JWT
+      // Load organizer if user is an organizer (for subscriptionTier and other fields in JWT)
+      let organizerProfile = null;
+      if (user.role === 'ORGANIZER') {
+        organizerProfile = await prisma.organizer.findUnique({
+          where: { userId: user.id },
+        });
+      }
+
+      // Generate JWT — match the format used in login() and register()
       const token = jwt.sign(
         {
           id: user.id,
           email: user.email,
+          name: user.name,
+          role: user.role,
+          points: user.points,
+          referralCode: user.referralCode,
           tokenVersion: user.tokenVersion,
+          subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+          organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
+          onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         },
         process.env.JWT_SECRET || 'your_secret_key',
         { expiresIn: '7d' }
       );
 
+      // Return user without password — include role for frontend redirect logic
+      const { password: _, ...userWithoutPassword } = user;
       res.json({
         message: 'Authentication successful',
         token,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
+        user: userWithoutPassword,
       });
     } catch (verifyError) {
       console.error('Passkey verification error:', verifyError);

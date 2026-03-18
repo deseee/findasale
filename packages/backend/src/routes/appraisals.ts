@@ -15,8 +15,8 @@ const router = Router();
 // GET /api/appraisals — public feed of open appraisal requests for community
 router.get('/', getOpenAppraisalsForCommunity);
 
-// POST /api/appraisals — create new appraisal request (PAID_ADDON tier required)
-router.post('/', authenticate, requireTier('PAID_ADDON'), createAppraisalRequest);
+// POST /api/appraisals — create new appraisal request (PRO tier required — PAID_ADDON maps to PRO until addon billing is wired)
+router.post('/', authenticate, requireTier('PRO'), createAppraisalRequest);
 
 // GET /api/appraisals/my — get user's own appraisal requests (auth required)
 router.get('/my', authenticate, getMyAppraisalRequests);
