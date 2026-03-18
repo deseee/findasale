@@ -610,7 +610,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
-        location: { contains: citySlug, mode: 'insensitive' }
+        city: { contains: citySlug, mode: 'insensitive' }
       },
       skip,
       take: limitNum,
@@ -628,7 +628,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
-        location: { contains: citySlug, mode: 'insensitive' }
+        city: { contains: citySlug, mode: 'insensitive' }
       }
     });
 
