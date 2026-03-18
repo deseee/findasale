@@ -58,6 +58,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     { href: '/calendar', label: 'Calendar' },
     { href: '/map', label: 'Map' },
     { href: '/plan', label: 'Plan a Sale' },
+    { href: '/cities', label: 'Cities' },
+    { href: '/trending', label: 'Trending' },
     { href: '/about', label: 'About' },
     { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/contact', label: 'Contact' },
@@ -79,11 +81,49 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 Command Center
               </Link>
             )}
+            {canAccess('PRO') && (
+              <Link href="/organizer/typology" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                Typology Classifier
+              </Link>
+            )}
+            {canAccess('PRO') && (
+              <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                Fraud Signals
+              </Link>
+            )}
+            {canAccess('PRO') && (
+              <Link href="/organizer/offline" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                Offline Mode
+              </Link>
+            )}
+            {canAccess('PRO') && (
+              <Link href="/organizer/appraisals" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                Appraisals
+              </Link>
+            )}
             {canAccess('TEAMS') && (
               <Link href="/organizer/workspace" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
                 Workspace
               </Link>
             )}
+            <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Bounties
+            </Link>
+            <Link href="/organizer/message-templates" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Message Templates
+            </Link>
+            <Link href="/organizer/reputation" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Reputation
+            </Link>
+            <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              UGC Moderation
+            </Link>
+            <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Performance
+            </Link>
+            <Link href="/organizer/neighborhoods" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Neighborhoods
+            </Link>
           </>
         )}
         {(user.role === 'USER' || user.role === 'ADMIN') && (
@@ -209,9 +249,27 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         {canAccess('PRO') && (
                           <Link href="/organizer/command-center" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Command Center</Link>
                         )}
+                        {canAccess('PRO') && (
+                          <Link href="/organizer/typology" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Typology</Link>
+                        )}
+                        {canAccess('PRO') && (
+                          <Link href="/organizer/fraud-signals" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Fraud Signals</Link>
+                        )}
+                        {canAccess('PRO') && (
+                          <Link href="/organizer/offline" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Offline</Link>
+                        )}
+                        {canAccess('PRO') && (
+                          <Link href="/organizer/appraisals" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Appraisals</Link>
+                        )}
                         {canAccess('TEAMS') && (
                           <Link href="/organizer/workspace" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Workspace</Link>
                         )}
+                        <Link href="/organizer/bounties" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Bounties</Link>
+                        <Link href="/organizer/message-templates" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Message Templates</Link>
+                        <Link href="/organizer/reputation" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Reputation</Link>
+                        <Link href="/organizer/ugc-moderation" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">UGC Moderation</Link>
+                        <Link href="/organizer/performance" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Performance</Link>
+                        <Link href="/organizer/neighborhoods" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Neighborhoods</Link>
                       </>
                     )}
                     {(user.role === 'USER' || user.role === 'ADMIN') && (

@@ -398,6 +398,36 @@ const OrganizerDashboard = () => {
                 ↓ Export Data
               </button>
             )}
+            <Link
+              href="/organizer/bounties"
+              className="bg-yellow-100 hover:bg-yellow-200 text-yellow-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              📊 Bounties
+            </Link>
+            <Link
+              href="/organizer/message-templates"
+              className="bg-green-100 hover:bg-green-200 text-green-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              📝 Message Templates
+            </Link>
+            <Link
+              href="/organizer/reputation"
+              className="bg-orange-100 hover:bg-orange-200 text-orange-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              ⭐ Reputation
+            </Link>
+            <Link
+              href="/organizer/neighborhoods"
+              className="bg-teal-100 hover:bg-teal-200 text-teal-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              🏘️ Neighborhoods
+            </Link>
+            <Link
+              href="/organizer/performance"
+              className="bg-violet-100 hover:bg-violet-200 text-violet-900 font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              📈 Performance
+            </Link>
           </div>
 
           {/* Tab Navigation */}

@@ -34,8 +34,6 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const challenge = generateAndStoreChallenge(userId);
-
     const options = await generateRegistrationOptions({
       rpID: WEBAUTHN_RP_ID,
       rpName: WEBAUTHN_RP_NAME,
@@ -51,9 +49,17 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
       timeout: 60000,
     });
 
-    // Store challenge in our map (already done above)
-    // Return options to client
-    res.json({ publicKeyOptions: options });
+    // Override simplewebauthn's generated challenge with our own stored challenge
+    // so registerComplete can retrieve it by userId for expectedChallenge verification.
+    // generateRegistrationOptions generates its own internal challenge — we discard it
+    // and replace with ours so the two sides stay in sync.
+    const challenge = generateAndStoreChallenge(userId);
+    const optionsWithChallenge = {
+      ...options,
+      challenge: challenge,
+    };
+
+    res.json({ publicKeyOptions: optionsWithChallenge });
   } catch (error) {
     console.error('Passkey registration begin error:', error);
     res.status(500).json({ message: 'Server error during registration setup' });
