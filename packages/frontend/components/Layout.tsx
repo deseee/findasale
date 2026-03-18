@@ -206,7 +206,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         Low BW
                       </span>
                     )}
-                    <ThemeToggle compact={true} />
                     <button onClick={handleLogout} className="text-warm-900 dark:text-warm-300 hover:text-amber-600">Logout</button>
                   </div>
                 </>
@@ -216,6 +215,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   <Link href="/register" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md">Register</Link>
                 </>
               )}
+              <ThemeToggle compact={true} />
             </div>
 
             {/* Mobile: notification bell (if logged in) + theme toggle + hamburger */}
