@@ -19,6 +19,9 @@ import NudgeBar from '../components/NudgeBar';
 import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
 import DegradationBanner from '../components/DegradationBanner'; // Feature #20: Proactive Degradation Mode
 import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20: Proactive Degradation Mode
+import { LowBandwidthProvider } from '../contexts/LowBandwidthContext'; // Feature #22: Low-Bandwidth Mode
+import LowBandwidthBanner from '../components/LowBandwidthBanner'; // Feature #22: Low-Bandwidth Mode
+import { useLowBandwidthInitializer } from '../hooks/useLowBandwidthInitializer'; // Feature #22: Low-Bandwidth Mode
 import { useOfflineSync } from '../hooks/useOfflineSync'; // Feature #69: Local-First Offline Mode
 
 // #63 Dark Mode — Apply theme class on mount to prevent FOUC
@@ -53,6 +56,12 @@ function SentryUserContextSync() {
 // Feature #69: Initialize offline sync on app mount
 function OfflineSyncInitializer() {
   useOfflineSync(); // Initialize IndexedDB, register online/offline listeners, auto-sync on reconnect
+  return null;
+}
+
+// Feature #22: Monitor network quality and sync to global context
+function LowBandwidthMonitor() {
+  useLowBandwidthInitializer(); // Syncs network quality hook to LowBandwidthContext
   return null;
 }
 
@@ -217,7 +226,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
       <ToastProvider>
         <AuthProvider>
           <DegradationProvider>
-            <QueryClientProvider client={queryClient}>
+            <LowBandwidthProvider>
+              <QueryClientProvider client={queryClient}>
               <ThemeInitializer />
               <ErrorBoundary key={router.asPath}>
                 <Layout>
@@ -232,6 +242,9 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               {/* Feature #20: Proactive Degradation Mode */}
               <DegradationMonitor />
               <DegradationBanner />
+              {/* Feature #22: Low-Bandwidth Mode */}
+              <LowBandwidthMonitor />
+              <LowBandwidthBanner />
               {/* #18: UTM capture for social link clicks */}
               <UTMCapture />
               {/* Feature #21: Sentry user context sync */}
@@ -244,7 +257,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <OnboardingShower />
               {/* Organizer post-registration onboarding */}
               <OrganizerOnboardingShower />
-            </QueryClientProvider>
+              </QueryClientProvider>
+            </LowBandwidthProvider>
           </DegradationProvider>
         </AuthProvider>
       </ToastProvider>

@@ -5,10 +5,12 @@ import { useRouter } from 'next/router';
 import { signIn } from 'next-auth/react';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import { usePasskey } from '../hooks/usePasskey';
 
 const LoginPage = () => {
   const router = useRouter();
   const { login } = useAuth();
+  const { authenticatePasskey, isSupported: passkeySupported, isLoading: passkeyLoading, error: passkeyError } = usePasskey();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -27,7 +29,7 @@ const LoginPage = () => {
 
       // Store token in context and localStorage
       login(response.data.token);
-      
+
       // Honour ?redirect= param, then fall back to role-based default
       const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
       if (redirect && redirect.startsWith('/')) {
@@ -41,6 +43,28 @@ const LoginPage = () => {
       setError(err.response?.data?.message || 'An error occurred during login');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasskeySignin = async () => {
+    setError('');
+    try {
+      const result = await authenticatePasskey();
+
+      // Store token in context and localStorage
+      login(result.token);
+
+      // Honour ?redirect= param, then fall back to role-based default
+      const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
+      if (redirect && redirect.startsWith('/')) {
+        router.push(redirect);
+      } else if (result.user.role === 'ORGANIZER') {
+        router.push('/organizer/dashboard');
+      } else {
+        router.push('/');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during passkey authentication');
     }
   };
 
@@ -131,6 +155,32 @@ const LoginPage = () => {
             </button>
           </div>
         </form>
+        {/* Passkey signin option */}
+        {passkeySupported && (
+          <>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-warm-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-warm-50 text-warm-500">Or sign in with</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handlePasskeySignin}
+              disabled={passkeyLoading}
+              className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 rounded-md shadow-sm bg-white text-sm font-medium text-warm-700 hover:bg-warm-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              {passkeyLoading ? 'Signing in...' : 'Sign in with Passkey'}
+            </button>
+          </>
+        )}
+
         {/* Phase 31: Social login */}
         <div className="relative">
           <div className="absolute inset-0 flex items-center">

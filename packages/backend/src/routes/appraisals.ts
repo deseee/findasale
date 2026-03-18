@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { requireTier } from '../middleware/requireTier';
 import {
   createAppraisalRequest,
   getAppraisalRequest,
@@ -14,8 +15,8 @@ const router = Router();
 // GET /api/appraisals — public feed of open appraisal requests for community
 router.get('/', getOpenAppraisalsForCommunity);
 
-// POST /api/appraisals — create new appraisal request (auth required)
-router.post('/', authenticate, createAppraisalRequest);
+// POST /api/appraisals — create new appraisal request (PAID_ADDON tier required)
+router.post('/', authenticate, requireTier('PAID_ADDON'), createAppraisalRequest);
 
 // GET /api/appraisals/my — get user's own appraisal requests (auth required)
 router.get('/my', authenticate, getMyAppraisalRequests);
