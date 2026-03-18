@@ -52,6 +52,7 @@ import BulkCategoryModal from '../../../components/BulkCategoryModal';
 import BulkStatusModal from '../../../components/BulkStatusModal';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
 import ValuationWidget from '../../../components/ValuationWidget';
+import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
 
 /**
  * Phase 3: On-Device Image Processing Utilities
@@ -242,6 +243,7 @@ const emptyForm = {
   reverseFloorPrice: '',
   shippingAvailable: false,
   shippingPrice: '',
+  tags: [] as string[], // Feature #42: Voice-to-tag support
   photoUrls: [] as string[],
 };
 
@@ -1086,6 +1088,53 @@ const AddItemsDetailPage = () => {
                     className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                     placeholder="Item description"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 mb-2">Tags</label>
+                  <div className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {formData.tags.map((tag) => (
+                          <span key={tag} className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tag) })}
+                              className="text-amber-600 hover:text-amber-900 font-bold"
+                              aria-label={`Remove tag ${tag}`}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const value = (e.target as HTMLInputElement).value.trim();
+                            if (value && !formData.tags.includes(value)) {
+                              setFormData({ ...formData, tags: [...formData.tags, value] });
+                              (e.target as HTMLInputElement).value = '';
+                            }
+                          }
+                        }}
+                        placeholder="Add tags (press Enter)"
+                        className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <VoiceTagButton
+                      onExtraction={(result) => {
+                        const newTags = result.tags.filter((t) => !formData.tags.includes(t));
+                        if (newTags.length > 0) {
+                          setFormData({ ...formData, tags: [...formData.tags, ...newTags] });
+                        }
+                      }}
+                      className="px-3 py-2 rounded-lg"
+                    />
+                  </div>
                 </div>
 
                 <div>

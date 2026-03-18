@@ -30,6 +30,7 @@ import SaleOGMeta from '../../components/SaleOGMeta'; // Feature #43: OG Image G
 import OrganizerReputation from '../../components/OrganizerReputation'; // #71: Organizer Reputation Score
 import VerifiedBadge from '../../components/VerifiedBadge'; // Feature #16
 import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
+import { RippleIndicator } from '../../components/RippleIndicator'; // Feature #51: Sale Ripples
 
 interface Sale {
   id: string;
@@ -287,6 +288,9 @@ const SaleDetailPage = () => {
           <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             <div className="flex-1">
               <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-2">{sale.title}</h1>
+              <div className="mb-4">
+                <RippleIndicator saleId={sale.id} size="md" />
+              </div>
               <p className="text-lg text-warm-700 dark:text-gray-400 mb-4">
                 {sale.address}, {sale.city}, {sale.state} {sale.zip}
               </p>

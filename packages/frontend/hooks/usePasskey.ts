@@ -95,6 +95,7 @@ export const usePasskey = () => {
       // Step 1: Get authentication options from server (public endpoint)
       const beginResponse = await api.post('/api/auth/passkey/authenticate/begin');
       const options = beginResponse.data.publicKeyOptions;
+      const challengeId = beginResponse.data.challengeId;
 
       // Step 2: Use browser API to authenticate
       const assertion = await startAuthentication(options);
@@ -105,6 +106,7 @@ export const usePasskey = () => {
         {
           id: assertion.id,
           response: assertion.response,
+          challengeId,
         }
       );
 
