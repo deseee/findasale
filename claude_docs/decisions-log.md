@@ -5,6 +5,15 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-03-18 (S198) — Roadmap 13-Column Schema + #51 Implementation Gap
+
+**Status:** APPROVED (schema + gap identification)
+**Made by:** findasale-records (audit discovery)
+**Rationale:** 13-column enriched tracking schema (# | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes) adopted for all 146 Completed features. Reveals #51 Sale Ripples as false-positive QA-PASS from S195 (zero implementation on disk — no schema, no API routes, no UI). Human test column shows 📋 for all features (Patrick has never formally executed E2E checklist or mobile gestures guide). Archive re-filed (134 files from archive-old → archive). findasale-records full project docs audit deferred to S199 due to context limits.
+**Consequences:** Roadmap v51 now the source of truth for 146 features with detailed column visibility. #51 moved to TIER 1 for immediate implementation (treat as new feature sprint). Patrick human test execution is future blocker for feature promotion to prod. docs audit will remediate stale content + rule violations.
+
+---
+
 ## Session 170 — 2026-03-15
 
 ### Decision: CLAUDE.md §11 — Subagent-First Implementation Gate (HARD GATE)

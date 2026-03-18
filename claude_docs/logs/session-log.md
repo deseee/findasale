@@ -16,6 +16,24 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+## Session 198 — 2026-03-18 — QA Audit (17 Features All-PASS) + Roadmap v51 Restructure + Archive Re-Filed
+
+**Worked on:** (1) Frontend bug fixed — `useOrganizerTier.ts` removed `@findasale/shared` import that was crashing Vercel build. Patrick pushed to GitHub; Vercel unblocked. (2) QA audit on S196–S197 files (17 features, ALL PASS on first scan): useTypology.ts, TypologyBadge.tsx, typology.tsx, useAppraisal.ts, AppraisalResponseForm.tsx, appraisals.tsx, useBidBot.ts, fraud-signals.tsx, useOfflineMode.ts, offline.tsx, Layout.tsx, dashboard.tsx, useOrganizerTier.ts, LowBandwidthContext.tsx, LowBandwidthBanner.tsx, useLowBandwidthInitializer.ts, imageUrl.ts. No additional TypeScript errors. (3) Roadmap v51 major restructure: 13-column enriched schema applied to all 146 Completed features (# | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes). TIER 2/3 tables removed. All QA-PASS features promoted to Completed. #51 Sale Ripples discovered as IMPLEMENTATION-GAP (zero schema/API/UI despite S195 QA-PASS marking) — flagged [IMPLEMENTATION-GAP] and moved to TIER 1. #42 Voice-to-Tag ⚠️ VoiceTagButton.tsx missing. Claude Automated Checks table added (9 checks). 8 legacy phase features slotted into Completed (CSV Import, Stripe Connect, Auction Mechanics, Password Reset, Refund Policy Config, iCal Export, QR Code Signs, QR Scan Analytics). Human test column: ALL features show 📋 — no Patrick execution records exist. (4) COMPLETED_PHASES.md updated for Wave 5 Sprint 2 completions. (5) Archive-old re-filed: 134 files reorganized from `claude_docs/archive-old/` into `claude_docs/archive/` (15 subdirectories). archive/README.md + MIGRATION_LOG_2026-03-18.md created as index and mapping reference. Archive-old preserved (not deleted).
+
+**Decisions:** 13-column schema standardization for all 146 Completed features. #51 Sale Ripples moved to TIER 1 as implementation gap (false positive from S195 QA). All human tests show 📋 pending — Patrick has never formally executed E2E checklist. findasale-records full project docs audit deferred to S199 due to context limits.
+
+**Token efficiency:** Minimal token burn — audit work straightforward, archive re-file automated, roadmap schema application mechanical. No subagent dispatches. Single docs-only push if Patrick executes.
+
+**Token burn:** ~60k tokens (est.), 0 checkpoints.
+
+**Next up:** findasale-records — full project docs audit (PRIORITY 1 S199). #51 Sale Ripples — full build (schema + API + UI). #42 VoiceTagButton.tsx build. #19 Passkey end-to-end re-QA. #60 Premium Tier Bundle Sprint 2 build. Patrick human testing — E2E checklist execution.
+
+**Blockers:** None — all platforms green. #51 gap is backward-looking (S195 false positive); no blocker to forward progress.
+
+**Files changed:** `claude_docs/strategy/roadmap.md` (MODIFIED — v51, 13-col schema, 146 feature rows), `claude_docs/strategy/COMPLETED_PHASES.md` (MODIFIED — Wave 5 Sprint 2 completions), `claude_docs/archive/` (134 new files + README.md + MIGRATION_LOG_2026-03-18.md from archive-old re-file), `packages/frontend/hooks/useOrganizerTier.ts` (MODIFIED — pushed separately by Patrick S198) | Compressions: 0 | Subagents: 0 | Push method: MCP or Patrick PS1 (docs-only batch)
+
+---
+
 ## Session 197 — 2026-03-18 — Wave 5 Sprint 2 Frontends (4 features) + P3 Nav + Workflow Fixes
 
 **Worked on:** (1) Passkey registerBegin bug fix — challenge stored before options generated, so browser received mismatched challenge. Fixed: generate challenge after `generateRegistrationOptions()`, override `options.challenge` before response. (2) Wave 5 Sprint 2 frontends for 4 features: #46 Typology Classifier (useTypology.ts, TypologyBadge.tsx, typology.tsx), #54 Appraisal API (useAppraisal.ts, AppraisalResponseForm.tsx, appraisals.tsx — AI path placeholder), #17 Bid Bot Detector (useBidBot.ts, fraud-signals.tsx), #69 Offline Mode (useOfflineMode.ts, offline.tsx). (3) P3 nav discoverability pass — Layout.tsx + dashboard.tsx wired for 8+ hidden organizer features. (4) Workflow fixes — CORE.md §2.1 post-compaction re-init rule; findasale-dev SKILL.md renamed "Context Checkpoint" to "Context-Maintenance Triggered"; retrospective doc written.

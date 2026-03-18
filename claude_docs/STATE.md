@@ -7,6 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 198 COMPLETE (2026-03-18) — QA AUDIT + ROADMAP v51 + ARCHIVE RE-FILED:**
+
+**Frontend bug fixed:**
+- `useOrganizerTier.ts` — removed `@findasale/shared` import (Vercel unblocked). ✅ Pushed by Patrick.
+
+**QA audit — S196+S197 files:**
+- 17 files audited, ALL PASS. No additional TypeScript errors found.
+
+**Roadmap v51 (major restructure):**
+- 13-column enriched schema applied to all 146 Completed feature rows
+- TIER 2/3 tables removed — all QA-PASS features promoted to Completed
+- #51 Sale Ripples: IMPLEMENTATION-GAP discovered — no schema, no API, no UI. Moved to TIER 1.
+- #42 Voice-to-Tag: UI ⚠️ — VoiceTagButton.tsx missing
+- 8 legacy phase features slotted into Completed (CSV Import, Stripe Connect, Auction Mechanics, etc.)
+- Claude Automated Checks table added (9 checks)
+- Human test column: ALL features show 📋 — no Patrick execution records exist
+
+**Archive-old re-filed:**
+- 134 files reorganized from archive-old/ into archive/ (15 subdirectories)
+- archive/README.md + MIGRATION_LOG_2026-03-18.md created
+
+**COMPLETED_PHASES.md:**
+- Wave 5 statuses updated for all Sprint 2 completions
+
+**Last Updated:** 2026-03-18 (session 198)
+
+**Pending — carry to S199:**
+- [ ] findasale-records: Full project docs audit (stale docs, rule violations, orphaned folders)
+- [ ] #51 Sale Ripples: Full build from scratch (schema + API + UI — treat as new feature)
+- [ ] #42 Voice-to-Tag: Build VoiceTagButton.tsx (UI layer missing)
+- [ ] #19 Passkey: End-to-end re-QA (register → login → redirect)
+- [ ] #60 Premium Tier Bundle: Sprint 2 build (billing + workspace management UX)
+- [ ] Patrick human testing: Execute E2E checklist and mobile gestures guide; update Human column from 📋 to ✅ for verified features
+- [ ] Open Stripe business account (test keys still in production — recurring)
+
+---
+
 **Session 197 COMPLETE (2026-03-18) — WAVE 5 SPRINT 2 FRONTENDS + P3 NAV + WORKFLOW FIXES:**
 
 **Sprint 2 frontends built (4 features):**

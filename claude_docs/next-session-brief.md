@@ -1,115 +1,41 @@
-# Next Session Brief — S197
+# Next Session Brief — S199 (2026-03-18 → next)
 
-**Date Prepared:** 2026-03-17 (Session 196 wrap)
-**Context:** S196 completed full frontend wiring audit + bug fixes + #22 Low-Bandwidth build + rate limiting. All 29 features from S195 now fully wired. Roadmap v50. INFRASTRUCTURE: Railway and Vercel both GREEN. DATABASE: No pending migrations.
+## Priority 1: Records Audit (DO FIRST)
+Spawn findasale-records immediately. Full project docs audit:
+- Scan ALL files in claude_docs/ for stale content, rule violations, orphaned folders
+- Check CLAUDE.md files at project root + package level for drift from actual behavior
+- Check CORE.md rules are being followed (especially §10 push limits, §12 subagent gate)
+- Flag any duplicate docs, contradictory instructions, or files that no longer serve a purpose
+- Review archive/ structure after S198 re-file for correctness
+- Update context.md (run `node scripts/update-context.js` if available, else manual rebuild)
 
----
+## Priority 2: Feature Gaps
+Two features need builds:
+- **#51 Sale Ripples** [IMPLEMENTATION-GAP] — dispatch findasale-dev for full build (schema + API + UI). Zero code exists.
+- **#42 Voice-to-Tag** [UI-INCOMPLETE] — dispatch findasale-dev for VoiceTagButton.tsx. Backend route exists.
 
-## Patrick Pre-Session Checklist
+## Priority 3: Passkey Re-QA
+- #19 Passkey: Run full end-to-end QA (register → authenticate → JWT → redirect). Backend + frontend both fixed S196+S197.
 
-### No Critical Blockers ✅
-All migrations applied. Both platforms green. No manual Patrick actions required to start S197.
+## Priority 4: #60 Premium Tier Bundle Sprint 2
+- Full billing + workspace management UX. findasale-dev dispatch.
 
-### Optional But Recommended
-- [ ] Open Stripe business account (currently on test keys; blocks monetization feature flags)
-- [ ] Beta organizer recruitment (5 targets in `claude_docs/beta-launch/organizer-outreach.md`)
+## Context at Wrap (S198)
+- **Roadmap:** v51, 13-column schema, 146 features tracked, #51 gap flagged
+- **Archive:** Fully re-filed from archive-old → archive (134 files, 15 subdirs)
+- **Human tests:** ALL features show 📋 — Patrick has never formally run the E2E checklist
+- **Railway:** GREEN ✅ | **Vercel:** GREEN ✅ (useOrganizerTier.ts fix pushed)
+- **Push needed by Patrick for S198 files (if not yet done):**
 
----
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/strategy/roadmap.md claude_docs/strategy/COMPLETED_PHASES.md claude_docs/archive
+git commit -m "docs: roadmap v51 13-col schema, archive re-filed, #51 gap flagged, S198 session wrap"
+.\push.ps1
+```
 
-## Session 197 Goal
-
-**Re-QA wired features + Wave 5 Sprint 2 remaining frontends + Health Scout scan**
-
-### Top Priorities (In Order)
-
-1. **Re-QA #19 Passkey end-to-end** (backend fixed S196, frontend login UI wired)
-   - Test flow: Register → Confirm email → Login with passkey → Verify redirect to dashboard
-   - Dispatch: `findasale-qa`
-
-2. **Re-QA #54 Appraisal API smoke test** (tier gate fixed S196 from PAID_ADDON → PRO)
-   - Test flow: POST /api/appraisals requires PRO tier
-   - Verify Stripe integration still wired
-   - Dispatch: `findasale-qa`
-
-3. **Wave 5 Sprint 2 frontend builds** (4 remaining after S196)
-   - `#46 Treasure Typology` — tag suggestion UI + Collector Passport integration
-   - `#54 Crowdsourced Appraisal` — request form + Claude vision modal
-   - `#60 Premium Tier Bundle` — billing + workspace management UX
-   - `#69 Local-First Offline Mode` — offline catalog UI + conflict resolution
-   - Dispatch: `findasale-dev` (parallel batch)
-
-4. **Health Scout scan on new wiring changes** (SaleCard, Layout, dashboard wiring from S196)
-   - Verify no new lint violations or missing types
-   - Verify rate limiting middleware applied correctly
-   - Dispatch: `findasale-qa`
-
-5. **P3 nav discoverability pass** (trending/cities/neighborhoods/bounties)
-   - These routes exist at `/trending`, `/cities`, `/city/[slug]`, `/neighborhoods/[slug]`, `/organizer/bounties`
-   - But no nav entry points from dashboard or main navigation
-   - Build missing nav links and dash quick-links
-   - Dispatch: `findasale-dev` (low-complexity, high-value wiring)
-
----
-
-## Suggested Dispatch Batch (Session Start)
-
-**Parallel wave 1 (independent tasks):**
-- `findasale-qa`: Re-QA #19 + #54 + Health Scout scan (1 agent, 3 tasks)
-- `findasale-dev`: Wave 5 Sprint 2 frontends (#46 #54 #60 #69) + P3 nav discoverability (1 agent, 5 tasks or 2 batches if needed)
-
-**Sequential after wave 1 (dependent on QA results):**
-- If re-QA finds issues → dispatch `findasale-dev` for fixes
-- If QA passes → move features to SHIPPED status in roadmap
-
----
-
-## Files to Reference
-
-- `claude_docs/STATE.md` — Current session state (S196 complete)
-- `claude_docs/strategy/roadmap.md` — v50, feature statuses + priorities
-- `claude_docs/logs/session-log.md` — S196 entry (full wiring audit detail)
-- `claude_docs/CLAUDE.md` — Execution rules (hard gates, push protocol)
-- `claude_docs/CORE.md` — Architecture + behavior rules
-
----
-
-## Known Issues Pending Fix
-
-**From Health Scout S195:**
-- [ ] Open Stripe business account (test keys in production — recurring blocker)
-- [ ] Add `NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED` to `.env.example` (low priority)
-
-**From S196 Wiring Audit:**
-- [ ] Re-QA #19 Passkey (register → login → redirect flow)
-- [ ] Re-QA #54 Appraisal API (tier gate + smoke test)
-- [ ] Wave 5 Sprint 2 remaining (4 features need frontend builds)
-- [ ] P3 nav discoverability (5 routes unreachable from main nav)
-
----
-
-## Infrastructure Status
-
-- **Vercel (Frontend):** GREEN ✅ — auto-deploys on main push
-- **Railway (Backend):** GREEN ✅ — auto-deploys on main push
-- **Neon (Database):** GREEN ✅ — no pending migrations
-
-Both platforms ready for immediate deployment. No setup needed.
-
----
-
-## Context Checkpoint
-
-After S196 full wiring audit, the codebase is in a consolidated, well-documented state:
-- 29 features now fully wired (no orphaned components)
-- All organizer nav links in place
-- All shopper nav links + quick-links in place
-- Rate limiting deployed
-- Both bug fixes (#19 #54) in place pending re-QA
-
-Roadmap clarity is HIGH. Path forward is clear: re-QA wired items, complete Wave 5 Sprint 2 frontends, add missing P3 nav layer.
-
----
-
-## No Patrick Pre-Work Required
-
-Start immediately. All code ready to test. All platforms green.
+## S199 Agent Fleet Suggestion
+Run these in parallel at session start:
+1. findasale-records — docs audit (Priority 1)
+2. findasale-dev — #51 Sale Ripples build (Priority 2)
+3. findasale-dev — #42 VoiceTagButton.tsx (Priority 2)
