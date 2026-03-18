@@ -44,6 +44,11 @@
   @apply bg-[#1C1C1E] text-[#F5F5F0];
 }
 
+/* Ensure body itself goes dark — overrides the @layer base bg-warm-100 */
+.dark body {
+  @apply bg-[#1C1C1E] text-[#F5F5F0];
+}
+
 .dark .card {
   @apply bg-[#2C2C2E] border-[#3A3A3C];
 }
