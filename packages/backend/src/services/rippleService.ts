@@ -1,7 +1,35 @@
 import { Server } from 'socket.io';
 import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
-import type { RippleSummaryDTO, RippleTrendDTO } from '@findasale/shared';
+
+/**
+ * DTO for ripple summary (counts by type)
+ */
+export type RippleSummaryDTO = {
+  saleId: string;
+  views: number;
+  shares: number;
+  saves: number;
+  bids: number;
+  totalRipples: number;
+  lastRippleAt: string | null; // ISO date string
+};
+
+/**
+ * DTO for ripple trend data (hourly breakdown)
+ */
+export type RippleTrendDTO = {
+  saleId: string;
+  hourlyData: Array<{
+    hour: string; // ISO date string, rounded to hour
+    viewCount: number;
+    shareCount: number;
+    saveCount: number;
+    bidCount: number;
+  }>;
+  totalRipples: number;
+  trendPeriodHours: number;
+};
 
 /**
  * Record a ripple event (view, share, save, bid) for a sale.
@@ -22,7 +50,7 @@ export const recordRipple = async (
         saleId,
         type,
         userId: userId || null,
-        metadata: metadata || null,
+        metadata: metadata ? metadata : undefined,
       },
     });
   } catch (err) {

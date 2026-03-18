@@ -1,8 +1,36 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import type { RippleSummaryDTO, RippleTrendDTO } from '@findasale/shared';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+
+/**
+ * DTO for ripple summary (counts by type)
+ */
+export type RippleSummaryDTO = {
+  saleId: string;
+  views: number;
+  shares: number;
+  saves: number;
+  bids: number;
+  totalRipples: number;
+  lastRippleAt: string | null; // ISO date string
+};
+
+/**
+ * DTO for ripple trend data (hourly breakdown)
+ */
+export type RippleTrendDTO = {
+  saleId: string;
+  hourlyData: Array<{
+    hour: string; // ISO date string, rounded to hour
+    viewCount: number;
+    shareCount: number;
+    saveCount: number;
+    bidCount: number;
+  }>;
+  totalRipples: number;
+  trendPeriodHours: number;
+};
 
 /**
  * Hook to fetch ripple summary for a sale.
