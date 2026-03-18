@@ -75,7 +75,7 @@ const OfflinePage = () => {
 
   const handleSync = async () => {
     try {
-      const operations = queueData?.data?.data || [];
+      const operations = queueData?.data || [];
       if (operations.length === 0) {
         showToast('No pending operations to sync', 'info');
         return;
@@ -87,7 +87,7 @@ const OfflinePage = () => {
     }
   };
 
-  const queueItems = queueData?.data?.data || [];
+  const queueItems = queueData?.data || [];
 
   return (
     <>
