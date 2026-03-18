@@ -45,7 +45,8 @@ const OfflinePage = () => {
   const { canAccess } = useOrganizerTier();
   const { showToast } = useToast();
   const offlineStatus = useOfflineStatus();
-  const { data: queueData, isLoading: queueLoading } = useSyncQueue();
+  const { data: queueData } = useSyncQueue();
+  const queueLoading = false;
   const syncMutation = useTriggerSync();
 
   // Show loading spinner during auth check
