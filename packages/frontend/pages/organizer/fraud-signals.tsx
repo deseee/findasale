@@ -278,8 +278,7 @@ const FraudSignalsPage = () => {
                       )}
                     </div>
                     );
-                  })
-                  ))}
+                  })}
                 </div>
               ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-12 text-center">
