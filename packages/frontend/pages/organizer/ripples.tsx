@@ -276,7 +276,7 @@ export default function RipplesPage() {
  * StatCard Component
  */
 interface StatCardProps {
-  icon: React.ComponentType<{ className: string }>;
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   color: 'blue' | 'green' | 'yellow' | 'purple';
