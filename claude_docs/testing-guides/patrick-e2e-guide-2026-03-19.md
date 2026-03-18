@@ -1533,8 +1533,10 @@ Run this first to catch obvious breaks.
 **Typical Session:** 30–45 minutes (pick 2–3 workflow groups)
 
 **Completed Features:** 146 features shipped and live
-**In-Progress (TIER 1):** 4 features (Passkey fix, Ripples deploy, Appraisal, Premium tier)
+**In-Progress (TIER 1):** 2 features (#19 Passkey P0 fix pending merge, #54 Appraisal AI Sprint 3 deferred)
+**Recently Fixed (S202):** #51 Ripples + #60 Premium — P1 fixes applied (@findasale/shared removal, pricing TIER_CONFIG). Human-ready after #51 Neon migration.
 **Untestable (DB/API only):** ~6 features (no UI yet)
+**Missing dedicated test sections:** #7 Referral, #17 Bid Bot, #18 Performance Analytics, #20 Degradation, #46 Typology, #51 Ripples — all passed QA S201 but no step-by-step test cases in this guide yet.
 
 ---
 
@@ -1551,5 +1553,5 @@ Post in MESSAGE_BOARD.json or mention in next session sync.
 
 ---
 
-**Last Updated:** 2026-03-19 by Session 200
-**Next Update:** After new features ship or bugs are resolved.
+**Last Updated:** 2026-03-18 by Session 202 (P1 fixes, QA column updates)
+**Next Update:** After Chrome MCP verification pass on 38 routes + missing test sections added.

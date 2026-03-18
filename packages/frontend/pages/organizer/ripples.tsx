@@ -15,9 +15,37 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Eye, Share2, Save, TrendingUp } from 'lucide-react';
-import type { RippleSummaryDTO, RippleTrendDTO } from '@findasale/shared';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+
+/**
+ * DTO for ripple summary (counts by type)
+ */
+type RippleSummaryDTO = {
+  saleId: string;
+  views: number;
+  shares: number;
+  saves: number;
+  bids: number;
+  totalRipples: number;
+  lastRippleAt: string | null; // ISO date string
+};
+
+/**
+ * DTO for ripple trend data (hourly breakdown)
+ */
+type RippleTrendDTO = {
+  saleId: string;
+  hourlyData: Array<{
+    hour: string; // ISO date string, rounded to hour
+    viewCount: number;
+    shareCount: number;
+    saveCount: number;
+    bidCount: number;
+  }>;
+  totalRipples: number;
+  trendPeriodHours: number;
+};
 
 interface SaleWithRipples extends RippleSummaryDTO {
   saleTitle: string;

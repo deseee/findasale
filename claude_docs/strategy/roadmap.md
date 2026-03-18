@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-18 (v52 — Session 199: #51 Ripples full-stack shipped (Sprint 1). #42 Voice-Button complete. #60 Sprint 2 frontend complete. #19 Passkey P0 fix dispatched (concurrent challenge race). Docs audit HIGH/MEDIUM findings logged.)
+**Last Updated:** 2026-03-18 (v53 — Session 202: QA column updated for 11 features (#7 #14 #17 #18 #20 #22 #42 #46 #62 #68 #71) re-confirmed S201 human-ready. #51/#60 P1 fixes applied S202 (@findasale/shared removal + pricing TIER_CONFIG). #65 flagged for spec clarification. @findasale/shared build errors fixed in rippleService.ts, useRipples.ts, ripples.tsx.)
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -287,9 +287,9 @@ Roadmap and session-log are always updated in the same commit.
 | — | Payout Transparency / Earnings Dashboard | ORG | SIMPLE | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Item-level fee breakdown + PDF |
 | 11 | Organizer Referral (Fee Bypass) | ORG | SIMPLE | Ph.6 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | referralDiscountExpiry |
 | — | Tiers Backend Infrastructure | ORG | SIMPLE | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/tiers` — getMyTier, syncTier |
-| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | S183 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI |
-| 71 | Organizer Reputation Score | ORG | SIMPLE | S196 | ✅ | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | 1-5 star public score + reputation.tsx frontend |
-| 22 | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | S196 | — | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | Network API detection, localStorage, LowBandwidthContext |
+| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | S183 | ✅ | ✅ | ✅ | ⚠️S201 | 📋 | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI. **S201: Flagged for spec clarification — no feature file found.** |
+| 71 | Organizer Reputation Score | ORG | SIMPLE | S196 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | 1-5 star public score + reputation.tsx frontend. QA re-confirmed S201, human-ready. |
+| 22 | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | S196 | — | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | Network API detection, localStorage, LowBandwidthContext. QA re-confirmed S201, human-ready. |
 | 19 | Passkey / WebAuthn Login | ORG | SIMPLE | S190 | ✅ | ✅ | ✅ | 🔧S199 | 📋 | ⚠️ | 📋 | P0 concurrent challenge race fixed S199 (session-based key). End-to-end re-QA + merge pending. |
 | — | A/B Testing Infrastructure | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Internal optimization tool |
 | — | Invites | ORG | SIMPLE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Invite-to-sale / invite-to-platform |
@@ -308,12 +308,12 @@ Roadmap and session-log are always updated in the same commit.
 | — | Payout PDF Export | ORG | PRO | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Financial reporting for tax/accounting |
 | — | Stripe Connect Setup | ORG | SIMPLE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Payout bank account linking + verification |
 | 25 | Organizer Item Library (Consignment Rack) | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Upload once, reuse; cross-sale search, price history |
-| 42 | Voice-to-Tag | ORG | PRO | S199 | — | ✅ | ✅ | ✅S199 | 📋 | — | 📋 | VoiceTagButton.tsx + useVoiceTag.ts complete. Web Speech API integration. Ready for add-items page. |
-| 18 | Post Performance Analytics | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | UTM tracking on social template downloads |
+| 42 | Voice-to-Tag | ORG | PRO | S199 | — | ✅ | ✅ | ✅S201 | 📋 | — | 📋 | VoiceTagButton.tsx + useVoiceTag.ts complete. Web Speech API integration. Ready for add-items page. QA re-confirmed S201, human-ready. |
+| 18 | Post Performance Analytics | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | UTM tracking on social template downloads. QA re-confirmed S201, human-ready. |
 | 41 | Flip Report | ORG | PRO | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Item resale potential scoring |
-| 17 | Bid Bot Detector + Fraud Score | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | FraudBadge on holds page, fraud-signals.tsx |
+| 17 | Bid Bot Detector + Fraud Score | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | FraudBadge on holds page, fraud-signals.tsx. QA re-confirmed S201, human-ready. |
 | 13 | TEAMS Workspace | ORG | TEAMS | S190 | ✅ | ✅ | ✅ | ✅S195 | ✅S194 | ✅ | 📋 | Multi-user workspace, role management |
-| 68 | Command Center Dashboard | ORG | PRO | S183 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Per-sale widget dashboard |
+| 68 | Command Center Dashboard | ORG | PRO | S183 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | Per-sale widget dashboard. QA re-confirmed S201, human-ready. |
 
 ### Organizer — Marketing & Brand Amplification [SIMPLE/PRO mixed]
 
@@ -326,7 +326,7 @@ Roadmap and session-log are always updated in the same commit.
 | 33 | Share Card Factory (OG Tags) | ORG | SIMPLE | Ph.10 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Branded social previews, dynamic OG images |
 | — | Message Templates | ORG | PRO | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Saved organizer reply templates |
 | 34 | Hype Meter | ORG | SIMPLE | Ph.11 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Real-time social proof |
-| 18 | Post Performance Analytics | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Social template download UTM tracking |
+| 18 | Post Performance Analytics | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | Social template download UTM tracking. QA re-confirmed S201. |
 | 63 | Dark Mode + Accessibility | BOTH | FREE | S182 | — | ✅ | ✅ | ✅S195 | 📋 | — | 📋 | Tailwind dark variants, WCAG 2.1 AA, high-contrast outdoor mode |
 | 67 | Social Proof Notifications | BOTH | SIMPLE | S181 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Engagement aggregation (favorites, bids, holds) |
 
@@ -338,8 +338,8 @@ Roadmap and session-log are always updated in the same commit.
 | — | Auction Mechanics | ORG | SIMPLE | Ph.12 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Countdown timer, bid modal, auto-bid, cron closing |
 | 37 | Sale Reminders (Calendar + Remind Me) | SHO | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Sale alerts for shoppers |
 | 28 | Neighborhood Heatmap | BOTH | SIMPLE | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Density-based Leaflet overlay |
-| 14 | Real-Time Status Updates | BOTH | PRO | S187 | ✅ | ✅ | ✅ | ✅S196 | 📋 | — | 📋 | Organizer widget, SMS/email alerts, SaleStatusWidget |
-| 20 | Proactive Degradation Mode | BOTH | PRO | S190 | — | ✅ | ✅ | ✅S195 | 📋 | — | 📋 | DegradationBanner + middleware for offline |
+| 14 | Real-Time Status Updates | BOTH | PRO | S187 | ✅ | ✅ | ✅ | ✅S201 | 📋 | — | 📋 | Organizer widget, SMS/email alerts, SaleStatusWidget. QA re-confirmed S201, human-ready. |
+| 20 | Proactive Degradation Mode | BOTH | PRO | S190 | — | ✅ | ✅ | ✅S201 | 📋 | — | 📋 | DegradationBanner + middleware for offline. QA re-confirmed S201, human-ready. |
 | 30 | AI Item Valuation & Comparables | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | ValuationWidget (PRO-gated) on add-items page |
 | 39 | Photo Op Stations | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | PhotoOpMarker on map, rate-limited |
 | 40 | Sale Hubs | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Hub pages + membership UI |
@@ -393,7 +393,7 @@ Roadmap and session-log are always updated in the same commit.
 | — | Pickup Booking (Schedule Pickup) | SHO | FREE | Ph.7 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Shopper-side scheduling |
 | 29 | Shopper Loyalty Passport | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Stamps, badges, early-access perks |
 | 32 | Shopper Wishlist Alerts + Smart Follow | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Category/tag/organizer alerts on new items |
-| 62 | Digital Receipt + Returns | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Auto-generated receipt post-POS, return window |
+| 62 | Digital Receipt + Returns | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | Auto-generated receipt post-POS, return window. QA re-confirmed S201, human-ready. |
 | 45 | Collector Passport | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Specialty collection tracking + achievement path |
 | 50 | Loot Log | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Personal purchase history with photos + prices |
 
@@ -418,15 +418,15 @@ Roadmap and session-log are always updated in the same commit.
 
 | # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
-| 46 | Treasure Typology Classifier | ORG | PRO | S191 | ✅ | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx |
-| 51 | Sale Ripples | SHO | FREE | S199 | ✅ | ✅ | ✅ | ✅S199 | 📋 | ✅ | 📋 | Social proof activity tracking. RippleIndicator auto-records. ripples.tsx analytics. **Neon migration pending.** |
+| 46 | Treasure Typology Classifier | ORG | PRO | S191 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx. QA re-confirmed S201, human-ready. |
+| 51 | Sale Ripples | SHO | FREE | S199 | ✅ | ✅ | ✅ | ✅S202 | 📋 | ✅ | 📋 | Social proof activity tracking. RippleIndicator auto-records. ripples.tsx analytics. P1 fix applied S202 (useEffect dep + @findasale/shared removal). **Neon migration pending.** Human-ready after migration. |
 | 52 | Estate Sale Encyclopedia | SHO | FREE | S191 | ✅ | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | Wiki-style knowledge base; EncyclopediaCard.tsx |
 | 54 | Crowdsourced Appraisal (Base) | BOTH | FREE | S191 | ✅ | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | Request/submit/vote appraisals; AI Sprint 3 deferred |
-| 60 | Premium Tier Bundle | ORG | PRO | S199 | ✅ | ✅ | ✅ | ✅S199 | 📋 | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. Sprint 2 frontend complete. |
+| 60 | Premium Tier Bundle | ORG | PRO | S199 | ✅ | ✅ | ✅ | ✅S202 | 📋 | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. Sprint 2 frontend complete. P1 fix applied S202 (pricing TIER_CONFIG constant). Human-ready. |
 | 69 | Local-First Offline Mode | BOTH | PRO | S191 | — | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | Service worker sync queue; offline catalog |
 | 70 | Live Sale Feed | SHO | SIMPLE | S185 | ✅ | ✅ | ✅ | 📋 | 📋 | — | 📋 | Real-time sale activity feed |
 | 47 | UGC Photo Tags | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Shopper-submitted item photos + moderation |
-| 7 | Shopper Referral Rewards | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Referral tracking + rewards distribution |
+| 7 | Shopper Referral Rewards | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S201 | 📋 | ✅ | 📋 | Referral tracking + rewards distribution. QA re-confirmed S201, human-ready. |
 
 ### Platform & AI [FREE/SIMPLE]
 
