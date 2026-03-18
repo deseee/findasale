@@ -76,6 +76,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Dashboard
             </Link>
+            <Link href="/organizer/premium" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Premium Plans
+            </Link>
             {canAccess('PRO') && (
               <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
                 Command Center

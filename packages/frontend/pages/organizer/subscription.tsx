@@ -3,6 +3,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import UsageBar from '../../components/UsageBar';
 
 interface Subscription {
   tier: 'SIMPLE' | 'PRO' | 'TEAMS';
@@ -16,6 +18,7 @@ interface Subscription {
 export default function SubscriptionPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { tier } = useOrganizerTier();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
@@ -195,6 +198,56 @@ export default function SubscriptionPage() {
                   </div>
                 )}
               </div>
+
+              {/* Usage Stats Section */}
+              {(subscription.tier === 'PRO' || subscription.tier === 'TEAMS') && (
+                <div className="p-8 border-t border-gray-200">
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">Usage Overview</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Items per Sale */}
+                    <div>
+                      <UsageBar
+                        label="Items per Sale Limit"
+                        current={0}
+                        limit={subscription.tier === 'PRO' ? 500 : 9999}
+                        unit="items"
+                        showPercent={false}
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        {subscription.tier === 'PRO'
+                          ? 'PRO: 500 items per sale'
+                          : 'TEAMS: Unlimited items per sale'}
+                      </p>
+                    </div>
+
+                    {/* Photos per Item */}
+                    <div>
+                      <UsageBar
+                        label="Photos per Item Limit"
+                        current={0}
+                        limit={subscription.tier === 'PRO' ? 10 : 9999}
+                        unit="photos"
+                        showPercent={false}
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        {subscription.tier === 'PRO'
+                          ? 'PRO: 10 photos per item'
+                          : 'TEAMS: Unlimited photos per item'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-600 mt-6">
+                    💡 Usage stats are computed from your sales data. Check your{' '}
+                    <Link href="/organizer/dashboard" className="text-sage-600 hover:text-sage-700 font-semibold">
+                      dashboard
+                    </Link>
+                    {' '}for detailed analytics.
+                  </p>
+                </div>
+              )}
+
 
               {/* Payment Method & Actions */}
               <div className="p-8">
