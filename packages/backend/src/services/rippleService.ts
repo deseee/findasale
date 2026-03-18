@@ -1,6 +1,136 @@
 import { Server } from 'socket.io';
 import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
+import type { RippleSummaryDTO, RippleTrendDTO } from '@findasale/shared';
+
+/**
+ * Record a ripple event (view, share, save, bid) for a sale.
+ * @param saleId - ID of the sale
+ * @param type - Type of ripple event
+ * @param userId - Optional user ID
+ * @param metadata - Optional metadata (e.g., source platform, device type)
+ */
+export const recordRipple = async (
+  saleId: string,
+  type: string,
+  userId?: string,
+  metadata?: Record<string, any>
+): Promise<void> => {
+  try {
+    await prisma.saleRipple.create({
+      data: {
+        saleId,
+        type,
+        userId: userId || null,
+        metadata: metadata || null,
+      },
+    });
+  } catch (err) {
+    console.error(`[rippleService] Failed to record ripple for sale ${saleId}:`, err);
+  }
+};
+
+/**
+ * Get ripple summary for a sale (counts by type).
+ * @param saleId - ID of the sale
+ * @returns RippleSummaryDTO with counts for each ripple type
+ */
+export const getRippleSummary = async (saleId: string): Promise<RippleSummaryDTO> => {
+  try {
+    const ripples = await prisma.saleRipple.findMany({
+      where: { saleId },
+      select: { type: true, createdAt: true },
+    });
+
+    const summary: RippleSummaryDTO = {
+      saleId,
+      views: ripples.filter((r) => r.type === 'VIEW').length,
+      shares: ripples.filter((r) => r.type === 'SHARE').length,
+      saves: ripples.filter((r) => r.type === 'SAVE').length,
+      bids: ripples.filter((r) => r.type === 'BID').length,
+      totalRipples: ripples.length,
+      lastRippleAt: ripples.length > 0 ? new Date(Math.max(...ripples.map(r => r.createdAt.getTime()))).toISOString() : null,
+    };
+
+    return summary;
+  } catch (err) {
+    console.error(`[rippleService] Failed to get ripple summary for sale ${saleId}:`, err);
+    return {
+      saleId,
+      views: 0,
+      shares: 0,
+      saves: 0,
+      bids: 0,
+      totalRipples: 0,
+      lastRippleAt: null,
+    };
+  }
+};
+
+/**
+ * Get ripple trend data for a sale over a time period.
+ * @param saleId - ID of the sale
+ * @param hours - Number of hours to look back (default 24)
+ * @returns RippleTrendDTO with hourly breakdown
+ */
+export const getRippleTrend = async (saleId: string, hours: number = 24): Promise<RippleTrendDTO> => {
+  try {
+    const startTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const ripples = await prisma.saleRipple.findMany({
+      where: {
+        saleId,
+        createdAt: { gte: startTime },
+      },
+      select: { type: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Group by hour
+    const hourlyMap = new Map<string, { views: number; shares: number; saves: number; bids: number }>();
+
+    ripples.forEach((ripple) => {
+      const date = new Date(ripple.createdAt);
+      date.setMinutes(0, 0, 0); // Round down to hour
+      const hourKey = date.toISOString();
+
+      if (!hourlyMap.has(hourKey)) {
+        hourlyMap.set(hourKey, { views: 0, shares: 0, saves: 0, bids: 0 });
+      }
+
+      const bucket = hourlyMap.get(hourKey)!;
+      if (ripple.type === 'VIEW') bucket.views++;
+      else if (ripple.type === 'SHARE') bucket.shares++;
+      else if (ripple.type === 'SAVE') bucket.saves++;
+      else if (ripple.type === 'BID') bucket.bids++;
+    });
+
+    const hourlyData = Array.from(hourlyMap.entries())
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+      .map(([hour, counts]) => ({
+        hour,
+        viewCount: counts.views,
+        shareCount: counts.shares,
+        saveCount: counts.saves,
+        bidCount: counts.bids,
+      }));
+
+    return {
+      saleId,
+      hourlyData,
+      totalRipples: ripples.length,
+      trendPeriodHours: hours,
+    };
+  } catch (err) {
+    console.error(`[rippleService] Failed to get ripple trend for sale ${saleId}:`, err);
+    return {
+      saleId,
+      hourlyData: [],
+      totalRipples: 0,
+      trendPeriodHours: hours,
+    };
+  }
+};
 
 /**
  * Haversine formula to calculate distance in miles between two lat/lng points.

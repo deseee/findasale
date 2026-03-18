@@ -119,6 +119,8 @@ model User {
   appraisalResponses   AppraisalResponse[] @relation("AppraisalResponses")
   appraisalAIRequests  AppraisalAIRequest[] @relation("AppraisalAIRequests")
   appraisalDisputes    AppraisalDispute[]  @relation("AppraisalDisputes")
+  // Feature #51: Sale Ripples — social proof activity
+  ripples              SaleRipple[]        @relation("SaleRipples")
   // Feature #60: TEAMS Onboarding Wizard completion flag
   teamsOnboardingComplete Boolean @default(false)
 
@@ -245,6 +247,8 @@ model Sale {
   fraudSignals      FraudSignal[]
   // Feature #40: Sale Hubs — membership in coordinated hubs
   hubMemberships    SaleHubMembership[] @relation("SaleHubMemberships")
+  // Feature #51: Sale Ripples — social proof activity feed
+  ripples           SaleRipple[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -1792,4 +1796,21 @@ model AppraisalDispute {
   updatedAt   DateTime @updatedAt
 
   @@index([requestId])
+}
+
+// Feature #51: Sale Ripples — social proof via activity ripples (views, shares, saves)
+model SaleRipple {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  type      String   @default("VIEW") // VIEW | SHARE | SAVE | BID — activity type
+  userId    String?  // Optional: anonymous views won't have userId
+  user      User?    @relation("SaleRipples", fields: [userId], references: [id])
+  metadata  Json?    // Optional metadata e.g., { source: "facebook", platform: "mobile" }
+  createdAt DateTime @default(now())
+
+  @@index([saleId])
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
 }

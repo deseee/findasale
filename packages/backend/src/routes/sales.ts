@@ -21,6 +21,7 @@ import {
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
 import { getHeatmapHandler } from '../controllers/heatmapController'; // Feature #28
+import rippleRoutes from './ripples'; // Feature #51: Sale Ripples
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -49,5 +50,8 @@ router.post('/generate-description', authenticate, generateSaleDescriptionHandle
 router.post('/:id/track-scan', trackQrScan); // public, no auth needed
 router.get('/:id/calendar.ics', generateIcal); // public, no auth needed
 router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
+
+// Feature #51: Sale Ripples — social proof activity tracking
+router.use('/:saleId/ripples', rippleRoutes);
 
 export default router;

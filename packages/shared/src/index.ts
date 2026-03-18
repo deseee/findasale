@@ -1,5 +1,8 @@
 // Shared types and utilities will go here
 
+// Feature #51: Sale Ripples — social proof activity
+export { RippleType, type RippleSummaryDTO, type RippleTrendDTO, type RippleActivityDTO } from './types/ripples';
+
 // Feature #65: Subscription tier gating
 export { type SubscriptionTier, hasAccess, TIER_RANK, FEATURE_TIERS } from './tierGate';
 
