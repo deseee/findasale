@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -176,10 +177,9 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
  */
 export const authenticateBegin = async (req: Request, res: Response) => {
   try {
-    // Generate and store challenge with a fixed key for simplicity
-    // Note: In production, this should use a session token to allow concurrent auth flows
-    // For now, this supports a single active authentication session
-    const challenge = generateAndStoreChallenge('passkey-auth-current');
+    // Generate unique challengeId per request to support concurrent auth flows
+    const challengeId = randomUUID();
+    const challenge = generateAndStoreChallenge(challengeId);
 
     // For now, we don't know which user is logging in, so allowCredentials is empty
     // The browser will use the resident key (discoverable credential) flow
@@ -195,7 +195,7 @@ export const authenticateBegin = async (req: Request, res: Response) => {
       challenge: challenge,
     };
 
-    res.json({ publicKeyOptions: optionsWithChallenge });
+    res.json({ publicKeyOptions: optionsWithChallenge, challengeId });
   } catch (error) {
     console.error('Passkey authentication begin error:', error);
     res.status(500).json({ message: 'Server error during authentication setup' });
@@ -272,9 +272,9 @@ export const listPasskeys = async (req: AuthRequest, res: Response) => {
  */
 export const authenticateComplete = async (req: Request, res: Response) => {
   try {
-    const { id: credentialIdBase64, response: clientResponse } = req.body;
+    const { id: credentialIdBase64, response: clientResponse, challengeId } = req.body;
 
-    if (!credentialIdBase64 || !clientResponse) {
+    if (!credentialIdBase64 || !clientResponse || !challengeId) {
       return res.status(400).json({ message: 'Missing credential data' });
     }
 
@@ -292,30 +292,16 @@ export const authenticateComplete = async (req: Request, res: Response) => {
     });
 
     if (!credential) {
-      return res.status(404).json({ message: 'Passkey not found' });
+      return res.status(401).json({ message: 'Authentication failed' });
     }
 
     const user = credential.user;
 
-    // Retrieve challenge from storage (one-time use)
-    // The challenge is stored in webauthnChallenges map with key 'passkey-auth-{timestamp}'
-    // We need to find the corresponding challenge. Since we don't know the exact timestamp,
-    // and simplewebauthn includes the challenge in the response, we can extract it from there.
-    // The browser will have echoed back the same challenge in the assertion.
-
-    // Note: The challenge is included in the client response as part of the authenticator response.
-    // simplewebauthn will validate that it matches what's expected.
-    // For storage validation, we trust that any challenge in the assertion was one we issued.
-
-    // The real issue: this code was creating a NEW empty Map, so lookups always failed.
-    // Fix: We can't easily know which timestamp was used, but we don't need to.
-    // The challenge value itself is what matters. It's a base64url random string.
-    // For this demo flow, we'll use a fixed key for simplicity:
-
-    const challenge = getAndValidateChallenge('passkey-auth-current');
+    // Retrieve challenge from storage using the challengeId from client (one-time use)
+    const challenge = getAndValidateChallenge(challengeId);
 
     if (!challenge) {
-      return res.status(400).json({ message: 'Challenge not found. Start authentication again.' });
+      return res.status(400).json({ message: 'Challenge not found or expired. Start authentication again.' });
     }
 
     try {
