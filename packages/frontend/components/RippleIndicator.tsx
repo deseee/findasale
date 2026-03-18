@@ -31,7 +31,7 @@ export const RippleIndicator: React.FC<RippleIndicatorProps> = ({
       recordView({ saleId, type: 'VIEW' });
       setHasRecordedView(true);
     }
-  }, [saleId, hasRecordedView, recordView]);
+  }, [saleId, hasRecordedView]);
 
   if (isLoading || !summary) {
     return (

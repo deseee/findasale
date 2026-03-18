@@ -59,7 +59,10 @@ const OrganizerPremiumPage = () => {
     );
   }
 
-  const tierInfo: Record<string, { label: string; description: string; price: string }> = {
+  // TODO: fetch from /api/billing/tiers when endpoint exists
+  // Tier pricing is hardcoded here temporarily. Consider fetching from backend
+  // so pricing changes don't require frontend deploys.
+  const TIER_CONFIG = {
     SIMPLE: {
       label: 'Free',
       description: 'Essential tools for getting started with estate sales',
@@ -76,6 +79,8 @@ const OrganizerPremiumPage = () => {
       price: '$79/month',
     },
   };
+
+  const tierInfo: Record<string, { label: string; description: string; price: string }> = TIER_CONFIG;
 
   const currentTierInfo = tierInfo[tier] || tierInfo.SIMPLE;
 
