@@ -12,6 +12,7 @@ import {
   trackQrScan,
   generateIcal,
   getSalesByNeighborhood,
+  getSalesByCity,
   cloneSale,
   getSaleActivity,
   generateSaleDescriptionHandler,
@@ -29,6 +30,7 @@ router.get('/', listSales);
 router.get('/search', searchSales);
 router.get('/heatmap', getHeatmapHandler); // Feature #28: Neighborhood heatmap
 router.get('/neighborhood/:slug', getSalesByNeighborhood); // U2: SEO landing pages
+router.get('/city/:city', getSalesByCity); // Bug fix: City page route
 
 // /mine must be registered before /:id so Express doesn't treat "mine" as an ID
 router.get('/mine', authenticate, getMySales);

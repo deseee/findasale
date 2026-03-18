@@ -79,6 +79,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 Command Center
               </Link>
             )}
+            {canAccess('TEAMS') && (
+              <Link href="/organizer/workspace" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                Workspace
+              </Link>
+            )}
           </>
         )}
         {(user.role === 'USER' || user.role === 'ADMIN') && (
@@ -179,6 +184,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         <Link href="/organizer/dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Dashboard</Link>
                         {canAccess('PRO') && (
                           <Link href="/organizer/command-center" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Command Center</Link>
+                        )}
+                        {canAccess('TEAMS') && (
+                          <Link href="/organizer/workspace" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Workspace</Link>
                         )}
                       </>
                     )}

@@ -103,32 +103,32 @@ const LineQueuePage = () => {
         <title>Virtual Line Manager – FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">
 
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/organizer/dashboard" className="text-warm-500 hover:text-warm-700 p-2 rounded hover:bg-warm-100" aria-label="Go back">
+            <Link href="/organizer/dashboard" className="text-warm-500 hover:text-warm-700 dark:text-gray-400 dark:hover:text-gray-300 p-2 rounded hover:bg-warm-100 dark:hover:bg-gray-800" aria-label="Go back">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <h1 className="text-2xl font-bold text-warm-900">Virtual Line</h1>
+            <h1 className="text-2xl font-bold text-warm-900 dark:text-gray-100">Virtual Line</h1>
           </div>
 
           {/* Stats bar */}
           <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="card p-4 text-center">
-              <p className="text-3xl font-bold text-amber-700">{waiting.length}</p>
-              <p className="text-xs text-warm-500 mt-1">Waiting</p>
+            <div className="card p-4 text-center bg-white dark:bg-gray-800">
+              <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{waiting.length}</p>
+              <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Waiting</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-3xl font-bold text-blue-700">{notified.length}</p>
-              <p className="text-xs text-warm-500 mt-1">Notified</p>
+            <div className="card p-4 text-center bg-white dark:bg-gray-800">
+              <p className="text-3xl font-bold text-blue-700 dark:text-blue-400">{notified.length}</p>
+              <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Notified</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-3xl font-bold text-green-700">{entered.length}</p>
-              <p className="text-xs text-warm-500 mt-1">Entered</p>
+            <div className="card p-4 text-center bg-white dark:bg-gray-800">
+              <p className="text-3xl font-bold text-green-700 dark:text-green-400">{entered.length}</p>
+              <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Entered</p>
             </div>
           </div>
 
@@ -141,7 +141,7 @@ const LineQueuePage = () => {
                 () => api.post(`/lines/${saleId}/next`),
                 'Next person notified via SMS'
               )}
-              className="flex-1 bg-amber-600 text-white py-3 rounded-xl font-semibold disabled:opacity-40 hover:bg-amber-700 transition-colors"
+              className="flex-1 bg-amber-600 text-white py-3 rounded-xl font-semibold disabled:opacity-40 hover:bg-amber-700 dark:hover:bg-amber-700 transition-colors"
             >
               {actionLoading === 'callNext' ? 'Sending…' : `Call Next #${waiting[0]?.position ?? '–'}`}
             </button>
@@ -152,34 +152,34 @@ const LineQueuePage = () => {
                 () => api.post(`/lines/${saleId}/notify`),
                 `Position update sent to ${waiting.length} shopper${waiting.length !== 1 ? 's' : ''}`
               )}
-              className="flex-1 bg-white border border-warm-300 text-warm-800 py-3 rounded-xl font-semibold disabled:opacity-40 hover:bg-warm-50 transition-colors"
+              className="flex-1 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 text-warm-800 dark:text-gray-300 py-3 rounded-xl font-semibold disabled:opacity-40 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
             >
               {actionLoading === 'notifyAll' ? 'Sending…' : 'Notify All'}
             </button>
           </div>
 
           {isLoading && (
-            <div className="text-center text-warm-500 py-10">Loading line…</div>
+            <div className="text-center text-warm-500 dark:text-gray-400 py-10">Loading line…</div>
           )}
 
           {!isLoading && active.length === 0 && (
             <div className="text-center py-12">
               <p className="text-4xl mb-3">🏁</p>
-              <p className="text-warm-600 font-medium">No one in line yet.</p>
-              <p className="text-warm-500 text-sm mt-1">Shoppers can join via the sale page.</p>
+              <p className="text-warm-600 dark:text-gray-400 font-medium">No one in line yet.</p>
+              <p className="text-warm-500 dark:text-gray-500 text-sm mt-1">Shoppers can join via the sale page.</p>
             </div>
           )}
 
           {!isLoading && active.length > 0 && (
             <div className="space-y-3">
               {active.map(entry => (
-                <div key={entry.id} className="card p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                    <span className="font-bold text-amber-800 text-sm">#{entry.position}</span>
+                <div key={entry.id} className="card p-4 flex items-center gap-3 bg-white dark:bg-gray-800">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center flex-shrink-0">
+                    <span className="font-bold text-amber-800 dark:text-amber-200 text-sm">#{entry.position}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-warm-900 truncate">{entry.user.name}</p>
-                    <p className="text-xs text-warm-500">
+                    <p className="font-semibold text-warm-900 dark:text-gray-100 truncate">{entry.user.name}</p>
+                    <p className="text-xs text-warm-500 dark:text-gray-400">
                       {entry.user.phone ?? 'No phone — cannot SMS'}
                     </p>
                   </div>
