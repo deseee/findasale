@@ -85,3 +85,6 @@ packages/backend/services/image-tagger/.coverage*
 # =========================
 packages/database/package-lock.json
 *.skill
+
+# Session tracking (VM-local, not for git)
+.checkpoint-manifest.json
