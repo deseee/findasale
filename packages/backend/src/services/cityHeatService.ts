@@ -18,8 +18,8 @@ export interface CityHeatResponse {
 
 /**
  * Compute city heat index from published sales in past 30 days.
- * Groups by lat/lng rounded to 1 decimal place (~11km grid cells).
- * Returns top 10 cells with sale count, item count, estimated value, and trend.
+ * Groups by city name from the Sale record.
+ * Returns top 10 cities with sale count, item count, estimated value, and trend.
  */
 export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
   const now = new Date();
@@ -45,6 +45,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
     },
     select: {
       id: true,
+      city: true,
       lat: true,
       lng: true,
       startDate: true,
@@ -79,72 +80,68 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
     saleValueMap.set(sale.id, totalValue);
   }
 
-  // Group sales by cell: lat/lng rounded to 1 decimal
-  interface CellData {
-    lat: number;
-    lng: number;
+  // Group sales by city
+  interface CityData {
+    latitudes: number[];
+    longitudes: number[];
     salesThisWeek: string[];
     salesLastWeek: string[];
     totalValue: number;
     totalItems: number;
   }
-  const cellMap = new Map<string, CellData>();
+  const cityMap = new Map<string, CityData>();
 
   for (const sale of sales) {
-    const cellLat = Math.round(sale.lat * 10) / 10;
-    const cellLng = Math.round(sale.lng * 10) / 10;
-    const cellKey = `${cellLat},${cellLng}`;
+    const cityKey = sale.city;
 
     const isThisWeek = sale.startDate >= sevenDaysAgo;
     const isLastWeek = sale.startDate >= fourteenDaysAgo && sale.startDate < sevenDaysAgo;
 
-    if (!cellMap.has(cellKey)) {
-      cellMap.set(cellKey, {
-        lat: cellLat,
-        lng: cellLng,
+    if (!cityMap.has(cityKey)) {
+      cityMap.set(cityKey, {
+        latitudes: [],
+        longitudes: [],
         salesThisWeek: [],
         salesLastWeek: [],
         totalValue: 0,
-        totalItems: sale._count.items,
+        totalItems: 0,
       });
     }
 
-    const cell = cellMap.get(cellKey)!;
-    if (isThisWeek) cell.salesThisWeek.push(sale.id);
-    if (isLastWeek) cell.salesLastWeek.push(sale.id);
-    cell.totalValue += saleValueMap.get(sale.id) ?? 0;
-    cell.totalItems += sale._count.items;
+    const city = cityMap.get(cityKey)!;
+    city.latitudes.push(sale.lat);
+    city.longitudes.push(sale.lng);
+    if (isThisWeek) city.salesThisWeek.push(sale.id);
+    if (isLastWeek) city.salesLastWeek.push(sale.id);
+    city.totalValue += saleValueMap.get(sale.id) ?? 0;
+    city.totalItems += sale._count.items;
   }
 
-  // Convert cells to CityHeat, compute trend, sort by sale count
+  // Convert cities to CityHeat, compute trend, sort by sale count
   const cities: CityHeat[] = [];
-  cellMap.forEach((cell) => {
-    const thisWeekCount = cell.salesThisWeek.length;
-    const lastWeekCount = cell.salesLastWeek.length;
+  cityMap.forEach((city, cityName) => {
+    const thisWeekCount = city.salesThisWeek.length;
+    const lastWeekCount = city.salesLastWeek.length;
     let trend: 'up' | 'stable' | 'down' = 'stable';
     if (thisWeekCount > lastWeekCount) trend = 'up';
     else if (thisWeekCount < lastWeekCount) trend = 'down';
 
-    // Label derivation: hard-code Grand Rapids downtown for specific lat/lng ranges, else generic
-    let label = 'Area';
-    if (cell.lat >= 42.7 && cell.lat <= 42.8 && cell.lng >= -85.3 && cell.lng <= -85.2) {
-      label = 'Downtown Grand Rapids';
-    } else if (cell.lat >= 42.9 && cell.lat <= 43.0 && cell.lng >= -85.4 && cell.lng <= -85.3) {
-      label = 'North Grand Rapids';
-    } else if (cell.lat >= 42.6 && cell.lat <= 42.7 && cell.lng >= -85.3 && cell.lng <= -85.2) {
-      label = 'South Grand Rapids';
-    } else {
-      label = `Area ${cell.lat.toFixed(1)}, ${cell.lng.toFixed(1)}`;
-    }
+    // Average lat/lng for map placement
+    const avgLat = city.latitudes.length > 0
+      ? city.latitudes.reduce((a, b) => a + b, 0) / city.latitudes.length
+      : 0;
+    const avgLng = city.longitudes.length > 0
+      ? city.longitudes.reduce((a, b) => a + b, 0) / city.longitudes.length
+      : 0;
 
     cities.push({
-      label,
+      label: cityName,
       saleCount: thisWeekCount,
-      itemCount: cell.totalItems,
-      totalEstimatedValue: cell.totalValue,
+      itemCount: city.totalItems,
+      totalEstimatedValue: city.totalValue,
       trend,
-      lat: cell.lat,
-      lng: cell.lng,
+      lat: avgLat,
+      lng: avgLng,
     });
   });
 
