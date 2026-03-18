@@ -194,7 +194,7 @@ const EncyclopediaEntryPage = () => {
             subtext="The encyclopedia article you're looking for doesn't exist or has been removed."
             cta={{
               label: 'Back to Encyclopedia',
-              onClick: () => router.push('/encyclopedia'),
+              href: '/encyclopedia',
             }}
           />
         </div>
