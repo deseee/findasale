@@ -7,6 +7,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 199 COMPLETE (2026-03-18) — FULL DOCS AUDIT + #51 RIPPLES + #42 VOICE-BUTTON + #60 SPRINT 2 + #19 P0 FIX:**
+
+**Full-stack feature shipping:**
+- `#51 Sale Ripples` — Complete schema + API + frontend. RippleIndicator auto-records views. ripples.tsx page with trend analytics. **Patrick action: Neon migration + prisma generate pending.**
+- `#42 Voice-to-Tag` — VoiceTagButton.tsx + useVoiceTag.ts complete. Web Speech API + browser compat fallback. Ready for integration into add-items page.
+- `#60 Premium Tier Bundle Sprint 2` — 5 new frontend files: useSubscription, UsageBar, TierComparisonTable, PremiumCTA, premium.tsx page. Layout.tsx + subscription.tsx modified with nav wiring + usage overview.
+- `#19 Passkey P0 Fix` — Concurrent challenge race condition fixed (session-based key replaces fixed 'passkey-auth-current'). **Dispatched to findasale-dev; confirmation + merge pending.**
+
+**Docs audit (447 files scanned):**
+- HIGH: archive-old/ stale duplicate (delete after verify). roadmap.old.md orphan (move to archive/feature-notes/).
+- MEDIUM: STATE.md at 200 lines (trim next session). /packages/shared/CLAUDE.md empty (populate or delete). archive-index.json out of date.
+- Full report: `claude_docs/audits/periodic-docs-audit-2026-03-18.md`
+
+**All code pushed to main (4 commits).** Vercel + Railway green. MESSAGE_BOARD.json untracked (git rm --cached applied).
+
+---
+
 **Session 198 COMPLETE (2026-03-18) — QA AUDIT + ROADMAP v51 + ARCHIVE RE-FILED:**
 
 **Frontend bug fixed:**

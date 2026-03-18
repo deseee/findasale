@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-18 (v51 — Session 197: Wave 5 Sprint 2 frontends shipped for #46 #54 #17 #69. Passkey bug fixed. P3 nav wired. All S187–S196 QA-PASS features promoted to Completed. TIER 1/2/3 pipeline cleaned.)
+**Last Updated:** 2026-03-18 (v52 — Session 199: #51 Ripples full-stack shipped (Sprint 1). #42 Voice-Button complete. #60 Sprint 2 frontend complete. #19 Passkey P0 fix dispatched (concurrent challenge race). Docs audit HIGH/MEDIUM findings logged.)
 **Previous:** 2026-03-13 (v27 — Session 157: Innovation Round 3. 30 new ideas across 10 creative lenses (casino/gambling, microtransactions, big box retail, mobile trends, international, progressive disclosure, GitHub/open source, Reddit/social, Zapier/automation, emerging). 11 rated BUILD → added to Phase 4 (#61–#71). 19 rated DEFER → added to Deferred. Total: 71 active features + 65 deferred items. Research: `claude_docs/research/innovation-round3-2026-03-13.md`.)
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -103,10 +103,10 @@ These checks run at session start or before any deploy:
 **TIER 1 — IN-PROGRESS / PARTIAL (Sprint work remaining)**
 | # | Feature | Tier | Notes |
 |---|---------|------|-------|
-| 19 | Passkey / WebAuthn Support | [SIMPLE] | [QA-FIXED S196+S197] Backend fully fixed (challenge flow + JWT role). Frontend login wired. Needs end-to-end re-QA: register → login → redirect flow. |
-| 51 | Sale Ripples | [FREE] | [IMPLEMENTATION-GAP] Listed QA-PASS S195 but codebase verification found ZERO implementation: no schema model, no API route, no UI component. Needs full build from scratch. Removed from Completed. |
+| 19 | Passkey / WebAuthn Support | [SIMPLE] | [P0 FIX S199] Concurrent challenge race condition fixed (session-based key replaces fixed 'passkey-auth-current'). P0 fix dispatched to findasale-dev S199; merge + end-to-end re-QA pending. Backend backend + frontend login wired. Register → login → redirect flow testing after merge. |
+| 51 | Sale Ripples | [FREE] | [COMPLETE S199 SPRINT 1] Schema + API + frontend complete. rippleService (record/summary/trend), rippleController (3 endpoints), ripples.tsx organizer page. RippleIndicator auto-records view events. Neon migration outstanding (Patrick action). |
 | 54 | Crowdsourced Appraisal AI | [PAID_ADDON] | Sprint 2 frontend built S197 (AI path placeholder only). Sprint 3 (Stripe billing + Claude Haiku vision integration) deferred. Base appraisal request/response flow complete. |
-| 60 | Premium Tier Bundle | [PRO] | [QA-PARTIAL S196] Sprint 1 backend + schema complete. Sprint 2 frontend not yet built — full billing + workspace management UX pending. |
+| 60 | Premium Tier Bundle | [PRO] | [COMPLETE S199 SPRINT 2] useSubscription hook, UsageBar, TierComparisonTable, PremiumCTA, premium.tsx page. Layout.tsx nav wired. Usage stats endpoint stubbed (optional Sprint 3). Tier comparison matrix + upgrade CTA working. |
 
 
 **BLOCKED**
@@ -290,7 +290,7 @@ Roadmap and session-log are always updated in the same commit.
 | 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | S183 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI |
 | 71 | Organizer Reputation Score | ORG | SIMPLE | S196 | ✅ | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | 1-5 star public score + reputation.tsx frontend |
 | 22 | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | S196 | — | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | Network API detection, localStorage, LowBandwidthContext |
-| 19 | Passkey / WebAuthn Login | ORG | SIMPLE | S190 | ✅ | ✅ | ✅ | 🔧S197 | 📋 | ⚠️ | 📋 | SimpleWebAuthn backend + frontend login wired; end-to-end re-QA pending |
+| 19 | Passkey / WebAuthn Login | ORG | SIMPLE | S190 | ✅ | ✅ | ✅ | 🔧S199 | 📋 | ⚠️ | 📋 | P0 concurrent challenge race fixed S199 (session-based key). End-to-end re-QA + merge pending. |
 | — | A/B Testing Infrastructure | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Internal optimization tool |
 | — | Invites | ORG | SIMPLE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Invite-to-sale / invite-to-platform |
 | — | Disputes Management | BOTH | SIMPLE | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Trust & safety |
@@ -308,7 +308,7 @@ Roadmap and session-log are always updated in the same commit.
 | — | Payout PDF Export | ORG | PRO | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Financial reporting for tax/accounting |
 | — | Stripe Connect Setup | ORG | SIMPLE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Payout bank account linking + verification |
 | 25 | Organizer Item Library (Consignment Rack) | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Upload once, reuse; cross-sale search, price history |
-| 42 | Voice-to-Tag | ORG | PRO | S187 | — | ✅ | ⚠️ | ✅S195 | 📋 | — | 📋 | Organizer voice input → AI transcribe + tag. VoiceTagButton.tsx missing. |
+| 42 | Voice-to-Tag | ORG | PRO | S199 | — | ✅ | ✅ | ✅S199 | 📋 | — | 📋 | VoiceTagButton.tsx + useVoiceTag.ts complete. Web Speech API integration. Ready for add-items page. |
 | 18 | Post Performance Analytics | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | UTM tracking on social template downloads |
 | 41 | Flip Report | ORG | PRO | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Item resale potential scoring |
 | 17 | Bid Bot Detector + Fraud Score | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | FraudBadge on holds page, fraud-signals.tsx |
@@ -419,8 +419,10 @@ Roadmap and session-log are always updated in the same commit.
 | # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
 | 46 | Treasure Typology Classifier | ORG | PRO | S191 | ✅ | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx |
+| 51 | Sale Ripples | SHO | FREE | S199 | ✅ | ✅ | ✅ | ✅S199 | 📋 | ✅ | 📋 | Social proof activity tracking. RippleIndicator auto-records. ripples.tsx analytics. **Neon migration pending.** |
 | 52 | Estate Sale Encyclopedia | SHO | FREE | S191 | ✅ | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | Wiki-style knowledge base; EncyclopediaCard.tsx |
 | 54 | Crowdsourced Appraisal (Base) | BOTH | FREE | S191 | ✅ | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | Request/submit/vote appraisals; AI Sprint 3 deferred |
+| 60 | Premium Tier Bundle | ORG | PRO | S199 | ✅ | ✅ | ✅ | ✅S199 | 📋 | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. Sprint 2 frontend complete. |
 | 69 | Local-First Offline Mode | BOTH | PRO | S191 | — | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | Service worker sync queue; offline catalog |
 | 70 | Live Sale Feed | SHO | SIMPLE | S185 | ✅ | ✅ | ✅ | 📋 | 📋 | — | 📋 | Real-time sale activity feed |
 | 47 | UGC Photo Tags | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Shopper-submitted item photos + moderation |
