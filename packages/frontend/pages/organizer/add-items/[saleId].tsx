@@ -51,6 +51,7 @@ import BulkActionDropdown from '../../../components/BulkActionDropdown';
 import BulkCategoryModal from '../../../components/BulkCategoryModal';
 import BulkStatusModal from '../../../components/BulkStatusModal';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
+import ValuationWidget from '../../../components/ValuationWidget';
 
 /**
  * Phase 3: On-Device Image Processing Utilities
@@ -1045,7 +1046,7 @@ const AddItemsDetailPage = () => {
                       className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
                       placeholder="0.00"
                     />
-
+                    <p className="text-xs text-warm-500 mt-2">💡 PRO organizers: Use pricing insights to research comparable sales. Create the item first, then view suggestions below.</p>
                   </div>
 
                   <div>

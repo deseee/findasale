@@ -2,6 +2,33 @@
 
 ## Recent Sessions
 
+### 2026-03-17 · Session 196
+
+**Bug Fix Sprint + Feature Implementations + Rate Limiting**
+
+**Worked on:**
+- Fixed #54 Appraisal API: `requireTier('PAID_ADDON')` was invalid enum value causing Railway TypeScript build error. Changed to `requireTier('PRO')` as interim gate.
+- Fixed #19 Passkey auth: two backend blockers in `passkeyController.ts` — (1) `authenticateComplete` creating empty Map instead of retrieving challenges, (2) JWT response missing `role` field. Both fixed, re-QA needed after frontend wiring audit.
+- Implemented #22 Low-Bandwidth Mode (SIMPLE): full stack complete with Network Information API detection, localStorage persistence, manual UI toggle, SSR-safe. QA PASS on first build.
+- Built Wave 5 Sprint 2 frontends: #52 Encyclopedia (index, [slug], EncyclopediaCard, useEncyclopedia) and #71 Reputation Score (reputation page, useReputation). Both QA-PASS Sprint 1.
+- Added rate limiting: 10/hr on `POST /photo-ops/:stationId/shares`, 30/15min on `POST /shares/:shareId/like`. New middleware: `packages/backend/src/middleware/rateLimiter.ts`.
+- Upgraded #14 Real-Time Status from ⚠️ to ✅ PASS (REST + Socket.io verified working).
+
+**QA Results:**
+- #22 Low-Bandwidth Mode: PASS
+- #14 Real-Time Status: PASS (S195 audit note corrected)
+- #54 Appraisal: QA-FIXED (needs re-QA)
+- #19 Passkey: QA-FIXED (needs re-QA)
+- Wave 5 #46 #52 #69 #71: PASS Sprint 1; #52 #71 Sprint 2 PASS; #60 PARTIAL (Sprint 1 only)
+
+**Infrastructure:** Railway ✅ Vercel ✅
+
+**Next up:** Frontend wiring audit (nav, pages, dashboard buttons for QA-PASS features), re-QA #54 + #19, build #60 Sprint 2 + Wave 5 Sprint 2 for #46 #54 #69
+
+**Blockers:** None
+
+---
+
 ### 2026-03-17 · Session 194
 
 **Comprehensive QA Audit + 13 Bug Fixes**

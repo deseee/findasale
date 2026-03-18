@@ -97,6 +97,30 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <Link href="/referral-dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Referrals
             </Link>
+            <hr className="my-2 border-warm-200" />
+            <span className="block px-3 py-1 text-xs font-semibold text-warm-600 uppercase">My Collection</span>
+            <Link href="/shopper/collector-passport" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Collection
+            </Link>
+            <Link href="/shopper/alerts" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Wishlist Alerts
+            </Link>
+            <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Treasure Trails
+            </Link>
+            <Link href="/shopper/loot-log" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Loot Log
+            </Link>
+            <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Loyalty
+            </Link>
+            <Link href="/shopper/receipts" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Receipts
+            </Link>
+            <hr className="my-2 border-warm-200" />
+            <Link href="/shopper/settings" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Settings
+            </Link>
           </>
         )}
         {user.role === 'ADMIN' && (
@@ -195,6 +219,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         <Link href="/shopper/dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">My Profile</Link>
                         <Link href="/wishlists" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">My Wishlists</Link>
                         <Link href="/referral-dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Referrals</Link>
+                        <div className="border-l border-warm-300 dark:border-gray-700 pl-2 ml-2">
+                          <Link href="/shopper/collector-passport" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Collection</Link>
+                          <Link href="/shopper/loyalty" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Loyalty</Link>
+                          <Link href="/shopper/settings" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Settings</Link>
+                        </div>
                       </>
                     )}
                     {user.role === 'ADMIN' && (

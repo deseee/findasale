@@ -277,7 +277,6 @@ Roadmap and session-log are always updated in the same commit.
 
 ## ✅ Completed Features (Shipped)
 
-*Agents: you may stop reading here if you are not actively slotting newly completed features into this section or seeking information on already shipped features.*
 
 ### Organizer — Core Operations [SIMPLE]
 

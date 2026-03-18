@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import HoldTimer from '../../components/HoldTimer';
+import FraudBadge from '../../components/FraudBadge';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 interface HoldItem {
@@ -22,7 +23,7 @@ interface HoldItem {
   expiresAt: string;
   createdAt: string;
   note: string | null;
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; fraudConfidenceScore?: number };
   item: {
     id: string;
     title: string;
@@ -273,6 +274,9 @@ const OrganizerHoldsPage = () => {
                       <div className="flex items-center gap-3">
                         <span className="text-warm-900 dark:text-warm-100 font-semibold">{group.buyerName}</span>
                         <span className="text-warm-400 dark:text-warm-500 text-sm">{group.buyerEmail}</span>
+                        {typeof group.holds[0].user.fraudConfidenceScore === 'number' && (
+                          <FraudBadge confidenceScore={group.holds[0].user.fraudConfidenceScore} size="sm" />
+                        )}
                         <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                           {group.holds.length} {group.holds.length === 1 ? 'hold' : 'holds'}
                         </span>

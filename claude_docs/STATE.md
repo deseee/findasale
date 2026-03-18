@@ -7,6 +7,38 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 196 COMPLETE (2026-03-17) — BUG FIX SPRINT + FEATURE BUILDS + RATE LIMITING:**
+- **Bugs fixed (all live on Railway + Vercel):**
+  - `#54 Appraisal API` — `requireTier('PAID_ADDON')` was invalid SubscriptionTier enum value (Railway TypeScript build error). Fixed to `requireTier('PRO')` as interim gate until addon billing wired.
+  - `#19 Passkey auth` — two backend blockers fixed in `passkeyController.ts`: (1) `authenticateComplete` creating empty Map instead of calling `getAndValidateChallenge()` — challenges never retrieved, auth always failed; (2) JWT response missing `role` field causing frontend redirect break. Both fixed.
+  - Railway build unblocked (was failing with PAID_ADDON TS error).
+- **Features built:**
+  - `#22 Low-Bandwidth Mode` (SIMPLE) — full implementation complete: `LowBandwidthContext.tsx`, `LowBandwidthBanner.tsx`, `useLowBandwidthInitializer.ts`, `lib/imageUrl.ts`, `_app.tsx` updated. Network Information API detection, localStorage persistence, manual toggle, SSR-safe. ✅ QA PASS on first build.
+  - Wave 5 Sprint 2 frontends: `#52 Encyclopedia` (index.tsx, [slug].tsx, EncyclopediaCard.tsx, useEncyclopedia.ts) and `#71 Reputation Score` (reputation.tsx, useReputation.ts). ✅ QA-PASS Sprint 1.
+- **Rate limiting added:**
+  - `POST /photo-ops/:stationId/shares` — 10/hr per user
+  - `POST /shares/:shareId/like` — 30/15min per user
+  - New middleware: `packages/backend/src/middleware/rateLimiter.ts`
+- **QA results:**
+  - `#14 Real-Time Status` — upgraded from ⚠️ WARN to ✅ PASS. REST + Socket.io both confirmed working. S195 audit note was incorrect.
+  - `#22 Low-Bandwidth Mode` — PASS on first QA after build.
+  - `#54 Appraisal API` — was FAIL (invalid tier) → fixed → status QA-FIXED, needs re-QA.
+  - `#19 Passkey` — was FAIL → fixed backend → status QA-FIXED, needs re-QA after frontend wiring audit.
+  - Wave 5 `#46 #52 #69 #71` — QA-PASS Sprint 1. `#52 #71` Sprint 2 frontends QA-PASS. `#60` QA-PARTIAL (Sprint 1 backend only).
+- **Infrastructure:** Railway GREEN ✅ | Vercel GREEN ✅
+- **Roadmap:** Updated to v49 with 26 QA passes from S195+S196 logged.
+- **Last Updated:** 2026-03-17 (session 196)
+
+**Pending — Patrick action items (S196):**
+- [ ] Frontend wiring audit — identify which QA-PASS features lack nav links, pages, or dashboard buttons
+- [ ] Re-QA #54 Appraisal API and #19 Passkey after wiring audit
+- [ ] #60 Premium Tier Bundle Sprint 2 frontend not yet built
+- [ ] Wave 5 Sprint 2 for #46 #54 #69 not yet built (only #52 and #71 Sprint 2 done)
+- [ ] Rate limiting re-QA on photo-ops endpoints
+- [ ] Open Stripe business account (recurring — test keys still in production)
+
+---
+
 **Session 195 COMPLETE (2026-03-17) — 6 BUG FIXES + COMPREHENSIVE QA AUDIT (29 FEATURES) + HEALTH SCOUT:**
 - **Bugs fixed (all live on Railway + Vercel):**
   - Login infinite redirect loop → `NudgeBar` fired unauthenticated API call; 401 interceptor redirected to `/login` causing reload cycle. Fixed: `NudgeBar.tsx` guards `useNudges(!!user)`; `api.ts` interceptor skips redirect when already on `/login`.
