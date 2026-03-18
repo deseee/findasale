@@ -24,7 +24,11 @@ const CityPage = () => {
 
   if (!city) return null;
 
-  const pageTitle = `Estate Sales in ${city}`;
+  // Humanize city slug: convert hyphens to spaces and capitalize words
+  const cityName = typeof city === 'string'
+    ? city.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    : '';
+  const pageTitle = `Estate Sales in ${cityName}`;
 
   return (
     <>
@@ -32,9 +36,9 @@ const CityPage = () => {
         <title>{pageTitle}</title>
         <meta name="description" content={`Find estate sales in ${city}`} />
       </Head>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold text-warm-900 mb-8">{pageTitle}</h1>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-8">{pageTitle}</h1>
 
           {isLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -45,8 +49,8 @@ const CityPage = () => {
           )}
 
           {isError && (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 gap-4">
-              <p className="text-warm-700 text-lg">Failed to load city listings.</p>
+            <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-800 gap-4">
+              <p className="text-warm-700 dark:text-gray-300 text-lg">Failed to load city listings.</p>
               <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
             </div>
           )}
@@ -58,7 +62,7 @@ const CityPage = () => {
                   <SaleCard key={sale.id} sale={sale} />
                 ))}
               </div>
-              {data.hasMore && (
+              {data.totalPages && data.page < data.totalPages && (
                 <div className="mt-8 flex justify-center">
                   <button
                     onClick={() => setPage((p) => p + 1)}
@@ -71,7 +75,7 @@ const CityPage = () => {
             </>
           ) : (
             <div className="text-center py-8">
-              <p className="text-warm-600">No sales found in {city}.</p>
+              <p className="text-warm-600 dark:text-gray-400">No sales found in {cityName}.</p>
             </div>
           )}
         </div>

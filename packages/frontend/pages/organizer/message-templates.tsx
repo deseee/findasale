@@ -55,12 +55,12 @@ export default function TemplatesPage() {
   return (
     <>
       <Head><title>Quick Reply Templates — FindA.Sale</title></Head>
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-3xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-warm-900">⚡ Quick Reply Templates</h1>
-              <p className="text-warm-600 text-sm mt-1">Canned responses for common shopper questions</p>
+              <h1 className="text-2xl font-bold text-warm-900 dark:text-gray-100">⚡ Quick Reply Templates</h1>
+              <p className="text-warm-600 dark:text-gray-400 text-sm mt-1">Canned responses for common shopper questions</p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setIsAdding(true)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition">
@@ -73,14 +73,14 @@ export default function TemplatesPage() {
           </div>
 
           {isAdding && (
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border-2 border-amber-200">
-              <h3 className="font-semibold text-warm-900 mb-4">New Template</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6 border-2 border-amber-200 dark:border-amber-800">
+              <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-4">New Template</h3>
               <div className="space-y-3">
-                <input type="text" value={editData.title} onChange={e => setEditData(d => ({ ...d, title: e.target.value }))} placeholder="Template name (e.g. Pickup Hours)" className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
-                <select value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <input type="text" value={editData.title} onChange={e => setEditData(d => ({ ...d, title: e.target.value }))} placeholder="Template name (e.g. Pickup Hours)" className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100" />
+                <select value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100">
                   {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                 </select>
-                <textarea value={editData.body} onChange={e => setEditData(d => ({ ...d, body: e.target.value }))} rows={4} placeholder="Response text..." className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                <textarea value={editData.body} onChange={e => setEditData(d => ({ ...d, body: e.target.value }))} rows={4} placeholder="Response text..." className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none bg-white dark:bg-gray-700 dark:text-gray-100" />
                 <div className="flex gap-2">
                   <button onClick={() => createMutation.mutate(editData)} disabled={!editData.title || !editData.body || createMutation.isPending} className="bg-amber-600 text-white font-semibold py-2 px-4 rounded-lg text-sm disabled:opacity-50">Save</button>
                   <button onClick={() => setIsAdding(false)} className="bg-warm-200 text-warm-700 font-semibold py-2 px-4 rounded-lg text-sm">Cancel</button>
@@ -91,11 +91,11 @@ export default function TemplatesPage() {
 
           <div className="space-y-3">
             {templates.map(t => (
-              <div key={t.id} className="bg-white rounded-xl shadow-sm p-5">
+              <div key={t.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
                 {editing === t.id ? (
                   <div className="space-y-3">
-                    <input type="text" value={editData.title} onChange={e => setEditData(d => ({ ...d, title: e.target.value }))} className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
-                    <select value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                    <input type="text" value={editData.title} onChange={e => setEditData(d => ({ ...d, title: e.target.value }))} className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100" />
+                    <select value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100">
                       {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                     </select>
                     <textarea value={editData.body} onChange={e => setEditData(d => ({ ...d, body: e.target.value }))} rows={4} className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />

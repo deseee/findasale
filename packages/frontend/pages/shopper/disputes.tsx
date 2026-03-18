@@ -90,10 +90,10 @@ const ShopperDisputesPage = () => {
     return (
       <>
         <Head><title>My Disputes | FindA.Sale</title></Head>
-        <div className="min-h-screen bg-warm-50 py-8">
+        <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
           <div className="max-w-4xl mx-auto px-4">
             <div className="mb-6 flex items-center justify-between">
-              <h1 className="text-3xl font-bold text-warm-900">My Disputes</h1>
+              <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">My Disputes</h1>
               <Link href="/shopper/dashboard" className="text-amber-600 hover:text-amber-700 font-medium">Back to Dashboard</Link>
             </div>
             <EmptyState
@@ -110,20 +110,20 @@ const ShopperDisputesPage = () => {
   return (
     <>
       <Head><title>My Disputes | FindA.Sale</title></Head>
-      <div className="min-h-screen bg-warm-50 py-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-4xl mx-auto px-4">
           <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-warm-900">My Disputes</h1>
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">My Disputes</h1>
             <Link href="/shopper/dashboard" className="text-amber-600 hover:text-amber-700 font-medium">Back to Dashboard</Link>
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-warm-700 mb-2">Filter by Status</label>
+            <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Filter by Status</label>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => { setFilterStatus(''); setCurrentPage(1); }}
                 className={`px-4 py-2 rounded-lg font-medium transition ${
-                  filterStatus === '' ? 'bg-amber-600 text-white' : 'bg-white text-warm-700 border border-warm-300 hover:bg-warm-50'
+                  filterStatus === '' ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-600 hover:bg-warm-50 dark:hover:bg-gray-700'
                 }`}
               >
                 All
@@ -133,7 +133,7 @@ const ShopperDisputesPage = () => {
                   key={status}
                   onClick={() => { setFilterStatus(status); setCurrentPage(1); }}
                   className={`px-4 py-2 rounded-lg font-medium transition ${
-                    filterStatus === status ? 'bg-amber-600 text-white' : 'bg-white text-warm-700 border border-warm-300 hover:bg-warm-50'
+                    filterStatus === status ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-600 hover:bg-warm-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   {getStatusLabel(status)}
@@ -147,16 +147,16 @@ const ShopperDisputesPage = () => {
               <div className="inline-block animate-spin">
                 <div className="w-8 h-8 border-4 border-warm-200 border-t-amber-600 rounded-full"></div>
               </div>
-              <p className="mt-4 text-warm-600">Loading disputes...</p>
+              <p className="mt-4 text-warm-600 dark:text-gray-400">Loading disputes...</p>
             </div>
           ) : (
             <>
-              <div className="bg-white rounded-lg border border-warm-200 overflow-hidden shadow-sm">
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-600 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-warm-100 border-b border-warm-200">
+                    <thead className="bg-warm-100 dark:bg-gray-700 border-b border-warm-200 dark:border-gray-600">
                       <tr>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Date</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900 dark:text-gray-200">Date</th>
                         <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Item</th>
                         <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Reason</th>
                         <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Status</th>

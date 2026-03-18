@@ -49,8 +49,8 @@ const OrganizerBountiesPage = () => {
   const { data: sales } = useQuery<Sale[]>({
     queryKey: ['organizer-sales-list'],
     queryFn: async () => {
-      const res = await api.get('/organizer/sales');
-      return res.data.map((s: any) => ({ id: s.id, title: s.title }));
+      const res = await api.get('/sales/mine');
+      return res.data.sales.map((s: any) => ({ id: s.id, title: s.title }));
     },
     enabled: !!user?.id,
   });
@@ -80,7 +80,7 @@ const OrganizerBountiesPage = () => {
     onError: (err: any) => showToast(err.response?.data?.message || 'Failed to fulfill', 'error'),
   });
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
+  if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">Loading…</div>;
 
   const openBounties = bounties.filter(b => b.status === 'OPEN');
   const closedBounties = bounties.filter(b => b.status !== 'OPEN');
@@ -88,23 +88,23 @@ const OrganizerBountiesPage = () => {
   return (
     <>
       <Head><title>Bounties - FindA.Sale</title></Head>
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white border-b border-gray-200 px-4 py-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4">
           <div className="max-w-3xl mx-auto flex items-center gap-3">
-            <Link href="/organizer/dashboard" className="text-gray-400 hover:text-gray-600 text-sm">← Dashboard</Link>
-            <span className="text-gray-300">/</span>
-            <h1 className="text-lg font-semibold text-gray-900">Missing-Item Requests</h1>
+            <Link href="/organizer/dashboard" className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-400 text-sm">← Dashboard</Link>
+            <span className="text-gray-300 dark:text-gray-600">/</span>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Missing-Item Requests</h1>
           </div>
         </div>
 
         <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
           {/* Sale selector */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sale</label>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sale</label>
             <select
               value={selectedSaleId}
               onChange={e => setSelectedSaleId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-gray-100"
             >
               {!sales?.length && <option value="">No sales found</option>}
               {sales?.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
@@ -113,21 +113,21 @@ const OrganizerBountiesPage = () => {
 
           {/* Open bounties */}
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               Open requests ({openBounties.length})
             </h2>
             {bountiesLoading ? (
-              <p className="text-gray-400 text-sm">Loading…</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm">Loading…</p>
             ) : openBounties.length === 0 ? (
-              <p className="text-gray-400 text-sm">No open requests for this sale.</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm">No open requests for this sale.</p>
             ) : (
               <div className="space-y-3">
                 {openBounties.map(b => (
-                  <div key={b.id} className="bg-white rounded-xl border border-yellow-200 p-4">
+                  <div key={b.id} className="bg-white dark:bg-gray-800 rounded-xl border border-yellow-200 dark:border-yellow-700 p-4">
                     <div className="flex justify-between items-start gap-3">
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">"{b.description}"</p>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">"{b.description}"</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                           From <span className="font-medium">{b.user.name}</span>
                           {b.offerPrice != null && (
                             <> · willing to pay <span className="font-medium text-green-700">${b.offerPrice.toFixed(2)}</span></>
@@ -145,8 +145,8 @@ const OrganizerBountiesPage = () => {
 
                     {/* Inline fulfill form */}
                     {fulfillBountyId === b.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-xs text-gray-500 mb-2">
+                      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                           Optionally link the item you listed (paste Item ID from the item's URL):
                         </p>
                         <div className="flex gap-2">
@@ -155,7 +155,7 @@ const OrganizerBountiesPage = () => {
                             placeholder="Item ID (optional)"
                             value={fulfillItemId}
                             onChange={e => setFulfillItemId(e.target.value)}
-                            className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:text-gray-100"
                           />
                           <button
                             onClick={() => fulfillMutation.mutate({ id: b.id, itemId: fulfillItemId })}
@@ -166,7 +166,7 @@ const OrganizerBountiesPage = () => {
                           </button>
                           <button
                             onClick={() => setFulfillBountyId(null)}
-                            className="text-sm text-gray-500 px-3 py-1.5 hover:text-gray-700"
+                            className="text-sm text-gray-500 dark:text-gray-400 px-3 py-1.5 hover:text-gray-700 dark:hover:text-gray-300"
                           >
                             Cancel
                           </button>
@@ -182,14 +182,14 @@ const OrganizerBountiesPage = () => {
           {/* Closed bounties */}
           {closedBounties.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold text-gray-500 mb-3">Closed ({closedBounties.length})</h2>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">Closed ({closedBounties.length})</h2>
               <div className="space-y-2">
                 {closedBounties.map(b => (
-                  <div key={b.id} className="bg-white rounded-xl border border-gray-100 p-4 flex justify-between items-center gap-3">
+                  <div key={b.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 flex justify-between items-center gap-3">
                     <div>
-                      <p className="text-sm text-gray-700">"{b.description}"</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">"{b.description}"</p>
                       {b.item && (
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           Linked to: <span className="font-medium">{b.item.title}</span>
                           {b.item.price != null && ` · $${b.item.price.toFixed(2)}`}
                         </p>

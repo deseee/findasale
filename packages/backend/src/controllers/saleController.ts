@@ -593,6 +593,52 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
   }
 };
 
+export const getSalesByCity = async (req: Request, res: Response) => {
+  try {
+    const { city } = req.params;
+    const { page = '1', limit = '12' } = req.query;
+
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 12;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Decode city slug and convert hyphens to spaces for matching
+    const citySlug = decodeURIComponent(city as string).replace(/-/g, ' ');
+
+    const now = new Date();
+    const sales = await prisma.sale.findMany({
+      where: {
+        status: 'PUBLISHED',
+        endDate: { gte: now },
+        location: { contains: citySlug, mode: 'insensitive' }
+      },
+      skip,
+      take: limitNum,
+      select: {
+        id: true, title: true, description: true, startDate: true, endDate: true,
+        address: true, city: true, state: true, zip: true, lat: true, lng: true,
+        photoUrls: true, tags: true,
+        organizer: { select: { businessName: true, avgRating: true } },
+        _count: { select: { items: true } },
+      },
+      orderBy: { startDate: 'asc' },
+    });
+
+    const total = await prisma.sale.count({
+      where: {
+        status: 'PUBLISHED',
+        endDate: { gte: now },
+        location: { contains: citySlug, mode: 'insensitive' }
+      }
+    });
+
+    res.json({ sales: sales.map(convertDecimalsToNumbers), total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
+  } catch (error) {
+    console.error('Error fetching city sales:', error);
+    res.status(500).json({ message: 'Server error while fetching city sales' });
+  }
+};
+
 export const cloneSale = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {

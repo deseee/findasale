@@ -56,7 +56,7 @@ export default function TrendingPage() {
         <meta name="twitter:card" content="summary" />
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Hero */}
         <div className="bg-gradient-to-r from-amber-600 to-amber-500 text-white py-12 px-4">
           <div className="max-w-7xl mx-auto">
@@ -69,7 +69,7 @@ export default function TrendingPage() {
 
           {/* Trending Sales */}
           <section>
-            <h2 className="text-2xl font-bold text-warm-900 mb-6">🏷️ Hot Sales</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-6">🏷️ Hot Sales</h2>
             {salesLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
@@ -80,7 +80,7 @@ export default function TrendingPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {(salesData?.sales || []).map((sale: TrendingSale, index: number) => (
                   <Link key={sale.id} href={`/sales/${sale.id}`}>
-                    <div className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition group cursor-pointer">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition group cursor-pointer">
                       <div className="relative h-36 bg-warm-100">
                         {sale.photoUrls?.[0] ? (
                           <Image
@@ -99,9 +99,9 @@ export default function TrendingPage() {
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="font-semibold text-warm-900 text-sm line-clamp-1">{sale.title}</p>
-                        <p className="text-xs text-warm-500 mt-0.5">{sale.city}, {sale.state}</p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-warm-500">
+                        <p className="font-semibold text-warm-900 dark:text-gray-100 text-sm line-clamp-1">{sale.title}</p>
+                        <p className="text-xs text-warm-500 dark:text-gray-400 mt-0.5">{sale.city}, {sale.state}</p>
+                        <div className="flex items-center gap-3 mt-2 text-xs text-warm-500 dark:text-gray-400">
                           <span>❤️ {sale._count.followers}</span>
                           <span>📦 {sale._count.items} items</span>
                           <span>📅 {formatDate(sale.startDate)}</span>
@@ -116,7 +116,7 @@ export default function TrendingPage() {
 
           {/* Trending Items */}
           <section>
-            <h2 className="text-2xl font-bold text-warm-900 mb-6">⭐ Most Wanted Items</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-6">⭐ Most Wanted Items</h2>
             {itemsLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {[...Array(8)].map((_, i) => (
@@ -127,7 +127,7 @@ export default function TrendingPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {(itemsData?.items || []).map((item: TrendingItem, index: number) => (
                   <Link key={item.id} href={`/items/${item.id}`}>
-                    <div className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition group cursor-pointer">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition group cursor-pointer">
                       <div className="relative aspect-square bg-warm-100">
                         {item.photos?.[0] ? (
                           <Image
@@ -149,9 +149,9 @@ export default function TrendingPage() {
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="font-semibold text-warm-900 text-sm line-clamp-2">{item.title}</p>
-                        <p className="text-amber-600 font-bold mt-1">{formatPrice(item.price)}</p>
-                        <p className="text-xs text-warm-400 mt-0.5 truncate">{item.sale.title}</p>
+                        <p className="font-semibold text-warm-900 dark:text-gray-100 text-sm line-clamp-2">{item.title}</p>
+                        <p className="text-amber-600 dark:text-amber-400 font-bold mt-1">{formatPrice(item.price)}</p>
+                        <p className="text-xs text-warm-400 dark:text-gray-400 mt-0.5 truncate">{item.sale.title}</p>
                       </div>
                     </div>
                   </Link>
@@ -162,7 +162,7 @@ export default function TrendingPage() {
 
           {/* CTA */}
           <div className="text-center py-8">
-            <p className="text-warm-600 mb-4">Looking for something specific?</p>
+            <p className="text-warm-600 dark:text-gray-400 mb-4">Looking for something specific?</p>
             <Link href="/search" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-xl transition">
               Browse All Sales →
             </Link>
