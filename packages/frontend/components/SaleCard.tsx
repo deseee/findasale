@@ -5,6 +5,7 @@ import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
 import TierBadge from './TierBadge'; // Phase 22
 import ReputationBadge from './ReputationBadge'; // Feature #71
+import VerifiedBadge from './VerifiedBadge'; // Feature #16
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 
 interface Sale {
@@ -24,6 +25,7 @@ interface Sale {
     reputationTier?: string; // Phase 22
     reputationScore?: number; // Feature #71
     reputationIsNew?: boolean; // Feature #71
+    verificationStatus?: string; // Feature #16
   };
   status?: string;
   isAuctionSale?: boolean;
@@ -167,6 +169,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             >
               {sale.organizer.businessName}
             </Link>
+            <VerifiedBadge status={sale.organizer.verificationStatus} size="sm" />
             {sale.organizer.reputationTier && (
               <TierBadge tier={sale.organizer.reputationTier} />
             )}

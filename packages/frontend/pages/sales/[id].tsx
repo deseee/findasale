@@ -14,6 +14,7 @@ import SaleQRCode from '../../components/SaleQRCode';
 import SaleMap from '../../components/SaleMap';
 import Skeleton from '../../components/Skeleton';
 import { usePhotoOpStations } from '../../hooks/usePhotoOps';
+import { useUGCPhotos } from '../../hooks/useUGCPhotos';
 import BadgeDisplay from '../../components/BadgeDisplay';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 31: Tier Rewards
 import AuctionCountdown from '../../components/AuctionCountdown';
@@ -27,6 +28,8 @@ import ActivityFeed from '../../components/ActivityFeed';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
 import SaleOGMeta from '../../components/SaleOGMeta'; // Feature #43: OG Image Generator
 import OrganizerReputation from '../../components/OrganizerReputation'; // #71: Organizer Reputation Score
+import VerifiedBadge from '../../components/VerifiedBadge'; // Feature #16
+import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
 
 interface Sale {
   id: string;
@@ -49,6 +52,7 @@ interface Sale {
     phone: string;
     address: string;
     tier?: 'BRONZE' | 'SILVER' | 'GOLD'; // Phase 31: Tier Rewards
+    verificationStatus?: string; // Feature #16
     badges?: Array<{
       id: string;
       name: string;
@@ -147,6 +151,9 @@ const SaleDetailPage = () => {
 
   // Feature #39: Fetch photo op stations for this sale
   const { data: photoOpStations = [] } = usePhotoOpStations(id as string);
+
+  // Feature #47: Fetch UGC photos for this sale
+  const { data: ugcPhotos = [], isLoading: ugcLoading } = useUGCPhotos(id as string);
 
   const handleBuyNow = (itemId: string, itemTitle: string) => {
     setCheckoutItem({ id: itemId, title: itemTitle });
@@ -309,6 +316,7 @@ const SaleDetailPage = () => {
               <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-2">Organized by</h2>
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-lg font-semibold text-warm-800 dark:text-gray-200">{sale.organizer.businessName}</p>
+                <VerifiedBadge status={sale.organizer.verificationStatus} size="md" />
                 {/* Phase 31: Show tier badge if SILVER or GOLD */}
                 {sale.organizer.tier && (sale.organizer.tier === 'SILVER' || sale.organizer.tier === 'GOLD') && (
                   <OrganizerTierBadge tier={sale.organizer.tier} />
@@ -555,6 +563,19 @@ const SaleDetailPage = () => {
           <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-4">About</h2>
           <p className="text-warm-700 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
         </div>
+
+        {/* Feature #47: UGC Photo Gallery */}
+        {ugcPhotos.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+            <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">
+              Community Photos
+              <span className="ml-2 text-sm font-normal text-warm-400 dark:text-gray-500">
+                ({ugcPhotos.length})
+              </span>
+            </h2>
+            <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
+          </div>
+        )}
 
         {/* Map Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">

@@ -15,6 +15,7 @@ import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useCommandCenter } from '../../hooks/useCommandCenter';
 import { useToast } from '../../components/ToastContext';
 import CommandCenterCard from '../../components/CommandCenterCard';
+import SaleStatusWidget from '../../components/SaleStatusWidget';
 import Skeleton from '../../components/Skeleton';
 
 type StatusFilter = 'active' | 'upcoming' | 'recent' | 'all';
@@ -166,9 +167,14 @@ const CommandCenterPage = () => {
           </div>
 
           {sales.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="space-y-8">
               {sales.map((sale) => (
-                <CommandCenterCard key={sale.id} sale={sale} />
+                <div key={sale.id}>
+                  <div className="mb-4">
+                    <CommandCenterCard sale={sale} />
+                  </div>
+                  <SaleStatusWidget saleId={sale.id} />
+                </div>
               ))}
             </div>
           ) : (

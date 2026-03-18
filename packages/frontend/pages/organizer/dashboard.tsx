@@ -20,6 +20,7 @@ import FlashDealForm from '../../components/FlashDealForm';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import OnboardingWizard from '../../components/OnboardingWizard';
 import SimpleModePanel from '../../components/SimpleModePanel';
+import SaleStatusWidget from '../../components/SaleStatusWidget';
 import Head from 'next/head';
 import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
@@ -361,6 +362,22 @@ const OrganizerDashboard = () => {
                 🎨 Brand Kit
               </Link>
             )}
+            {canAccess('PRO') && (
+              <Link
+                href="/organizer/item-library"
+                className="bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                📚 Item Library
+              </Link>
+            )}
+            {canAccess('PRO') && (
+              <Link
+                href="/organizer/flip-report"
+                className="bg-rose-100 hover:bg-rose-200 text-rose-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                📈 Flip Report
+              </Link>
+            )}
             <Link
               href="/organizer/holds"
               className="relative bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold py-2 px-6 rounded-lg transition-colors"
@@ -527,7 +544,7 @@ const OrganizerDashboard = () => {
 
               {/* Phase 22: Creator Tier card */}
               {orgProfile && (
-                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6">
+                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-6">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">Creator Tier</h3>
                   <div className="flex flex-wrap items-center gap-3 mb-4">
                     <ReputationTier tier={orgProfile.reputationTier} size="sm" />
@@ -548,8 +565,26 @@ const OrganizerDashboard = () => {
                       ))}
                     </ul>
                   </div>
+                  <Link
+                    href="/organizer/reputation"
+                    className="inline-block mt-4 text-sm font-semibold text-amber-600 hover:text-amber-700"
+                  >
+                    View Full Reputation Score →
+                  </Link>
                 </div>
               )}
+
+              {/* Feature #71: Reputation Score card */}
+              <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">Reputation Score</h3>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Track your reputation metrics and community standing.</p>
+                <Link
+                  href="/organizer/reputation"
+                  className="inline-block px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  View Reputation →
+                </Link>
+              </div>
             </>
           )}
 
@@ -558,7 +593,7 @@ const OrganizerDashboard = () => {
               {salesLoading ? (
                 <p>Loading your sales...</p>
               ) : salesData && salesData.length > 0 ? (
-                <div className="space-y-6">
+                <div className="space-y-8">
                   {salesData.map((sale: any) => (
                     <div key={sale.id}>
                       <div className="card overflow-hidden hover:shadow-lg transition-shadow">
@@ -595,6 +630,11 @@ const OrganizerDashboard = () => {
                           )}
                         </div>
                       </div>
+                      {sale.status === 'PUBLISHED' && (
+                        <div className="mt-4">
+                          <SaleStatusWidget saleId={sale.id} />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
