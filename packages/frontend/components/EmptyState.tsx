@@ -18,7 +18,8 @@ interface EmptyStateProps {
   subtext?: string;
   cta?: {
     label: string;
-    href: string;
+    href?: string;
+    onClick?: () => void;
   };
 }
 
@@ -34,14 +35,21 @@ const EmptyState: React.FC<EmptyStateProps> = ({ icon = '📦', heading, subtext
       )}
       <h2 className="text-xl font-semibold text-warm-900 mb-2">{heading}</h2>
       {subtext && <p className="text-warm-600 mb-6">{subtext}</p>}
-      {cta && (
+      {cta && cta.href ? (
         <Link
           href={cta.href}
           className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
         >
           {cta.label}
         </Link>
-      )}
+      ) : cta && cta.onClick ? (
+        <button
+          onClick={cta.onClick}
+          className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+        >
+          {cta.label}
+        </button>
+      ) : null}
     </div>
   );
 };

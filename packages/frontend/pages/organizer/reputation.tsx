@@ -62,7 +62,7 @@ const OrganizerReputationPage = () => {
           <EmptyState
             heading="Unable to Load Reputation"
             subtext="We couldn't fetch your reputation data. Please try again later."
-            cta={{ label: 'Back to Dashboard', onClick: () => router.push('/organizer/dashboard') }}
+            cta={{ label: 'Back to Dashboard', href: '/organizer/dashboard' }}
           />
         </div>
       </Layout>
