@@ -15,6 +15,7 @@ interface User {
   huntPassActive?: boolean;
   organizerTier?: string;
   notificationPrefs?: Record<string, boolean>;
+  onboardingComplete?: boolean;
 }
 
 interface AuthContextType {
@@ -51,7 +52,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: payload.role,
           points: payload.points || 0,
           referralCode: payload.referralCode || '',
-          organizerTier: payload.organizerTier || 'SIMPLE'
+          organizerTier: payload.organizerTier || 'SIMPLE',
+          onboardingComplete: payload.onboardingComplete ?? false
         });
       } catch (e) {
         console.error('Failed to decode token', e);
@@ -76,7 +78,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: payload.role,
         points: payload.points || 0,
         referralCode: payload.referralCode || '',
-        organizerTier: payload.organizerTier || 'SIMPLE'
+        organizerTier: payload.organizerTier || 'SIMPLE',
+        onboardingComplete: payload.onboardingComplete ?? false
       });
     } catch (e) {
       console.error('Failed to decode token', e);

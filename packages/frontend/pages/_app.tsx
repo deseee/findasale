@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
+import api from '../lib/api';
 import Layout from '../components/Layout';
 import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
@@ -119,20 +120,30 @@ function OnboardingShower() {
 
 /**
  * Show organizer onboarding modal for new ORGANIZER users on first login.
- * Completion stored in localStorage.
+ * Completion flag is stored on backend (Organizer.onboardingComplete) and included in JWT.
  */
 function OrganizerOnboardingShower() {
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     if (!user || user.role !== 'ORGANIZER') return;
-    if (typeof window === 'undefined') return;
-    const done = localStorage.getItem('organizer_onboarded');
-    if (!done) setShow(true);
+    if (user.onboardingComplete) return; // Already onboarded — don't show
+    setShow(true);
   }, [user]);
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    try {
+      // Mark onboarded on backend and get fresh JWT
+      const res = await api.post('/organizers/me/onboarding-complete');
+      if (res.data.token) {
+        login(res.data.token); // Updates user context with onboarding: true
+      }
+    } catch (e) {
+      console.error('Failed to mark onboarding complete:', e);
+      // Fallback: don't show again this session
+    }
+    // Belt-and-suspenders: also set localStorage for extra safety
     if (typeof window !== 'undefined') {
       localStorage.setItem('organizer_onboarded', 'true');
     }

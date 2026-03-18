@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
@@ -126,7 +127,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// POST /organizers/me/onboarding-complete — mark onboarding as completed
+// POST /organizers/me/onboarding-complete — mark onboarding as completed, return fresh JWT
 router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user || req.user.role !== 'ORGANIZER') {
@@ -146,7 +147,29 @@ router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, re
       data: { onboardingComplete: true },
     });
 
-    res.json({ success: true, onboardingComplete: updated.onboardingComplete });
+    // Generate fresh JWT with updated onboardingComplete flag
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+    });
+
+    const token = jwt.sign(
+      {
+        id: user!.id,
+        email: user!.email,
+        name: user!.name,
+        role: user!.role,
+        points: user!.points,
+        referralCode: user!.referralCode,
+        tokenVersion: user!.tokenVersion,
+        subscriptionTier: updated.subscriptionTier ?? 'SIMPLE',
+        organizerTokenVersion: updated.tokenVersion ?? 0,
+        onboardingComplete: updated.onboardingComplete,
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ success: true, onboardingComplete: updated.onboardingComplete, token });
   } catch (error) {
     console.error('Error marking onboarding complete:', error);
     res.status(500).json({ message: 'Server error' });
