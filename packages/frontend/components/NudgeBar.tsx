@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import useNudges, { Nudge } from '../hooks/useNudges';
+import { useAuth } from './AuthContext';
 
 const NudgeBar: React.FC = () => {
-  const { topNudge, loading } = useNudges();
+  const { user } = useAuth();
+  const { topNudge, loading } = useNudges(!!user);
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
 

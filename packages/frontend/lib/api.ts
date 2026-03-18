@@ -27,8 +27,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Remove token and redirect to login
-      if (typeof window !== 'undefined') {
+      // Remove token and redirect to login — skip if already on /login to prevent redirect loops
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
         localStorage.removeItem('token');
         window.location.href = '/login';
       }
