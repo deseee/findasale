@@ -39,6 +39,22 @@
 - Open Stripe business account (test keys still in production — recurring)
 - Waves 2–4 smoke test remaining features with real beta data
 
+### Claude Automated Checks (Recommended)
+
+These checks run at session start or before any deploy:
+
+| Check | Trigger | Tool | Pass Criteria |
+|-------|---------|------|---------------|
+| TypeScript build | Pre-deploy, post-feature | `next build` in frontend | Zero TS errors |
+| Schema alignment | After any API change | findasale-qa | All frontend API calls match backend route signatures |
+| Auth pattern | On new frontend file | findasale-qa | No `@findasale/shared`, no `hooks/useAuth`, no `useSession` |
+| Tier gate | On new PRO/TEAMS feature | findasale-qa | Backend has `requireTier`, frontend has `canAccess()` guard |
+| Nav wiring | After new page added | findasale-qa | Every feature page has ≥1 nav entry point or dashboard link |
+| 404 check | Pre-deploy | findasale-ops | All nav links return non-404 |
+| Dark mode | On new page | health-scout | Every page has `dark:` Tailwind variants |
+| Rate limit | On new mutation endpoint | health-scout | All write endpoints have rateLimiter middleware |
+| Import audit | On new file | health-scout | No cross-package imports violating layer contracts |
+
 ### S194 QA Audit Results (2026-03-17)
 **Chrome-tested, confirmed working:**
 - `/trending` ✅ (dark mode fixed)
@@ -88,6 +104,7 @@
 | # | Feature | Tier | Notes |
 |---|---------|------|-------|
 | 19 | Passkey / WebAuthn Support | [SIMPLE] | [QA-FIXED S196+S197] Backend fully fixed (challenge flow + JWT role). Frontend login wired. Needs end-to-end re-QA: register → login → redirect flow. |
+| 51 | Sale Ripples | [FREE] | [IMPLEMENTATION-GAP] Listed QA-PASS S195 but codebase verification found ZERO implementation: no schema model, no API route, no UI component. Needs full build from scratch. Removed from Completed. |
 | 54 | Crowdsourced Appraisal AI | [PAID_ADDON] | Sprint 2 frontend built S197 (AI path placeholder only). Sprint 3 (Stripe billing + Claude Haiku vision integration) deferred. Base appraisal request/response flow complete. |
 | 60 | Premium Tier Bundle | [PRO] | [QA-PARTIAL S196] Sprint 1 backend + schema complete. Sprint 2 frontend not yet built — full billing + workspace management UX pending. |
 
@@ -236,186 +253,185 @@ Roadmap and session-log are always updated in the same commit.
 
 ### Organizer — Core Operations [SIMPLE]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Create / Edit / Publish / Archive Sales | [SIMPLE] | Core workflow |
-| Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | [SIMPLE] | Enum validation + validation matrix (Item #5) |
-| Listing Type Schema Validation | [SIMPLE] | Item #5 — backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS enum consistency |
-| Sale Map with Geocoding | [SIMPLE] | `/api/geocode` |
-| Entrance Pin / Front Door Locator | [SIMPLE] | Item #35 + #38 — shopper convenience, parking + entrance detail on map |
-| Sale Calendar View | [SIMPLE] | Organizer + shopper views |
-| Item Add / Edit / Delete / Status | [SIMPLE] | Core CRUD |
-| Photo Upload (Single + Multi) | [SIMPLE] | `/api/upload` with Cloudinary |
-| Rapidfire Camera Mode | [SIMPLE] | Multi-photo AI draft pipeline |
-| AI Tag Suggestions + Health Score | [SIMPLE] | Haiku-powered |
-| Condition Grading (S/A/B/C/D) | [SIMPLE] | AI + manual override |
-| Item Holds / Reservations | [SIMPLE] | `/api/reservations` with expiry |
-| Hold Duration Configuration | [SIMPLE] | Per-sale configurable |
-| Holds-Only Item View (Batch Ops) | [SIMPLE] | Item #24 — grouped by buyer |
-| Sale Checklist | [SIMPLE] | Per-sale custom checklist (undocumented) |
-| Email Reminders to Shoppers | [SIMPLE] | `/api/reminders` |
-| Push Notification Subscriptions | [SIMPLE] | `/api/push` VAPID |
-| Notification Inbox | [SIMPLE] | In-app notification center (undocumented) |
-| Organizer Digest Emails | [SIMPLE] | Weekly activity summaries (undocumented) |
-| Basic Organizer Profile | [SIMPLE] | businessName, phone, bio, website |
-| Organizer Public Profile Page | [SIMPLE] | `/organizers/[slug]` |
-| Password Reset Flow | [SIMPLE] | Phase 5 — email-based password recovery |
-| Refund Policy Configuration | [SIMPLE] | Phase 6 — per-organizer configurable refund window |
-| Pickup Scheduling | [SIMPLE] | Organizer slots + shopper booking (undocumented) |
-| Sale Waitlist | [SIMPLE] | Shopper join + organizer broadcast (undocumented) |
-| Flash Deals | [SIMPLE] | Time-limited price drops (undocumented) |
-| Reviews (Receive + View) | [SIMPLE] | Shopper → sale + organizer (undocumented) |
-| Contact Form | [SIMPLE] | `/api/contact` |
-| Stripe Terminal POS (v2) | [SIMPLE] | Multi-item + cash, 10% fee parity |
-| Payout Transparency / Earnings Dashboard | [SIMPLE] | Item-level fee breakdown + PDF |
-| Organizer Referral (Fee Bypass) | [SIMPLE] | Item #11 — referralDiscountExpiry |
-| Tiers Backend Infrastructure | [SIMPLE] | `/api/tiers` — getMyTier, syncTier (undocumented) |
-| Organizer Mode Tiers (Simple/Pro/Teams) | [PRO] | Item #65 — Full tier infrastructure: SubscriptionTier enum (SIMPLE/PRO/TEAMS), tierGate.ts, requireTier middleware, Stripe billing (checkout, webhook, cancel), upgrade/subscription UI, Progressive Disclosure UI (SIMPLE sees 5-button surface, PRO/TEAMS see all features). Sprints 1+2 S177-S178, Sprint 3 S183. useOrganizerTier hook, AuthContext JWT tier extraction. |
-| Organizer Reputation Score | [SIMPLE] | Item #71 — 1-5 star public score, backend + full Sprint 2 frontend (reputation.tsx, useReputation.ts). QA-PASS S196. SHIPPED S191+S196. |
-| Low-Bandwidth Mode (PWA) | [SIMPLE] | Item #22 — Network Information API detection, localStorage persistence, manual toggle, SSR-safe. LowBandwidthContext, LowBandwidthBanner, useLowBandwidthInitializer, imageUrl.ts, shopper settings toggle. QA-PASS S196. SHIPPED S196. |
-| Passkey / WebAuthn Login | [SIMPLE] | Item #19 — SimpleWebAuthn backend (register/authenticate), challenge storage, Uint8Array type compat, JWT with role field, frontend login UI wired. QA-FIXED S196+S197. End-to-end re-QA pending. SHIPPED S190. |
-| A/B Testing Infrastructure | [SIMPLE] | Internal optimization tool (undocumented) |
-| Invites | [SIMPLE] | Invite-to-sale / invite-to-platform (undocumented) |
-| Disputes Management | [SIMPLE] | Trust & safety (undocumented) |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| — | Create / Edit / Publish / Archive Sales | ORG | SIMPLE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Core workflow |
+| — | Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | ORG | SIMPLE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Enum validation + validation matrix (Item #5) |
+| 5 | Listing Type Schema Validation | ORG | SIMPLE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS |
+| — | Sale Map with Geocoding | ORG | SIMPLE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | `/api/geocode` |
+| 35 | Entrance Pin / Front Door Locator | BOTH | SIMPLE | Ph.3 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Shopper convenience, parking + entrance detail |
+| — | Sale Calendar View | BOTH | SIMPLE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Organizer + shopper views |
+| — | Item Add / Edit / Delete / Status | ORG | SIMPLE | Ph.1 | ✅ | ✅ | ✅ | ✅S126 | ✅S125 | ✅ | 📋 | Core CRUD |
+| — | Photo Upload (Single + Multi) | ORG | SIMPLE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/upload` with Cloudinary |
+| — | Rapidfire Camera Mode | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Multi-photo AI draft pipeline |
+| — | AI Tag Suggestions + Health Score | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | ✅S124 | ✅S124 | ✅ | 📋 | Haiku-powered, part of intake |
+| — | Condition Grading (S/A/B/C/D) | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | AI + manual override |
+| — | Item Holds / Reservations | BOTH | SIMPLE | Ph.3 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/reservations` with expiry |
+| — | Hold Duration Configuration | ORG | SIMPLE | Ph.3 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Per-sale configurable |
+| 24 | Holds-Only Item View (Batch Ops) | ORG | SIMPLE | Ph.6 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Grouped by buyer |
+| — | Sale Checklist | ORG | SIMPLE | Ph.7 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Per-sale custom checklist |
+| — | Email Reminders to Shoppers | ORG | SIMPLE | Ph.4 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/reminders` |
+| — | Push Notification Subscriptions | BOTH | SIMPLE | Ph.4 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/push` VAPID |
+| — | Notification Inbox | BOTH | SIMPLE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | In-app notification center |
+| — | Organizer Digest Emails | ORG | SIMPLE | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Weekly activity summaries |
+| — | Basic Organizer Profile | ORG | SIMPLE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | businessName, phone, bio, website |
+| — | Organizer Public Profile Page | ORG | SIMPLE | Ph.3 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | `/organizers/[slug]` |
+| — | Password Reset Flow | ORG | SIMPLE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Email-based password recovery |
+| — | Refund Policy Configuration | ORG | SIMPLE | Ph.6 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Per-organizer configurable refund window |
+| — | Pickup Scheduling | BOTH | SIMPLE | Ph.7 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Organizer slots + shopper booking |
+| — | Sale Waitlist | BOTH | SIMPLE | Ph.7 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Shopper join + organizer broadcast |
+| — | Flash Deals | ORG | SIMPLE | Ph.7 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Time-limited price drops |
+| — | Reviews (Receive + View) | BOTH | SIMPLE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Shopper → sale + organizer |
+| — | Contact Form | PUB | SIMPLE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/contact` |
+| — | Stripe Terminal POS (v2) | ORG | SIMPLE | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Multi-item + cash, 10% fee parity |
+| — | Payout Transparency / Earnings Dashboard | ORG | SIMPLE | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Item-level fee breakdown + PDF |
+| 11 | Organizer Referral (Fee Bypass) | ORG | SIMPLE | Ph.6 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | referralDiscountExpiry |
+| — | Tiers Backend Infrastructure | ORG | SIMPLE | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/tiers` — getMyTier, syncTier |
+| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | S183 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI |
+| 71 | Organizer Reputation Score | ORG | SIMPLE | S196 | ✅ | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | 1-5 star public score + reputation.tsx frontend |
+| 22 | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | S196 | — | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | Network API detection, localStorage, LowBandwidthContext |
+| 19 | Passkey / WebAuthn Login | ORG | SIMPLE | S190 | ✅ | ✅ | ✅ | 🔧S197 | 📋 | ⚠️ | 📋 | SimpleWebAuthn backend + frontend login wired; end-to-end re-QA pending |
+| — | A/B Testing Infrastructure | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Internal optimization tool |
+| — | Invites | ORG | SIMPLE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Invite-to-sale / invite-to-platform |
+| — | Disputes Management | BOTH | SIMPLE | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Trust & safety |
 
 ### Organizer — Analytics & Intelligence [PRO]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Seller Performance Dashboard | [PRO] | Per-sale analytics + insights |
-| Organizer Insights (Lifetime) | [PRO] | Cross-sale totals + benchmarking |
-| Batch Operations Toolkit | [PRO] | Item #8 — bulk price/status/category/tag/photo |
-| CSV Listing Import | [SIMPLE] | Phase 2 — bulk upload item lists from CSV file |
-| CSV / JSON / Text Listing Exports | [PRO] | Item #27 Sprint 2 — multi-format output |
-| Open Data Export (ZIP) | [PRO] | Item #66 — items/sales/purchases CSV |
-| Payout PDF Export | [PRO] | Financial reporting for tax/accounting |
-| Stripe Connect Setup | [PRO] | Phase 2 — organizer payout bank account linking + verification |
-| Organizer Item Library (Consignment Rack) | [PRO] | Item #25 — Upload once, reuse across sales. Cross-sale search, price history, sold vs. unsold analytics. SHIPPED S187. |
-| Voice-to-Tag | [PRO] | Item #42 — Organizer speaks item description during Rapidfire → AI transcribes + extracts tags automatically. Hands-free cataloging. SHIPPED S187. |
-| Post Performance Analytics | [PRO] | Item #18 — UTM tracking on social template downloads → organizer dashboard click reporting. QA-PASS S195. SHIPPED S187. |
-| Flip Report | [PRO] | Item #41 — Item resale potential scoring. Nav link wired S196. QA-PASS S195. SHIPPED S189. |
-| Bid Bot Detector + Fraud Score | [PRO] | Item #17 — FraudBadge on holds page, fraud-signals.tsx (useBidBot.ts), fraud score + signal review UI. QA-PASS S195+S197. SHIPPED S190. |
-| TEAMS Workspace | [TEAMS] | Item #13 — Multi-user workspace, role management, workspace.tsx. QA-PASS S195. SHIPPED S190. |
-| Command Center Dashboard | [PRO] | Item #68 — Per-sale widget dashboard with SaleStatusWidget. QA-PASS S195. SHIPPED S183. |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| — | Seller Performance Dashboard | ORG | PRO | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Per-sale analytics + insights |
+| — | Organizer Insights (Lifetime) | ORG | PRO | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Cross-sale totals + benchmarking |
+| 8 | Batch Operations Toolkit | ORG | PRO | Ph.6 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Bulk price/status/category/tag/photo |
+| — | CSV Listing Import | ORG | SIMPLE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Bulk upload item lists from CSV |
+| 27 | CSV / JSON / Text Listing Exports | ORG | PRO | S187 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Multi-format output (Listing Factory) |
+| 66 | Open Data Export (ZIP) | ORG | PRO | Ph.13 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Items/sales/purchases CSV |
+| — | Payout PDF Export | ORG | PRO | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Financial reporting for tax/accounting |
+| — | Stripe Connect Setup | ORG | SIMPLE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Payout bank account linking + verification |
+| 25 | Organizer Item Library (Consignment Rack) | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Upload once, reuse; cross-sale search, price history |
+| 42 | Voice-to-Tag | ORG | PRO | S187 | — | ✅ | ⚠️ | ✅S195 | 📋 | — | 📋 | Organizer voice input → AI transcribe + tag. VoiceTagButton.tsx missing. |
+| 18 | Post Performance Analytics | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | UTM tracking on social template downloads |
+| 41 | Flip Report | ORG | PRO | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Item resale potential scoring |
+| 17 | Bid Bot Detector + Fraud Score | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | FraudBadge on holds page, fraud-signals.tsx |
+| 13 | TEAMS Workspace | ORG | TEAMS | S190 | ✅ | ✅ | ✅ | ✅S195 | ✅S194 | ✅ | 📋 | Multi-user workspace, role management |
+| 68 | Command Center Dashboard | ORG | PRO | S183 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Per-sale widget dashboard |
 
 ### Organizer — Marketing & Brand Amplification [SIMPLE/PRO mixed]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Social Templates (3 tones × 2 platforms) | [SIMPLE] | Item #27 Sprint 2 — Instagram/Facebook copy (brand-spreading) |
-| Cloudinary Watermark on Photo Exports | [SIMPLE] | Item #27 Sprint 2 — brand protection (brand-spreading) |
-| CSV/JSON Listing Exports (Listing Factory) | [SIMPLE] | Item #27 Sprint 2 — multi-platform sharing (brand-spreading) |
-| Brand Kit | [PRO] | Item #31 — colors, logo, socials (auto-propagates). QA-PASS S195. SHIPPED S187. |
-| Share Card Factory (OG Tags) | [SIMPLE] | Item #33 + #43 — branded social previews, dynamic OG images via Cloudinary |
-| Message Templates | [PRO] | Saved organizer reply templates (undocumented) |
-| Hype Meter | [SIMPLE] | Item #34 — real-time social proof |
-| Post Performance Analytics | [PRO] | Item #18 — UTM tracking on social template downloads → "your Instagram post got 200 clicks" in organizer dashboard. SHIPPED S187 — QA pending. |
-| Dark Mode + Accessibility | [FREE] | Item #63 — Tailwind dark variants (system preference + manual toggle), high-contrast outdoor mode, WCAG 2.1 AA compliant (all ratios passing). useTheme hook (SSR-safe), ThemeToggle component, Appearance settings tab with font size slider (14–20px) + high-contrast toggle. 14 files, 3 phases (S182) |
-| Social Proof Notifications | [SIMPLE] | Item #67 — stateless engagement aggregation (favorites, bids, holds) at item + sale level. Backend: socialProofService (aggregation logic), socialProofController (GET endpoints), socialProof route. Frontend: useSocialProof hook (React Query, 30s stale), SocialProofBadge component (compact/full, sage-green). No schema changes (S181) |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| 27 | Social Templates (3 tones × 2 platforms) | ORG | SIMPLE | Ph.12 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Instagram/Facebook copy (brand-spreading) |
+| 27 | Cloudinary Watermark on Photo Exports | ORG | SIMPLE | Ph.12 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Brand protection (brand-spreading) |
+| 27 | CSV/JSON Listing Exports (Listing Factory) | ORG | SIMPLE | Ph.12 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Multi-platform sharing (brand-spreading) |
+| 31 | Brand Kit | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Colors, logo, socials (auto-propagates) |
+| 33 | Share Card Factory (OG Tags) | ORG | SIMPLE | Ph.10 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Branded social previews, dynamic OG images |
+| — | Message Templates | ORG | PRO | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Saved organizer reply templates |
+| 34 | Hype Meter | ORG | SIMPLE | Ph.11 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Real-time social proof |
+| 18 | Post Performance Analytics | ORG | PRO | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Social template download UTM tracking |
+| 63 | Dark Mode + Accessibility | BOTH | FREE | S182 | — | ✅ | ✅ | ✅S195 | 📋 | — | 📋 | Tailwind dark variants, WCAG 2.1 AA, high-contrast outdoor mode |
+| 67 | Social Proof Notifications | BOTH | SIMPLE | S181 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Engagement aggregation (favorites, bids, holds) |
 
 ### Organizer — Sales Tools & Workflow [SIMPLE/PRO mixed]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Virtual Queue / Line Management | [SIMPLE] | Item #6 — start/call next/join line + SMS (undocumented). S176 decision: free for all organizers. |
-| Auction Mechanics | [SIMPLE] | Phase 12 — countdown timer, bid modal, auto-bid, cron job closing, item-level auction fees |
-| Sale Reminders (Calendar + Remind Me) | [SIMPLE] | Item #37 — sale alerts for shoppers |
-| Neighborhood Heatmap | [SIMPLE] | Item #28 — density-based Leaflet overlay |
-| Real-Time Status Updates | [PRO] | Item #14 — Organizer mobile widget, SMS/email alerts, SaleStatusWidget mounted on command-center. REST + Socket.io. QA-PASS S196. SHIPPED S187. |
-| Proactive Degradation Mode | [PRO] | Item #20 — DegradationBanner + middleware. QA-PASS S195. SHIPPED S190. |
-| AI Item Valuation & Comparables | [PRO] | Item #30 — ValuationWidget (PRO-gated) wired to add-items page. QA-PASS S195. SHIPPED S190. |
-| Photo Op Stations | [PRO] | Item #39 — PhotoOpMarker on map. Rate-limited POST /photo-ops/:id/shares (10/hr). QA-PASS S195. SHIPPED S190. |
-| Sale Hubs | [PRO] | Item #40 — Hub pages + membership UI. QA-PASS S195. SHIPPED S190. |
-| Verified Organizer Badge | [PRO] | Item #16 — VerifiedBadge on sales detail + SaleCard. QA-PASS S195. SHIPPED S189. |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| 6 | Virtual Queue / Line Management | ORG | SIMPLE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Start/call next/join line + SMS; free for all |
+| — | Auction Mechanics | ORG | SIMPLE | Ph.12 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Countdown timer, bid modal, auto-bid, cron closing |
+| 37 | Sale Reminders (Calendar + Remind Me) | SHO | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Sale alerts for shoppers |
+| 28 | Neighborhood Heatmap | BOTH | SIMPLE | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Density-based Leaflet overlay |
+| 14 | Real-Time Status Updates | BOTH | PRO | S187 | ✅ | ✅ | ✅ | ✅S196 | 📋 | — | 📋 | Organizer widget, SMS/email alerts, SaleStatusWidget |
+| 20 | Proactive Degradation Mode | BOTH | PRO | S190 | — | ✅ | ✅ | ✅S195 | 📋 | — | 📋 | DegradationBanner + middleware for offline |
+| 30 | AI Item Valuation & Comparables | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | ValuationWidget (PRO-gated) on add-items page |
+| 39 | Photo Op Stations | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | PhotoOpMarker on map, rate-limited |
+| 40 | Sale Hubs | ORG | PRO | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Hub pages + membership UI |
+| 16 | Verified Organizer Badge | ORG | PRO | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | — | 📋 | VerifiedBadge on sales detail + SaleCard |
 
 ### Shopper — Discovery & Search [FREE]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Browse Sales (Homepage + Map) | [FREE] | `/map`, `/` |
-| Sale Detail Page | [FREE] | `/sales/[slug]` |
-| Item Detail Page | [FREE] | `/items/[id]` |
-| Full-Text Search | [FREE] | Advanced filters + location |
-| Category Browsing | [FREE] | `/categories` index + `/categories/[slug]` |
-| Tag Browsing | [FREE] | `/tags/[slug]` ISR pages |
-| Surprise Me / Serendipity Search | [FREE] | `/surprise-me` — random item discovery |
-| Sale Calendar (Upcoming) | [FREE] | `/calendar` |
-| iCal / Calendar Export | [SIMPLE] | Phase 10 — download .ics file for sales + items |
-| QR Code Signs (Yard + Item Labels) | [SIMPLE] | Phase 10 — printable QR codes linking to sale/items |
-| QR Scan Analytics | [SIMPLE] | Phase 10 — tracking + insights on QR code scans |
-| Neighborhood Heatmap | [FREE] | Item #28 — visual density map |
-| City Pages | [FREE] | `/cities` + `/city/[slug]` — city-level browsing (undocumented) |
-| Neighborhood Pages | [FREE] | `/neighborhoods/[slug]` — local discovery (undocumented) |
-| Trending Items / Sales | [FREE] | `/trending` page + API (undocumented) |
-| Activity Feed | [FREE] | `/feed` page + API (undocumented) |
-| Route Planning (Multi-Sale) | [FREE] | `/api/routes` — OSRM-based (undocumented) |
-| Price History Tracking | [FREE] | `/api/price-history` — price changes over time (undocumented) |
-| City Heat Index | [FREE] | Item #49 — City-level "estate sale activity" score — weekly ranking of hottest metro areas. Content marketing magnet + SEO play. Powered by aggregated sale data. SHIPPED S187. |
-| Sale Ripples | [FREE] | Item #51 — Smart notification algorithm — "A sale just posted 2 miles from a sale you liked." Proximity + preference signals. Drives spontaneous visits. SHIPPED S187. |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| — | Browse Sales (Homepage + Map) | SHO | FREE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | `/map`, `/` |
+| — | Sale Detail Page | SHO | FREE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/sales/[slug]` |
+| — | Item Detail Page | SHO | FREE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/items/[id]` |
+| — | Full-Text Search | SHO | FREE | Ph.3 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Advanced filters + location |
+| — | Category Browsing | SHO | FREE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | `/categories` index + `/categories/[slug]` |
+| — | Tag Browsing | SHO | FREE | Ph.4 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | `/tags/[slug]` ISR pages |
+| — | Surprise Me / Serendipity Search | SHO | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/surprise-me` random discovery |
+| — | Sale Calendar (Upcoming) | SHO | FREE | Ph.4 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/calendar` |
+| — | iCal / Calendar Export | SHO | SIMPLE | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Download .ics file for sales + items |
+| — | QR Code Signs (Yard + Item Labels) | ORG | SIMPLE | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Printable QR codes linking to sales/items |
+| — | QR Scan Analytics | ORG | SIMPLE | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Tracking + insights on QR scans |
+| 28 | Neighborhood Heatmap | BOTH | SIMPLE | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | ✅ | 📋 | Visual density map |
+| — | City Pages | SHO | FREE | Ph.12 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/cities` + `/city/[slug]` city-level browsing |
+| — | Neighborhood Pages | SHO | FREE | Ph.13 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/neighborhoods/[slug]` local discovery |
+| — | Trending Items / Sales | SHO | FREE | Ph.12 | ✅ | ✅ | ✅ | ✅S194 | ✅S194 | — | 📋 | `/trending` page + API |
+| — | Activity Feed | SHO | FREE | Ph.12 | ✅ | ✅ | ✅ | ✅S194 | ✅S194 | — | 📋 | `/feed` page + API |
+| — | Route Planning (Multi-Sale) | SHO | FREE | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/routes` OSRM-based |
+| — | Price History Tracking | SHO | FREE | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/api/price-history` price trends |
+| 49 | City Heat Index | SHO | FREE | S187 | ⚠️ | ✅ | ⚠️ | ✅S195 | ✅S194 | ✅ | 📋 | Weekly "hottest metro" ranking; aggregated sale data |
 
 ### Shopper — Engagement & Community [FREE]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Wishlists | [FREE] | Full CRUD, distinct from favorites (undocumented) |
-| Saved Searches with notifyOnNew | [FREE] | `/api/saved-searches` — auto-notify on new matches (undocumented) |
-| Shopper ↔ Organizer Messaging | [FREE] | `/messages/*` — threaded conversations (undocumented) |
-| Buying Pools | [FREE] | `/api/buying-pools` — group buying on items (undocumented) |
-| Bounties (Item Requests) | [FREE] | `/api/bounties` — shopper want-ads (undocumented) |
-| Reviews (Submit Sale / Organizer) | [FREE] | Via `/api/reviews` |
-| User Profile Page | [FREE] | `/profile` |
-| Shopper Public Profiles | [FREE] | `/shoppers/[slug]` — collection showcase (undocumented) |
-| Favorites | [FREE] | Save items for later |
-| Notification Center | [FREE] | `/notifications` page |
-| Email + SMS Validation (Twilio) | [SIMPLE] | Phase 8 — phone number verification via SMS |
-| Unsubscribe / Preferences | [FREE] | `/unsubscribe` + `/api/unsubscribe` |
-| Weekly Treasure Digest (Email) | [FREE] | Item #36 — MailerLite Sunday 6pm |
-| Contact Organizer | [FREE] | Via messaging system |
-| Entrance Pin (Location Detail) | [FREE] | Item #35 — parking + entrance info |
-| Condition Guide | [FREE] | `/condition-guide` — educational page |
-| FAQ / Guide / Terms / Privacy | [FREE] | Legal + help pages |
-| Pickup Booking (Schedule Pickup) | [FREE] | Shopper-side of item #24 (undocumented) |
-| Shopper Loyalty Passport | [FREE] | Item #29 — Gamified repeat-visit system — stamps, badges, early-access perks. Drives shopper retention. SHIPPED S187. |
-| Shopper Wishlist Alerts + Smart Follow | [FREE] | Item #32 — Shoppers set category/tag/organizer preferences → push alerts when matching items list. Foundational for shopper retention and intent data. SHIPPED S187. |
-| Digital Receipt + Returns | [FREE] | Item #62 — Auto-generate digital receipt with item photos + prices after every POS transaction. Push to shopper's app profile. Optional organizer-set return window (24h/48h/none). SHIPPED S187. |
-| Collector Passport | [FREE] | Item #45 — Specialty collection tracking (coins, books, vinyl etc.), collector profile, achievement path. Nav link wired S196. QA-PASS S195. SHIPPED S189. |
-| Loot Log | [FREE] | Item #50 — Personal purchase history with photos + prices. Nav link wired S196. QA-PASS S195. SHIPPED S189. |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| — | Wishlists | SHO | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Full CRUD, distinct from favorites |
+| — | Saved Searches with notifyOnNew | SHO | FREE | Ph.6 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Auto-notify on new matches |
+| — | Shopper ↔ Organizer Messaging | BOTH | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Threaded conversations |
+| — | Buying Pools | SHO | FREE | Ph.6 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Group buying on items |
+| — | Bounties (Item Requests) | SHO | FREE | Ph.8 | ✅ | ✅ | ✅ | ✅S194 | 📋 | ✅ | 📋 | Shopper want-ads |
+| — | Reviews (Submit Sale / Organizer) | SHO | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Via `/api/reviews` |
+| — | User Profile Page | SHO | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/profile` |
+| — | Shopper Public Profiles | SHO | FREE | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/shoppers/[slug]` collection showcase |
+| — | Favorites | SHO | FREE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Save items for later |
+| — | Notification Center | SHO | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/notifications` page |
+| — | Email + SMS Validation (Twilio) | BOTH | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Phone number verification via SMS |
+| — | Unsubscribe / Preferences | SHO | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/unsubscribe` + `/api/unsubscribe` |
+| 36 | Weekly Treasure Digest (Email) | SHO | FREE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | MailerLite Sunday 6pm |
+| — | Contact Organizer | SHO | FREE | Ph.5 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Via messaging system |
+| 35 | Entrance Pin (Location Detail) | SHO | SIMPLE | Ph.3 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Parking + entrance info on map |
+| — | Condition Guide | SHO | FREE | Ph.2 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/condition-guide` educational page |
+| — | FAQ / Guide / Terms / Privacy | PUB | FREE | Ph.1 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Legal + help pages |
+| — | Pickup Booking (Schedule Pickup) | SHO | FREE | Ph.7 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Shopper-side scheduling |
+| 29 | Shopper Loyalty Passport | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Stamps, badges, early-access perks |
+| 32 | Shopper Wishlist Alerts + Smart Follow | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Category/tag/organizer alerts on new items |
+| 62 | Digital Receipt + Returns | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Auto-generated receipt post-POS, return window |
+| 45 | Collector Passport | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Specialty collection tracking + achievement path |
+| 50 | Loot Log | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Personal purchase history with photos + prices |
 
 ### Shopper — Gamification [FREE + HUNT_PASS]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Points System | [FREE] | 1 pt/visit/day, tier-based (undocumented) |
-| Streaks (Visit / Save / Purchase) | [FREE] | Daily streak tracking (undocumented) |
-| Treasure Hunt (Daily) | [FREE] | Daily clue + category matching (undocumented) |
-| Leaderboard (Shoppers + Organizers) | [FREE] | Public rankings (undocumented) |
-| **Hunt Pass ($4.99/30 days)** | **[PAID_ADDON]** | **2× streak multiplier, 30-day recurring subscription, Stripe live billing (undocumented)** |
-| Near-Miss Nudges | [FREE] | Item #61 — variable-ratio casino-psychology nudges, 4 types, NudgeBar toast (S181) |
-| Unsubscribe-to-Snooze (MailerLite) | [SIMPLE] | Item #23 — intercepts MailerLite unsubscribe webhook, sets 30-day snooze via custom field instead of permanent removal. Backend: snoozeService (snooze/reactivate via MailerLite API), snoozeController (webhook + status/reactivate endpoints), snooze route (/api/snooze/webhook unauthenticated, /api/snooze/status + /api/snooze/reactivate authenticated). No schema changes; uses MailerLite custom fields only (S181). Patrick task: create snooze_until date field in MailerLite dashboard, point webhook to /api/snooze/webhook |
-| Streak Rewards | [FREE] | Item #59 — Visit/save/purchase daily streaks. Streak indicator wired to Layout. QA-PASS S195. SHIPPED S190. |
-| Achievement Badges | [FREE] | Item #58 — Shopper badge system, /shopper/achievements page. Env var bug fixed (NEXT_PUBLIC_API_URL). QA-PASS S195. SHIPPED S190. |
-| Shiny / Rare Item Badges | [FREE] | Item #57 — RarityBadge wired to item cards. QA-PASS S195. SHIPPED S190. |
-| Treasure Trail Route Builder | [FREE] | Item #48 — Trail pages + share token, multi-sale route building. QA-PASS S195. SHIPPED S190. |
-| Seasonal Discovery Challenges | [FREE] | Item #55 — Rotating discovery challenges by season/category. QA-PASS S195. SHIPPED S189. |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| — | Points System | SHO | FREE | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | 1 pt/visit/day, tier-based |
+| — | Streaks (Visit / Save / Purchase) | SHO | FREE | Ph.9 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Daily streak tracking |
+| — | Treasure Hunt (Daily) | SHO | FREE | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Daily clue + category matching |
+| — | Leaderboard (Shoppers + Organizers) | SHO | FREE | Ph.10 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Public rankings |
+| — | **Hunt Pass ($4.99/30 days)** | SHO | **PAID_ADDON** | Ph.11 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | **2× streak multiplier, recurring Stripe billing** |
+| 61 | Near-Miss Nudges | SHO | FREE | S181 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Variable-ratio casino psychology; 4 types |
+| 23 | Unsubscribe-to-Snooze (MailerLite) | SHO | SIMPLE | S181 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Intercept unsubscribe → 30-day snooze via MailerLite custom fields |
+| 59 | Streak Rewards | SHO | FREE | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Visit/save/purchase streaks wired to Layout |
+| 58 | Achievement Badges | SHO | FREE | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | `/shopper/achievements` page |
+| 57 | Shiny / Rare Item Badges | SHO | FREE | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | — | 📋 | RarityBadge wired to item cards |
+| 48 | Treasure Trail Route Builder | SHO | FREE | S190 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Trail pages + share token, multi-sale routing |
+| 55 | Seasonal Discovery Challenges | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | — | 📋 | Rotating challenges by season/category |
 
 ### Wave 5 — Advanced Intelligence Features [PRO/FREE/PAID_ADDON]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| Treasure Typology Classifier | [PRO] | Item #46 — AI item category classification service. useTypology.ts, TypologyBadge.tsx, typology.tsx (Sprint 2 frontend). Batch classify per-sale. QA-PASS S197. SHIPPED S191+S197. |
-| Estate Sale Encyclopedia | [FREE] | Item #52 — Wiki-style estate sale knowledge base. index.tsx, [slug].tsx, EncyclopediaCard.tsx, useEncyclopedia.ts (Sprint 2 frontend). QA-PASS S196. SHIPPED S191+S196. |
-| Crowdsourced Appraisal (Base) | [FREE] | Item #54 — Request/submit/vote on item appraisals. AppraisalResponseForm.tsx, appraisals.tsx, useAppraisal.ts (Sprint 2 frontend, AI path placeholder). QA-PASS S197. SHIPPED S191+S197. Note: AI-powered Sprint 3 (Haiku vision + Stripe billing) deferred. |
-| Local-First Offline Mode | [PRO] | Item #69 — Service worker sync queue, offline catalog, conflict resolution UI. useOfflineMode.ts, offline.tsx (Sprint 2 frontend). Sync via /sync/batch. QA-PASS S197. SHIPPED S191+S197. |
-| Live Sale Feed | [SIMPLE] | Item #70 — Real-time sale activity feed. Fully deployed. SHIPPED S185. |
-| UGC Photo Tags | [FREE] | Item #47 — Shopper-submitted item photos, moderation queue. UGCPhotoGallery mounted on sale detail S196. QA-PASS S195. SHIPPED S189. |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| 46 | Treasure Typology Classifier | ORG | PRO | S191 | ✅ | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx |
+| 52 | Estate Sale Encyclopedia | SHO | FREE | S191 | ✅ | ✅ | ✅ | ✅S196 | 📋 | ✅ | 📋 | Wiki-style knowledge base; EncyclopediaCard.tsx |
+| 54 | Crowdsourced Appraisal (Base) | BOTH | FREE | S191 | ✅ | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | Request/submit/vote appraisals; AI Sprint 3 deferred |
+| 69 | Local-First Offline Mode | BOTH | PRO | S191 | — | ✅ | ✅ | ✅S197 | 📋 | ✅ | 📋 | Service worker sync queue; offline catalog |
+| 70 | Live Sale Feed | SHO | SIMPLE | S185 | ✅ | ✅ | ✅ | 📋 | 📋 | — | 📋 | Real-time sale activity feed |
+| 47 | UGC Photo Tags | SHO | FREE | S189 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Shopper-submitted item photos + moderation |
+| 7 | Shopper Referral Rewards | SHO | FREE | S187 | ✅ | ✅ | ✅ | ✅S195 | 📋 | ✅ | 📋 | Referral tracking + rewards distribution |
 
 ### Platform & AI [FREE/SIMPLE]
 
-| Feature | Tier | Notes |
-|---------|------|-------|
-| AI Sale Planner Chat | [FREE] | `/plan` page, public (no auth), rate-limited — acquisition tool (undocumented) |
-| AI Tag Suggestions (Haiku) | [SIMPLE] | Part of Rapidfire, all tiers |
-| AI Condition Grade Suggestions | [SIMPLE] | S/A/B/C/D from photo |
-| AI SEO Description Optimization | [SIMPLE] | High-intent search term bias |
-| User Impact Scoring in Sentry | [Infrastructure] | Item #21 — correlates errors with user tier, points, hunt pass status; impact_level (HIGH/MEDIUM/LOW) for prioritization. Backend: sentryUserContext middleware enriches Sentry errors. Frontend: useSentryUserContext hook syncs context to browser Sentry. Wired globally (index.ts middleware + _app.tsx SentryUserContextSync component). No schema changes (S181) |
-| Shopper Referral Rewards | [FREE] | Item #7 — Referral tracking, rewards distribution, email notifications, /referral-dashboard. QA-PASS S195. SHIPPED S187. |
+| # | Feature | Role | Tier | Shipped | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|---------|----|----|----|----|--------|-----|-------|-------|
+| — | AI Sale Planner Chat | PUB | FREE | Ph.12 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | `/plan` page, public rate-limited acquisition tool |
+| — | AI Tag Suggestions (Haiku) | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Part of Rapidfire, all tiers |
+| — | AI Condition Grade Suggestions | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | S/A/B/C/D from photo |
+| — | AI SEO Description Optimization | ORG | SIMPLE | Ph.8 | ✅ | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | High-intent search term bias |
+| 21 | User Impact Scoring in Sentry | BOTH | FREE | S181 | — | ✅ | ✅ | 📋PEND | 📋 | — | 📋 | Error prioritization by tier/points/hunt-pass status |
