@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-18T13:43:26.297Z*
+*Generated at 2026-03-19T02:06:23.674Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -16,12 +16,12 @@ See report for details.
 
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
-⚠ 8+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/jolly-funny-lovelace/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
-  /sessions/jolly-funny-lovelace/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/jolly-funny-lovelace/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
-  /sessions/jolly-funny-lovelace/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
-  /sessions/jolly-funny-lovelace/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
+⚠ 9+ TODO/FIXME markers in source (showing up to 5):
+  /sessions/bold-nice-babbage/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
+  /sessions/bold-nice-babbage/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/bold-nice-babbage/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
+  /sessions/bold-nice-babbage/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/bold-nice-babbage/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
 
 ## Project File Tree
 ```
@@ -1025,6 +1025,16 @@ See report for details.
 ├── SPRINT2-PUSH-INSTRUCTIONS.md
 ├── TASK_18_COMPLETION_SUMMARY.md
 ├── TASK_18_HANDOFF.md
+├── _tmp_17008_08453a9272e81ddede29e697bc75df3b
+├── _tmp_17008_68e99a0b6f56ac76db24afa22668ce8e
+├── _tmp_19825_1b42f7f27018650a050acda6c56bb042
+├── _tmp_19825_d4fa5d4bb5bbcc3577cc4308c8740ea3
+├── _tmp_19859_73093acdfd3598bc12b5fbdbe206ea00
+├── _tmp_19859_fde55055970563788e18f4d50f97d1b2
+├── _tmp_20883_8b5e2c736d8eacfe7cfb63163610dc51
+├── _tmp_20883_a5422550ee8c28a338c754488ad81595
+├── _tmp_22214_a1f14e2eec910bab06aff6790baa32c2
+├── _tmp_22214_b17ce583c13a1091e6e17065b84fc332
 ├── _tmp_79153_b78de4bad81704a77606cd957038642b
 ├── _tmp_79153_dd2c0afeeac46b8dda065f928d380dee
 ├── ai-config/
@@ -1037,6 +1047,7 @@ See report for details.
 │   ├── SECURITY.md
 │   ├── STACK.md
 │   ├── STATE.md
+│   ├── VOICE_TAG_INTEGRATION.md
 │   ├── architecture/
 │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
 │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
@@ -1051,7 +1062,10 @@ See report for details.
 │   │   ├── ADR-068-QUICK-REFERENCE.md
 │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
 │   │   └── ADR-PHASE4-BRIEF.md
-│   ├── archive/ (14 files)
+│   ├── archive/ (22 files)
+│   ├── audits/
+│   │   ├── passkey-qa-audit-s200.md
+│   │   └── periodic-docs-audit-2026-03-18.md
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (9 files)
 │   ├── competitor-intel/ (2 files)
@@ -1087,6 +1101,9 @@ See report for details.
 │   ├── strategic/
 │   │   └── advisory-board-adr-065-pricing-analysis-2026-03-16.md
 │   ├── strategy/ (6 files)
+│   ├── testing-evidence-archive.md
+│   ├── testing-guides/
+│   │   └── patrick-e2e-guide-2026-03-19.md
 │   ├── ux-spotchecks/
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
 │   │   └── add-items-ux-audit-2026-03-15.md
@@ -1115,7 +1132,7 @@ See report for details.
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
-│   │   │   ├── controllers/ (95 files)
+│   │   │   ├── controllers/ (96 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
@@ -1124,7 +1141,7 @@ See report for details.
 │   │   │   ├── lib/ (7 files)
 │   │   │   ├── middleware/ (6 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (94 files)
+│   │   │   ├── routes/ (95 files)
 │   │   │   ├── services/ (48 files)
 │   │   │   ├── types/ (1 files)
 │   │   │   └── utils/ (4 files)
@@ -1137,7 +1154,7 @@ See report for details.
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
-│   │   │   ├── migrations/ (110 migrations)
+│   │   │   ├── migrations/ (111 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -1148,10 +1165,10 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (150 files)
+│   │   ├── components/ (155 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (3 files)
-│   │   ├── hooks/ (45 files)
+│   │   ├── hooks/ (48 files)
 │   │   ├── lib/ (9 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
@@ -1176,7 +1193,7 @@ See report for details.
 │       │   │   └── tagVocabulary.ts
 │       │   ├── index.ts
 │       │   ├── tierGate.ts
-│       │   └── types/ (3 files)
+│       │   └── types/ (4 files)
 │       └── tsconfig.json
 ├── pnpm
 ├── pnpm-workspace.yaml
