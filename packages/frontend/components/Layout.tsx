@@ -57,7 +57,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     { href: '/', label: 'Home' },
     { href: '/calendar', label: 'Calendar' },
     { href: '/map', label: 'Map' },
-    { href: '/plan', label: 'Plan a Sale' },
     { href: '/cities', label: 'Cities' },
     { href: '/trending', label: 'Trending' },
     { href: '/about', label: 'About' },
@@ -75,6 +74,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <>
             <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Dashboard
+            </Link>
+            <Link href="/plan" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              Plan a Sale
             </Link>
             <Link href="/organizer/premium" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Premium Plans
@@ -257,7 +259,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                     <span className="text-warm-900 dark:text-warm-100 text-sm">Hi, {user.name || user.email}</span>
                     {user.role === 'ORGANIZER' && (
                       <>
-                        <Link href="/organizer/dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Dashboard</Link>
                         {canAccess('PRO') && (
                           <Link href="/organizer/command-center" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Command Center</Link>
                         )}
@@ -276,12 +277,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         {canAccess('TEAMS') && (
                           <Link href="/organizer/workspace" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Workspace</Link>
                         )}
-                        <Link href="/organizer/bounties" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Bounties</Link>
-                        <Link href="/organizer/message-templates" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Message Templates</Link>
-                        <Link href="/organizer/reputation" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Reputation</Link>
-                        <Link href="/organizer/ugc-moderation" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">UGC Moderation</Link>
-                        <Link href="/organizer/performance" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Performance</Link>
-                        <Link href="/neighborhoods" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Neighborhoods</Link>
                       </>
                     )}
                     {(user.role === 'USER' || user.role === 'ADMIN') && (
@@ -417,8 +412,76 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {label}
             </Link>
           ))}
-          <div className="border-t border-warm-200 pt-3 mt-2 space-y-1">
-            {authLinks}
+          <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
+            {isClient && user?.role === 'ORGANIZER' ? (
+              <>
+                {/* Primary organizer links */}
+                <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Dashboard
+                </Link>
+                <Link href="/plan" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Plan a Sale
+                </Link>
+                <Link href="/organizer/premium" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Premium Plans
+                </Link>
+
+                {/* Organizer Tools Section */}
+                <span className="block px-3 py-1 text-xs font-semibold text-warm-600 uppercase mt-3">Organizer Tools</span>
+                <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Bounties
+                </Link>
+                <Link href="/organizer/message-templates" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Message Templates
+                </Link>
+                <Link href="/organizer/reputation" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Reputation
+                </Link>
+                <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  UGC Moderation
+                </Link>
+                <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Performance
+                </Link>
+                <Link href="/neighborhoods" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                  Neighborhoods
+                </Link>
+
+                {/* Pro Tools Section */}
+                {canAccess('PRO') && (
+                  <>
+                    <span className="block px-3 py-1 text-xs font-semibold text-warm-600 uppercase mt-3">Pro Tools</span>
+                    <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                      Command Center
+                    </Link>
+                    <Link href="/organizer/typology" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                      Typology Classifier
+                    </Link>
+                    <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                      Fraud Signals
+                    </Link>
+                    <Link href="/organizer/offline" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                      Offline Mode
+                    </Link>
+                    <Link href="/organizer/appraisals" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                      Appraisals
+                    </Link>
+                  </>
+                )}
+
+                {/* Workspace Section */}
+                {canAccess('TEAMS') && (
+                  <>
+                    <span className="block px-3 py-1 text-xs font-semibold text-warm-600 uppercase mt-3">Workspace</span>
+                    <Link href="/organizer/workspace" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+                      Workspace
+                    </Link>
+                  </>
+                )}
+              </>
+            ) : (
+              authLinks
+            )}
           </div>
         </nav>
       </div>
