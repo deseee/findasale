@@ -16,6 +16,7 @@ interface User {
   organizerTier?: string;
   notificationPrefs?: Record<string, boolean>;
   onboardingComplete?: boolean;
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -53,7 +54,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           points: payload.points || 0,
           referralCode: payload.referralCode || '',
           organizerTier: payload.organizerTier || 'SIMPLE',
-          onboardingComplete: payload.onboardingComplete ?? false
+          onboardingComplete: payload.onboardingComplete ?? false,
+          createdAt: payload.createdAt
         });
       } catch (e) {
         console.error('Failed to decode token', e);
@@ -79,7 +81,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         points: payload.points || 0,
         referralCode: payload.referralCode || '',
         organizerTier: payload.organizerTier || 'SIMPLE',
-        onboardingComplete: payload.onboardingComplete ?? false
+        onboardingComplete: payload.onboardingComplete ?? false,
+        createdAt: payload.createdAt
       });
     } catch (e) {
       console.error('Failed to decode token', e);

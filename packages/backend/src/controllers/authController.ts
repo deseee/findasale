@@ -212,6 +212,7 @@ export const register = async (req: Request, res: Response) => {
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+        createdAt: user.createdAt.toISOString(),
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -296,6 +297,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+        createdAt: user.createdAt.toISOString(),
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -360,6 +362,7 @@ export const login = async (req: Request, res: Response) => {
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+        createdAt: user.createdAt.toISOString(),
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
