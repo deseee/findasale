@@ -171,6 +171,7 @@ const LoginPage = () => {
               type="button"
               onClick={handlePasskeySignin}
               disabled={passkeyLoading}
+              aria-label="Sign in with Passkey"
               className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 rounded-md shadow-sm bg-white text-sm font-medium text-warm-700 hover:bg-warm-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -195,6 +196,7 @@ const LoginPage = () => {
           <button
             type="button"
             onClick={() => signIn('google', { callbackUrl: '/' })}
+            aria-label="Sign in with Google"
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 rounded-md shadow-sm bg-white text-sm font-medium text-warm-700 hover:bg-warm-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -208,6 +210,7 @@ const LoginPage = () => {
           <button
             type="button"
             onClick={() => signIn('facebook', { callbackUrl: '/' })}
+            aria-label="Sign in with Facebook"
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 rounded-md shadow-sm bg-white text-sm font-medium text-warm-700 hover:bg-warm-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
           >
             <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24" aria-hidden="true">

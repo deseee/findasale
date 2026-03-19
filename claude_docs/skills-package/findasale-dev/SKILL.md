@@ -1,7 +1,8 @@
 ---
-version: 1
-last_updated: 2026-03-09 (Session 108)
 name: findasale-dev
+metadata:
+  version: 2
+  last_updated: "2026-03-18"
 description: >
   FindA.Sale Senior Developer subagent. Implements features, fixes bugs, and
   writes production-quality TypeScript/Next.js/Express/Prisma code for the
@@ -192,6 +193,39 @@ Wrong paths fail silently until Vercel build. Always verify.
 Each missed field or bad import = one full push cycle wasted (commit → push → Railway/Vercel build fail → diagnose → fix → commit → push again). S178 had 4 such cycles in a row. This gate exists to prevent that.
 
 **Origin:** S178 — dev agent used `subscriptionEndsAt` and `stripeCurrentPeriodEnd` (neither exists on Organizer), imported `sonner` (not installed), and used `../../hooks/useAuth` (doesn't exist). Three separate Railway/Vercel build failures resulted. (Added 2026-03-16, Session 178.)
+
+---
+
+## §13 Schema-First Pre-Flight Gate (mandatory — CLAUDE.md §13)
+
+Before touching any `.ts`/`.tsx`/`.prisma` file:
+
+**Step 1 — Schema verify:**
+Read `$PROJECT_ROOT/packages/database/prisma/schema.prisma`. Confirm every model field referenced in the component or hook actually exists. Field not in schema? STOP — do not invent a type, do not add a field inline. Escalate to Patrick or Architect.
+
+**Step 2 — Hook shape verify:**
+Read the relevant hook file (`hooks/use*.ts`). Confirm the return shape before destructuring in a component. Critical distinction:
+- `useState`-based hooks do NOT return `{ isLoading, data }` — they return values directly.
+- `react-query`-based hooks DO return `{ data, isLoading, isError }`.
+- Never assume. Always read. One wrong destructure = one Vercel failure.
+
+**Step 3 — Controller/service type verify:**
+If the component references fields from an API response, read the relevant controller file's return type. Do not derive field names from variable names or guesses.
+
+**Step 4 — Post-edit TypeScript check (mandatory before returning):**
+After every batch of changes, run:
+```bash
+cd packages/frontend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules
+```
+Zero errors required before returning output to main session. Do not return partial fixes. If errors remain, fix them in the same dispatch round.
+
+**Forbidden patterns (immediate red flag — stop and re-read):**
+- `import { anything } from '@findasale/shared'` — forbidden, always causes Vercel failure
+- Destructuring `{ isLoading }` from a hook without verifying it returns that shape
+- Adding a field to a type definition without confirming it exists in schema.prisma
+- Returning from a dispatch with TypeScript errors still present
+
+**Origin:** Sessions 196–202 — seven consecutive Vercel build failures caused by fabricated field names, wrong `@findasale/shared` imports, missing `createdAt` in JWT payload, `isLoading` destructured from a `useState` hook, and incorrect data nesting (`queueData?.data?.data` vs `queueData?.data`). Each failure cost 1–3 repair rounds. This gate is permanent and Patrick-approved.
 
 ---
 

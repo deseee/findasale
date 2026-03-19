@@ -137,6 +137,7 @@ const BottomTabNav = () => {
                   ? 'text-amber-600'
                   : 'text-warm-500 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-100'
               }`}
+              aria-label={tab.label}
               aria-current={active ? 'page' : undefined}
             >
               <div className="relative">
@@ -148,12 +149,12 @@ const BottomTabNav = () => {
                   />
                 )}
                 {tab.label === 'Messages' && unreadData && unreadData.unread > 0 && (
-                  <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                  <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center leading-none" aria-hidden="true">
                     {unreadData.unread > 9 ? '9+' : unreadData.unread}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] mt-0.5 font-medium leading-none">
+              <span className="text-[10px] mt-0.5 font-medium leading-none" aria-hidden="true">
                 {tab.label}
               </span>
             </Link>
