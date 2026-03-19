@@ -132,6 +132,19 @@ import encyclopediaRoutes from './routes/encyclopedia';        // Feature #52: E
 import appraisalRoutes from './routes/appraisals';            // Feature #54: Crowdsourced Appraisal API
 import typologyRoutes from './routes/typology';               // Feature #46: Treasure Typology Classifier
 import syncRoutes from './routes/sync';                        // Feature #69: Local-First Offline Mode
+import checklistRoutes from './routes/checklist';               // Sale Checklist
+import disputeRoutes from './routes/disputes';                  // Disputes Management
+import messageTemplateRoutes from './routes/messageTemplates';  // Message Templates
+import priceHistoryRoutes from './routes/priceHistory';         // Price History Tracking
+import savedSearchRoutes from './routes/savedSearches';         // Saved Searches with notifyOnNew
+import saleWaitlistRoutes from './routes/saleWaitlist';         // Sale Waitlist (sale-level)
+import treasureHuntRoutes from './routes/treasureHunt';         // Daily Treasure Hunt
+import trendingRoutes from './routes/trending';                 // Trending Items & Sales
+import unsubscribeRoutes from './routes/unsubscribe';           // Unsubscribe / Preferences
+import shopperReferralRoutes from './routes/shopperReferral';   // Feature #7: Shopper Referral Rewards
+import earningsPdfRoutes from './routes/earningsPdf';           // Payout PDF Export
+import abTestRoutes from './routes/abTest';                     // A/B Testing Infrastructure
+import feedbackRoutes from './routes/feedback';                 // User Feedback
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -339,6 +352,19 @@ app.use('/api/encyclopedia', encyclopediaRoutes);                     // Feature
 app.use('/api/appraisals', appraisalRoutes);                          // Feature #54: Crowdsourced Appraisal API
 app.use('/api', typologyRoutes);                                       // Feature #46: Treasure Typology Classifier
 app.use('/api/sync', syncRoutes);                                    // Feature #69: Local-First Offline Mode
+app.use('/api/checklist', checklistRoutes);                            // Sale Checklist
+app.use('/api/disputes', disputeRoutes);                               // Disputes Management
+app.use('/api/message-templates', messageTemplateRoutes);              // Message Templates
+app.use('/api/items', priceHistoryRoutes);                             // Price History (sub-routes under /api/items/:id/price-history)
+app.use('/api/saved-searches', savedSearchRoutes);                     // Saved Searches with notifyOnNew
+app.use('/api/sale-waitlist', saleWaitlistRoutes);                     // Sale Waitlist (sale-level)
+app.use('/api/treasure-hunt', treasureHuntRoutes);                     // Daily Treasure Hunt
+app.use('/api/trending', trendingRoutes);                              // Trending Items & Sales
+app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
+app.use('/api/shopper-referral', shopperReferralRoutes);               // Feature #7: Shopper Referral Rewards
+app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
+app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure
+app.use('/api/feedback', feedbackRoutes);                              // User Feedback
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
