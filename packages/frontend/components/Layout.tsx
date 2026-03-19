@@ -231,6 +231,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
+              {/* Show Explore/Browse for all users, Map for all users */}
+              {isClient && user && (user.role === 'USER' || user.role === 'ADMIN') && (
+                <>
+                  <Link href="/" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Explore</Link>
+                  <Link href="/map" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Map</Link>
+                </>
+              )}
+              {/* Static nav links for all users */}
               {staticNavLinks.map(({ href, label }) => (
                 <Link key={href} href={href} className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">{label}</Link>
               ))}
