@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-19T12:09:52.821Z*
+*Generated at 2026-03-19T16:10:19.283Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -17,11 +17,11 @@ See report for details.
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
 ⚠ 9+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/busy-compassionate-keller/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
-  /sessions/busy-compassionate-keller/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/busy-compassionate-keller/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
-  /sessions/busy-compassionate-keller/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
-  /sessions/busy-compassionate-keller/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
+  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
+  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
+  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
 
 ## Project File Tree
 ```
@@ -1083,6 +1083,8 @@ See report for details.
 │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
 │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
 │   ├── feature-notes/ (18 files)
+│   ├── features/
+│   │   └── 65-progressive-disclosure.md
 │   ├── guides/ (0 files)
 │   ├── health-reports/ (6 files)
 │   ├── improvement-memos/ (1 files)
@@ -1094,8 +1096,8 @@ See report for details.
 │   │   └── 2026-03.md
 │   ├── next-session-brief.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (43 files)
-│   ├── research/ (9 files)
+│   ├── operations/ (44 files)
+│   ├── research/ (10 files)
 │   ├── self-healing/ (1 files)
 │   ├── self_healing_skills.md
 │   ├── session-log-archive.md
@@ -1111,6 +1113,8 @@ See report for details.
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
 │   │   └── add-items-ux-audit-2026-03-15.md
 │   └── workflow-retrospectives/ (3 files)
+├── conversation-defaults-SKILL-v8.md
+├── conversation-defaults-SKILL-v8.md.tmp.35852.1773930503120
 ├── conversation-defaults-SKILL.md
 ├── next
 ├── package-lock.json
@@ -1168,7 +1172,7 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (155 files)
+│   │   ├── components/ (156 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (3 files)
 │   │   ├── hooks/ (48 files)

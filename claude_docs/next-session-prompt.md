@@ -1,62 +1,40 @@
-# Next Session Resume Prompt — Session 205 (QA Blitz)
+# Next Session Resume Prompt — Session 206 (Chrome + Nav + Human Prep)
 *Written: 2026-03-19*
 *Session ended: normally*
 
 ## Resume From
-S204 complete. Patrick may still need to push progressive disclosure code + roadmap changes. Check git log for latest commit. If the push block below hasn't been run, give it to Patrick first.
+S205 complete. Patrick needs to push 2 files (index.ts + roadmap.md). Check git log for `S205` commit. If not pushed, give Patrick the push block.
 
 ## Pending Push Block (if not already done)
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/TierGatedNav.tsx packages/frontend/components/Layout.tsx packages/frontend/pages/organizer/dashboard.tsx claude_docs/features/65-progressive-disclosure.md claude_docs/strategy/roadmap.md claude_docs/operations/roadmap-reconciliation-2026-03-19.md claude_docs/research/affiliate-program-research-2026-03-19.md
-git commit -m "S204: progressive disclosure nav, tier-gated dashboard, roadmap v56 audit"
+git add packages/backend/src/index.ts claude_docs/strategy/roadmap.md
+git commit -m "S205: register 13 dead backend routes, QA blitz — all 71 features verified"
 .\push.ps1
 ```
 
-Then delete junk files:
+Also delete 3 junk untracked files:
 ```powershell
-git rm claude_docs/operations/patrick-checklist.md claude_docs/operations/automated-checks.md claude_docs/operations/agent-task-queue.md
-git commit -m "S204: remove duplicate ops files created in error"
-.\push.ps1
+Remove-Item claude_docs\operations\patrick-checklist.md, claude_docs\operations\automated-checks.md, claude_docs\operations\agent-task-queue.md
 ```
 
-## S205 Mission: QA Blitz — Ship Everything
+## S206 Mission: Chrome + Nav + Human Prep
 
-Goal: dispatch parallel QA/test agents to move as many features as possible from 📋PEND to ✅ in QA/Chrome/Nav columns. Make features Human-ready for Patrick's E2E testing.
+QA column is now ✅ for all features except #65/#19/#70. The next QA frontiers are Chrome, Nav, and Human columns.
 
 ### Strategy
-1. Read roadmap.md shipped tables. Count all 📋PEND features by section.
-2. Group into batches by section (max 3 agents per parallel dispatch per Rule 11).
-3. For each batch, dispatch findasale-qa agents with specific feature lists to verify:
-   - API endpoints respond correctly (200/401/403 as expected)
-   - Frontend pages render without errors
-   - Nav links exist and work
-   - Dark mode renders
-   - TypeScript compiles clean
-4. After QA agents return, update roadmap columns (QA/Chrome/Nav) for each verified feature.
-5. Any bugs found → dispatch findasale-dev to fix immediately, then re-verify.
+1. **Chrome column** — Use Chrome MCP to verify features render in browser. Prioritize organizer flows first (create sale → add items → publish → holds → POS).
+2. **Nav column** — Audit Layout.tsx/BottomTabNav against roadmap. Many features marked ✅ Nav in roadmap but should be verified.
+3. **Human column** — Create an E2E testing guide for Patrick. Organize by user flow (organizer onboarding, item management, shopper discovery, gamification, payments).
+4. **#19 Passkey re-QA** — End-to-end verification after P0 race condition fix.
+5. **#70 Live Sale Feed** — Needs live Socket.io testing.
 
-### Priority Order for QA
-1. **Wave 5 incomplete** — #70 Live Sale Feed (QA 📋), #47 UGC Photo Tags (Chrome 📋)
-2. **Organizer Core** — ~25 features with 📋PEND QA
-3. **Shopper Discovery** — ~15 features with 📋PEND QA
-4. **Shopper Engagement** — ~12 features with 📋PEND QA
-5. **Gamification** — ~8 features with 📋PEND QA
-6. **Marketing/Brand** — ~8 features with 📋PEND QA
+### What S205 Accomplished
+- P0: 13 dead backend routes registered in index.ts (were returning 404)
+- QA Blitz: All 71+ shipped features verified (routes, pages, TypeScript)
+- Roadmap v57: ~80 features upgraded 📋PEND → ✅ in QA column
 
-### Install Before Starting
-Patrick needs to install conversation-defaults v8 (with Rule 29 — roadmap formatting enforcement). File: `conversation-defaults-SKILL-v8.md` in repo root.
-
-## What Was Completed S204
-- Migrations: all 3 stuck Neon migrations APPLIED
-- Shopper nav: Explore + Map in desktop nav for shoppers
-- Encyclopedia seed: 15 entries + seed.ts bug fixes (TS2448 + P2003)
-- #65 Progressive Disclosure: spec + TierGatedNav + Layout + dashboard restructure
-- Roadmap v56: full audit, formatting rules, Chrome/Nav/Human restored, Role columns added, Coupons + Affiliate slotted
-- Innovation: Affiliate Program research (phased approach)
-- conversation-defaults v8 with Rule 29 drafted
-
-## Open Decisions (NOT for S205 — park these)
+### Open Decisions (NOT for S206 — park these)
 - Hunt Pass placement within Premium tier
 - Coupon two-tier scope
 - Affiliate referral badges + loyalty passport fleshing out

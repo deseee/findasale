@@ -16,6 +16,24 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### Session 205 — 2026-03-19 — QA Blitz (All 71+ Features) + P0 Dead Route Fix
+
+**Worked on:** (1) QA Blitz — audited every shipped feature across all 9 roadmap sections. Dispatched parallel QA agents for Organizer Core, Shopper Discovery+Engagement+Gamification, and Analytics+Marketing+Sales Tools+Platform/AI+Wave 5. Found P0: 16 backend route files existed but were NOT registered in index.ts — endpoints returned 404. (2) P0 Fix — dispatched findasale-dev to register 13 routes in index.ts (3 were already accessible via sub-routers or duplicates). Routes: checklist, disputes, messageTemplates, priceHistory, savedSearches, saleWaitlist, treasureHunt, trending, unsubscribe, shopperReferral, earningsPdf, abTest, feedback. TypeScript compiles clean. (3) Roadmap v57 — upgraded ~80 features from 📋PEND → ✅ in QA column. Only 3 features not at ✅: #65 Tiers (⚠️), #19 Passkey (🔧), #70 Live Feed (📋).
+
+**Decisions:** All 📋PEND features verified via code-level audit (route registration, page existence, TS compilation). Chrome/Nav/Human columns untouched — those require browser testing. priceHistory mounted at `/api/items` as second router (Express merges). abTest mounted at `/api/ab` (frontend uses `/ab/variant`).
+
+**Token efficiency:** 3 QA agents + 1 dev agent + 1 records agent (API error mid-run, finished manually) + 1 context-maintenance agent. Efficient — bulk QA work parallelized.
+
+**Token burn:** ~120k tokens (est.), 3 checkpoints logged.
+
+**Next up:** Chrome column verification via browser testing. Nav column audit. Human E2E prep. #19 Passkey re-QA. #70 Live Feed testing.
+
+**Blockers:** None. Patrick push pending for 2 files (index.ts + roadmap.md). 3 junk files to delete.
+
+**Files changed:** `packages/backend/src/index.ts` (13 imports + 13 app.use), `claude_docs/strategy/roadmap.md` (v57, ~80 QA upgrades) | Compressions: 0 | Subagents: 5 (qa×2, dev×1, records×1, context×1) | Push method: Patrick PS1
+
+---
+
 ## Session 199 — 2026-03-18 — Full Docs Audit (HIGH/MEDIUM Findings) + #51 Ripples (Complete Build) + #42 Voice-Button + #60 Sprint 2 + #19 P0 Fix
 
 **Worked on:** (1) Periodic docs audit (447 files scanned, findasale-records). HIGH findings: archive-old/ (134 files already re-filed, stale duplicate — delete). roadmap.old.md orphan (move to archive/feature-notes/). MEDIUM findings: STATE.md at 200 lines (gate 250, trim before next session). packages/shared/CLAUDE.md empty (populate or delete). archive-index.json out of sync. Full report saved to claude_docs/audits/periodic-docs-audit-2026-03-18.md. Audit categories: stale docs, rule violations, orphaned files. Roadmap-STATE alignment PASS. CLAUDE.md drift PASS. CORE.md compliance PASS. Archive structure PASS. (2) #51 Sale Ripples — Full stack build (findasale-dev). Schema: SaleRipple model (id, saleId, type, userId, metadata, createdAt) + migrations + relations. Backend: rippleService (recordRipple, getSummary, getTrend), rippleController (3 endpoints), ripples.ts route (POST/GET). Frontend: useRipples hook, RippleIndicator component (auto-records views on mount), RippleCard component (4-stat display), ripples.tsx organizer page (trend analytics with hourly chart). 9 new files, 4 modified (schema, index.ts, sales.ts, shared/index.ts). **Patrick action: Neon migration + prisma generate outstanding.** (3) #42 Voice-to-Tag Button (findasale-dev). VoiceTagButton.tsx (microphone button with 3-state UI: idle/listening/processing). useVoiceTag.ts hook (Web Speech API integration). Browser compat fallback for unsupported browsers. Backend route /api/voice/extract already exists (S187). Ready for integration into add-items page. (4) #60 Premium Tier Bundle Sprint 2 (findasale-dev). 5 new files: useSubscription hook, UsageBar component, TierComparisonTable component, PremiumCTA card, organizer/premium.tsx page. Files modified: Layout.tsx (nav link), subscription.tsx (usage overview). Features: tier comparison matrix, benefit cards per tier, FAQ accordion, tier upgrade CTA (SIMPLE-only). Usage stats endpoint stubbed (real tracking optional — Sprint 3). (5) #19 Passkey P0 Fix (findasale-dev dispatch). Concurrent session race condition: authenticateBegin used fixed key 'passkey-auth-current' for challenge storage — concurrent logins overwrote each other's challenges. Fix: session-based key replaces fixed key. Also documented: WEBAUTHN_RP_ID/WEBAUTHN_ORIGIN env vars (silent failure in production if missing). 404→401 for unknown credential (enumeration protection). Counter regression logging (optional). **Fix dispatched; confirmation + merge pending.** (6) Vercel build fix — encyclopedia/[slug].tsx onClick→href on EmptyState cta prop. Pushed (MCP). (7) MESSAGE_BOARD.json untracked — git rm --cached applied + committed.

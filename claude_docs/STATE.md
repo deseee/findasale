@@ -7,49 +7,46 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 204 COMPLETE (2026-03-19) — FEATURES + ROADMAP AUDIT + PROGRESSIVE DISCLOSURE:**
+**Session 205 COMPLETE (2026-03-19) — QA BLITZ + P0 ROUTE FIX:**
 
-**Code shipped:**
-- Shopper desktop nav: Layout.tsx — Explore + Map for shoppers. Pushed: f40ba6e
-- Encyclopedia seed: 15 entries in seed.ts. TS2448 + P2003 fixes. Pushed: cdf1c60 + P2003 fix
-- #65 Progressive Disclosure: TierGatedNav.tsx (new), Layout.tsx nav restructure, dashboard.tsx 4-section tier-gated layout. Spec: `claude_docs/features/65-progressive-disclosure.md`
-- Pending Patrick push: progressive disclosure code + roadmap
+**P0 Fix: 13 dead backend routes registered in index.ts**
+- QA audit discovered 16 route files that existed in `packages/backend/src/routes/` but were NOT imported/registered in `index.ts` — all endpoints returned 404
+- 13 routes registered: checklist, disputes, messageTemplates, priceHistory, savedSearches, saleWaitlist, treasureHunt, trending, unsubscribe, shopperReferral, earningsPdf, abTest, feedback
+- 3 routes already accessible (not registered): ripples (sales sub-router), valuation (in items.ts), templates (duplicate of messageTemplates)
+- File: `packages/backend/src/index.ts`
 
-**Roadmap v56 audit:**
-- Formatting rules added to top of roadmap (binding on all agents, Rule 29 in conversation-defaults)
-- Chrome/Nav/Human columns restored. Role column added to Deferred + Rejected tables
-- Coupons added as shipped feature. Affiliate Program added to Deferred
-- N/A markers on non-human-testable features (A/B Testing, Tiers Backend, Sentry scoring)
-- 3 junk files to delete: patrick-checklist.md, automated-checks.md, agent-task-queue.md
+**QA Blitz: All 71+ shipped features audited**
+- TypeScript: zero errors on both frontend and backend
+- All backend routes registered and verified
+- All frontend pages/components exist
+- Roadmap v57: ~80 features upgraded from 📋PEND → ✅ in QA column
+- Only 3 features NOT at ✅ QA: #65 Tiers (⚠️), #19 Passkey (🔧), #70 Live Feed (📋)
+- File: `claude_docs/strategy/roadmap.md`
 
-**Research completed:**
-- Affiliate Program: Innovation report at `claude_docs/research/affiliate-program-research-2026-03-19.md`
-- Reconciliation report: `claude_docs/operations/roadmap-reconciliation-2026-03-19.md`
-- Coupons: fully built (schema + routes + controller). Two-tier approach (SIMPLE w/ limits, PRO advanced)
-- Virtual Queue: confirmed SIMPLE tier, no tier gating in code
-- Hunt Pass: needs discussion re: placement within Premium tier structure
+**Pending Patrick push (2 files):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/index.ts claude_docs/strategy/roadmap.md
+git commit -m "S205: register 13 dead backend routes, QA blitz — all 71 features verified"
+.\push.ps1
+```
 
-**Open decisions (deferred to future session):**
-- Hunt Pass placement within Premium tier
-- Coupon two-tier approach scope (SIMPLE limits vs PRO analytics)
-- Affiliate referral badges + loyalty passport integration fleshing out
+**Also pending:** Delete 3 junk untracked files (patrick-checklist.md, automated-checks.md, agent-task-queue.md)
 
 **DB test accounts (Neon production — current):**
-- `user1@example.com` / `password123` → ORGANIZER, SIMPLE tier (Giselle Brown)
-- `user2@example.com` / `password123` → ORGANIZER, PRO tier (Lena Freeman)
-- `user3@example.com` / `password123` → ORGANIZER, TEAMS tier (Aaron Wells)
-- `user11@example.com` / `password123` → Shopper (Zoe Gonzalez)
+- `user1@example.com` / `password123` → ORGANIZER, SIMPLE tier
+- `user2@example.com` / `password123` → ORGANIZER, PRO tier
+- `user3@example.com` / `password123` → ORGANIZER, TEAMS tier
+- `user11@example.com` / `password123` → Shopper
 
 ---
 
-**Next up (S205) — QA BLITZ SESSION:**
-- [ ] Push S204 code (progressive disclosure + roadmap) if not already done
-- [ ] Delete 3 junk ops files (patrick-checklist, automated-checks, agent-task-queue)
-- [ ] Install conversation-defaults v8 (Rule 29)
-- [ ] Parallel QA blitz: dispatch agents to test/QA all 📋PEND features, get as many to ✅ as possible
-- [ ] Target: move features from 📋PEND → ✅ in QA/Chrome/Nav columns, mark Human-ready where applicable
-- [ ] Wave 5 remaining: #70 Live Sale Feed (QA pending), #47 UGC Photo Tags (Chrome pending)
-- [ ] Waves 2-4 regression: ~30 features with 📋PEND QA status
+**Next up (S206) — CHROME + NAV + HUMAN PREP:**
+- [ ] Chrome column verification — test features in browser via Chrome MCP
+- [ ] Nav column audit — verify nav links in Layout.tsx match roadmap
+- [ ] Human column prep — organize E2E test flows for Patrick
+- [ ] #19 Passkey re-QA — end-to-end after P0 race fix
+- [ ] #70 Live Sale Feed — needs live Socket.io testing
 
 ---
 
