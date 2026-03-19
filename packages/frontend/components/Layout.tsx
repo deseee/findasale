@@ -405,7 +405,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
 
         {/* Drawer nav links */}
-        <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-1" aria-label="Mobile navigation">
+        <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-1" aria-label="Mobile menu">
           {staticNavLinks.map(({ href, label }) => (
             <Link
               key={href}
