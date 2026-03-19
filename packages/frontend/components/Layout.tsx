@@ -124,7 +124,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Performance
             </Link>
-            <Link href="/organizer/neighborhoods" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/neighborhoods" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
               Neighborhoods
             </Link>
           </>
@@ -281,7 +281,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         <Link href="/organizer/reputation" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Reputation</Link>
                         <Link href="/organizer/ugc-moderation" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">UGC Moderation</Link>
                         <Link href="/organizer/performance" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Performance</Link>
-                        <Link href="/organizer/neighborhoods" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Neighborhoods</Link>
+                        <Link href="/neighborhoods" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Neighborhoods</Link>
                       </>
                     )}
                     {(user.role === 'USER' || user.role === 'ADMIN') && (
