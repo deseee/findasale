@@ -45,6 +45,14 @@ export const usePhotosForSale = (saleId: number) => {
 };
 
 /**
+ * Alias for usePhotosForSale - accepts string or number saleId
+ */
+export const useUGCPhotos = (saleId: string | number) => {
+  const numericSaleId = typeof saleId === 'string' ? parseInt(saleId, 10) : saleId;
+  return usePhotosForSale(numericSaleId);
+};
+
+/**
  * Get approved photos for a specific item
  */
 export const usePhotosForItem = (itemId: number) => {
