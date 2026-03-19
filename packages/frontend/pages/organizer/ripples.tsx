@@ -229,11 +229,11 @@ export default function RipplesPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="hour"
-                    tickFormatter={(value) => new Date(value).toLocaleTimeString()}
+                    tickFormatter={(value: string) => new Date(value).toLocaleTimeString()}
                   />
                   <YAxis />
                   <Tooltip
-                    labelFormatter={(value) => new Date(value).toLocaleString()}
+                    labelFormatter={(value: string) => new Date(value).toLocaleString()}
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
                   />
                   <Legend />
