@@ -146,22 +146,32 @@ async function main() {
   const defaultPassword = await bcrypt.hash('password123', saltRounds);
 
   // Clear existing data in correct dependency order
+  // Dependency chain:
+  // - All child tables with FK to User/Organizer/Sale/Badge → delete first (leaf tables)
+  // - Sale, Badge, Organizer → delete after their children
+  // - User → delete last (it's the root)
   console.log('🗑️  Clearing existing data...');
   await prisma.$transaction([
+    // Leaf tables: no FK dependents on them
     prisma.bid.deleteMany(),
     prisma.lineEntry.deleteMany(),
     prisma.affiliateLink.deleteMany(),
+    prisma.pointsTransaction.deleteMany(),
     prisma.review.deleteMany(),
     prisma.saleSubscriber.deleteMany(),
     prisma.purchase.deleteMany(),
     prisma.favorite.deleteMany(),
     prisma.userBadge.deleteMany(),
-    prisma.item.deleteMany(),
-    prisma.sale.deleteMany(),
     prisma.referral.deleteMany(),
-    prisma.organizer.deleteMany(),
-    prisma.user.deleteMany(),
+    prisma.encyclopediaEntry.deleteMany(),
+    // Intermediate table
+    prisma.item.deleteMany(),
+    // Parent tables (after children)
+    prisma.sale.deleteMany(),
     prisma.badge.deleteMany(),
+    prisma.organizer.deleteMany(),
+    // User is the root, delete last
+    prisma.user.deleteMany(),
     prisma.feeStructure.deleteMany(),
   ]);
 
