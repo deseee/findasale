@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-19 (v57 — S205 QA Blitz: upgraded ~80 features from 📋PEND to ✅ QA after full audit. Fixed 13 dead backend routes in index.ts. All shipped features now QA-verified except #65 Tiers ⚠️, #19 Passkey 🔧, #70 Live Feed 📋.)
+**Last Updated:** 2026-03-19 (v59 — Added 6 Design Polish backlog items #76–#81 from design vision exploration: Skeleton Loaders, Sale Published Celebration, Inspiration Page, Earnings Animation, Purchase Confirmation Redesign, Empty State Audit. All spec'd in `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md`.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -252,7 +252,17 @@ Production MVP launched Q1 2026.
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
+| 72 | Dual-Role Account Schema | BOTH | SIMPLE | — | — | — | — | — | — | — | `roles[]` array + `subscriptions[]` table. Replaces any single `role` enum. Architect ADR required before dev. Gate for #73, #74, #75. |
+| 73 | Two-Channel Notification System | BOTH | SIMPLE | — | — | — | — | — | — | — | OPERATIONAL (organizer) + DISCOVERY (shopper) channels. `notificationChannel` as first-class field on all notification records. Extends existing push/inbox features. Architect ADR required. Depends on #72. |
+| 74 | Role-Aware Registration Consent Flow | BOTH | FREE | — | — | — | — | — | — | — | Separate opt-in checkboxes at signup: "sale management alerts" (ORG) + "nearby sale alerts" (SHO). Legal review of consent copy required before dev. Depends on #72. |
+| 75 | Tier Lapse State Logic | ORG | PRO | — | — | — | — | — | — | — | When organizer sub lapses: suspend organizer features, retain shopper features. Re-enables on billing resume. Full freeze is not the default. Extends #65. Depends on #72. |
 | 56 | Printful Merch Store | BOTH | FREE/PAID_ADDON | — | — | — | — | — | — | — | Drop-shipped branded merch via Printful API. Zero inventory risk. 1 sprint est. |
+| 76 | Skeleton Loaders — Item Grids | BOTH | FREE | — | — | — | — | — | — | — | Replace spinners with ghost card layouts across all item/sale grids. No schema changes — reads existing `Item.photoUrls[]`, `Item.title`, `Item.price`. UI-only. Highest perceived-performance ROI. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
+| 77 | Sale Published Celebration Screen | ORG | SIMPLE | — | — | — | — | — | — | — | Full-screen moment when organizer publishes a sale — sale name, cover photo, "You're live" + confetti. No schema changes — triggers on `Sale.status → PUBLISHED`. Replaces generic toast. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
+| 78 | Inspiration Page — Item Gallery | SHO | FREE | — | — | — | — | — | — | — | Browseable masonry grid of best item photos from active/upcoming sales within radius. Shoppable — taps to item detail. No new schema: queries `Item` (photoUrls, aiConfidence, category, status=AVAILABLE, draftStatus=PUBLISHED) + `Sale` (status=PUBLISHED, startDate, endDate) + `Organizer.businessName`. MVP: no filters, 2-col mobile / 3-col desktop, entry from shopper home. V2: category filter, Save to Wishlist inline, organizer attribution. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
+| 79 | Earnings Counter Animation | ORG | SIMPLE | — | — | — | — | — | — | — | Dashboard earnings number rolls up to current value (Revolut-style) on open/refresh. No schema changes — reads existing `Purchase` aggregates. Frontend-only. Pairs with #77 to make dashboard feel alive. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
+| 80 | Purchase Confirmation Redesign | SHO | FREE | — | — | — | — | — | — | — | Redesign shopper success screen after purchase — item photo hero, item title, seller name, pickup details, designed layout. No schema changes: reads `Purchase` + `Item.photoUrls[]`, `Item.title`, `Sale.title`, `Organizer.businessName`. Replaces generic confirmation text. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
+| 81 | Empty State Audit + Copy Pass | BOTH | FREE | — | — | — | — | — | — | — | Inventory all empty states across organizer and shopper flows. Write human-voice copy for each (no dead ends — every empty state gets a CTA and a human sentence). UX/copy-only, no schema or API changes. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
 
 ---
 
@@ -380,6 +390,9 @@ Production MVP launched Q1 2026.
 - **Heatmap density:** Radius-based (1–3 mile), pre-computed grid tiles every 6h, 7-day rolling window.
 - **Background removal:** On-demand Cloudinary `b_remove` transform only. Primary photo. No batch job.
 - **Holds grouping:** By-item in schema, grouped-by-buyer in display. No junction table.
+- **Reputation scoring:** Two separate scores — organizer reputation (sale quality, reliability) and shopper reputation (buyer reliability, pickup behavior). Schema must accommodate both; shopper score can be deferred but field must exist from day one. Single-score merge not permitted after schema is locked.
+- **Tier lapse state:** Lapsing organizer subscription suspends organizer-only features. Shopper features retained. Full account freeze is not the default behavior. Re-activation on billing resume restores organizer features immediately.
+- **Notification defaults:** Both notification channels default to opt-in. Shopper discovery alerts and organizer operational alerts are separate consent items at registration. No "all on" default for either channel.
 Roadmap (bottom) — 7 locked UX/product decisions from S155 (holds expiry, health score, tag vocabulary, social templates, heatmap density, background removal, holds grouping)
 claude_docs/architecture/ — 13 ADR files covering feature-specific technical specs (#13/#60 Teams Bundle, #17/#19 Bid Bot/Passkey, #30/#46/#69 AI/Offline, #40/#44/#48 Hubs/Trail, #52/#53/#54 Encyclopedia/Aggregator/Appraisal, #65 Tiers, #68 Command Center)
 claude_docs/feature-decisions/ — 7 files covering architecture choices (camera workflow, cash fee collection, push coordinator, manager subagent)
