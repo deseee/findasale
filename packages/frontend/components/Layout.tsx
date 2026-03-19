@@ -259,6 +259,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                     <span className="text-warm-900 dark:text-warm-100 text-sm">Hi, {user.name || user.email}</span>
                     {user.role === 'ORGANIZER' && (
                       <>
+                        <Link href="/organizer/dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Dashboard</Link>
+                        <Link href="/plan" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Plan a Sale</Link>
                         {canAccess('PRO') && (
                           <Link href="/organizer/command-center" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Command Center</Link>
                         )}
@@ -277,6 +279,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         {canAccess('TEAMS') && (
                           <Link href="/organizer/workspace" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Workspace</Link>
                         )}
+                        <div className="border-l border-warm-300 dark:border-gray-700 pl-2 ml-2 flex items-center gap-2">
+                          <Link href="/organizer/bounties" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Bounties</Link>
+                          <Link href="/organizer/reputation" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Reputation</Link>
+                          <Link href="/organizer/performance" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Performance</Link>
+                        </div>
                       </>
                     )}
                     {(user.role === 'USER' || user.role === 'ADMIN') && (
