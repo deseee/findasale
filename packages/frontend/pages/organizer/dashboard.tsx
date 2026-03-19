@@ -417,7 +417,7 @@ const OrganizerDashboard = () => {
               ⭐ Reputation
             </Link>
             <Link
-              href="/organizer/neighborhoods"
+              href="/neighborhoods"
               className="bg-teal-100 hover:bg-teal-200 text-teal-900 font-bold py-2 px-6 rounded-lg transition-colors"
             >
               🏘️ Neighborhoods
