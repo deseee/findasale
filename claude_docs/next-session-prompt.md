@@ -1,34 +1,31 @@
-# Next Session Resume Prompt — Session 203 Handoff
-*Written: 2026-03-18T22:00:00Z*
+# Next Session Resume Prompt — Session 204 Handoff
+*Written: 2026-03-19T23:30:00Z*
 *Session ended: normally*
 
 ## Resume From
-Check if Patrick ran the 3 stuck Neon migration resolve commands (in STATE.md). If not, give him those first. Then: shopper nav consistency dispatch to findasale-dev, then encyclopedia/challenges seed content.
+Check if Patrick pushed the P2003 deletion order fix (seed.ts cleanup section reorder) and re-ran seed successfully. If yes, continue to #65 Progressive Disclosure spec clarification. If no, provide him the push block.
 
 ## What Was In Progress
-- **3 stuck Neon migrations** — Patrick has the resolve commands in STATE.md. NOT a code fix — SQL on disk is already correct. Just state reset in _prisma_migrations + redeploy.
-- **Shopper nav consistency** — desktop/mobile gap not yet dispatched.
-- **#65 Progressive Disclosure** — no feature file found; needs spec clarification.
+- **P2003 seed.ts fix** — PointsTransaction + EncyclopediaEntry added to cleanup, deletion order reordered for FK compliance. Pending Patrick push.
+- **#65 Progressive Disclosure** — no feature file found; needs spec clarification from product.
+- **P2 UX fixes** — mobile dashboard simplification, Manage Sales dropdown, tier/rewards card repositioning (not yet assigned).
 
 ## What Was Completed This Session
-- P1 Layout.tsx: restored SIMPLE organizer desktop nav (Dashboard, Plan a Sale, Bounties/Reputation/Performance)
-- A11Y P0: BottomTabNav aria-labels, login.tsx social button labels, Layout.tsx nav landmarks. TSC clean.
-- Migration audit: #51 Ripples applied; 3 others stuck (SQL OK, _prisma_migrations state needs reset)
-- findasale-dev SKILL.md + .skill updated with §13 Schema-First Pre-Flight Gate
-- STATE.md trimmed from 246 to ~110 lines
+- Migration status: All 3 stuck Neon migrations (ugc_photos, fraud_signals, treasure_trail) now APPLIED. Patrick ran resolve commands successfully. No blockers for future migrate deploy.
+- Shopper desktop nav: Layout.tsx updated. Explore + Map links now show for shopper users in desktop nav, matching mobile BottomTabNav. TypeScript clean. Pushed: commit f40ba6e.
+- Encyclopedia seed: 15 published entries added (Depression Glass, MCM Furniture, Victorian Antiques, Vintage Clothing, Art Deco, Tools, Pottery, Americana, Vinyl Records, Jewelry, Books, Estate Sale Shopping 101, Lighting, Rugs). Achievements + Challenges auto-populated. Fixed TS2448 block-scoped var error. Pushed: commit cdf1c60.
 
 ## Environment Notes
-- All S203 changes pushed to main (commits aa06fee, c317773)
-- Vercel + Railway: green, no known issues
-- Patrick needs to install updated findasale-dev.skill via Cowork UI
-- 3 stuck migrations on Neon BLOCK any future migrate deploy — resolve first
+- S204 changes pushed: f40ba6e (shopper nav), cdf1c60 (encyclopedia seed + TS2448 fix)
+- Vercel + Railway: green
+- P2003 seed fix awaiting Patrick push
+- Migration blockers cleared — ready for next schema work
 
 ## Exact Context
-Migration resolve commands:
-
-
 DB test accounts (Neon, current):
 - user1@example.com / password123 → ORGANIZER SIMPLE
 - user2@example.com / password123 → ORGANIZER PRO
 - user3@example.com / password123 → ORGANIZER TEAMS
 - user11@example.com / password123 → Shopper
+
+Next priorities: P2003 seed fix confirmation → #65 spec clarification → Patrick E2E testing → P2 UX → Wave 5 Sprint 3

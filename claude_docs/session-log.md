@@ -2,6 +2,28 @@
 
 ## Recent Sessions
 
+### 2026-03-19 · Session 204
+
+**Migration Audit Complete + Shopper Nav + Encyclopedia Seed**
+
+**Worked on:**
+- Confirmed 3 stuck Neon migrations all APPLIED: ugc_photos, fraud_signals, treasure_trail (Patrick ran resolve commands successfully). No blockers for future migrate deploy.
+- Shopper desktop nav: Updated Layout.tsx to show Explore + Map links for shopper users (role USER/ADMIN) in desktop nav, matching mobile BottomTabNav. TypeScript clean. Pushed: commit f40ba6e.
+- Encyclopedia seed: Added 15 published entries to packages/backend/seed.ts (Depression Glass, MCM Furniture, Victorian Antiques, Vintage Clothing, Art Deco, Tools, Pottery, Americana, Vinyl Records, Jewelry, Books, Estate Sale Shopping 101, Lighting, Rugs). Achievements and Challenges auto-populated by their services. Fixed TS2448 block-scoped variable error by moving encyclopedia block after users creation. Pushed: commit cdf1c60.
+- Seed.ts P2003 fix: Added PointsTransaction + EncyclopediaEntry to cleanup section, reordered deletions for FK constraint compliance. Pending Patrick push.
+
+**QA Results:**
+- Shopper nav consistency: PASS
+- Encyclopedia seed entries: READY (waiting for P2003 fix push to verify seed runs)
+
+**Decisions:** Migration state reset now complete — focus shifts to feature cleanup and P2 UX work.
+
+**Next up:** Confirm P2003 fix push, #65 Progressive Disclosure spec clarification, Patrick E2E testing pass, P2 UX fixes, Wave 5 Sprint 3 work
+
+**Blockers:** P2003 seed fix pending Patrick push
+
+---
+
 ### 2026-03-18 · Session 203
 
 **P1 Nav Regression Fix + A11Y P0 + Migration Audit + Skill Update**

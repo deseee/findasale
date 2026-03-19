@@ -7,44 +7,27 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 203 COMPLETE (2026-03-18) — P1 NAV REGRESSION FIX + A11Y P0 + MIGRATION AUDIT + SKILL UPDATE:**
+**Session 204 COMPLETE (2026-03-19) — MIGRATION APPLIED + SHOPPER NAV + ENCYCLOPEDIA SEED:**
 
-**P1 Layout.tsx regression fix:**
-- Restored Dashboard + Plan a Sale + Bounties/Reputation/Performance to desktop right-side nav for SIMPLE organizers (accidentally removed during S202 P0 UX restructure)
-- TypeScript clean. Pushed: commits aa06fee + c317773
+**Migration Status:**
+- All 3 stuck Neon migrations confirmed APPLIED: ugc_photos, fraud_signals, treasure_trail (2026-03-18/19)
+- No blockers for future `migrate deploy` calls
+- Patrick ran resolve commands successfully in S204
 
-**Accessibility P0 fixes (WCAG 2.1 AA):**
-- `BottomTabNav.tsx` — aria-label + aria-hidden on visible label spans
-- `login.tsx` — aria-label on Passkey, Google, Facebook buttons
-- `Layout.tsx` — Main navigation + Mobile menu landmark labels
-- H1 headings: audit confirmed all 3 targeted pages already correct
-- TypeScript clean. Pushed: commit c317773
+**Shopper desktop nav (Explore + Map links):**
+- Layout.tsx updated: Explore + Map now show for shopper users (role USER/ADMIN) in desktop right nav, matching mobile BottomTabNav behavior
+- TypeScript clean. Pushed: commit f40ba6e
 
-**findasale-dev SKILL.md §13 gate:**
-- Schema-First Pre-Flight Gate added to SKILL.md + repackaged as .skill
-- Patrick: install updated skill via Cowork UI (findasale-dev.skill in claude_docs/skills-package/)
+**Encyclopedia seed data (15 published entries):**
+- Added to `packages/backend/seed.ts`: Depression Glass, MCM Furniture, Victorian Antiques, Vintage Clothing, Art Deco, Tools, Pottery, Americana, Vinyl Records, Jewelry, Books, Estate Sale Shopping 101, Lighting, Rugs
+- Achievements and Challenges auto-populated by their services (included in seed)
+- Moved encyclopedia block after users creation to fix TS2448 (block-scoped variable used before declaration)
+- Pushed: commits cdf1c60 + pending P2003 fix
 
-**Migration audit:**
-- #51 Ripples: ✅ APPLIED (2026-03-18 21:02:53)
-- 3 stuck migrations on Neon (ugc_photos, fraud_signals, treasure_trail): SQL on disk is CORRECT. Need `migrate resolve` + `migrate deploy` to clear failed state.
-
-**Pending Patrick actions:**
-- [ ] Migration fix (3 stuck): run resolve commands (see below) — BLOCKS future migrate deploy
-- [ ] #19 Passkey human test: READY — register → login → list → delete in browser
-- [ ] Open Stripe business account (recurring — test keys still in production)
-- [ ] VAPID keys provisioning (push notifications)
-- [ ] Install updated findasale-dev.skill via Cowork UI
-
-**Migration resolve commands (run from Windows PowerShell):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
-npx prisma migrate resolve --rolled-back 20260317001200_add_ugc_photos
-npx prisma migrate resolve --rolled-back 20260317001700_add_fraud_signals
-npx prisma migrate resolve --rolled-back 20260317002100_add_treasure_trail
-npx prisma migrate deploy
-npx prisma generate
-```
+**Seed.ts P2003 fix (pending Patrick push):**
+- Added PointsTransaction + EncyclopediaEntry to cleanup section
+- Reordered deletions for FK constraint compliance (Achievement → Appraisal → PointsTransaction → EncyclopediaEntry → Sale/User)
+- Awaiting Patrick push to verify seed runs cleanly
 
 **DB test accounts (Neon production — current):**
 - `user1@example.com` / `password123` → ORGANIZER, SIMPLE tier (Giselle Brown)
@@ -54,11 +37,10 @@ npx prisma generate
 
 ---
 
-**Next up (S204):**
-- [ ] Shopper nav consistency (desktop/mobile gap — not yet dispatched)
-- [ ] #65 Progressive Disclosure spec clarification (no feature file found)
-- [ ] Encyclopedia + Challenges seed content (pages load, zero data)
-- [ ] Patrick E2E testing (guide at `claude_docs/testing-guides/patrick-e2e-guide-2026-03-19.md`)
+**Next up (S205):**
+- [ ] Confirm Patrick P2003 fix push and seed cleanly
+- [ ] #65 Progressive Disclosure spec clarification (no feature file found — dispatch for spec review)
+- [ ] Patrick E2E testing pass (guide at `claude_docs/testing-guides/patrick-e2e-guide-2026-03-19.md`)
 - [ ] P2 UX fixes (mobile dashboard simplification, Manage Sales dropdown, tier/rewards card repositioning)
 - [ ] Wave 5 Sprint 3 work (AI Appraisal async, remaining Sprint 3 features)
 
