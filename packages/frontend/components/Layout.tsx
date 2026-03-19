@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
+import { SectionHeader } from './TierGatedNav';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
@@ -72,61 +73,65 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </span>
         {user.role === 'ORGANIZER' && (
           <>
-            <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <SectionHeader label="Primary" />
+            <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Dashboard
             </Link>
-            <Link href="/plan" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/plan" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Plan a Sale
             </Link>
-            <Link href="/organizer/premium" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-              Premium Plans
+            <Link href="/organizer/premium" className="block px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
             </Link>
             {canAccess('PRO') && (
-              <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-                Command Center
-              </Link>
-            )}
-            {canAccess('PRO') && (
-              <Link href="/organizer/typology" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-                Typology Classifier
-              </Link>
-            )}
-            {canAccess('PRO') && (
-              <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-                Fraud Signals
-              </Link>
-            )}
-            {canAccess('PRO') && (
-              <Link href="/organizer/offline" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-                Offline Mode
-              </Link>
-            )}
-            {canAccess('PRO') && (
-              <Link href="/organizer/appraisals" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
-                Appraisals
+              <Link href="/organizer/insights" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                Insights
               </Link>
             )}
             {canAccess('TEAMS') && (
-              <Link href="/organizer/workspace" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+              <Link href="/organizer/workspace" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                 Workspace
               </Link>
             )}
-            <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+
+            {canAccess('PRO') && (
+              <>
+                <SectionHeader label="Pro Tools" />
+                <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Command Center
+                </Link>
+                <Link href="/organizer/typology" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Typology Classifier
+                </Link>
+                <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Fraud Signals
+                </Link>
+                <Link href="/organizer/offline" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Offline Mode
+                </Link>
+                <Link href="/organizer/appraisals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Appraisals
+                </Link>
+              </>
+            )}
+
+            <SectionHeader label="Organizer Tools" />
+            <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Bounties
             </Link>
-            <Link href="/organizer/message-templates" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/organizer/message-templates" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Message Templates
             </Link>
-            <Link href="/organizer/reputation" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/organizer/reputation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Reputation
             </Link>
-            <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               UGC Moderation
             </Link>
-            <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Performance
             </Link>
-            <Link href="/neighborhoods" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/neighborhoods" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Neighborhoods
             </Link>
           </>
@@ -270,23 +275,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         <Link href="/organizer/dashboard" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Dashboard</Link>
                         <Link href="/plan" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Plan a Sale</Link>
                         {canAccess('PRO') && (
-                          <Link href="/organizer/command-center" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Command Center</Link>
+                          <Link href="/organizer/insights" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Insights</Link>
                         )}
-                        {canAccess('PRO') && (
-                          <Link href="/organizer/typology" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Typology</Link>
-                        )}
-                        {canAccess('PRO') && (
-                          <Link href="/organizer/fraud-signals" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Fraud Signals</Link>
-                        )}
-                        {canAccess('PRO') && (
-                          <Link href="/organizer/offline" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Offline</Link>
-                        )}
-                        {canAccess('PRO') && (
-                          <Link href="/organizer/appraisals" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Appraisals</Link>
-                        )}
-                        {canAccess('TEAMS') && (
-                          <Link href="/organizer/workspace" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Workspace</Link>
-                        )}
+                        <Link href="/organizer/premium" className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium">
+                          {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade'}
+                        </Link>
                         <div className="border-l border-warm-300 dark:border-gray-700 pl-2 ml-2 flex items-center gap-2">
                           <Link href="/organizer/bounties" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Bounties</Link>
                           <Link href="/organizer/reputation" className="text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Reputation</Link>

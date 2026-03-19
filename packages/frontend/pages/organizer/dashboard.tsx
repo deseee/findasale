@@ -12,6 +12,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { TierGatedButton } from '../../components/TierGatedNav';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge';
@@ -271,9 +272,9 @@ const OrganizerDashboard = () => {
 
           {/* Action Buttons - Grouped Sections */}
           <div className="space-y-4 mb-8">
-            {/* Section 1: Essential Actions */}
+            {/* Section 1: Quick Actions (always visible) */}
             <div>
-              <h3 className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2">Essential</h3>
+              <h3 className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Quick Actions</h3>
               <div className="flex flex-wrap gap-4">
                 <Link
                   href="/organizer/create-sale"
@@ -294,12 +295,12 @@ const OrganizerDashboard = () => {
                         showToast('Please create a sale first', 'error');
                       }
                     }}
-                    className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                    className="bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg transition-colors"
                   >
-                    Add Items
+                    📦 Add Items
                   </button>
                   {showSaleSelector && salesData && salesData.length > 1 && (
-                    <div className="absolute top-full left-0 mt-2 bg-white border border-warm-300 rounded-lg shadow-lg z-50">
+                    <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-50">
                       {salesData.map((sale: any) => (
                         <button
                           key={sale.id}
@@ -307,7 +308,7 @@ const OrganizerDashboard = () => {
                             router.push(`/organizer/add-items/${sale.id}`);
                             setShowSaleSelector(false);
                           }}
-                          className="block w-full text-left px-4 py-2 hover:bg-warm-50 text-warm-900 text-sm border-b border-warm-100 last:border-b-0 transition-colors"
+                          className="block w-full text-left px-4 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm border-b border-warm-100 dark:border-gray-700 last:border-b-0 transition-colors"
                         >
                           {sale.title}
                         </button>
@@ -317,7 +318,7 @@ const OrganizerDashboard = () => {
                 </div>
                 <Link
                   href="/organizer/holds"
-                  className="relative bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="relative bg-amber-100 hover:bg-amber-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-amber-900 dark:text-amber-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   🤝 Holds
                   {(holdCountData?.count ?? 0) > 0 && (
@@ -330,9 +331,9 @@ const OrganizerDashboard = () => {
                   onClick={() => {
                     if (salesData && salesData.length > 0) {
                       if (salesData.length === 1) {
-                        router.push(`/organizer/add-items/${salesData[0].id}`);
+                        router.push(`/organizer/sales/${salesData[0].id}`);
                       } else {
-                        setShowSaleSelector(!showSaleSelector);
+                        router.push('/organizer/sales');
                       }
                     } else {
                       showToast('Please create a sale first', 'error');
@@ -340,122 +341,181 @@ const OrganizerDashboard = () => {
                   }}
                   className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg border border-warm-300 dark:border-gray-600 transition-colors"
                 >
-                  📋 Listing Factory
+                  📋 Manage Sales
                 </button>
               </div>
             </div>
 
-            {/* Section 2: Organizer Tools */}
+            {/* Section 2: Essential Tools (always visible) */}
             <div>
-              <h3 className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2">Organizer Tools</h3>
+              <h3 className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Essential Tools</h3>
               <div className="flex flex-wrap gap-4">
                 <Link
                   href="/organizer/print-inventory"
-                  className="bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-purple-100 hover:bg-purple-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-purple-900 dark:text-purple-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   🖨️ Print Inventory
                 </Link>
                 <Link
                   href="/organizer/pos"
-                  className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-emerald-100 hover:bg-emerald-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-emerald-900 dark:text-emerald-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   💳 POS
                 </Link>
                 <Link
                   href="/organizer/message-templates"
-                  className="bg-green-100 hover:bg-green-200 text-green-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-green-100 hover:bg-green-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-green-900 dark:text-green-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   📝 Message Templates
                 </Link>
+              </div>
+            </div>
+
+            {/* Section 3: Pro & Teams Tools (collapsible) */}
+            <details open={canAccess('PRO') || canAccess('TEAMS')} className="group">
+              <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors">
+                <span className="group-open:hidden">▶</span>
+                <span className="hidden group-open:inline">▼</span>
+                Pro & Teams Tools
+              </summary>
+              <div className="mt-3 ml-3 flex flex-wrap gap-4">
+                {canAccess('PRO') && (
+                  <>
+                    <TierGatedButton
+                      href="/organizer/insights"
+                      label="Insights"
+                      icon="📊"
+                      requiredTier="PRO"
+                      className="bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/command-center"
+                      label="Command Center"
+                      icon="⚙️"
+                      requiredTier="PRO"
+                      className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/typology"
+                      label="Typology Classifier"
+                      icon="🏷️"
+                      requiredTier="PRO"
+                      className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/fraud-signals"
+                      label="Fraud Signals"
+                      icon="⚠️"
+                      requiredTier="PRO"
+                      className="bg-red-100 hover:bg-red-200 dark:bg-red-900/30 text-red-900 dark:text-red-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/offline"
+                      label="Offline Mode"
+                      icon="📵"
+                      requiredTier="PRO"
+                      className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/appraisals"
+                      label="Appraisals"
+                      icon="💎"
+                      requiredTier="PRO"
+                      className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/brand-kit"
+                      label="Brand Kit"
+                      icon="🎨"
+                      requiredTier="PRO"
+                      className="bg-pink-100 hover:bg-pink-200 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/item-library"
+                      label="Item Library"
+                      icon="📚"
+                      requiredTier="PRO"
+                      className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100"
+                    />
+                    <TierGatedButton
+                      href="/organizer/flip-report"
+                      label="Flip Report"
+                      icon="📈"
+                      requiredTier="PRO"
+                      className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100"
+                    />
+                    <TierGatedButton
+                      href="/api/organizers/export"
+                      label="Export Data"
+                      icon="↓"
+                      requiredTier="PRO"
+                      className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
+                    />
+                  </>
+                )}
+                {canAccess('TEAMS') && (
+                  <TierGatedButton
+                    href="/organizer/webhooks"
+                    label="Webhooks"
+                    icon="🔗"
+                    requiredTier="TEAMS"
+                    className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
+                  />
+                )}
+              </div>
+            </details>
+
+            {/* Section 4: Community & Growth (collapsible) */}
+            <details>
+              <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors">
+                <span className="group-open:hidden">▶</span>
+                <span className="hidden group-open:inline">▼</span>
+                Community & Growth
+              </summary>
+              <div className="mt-3 ml-3 flex flex-wrap gap-4">
                 <Link
                   href="/organizer/bounties"
-                  className="bg-yellow-100 hover:bg-yellow-200 text-yellow-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
-                  📊 Bounties
+                  🏆 Bounties
                 </Link>
                 <Link
                   href="/organizer/reputation"
-                  className="bg-orange-100 hover:bg-orange-200 text-orange-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   ⭐ Reputation
                 </Link>
                 <Link
                   href="/neighborhoods"
-                  className="bg-teal-100 hover:bg-teal-200 text-teal-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   🏘️ Neighborhoods
                 </Link>
                 <Link
                   href="/organizer/performance"
-                  className="bg-violet-100 hover:bg-violet-200 text-violet-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   📈 Performance
                 </Link>
               </div>
-            </div>
+            </details>
 
-            {/* Section 3: Tier-Based Features */}
-            {(canAccess('PRO') || canAccess('TEAMS')) && (
-              <div>
-                {/* Desktop: always expanded, Mobile: toggle */}
-                <button
-                  onClick={() => setShowTierTools(!showTierTools)}
-                  className="md:hidden text-sm text-amber-600 font-medium flex items-center gap-1 mb-2"
-                >
-                  Pro & Teams Tools <span>{showTierTools ? '▴' : '▾'}</span>
-                </button>
-                <div className={`${!window.matchMedia('(max-width: 767px)').matches || showTierTools ? 'block' : 'hidden'}`}>
-                  <h3 className="text-xs font-semibold text-warm-500 uppercase tracking-wide mb-2 mt-4">Pro & Teams Tools</h3>
-                  <div className="flex flex-wrap gap-4">
-                    {canAccess('PRO') && (
-                      <>
-                        <Link
-                          href="/organizer/insights"
-                          className="bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold py-2 px-6 rounded-lg transition-colors"
-                        >
-                          📊 Insights
-                        </Link>
-                        <Link
-                          href="/organizer/command-center"
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold py-2 px-6 rounded-lg transition-colors"
-                        >
-                          ⚙️ Command Center
-                        </Link>
-                        <Link
-                          href="/organizer/brand-kit"
-                          className="bg-pink-100 hover:bg-pink-200 text-pink-900 font-bold py-2 px-6 rounded-lg transition-colors"
-                        >
-                          🎨 Brand Kit
-                        </Link>
-                        <Link
-                          href="/organizer/item-library"
-                          className="bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold py-2 px-6 rounded-lg transition-colors"
-                        >
-                          📚 Item Library
-                        </Link>
-                        <Link
-                          href="/organizer/flip-report"
-                          className="bg-rose-100 hover:bg-rose-200 text-rose-900 font-bold py-2 px-6 rounded-lg transition-colors"
-                        >
-                          📈 Flip Report
-                        </Link>
-                        <button
-                          onClick={() => window.open('/api/organizers/export', '_blank')}
-                          className="bg-cyan-100 hover:bg-cyan-200 text-cyan-900 font-bold py-2 px-6 rounded-lg transition-colors"
-                          title="Download your sales, items, and purchases data"
-                        >
-                          ↓ Export Data
-                        </button>
-                      </>
-                    )}
-                    {canAccess('TEAMS') && (
-                      <Link
-                        href="/organizer/webhooks"
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold py-2 px-6 rounded-lg transition-colors"
-                      >
-                        🔗 Webhooks
-                      </Link>
-                    )}
+            {/* Section 5: Upgrade CTA for SIMPLE tier */}
+            {isSimple && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mt-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">🔒</span>
+                  <div className="flex-1">
+                    <p className="font-semibold text-blue-900 dark:text-blue-100">Unlock Pro Features</p>
+                    <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
+                      Get access to Insights, Command Center, Brand Kit, Item Library, and more advanced tools to grow your estate sale business.
+                    </p>
+                    <Link
+                      href="/organizer/premium?source=dashboard"
+                      className="inline-block mt-3 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
+                    >
+                      Upgrade to PRO
+                    </Link>
                   </div>
                 </div>
               </div>

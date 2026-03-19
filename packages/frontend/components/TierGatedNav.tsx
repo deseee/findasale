@@ -1,0 +1,119 @@
+import React from 'react';
+import Link from 'next/link';
+import { useOrganizerTier } from '../hooks/useOrganizerTier';
+
+/**
+ * TierGatedNavLink — Navigation link with tier-based access control
+ * Locked features show dimmed with lock icon and tooltip
+ */
+interface TierGatedNavLinkProps {
+  href: string;
+  label: string;
+  requiredTier: 'SIMPLE' | 'PRO' | 'TEAMS';
+  icon?: React.ReactNode;
+}
+
+export function TierGatedNavLink({
+  href,
+  label,
+  requiredTier,
+  icon,
+}: TierGatedNavLinkProps) {
+  const { canAccess } = useOrganizerTier();
+  const isLocked = !canAccess(requiredTier);
+
+  if (isLocked) {
+    return (
+      <div
+        className="block px-3 py-2 text-warm-900 dark:text-warm-300 opacity-50 cursor-not-allowed"
+        title={`Upgrade to ${requiredTier} to unlock ${label}`}
+      >
+        🔒 {icon} {label}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+    >
+      {icon} {label}
+    </Link>
+  );
+}
+
+/**
+ * TierGatedButton — Dashboard button with tier-based access control
+ * Locked features show dimmed with lock icon and disabled state
+ */
+interface TierGatedButtonProps {
+  href?: string;
+  label: string;
+  icon: React.ReactNode;
+  requiredTier: 'SIMPLE' | 'PRO' | 'TEAMS';
+  onClick?: () => void;
+  className?: string;
+}
+
+export function TierGatedButton({
+  href,
+  label,
+  icon,
+  requiredTier,
+  onClick,
+  className = '',
+}: TierGatedButtonProps) {
+  const { canAccess } = useOrganizerTier();
+  const isLocked = !canAccess(requiredTier);
+
+  const baseClasses = 'inline-flex items-center gap-2 px-4 py-3 rounded-lg transition-all font-bold text-sm';
+  const enabledClasses = 'bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 cursor-pointer';
+  const disabledClasses = 'bg-gray-100 dark:bg-gray-800 opacity-50 cursor-not-allowed text-gray-600 dark:text-gray-400';
+
+  const buttonClasses = `${baseClasses} ${isLocked ? disabledClasses : enabledClasses} ${className}`;
+
+  if (isLocked) {
+    return (
+      <button
+        disabled
+        className={buttonClasses}
+        title={`Upgrade to ${requiredTier} to unlock ${label}`}
+      >
+        <span>🔒 {icon}</span>
+        <span>{label}</span>
+      </button>
+    );
+  }
+
+  if (href) {
+    return (
+      <Link href={href} className={buttonClasses}>
+        <span>{icon}</span>
+        <span>{label}</span>
+      </Link>
+    );
+  }
+
+  return (
+    <button onClick={onClick} className={buttonClasses}>
+      <span>{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+/**
+ * SectionHeader — Consistent styling for nav section headers
+ */
+interface SectionHeaderProps {
+  label: string;
+}
+
+export function SectionHeader({ label }: SectionHeaderProps) {
+  return (
+    <span className="block px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warm-500 dark:text-warm-400 mt-3">
+      {label}
+    </span>
+  );
+}
