@@ -13,8 +13,6 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - ✅ **P2 fixes SHIPPED (all remaining):** ThemeToggle dedup, Layout dedup (item-library, photo-ops)
 - ✅ **#70 dev dispatch COMPLETE:** Redis adapter + JWT socket auth + `useLiveFeed` + `LiveFeedTicker`
 - Last Updated: 2026-03-20
-- Patrick → Vercel: Add `NEXT_PUBLIC_SOCKET_URL=https://backend-production-153c9.up.railway.app`
-- Dev dispatch pending: Redis adapter + JWT socket auth
 
 **#19 Passkey — CLEAR TO DEPLOY ✅ (no further work needed)**
 
@@ -45,8 +43,10 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - [x] Fix P2 remaining (ThemeToggle dedup, Layout dedup) ✅ S213 SHIPPED
 - [x] Redis env live on Railway + Vercel ✅ S213 COMPLETE
 - [x] Dev dispatch: Redis adapter + JWT socket auth + LiveFeedTicker for #70 ✅ S213 SHIPPED
+- [x] Secondary route audit P0s fixed (price history import + visibility) ✅ S213 SHIPPED
+- [x] Secondary route audit P1s fixed (encyclopedia ownership, price history item-level, hub discovery cap) ✅ S213 SHIPPED
 - [ ] #19 Passkey — CLEAR TO DEPLOY ✅ (no further work needed)
-- [ ] Follow-up audit: 6 secondary routes not tested (categories, tags, condition-guide, public profiles, item detail)
+- [ ] P2 audit findings: inconsistent error shapes, missing pagination on holds, N+1 hub query
 
 ---
 
