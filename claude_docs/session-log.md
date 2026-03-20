@@ -4,29 +4,21 @@
 
 ### 2026-03-20 · Session 213
 
-**Redis Infrastructure + P1/P2 Bug Fix Completion + #70 Socket Dispatch**
+**Redis Infrastructure + P1/P2 Fixes + #70 Socket Dispatch + Secondary Route Audit P0/P1**
 
-**Redis Infrastructure (S213 ops):**
-- Added `REDIS_URL=${{Redis.REDIS_URL}}` to Railway backend via Raw Editor
-- Added `NEXT_PUBLIC_SOCKET_URL=https://backend-production-153c9.up.railway.app` to Vercel
-- Cache-bust commit to `Dockerfile.production` triggered Railway redeploy
+**Work completed:**
+- Redis env live: `REDIS_URL` on Railway, `NEXT_PUBLIC_SOCKET_URL` on Vercel
+- `getCities` controller: `prisma.$queryRaw` (bypassed Prisma groupBy type constraints, bigint→Number)
+- P2 fixes: ThemeToggle dedup in Layout.tsx, Layout wrapper dedup in item-library + photo-ops
+- #70: Redis socket adapter (graceful degradation), JWT socket auth, `useLiveFeed` hook, `LiveFeedTicker` component
+- Secondary route audit: 5 P0/P1 fixed — priceHistory import+visibility, encyclopedia ownership, hub discovery 500-cap
+- Merge conflict resolution: 5 files after sync with remote (STATE.md, session-log.md, saleController, insights, typology)
 
-**P1 Fix — Cities Page:**
-- `getCities` controller: final impl uses `prisma.$queryRaw` (bypasses Prisma groupBy type constraints)
-- COUNT(*) returns bigint — converted with `Number(item.count)`
-- 3 Railway build cycles required to reach zero TS errors (groupBy → $queryRaw)
+**Decisions:** `$queryRaw` is the correct pattern for grouped aggregates in this Prisma version. `groupBy` with `_count` has version-specific type issues — never use it.
 
-**P2 Fixes (all remaining):**
-- `Layout.tsx`: Removed duplicate ThemeToggle from desktop nav
-- `item-library.tsx`, `photo-ops/[saleId].tsx`: Consolidated duplicate Layout wrappers
+**Next up:** Chrome re-verification of all S212+S213 fixes (none verified since S211). LiveFeedTicker needs page integration. P2 audit backlog.
 
-**#70 Dev Dispatch — Redis adapter + JWT socket auth:**
-- `packages/backend/src/lib/socket.ts`: Redis adapter (graceful degradation) + JWT socket auth
-- `packages/backend/package.json`: Added `redis@^4.7.0` + `@socket.io/redis-adapter@^8.3.0`
-- `packages/frontend/hooks/useLiveFeed.ts`: JWT pass-through, REST hydration, SSR-safe
-- `packages/frontend/components/LiveFeedTicker.tsx`: NEW — compact event ticker, dark mode
-
-**Route Audit (parallel):** 3 P0s identified (item detail auth guard, price history import path, price history visibility check)
+**Blockers:** LiveFeedTicker created but not placed on any page yet — needs a home (sale detail page is the likely candidate).
 
 ---
 

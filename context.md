@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-19T16:10:19.283Z*
+*Generated at 2026-03-20T21:31:19.551Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -17,11 +17,11 @@ See report for details.
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
 ⚠ 9+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
-  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
-  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
-  /sessions/brave-focused-ride/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
+  /sessions/eloquent-optimistic-volta/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
+  /sessions/eloquent-optimistic-volta/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/eloquent-optimistic-volta/mnt/FindaSale/packages/backend/src/controllers/itemController.ts:1026:        description: null, // TODO: Add description to schema if needed
+  /sessions/eloquent-optimistic-volta/mnt/FindaSale/packages/backend/src/routes/items.ts:25:// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+  /sessions/eloquent-optimistic-volta/mnt/FindaSale/packages/backend/src/services/snoozeService.ts:96:  // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
 
 ## Project File Tree
 ```
@@ -1020,6 +1020,8 @@ See report for details.
 ├── INSTALL-conversation-defaults-rule27.md
 ├── INSTALL-push-coordinator-SKILL.md
 ├── MESSAGE_BOARD.json
+├── QA-AUDIT-SESSION-SUMMARY.md
+├── QA-TESTING-SESSION-READY.txt
 ├── README.md
 ├── S184-PUSH-INSTRUCTIONS.md
 ├── SPRINT2-PUSH-INSTRUCTIONS.md
@@ -1064,7 +1066,17 @@ See report for details.
 │   │   └── ADR-PHASE4-BRIEF.md
 │   ├── archive/ (22 files)
 │   ├── audits/
+│   │   ├── CHROME-AUDIT-SESSION-208-SUMMARY.md
+│   │   ├── INDEX-2026-03-20.md
+│   │   ├── QUICK-REFERENCE-QA-2026-03-20.md
+│   │   ├── README-QA-SESSION-2026-03-20.md
 │   │   ├── accessibility-audit-2026-03-18.md
+│   │   ├── business-plan-brand-review-2026-03-19.md
+│   │   ├── chrome-audit-2026-03-20-roadmap-updates.md
+│   │   ├── chrome-audit-2026-03-20.md
+│   │   ├── chrome-audit-comprehensive-S211.md
+│   │   ├── chrome-live-audit-2026-03-20-CHECKLIST.md
+│   │   ├── chrome-live-audit-2026-03-20.md
 │   │   ├── design-critique-2026-03-18.md
 │   │   ├── passkey-qa-audit-s200.md
 │   │   ├── periodic-docs-audit-2026-03-18.md
@@ -1082,7 +1094,7 @@ See report for details.
 │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
 │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
 │   │   └── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
-│   ├── feature-notes/ (18 files)
+│   ├── feature-notes/ (19 files)
 │   ├── features/
 │   │   └── 65-progressive-disclosure.md
 │   ├── guides/ (0 files)
@@ -1097,7 +1109,7 @@ See report for details.
 │   ├── next-session-brief.md
 │   ├── next-session-prompt.md
 │   ├── operations/ (44 files)
-│   ├── research/ (10 files)
+│   ├── research/ (11 files)
 │   ├── self-healing/ (1 files)
 │   ├── self_healing_skills.md
 │   ├── session-log-archive.md
@@ -1105,13 +1117,16 @@ See report for details.
 │   ├── skills-package/ (29 files)
 │   ├── strategic/
 │   │   └── advisory-board-adr-065-pricing-analysis-2026-03-16.md
-│   ├── strategy/ (6 files)
+│   ├── strategy/ (18 files)
 │   ├── testing-evidence-archive.md
 │   ├── testing-guides/
 │   │   └── patrick-e2e-guide-2026-03-19.md
 │   ├── ux-spotchecks/
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
-│   │   └── add-items-ux-audit-2026-03-15.md
+│   │   ├── add-items-ux-audit-2026-03-15.md
+│   │   ├── comprehensive-frontend-audit-2026-03-20.md
+│   │   ├── design-polish-vision-2026-03-19.md
+│   │   └── nav-dashboard-consolidation-2026-03-20.md
 │   └── workflow-retrospectives/ (3 files)
 ├── conversation-defaults-SKILL-v8.md
 ├── conversation-defaults-SKILL-v8.md.tmp.35852.1773930503120
@@ -1148,7 +1163,7 @@ See report for details.
 │   │   │   ├── lib/ (7 files)
 │   │   │   ├── middleware/ (6 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (95 files)
+│   │   │   ├── routes/ (96 files)
 │   │   │   ├── services/ (48 files)
 │   │   │   ├── types/ (1 files)
 │   │   │   └── utils/ (4 files)
@@ -1172,7 +1187,7 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (156 files)
+│   │   ├── components/ (158 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (3 files)
 │   │   ├── hooks/ (48 files)
