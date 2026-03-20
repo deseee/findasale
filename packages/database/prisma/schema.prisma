@@ -123,6 +123,12 @@ model User {
   ripples              SaleRipple[]        @relation("SaleRipples")
   // Feature #60: TEAMS Onboarding Wizard completion flag
   teamsOnboardingComplete Boolean @default(false)
+  // Feature #72: Affiliate Program — referral code and payouts
+  affiliateReferralCode String?              @unique  // Unique code for affiliate referral tracking
+  affiliatePayoutsGiven   AffiliatePayout[]  @relation("AffiliatePayoutsGiven")
+  affiliatePayoutsReceived AffiliatePayout[] @relation("AffiliatePayoutsReceived")
+  affiliateReferralsGiven AffiliateReferral[] @relation("AffiliateReferrals_Referrer")
+  affiliateReferralsReceived AffiliateReferral[] @relation("AffiliateReferrals_Referred")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
 }
@@ -332,6 +338,9 @@ model Item {
   valuation        ItemValuation?
   // Feature #46: Treasure Typology Classifier — collector category classification
   typology         ItemTypology?
+  // Feature #70: Consignment — operator-consigned items with split payout
+  consignorId      String?                       // Optional: consignor user ID (nullable for future Consignor table)
+  consignmentSplitPct Decimal?                   // Optional: percentage split for consignor (e.g., 0.70 = 70%)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1813,4 +1822,45 @@ model SaleRipple {
   @@index([userId])
   @@index([type])
   @@index([createdAt])
+}
+
+// Feature #72: Affiliate Program — referral payouts and tracking
+model AffiliatePayout {
+  id              String    @id @default(cuid())
+  referrerId      String    // User who earned the payout (affiliate)
+  referrer        User      @relation("AffiliatePayoutsGiven", fields: [referrerId], references: [id])
+  referredUserId  String?   // Optional: user who was referred (null if campaign-wide payout)
+  referredUser    User?     @relation("AffiliatePayoutsReceived", fields: [referredUserId], references: [id])
+  saleId          String?   // Optional: linked to a specific sale
+  sale            Sale?     @relation(fields: [saleId], references: [id])
+  amount          Decimal   // Payout amount in USD
+  status          String    @default("PENDING") // PENDING | PAID | CANCELLED
+  paidAt          DateTime? // Timestamp when payout was processed
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([saleId])
+  @@index([status])
+}
+
+// Feature #72: Affiliate Referral tracking — tracks individual referral relationships
+model AffiliateReferral {
+  id                String    @id @default(cuid())
+  referrerId        String    // The User who referred
+  referrer          User      @relation("AffiliateReferrals_Referrer", fields: [referrerId], references: [id])
+  referredUserId    String    // The User who was referred
+  referredUser      User      @relation("AffiliateReferrals_Referred", fields: [referredUserId], references: [id])
+  referralCode      String    @unique // The code used at signup
+  status            String    @default("PENDING") // PENDING | QUALIFIED | PAID
+  payoutAmountCents Int?      // Amount in cents (nullable until payout calculated)
+  paidAt            DateTime? // Timestamp when payout was processed
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([referralCode])
+  @@index([status])
 }
