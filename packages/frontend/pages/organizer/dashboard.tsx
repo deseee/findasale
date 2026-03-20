@@ -506,9 +506,9 @@ const OrganizerDashboard = () => {
                 <div className="flex items-start gap-3">
                   <span className="text-2xl">🔒</span>
                   <div className="flex-1">
-                    <p className="font-semibold text-blue-900 dark:text-blue-100">Unlock Pro Features</p>
-                    <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
-                      Get access to Insights, Command Center, Brand Kit, Item Library, and more advanced tools to grow your estate sale business.
+                    <p className="font-semibold text-amber-900 dark:text-amber-100">Unlock Pro Features</p>
+                    <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
+                      Save time. Understand what sells. Build a brand that brings shoppers back.
                     </p>
                     <Link
                       href="/organizer/premium?source=dashboard"

@@ -36,7 +36,7 @@ function LoyaltyPage() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-600">Loading your loyalty passport...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading your loyalty passport...</p>
         </div>
       </Layout>
     );
@@ -46,11 +46,11 @@ function LoyaltyPage() {
     return (
       <Layout>
         <div className="max-w-5xl mx-auto py-8 px-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-            <p className="text-red-700">Unable to load your loyalty passport. Please try again.</p>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center dark:bg-red-900 dark:border-red-700">
+            <p className="text-red-700 dark:text-red-300">Unable to load your loyalty passport. Please try again.</p>
             <button
               onClick={() => refetch()}
-              className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg"
+              className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg dark:bg-amber-700 dark:hover:bg-amber-800"
             >
               Retry
             </button>
@@ -64,7 +64,7 @@ function LoyaltyPage() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-600">No loyalty data available.</p>
+          <p className="text-gray-600 dark:text-gray-400">No loyalty data available.</p>
         </div>
       </Layout>
     );
@@ -91,18 +91,18 @@ function LoyaltyPage() {
         <div className="max-w-5xl mx-auto py-8 px-4">
           {/* Header */}
           <div className="mb-10">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Loyalty Passport ✨</h1>
-            <p className="text-gray-600">
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-warm-100 mb-2">Loyalty Passport ✨</h1>
+            <p className="text-gray-600 dark:text-gray-400">
               Earn stamps and unlock rewards as you shop and collect
             </p>
           </div>
 
           {/* Current Tier Card */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg shadow-md p-8 mb-8 border-2 border-amber-200">
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg shadow-md p-8 mb-8 border-2 border-amber-200 dark:from-gray-800 dark:to-gray-700 dark:border-amber-700">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Tier Info */}
               <div>
-                <p className="text-sm font-semibold text-gray-600 mb-1">Current Tier</p>
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Current Tier</p>
                 <div className="flex items-end gap-3 mb-4">
                   <div
                     className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md"
@@ -111,19 +111,19 @@ function LoyaltyPage() {
                     {currentTierData.name[0]}
                   </div>
                   <div>
-                    <h2 className="text-3xl font-bold text-gray-900">{currentTierData.name}</h2>
-                    <p className="text-sm text-gray-600">{passport.totalStamps} total stamps</p>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-warm-100">{currentTierData.name}</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{passport.totalStamps} total stamps</p>
                   </div>
                 </div>
               </div>
 
               {/* Points Balance */}
               <div className="flex flex-col justify-center">
-                <p className="text-sm font-semibold text-gray-600 mb-2">Points Balance</p>
-                <div className="text-4xl font-bold text-amber-700 mb-2">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Points Balance</p>
+                <div className="text-4xl font-bold text-amber-700 dark:text-amber-400 mb-2">
                   {passport.totalStamps ?? 0}
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   {currentTierData.nextStamps
                     ? `${currentTierData.nextStamps - (passport.totalStamps ?? 0)} stamps to ${tierLevels[Math.min(Math.floor((passport.totalStamps ?? 0) / 100) + 1, 3)].name}`
                     : 'You\'ve reached max tier!'}
@@ -135,10 +135,10 @@ function LoyaltyPage() {
             {currentTierData.nextStamps && (
               <div className="mt-6">
                 <div className="flex justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-700">Progress to Next Tier</span>
-                  <span className="text-xs text-gray-600">{Math.round(progressPercent)}%</span>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Progress to Next Tier</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">{Math.round(progressPercent)}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
                   <div
                     className="bg-gradient-to-r from-amber-400 to-amber-600 h-3 rounded-full transition-all"
                     style={{ width: `${Math.min(progressPercent, 100)}%` }}
@@ -149,41 +149,41 @@ function LoyaltyPage() {
           </div>
 
           {/* Stamps Breakdown */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Your Stamps</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Your Stamps</h3>
 
             {passport.stamps && passport.stamps.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {passport.stamps.map((stamp) => (
                   <div
                     key={stamp.type}
-                    className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-4 border border-amber-200 text-center"
+                    className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-4 border border-amber-200 text-center dark:from-gray-700 dark:to-gray-600 dark:border-amber-700"
                   >
-                    <p className="text-sm font-semibold text-gray-700 mb-2 capitalize">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 capitalize">
                       {stamp.type}
                     </p>
-                    <p className="text-3xl font-bold text-amber-700">{stamp.count}</p>
-                    <p className="text-xs text-gray-600 mt-1">Stamps</p>
+                    <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{stamp.count}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Stamps</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-600">No stamps yet. Start shopping to earn stamps!</p>
+              <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p className="text-gray-600 dark:text-gray-400">No stamps yet. Start shopping to earn stamps!</p>
               </div>
             )}
           </div>
 
           {/* Milestone Progress */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Milestones & Badges</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Milestones & Badges</h3>
 
             {passport.milestones && passport.milestones.length > 0 ? (
               <div className="space-y-4">
                 {passport.milestones.map((milestone, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200"
+                    className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200 dark:from-gray-700 dark:to-gray-600 dark:border-purple-700"
                   >
                     <div className="flex-shrink-0">
                       <div className="flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400">
@@ -191,10 +191,10 @@ function LoyaltyPage() {
                       </div>
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-gray-900">
+                      <p className="font-semibold text-gray-900 dark:text-warm-100">
                         Milestone {milestone.milestone}
                       </p>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         {milestone.badgeType} • Earned {new Date(milestone.earnedAt).toLocaleDateString()}
                       </p>
                     </div>
@@ -202,8 +202,8 @@ function LoyaltyPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-600">
+              <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p className="text-gray-600 dark:text-gray-400">
                   Earn {passport.nextMilestone || 'more'} stamps to unlock your first badge!
                 </p>
               </div>
@@ -211,31 +211,31 @@ function LoyaltyPage() {
           </div>
 
           {/* Benefits & Rewards */}
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-md p-8 border border-green-200">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Your Benefits</h3>
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-md p-8 border border-green-200 dark:from-gray-800 dark:to-gray-700 dark:border-green-700">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Your Benefits</h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex gap-4">
                 <div className="flex-shrink-0 text-2xl">🎁</div>
                 <div>
-                  <p className="font-semibold text-gray-900">Exclusive Deals</p>
-                  <p className="text-sm text-gray-600">Early access to curated sales</p>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Exclusive Deals</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Early access to curated sales</p>
                 </div>
               </div>
 
               <div className="flex gap-4">
                 <div className="flex-shrink-0 text-2xl">⚡</div>
                 <div>
-                  <p className="font-semibold text-gray-900">Priority Listings</p>
-                  <p className="text-sm text-gray-600">See new items before others</p>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Priority Listings</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">See new items before others</p>
                 </div>
               </div>
 
               <div className="flex gap-4">
                 <div className="flex-shrink-0 text-2xl">💎</div>
                 <div>
-                  <p className="font-semibold text-gray-900">Tier-Based Discounts</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Tier-Based Discounts</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     {currentTierData.name} members get special perks
                   </p>
                 </div>
@@ -244,8 +244,8 @@ function LoyaltyPage() {
               <div className="flex gap-4">
                 <div className="flex-shrink-0 text-2xl">🌟</div>
                 <div>
-                  <p className="font-semibold text-gray-900">Badges & Recognition</p>
-                  <p className="text-sm text-gray-600">Showcase your collector status</p>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Badges & Recognition</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Showcase your collector status</p>
                 </div>
               </div>
             </div>
@@ -253,10 +253,10 @@ function LoyaltyPage() {
 
           {/* CTA Section */}
           <div className="mt-12 text-center">
-            <p className="text-gray-600 mb-4">Ready to earn more stamps?</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Ready to earn more stamps?</p>
             <Link
               href="/sales"
-              className="inline-block px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+              className="inline-block px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors dark:bg-amber-700 dark:hover:bg-amber-800"
             >
               Browse Sales
             </Link>

@@ -20,12 +20,12 @@ export default function FlipReportPage() {
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Flip Report</h1>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <p className="text-gray-700 mb-4">Flip Report is a PRO feature. Upgrade your plan to access post-sale analytics.</p>
+            <p className="text-gray-700 mb-4">See exactly what sold, at what price, and what to price next time. Flip Report turns your sale history into your next sale's strategy.</p>
             <button
               onClick={() => router.push('/organizer/upgrade')}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg"
             >
-              Upgrade to PRO
+              Unlock Flip Report →
             </button>
           </div>
         </div>

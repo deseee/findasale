@@ -138,78 +138,78 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         )}
         {(user.role === 'USER' || user.role === 'ADMIN') && (
           <>
-            <Link href="/shopper/dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/shopper/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               My Profile
             </Link>
-            <Link href="/wishlists" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/wishlists" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               My Wishlists
             </Link>
-            <Link href="/referral-dashboard" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/referral-dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Referrals
             </Link>
-            <hr className="my-2 border-warm-200" />
-            <span className="block px-3 py-1 text-xs font-semibold text-warm-600 uppercase">My Collection</span>
-            <Link href="/shopper/collector-passport" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <hr className="my-2 border-warm-200 dark:border-gray-700" />
+            <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">My Collection</span>
+            <Link href="/shopper/collector-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Collection
             </Link>
-            <Link href="/shopper/alerts" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/shopper/alerts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Wishlist Alerts
             </Link>
-            <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Treasure Trails
             </Link>
-            <Link href="/shopper/loot-log" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/shopper/loot-log" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Loot Log
             </Link>
-            <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Loyalty
             </Link>
-            <Link href="/shopper/receipts" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/shopper/receipts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Receipts
             </Link>
-            <Link href="/challenges" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/challenges" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Challenges
             </Link>
-            <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Live Sale Feed
             </Link>
-            <Link href="/encyclopedia" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <Link href="/encyclopedia" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Encyclopedia
             </Link>
-            <hr className="my-2 border-warm-200" />
-            <Link href="/shopper/settings" className="block px-3 py-2 text-sm text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+            <hr className="my-2 border-warm-200 dark:border-gray-700" />
+            <Link href="/shopper/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Settings
             </Link>
           </>
         )}
         {user.role === 'ADMIN' && (
-          <Link href="/admin" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md font-medium bg-amber-50">
+          <Link href="/admin" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium bg-amber-50 dark:bg-amber-900/20">
             Admin Panel
           </Link>
         )}
         <button
           onClick={handleLogout}
-          className="block w-full text-left px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md"
+          className="block w-full text-left px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
         >
           Logout
         </button>
       </>
     ) : (
       <>
-        <Link href="/login" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+        <Link href="/login" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
           Login
         </Link>
-        <Link href="/register" className="block px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-medium text-center">
+        <Link href="/register" className="block px-3 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-md font-medium text-center">
           Register
         </Link>
       </>
     )
   ) : (
     <>
-      <Link href="/login" className="block px-3 py-2 text-warm-900 hover:text-amber-600 hover:bg-warm-100 rounded-md">
+      <Link href="/login" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
         Login
       </Link>
-      <Link href="/register" className="block px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-medium text-center">
+      <Link href="/register" className="block px-3 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-md font-medium text-center">
         Register
       </Link>
     </>

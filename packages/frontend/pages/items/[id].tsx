@@ -341,7 +341,16 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   }
 
   if (itemError || !item) {
-    return <div className="p-6">Item not found.</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
+        <div className="text-center px-4 max-w-md">
+          <div className="text-5xl mb-4">🔍</div>
+          <h1 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-2">Item not found</h1>
+          <p className="text-warm-500 dark:text-gray-400 mb-6">This item may have sold or the link may have changed.</p>
+          <Link href="/" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Find More Treasures</Link>
+        </div>
+      </div>
+    );
   }
 
   const isAuction = item.status === 'auction';

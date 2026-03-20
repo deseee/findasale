@@ -75,8 +75,19 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl, imageQuality) : null;
   const showToday = isHappeningToday();
 
+  const getStatusBadge = () => {
+    if (sale.isSold) return { label: 'SOLD', classes: 'bg-warm-700 text-white' };
+    if (sale.isLive) return { label: 'LIVE', pulse: true, classes: 'bg-green-600 text-white' };
+    if (sale.isFlashDeal) return { label: 'FLASH', classes: 'bg-amber-600 text-white' };
+    if (sale.isAuctionSale) return { label: 'AUCTION', classes: 'bg-amber-600 text-white' };
+    if (showToday) return { label: 'TODAY', classes: 'bg-green-600 text-white' };
+    return null;
+  };
+
+  const badge = getStatusBadge();
+
   return (
-    <div className="card overflow-hidden hover:shadow-card-hover transition-shadow flex flex-col">
+    <div className="card overflow-hidden hover:shadow-card-hover transition-shadow flex flex-col dark:bg-gray-800 dark:border dark:border-gray-700">
       {/* ── Image area (60% visual weight) — 1:1 square ── */}
       <Link href={`/sales/${sale.id}`} className="block relative aspect-square bg-warm-200 dark:bg-gray-700 overflow-hidden">
         {/* Tier 1: LQIP blurred background (loads instantly) */}
@@ -120,35 +131,15 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           </div>
         ) : null}
 
-        {/* Badge overlays — top-left corner */}
-        <div className="absolute top-2 left-2 flex gap-1 items-center">
-          {sale.isSold && (
-            <span className="px-2 py-0.5 rounded text-xs font-bold bg-gray-600 text-white shadow">
-              SOLD
+        {/* Badge overlay — top-left corner (single highest-priority badge) */}
+        {badge && (
+          <div className="absolute top-2 left-2">
+            <span className={`flex items-center gap-1 px-2.5 py-1 rounded text-sm font-bold ${badge.classes} shadow`}>
+              {badge.pulse && <span className="w-2 h-2 rounded-full bg-white animate-pulse" />}
+              {badge.label}
             </span>
-          )}
-          {sale.isLive && !sale.isSold && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-green-500 text-white shadow">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              LIVE
-            </span>
-          )}
-          {sale.isFlashDeal && !sale.isSold && (
-            <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-600 text-white shadow">
-              Flash Deal
-            </span>
-          )}
-          {sale.isAuctionSale && !sale.isSold && (
-            <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-600 text-white shadow">
-              AUCTION
-            </span>
-          )}
-          {showToday && !sale.isSold && !sale.isLive && !sale.isFlashDeal && (
-            <span className="px-2 py-0.5 rounded text-xs font-bold bg-green-600 text-white shadow">
-              TODAY
-            </span>
-          )}
-        </div>
+          </div>
+        )}
       </Link>
 
       {/* ── Content area (40% visual weight) ── */}
@@ -165,7 +156,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           <div className="flex items-center gap-1 min-w-0 flex-wrap">
             <Link
               href={`/organizers/${sale.organizer.id}`}
-              className="text-xs font-medium text-amber-600 hover:underline line-clamp-1"
+              className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline line-clamp-1"
             >
               {sale.organizer.businessName}
             </Link>
@@ -184,7 +175,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             )}
           </div>
           {typeof sale.favoriteCount === 'number' && sale.favoriteCount > 0 && (
-            <span className="text-xs text-warm-400 dark:text-gray-500 flex-shrink-0 ml-1">
+            <span className="text-xs text-warm-400 dark:text-gray-400 flex-shrink-0 ml-1">
               ♥ {sale.favoriteCount}
             </span>
           )}
