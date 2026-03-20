@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: payload.role,
           points: payload.points || 0,
           referralCode: payload.referralCode || '',
-          organizerTier: payload.organizerTier || 'SIMPLE',
+          organizerTier: payload.subscriptionTier || 'SIMPLE',
           onboardingComplete: payload.onboardingComplete ?? false,
           createdAt: payload.createdAt
         });
@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: payload.role,
         points: payload.points || 0,
         referralCode: payload.referralCode || '',
-        organizerTier: payload.organizerTier || 'SIMPLE',
+        organizerTier: payload.subscriptionTier || 'SIMPLE',
         onboardingComplete: payload.onboardingComplete ?? false,
         createdAt: payload.createdAt
       });
