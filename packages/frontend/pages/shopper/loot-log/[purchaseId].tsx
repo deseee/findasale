@@ -32,9 +32,9 @@ export default function PurchaseDetailPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-warm-50">
+      <div className="flex items-center justify-center min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="text-center px-4 max-w-md">
-          <p className="text-xl text-warm-700 mb-4">Purchase not found</p>
+          <p className="text-xl text-warm-700 dark:text-warm-300 mb-4">Purchase not found</p>
           <Link
             href="/shopper/loot-log"
             className="px-6 py-2 bg-[#8FB897] text-white rounded-lg"
@@ -58,7 +58,7 @@ export default function PurchaseDetailPage() {
         <title>{purchase?.item?.title || 'Purchase'} — My Loot Log</title>
       </Head>
 
-      <main className="min-h-screen bg-gradient-to-b from-warm-50 to-white">
+      <main className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-2xl mx-auto px-4 py-12">
           {/* Back Link */}
           <Link
@@ -69,10 +69,10 @@ export default function PurchaseDetailPage() {
           </Link>
 
           {/* Detail Card */}
-          <div className="bg-white rounded-lg border border-warm-200 overflow-hidden shadow-lg">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden shadow-lg">
             <div className="grid grid-cols-2 gap-8 p-8">
               {/* Image */}
-              <div className="flex items-center justify-center bg-warm-100 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-center bg-warm-100 dark:bg-gray-700 rounded-lg overflow-hidden">
                 {purchase?.item?.imageUrl ? (
                   <Image
                     src={purchase.item.imageUrl}
@@ -91,7 +91,7 @@ export default function PurchaseDetailPage() {
               {/* Details */}
               <div className="flex flex-col justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-warm-900 mb-4">{purchase?.item?.title}</h1>
+                  <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-4">{purchase?.item?.title}</h1>
 
                   <div className="space-y-4 mb-8">
                     <InfoRow label="Category" value={purchase?.item?.category} />
@@ -101,8 +101,8 @@ export default function PurchaseDetailPage() {
                   </div>
 
                   {/* Sale Info */}
-                  <div className="border-t border-warm-200 pt-6">
-                    <h3 className="font-semibold text-warm-900 mb-4">Sale Information</h3>
+                  <div className="border-t border-warm-200 dark:border-gray-700 pt-6">
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-4">Sale Information</h3>
                     <div className="space-y-2">
                       <InfoRow label="Sale Name" value={purchase?.sale?.title} />
                       <InfoRow
@@ -122,8 +122,8 @@ export default function PurchaseDetailPage() {
                 </div>
 
                 {/* Receipt Badge */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-green-800">✓ Purchase Complete</p>
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-green-800 dark:text-green-200">✓ Purchase Complete</p>
                   <p className="text-xs text-green-700 mt-1">Transaction ID: {purchase?.id}</p>
                 </div>
               </div>
@@ -138,8 +138,8 @@ export default function PurchaseDetailPage() {
 function InfoRow({ label, value }: { label: string; value: string | undefined }) {
   return (
     <div className="flex justify-between">
-      <span className="text-warm-600">{label}</span>
-      <span className="font-semibold text-warm-900">{value || 'N/A'}</span>
+      <span className="text-warm-600 dark:text-warm-400">{label}</span>
+      <span className="font-semibold text-warm-900 dark:text-warm-100">{value || 'N/A'}</span>
     </div>
   );
 }

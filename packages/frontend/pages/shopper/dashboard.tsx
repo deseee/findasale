@@ -68,7 +68,7 @@ const ShopperDashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-warm-50 py-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <Skeleton className="h-10 w-64 mb-8" />
           <div className="space-y-4">
@@ -86,9 +86,9 @@ const ShopperDashboard = () => {
       <Head>
         <title>My Dashboard - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold text-warm-900 mb-8">My Dashboard</h1>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">My Dashboard</h1>
 
           {/* Quick Links */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
@@ -108,14 +108,14 @@ const ShopperDashboard = () => {
             </Link>
             <Link
               href="/shopper/alerts"
-              className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
             >
               <div className="text-2xl mb-2">🔔</div>
               <p className="text-xs font-semibold text-blue-900">Alerts</p>
             </Link>
             <Link
               href="/shopper/trails"
-              className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
             >
               <div className="text-2xl mb-2">🗺️</div>
               <p className="text-xs font-semibold text-green-900">Trails</p>
@@ -137,7 +137,7 @@ const ShopperDashboard = () => {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 mb-8 border-b border-warm-200 overflow-x-auto">
+          <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'purchases', label: 'Purchases' },
@@ -151,7 +151,7 @@ const ShopperDashboard = () => {
                 className={`pb-2 font-medium whitespace-nowrap transition-colors ${
                   activeTab === tab.id
                     ? 'border-b-2 border-amber-600 text-amber-600'
-                    : 'text-warm-600 hover:text-warm-900'
+                    : 'text-warm-600 dark:text-warm-400 hover:text-warm-900'
                 }`}
               >
                 {tab.label}
@@ -195,18 +195,18 @@ const ShopperDashboard = () => {
                   {purchases.map((purchase: any) => (
                     <div key={purchase.id} className="card p-4 flex justify-between items-center">
                       <div>
-                        <h3 className="font-semibold text-warm-900">{purchase.itemTitle}</h3>
-                        <p className="text-sm text-warm-600">Purchased on {purchase.purchasedAt}</p>
+                        <h3 className="font-semibold text-warm-900 dark:text-warm-100">{purchase.itemTitle}</h3>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Purchased on {purchase.purchasedAt}</p>
                       </div>
-                      <span className="font-bold text-warm-900">${purchase.amount}</span>
+                      <span className="font-bold text-warm-900 dark:text-warm-100">${purchase.amount}</span>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-16">
                   <p className="text-5xl mb-4">🛍️</p>
-                  <h3 className="text-xl font-semibold text-warm-900 mb-2">No purchases yet</h3>
-                  <p className="text-warm-600 mb-6">When you buy an item at a sale, it will show up here.</p>
+                  <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No purchases yet</h3>
+                  <p className="text-warm-600 dark:text-warm-400 mb-6">When you buy an item at a sale, it will show up here.</p>
                   <Link
                     href="/"
                     className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
@@ -229,7 +229,7 @@ const ShopperDashboard = () => {
                         <img src={item.photoUrls[0]} alt={item.title} className="aspect-square w-full object-cover" loading="lazy" />
                       )}
                       <div className="p-3">
-                        <h3 className="text-sm font-semibold text-warm-900 line-clamp-1">{item.title}</h3>
+                        <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 line-clamp-1">{item.title}</h3>
                         {item.price != null && <p className="text-amber-600 font-bold text-sm">${Number(item.price).toFixed(2)}</p>}
                       </div>
                     </Link>
@@ -238,8 +238,8 @@ const ShopperDashboard = () => {
               ) : (
                 <div className="text-center py-16">
                   <div className="text-6xl mb-4 text-warm-300">❤️</div>
-                  <h3 className="text-xl font-semibold text-warm-900 mb-2">Nothing saved yet</h3>
-                  <p className="text-warm-600 mb-6">
+                  <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">Nothing saved yet</h3>
+                  <p className="text-warm-600 dark:text-warm-400 mb-6">
                     Tap the heart on any item you like and it will appear here.
                     You also earn 2 Hunt Pass points for every favorite!
                   </p>
@@ -258,8 +258,8 @@ const ShopperDashboard = () => {
           {activeTab === 'subscribed' && (
             <div className="text-center py-16">
               <p className="text-5xl mb-4">🔔</p>
-              <h3 className="text-xl font-semibold text-warm-900 mb-2">No subscriptions yet</h3>
-              <p className="text-warm-600 mb-6">
+              <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No subscriptions yet</h3>
+              <p className="text-warm-600 dark:text-warm-400 mb-6">
                 Subscribe to a sale to get notified about updates and new items.
               </p>
               <Link

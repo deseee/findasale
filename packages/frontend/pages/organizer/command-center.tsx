@@ -17,6 +17,7 @@ import { useToast } from '../../components/ToastContext';
 import CommandCenterCard from '../../components/CommandCenterCard';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
 import Skeleton from '../../components/Skeleton';
+import TierGate from '../../components/TierGate';
 
 type StatusFilter = 'active' | 'upcoming' | 'recent' | 'all';
 
@@ -42,12 +43,6 @@ const CommandCenterPage = () => {
   // Redirect if not authenticated or not organizer
   if (!user || user.role !== 'ORGANIZER') {
     router.push('/login');
-    return null;
-  }
-
-  // Redirect if PRO tier not available
-  if (!canAccess('PRO')) {
-    router.push('/organizer/upgrade');
     return null;
   }
 
@@ -106,6 +101,7 @@ const CommandCenterPage = () => {
         <title>Command Center - FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Command Center" description="Multi-sale overview dashboard with real-time status, quick actions, and performance metrics across all your sales.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
           <div className="max-w-6xl mx-auto flex items-center gap-3">
@@ -195,6 +191,7 @@ const CommandCenterPage = () => {
           )}
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

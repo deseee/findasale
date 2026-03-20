@@ -99,12 +99,12 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
         />
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white border-b border-warm-200 py-8">
+        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 py-8">
           <div className="max-w-6xl mx-auto px-4">
             {/* Breadcrumb */}
-            <nav className="text-sm text-warm-500 mb-6 flex items-center gap-2">
+            <nav className="text-sm text-warm-500 dark:text-warm-400 mb-6 flex items-center gap-2">
               <Link href="/" className="hover:text-amber-600">
                 Home
               </Link>
@@ -113,11 +113,11 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                 Tags
               </Link>
               <span>›</span>
-              <span className="text-warm-900 font-medium">{formattedTag}</span>
+              <span className="text-warm-900 dark:text-warm-100 font-medium">{formattedTag}</span>
             </nav>
 
-            <h1 className="text-4xl font-bold text-warm-900 mb-2">{formattedTag}</h1>
-            <p className="text-warm-600 text-lg">
+            <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">{formattedTag}</h1>
+            <p className="text-warm-600 dark:text-warm-400 text-lg">
               {itemCount} item{itemCount !== 1 ? 's' : ''} available at estate sales near you
             </p>
           </div>
@@ -131,9 +131,9 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {items.map((item) => (
                   <Link key={item.id} href={`/items/${item.id}`}>
-                    <a className="bg-white rounded-lg overflow-hidden border border-warm-200 shadow-sm hover:shadow-lg transition-shadow">
+                    <a className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700 shadow-sm hover:shadow-lg transition-shadow">
                       {/* Item Photo */}
-                      <div className="relative aspect-square bg-warm-100 overflow-hidden">
+                      <div className="relative aspect-square bg-warm-100 dark:bg-gray-700 overflow-hidden">
                         {item.thumbnailUrl ? (
                           <Image
                             src={item.thumbnailUrl}
@@ -143,7 +143,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         ) : (
-                          <div className="flex items-center justify-center h-full bg-warm-200 text-warm-500">
+                          <div className="flex items-center justify-center h-full bg-warm-200 text-warm-500 dark:text-warm-400">
                             <svg
                               className="w-12 h-12"
                               fill="none"
@@ -164,7 +164,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                       {/* Card Content */}
                       <div className="p-4 space-y-3">
                         {/* Title */}
-                        <h3 className="text-lg font-semibold text-warm-900 line-clamp-2">
+                        <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 line-clamp-2">
                           {item.title}
                         </h3>
 
@@ -176,9 +176,9 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                         )}
 
                         {/* Sale Info */}
-                        <div className="bg-warm-50 rounded p-3 space-y-1 text-sm">
-                          <p className="font-semibold text-warm-900">{item.saleTitle}</p>
-                          <p className="text-warm-600">
+                        <div className="bg-warm-50 dark:bg-gray-900 rounded p-3 space-y-1 text-sm">
+                          <p className="font-semibold text-warm-900 dark:text-warm-100">{item.saleTitle}</p>
+                          <p className="text-warm-600 dark:text-warm-400">
                             {item.city}, {item.state}
                           </p>
                         </div>
@@ -186,7 +186,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                         {/* Condition Badge */}
                         {item.condition && (
                           <div className="flex items-center gap-2 text-xs">
-                            <span className="bg-warm-200 text-warm-800 px-2 py-1 rounded">
+                            <span className="bg-warm-200 text-warm-800 dark:text-warm-200 px-2 py-1 rounded">
                               {item.condition}
                             </span>
                           </div>
@@ -199,7 +199,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
 
               {/* Note about pagination */}
               {itemCount > 24 && (
-                <div className="mt-12 text-center text-warm-600">
+                <div className="mt-12 text-center text-warm-600 dark:text-warm-400">
                   <p>Showing 24 of {itemCount} items</p>
                   <p className="text-sm mt-2">More items from this tag coming soon</p>
                 </div>
@@ -209,8 +209,8 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
             /* Empty State */
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <div className="text-5xl mb-4">🏺</div>
-              <h2 className="text-2xl font-bold text-warm-900 mb-2">No items yet</h2>
-              <p className="text-warm-600 mb-6">
+              <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">No items yet</h2>
+              <p className="text-warm-600 dark:text-warm-400 mb-6">
                 Check back soon for {tag} items at estate sales near you.
               </p>
               <Link href="/" className="text-amber-600 hover:underline font-medium">

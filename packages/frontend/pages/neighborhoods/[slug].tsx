@@ -82,24 +82,24 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
         />
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">
 
           {/* Breadcrumb */}
-          <nav className="flex items-center gap-2 text-sm text-warm-500 mb-5">
-            <Link href="/" className="hover:text-warm-700">Home</Link>
+          <nav className="flex items-center gap-2 text-sm text-warm-500 dark:text-warm-400 mb-5">
+            <Link href="/" className="hover:text-warm-700 dark:text-warm-300">Home</Link>
             <span>›</span>
-            <Link href="/neighborhoods" className="hover:text-warm-700">Neighborhoods</Link>
+            <Link href="/neighborhoods" className="hover:text-warm-700 dark:text-warm-300">Neighborhoods</Link>
             <span>›</span>
-            <span className="text-warm-700 font-medium">{name}</span>
+            <span className="text-warm-700 dark:text-warm-300 font-medium">{name}</span>
           </nav>
 
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-warm-900">
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">
               Estate Sales in {name}
             </h1>
-            <p className="text-warm-500 mt-1 text-sm">{description}</p>
+            <p className="text-warm-500 dark:text-warm-400 mt-1 text-sm">{description}</p>
             {total > 0 && (
               <p className="text-amber-700 font-medium mt-2 text-sm">
                 {total} upcoming sale{total !== 1 ? 's' : ''} in this area
@@ -111,10 +111,10 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
           {sales.length === 0 && (
             <div className="text-center py-16">
               <p className="text-4xl mb-4">🏷️</p>
-              <h2 className="text-xl font-semibold text-warm-900 mb-2">
+              <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">
                 No upcoming sales in {name} right now
               </h2>
-              <p className="text-warm-500 text-sm mb-6">
+              <p className="text-warm-500 dark:text-warm-400 text-sm mb-6">
                 Check back soon — new sales are added every day.
               </p>
               <Link
@@ -138,7 +138,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
                     className="card overflow-hidden flex gap-0 hover:shadow-md transition-shadow"
                   >
                     {/* Photo */}
-                    <div className="w-28 h-28 flex-shrink-0 bg-warm-100">
+                    <div className="w-28 h-28 flex-shrink-0 bg-warm-100 dark:bg-gray-700">
                       {sale.photoUrls?.[0] ? (
                         <img
                           src={sale.photoUrls[0]}
@@ -155,37 +155,37 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
                     {/* Info */}
                     <div className="flex-1 p-3 min-w-0">
                       <div className="flex items-start gap-2">
-                        <p className="font-semibold text-warm-900 text-sm leading-tight flex-1 truncate">
+                        <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm leading-tight flex-1 truncate">
                           {sale.title}
                         </p>
                         {active && (
-                          <span className="flex-shrink-0 text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                          <span className="flex-shrink-0 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 px-2 py-0.5 rounded-full font-medium">
                             Happening Now
                           </span>
                         )}
                       </div>
 
-                      <p className="text-xs text-warm-500 mt-1">
+                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                         {sale.organizer.businessName}
                         {sale.organizer.avgRating && sale.organizer.avgRating > 0 && (
                           <span className="ml-1">· ⭐ {sale.organizer.avgRating.toFixed(1)}</span>
                         )}
                       </p>
 
-                      <p className="text-xs text-warm-600 mt-1">
+                      <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">
                         📅 {formatDate(sale.startDate)} – {formatDate(sale.endDate)}
                       </p>
 
-                      <p className="text-xs text-warm-500 mt-0.5 truncate">
+                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5 truncate">
                         📍 {sale.address}, {sale.city}
                       </p>
 
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs text-warm-500">
+                        <span className="text-xs text-warm-500 dark:text-warm-400">
                           {sale._count.items} item{sale._count.items !== 1 ? 's' : ''}
                         </span>
                         {sale.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-xs bg-warm-100 text-warm-600 px-2 py-0.5 rounded-full">
+                          <span key={tag} className="text-xs bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-warm-400 px-2 py-0.5 rounded-full">
                             {tag}
                           </span>
                         ))}
@@ -198,8 +198,8 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
           )}
 
           {/* Other neighborhoods CTA */}
-          <div className="mt-10 pt-6 border-t border-warm-200 text-center">
-            <p className="text-warm-500 text-sm mb-3">Looking in a different area?</p>
+          <div className="mt-10 pt-6 border-t border-warm-200 dark:border-gray-700 text-center">
+            <p className="text-warm-500 dark:text-warm-400 text-sm mb-3">Looking in a different area?</p>
             <Link
               href="/neighborhoods"
               className="text-amber-600 hover:text-amber-700 font-medium text-sm"

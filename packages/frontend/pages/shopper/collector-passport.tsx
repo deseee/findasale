@@ -66,7 +66,7 @@ function CollectorPassportPage() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
         </div>
       </Layout>
     );
@@ -129,7 +129,7 @@ function CollectorPassportPage() {
           <div className="mb-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold text-gray-900">My Collector Passport 🏺</h1>
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">My Collector Passport 🏺</h1>
                 {passport && (
                   <div className="bg-[#8fb897] text-white rounded-full px-4 py-2 font-semibold">
                     {passport.totalFinds} finds
@@ -137,32 +137,32 @@ function CollectorPassportPage() {
                 )}
               </div>
             </div>
-            <p className="text-gray-600 mt-2">
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
               Define your collection identity and get notified when matching items appear
             </p>
           </div>
 
           {/* Section 1: Identity Card */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Collector Identity</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your Collector Identity</h2>
 
             {/* Bio */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Collector Bio
               </label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="What drives your collection? e.g., 'Passionate collector of mid-century modern furniture'"
-                className="w-full h-24 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
+                className="w-full h-24 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
               />
-              <p className="text-xs text-gray-500 mt-1">Optional — visible on your public profile</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Optional — visible on your public profile</p>
             </div>
 
             {/* Specialties */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Specialties
               </label>
               <div className="flex gap-2 mb-3">
@@ -177,7 +177,7 @@ function CollectorPassportPage() {
                     }
                   }}
                   placeholder="e.g., mid-century modern"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
                 />
                 <button
                   onClick={handleAddSpecialty}
@@ -206,7 +206,7 @@ function CollectorPassportPage() {
 
             {/* Categories */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Item Categories
               </label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -218,7 +218,7 @@ function CollectorPassportPage() {
                       onChange={() => handleToggleCategory(cat)}
                       className="w-4 h-4 text-[#8fb897] rounded focus:ring-[#8fb897]"
                     />
-                    <span className="text-gray-700">{cat}</span>
+                    <span className="text-gray-700 dark:text-gray-300">{cat}</span>
                   </label>
                 ))}
               </div>
@@ -226,7 +226,7 @@ function CollectorPassportPage() {
 
             {/* Keywords */}
             <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Keywords
               </label>
               <div className="flex gap-2 mb-3">
@@ -241,7 +241,7 @@ function CollectorPassportPage() {
                     }
                   }}
                   placeholder="e.g., eames, pyrex, walnut"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
                 />
                 <button
                   onClick={handleAddKeyword}
@@ -279,16 +279,16 @@ function CollectorPassportPage() {
           </div>
 
           {/* Section 2: My Matches */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
               {totalMatches > 0 ? `${totalMatches} Matching Items` : 'My Matches'}
             </h2>
 
             {matchesLoading ? (
-              <p className="text-gray-600">Loading matches...</p>
+              <p className="text-gray-600 dark:text-gray-400">Loading matches...</p>
             ) : totalMatches === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-600">
+                <p className="text-gray-600 dark:text-gray-400">
                   No matching items found yet. Set your specialties above to discover matching items.
                 </p>
               </div>
@@ -298,7 +298,7 @@ function CollectorPassportPage() {
                   <Link
                     key={item.id}
                     href={`/sales/${item.sale.id}`}
-                    className="group cursor-pointer rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+                    className="group cursor-pointer rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow"
                   >
                     <div className="relative bg-gray-100 h-32 overflow-hidden">
                       {item.photoUrls[0] ? (
@@ -314,13 +314,13 @@ function CollectorPassportPage() {
                       )}
                     </div>
                     <div className="p-3">
-                      <h3 className="font-medium text-gray-900 line-clamp-2 text-sm">
+                      <h3 className="font-medium text-gray-900 dark:text-gray-100 line-clamp-2 text-sm">
                         {item.title}
                       </h3>
                       {item.price && (
                         <p className="text-[#8fb897] font-bold mt-1">${item.price.toFixed(2)}</p>
                       )}
-                      <p className="text-xs text-gray-500 mt-2">{item.sale.title}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{item.sale.title}</p>
                     </div>
                   </Link>
                 ))}
@@ -329,14 +329,14 @@ function CollectorPassportPage() {
           </div>
 
           {/* Section 3: Notification Settings */}
-          <div className="bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Notification Settings</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Notification Settings</h2>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">Email Alerts</p>
-                  <p className="text-sm text-gray-600">Get notified via email when items match your collection</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">Email Alerts</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Get notified via email when items match your collection</p>
                 </div>
                 <button
                   onClick={() => setNotifyEmail(!notifyEmail)}
@@ -345,7 +345,7 @@ function CollectorPassportPage() {
                   }`}
                 >
                   <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 transition-transform ${
                       notifyEmail ? 'translate-x-7' : 'translate-x-1'
                     }`}
                   />
@@ -354,8 +354,8 @@ function CollectorPassportPage() {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">Push Notifications</p>
-                  <p className="text-sm text-gray-600">Get push notifications when items match your collection</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">Push Notifications</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Get push notifications when items match your collection</p>
                 </div>
                 <button
                   onClick={() => setNotifyPush(!notifyPush)}
@@ -364,7 +364,7 @@ function CollectorPassportPage() {
                   }`}
                 >
                   <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 transition-transform ${
                       notifyPush ? 'translate-x-7' : 'translate-x-1'
                     }`}
                   />

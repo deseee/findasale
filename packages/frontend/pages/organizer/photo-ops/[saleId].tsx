@@ -95,7 +95,7 @@ const PhotoOpsPage: React.FC = () => {
     return (
       <Layout>
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-amber-900 mb-2">Upgrade to PRO</h2>
             <p className="text-sm text-amber-800 mb-2">
               Mark your best photo spots on the map and let shoppers know where to find the most Instagrammable finds at your sale.
@@ -136,10 +136,10 @@ const PhotoOpsPage: React.FC = () => {
         {showForm && (
           <form
             onSubmit={handleSubmit}
-            className="mb-8 p-6 bg-gray-50 border border-gray-200 rounded-lg"
+            className="mb-8 p-6 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg"
           >
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Station Name *
               </label>
               <input
@@ -147,19 +147,19 @@ const PhotoOpsPage: React.FC = () => {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
                 placeholder="e.g., Front Porch Photo Spot"
               />
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Description
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
                 placeholder="e.g., Charming window with vintage lamp and painting"
                 rows={3}
               />
@@ -167,7 +167,7 @@ const PhotoOpsPage: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Latitude *
                 </label>
                 <input
@@ -176,12 +176,12 @@ const PhotoOpsPage: React.FC = () => {
                   step="0.0001"
                   value={formData.lat}
                   onChange={(e) => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
                   placeholder="42.7335"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Longitude *
                 </label>
                 <input
@@ -190,21 +190,21 @@ const PhotoOpsPage: React.FC = () => {
                   step="0.0001"
                   value={formData.lng}
                   onChange={(e) => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
                   placeholder="-85.6465"
                 />
               </div>
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Frame Image URL
               </label>
               <input
                 type="url"
                 value={formData.frameImageUrl}
                 onChange={(e) => setFormData({ ...formData, frameImageUrl: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
                 placeholder="https://cdn.example.com/frame.png"
               />
             </div>
@@ -231,21 +231,21 @@ const PhotoOpsPage: React.FC = () => {
         {/* Stations List */}
         <div className="space-y-4">
           {isLoading ? (
-            <p className="text-gray-500">Loading stations...</p>
+            <p className="text-gray-500 dark:text-gray-400">Loading stations...</p>
           ) : stations.length === 0 ? (
-            <p className="text-gray-500">No photo op stations yet. Create one to get started!</p>
+            <p className="text-gray-500 dark:text-gray-400">No photo op stations yet. Create one to get started!</p>
           ) : (
             stations.map((station) => (
               <div
                 key={station.id}
-                className="p-4 bg-white border border-gray-200 rounded-lg flex justify-between items-start"
+                className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg flex justify-between items-start"
               >
                 <div className="flex-1">
                   <h3 className="font-semibold text-lg">{station.name}</h3>
                   {station.description && (
-                    <p className="text-sm text-gray-600 mt-1">{station.description}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{station.description}</p>
                   )}
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                     📍 {station.lat.toFixed(4)}, {station.lng.toFixed(4)}
                   </p>
                 </div>

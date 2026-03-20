@@ -91,7 +91,7 @@ const AdminSales = () => {
     return (
       <Layout>
         <div className="container mx-auto px-4 py-8">
-          <div className="text-center text-warm-600">Loading sales...</div>
+          <div className="text-center text-warm-600 dark:text-warm-400">Loading sales...</div>
         </div>
       </Layout>
     );
@@ -105,31 +105,31 @@ const AdminSales = () => {
     <Layout>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-warm-900 mb-2">Manage Sales</h1>
-          <p className="text-warm-600">Search, filter, and delete sales</p>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Manage Sales</h1>
+          <p className="text-warm-600 dark:text-warm-400">Search, filter, and delete sales</p>
         </div>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          <div className="bg-red-100 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-6">
             {error}
           </div>
         )}
 
         {/* Search and Filter */}
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
           <form onSubmit={handleSearch} className="flex flex-col gap-4 md:flex-row md:gap-4">
             <input
               type="text"
               placeholder="Search by title or organizer name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 px-4 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
+              className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
             />
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
+              className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
             >
               <option value="">All Statuses</option>
               <option value="DRAFT">Draft</option>
@@ -147,42 +147,42 @@ const AdminSales = () => {
         </div>
 
         {/* Sales Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-warm-50 border-b border-warm-200">
+              <thead className="bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-warm-900">Title</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-warm-900">Organizer</th>
-                  <th className="px-6 py-3 text-center text-sm font-medium text-warm-900">Status</th>
-                  <th className="px-6 py-3 text-center text-sm font-medium text-warm-900">Items</th>
-                  <th className="px-6 py-3 text-right text-sm font-medium text-warm-900">Revenue</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-warm-900">Dates</th>
-                  <th className="px-6 py-3 text-center text-sm font-medium text-warm-900">Actions</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Title</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Organizer</th>
+                  <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Status</th>
+                  <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Items</th>
+                  <th className="px-6 py-3 text-right text-sm font-medium text-warm-900 dark:text-warm-100">Revenue</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Dates</th>
+                  <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-warm-200">
                 {sales.map(sale => (
-                  <tr key={sale.id} className="hover:bg-warm-50">
-                    <td className="px-6 py-4 text-sm text-warm-900 font-medium">{sale.title}</td>
-                    <td className="px-6 py-4 text-sm text-warm-600">{sale.organizerName}</td>
+                  <tr key={sale.id} className="hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
+                    <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">{sale.title}</td>
+                    <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{sale.organizerName}</td>
                     <td className="px-6 py-4 text-sm text-center">
                       <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${
                         sale.status === 'PUBLISHED' ? 'bg-green-100 text-green-700' :
-                        sale.status === 'ENDED' ? 'bg-gray-100 text-gray-700' :
+                        sale.status === 'ENDED' ? 'bg-gray-100 dark:bg-gray-700 text-gray-700' :
                         'bg-yellow-100 text-yellow-700'
                       }`}>
                         {sale.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-center text-warm-600">{sale.itemCount}</td>
-                    <td className="px-6 py-4 text-sm text-right text-warm-900 font-medium">
+                    <td className="px-6 py-4 text-sm text-center text-warm-600 dark:text-warm-400">{sale.itemCount}</td>
+                    <td className="px-6 py-4 text-sm text-right text-warm-900 dark:text-warm-100 font-medium">
                       ${(sale.revenue / 100).toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-warm-600">
+                    <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                       <div className="text-xs">
                         <p>{new Date(sale.startDate).toLocaleDateString()}</p>
-                        <p className="text-warm-500">to {new Date(sale.endDate).toLocaleDateString()}</p>
+                        <p className="text-warm-500 dark:text-warm-400">to {new Date(sale.endDate).toLocaleDateString()}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-center">
@@ -201,7 +201,7 @@ const AdminSales = () => {
           </div>
 
           {sales.length === 0 && (
-            <div className="text-center py-8 text-warm-500">
+            <div className="text-center py-8 text-warm-500 dark:text-warm-400">
               No sales found
             </div>
           )}
@@ -217,7 +217,7 @@ const AdminSales = () => {
                 className={`px-3 py-1 rounded ${
                   p === page
                     ? 'bg-amber-600 text-white'
-                    : 'bg-warm-200 text-warm-900 hover:bg-warm-300'
+                    : 'bg-warm-200 text-warm-900 dark:text-warm-100 hover:bg-warm-300'
                 }`}
               >
                 {p}
@@ -229,15 +229,15 @@ const AdminSales = () => {
         {/* Delete Confirmation Dialog */}
         {confirmDelete && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 max-w-sm">
-              <h3 className="text-lg font-bold text-warm-900 mb-4">Delete Sale</h3>
-              <p className="text-warm-600 mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm">
+              <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-4">Delete Sale</h3>
+              <p className="text-warm-600 dark:text-warm-400 mb-6">
                 Are you sure you want to permanently delete this sale? This action cannot be undone and will also delete all associated items.
               </p>
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setConfirmDelete(null)}
-                  className="px-4 py-2 border border-warm-300 rounded-md text-warm-900 hover:bg-warm-50"
+                  className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
                 >
                   Cancel
                 </button>

@@ -57,18 +57,18 @@ const CategoriesIndexPage = () => {
             Home
           </Link>
           <span>›</span>
-          <span className="text-warm-900 font-medium">Categories</span>
+          <span className="text-warm-900 dark:text-warm-100 font-medium">Categories</span>
         </nav>
 
-        <h1 className="text-3xl font-bold text-warm-900 mb-2">Browse by Category</h1>
-        <p className="text-warm-500 mb-8">
+        <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Browse by Category</h1>
+        <p className="text-warm-500 dark:text-warm-400 mb-8">
           Find what you're looking for across all active estate sales.
         </p>
 
         {isLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl p-6 animate-pulse">
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 animate-pulse">
                 <div className="w-10 h-10 bg-warm-200 rounded-full mb-3" />
                 <div className="h-4 bg-warm-200 rounded w-2/3 mb-2" />
                 <div className="h-3 bg-warm-200 rounded w-1/3" />
@@ -78,7 +78,7 @@ const CategoriesIndexPage = () => {
         ) : isError ? (
           <div className="text-center py-16">
             <p className="text-5xl mb-4">😕</p>
-            <p className="text-warm-700 text-lg mb-4">Failed to load categories.</p>
+            <p className="text-warm-700 dark:text-warm-300 text-lg mb-4">Failed to load categories.</p>
             <Link
               href="/"
               className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
@@ -89,8 +89,8 @@ const CategoriesIndexPage = () => {
         ) : entries.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-5xl mb-4">📦</p>
-            <h3 className="text-xl font-semibold text-warm-900 mb-2">No items listed yet</h3>
-            <p className="text-warm-600 mb-6">
+            <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No items listed yet</h3>
+            <p className="text-warm-600 dark:text-warm-400 mb-6">
               Check back soon — new sales go live every week.
             </p>
             <Link
@@ -109,13 +109,13 @@ const CategoriesIndexPage = () => {
                 <Link
                   key={cat}
                   href={`/categories/${cat}`}
-                  className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start gap-2 border border-warm-100 hover:border-amber-200"
+                  className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start gap-2 border border-warm-100 hover:border-amber-200"
                 >
                   <span className="text-3xl" role="img" aria-label={label}>
                     {icon}
                   </span>
-                  <span className="font-semibold text-warm-900 text-base">{label}</span>
-                  <span className="text-sm text-warm-500">
+                  <span className="font-semibold text-warm-900 dark:text-warm-100 text-base">{label}</span>
+                  <span className="text-sm text-warm-500 dark:text-warm-400">
                     {count.toLocaleString()} item{count !== 1 ? 's' : ''}
                   </span>
                 </Link>

@@ -24,6 +24,7 @@ import {
   type OfflineQueueItem,
 } from '../../hooks/useOfflineMode';
 import Skeleton from '../../components/Skeleton';
+import TierGate from '../../components/TierGate';
 
 const operationTypeLabels: Record<SyncOperationType, string> = {
   CREATE_ITEM: 'Create Item',
@@ -68,10 +69,7 @@ const OfflinePage = () => {
   }
 
   // Redirect if PRO tier not available
-  if (!canAccess('PRO')) {
-    router.push('/organizer/upgrade');
-    return null;
-  }
+  // TierGate handles PRO access check in the JSX below
 
   const handleSync = async () => {
     try {
@@ -95,6 +93,7 @@ const OfflinePage = () => {
         <title>Offline Mode - FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Offline Mode" description="Run your sale without internet. Sync inventory, process sales, and manage holds offline with automatic background sync.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -274,6 +273,7 @@ const OfflinePage = () => {
           </div>
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

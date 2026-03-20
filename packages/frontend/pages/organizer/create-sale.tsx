@@ -147,20 +147,20 @@ const CreateSalePage = () => {
       <Head>
         <title>Create Sale - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-2xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
             Back to dashboard
           </Link>
 
-          <h1 className="text-3xl font-bold text-warm-900 mb-2">Create a New Sale</h1>
-          <p className="text-warm-600 mb-8">Get your estate sale online in minutes.</p>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Create a New Sale</h1>
+          <p className="text-warm-600 dark:text-warm-400 mb-8">Get your estate sale online in minutes.</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <label htmlFor="title" className="block text-sm font-medium text-warm-700">Sale Title</label>
+                <label htmlFor="title" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Sale Title</label>
                 <Tooltip content="This is the first thing shoppers see. Be specific: 'Johnson Family Estate Sale' beats 'Estate Sale'. Include the neighborhood or street if public." />
               </div>
               <input
@@ -171,7 +171,7 @@ const CreateSalePage = () => {
                 onChange={handleChange}
                 onBlur={handleBlur}
                 required
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="e.g., Downtown Estate Sale"
               />
             </div>
@@ -179,7 +179,7 @@ const CreateSalePage = () => {
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
-                  <label htmlFor="description" className="block text-sm font-medium text-warm-700">Description</label>
+                  <label htmlFor="description" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Description</label>
                   <Tooltip content="Briefly describe what's for sale. Mention standout categories: 'Mid-century furniture, vintage tools, estate jewelry.' 2-3 sentences is enough." />
                 </div>
                 <button
@@ -198,7 +198,7 @@ const CreateSalePage = () => {
                 onChange={handleChange}
                 onBlur={handleBlur}
                 rows={4}
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="Describe the sale, highlight special items..."
               />
             </div>
@@ -207,7 +207,7 @@ const CreateSalePage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <label htmlFor="startDate" className="block text-sm font-medium text-warm-700">Start Date</label>
+                  <label htmlFor="startDate" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Start Date</label>
                   <Tooltip content="Set your start date to the first day items are available. Shoppers browse before doors open, so publish 3-5 days early." />
                 </div>
                 <input
@@ -218,15 +218,15 @@ const CreateSalePage = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   required
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
                 {validationErrors.startDate && touchedFields.has('startDate') && (
                   <p className="text-red-600 text-xs mt-1">{validationErrors.startDate}</p>
                 )}
-                <p className="text-xs text-warm-500 mt-1">Dates are based on your local timezone.</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Dates are based on your local timezone.</p>
               </div>
               <div>
-                <label htmlFor="endDate" className="block text-sm font-medium text-warm-700 mb-2">End Date</label>
+                <label htmlFor="endDate" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">End Date</label>
                 <input
                   id="endDate"
                   type="date"
@@ -235,7 +235,7 @@ const CreateSalePage = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   required
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
                 {validationErrors.endDate && touchedFields.has('endDate') && (
                   <p className="text-red-600 text-xs mt-1">{validationErrors.endDate}</p>
@@ -246,7 +246,7 @@ const CreateSalePage = () => {
             {/* Location */}
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <label htmlFor="address" className="block text-sm font-medium text-warm-700">Address</label>
+                <label htmlFor="address" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Address</label>
                 <Tooltip content="Your exact address is shown to shoppers after the sale is published. It's used to show your sale on the map." />
               </div>
               <input
@@ -257,14 +257,14 @@ const CreateSalePage = () => {
                 onChange={handleChange}
                 onBlur={handleBlur}
                 required
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="123 Main St"
               />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label htmlFor="city" className="block text-sm font-medium text-warm-700 mb-2">City</label>
+                <label htmlFor="city" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">City</label>
                 <input
                   id="city"
                   type="text"
@@ -273,11 +273,11 @@ const CreateSalePage = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   required
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
               <div>
-                <label htmlFor="state" className="block text-sm font-medium text-warm-700 mb-2">State</label>
+                <label htmlFor="state" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">State</label>
                 <input
                   id="state"
                   type="text"
@@ -287,11 +287,11 @@ const CreateSalePage = () => {
                   onBlur={handleBlur}
                   required
                   maxLength={2}
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
               <div>
-                <label htmlFor="zip" className="block text-sm font-medium text-warm-700 mb-2">ZIP</label>
+                <label htmlFor="zip" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">ZIP</label>
                 <input
                   id="zip"
                   type="text"
@@ -300,14 +300,14 @@ const CreateSalePage = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   required
-                  className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </div>
 
             {/* Neighborhood — U2 (autocomplete input, replaces scrolling dropdown) */}
             <div>
-              <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 mb-2">
+              <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
                 Neighborhood <span className="text-warm-400 font-normal">(optional \u2014 helps shoppers find you)</span>
               </label>
               <input
@@ -319,7 +319,7 @@ const CreateSalePage = () => {
                 onChange={handleChange}
                 onBlur={handleBlur}
                 placeholder="Start typing or select..."
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 autoComplete="off"
               />
               <datalist id="neighborhood-list">
@@ -342,7 +342,7 @@ const CreateSalePage = () => {
 
             {/* B1: Sale Type Selector */}
             <div>
-              <label htmlFor="saleType" className="block text-sm font-medium text-warm-700 mb-2">
+              <label htmlFor="saleType" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
                 Sale Type
               </label>
               <select
@@ -351,7 +351,7 @@ const CreateSalePage = () => {
                 value={formData.saleType}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               >
                 <option value="ESTATE">Estate Sale</option>
                 <option value="YARD">Yard Sale</option>

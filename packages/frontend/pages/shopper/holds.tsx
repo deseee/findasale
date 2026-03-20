@@ -87,17 +87,17 @@ const ShopperHoldsPage = () => {
       <Head>
         <title>My Holds - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="flex items-center gap-4 mb-8">
             <Link href="/shopper/dashboard" className="text-amber-600 hover:text-amber-800 text-sm">
               ← Dashboard
             </Link>
-            <h1 className="text-3xl font-bold text-warm-900">My Holds</h1>
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">My Holds</h1>
           </div>
 
           {activeHolds.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
               <p className="text-sm text-blue-900">
                 You have <span className="font-semibold">{activeHolds.length}</span> active{' '}
                 {activeHolds.length === 1 ? 'hold' : 'holds'}. Items are held for 24 hours from placement.
@@ -107,11 +107,11 @@ const ShopperHoldsPage = () => {
 
           {holdsLoading ? (
             <div className="text-center py-12">
-              <p className="text-warm-600">Loading your holds…</p>
+              <p className="text-warm-600 dark:text-warm-400">Loading your holds…</p>
             </div>
           ) : activeHolds.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center">
-              <p className="text-warm-700 text-lg mb-4">You don't have any active holds yet.</p>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center">
+              <p className="text-warm-700 dark:text-warm-300 text-lg mb-4">You don't have any active holds yet.</p>
               <Link
                 href="/sales"
                 className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-6 rounded-lg"
@@ -122,7 +122,7 @@ const ShopperHoldsPage = () => {
           ) : (
             <div className="space-y-4">
               {activeHolds.map((hold) => (
-                <div key={hold.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <div key={hold.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                   <div className="flex flex-col sm:flex-row gap-4 p-5">
                     <div className="flex-shrink-0 w-full sm:w-32">
                       <Link href={`/items/${hold.item.id}`}>
@@ -136,10 +136,10 @@ const ShopperHoldsPage = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col h-full justify-between">
                         <div>
-                          <Link href={`/items/${hold.item.id}`} className="font-semibold text-warm-900 hover:text-amber-600 line-clamp-2">
+                          <Link href={`/items/${hold.item.id}`} className="font-semibold text-warm-900 dark:text-warm-100 hover:text-amber-600 line-clamp-2">
                             {hold.item.title}
                           </Link>
-                          <p className="text-sm text-warm-500 mt-1">
+                          <p className="text-sm text-warm-500 dark:text-warm-400 mt-1">
                             <Link href={`/sales/${hold.item.sale.id}`} className="hover:text-amber-600">
                               {hold.item.sale.title}
                             </Link>
@@ -166,7 +166,7 @@ const ShopperHoldsPage = () => {
                       <button
                         onClick={() => handleReleaseHold(hold.id)}
                         disabled={cancelMutation.isPending}
-                        className="border border-red-400 text-red-600 hover:bg-red-50 font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                        className="border border-red-400 text-red-600 hover:bg-red-50 dark:bg-red-900/20 font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50"
                       >
                         {cancelMutation.isPending ? 'Releasing…' : 'Release Hold'}
                       </button>
@@ -179,14 +179,14 @@ const ShopperHoldsPage = () => {
 
           {expiredHolds.length > 0 && (
             <div className="mt-8">
-              <h2 className="text-lg font-semibold text-warm-700 mb-4">Released Holds</h2>
+              <h2 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-4">Released Holds</h2>
               <div className="space-y-2">
                 {expiredHolds.map((hold) => (
-                  <div key={hold.id} className="bg-warm-50 rounded-lg p-4 border border-warm-200">
-                    <Link href={`/items/${hold.item.id}`} className="text-warm-700 hover:text-amber-600">
+                  <div key={hold.id} className="bg-warm-50 dark:bg-gray-900 rounded-lg p-4 border border-warm-200 dark:border-gray-700">
+                    <Link href={`/items/${hold.item.id}`} className="text-warm-700 dark:text-warm-300 hover:text-amber-600">
                       {hold.item.title}
                     </Link>
-                    <p className="text-xs text-warm-500 mt-1">
+                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                       Released {formatDistanceToNow(parseISO(hold.expiresAt), { addSuffix: true })}
                     </p>
                   </div>

@@ -43,13 +43,13 @@ export default function LootLogPage() {
         <meta name="description" content="Your personal purchase history from estate sales" />
       </Head>
 
-      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-12">
           {/* Header */}
           <div className="flex justify-between items-center mb-12">
             <div>
-              <h1 className="text-4xl font-bold text-slate-900 mb-2">My Loot Log</h1>
-              <p className="text-slate-600">Your personal purchase history across all sales</p>
+              <h1 className="text-4xl font-bold text-slate-900 dark:text-gray-100 mb-2">My Loot Log</h1>
+              <p className="text-slate-600 dark:text-gray-400">Your personal purchase history across all sales</p>
             </div>
             <button
               onClick={handleShare}
@@ -88,8 +88,8 @@ export default function LootLogPage() {
           {/* Gallery Grid */}
           {isEmpty ? (
             <div className="text-center py-24">
-              <p className="text-2xl font-semibold text-slate-700 mb-4">No treasures found yet</p>
-              <p className="text-slate-600 mb-8">Start attending sales and making purchases to build your loot log!</p>
+              <p className="text-2xl font-semibold text-slate-700 dark:text-gray-300 mb-4">No treasures found yet</p>
+              <p className="text-slate-600 dark:text-gray-400 mb-8">Start attending sales and making purchases to build your loot log!</p>
               <Link
                 href="/sales"
                 className="px-6 py-3 bg-[#8FB897] text-white rounded-lg hover:bg-opacity-90 transition inline-block"
@@ -106,7 +106,7 @@ export default function LootLogPage() {
                     href={`/shopper/loot-log/${purchase.id}`}
                     className="group cursor-pointer"
                   >
-                    <div className="relative w-full h-48 bg-slate-200 rounded-lg overflow-hidden mb-3">
+                    <div className="relative w-full h-48 bg-slate-200 dark:bg-gray-700 rounded-lg overflow-hidden mb-3">
                       {purchase.item.imageUrl ? (
                         <Image
                           src={purchase.item.imageUrl}
@@ -121,12 +121,12 @@ export default function LootLogPage() {
                         </div>
                       )}
                     </div>
-                    <h3 className="font-semibold text-slate-900 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">
+                    <h3 className="font-semibold text-slate-900 dark:text-gray-100 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">
                       {purchase.item.title}
                     </h3>
-                    <p className="text-sm text-slate-600 mb-1">{purchase.item.category}</p>
+                    <p className="text-sm text-slate-600 dark:text-gray-400 mb-1">{purchase.item.category}</p>
                     <p className="text-lg font-bold text-[#8FB897] mb-1">${purchase.amount.toFixed(2)}</p>
-                    <p className="text-xs text-slate-500">{purchase.sale.title}</p>
+                    <p className="text-xs text-slate-500 dark:text-gray-400">{purchase.sale.title}</p>
                   </Link>
                 ))}
               </div>
@@ -152,10 +152,10 @@ export default function LootLogPage() {
 
 function StatBox({ label, value, icon }: { label: string; value: string | number; icon: string }) {
   return (
-    <div className="bg-white rounded-lg p-6 border border-slate-200 text-center">
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-slate-200 dark:border-gray-700 text-center">
       <div className="text-3xl mb-2">{icon}</div>
-      <p className="text-slate-600 text-sm font-medium mb-2">{label}</p>
-      <p className="text-2xl font-bold text-slate-900">{value}</p>
+      <p className="text-slate-600 dark:text-gray-400 text-sm font-medium mb-2">{label}</p>
+      <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{value}</p>
     </div>
   );
 }

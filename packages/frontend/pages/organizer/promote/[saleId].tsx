@@ -60,17 +60,17 @@ const ExportCard: React.FC<ExportCardProps> = ({
   loading,
 }) => {
   return (
-    <div className="border border-warm-200 rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition">
+    <div className="border border-warm-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition">
       <div className="text-4xl mb-3">{icon}</div>
-      <h3 className="text-lg font-semibold text-warm-900 mb-2">{title}</h3>
-      <p className="text-warm-700 text-sm mb-6 leading-relaxed">{description}</p>
+      <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">{title}</h3>
+      <p className="text-warm-700 dark:text-warm-300 text-sm mb-6 leading-relaxed">{description}</p>
       <div className="flex gap-3">
         <button
           onClick={onClick}
           disabled={loading}
           className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
             loading
-              ? 'bg-warm-300 text-warm-700 cursor-not-allowed'
+              ? 'bg-warm-300 text-warm-700 dark:text-warm-300 cursor-not-allowed'
               : 'bg-amber-600 text-white hover:bg-amber-700'
           }`}
         >
@@ -81,8 +81,8 @@ const ExportCard: React.FC<ExportCardProps> = ({
           disabled={loading}
           className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
             loading
-              ? 'bg-warm-200 text-warm-700 cursor-not-allowed'
-              : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+              ? 'bg-warm-200 text-warm-700 dark:text-warm-300 cursor-not-allowed'
+              : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
           }`}
         >
           {loading ? 'Processing...' : secondaryButtonText}
@@ -192,7 +192,7 @@ export default function PromotePage(): JSX.Element {
   // Loading state
   if (authLoading || saleLoading) {
     return (
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Skeleton className="h-12 w-64 mb-4" />
           <Skeleton className="h-6 w-96 mb-8" />
@@ -209,11 +209,11 @@ export default function PromotePage(): JSX.Element {
   // Error states
   if (isError || !sale) {
     return (
-      <div className="min-h-screen bg-warm-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 text-center max-w-md">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center max-w-md">
           <div className="text-5xl mb-4">🔍</div>
-          <h1 className="text-2xl font-bold text-warm-900 mb-2">Sale not found</h1>
-          <p className="text-warm-700 mb-6">
+          <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">Sale not found</h1>
+          <p className="text-warm-700 dark:text-warm-300 mb-6">
             This sale may have been deleted or moved. Check your dashboard for active sales.
           </p>
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline font-medium">
@@ -227,13 +227,13 @@ export default function PromotePage(): JSX.Element {
   // Check authorization
   if (sale.organizer.userId !== user?.id) {
     return (
-      <div className="min-h-screen bg-warm-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 text-center max-w-md">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center max-w-md">
           <div className="text-5xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-warm-900 mb-2">
+          <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">
             You don't have access to this sale
           </h1>
-          <p className="text-warm-700 mb-6">Only the sale organizer can export.</p>
+          <p className="text-warm-700 dark:text-warm-300 mb-6">Only the sale organizer can export.</p>
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline font-medium">
             Back to Dashboard
           </Link>
@@ -321,7 +321,7 @@ export default function PromotePage(): JSX.Element {
         <title>Share Your Sale — FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-8">
           {/* Back link */}
           <Link
@@ -332,24 +332,24 @@ export default function PromotePage(): JSX.Element {
           </Link>
 
           {/* Page header */}
-          <h1 className="text-4xl font-bold text-warm-900 mb-2">Share Your Sale</h1>
-          <p className="text-warm-700 text-lg mb-8">
+          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Share Your Sale</h1>
+          <p className="text-warm-700 dark:text-warm-300 text-lg mb-8">
             Export your items to reach more buyers on platforms they already use
           </p>
 
           {/* Info card */}
           {itemCount > 0 && (
-            <div className="bg-warm-50 border border-warm-200 rounded-lg p-6 mb-8">
+            <div className="bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8">
               <div className="flex items-start gap-4">
                 <div className="text-2xl">📦</div>
                 <div className="flex-1">
-                  <p className="text-warm-900 font-semibold">
+                  <p className="text-warm-900 dark:text-warm-100 font-semibold">
                     {itemCount} {itemCount === 1 ? 'item' : 'items'} will be exported
                   </p>
-                  <p className="text-warm-700 text-sm mt-2">
+                  <p className="text-warm-700 dark:text-warm-300 text-sm mt-2">
                     💧 All photos will include a FindA.Sale watermark
                   </p>
-                  <p className="text-warm-700 text-sm">
+                  <p className="text-warm-700 dark:text-warm-300 text-sm">
                     ℹ️ Watermarks protect your inventory from unauthorized copying
                   </p>
                 </div>
@@ -394,16 +394,16 @@ export default function PromotePage(): JSX.Element {
           </div>
 
           {/* Social Template Section */}
-          <div className="bg-white border border-warm-200 rounded-lg p-6 mb-12">
-            <h2 className="text-2xl font-bold text-warm-900 mb-6">Create Social Posts</h2>
+          <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-12">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">Create Social Posts</h2>
 
             {/* Item Picker */}
             <div className="mb-6">
-              <label className="block text-sm font-semibold text-warm-900 mb-2">Select Item</label>
+              <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">Select Item</label>
               <select
                 value={selectedItemId}
                 onChange={(e) => setSelectedItemId(e.target.value)}
-                className="w-full border border-warm-200 rounded-lg px-4 py-2 bg-white text-warm-900 focus:outline-none focus:ring-2 focus:ring-amber-600"
+                className="w-full border border-warm-200 dark:border-gray-700 rounded-lg px-4 py-2 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-amber-600"
               >
                 <option value="">Choose an item...</option>
                 {itemsData.map((item) => (
@@ -418,7 +418,7 @@ export default function PromotePage(): JSX.Element {
               <>
                 {/* Tone Selector */}
                 <div className="mb-6">
-                  <label className="block text-sm font-semibold text-warm-900 mb-3">Tone</label>
+                  <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Tone</label>
                   <div className="flex gap-3">
                     {(['casual', 'professional', 'friendly'] as const).map((tone) => (
                       <button
@@ -427,7 +427,7 @@ export default function PromotePage(): JSX.Element {
                         className={`px-4 py-2 rounded-full font-medium transition ${
                           selectedTone === tone
                             ? 'bg-amber-600 text-white'
-                            : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+                            : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
                         }`}
                       >
                         {tone.charAt(0).toUpperCase() + tone.slice(1)}
@@ -438,7 +438,7 @@ export default function PromotePage(): JSX.Element {
 
                 {/* Platform Selector */}
                 <div className="mb-6">
-                  <label className="block text-sm font-semibold text-warm-900 mb-3">Platform</label>
+                  <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Platform</label>
                   <div className="flex gap-3">
                     {(['instagram', 'facebook'] as const).map((platform) => (
                       <button
@@ -447,7 +447,7 @@ export default function PromotePage(): JSX.Element {
                         className={`px-4 py-2 rounded-full font-medium transition ${
                           selectedPlatform === platform
                             ? 'bg-amber-600 text-white'
-                            : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+                            : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
                         }`}
                       >
                         {platform.charAt(0).toUpperCase() + platform.slice(1)}
@@ -463,7 +463,7 @@ export default function PromotePage(): JSX.Element {
                     <Skeleton className="h-12 w-full" />
                   </div>
                 ) : socialTemplate ? (
-                  <div className="bg-warm-50 border border-warm-200 rounded-lg p-6 space-y-4">
+                  <div className="bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg p-6 space-y-4">
                     {/* Preview Image */}
                     {socialTemplate.photoUrl && (
                       <div className="mb-4">
@@ -477,13 +477,13 @@ export default function PromotePage(): JSX.Element {
 
                     {/* Post Text */}
                     <div>
-                      <p className="text-sm font-semibold text-warm-700 mb-2">Post Text</p>
-                      <p className="text-warm-900 leading-relaxed whitespace-pre-wrap">{socialTemplate.text}</p>
+                      <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-2">Post Text</p>
+                      <p className="text-warm-900 dark:text-warm-100 leading-relaxed whitespace-pre-wrap">{socialTemplate.text}</p>
                     </div>
 
                     {/* Hashtags */}
                     <div>
-                      <p className="text-sm font-semibold text-warm-700 mb-2">Hashtags</p>
+                      <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-2">Hashtags</p>
                       <div className="flex flex-wrap gap-2">
                         {socialTemplate.hashtags.map((tag) => (
                           <button
@@ -492,7 +492,7 @@ export default function PromotePage(): JSX.Element {
                               navigator.clipboard.writeText(tag);
                               showToast(`${tag} copied!`, 'success');
                             }}
-                            className="bg-warm-100 text-warm-900 px-3 py-1 rounded-full text-sm hover:bg-warm-200 transition cursor-pointer"
+                            className="bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 px-3 py-1 rounded-full text-sm hover:bg-warm-200 dark:hover:bg-gray-600 transition cursor-pointer"
                           >
                             {tag}
                           </button>
@@ -501,10 +501,10 @@ export default function PromotePage(): JSX.Element {
                     </div>
 
                     {/* Character Count */}
-                    <div className="flex items-center justify-between pt-4 border-t border-warm-200">
+                    <div className="flex items-center justify-between pt-4 border-t border-warm-200 dark:border-gray-700">
                       <div>
-                        <p className="text-sm text-warm-700">
-                          Characters: <span className={socialTemplate.overLimit ? 'text-red-600 font-semibold' : 'text-warm-900 font-semibold'}>
+                        <p className="text-sm text-warm-700 dark:text-warm-300">
+                          Characters: <span className={socialTemplate.overLimit ? 'text-red-600 font-semibold' : 'text-warm-900 dark:text-warm-100 font-semibold'}>
                             {socialTemplate.charCount} / {socialTemplate.platformLimit}
                           </span>
                         </p>
@@ -526,14 +526,14 @@ export default function PromotePage(): JSX.Element {
           </div>
 
           {/* Help section */}
-          <details className="bg-white border border-warm-200 rounded-lg p-6 mb-8 lg:mb-0 lg:block">
-            <summary className="cursor-pointer font-semibold text-warm-900 text-lg mb-4 lg:mb-6">
+          <details className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8 lg:mb-0 lg:block">
+            <summary className="cursor-pointer font-semibold text-warm-900 dark:text-warm-100 text-lg mb-4 lg:mb-6">
               How to use these exports
             </summary>
 
-            <div className="space-y-6 text-sm text-warm-600">
+            <div className="space-y-6 text-sm text-warm-600 dark:text-warm-400">
               <div>
-                <h4 className="font-semibold text-warm-900 mb-2">📋 EstateSales.NET</h4>
+                <h4 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">📋 EstateSales.NET</h4>
                 <ol className="list-decimal list-inside space-y-1">
                   <li>Click "Export & Download" to save the CSV file</li>
                   <li>Go to EstateSales.NET and log in</li>
@@ -544,7 +544,7 @@ export default function PromotePage(): JSX.Element {
               </div>
 
               <div>
-                <h4 className="font-semibold text-warm-900 mb-2">👥 Facebook Marketplace</h4>
+                <h4 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">👥 Facebook Marketplace</h4>
                 <ol className="list-decimal list-inside space-y-1">
                   <li>Click "Export & Download" to save the JSON file</li>
                   <li>Go to Facebook Marketplace (on Facebook.com or Facebook app)</li>
@@ -557,7 +557,7 @@ export default function PromotePage(): JSX.Element {
               </div>
 
               <div>
-                <h4 className="font-semibold text-warm-900 mb-2">🏠 Craigslist</h4>
+                <h4 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">🏠 Craigslist</h4>
                 <ol className="list-decimal list-inside space-y-1">
                   <li>Click "Export & Download" or "Copy to Clipboard"</li>
                   <li>Go to Craigslist.org → "Post to Classifieds"</li>
@@ -567,8 +567,8 @@ export default function PromotePage(): JSX.Element {
                 </ol>
               </div>
 
-              <div className="bg-warm-50 border border-warm-200 rounded p-4">
-                <h4 className="font-semibold text-warm-900 mb-2">💡 Pro Tips</h4>
+              <div className="bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded p-4">
+                <h4 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">💡 Pro Tips</h4>
                 <ul className="list-disc list-inside space-y-1">
                   <li>Always download/copy both the listings AND the photo URLs</li>
                   <li>Watermarked photos protect your inventory — don't remove them</li>

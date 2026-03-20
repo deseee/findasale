@@ -30,9 +30,9 @@ const ZipCodePage = () => {
         <title>Sales in {zip} - FindA.Sale</title>
         <meta name="description" content={`Find estate sales in ZIP code ${zip}`} />
       </Head>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold text-warm-900 mb-8">Sales in {zip}</h1>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">Sales in {zip}</h1>
 
           {isLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -44,7 +44,7 @@ const ZipCodePage = () => {
 
           {isError && (
             <div className="text-center py-8">
-              <p className="text-warm-600">Unable to load sales. Please try again.</p>
+              <p className="text-warm-600 dark:text-warm-400">Unable to load sales. Please try again.</p>
             </div>
           )}
 
@@ -68,7 +68,7 @@ const ZipCodePage = () => {
             </>
           ) : (
             <div className="text-center py-8">
-              <p className="text-warm-600">No sales found in {zip}.</p>
+              <p className="text-warm-600 dark:text-warm-400">No sales found in {zip}.</p>
             </div>
           )}
         </div>

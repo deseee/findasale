@@ -136,24 +136,24 @@ const WishlistsPage = () => {
   const selectedWishlist = wishlists.find((w) => w.id === selectedWishlistId);
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>My Wishlists - FindA.Sale</title>
       </Head>
 
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-warm-900 mb-2">My Wishlists</h1>
-          <p className="text-warm-600">Save items to named wishlists for moving, decorating, gifting, and more.</p>
+          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">My Wishlists</h1>
+          <p className="text-warm-600 dark:text-warm-400">Save items to named wishlists for moving, decorating, gifting, and more.</p>
         </div>
 
         {/* New Wishlist Form */}
         {showNewForm && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold text-warm-900 mb-4">Create New Wishlist</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Create New Wishlist</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
                   Wishlist Name
                 </label>
                 <input
@@ -161,18 +161,18 @@ const WishlistsPage = () => {
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="e.g., Moving to New Place"
-                  className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-warm-700 mb-2">
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
                   Occasion (optional)
                 </label>
                 <select
                   value={newOccasion}
                   onChange={(e) => setNewOccasion(e.target.value)}
-                  className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="">Select an occasion</option>
                   <option value="moving">Moving</option>
@@ -189,9 +189,9 @@ const WishlistsPage = () => {
                   id="public-toggle"
                   checked={newIsPublic}
                   onChange={(e) => setNewIsPublic(e.target.checked)}
-                  className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded"
+                  className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
                 />
-                <label htmlFor="public-toggle" className="ml-2 text-sm text-warm-700">
+                <label htmlFor="public-toggle" className="ml-2 text-sm text-warm-700 dark:text-warm-300">
                   Make this wishlist public (can be shared)
                 </label>
               </div>
@@ -211,7 +211,7 @@ const WishlistsPage = () => {
                     setNewOccasion('');
                     setNewIsPublic(false);
                   }}
-                  className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-semibold py-2 px-6 rounded-lg transition-colors"
+                  className="bg-warm-200 hover:bg-warm-300 text-warm-900 dark:text-warm-100 font-semibold py-2 px-6 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
@@ -230,10 +230,10 @@ const WishlistsPage = () => {
         )}
 
         {isLoading ? (
-          <div className="text-center py-12 text-warm-600">Loading wishlists...</div>
+          <div className="text-center py-12 text-warm-600 dark:text-warm-400">Loading wishlists...</div>
         ) : wishlists.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-warm-600 text-lg mb-4">No wishlists yet. Create one to get started!</p>
+            <p className="text-warm-600 dark:text-warm-400 text-lg mb-4">No wishlists yet. Create one to get started!</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -246,14 +246,14 @@ const WishlistsPage = () => {
                   className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                     selectedWishlistId === wishlist.id
                       ? 'border-amber-600 bg-amber-50'
-                      : 'border-warm-200 bg-white hover:border-warm-300'
+                      : 'border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-warm-300'
                   }`}
                 >
-                  <div className="font-semibold text-warm-900">{wishlist.name}</div>
-                  <div className="text-sm text-warm-600 mt-1">
+                  <div className="font-semibold text-warm-900 dark:text-warm-100">{wishlist.name}</div>
+                  <div className="text-sm text-warm-600 dark:text-warm-400 mt-1">
                     {wishlist.occasion && (
                       <>
-                        <span className="inline-block bg-warm-100 px-2 py-1 rounded text-xs mr-2">
+                        <span className="inline-block bg-warm-100 dark:bg-gray-700 px-2 py-1 rounded text-xs mr-2">
                           {occasionLabels[wishlist.occasion] || wishlist.occasion}
                         </span>
                       </>
@@ -267,12 +267,12 @@ const WishlistsPage = () => {
             {/* Wishlist Items Detail */}
             {selectedWishlist && (
               <div className="lg:col-span-2">
-                <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                   <div className="flex justify-between items-start mb-6">
                     <div>
-                      <h2 className="text-2xl font-bold text-warm-900">{selectedWishlist.name}</h2>
+                      <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100">{selectedWishlist.name}</h2>
                       {selectedWishlist.occasion && (
-                        <p className="text-sm text-warm-600 mt-1">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">
                           Occasion: {occasionLabels[selectedWishlist.occasion] || selectedWishlist.occasion}
                         </p>
                       )}
@@ -289,14 +289,14 @@ const WishlistsPage = () => {
                   </div>
 
                   {selectedWishlist.items.length === 0 ? (
-                    <div className="text-center py-12 text-warm-600">
+                    <div className="text-center py-12 text-warm-600 dark:text-warm-400">
                       <p>No items in this wishlist yet.</p>
                       <p className="text-sm mt-2">Browse sales and click the bookmark icon to add items.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       {selectedWishlist.items.map((wishlistItem) => (
-                        <div key={wishlistItem.id} className="group relative bg-warm-50 rounded-lg overflow-hidden border border-warm-200">
+                        <div key={wishlistItem.id} className="group relative bg-warm-50 dark:bg-gray-900 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
                           {/* Item Photo */}
                           <Link href={`/items/${wishlistItem.item.id}`}>
                             <div className="relative w-full h-32 bg-warm-200 overflow-hidden">
@@ -318,11 +318,11 @@ const WishlistsPage = () => {
                           {/* Item Info */}
                           <div className="p-3">
                             <Link href={`/items/${wishlistItem.item.id}`}>
-                              <h3 className="font-semibold text-sm text-warm-900 truncate hover:text-amber-600">
+                              <h3 className="font-semibold text-sm text-warm-900 dark:text-warm-100 truncate hover:text-amber-600">
                                 {wishlistItem.item.title}
                               </h3>
                             </Link>
-                            <p className="text-xs text-warm-600 mt-1">
+                            <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">
                               {wishlistItem.item.sale.title}
                             </p>
                             {(wishlistItem.item.price || wishlistItem.item.auctionStartPrice) && (

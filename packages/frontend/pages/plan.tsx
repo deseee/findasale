@@ -97,12 +97,12 @@ const PlanPage = () => {
         />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white flex flex-col">
+      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800 flex flex-col">
         {/* Header */}
-        <div className="bg-white border-b border-warm-200 py-8">
+        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 py-8">
           <div className="max-w-2xl mx-auto px-4">
-            <h1 className="text-4xl font-bold text-warm-900 mb-2">Estate Sale Planning Assistant</h1>
-            <p className="text-warm-600 text-lg">
+            <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Estate Sale Planning Assistant</h1>
+            <p className="text-warm-600 dark:text-warm-400 text-lg">
               Free guidance for families and executors
             </p>
           </div>
@@ -114,7 +114,7 @@ const PlanPage = () => {
           <div className="flex-grow overflow-y-auto mb-6 space-y-4 min-h-96">
             {messages.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-warm-600 mb-6 text-lg">
+                <p className="text-warm-600 dark:text-warm-400 mb-6 text-lg">
                   Ask anything about planning your estate sale. We're here to help!
                 </p>
 
@@ -125,7 +125,7 @@ const PlanPage = () => {
                       key={prompt}
                       onClick={() => sendMessage(prompt)}
                       disabled={isLoading}
-                      className="px-4 py-3 bg-warm-100 hover:bg-warm-200 text-warm-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left border border-warm-300"
+                      className="px-4 py-3 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left border border-warm-300 dark:border-gray-600"
                     >
                       {prompt}
                     </button>
@@ -142,8 +142,8 @@ const PlanPage = () => {
                 <div
                   className={`max-w-xs sm:max-w-md lg:max-w-lg px-4 py-3 rounded-lg ${
                     msg.role === 'user'
-                      ? 'bg-warm-100 text-warm-900 rounded-br-none'
-                      : 'bg-white border border-warm-200 text-warm-900 rounded-bl-none'
+                      ? 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 rounded-br-none'
+                      : 'bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-warm-900 dark:text-warm-100 rounded-bl-none'
                   }`}
                 >
                   {msg.role === 'assistant' && (
@@ -151,7 +151,7 @@ const PlanPage = () => {
                       <div className="w-6 h-6 rounded-full bg-sage-600 text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">
                         AI
                       </div>
-                      <span className="text-xs text-warm-500 font-medium">Planning Assistant</span>
+                      <span className="text-xs text-warm-500 dark:text-warm-400 font-medium">Planning Assistant</span>
                     </div>
                   )}
                   <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
@@ -161,7 +161,7 @@ const PlanPage = () => {
 
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-white border border-warm-200 px-4 py-3 rounded-lg rounded-bl-none">
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 px-4 py-3 rounded-lg rounded-bl-none">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-sage-600 text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">
                       AI
@@ -178,7 +178,7 @@ const PlanPage = () => {
 
             {error && (
               <div className="flex justify-center">
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm max-w-xs">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm max-w-xs">
                   {error}
                 </div>
               </div>
@@ -188,7 +188,7 @@ const PlanPage = () => {
           </div>
 
           {/* Input area */}
-          <div className="border-t border-warm-200 pt-4 mt-auto">
+          <div className="border-t border-warm-200 dark:border-gray-700 pt-4 mt-auto">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -197,7 +197,7 @@ const PlanPage = () => {
                 onKeyDown={handleKeyDown}
                 disabled={isLoading}
                 placeholder="Ask about your estate sale..."
-                className="flex-grow px-4 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 disabled:bg-warm-50 text-sm"
+                className="flex-grow px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 disabled:bg-warm-50 text-sm"
               />
               <button
                 onClick={handleSend}
@@ -207,16 +207,16 @@ const PlanPage = () => {
                 Send
               </button>
             </div>
-            <p className="text-xs text-warm-500 mt-2">
+            <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
               You can send up to 20 messages per session
             </p>
           </div>
         </div>
 
         {/* Footer CTA */}
-        <div className="bg-warm-50 border-t border-warm-200 py-6">
+        <div className="bg-warm-50 dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 py-6">
           <div className="max-w-2xl mx-auto px-4 text-center">
-            <p className="text-warm-700 mb-3">
+            <p className="text-warm-700 dark:text-warm-300 mb-3">
               Ready to list your sale?{' '}
               <Link href="/guide" className="text-sage-600 hover:text-sage-700 font-medium underline">
                 Read the organizer guide →

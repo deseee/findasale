@@ -80,10 +80,10 @@ export default function SubscriptionPage() {
         <Head>
           <title>Subscription Settings | FindA.Sale</title>
         </Head>
-        <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="min-h-screen bg-white dark:bg-gray-800 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sage-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading subscription...</p>
+            <p className="text-gray-600 dark:text-gray-400">Loading subscription...</p>
           </div>
         </div>
       </>
@@ -96,10 +96,10 @@ export default function SubscriptionPage() {
         <Head>
           <title>Subscription Settings | FindA.Sale</title>
         </Head>
-        <div className="min-h-screen bg-white p-8">
+        <div className="min-h-screen bg-white dark:bg-gray-800 p-8">
           <div className="max-w-2xl mx-auto">
-            <h1 className="font-fraunces text-3xl font-bold text-gray-900 mb-8">Subscription Settings</h1>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h1 className="font-fraunces text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">Subscription Settings</h1>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
               <p className="text-red-900">Failed to load subscription information</p>
             </div>
           </div>
@@ -118,11 +118,11 @@ export default function SubscriptionPage() {
       <div className="min-h-screen bg-gradient-to-br from-sage-50 to-white py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
-          <h1 className="font-fraunces text-3xl font-bold text-gray-900 mb-8">Subscription Settings</h1>
+          <h1 className="font-fraunces text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">Subscription Settings</h1>
 
           {/* SIMPLE Plan Message */}
           {subscription.tier === 'SIMPLE' && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
               <h2 className="font-semibold text-blue-900 mb-3">You're on the Free Plan</h2>
               <p className="text-blue-800 mb-4">
                 Upgrade to PRO to unlock batch operations, analytics, exports, and more.
@@ -135,24 +135,24 @@ export default function SubscriptionPage() {
 
           {/* PRO/TEAMS Plan Details */}
           {(subscription.tier === 'PRO' || subscription.tier === 'TEAMS') && (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
               {/* Current Plan Section */}
-              <div className="p-8 border-b border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Current Plan</h2>
+              <div className="p-8 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Current Plan</h2>
 
                 <div className="grid grid-cols-2 gap-6 mb-8">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Plan</p>
-                    <p className="text-lg font-semibold text-gray-900">{subscription.tier}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Plan</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{subscription.tier}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Billing Interval</p>
-                    <p className="text-lg font-semibold text-gray-900 capitalize">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Billing Interval</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
                       {subscription.billingInterval || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Status</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</p>
                     <div className="flex items-center">
                       <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
                         subscription.status === 'active' ? 'bg-green-500' :
@@ -160,14 +160,14 @@ export default function SubscriptionPage() {
                         subscription.status === 'canceled' ? 'bg-gray-400' :
                         'bg-blue-500'
                       }`}></span>
-                      <p className="text-lg font-semibold text-gray-900 capitalize">
+                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
                         {subscription.status || 'Unknown'}
                       </p>
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Renews On</p>
-                    <p className="text-lg font-semibold text-gray-900">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Renews On</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                       {subscription.currentPeriodEnd
                         ? new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {
                             year: 'numeric',
@@ -181,7 +181,7 @@ export default function SubscriptionPage() {
 
                 {/* Cancellation Status */}
                 {subscription.cancelAtPeriodEnd && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8">
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg p-4 mb-8">
                     <p className="text-amber-900">
                       ⚠️ Your subscription is scheduled to end on{' '}
                       <strong>
@@ -201,8 +201,8 @@ export default function SubscriptionPage() {
 
               {/* Usage Stats Section */}
               {(subscription.tier === 'PRO' || subscription.tier === 'TEAMS') && (
-                <div className="p-8 border-t border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6">Usage Overview</h3>
+                <div className="p-8 border-t border-gray-200 dark:border-gray-700">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Usage Overview</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Items per Sale */}
@@ -214,7 +214,7 @@ export default function SubscriptionPage() {
                         unit="items"
                         showPercent={false}
                       />
-                      <p className="text-xs text-gray-500 mt-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         {subscription.tier === 'PRO'
                           ? 'PRO: 500 items per sale'
                           : 'TEAMS: Unlimited items per sale'}
@@ -230,7 +230,7 @@ export default function SubscriptionPage() {
                         unit="photos"
                         showPercent={false}
                       />
-                      <p className="text-xs text-gray-500 mt-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         {subscription.tier === 'PRO'
                           ? 'PRO: 10 photos per item'
                           : 'TEAMS: Unlimited photos per item'}
@@ -238,7 +238,7 @@ export default function SubscriptionPage() {
                     </div>
                   </div>
 
-                  <p className="text-sm text-gray-600 mt-6">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-6">
                     💡 Usage stats are computed from your sales data. Check your{' '}
                     <Link href="/organizer/dashboard" className="text-sage-600 hover:text-sage-700 font-semibold">
                       dashboard
@@ -251,7 +251,7 @@ export default function SubscriptionPage() {
 
               {/* Payment Method & Actions */}
               <div className="p-8">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Plan Actions</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Plan Actions</h3>
 
                 <div className="space-y-4">
                   <Link
@@ -264,7 +264,7 @@ export default function SubscriptionPage() {
                   {!subscription.cancelAtPeriodEnd && (
                     <button
                       onClick={() => setShowCancelConfirm(true)}
-                      className="block w-full bg-red-50 text-red-700 py-3 px-4 rounded-lg font-semibold hover:bg-red-100 transition border border-red-200"
+                      className="block w-full bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 py-3 px-4 rounded-lg font-semibold hover:bg-red-100 transition border border-red-200 dark:border-red-800"
                     >
                       Cancel Subscription
                     </button>
@@ -273,7 +273,7 @@ export default function SubscriptionPage() {
                   {subscription.cancelAtPeriodEnd && (
                     <button
                       disabled
-                      className="block w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-lg font-semibold cursor-not-allowed"
+                      className="block w-full bg-gray-100 text-gray-700 dark:text-gray-300 py-3 px-4 rounded-lg font-semibold cursor-not-allowed"
                     >
                       Subscription Ending
                     </button>
@@ -286,9 +286,9 @@ export default function SubscriptionPage() {
           {/* Cancel Confirmation Modal */}
           {showCancelConfirm && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Cancel Subscription?</h2>
-                <p className="text-gray-600 mb-4">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-8">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Cancel Subscription?</h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
                   Your {subscription.tier} subscription will remain active until{' '}
                   <strong>
                     {subscription.currentPeriodEnd
@@ -305,7 +305,7 @@ export default function SubscriptionPage() {
                   <button
                     onClick={() => setShowCancelConfirm(false)}
                     disabled={canceling}
-                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-900 rounded-lg font-semibold hover:bg-gray-200 transition disabled:opacity-50"
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-900 dark:text-gray-100 rounded-lg font-semibold hover:bg-gray-200 transition disabled:opacity-50"
                   >
                     Keep Subscription
                   </button>

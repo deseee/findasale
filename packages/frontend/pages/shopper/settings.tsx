@@ -36,7 +36,7 @@ function SettingsPage() {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-600">Loading settings...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
         </div>
       </Layout>
     );
@@ -64,20 +64,20 @@ function SettingsPage() {
         <div className="max-w-4xl mx-auto py-8 px-4">
           {/* Header */}
           <div className="mb-10">
-            <h1 className="text-4xl font-bold text-gray-900">Settings</h1>
-            <p className="text-gray-600 mt-2">Manage your account and preferences</p>
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your account and preferences</p>
           </div>
 
           {/* Display & Performance Section */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Display & Performance</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Display & Performance</h2>
 
             {/* Low Bandwidth Mode */}
-            <div className="border-b border-gray-200 pb-6 mb-6">
+            <div className="border-b border-gray-200 dark:border-gray-700 pb-6 mb-6">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">Low-Bandwidth Mode</h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Low-Bandwidth Mode</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                     Reduces image quality and disables video previews to save data on slow connections.
                   </p>
                   {isManualOverride && (
@@ -96,7 +96,7 @@ function SettingsPage() {
                   aria-label="Toggle low-bandwidth mode"
                 >
                   <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 transition-transform ${
                       lowBandwidthEnabled ? 'translate-x-7' : 'translate-x-1'
                     }`}
                   />
@@ -104,7 +104,7 @@ function SettingsPage() {
               </div>
 
               {lowBandwidthEnabled && (
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg">
                   <p className="text-sm text-amber-800">
                     <strong>Active:</strong> Images are optimized for slower connections and video previews are disabled.
                   </p>
@@ -113,9 +113,9 @@ function SettingsPage() {
             </div>
 
             {/* Network Detection Info */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-xs font-semibold text-gray-600 mb-2">Network Detection</p>
-              <p className="text-sm text-gray-700">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Network Detection</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300">
                 Low-Bandwidth Mode is{' '}
                 <span className={isManualOverride ? 'text-amber-700 font-semibold' : 'text-gray-700'}>
                   {isManualOverride ? 'manually overridden' : isLowBandwidth ? 'auto-detected' : 'not active'}
@@ -125,16 +125,16 @@ function SettingsPage() {
           </div>
 
           {/* Notification Settings Section */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Notifications</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Notifications</h2>
 
             <div className="space-y-6">
               {/* Email Notifications */}
-              <div className="border-b border-gray-200 pb-6">
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Email Notifications</h3>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Email Notifications</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       Receive email updates about your sales, bids, and wishlist alerts
                     </p>
                   </div>
@@ -144,17 +144,17 @@ function SettingsPage() {
                     aria-checked={true}
                     aria-label="Email notifications"
                   >
-                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white translate-x-7`} />
+                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 translate-x-7`} />
                   </button>
                 </div>
               </div>
 
               {/* Push Notifications */}
-              <div className="border-b border-gray-200 pb-6">
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Push Notifications</h3>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Push Notifications</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       Get real-time alerts on your device for important updates
                     </p>
                   </div>
@@ -164,7 +164,7 @@ function SettingsPage() {
                     aria-checked={true}
                     aria-label="Push notifications"
                   >
-                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white translate-x-7`} />
+                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 translate-x-7`} />
                   </button>
                 </div>
               </div>
@@ -173,8 +173,8 @@ function SettingsPage() {
               <div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Wishlist Alerts</h3>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Wishlist Alerts</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       Get notified when items matching your wishlist become available
                     </p>
                   </div>
@@ -184,7 +184,7 @@ function SettingsPage() {
                     aria-checked={true}
                     aria-label="Wishlist alerts"
                   >
-                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white translate-x-7`} />
+                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 translate-x-7`} />
                   </button>
                 </div>
               </div>
@@ -192,21 +192,21 @@ function SettingsPage() {
           </div>
 
           {/* Account Section */}
-          <div className="bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Account</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Account</h2>
 
             <div className="space-y-6">
               {/* Email Display */}
-              <div className="pb-6 border-b border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Email Address</p>
-                <p className="text-lg text-gray-900">{user?.email}</p>
-                <p className="text-xs text-gray-500 mt-2">Primary email address for your account</p>
+              <div className="pb-6 border-b border-gray-200 dark:border-gray-700">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Email Address</p>
+                <p className="text-lg text-gray-900 dark:text-gray-100">{user?.email}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Primary email address for your account</p>
               </div>
 
               {/* Member Since */}
-              <div className="pb-6 border-b border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Member Since</p>
-                <p className="text-gray-900">
+              <div className="pb-6 border-b border-gray-200 dark:border-gray-700">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Member Since</p>
+                <p className="text-gray-900 dark:text-gray-100">
                   {user?.createdAt
                     ? new Date(user.createdAt).toLocaleDateString('en-US', {
                         year: 'numeric',
@@ -218,9 +218,9 @@ function SettingsPage() {
               </div>
 
               {/* Danger Zone */}
-              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-red-900 mb-2">Danger Zone</h3>
-                <p className="text-sm text-red-700 mb-4">
+                <p className="text-sm text-red-700 dark:text-red-300 mb-4">
                   These actions cannot be undone. Please proceed with caution.
                 </p>
                 <button

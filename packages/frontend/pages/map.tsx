@@ -181,7 +181,7 @@ const MapPage = () => {
   const saleCount = filteredSales.length;
 
   return (
-    <div className="min-h-screen bg-warm-50 flex flex-col">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
       <Head>
         <title>Sales Near You - FindA.Sale</title>
         <meta name="description" content="View estate sales on an interactive map near you" />
@@ -193,12 +193,12 @@ const MapPage = () => {
       </Head>
 
       {/* Header Strip */}
-      <section className="bg-white border-b border-warm-200 px-4 py-4">
+      <section className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">
         <div className="container mx-auto">
           <div className="flex items-center justify-between gap-4 mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-warm-900">Sales Near You</h1>
-              <p className="text-sm text-warm-600 mt-1">
+              <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">Sales Near You</h1>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">
                 {isLoading ? '...' : `${saleCount} sale${saleCount !== 1 ? 's' : ''} near you`}
               </p>
             </div>
@@ -208,7 +208,7 @@ const MapPage = () => {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                   showHeatmap
                     ? 'bg-amber-600 text-white hover:bg-amber-700'
-                    : 'bg-warm-100 text-warm-700 hover:bg-warm-200'
+                    : 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200'
                 }`}
                 title="Toggle neighborhood heatmap overlay"
               >
@@ -250,7 +250,7 @@ const MapPage = () => {
                 className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                   dateFilter === f
                     ? 'bg-amber-600 text-white border-amber-600'
-                    : 'bg-white text-warm-700 border-warm-300 hover:border-amber-400'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-amber-400'
                 }`}
               >
                 {f === 'all' ? 'All' : f === 'today' ? 'Today' : f === 'this-weekend' ? 'This Weekend' : 'This Week'}
@@ -265,10 +265,10 @@ const MapPage = () => {
         {isLoading ? (
           <Skeleton className="w-full h-full" />
         ) : isError ? (
-          <div className="w-full h-full flex items-center justify-center bg-warm-50">
+          <div className="w-full h-full flex items-center justify-center bg-warm-50 dark:bg-gray-900">
             <div className="text-center">
               <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Map</h2>
-              <p className="text-warm-600 mb-4">There was a problem loading sales data.</p>
+              <p className="text-warm-600 dark:text-warm-400 mb-4">There was a problem loading sales data.</p>
               <button
                 onClick={() => refetch()}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded"

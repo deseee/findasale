@@ -52,10 +52,10 @@ export default function ProFeaturesPage() {
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="text-center mb-16">
-            <h1 className="font-fraunces text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            <h1 className="font-fraunces text-4xl md:text-5xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               Everything You Need to Run a Professional Sale
             </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
               The PRO tier includes six powerful features designed to save time, increase sales, and help you grow your business.
             </p>
           </div>
@@ -65,13 +65,13 @@ export default function ProFeaturesPage() {
             {PRO_FEATURES.map((feature, idx) => (
               <div
                 key={idx}
-                className="bg-white rounded-lg border border-gray-200 p-8 hover:shadow-lg transition"
+                className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 hover:shadow-lg transition"
               >
                 <div className="text-4xl mb-4">{feature.icon}</div>
-                <h2 className="font-fraunces text-2xl font-bold text-gray-900 mb-3">
+                <h2 className="font-fraunces text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">
                   {feature.title}
                 </h2>
-                <p className="text-gray-600 leading-relaxed">
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
                   {feature.description}
                 </p>
               </div>
@@ -80,7 +80,7 @@ export default function ProFeaturesPage() {
 
           {/* Social Proof */}
           <div className="bg-sage-50 rounded-lg border border-sage-200 p-8 mb-12">
-            <p className="text-center text-gray-700 leading-relaxed">
+            <p className="text-center text-gray-700 dark:text-gray-300 leading-relaxed">
               <span className="font-semibold">Join estate sale organizers who trust FindA.Sale.</span> PRO features help you streamline operations, understand what sells, and build a professional brand.
             </p>
           </div>
@@ -93,7 +93,7 @@ export default function ProFeaturesPage() {
             >
               Upgrade to PRO
             </Link>
-            <p className="text-gray-600 mt-4">7-day free trial — no credit card required</p>
+            <p className="text-gray-600 dark:text-gray-400 mt-4">7-day free trial — no credit card required</p>
           </div>
         </div>
       </div>

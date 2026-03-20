@@ -45,7 +45,7 @@ function AlertsPage() {
     return (
       <Layout>
         <div className="text-center py-8">
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
         </div>
       </Layout>
     );
@@ -81,8 +81,8 @@ function AlertsPage() {
         <div className="max-w-4xl mx-auto py-8 px-4">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Wishlist Alerts</h1>
-              <p className="text-gray-600 mt-2">Get notified when sales match your saved searches</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Wishlist Alerts</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">Get notified when sales match your saved searches</p>
             </div>
             <button
               onClick={() => { setEditingAlert(null); setIsFormOpen(true); }}
@@ -94,20 +94,20 @@ function AlertsPage() {
 
           {isLoading && (
             <div className="text-center py-8">
-              <p className="text-gray-600">Loading alerts...</p>
+              <p className="text-gray-600 dark:text-gray-400">Loading alerts...</p>
             </div>
           )}
 
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
+            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 text-red-700 dark:text-red-300">
               Error loading alerts: {error.message}
             </div>
           )}
 
           {alerts && alerts.length === 0 && !isLoading && (
-            <div className="rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No alerts yet</h3>
-              <p className="text-gray-600 mb-4">Create your first wishlist alert to get notified when matching items appear</p>
+            <div className="rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 p-12 text-center">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No alerts yet</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Create your first wishlist alert to get notified when matching items appear</p>
               <button
                 onClick={() => setIsFormOpen(true)}
                 className="rounded-lg bg-[#8fb897] text-white px-6 py-2 font-medium hover:bg-[#7ba680]"
@@ -120,11 +120,11 @@ function AlertsPage() {
           {alerts && alerts.length > 0 && (
             <div className="space-y-4">
               {alerts.map((alert) => (
-                <div key={alert.id} className="rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div key={alert.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900">{alert.name}</h3>
-                      <div className="mt-3 text-sm text-gray-600 space-y-1">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{alert.name}</h3>
+                      <div className="mt-3 text-sm text-gray-600 dark:text-gray-400 space-y-1">
                         {alert.query.q && <p><span className="font-medium">Keywords:</span> {alert.query.q}</p>}
                         {alert.query.category && <p><span className="font-medium">Category:</span> {alert.query.category}</p>}
                         {(alert.query.minPrice !== undefined || alert.query.maxPrice !== undefined) && (
@@ -152,7 +152,7 @@ function AlertsPage() {
                       <button
                         onClick={() => handleDelete(alert.id)}
                         disabled={deleteAlert.isPending}
-                        className="px-3 py-1 rounded-lg text-sm text-red-600 border border-red-300 hover:bg-red-50 disabled:opacity-50"
+                        className="px-3 py-1 rounded-lg text-sm text-red-600 border border-red-300 hover:bg-red-50 dark:bg-red-900/20 disabled:opacity-50"
                       >
                         {deleteAlert.isPending ? 'Deleting...' : 'Delete'}
                       </button>

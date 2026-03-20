@@ -19,6 +19,7 @@ import {
   useAcceptWorkspaceInvite,
   useRemoveWorkspaceMember,
 } from '../../hooks/useWorkspace';
+import TierGate from '../../components/TierGate';
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -57,31 +58,7 @@ export default function WorkspacePage() {
     return null;
   }
 
-  // TEAMS tier check
-  if (!isTeams) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Head>
-          <title>Team Workspace - FindA.Sale</title>
-        </Head>
-        <div className="max-w-4xl mx-auto px-4 py-12">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-              TEAMS Tier Required
-            </h1>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              Team workspace management is available to TEAMS tier subscribers only.
-            </p>
-            <Link href="/organizer/upgrade">
-              <a className="inline-block bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-6 rounded-md">
-                Upgrade to TEAMS
-              </a>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // TierGate handles TEAMS access check in the JSX below
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +111,7 @@ export default function WorkspacePage() {
   const members = membersData?.members || [];
 
   return (
+    <TierGate requiredTier="TEAMS" featureName="Team Workspace" description="Multi-user workspace management with role-based access, team collaboration tools, and shared sale operations.">
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Head>
         <title>Team Workspace - FindA.Sale</title>
@@ -350,5 +328,6 @@ export default function WorkspacePage() {
         )}
       </div>
     </div>
+    </TierGate>
   );
 }

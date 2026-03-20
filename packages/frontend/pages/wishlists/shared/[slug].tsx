@@ -59,18 +59,18 @@ const SharedWishlistPage = () => {
   });
 
   if (!slug) {
-    return <div className="min-h-screen flex items-center justify-center bg-warm-50">Loading...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">Loading...</div>;
   }
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-warm-50">Loading wishlist...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">Loading wishlist...</div>;
   }
 
   if (isError || !wishlist) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 gap-4">
-        <h1 className="text-2xl font-bold text-warm-900">Wishlist Not Found</h1>
-        <p className="text-warm-600">This wishlist doesn't exist or is private.</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4">
+        <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Wishlist Not Found</h1>
+        <p className="text-warm-600 dark:text-warm-400">This wishlist doesn't exist or is private.</p>
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium">
           Back to home
         </Link>
@@ -79,7 +79,7 @@ const SharedWishlistPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{wishlist.name} - FindA.Sale</title>
         <meta name="description" content={`Check out ${wishlist.user.name}'s "${wishlist.name}" wishlist on FindA.Sale`} />
@@ -94,14 +94,14 @@ const SharedWishlistPage = () => {
           Back to FindA.Sale
         </Link>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
           {/* Wishlist Info */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold text-warm-900 mb-2">{wishlist.name}</h1>
+            <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">{wishlist.name}</h1>
             <div className="flex flex-wrap items-center gap-4">
               <div>
-                <p className="text-sm text-warm-600">Created by</p>
-                <p className="font-semibold text-warm-900">{wishlist.user.name}</p>
+                <p className="text-sm text-warm-600 dark:text-warm-400">Created by</p>
+                <p className="font-semibold text-warm-900 dark:text-warm-100">{wishlist.user.name}</p>
               </div>
               {wishlist.occasion && (
                 <div>
@@ -110,7 +110,7 @@ const SharedWishlistPage = () => {
                   </span>
                 </div>
               )}
-              <div className="text-sm text-warm-600">
+              <div className="text-sm text-warm-600 dark:text-warm-400">
                 {wishlist.items.length} item{wishlist.items.length !== 1 ? 's' : ''}
               </div>
             </div>
@@ -118,7 +118,7 @@ const SharedWishlistPage = () => {
 
           {/* Items Grid */}
           {wishlist.items.length === 0 ? (
-            <div className="text-center py-12 text-warm-600">
+            <div className="text-center py-12 text-warm-600 dark:text-warm-400">
               <p className="text-lg">This wishlist is empty.</p>
             </div>
           ) : (
@@ -127,7 +127,7 @@ const SharedWishlistPage = () => {
                 <Link
                   key={wishlistItem.id}
                   href={`/items/${wishlistItem.item.id}`}
-                  className="group bg-warm-50 rounded-lg overflow-hidden border border-warm-200 hover:shadow-md transition-shadow"
+                  className="group bg-warm-50 dark:bg-gray-900 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700 hover:shadow-md transition-shadow"
                 >
                   {/* Item Photo */}
                   <div className="relative w-full h-32 bg-warm-200 overflow-hidden">
@@ -147,10 +147,10 @@ const SharedWishlistPage = () => {
 
                   {/* Item Info */}
                   <div className="p-3">
-                    <h3 className="font-semibold text-sm text-warm-900 truncate group-hover:text-amber-600">
+                    <h3 className="font-semibold text-sm text-warm-900 dark:text-warm-100 truncate group-hover:text-amber-600">
                       {wishlistItem.item.title}
                     </h3>
-                    <p className="text-xs text-warm-600 mt-1 truncate">
+                    <p className="text-xs text-warm-600 dark:text-warm-400 mt-1 truncate">
                       {wishlistItem.item.sale.title}
                     </p>
                     {(wishlistItem.item.price || wishlistItem.item.auctionStartPrice) && (
@@ -167,7 +167,7 @@ const SharedWishlistPage = () => {
 
         {/* CTA Footer */}
         <div className="text-center">
-          <p className="text-warm-600 mb-4">Want to create your own wishlist?</p>
+          <p className="text-warm-600 dark:text-warm-400 mb-4">Want to create your own wishlist?</p>
           <Link href="/wishlists" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors">
             Create a Wishlist
           </Link>

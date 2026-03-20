@@ -43,15 +43,15 @@ const NeighborhoodsPage = () => {
         <link rel="canonical" href="https://finda.sale/neighborhoods" />
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 pt-8 pb-24">
 
           {/* Header */}
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-warm-900 mb-2">
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">
               Estate Sales by Neighborhood
             </h1>
-            <p className="text-warm-500 text-sm">
+            <p className="text-warm-500 dark:text-warm-400 text-sm">
               Browse sales close to home
             </p>
           </div>
@@ -64,12 +64,12 @@ const NeighborhoodsPage = () => {
                 href={`/neighborhoods/${n.slug}`}
                 className="card p-4 flex items-start gap-3 hover:shadow-md transition-shadow"
               >
-                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-lg">📍</span>
                 </div>
                 <div>
-                  <p className="font-semibold text-warm-900">{n.name}</p>
-                  <p className="text-sm text-warm-500 mt-0.5">{n.description}</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100">{n.name}</p>
+                  <p className="text-sm text-warm-500 dark:text-warm-400 mt-0.5">{n.description}</p>
                 </div>
               </Link>
             ))}

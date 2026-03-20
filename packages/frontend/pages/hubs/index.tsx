@@ -55,16 +55,16 @@ export default function HubsPage() {
           </div>
 
           {/* Location & Filters */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             {locationError && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300">
                 {locationError}
               </div>
             )}
 
             <div className="flex flex-col sm:flex-row gap-4 items-end">
               <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Search Radius
                 </label>
                 <input
@@ -78,11 +78,11 @@ export default function HubsPage() {
                   }}
                   className="w-full h-2 bg-sage-200 rounded-lg appearance-none cursor-pointer"
                 />
-                <div className="text-sm text-gray-600 mt-1">{radius} km</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{radius} km</div>
               </div>
 
               {lat && lng && (
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-500 dark:text-gray-400">
                   📍 {lat.toFixed(4)}, {lng.toFixed(4)}
                 </div>
               )}
@@ -93,7 +93,7 @@ export default function HubsPage() {
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white rounded-lg shadow-md h-48 animate-pulse"></div>
+                <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-md h-48 animate-pulse"></div>
               ))}
             </div>
           ) : error ? (
@@ -102,7 +102,7 @@ export default function HubsPage() {
             </div>
           ) : !data?.hubs.length ? (
             <div className="text-center py-12">
-              <p className="text-gray-600 text-lg">No hubs found in your area. Try increasing the search radius.</p>
+              <p className="text-gray-600 dark:text-gray-400 text-lg">No hubs found in your area. Try increasing the search radius.</p>
             </div>
           ) : (
             <>
@@ -111,7 +111,7 @@ export default function HubsPage() {
                   <Link
                     key={hub.id}
                     href={`/hubs/${hub.slug}`}
-                    className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden group"
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden group"
                   >
                     <div className="p-6">
                       <div className="flex items-start justify-between mb-3">
@@ -120,7 +120,7 @@ export default function HubsPage() {
                             {hub.name}
                           </h3>
                           {hub.organizerName && (
-                            <p className="text-sm text-gray-600 mt-1">by {hub.organizerName}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">by {hub.organizerName}</p>
                           )}
                         </div>
                       </div>
@@ -133,7 +133,7 @@ export default function HubsPage() {
                       )}
 
                       {/* Stats */}
-                      <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
                         <span>📍 {hub.saleCount} sales</span>
                         {hub.saleDate && (
                           <span>📅 {new Date(hub.saleDate).toLocaleDateString()}</span>
@@ -155,19 +155,19 @@ export default function HubsPage() {
                   <button
                     onClick={() => setPage(Math.max(1, page - 1))}
                     disabled={page === 1}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50"
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm font-medium disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
                       Page {page} of {Math.ceil(data.total / data.limit)}
                     </span>
                   </div>
                   <button
                     onClick={() => setPage(page + 1)}
                     disabled={page * data.limit >= data.total}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50"
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm font-medium disabled:opacity-50"
                   >
                     Next
                   </button>

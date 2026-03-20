@@ -41,14 +41,14 @@ const FeedPage = () => {
   // Not logged in
   if (!user) {
     return (
-      <div className="min-h-screen bg-warm-50 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
         <Head>
           <title>Your Feed – FindA.Sale</title>
         </Head>
         <div className="text-center max-w-sm">
           <div className="text-5xl mb-4">📋</div>
-          <h1 className="text-2xl font-bold text-warm-900 mb-3">Your Feed</h1>
-          <p className="text-warm-600 mb-6">
+          <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-3">Your Feed</h1>
+          <p className="text-warm-600 dark:text-warm-400 mb-6">
             Log in to see new sales from organizers you follow.
           </p>
           <Link
@@ -57,7 +57,7 @@ const FeedPage = () => {
           >
             Log in
           </Link>
-          <p className="mt-4 text-sm text-warm-500">
+          <p className="mt-4 text-sm text-warm-500 dark:text-warm-400">
             <Link href="/" className="text-amber-600 hover:underline">Browse all sales instead</Link>
           </p>
         </div>
@@ -66,7 +66,7 @@ const FeedPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>Your Feed – FindA.Sale</title>
         <meta name="description" content="Sales from organizers you follow on FindA.Sale" />
@@ -81,9 +81,9 @@ const FeedPage = () => {
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-warm-900">Your Feed</h1>
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">Your Feed</h1>
             {!isLoading && data && (
-              <p className="text-sm text-warm-500 mt-1">
+              <p className="text-sm text-warm-500 dark:text-warm-400 mt-1">
                 {data.personalized
                   ? 'Sales from organizers you follow'
                   : <>Recent sales — <Link href="/" className="text-amber-600 hover:underline">follow organizers</Link> to personalize</>
@@ -106,7 +106,7 @@ const FeedPage = () => {
         {/* Error state */}
         {isError && (
           <div className="text-center py-12">
-            <p className="text-warm-600">Failed to load your feed. Try refreshing.</p>
+            <p className="text-warm-600 dark:text-warm-400">Failed to load your feed. Try refreshing.</p>
           </div>
         )}
 
@@ -114,8 +114,8 @@ const FeedPage = () => {
         {!isLoading && !isError && data?.sales.length === 0 && data.personalized && (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">🏡</div>
-            <h2 className="text-xl font-semibold text-warm-900 mb-2">All caught up</h2>
-            <p className="text-warm-600 mb-6">
+            <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">All caught up</h2>
+            <p className="text-warm-600 dark:text-warm-400 mb-6">
               The organizers you follow haven't published any sales yet.
               We'll notify you when they do.
             </p>
@@ -132,8 +132,8 @@ const FeedPage = () => {
         {!isLoading && !isError && data?.sales.length === 0 && !data?.personalized && (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">🔍</div>
-            <h2 className="text-xl font-semibold text-warm-900 mb-2">Your feed is empty</h2>
-            <p className="text-warm-600 mb-6">
+            <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">Your feed is empty</h2>
+            <p className="text-warm-600 dark:text-warm-400 mb-6">
               Follow organizers to see their new sales here first.
               Browse sales and tap <strong>Follow</strong> on any organizer page.
             </p>

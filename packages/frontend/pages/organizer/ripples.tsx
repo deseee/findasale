@@ -125,11 +125,11 @@ export default function RipplesPage() {
   const selectedSale = salesWithRipples?.find((s) => s.saleId === selectedSaleId);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Sale Ripples Analytics</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Sale Ripples Analytics</h1>
+          <p className="text-gray-600 dark:text-gray-400">
             Monitor social proof activity (views, shares, saves) across your sales
           </p>
         </div>
@@ -138,26 +138,26 @@ export default function RipplesPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Sales List */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Your Sales</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Your Sales</h2>
               </div>
 
               <div className="divide-y max-h-96 overflow-y-auto">
                 {loadingSales ? (
-                  <div className="p-4 text-center text-gray-500">Loading sales...</div>
+                  <div className="p-4 text-center text-gray-500 dark:text-gray-400">Loading sales...</div>
                 ) : salesWithRipples && salesWithRipples.length > 0 ? (
                   salesWithRipples.map((sale) => (
                     <button
                       key={sale.saleId}
                       onClick={() => setSelectedSaleId(sale.saleId)}
-                      className={`w-full text-left p-4 hover:bg-gray-50 transition ${
-                        selectedSaleId === sale.saleId ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                      className={`w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition ${
+                        selectedSaleId === sale.saleId ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500' : ''
                       }`}
                     >
-                      <h3 className="font-medium text-gray-900 truncate">{sale.saleTitle}</h3>
+                      <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">{sale.saleTitle}</h3>
                       <div className="flex items-center gap-4 mt-2 text-sm">
-                        <span className="text-gray-600">
+                        <span className="text-gray-600 dark:text-gray-400">
                           <TrendingUp className="w-4 h-4 inline mr-1" />
                           {sale.totalRipples}
                         </span>
@@ -165,7 +165,7 @@ export default function RipplesPage() {
                     </button>
                   ))
                 ) : (
-                  <div className="p-4 text-center text-gray-500">No sales found</div>
+                  <div className="p-4 text-center text-gray-500 dark:text-gray-400">No sales found</div>
                 )}
               </div>
             </div>
@@ -199,9 +199,9 @@ export default function RipplesPage() {
 
         {/* Trend Chart */}
         {selectedSale && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Activity Trend</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Activity Trend</h2>
               <div className="flex gap-2">
                 {[24, 72, 168].map((hours) => (
                   <button
@@ -210,7 +210,7 @@ export default function RipplesPage() {
                     className={`px-3 py-2 text-sm font-medium rounded-md transition ${
                       trendHours === hours
                         ? 'bg-blue-100 text-blue-700'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-gray-100 text-gray-700 dark:text-gray-300 hover:bg-gray-200'
                     }`}
                   >
                     {hours === 24 ? '24h' : hours === 72 ? '3d' : '7d'}
@@ -220,7 +220,7 @@ export default function RipplesPage() {
             </div>
 
             {loadingTrend ? (
-              <div className="h-96 flex items-center justify-center text-gray-500">
+              <div className="h-96 flex items-center justify-center text-gray-500 dark:text-gray-400">
                 Loading trend data...
               </div>
             ) : trendData && trendData.hourlyData.length > 0 ? (
@@ -261,7 +261,7 @@ export default function RipplesPage() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-96 flex items-center justify-center text-gray-500">
+              <div className="h-96 flex items-center justify-center text-gray-500 dark:text-gray-400">
                 No trend data available
               </div>
             )}
@@ -284,8 +284,8 @@ interface StatCardProps {
 
 function StatCard({ icon: Icon, label, value, color }: StatCardProps) {
   const colorClasses = {
-    blue: 'bg-blue-50 text-blue-600 border-blue-100',
-    green: 'bg-green-50 text-green-600 border-green-100',
+    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 border-blue-100',
+    green: 'bg-green-50 dark:bg-green-900/20 text-green-600 border-green-100',
     yellow: 'bg-yellow-50 text-yellow-600 border-yellow-100',
     purple: 'bg-purple-50 text-purple-600 border-purple-100',
   };

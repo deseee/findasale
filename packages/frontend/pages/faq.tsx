@@ -261,16 +261,16 @@ const FAQAccordion = ({ faqs }: FAQAccordionProps) => {
       {faqs.map((faq, index) => (
         <div
           key={index}
-          className="border border-warm-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+          className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
         >
           <button
             onClick={() => setExpandedIndex(expandedIndex === index ? null : index)}
-            className="w-full px-6 py-4 flex items-center justify-between hover:bg-warm-50 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-inset"
+            className="w-full px-6 py-4 flex items-center justify-between hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-inset"
             aria-expanded={expandedIndex === index}
           >
-            <p className="text-left text-base font-semibold text-warm-900">{faq.question}</p>
+            <p className="text-left text-base font-semibold text-warm-900 dark:text-warm-100">{faq.question}</p>
             <span
-              className={`ml-4 text-warm-500 transform transition-transform flex-shrink-0 ${
+              className={`ml-4 text-warm-500 dark:text-warm-400 transform transition-transform flex-shrink-0 ${
                 expandedIndex === index ? 'rotate-180' : ''
               }`}
               aria-hidden
@@ -279,7 +279,7 @@ const FAQAccordion = ({ faqs }: FAQAccordionProps) => {
             </span>
           </button>
           {expandedIndex === index && (
-            <div className="px-6 py-4 bg-warm-50 border-t border-warm-200 text-warm-700 leading-relaxed text-sm">
+            <div className="px-6 py-4 bg-warm-50 dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 text-warm-700 dark:text-warm-300 leading-relaxed text-sm">
               {faq.answer}
             </div>
           )}
@@ -301,19 +301,19 @@ const FAQPage = () => {
         <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the estate sale marketplace." />
       </Head>
 
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-3xl mx-auto px-4 py-12">
-          <h1 className="text-4xl font-bold text-warm-900 mb-2">Frequently Asked Questions</h1>
-          <p className="text-warm-500 mb-8">Find answers for shoppers and organizers below.</p>
+          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Frequently Asked Questions</h1>
+          <p className="text-warm-500 dark:text-warm-400 mb-8">Find answers for shoppers and organizers below.</p>
 
           {/* Tab switcher */}
-          <div className="flex border-b border-warm-200 mb-8">
+          <div className="flex border-b border-warm-200 dark:border-gray-700 mb-8">
             <button
               onClick={() => setTab('shopper')}
               className={`px-6 py-3 text-sm font-semibold transition-colors border-b-2 -mb-px ${
                 tab === 'shopper'
                   ? 'border-amber-500 text-amber-600'
-                  : 'border-transparent text-warm-500 hover:text-warm-800'
+                  : 'border-transparent text-warm-500 dark:text-warm-400 hover:text-warm-800'
               }`}
             >
               For Shoppers
@@ -323,7 +323,7 @@ const FAQPage = () => {
               className={`px-6 py-3 text-sm font-semibold transition-colors border-b-2 -mb-px ${
                 tab === 'organizer'
                   ? 'border-amber-500 text-amber-600'
-                  : 'border-transparent text-warm-500 hover:text-warm-800'
+                  : 'border-transparent text-warm-500 dark:text-warm-400 hover:text-warm-800'
               }`}
             >
               For Organizers
@@ -337,7 +337,7 @@ const FAQPage = () => {
           )}
 
           {/* Bottom help prompt */}
-          <div className="mt-10 p-5 bg-amber-50 rounded-xl text-sm text-warm-700">
+          <div className="mt-10 p-5 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-sm text-warm-700 dark:text-warm-300">
             {tab === 'organizer' ? (
               <>
                 Looking for the full walkthrough?{' '}

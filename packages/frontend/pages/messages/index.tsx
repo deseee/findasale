@@ -32,12 +32,12 @@ const MessagesPage = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-warm-50 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
         <Head><title>Messages – FindA.Sale</title></Head>
         <div className="text-center max-w-sm">
           <div className="text-5xl mb-4">💬</div>
-          <h1 className="text-2xl font-bold text-warm-900 mb-3">Messages</h1>
-          <p className="text-warm-600 mb-6">Log in to view your messages.</p>
+          <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-3">Messages</h1>
+          <p className="text-warm-600 dark:text-warm-400 mb-6">Log in to view your messages.</p>
           <Link href="/login" className="inline-block px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 transition-colors">
             Log in
           </Link>
@@ -47,25 +47,25 @@ const MessagesPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>Messages – FindA.Sale</title>
         <meta name="description" content="Your messages on FindA.Sale" />
       </Head>
 
       <main className="container mx-auto px-4 py-8 max-w-2xl pb-24">
-        <h1 className="text-2xl font-bold text-warm-900 mb-6">Messages</h1>
+        <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">Messages</h1>
 
         {/* Loading */}
         {isLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-white rounded-xl p-4 animate-pulse">
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 animate-pulse">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-warm-200" />
                   <div className="flex-1 space-y-1.5">
                     <div className="h-4 bg-warm-200 rounded w-1/3" />
-                    <div className="h-3 bg-warm-100 rounded w-2/3" />
+                    <div className="h-3 bg-warm-100 dark:bg-gray-700 rounded w-2/3" />
                   </div>
                 </div>
               </div>
@@ -76,7 +76,7 @@ const MessagesPage = () => {
         {/* Error */}
         {isError && (
           <div className="text-center py-12">
-            <p className="text-warm-600">Failed to load messages. Try refreshing.</p>
+            <p className="text-warm-600 dark:text-warm-400">Failed to load messages. Try refreshing.</p>
           </div>
         )}
 
@@ -84,8 +84,8 @@ const MessagesPage = () => {
         {!isLoading && !isError && conversations?.length === 0 && (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">💬</div>
-            <h2 className="text-xl font-semibold text-warm-900 mb-2">No messages yet</h2>
-            <p className="text-warm-600 mb-6">
+            <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No messages yet</h2>
+            <p className="text-warm-600 dark:text-warm-400 mb-6">
               {user.role === 'ORGANIZER'
                 ? 'Shoppers can message you from a sale page.'
                 : 'Browse sales and tap "Message Organizer" to ask a question.'}
@@ -111,7 +111,7 @@ const MessagesPage = () => {
                 <Link
                   key={conv.id}
                   href={`/messages/${conv.id}`}
-                  className="flex items-center gap-4 bg-white rounded-xl p-4 hover:bg-warm-50 transition-colors border border-warm-100"
+                  className="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-xl p-4 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition-colors border border-warm-100"
                 >
                   {/* Avatar */}
                   <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700 font-bold text-sm">
@@ -120,7 +120,7 @@ const MessagesPage = () => {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm font-semibold text-warm-900 truncate ${unread > 0 ? 'font-bold' : ''}`}>
+                      <span className={`text-sm font-semibold text-warm-900 dark:text-warm-100 truncate ${unread > 0 ? 'font-bold' : ''}`}>
                         {otherName}
                       </span>
                       <span className="text-xs text-warm-400 flex-shrink-0">{timeAgo}</span>
@@ -129,7 +129,7 @@ const MessagesPage = () => {
                       <p className="text-xs text-amber-600 truncate">{conv.sale.title}</p>
                     )}
                     {preview && (
-                      <p className={`text-xs truncate mt-0.5 ${unread > 0 ? 'text-warm-900 font-medium' : 'text-warm-500'}`}>
+                      <p className={`text-xs truncate mt-0.5 ${unread > 0 ? 'text-warm-900 dark:text-warm-100 font-medium' : 'text-warm-500'}`}>
                         {preview.senderId === user.id ? 'You: ' : ''}{preview.body}
                       </p>
                     )}

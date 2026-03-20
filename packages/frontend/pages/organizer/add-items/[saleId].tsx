@@ -888,7 +888,7 @@ const AddItemsDetailPage = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-white py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <Skeleton className="h-10 w-48 mb-8" />
           <div className="space-y-4">
@@ -906,7 +906,7 @@ const AddItemsDetailPage = () => {
         <title>{sale?.name ? `Add Items to ${sale.name}` : 'Add Items'} - FindA.Sale</title>
       </Head>
 
-      <main className="min-h-screen bg-warm-50 py-8">
+      <main className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <div className="mb-8">
             <Link
@@ -917,11 +917,11 @@ const AddItemsDetailPage = () => {
             </Link>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-            <h1 className="text-3xl font-bold text-warm-900 mb-1">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-1">
               Add Items{sale?.name ? ` to: ${sale.name}` : ''}
             </h1>
-            <p className="text-warm-600 mb-1">
+            <p className="text-warm-600 dark:text-warm-400 mb-1">
               {items.length > 0 && (
                 <>
                   {items.length} item{items.length !== 1 ? 's' : ''} {' '}
@@ -947,7 +947,7 @@ const AddItemsDetailPage = () => {
                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
                   activeTab === tab
                     ? 'bg-amber-600 text-white'
-                    : 'bg-white text-warm-700 border border-warm-300 hover:border-amber-400'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400'
                 }`}
               >
                 {tab === 'camera' ? 'Camera (AI)' : tab === 'batch' ? 'Batch Upload' : 'Manual Entry'}
@@ -955,7 +955,7 @@ const AddItemsDetailPage = () => {
             ))}
             <button
               onClick={() => setCsvModalOpen(true)}
-              className="px-4 py-2 rounded-lg font-medium bg-white text-warm-700 border border-warm-300 hover:border-amber-400 transition-all"
+              className="px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"
             >
               CSV Import
             </button>
@@ -963,8 +963,8 @@ const AddItemsDetailPage = () => {
 
           {/* Manual Entry Tab */}
           {activeTab === 'manual' && (
-            <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-              <h2 className="text-xl font-bold text-warm-900 mb-6">Add Item Manually</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-6">Add Item Manually</h2>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -978,13 +978,13 @@ const AddItemsDetailPage = () => {
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-2">Title *</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Title *</label>
                     <div className="flex gap-2 items-center">
                       <input
                         type="text"
                         value={formData.title}
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        className="flex-1 px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                         placeholder="Item title"
                       />
                       {voiceSupported && user?.organizerTier === 'PRO' && (
@@ -995,7 +995,7 @@ const AddItemsDetailPage = () => {
                           className={`px-3 py-2 rounded-lg text-xl font-semibold transition-all ${
                             isListening
                               ? 'bg-red-600 text-white animate-pulse ring-2 ring-red-400'
-                              : 'bg-warm-200 text-warm-900 hover:bg-warm-300'
+                              : 'bg-warm-200 text-warm-900 dark:text-warm-100 hover:bg-warm-300'
                           } disabled:opacity-50`}
                           title="Record item description"
                           aria-label={isListening ? 'Stop recording' : 'Start recording'}
@@ -1007,11 +1007,11 @@ const AddItemsDetailPage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-2">Category</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Category</label>
                     <select
                       value={formData.category}
                       onChange={(e) => handleCategoryChange(e.target.value)}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="">Select a category</option>
                       {CATEGORIES.map((cat) => (
@@ -1023,11 +1023,11 @@ const AddItemsDetailPage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-2">Condition</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Condition</label>
                     <select
                       value={formData.condition}
                       onChange={(e) => handleConditionChange(e.target.value)}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="">Select condition</option>
                       {CONDITIONS.map((cond) => (
@@ -1039,24 +1039,24 @@ const AddItemsDetailPage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-2">Price</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Price</label>
                     <input
                       type="number"
                       step="0.01"
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                       placeholder="0.00"
                     />
-                    <p className="text-xs text-warm-500 mt-2">💡 PRO organizers: Use pricing insights to research comparable sales. Create the item first, then view suggestions below.</p>
+                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">💡 PRO organizers: Use pricing insights to research comparable sales. Create the item first, then view suggestions below.</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-2">Rarity Badge</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Rarity Badge</label>
                     <select
                       value={formData.rarity}
                       onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     >
                       {RARITY_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -1067,11 +1067,11 @@ const AddItemsDetailPage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 mb-2">Listing Type</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Listing Type</label>
                     <select
                       value={formData.listingType}
                       onChange={(e) => setFormData({ ...formData, listingType: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="FIXED">Fixed Price</option>
                       <option value="AUCTION">Auction</option>
@@ -1080,18 +1080,18 @@ const AddItemsDetailPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-warm-700 mb-2">Description</label>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Description</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={4}
-                    className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     placeholder="Item description"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-warm-700 mb-2">Tags</label>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
                   <div className="flex gap-2 items-start">
                     <div className="flex-1">
                       <div className="flex flex-wrap gap-2 mb-2">
@@ -1122,7 +1122,7 @@ const AddItemsDetailPage = () => {
                           }
                         }}
                         placeholder="Add tags (press Enter)"
-                        className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <VoiceTagButton
@@ -1138,11 +1138,11 @@ const AddItemsDetailPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-warm-700 mb-2">Photos</label>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Photos</label>
                   {formData.photoUrls.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {formData.photoUrls.map((url, i) => (
-                        <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300">
+                        <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100">
                           <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                           <button
                             type="button"
@@ -1187,16 +1187,16 @@ const AddItemsDetailPage = () => {
                     type="button"
                     onClick={() => photoInputRef.current?.click()}
                     disabled={photoUploading}
-                    className="w-full bg-warm-50 border-2 border-dashed border-warm-300 rounded-lg p-6 text-center hover:border-amber-400 transition-colors cursor-pointer disabled:opacity-50"
+                    className="w-full bg-warm-50 dark:bg-gray-900 border-2 border-dashed border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg p-6 text-center hover:border-amber-400 transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {photoUploading ? (
-                      <span className="text-warm-600 text-sm">Uploading...</span>
+                      <span className="text-warm-600 dark:text-warm-400 text-sm">Uploading...</span>
                     ) : (
                       <>
                         <svg className="w-8 h-8 mx-auto text-warm-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 16v-8m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.32 3.75 3.75 0 013.572 5.095H19.5a4.5 4.5 0 01-4.5 4.5H9a4.5 4.5 0 01-2.25-.615z" />
                         </svg>
-                        <span className="text-warm-600 text-sm">Click to upload photos</span>
+                        <span className="text-warm-600 dark:text-warm-400 text-sm">Click to upload photos</span>
                       </>
                     )}
                   </button>
@@ -1215,8 +1215,8 @@ const AddItemsDetailPage = () => {
 
           {/* Batch Upload Tab */}
           {activeTab === 'batch' && (
-            <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-              <h2 className="text-xl font-bold text-warm-900 mb-6">Batch Upload Photos</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-6">Batch Upload Photos</h2>
               <SmartInventoryUpload
                 saleId={saleId as string}
                 onComplete={() => {
@@ -1228,11 +1228,11 @@ const AddItemsDetailPage = () => {
 
           {/* Camera Tab */}
           {activeTab === 'camera' && (
-            <div className={`bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8 transition-all duration-300 overflow-hidden ${
+            <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8 transition-all duration-300 overflow-hidden ${
               items.length > 0 ? 'max-h-60' : 'max-h-screen'
             }`}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-warm-900">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
                   {items.length > 0 ? '📷 Add More Photos' : 'Capture with Camera'}
                 </h2>
                 {items.length === 0 && <ModeToggle mode={captureMode} onChange={setCaptureMode} />}
@@ -1240,7 +1240,7 @@ const AddItemsDetailPage = () => {
 
               {captureMode === 'rapidfire' ? (
                 <div className="space-y-6">
-                  <p className="text-warm-600">
+                  <p className="text-warm-600 dark:text-warm-400">
                     Rapidly capture multiple items. Photos upload and analyze in the background.
                   </p>
 
@@ -1287,12 +1287,12 @@ const AddItemsDetailPage = () => {
                   {cameraAnalyzing ? (
                     <div className="text-center py-12">
                       <div className="inline-block w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4" />
-                      <p className="text-warm-700 font-medium">Analyzing photo with AI...</p>
-                      <p className="text-warm-500 text-sm mt-1">This may take a few seconds</p>
+                      <p className="text-warm-700 dark:text-warm-300 font-medium">Analyzing photo with AI...</p>
+                      <p className="text-warm-500 dark:text-warm-400 text-sm mt-1">This may take a few seconds</p>
                     </div>
                   ) : (
                     <div className="text-center py-8">
-                      <p className="text-warm-600 mb-4">
+                      <p className="text-warm-600 dark:text-warm-400 mb-4">
                         Take a photo of an item. AI will identify it and pre-fill the details for you to review.
                       </p>
                       <button
@@ -1328,9 +1328,9 @@ const AddItemsDetailPage = () => {
           {/* Phase 3: Face detection modal */}
           {showFaceModal && (
             <div className="fixed inset-0 bg-black/60 flex items-end z-50">
-              <div className="bg-white rounded-t-2xl p-6 w-full">
-                <h3 className="font-semibold text-gray-900 mb-2">Privacy check</h3>
-                <p className="text-gray-600 text-sm mb-4">
+              <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Privacy check</h3>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
                   This photo may contain a person. Upload anyway?
                 </p>
                 <div className="flex gap-3">
@@ -1342,7 +1342,7 @@ const AddItemsDetailPage = () => {
                   </button>
                   <button
                     onClick={handleFaceRetake}
-                    className="flex-1 bg-gray-100 text-gray-900 py-3 rounded-xl text-sm font-medium"
+                    className="flex-1 bg-gray-100 text-gray-900 dark:text-gray-100 py-3 rounded-xl text-sm font-medium"
                   >
                     Retake
                   </button>
@@ -1368,9 +1368,9 @@ const AddItemsDetailPage = () => {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : items && items.length > 0 ? (
-            <div className="bg-white rounded-lg overflow-hidden border border-warm-200">
-              <div className="p-4 border-b border-warm-200 flex items-center justify-between">
-                <h2 className="font-semibold text-warm-900">
+            <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
+              <div className="p-4 border-b border-warm-200 dark:border-gray-700 flex items-center justify-between">
+                <h2 className="font-semibold text-warm-900 dark:text-warm-100">
                   {items.length} Item{items.length !== 1 ? 's' : ''}
                   {selectedItems.size > 0 && (
                     <span className="ml-2 text-sm font-normal text-amber-600">
@@ -1381,7 +1381,7 @@ const AddItemsDetailPage = () => {
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/organizer/add-items/${saleId}/review?preview=true`}
-                    className="text-sm font-medium text-warm-700 hover:text-warm-900 hover:underline px-3 py-1.5 border border-warm-300 rounded-lg hover:bg-warm-50"
+                    className="text-sm font-medium text-warm-700 dark:text-warm-300 hover:text-warm-900 dark:text-warm-100 hover:underline px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
                   >
                     👁 Buyer Preview
                   </Link>
@@ -1457,7 +1457,7 @@ const AddItemsDetailPage = () => {
                           }
                         }}
                         disabled={bulkUpdateMutation.isPending || !bulkPrice}
-                        className="text-xs font-semibold text-amber-600 bg-white hover:bg-amber-50 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                        className="text-xs font-semibold text-amber-600 bg-white dark:bg-gray-800 hover:bg-amber-50 dark:bg-amber-900/20 disabled:opacity-50 px-2 py-1 rounded transition-colors"
                       >
                         Set Price
                       </button>
@@ -1495,7 +1495,7 @@ const AddItemsDetailPage = () => {
 
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-warm-50 border-b border-warm-200">
+                  <thead className="bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700">
                     <tr>
                       <th className="px-4 py-3 text-left w-12">
                         <input
@@ -1512,13 +1512,13 @@ const AddItemsDetailPage = () => {
                           title="Select all items"
                         />
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-20">Photo</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Title</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-32">Category</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-20">Price</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-20">Photos</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-28">Status</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 w-32">Actions</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-20">Photo</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Title</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-32">Category</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-20">Price</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-20">Photos</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-28">Status</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-32">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-warm-200">
@@ -1531,7 +1531,7 @@ const AddItemsDetailPage = () => {
                         'PUBLISHED': 'bg-green-100 text-green-700',
                       };
                       return (
-                        <tr key={item.id} className={`hover:bg-warm-50 transition-colors ${selectedItems.has(item.id) ? 'bg-blue-50' : ''}`}>
+                        <tr key={item.id} className={`hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition-colors ${selectedItems.has(item.id) ? 'bg-blue-50' : ''}`}>
                           <td className="px-4 py-3">
                             <input
                               type="checkbox"
@@ -1550,13 +1550,13 @@ const AddItemsDetailPage = () => {
                               <img
                                 src={item.photoUrls[0]}
                                 alt={item.title}
-                                className="w-16 h-16 object-cover rounded border border-warm-200"
+                                className="w-16 h-16 object-cover rounded border border-warm-200 dark:border-gray-700"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                               />
                             ) : (
-                              <div className="w-16 h-16 bg-gray-200 rounded border border-warm-200 flex items-center justify-center text-gray-400 text-2xl">
+                              <div className="w-16 h-16 bg-gray-200 rounded border border-warm-200 dark:border-gray-700 flex items-center justify-center text-gray-400 text-2xl">
                                 📷
                               </div>
                             )}
@@ -1566,15 +1566,15 @@ const AddItemsDetailPage = () => {
                               {item.title}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-warm-600">
-                            <span className="inline-block bg-warm-100 px-2 py-1 rounded text-xs">
+                          <td className="px-4 py-3 text-sm text-warm-600 dark:text-warm-400">
+                            <span className="inline-block bg-warm-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">
                               {formatCategory(item.category)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-warm-900 font-semibold">
+                          <td className="px-4 py-3 text-sm text-warm-900 dark:text-warm-100 font-semibold">
                             ${item.price ?? item.auctionStartPrice ?? '\u2014'}
                           </td>
-                          <td className="px-4 py-3 text-sm text-center text-warm-600">
+                          <td className="px-4 py-3 text-sm text-center text-warm-600 dark:text-warm-400">
                             {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
                           </td>
                           <td className="px-4 py-3 text-sm">
@@ -1596,7 +1596,7 @@ const AddItemsDetailPage = () => {
                             <div className="flex gap-2">
                               <Link
                                 href={`/organizer/edit-item/${item.id}`}
-                                className="text-amber-700 hover:text-amber-900 font-medium text-xs px-2 py-1 rounded hover:bg-amber-50"
+                                className="text-amber-700 hover:text-amber-900 font-medium text-xs px-2 py-1 rounded hover:bg-amber-50 dark:bg-amber-900/20"
                               >
                                 Edit
                               </Link>
@@ -1605,13 +1605,13 @@ const AddItemsDetailPage = () => {
                                   <button
                                     onClick={() => deleteMutation.mutate(item.id)}
                                     disabled={deleteMutation.isPending}
-                                    className="text-red-600 hover:text-red-700 font-medium text-xs px-1 disabled:opacity-50"
+                                    className="text-red-600 hover:text-red-700 dark:text-red-300 font-medium text-xs px-1 disabled:opacity-50"
                                   >
                                     Yes
                                   </button>
                                   <button
                                     onClick={() => setDeleteConfirmId(null)}
-                                    className="text-warm-600 hover:text-warm-700 font-medium text-xs px-1"
+                                    className="text-warm-600 dark:text-warm-400 hover:text-warm-700 dark:text-warm-300 font-medium text-xs px-1"
                                   >
                                     No
                                   </button>
@@ -1619,7 +1619,7 @@ const AddItemsDetailPage = () => {
                               ) : (
                                 <button
                                   onClick={() => setDeleteConfirmId(item.id)}
-                                  className="text-red-600 hover:text-red-700 font-medium text-xs px-2 py-1 rounded hover:bg-red-50"
+                                  className="text-red-600 hover:text-red-700 dark:text-red-300 font-medium text-xs px-2 py-1 rounded hover:bg-red-50 dark:bg-red-900/20"
                                 >
                                   Delete
                                 </button>
@@ -1634,8 +1634,8 @@ const AddItemsDetailPage = () => {
               </div>
             </div>
           ) : (
-            <div className="text-center py-12 bg-white rounded-lg border border-warm-200">
-              <p className="text-warm-600 text-lg">No items yet. Use the tabs above to get started.</p>
+            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-lg">No items yet. Use the tabs above to get started.</p>
             </div>
           )}
         </div>
@@ -1684,15 +1684,15 @@ const AddItemsDetailPage = () => {
       {/* Bulk Delete Confirmation Modal */}
       {bulkDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md">
-            <h3 className="text-lg font-bold text-warm-900 mb-3">Delete {bulkDeleteCount} item{bulkDeleteCount !== 1 ? 's' : ''}?</h3>
-            <p className="text-warm-600 text-sm mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Delete {bulkDeleteCount} item{bulkDeleteCount !== 1 ? 's' : ''}?</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm mb-6">
               This action cannot be undone. All selected items will be permanently removed.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setBulkDeleteConfirm(false)}
-                className="flex-1 px-4 py-2 border border-warm-300 rounded-lg text-warm-700 font-medium hover:bg-warm-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-warm-700 dark:text-warm-300 font-medium hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition-colors"
               >
                 Cancel
               </button>

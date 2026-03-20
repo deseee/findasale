@@ -44,27 +44,27 @@ const SendUpdatePage = () => {
       <Head>
         <title>Send Sale Update - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-2xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
             Back to dashboard
           </Link>
 
-          <h1 className="text-3xl font-bold text-warm-900 mb-8">Send Sale Update</h1>
-          <p className="text-warm-600 mb-6">Notify all subscribers about your sale.</p>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">Send Sale Update</h1>
+          <p className="text-warm-600 dark:text-warm-400 mb-6">Notify all subscribers about your sale.</p>
 
           <form onSubmit={handleSend} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">Message</label>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Message</label>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={6}
                 maxLength={500}
-                className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="What would you like to tell your subscribers?"
               />
-              <p className="text-xs text-warm-500 mt-1">{message.length}/500</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{message.length}/500</p>
             </div>
 
             <button

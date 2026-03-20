@@ -42,7 +42,7 @@ const ShopperReceiptsPage = () => {
 
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen bg-white py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
         <div className="max-w-4xl mx-auto px-4">
           <Skeleton className="h-10 w-64 mb-8" />
           <div className="space-y-4">
@@ -58,15 +58,15 @@ const ShopperReceiptsPage = () => {
       <Head>
         <title>My Receipts - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">My Receipts</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">My Receipts</h1>
 
-          <div className="flex gap-4 mb-8 border-b border-gray-200">
+          <div className="flex gap-4 mb-8 border-b border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setTab('receipts')}
               className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                tab === 'receipts' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 hover:text-gray-900'
+                tab === 'receipts' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
               style={tab === 'receipts' ? { borderColor: '#8FB897', color: '#8FB897' } : {}}
             >
@@ -75,7 +75,7 @@ const ShopperReceiptsPage = () => {
             <button
               onClick={() => setTab('returns')}
               className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                tab === 'returns' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 hover:text-gray-900'
+                tab === 'returns' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
               style={tab === 'returns' ? { borderColor: '#8FB897', color: '#8FB897' } : {}}
             >
@@ -88,7 +88,7 @@ const ShopperReceiptsPage = () => {
               {receiptsLoading ? (
                 <div className="space-y-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}</div>
               ) : receiptsError ? (
-                <div className="text-center py-12"><p className="text-gray-600 mb-4">Failed to load receipts. Please try again.</p></div>
+                <div className="text-center py-12"><p className="text-gray-600 dark:text-gray-400 mb-4">Failed to load receipts. Please try again.</p></div>
               ) : receiptsData && receiptsData.length > 0 ? (
                 <div className="space-y-4">
                   {receiptsData.map((receipt: any) => (
@@ -96,7 +96,7 @@ const ShopperReceiptsPage = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12"><p className="text-gray-600">You don't have any receipts yet.</p></div>
+                <div className="text-center py-12"><p className="text-gray-600 dark:text-gray-400">You don't have any receipts yet.</p></div>
               )}
             </div>
           )}
@@ -106,36 +106,36 @@ const ShopperReceiptsPage = () => {
               {returnsLoading ? (
                 <div className="space-y-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
               ) : returnsError ? (
-                <div className="text-center py-12"><p className="text-gray-600 mb-4">Failed to load return requests. Please try again.</p></div>
+                <div className="text-center py-12"><p className="text-gray-600 dark:text-gray-400 mb-4">Failed to load return requests. Please try again.</p></div>
               ) : returnsData && returnsData.length > 0 ? (
                 <div className="space-y-4">
                   {returnsData.map((returnReq: any) => (
-                    <div key={returnReq.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+                    <div key={returnReq.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{returnReq.purchase.item?.title || 'Item'}</h3>
-                          <p className="text-sm text-gray-600 mt-1">Requested {new Date(returnReq.requestedAt).toLocaleDateString()}</p>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{returnReq.purchase.item?.title || 'Item'}</h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Requested {new Date(returnReq.requestedAt).toLocaleDateString()}</p>
                         </div>
                         <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
                           returnReq.status === 'PENDING' ? 'bg-yellow-50 text-yellow-700'
-                          : returnReq.status === 'APPROVED' ? 'bg-green-50 text-green-700'
-                          : 'bg-red-50 text-red-700'
+                          : returnReq.status === 'APPROVED' ? 'bg-green-50 dark:bg-green-900/20 text-green-700'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-700'
                         }`}>
                           {returnReq.status}
                         </span>
                       </div>
-                      <div className="mb-4 p-3 bg-gray-50 rounded">
-                        <p className="text-sm text-gray-700"><span className="font-semibold">Reason:</span> {returnReq.reason}</p>
+                      <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 rounded">
+                        <p className="text-sm text-gray-700 dark:text-gray-300"><span className="font-semibold">Reason:</span> {returnReq.reason}</p>
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         <p>Amount: ${returnReq.purchase.amount.toFixed(2)}</p>
-                        {returnReq.resolvedAt && <p className="mt-2 text-gray-500">Resolved {new Date(returnReq.resolvedAt).toLocaleDateString()}</p>}
+                        {returnReq.resolvedAt && <p className="mt-2 text-gray-500 dark:text-gray-400">Resolved {new Date(returnReq.resolvedAt).toLocaleDateString()}</p>}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12"><p className="text-gray-600">You don't have any return requests yet.</p></div>
+                <div className="text-center py-12"><p className="text-gray-600 dark:text-gray-400">You don't have any return requests yet.</p></div>
               )}
             </div>
           )}

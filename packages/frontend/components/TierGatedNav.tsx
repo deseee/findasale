@@ -24,12 +24,18 @@ export function TierGatedNavLink({
 
   if (isLocked) {
     return (
-      <div
-        className="block px-3 py-2 text-warm-900 dark:text-warm-300 opacity-50 cursor-not-allowed"
+      <Link
+        href={href}
+        className="flex items-center justify-between px-3 py-2 text-warm-500 dark:text-warm-400 hover:text-warm-600 dark:hover:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-800 rounded-md"
         title={`Upgrade to ${requiredTier} to unlock ${label}`}
       >
-        🔒 {icon} {label}
-      </div>
+        <span className="flex items-center gap-1">
+          {icon} {label}
+        </span>
+        <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+          🔒 {requiredTier}
+        </span>
+      </Link>
     );
   }
 

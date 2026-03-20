@@ -50,15 +50,15 @@ const CitiesPage = () => {
         <meta property="og:url" content="https://finda.sale/cities" />
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 pt-8 pb-24">
 
           {/* Header */}
           <div className="mb-8 text-center">
-            <h1 className="text-4xl font-bold text-warm-900 mb-3">
+            <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-3">
               Estate Sales by City
             </h1>
-            <p className="text-warm-600 text-lg">
+            <p className="text-warm-600 dark:text-warm-400 text-lg">
               Browse sales in your area
             </p>
           </div>
@@ -66,12 +66,12 @@ const CitiesPage = () => {
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="h-32 bg-warm-100 rounded-lg animate-pulse" />
+                <div key={i} className="h-32 bg-warm-100 dark:bg-gray-700 rounded-lg animate-pulse" />
               ))}
             </div>
           ) : sortedCities.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-warm-500 text-lg">No cities with sales yet</p>
+              <p className="text-warm-500 dark:text-warm-400 text-lg">No cities with sales yet</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -91,10 +91,10 @@ const CitiesPage = () => {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <h2 className="text-xl font-bold text-warm-900">
+                        <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
                           {cityData.city}
                         </h2>
-                        <p className="text-sm text-warm-500 mt-1">
+                        <p className="text-sm text-warm-500 dark:text-warm-400 mt-1">
                           {cityData.state}
                         </p>
                       </div>
@@ -102,13 +102,13 @@ const CitiesPage = () => {
                         <div className="text-3xl font-bold text-amber-600">
                           {cityData.activeSales}
                         </div>
-                        <p className="text-xs text-warm-500 mt-1">
+                        <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                           active sale{cityData.activeSales !== 1 ? 's' : ''}
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-warm-200 flex items-center justify-between text-xs text-warm-500">
+                    <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700 flex items-center justify-between text-xs text-warm-500 dark:text-warm-400">
                       <span>{cityData.totalSales} total sale{cityData.totalSales !== 1 ? 's' : ''}</span>
                       {lastSaleDate && (
                         <span>Last: {lastSaleDate}</span>

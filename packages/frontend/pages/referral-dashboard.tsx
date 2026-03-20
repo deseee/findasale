@@ -54,19 +54,19 @@ const ReferralDashboard = () => {
       <Head>
         <title>Referral Dashboard - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold text-warm-900 mb-8">Referral Dashboard</h1>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">Referral Dashboard</h1>
 
           {/* Referral Link */}
           <div className="card p-6 mb-8">
-            <h2 className="text-xl font-semibold text-warm-900 mb-4">Your Referral Link</h2>
+            <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-4">Your Referral Link</h2>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={referralLink}
                 readOnly
-                className="flex-1 px-4 py-2 border border-warm-300 rounded-lg bg-warm-50"
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg bg-warm-50 dark:bg-gray-900"
               />
               <button
                 onClick={copyToClipboard}
@@ -81,35 +81,35 @@ const ReferralDashboard = () => {
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="card p-6">
-              <p className="text-warm-600 text-sm">Total Referrals</p>
-              <p className="text-3xl font-bold text-warm-900">{referralData?.totalReferrals || 0}</p>
+              <p className="text-warm-600 dark:text-warm-400 text-sm">Total Referrals</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{referralData?.totalReferrals || 0}</p>
             </div>
             <div className="card p-6">
-              <p className="text-warm-600 text-sm">Conversions</p>
-              <p className="text-3xl font-bold text-warm-900">{referralData?.conversions || 0}</p>
+              <p className="text-warm-600 dark:text-warm-400 text-sm">Conversions</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{referralData?.conversions || 0}</p>
             </div>
             <div className="card p-6">
-              <p className="text-warm-600 text-sm">Earnings</p>
-              <p className="text-3xl font-bold text-warm-900">${referralData?.earnings || '0.00'}</p>
+              <p className="text-warm-600 dark:text-warm-400 text-sm">Earnings</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${referralData?.earnings || '0.00'}</p>
             </div>
           </div>
 
           {/* Recent referrals list */}
           <div className="card p-6">
-            <h2 className="text-lg font-semibold text-warm-900 mb-4">Recent Referrals</h2>
+            <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Recent Referrals</h2>
             {referralData?.referrals?.length > 0 ? (
               <div className="space-y-3">
                 {referralData.referrals.map((r: { id: string; name: string; joinedAt: string }) => (
                   <div key={r.id} className="flex items-center justify-between py-2 border-b border-warm-100 last:border-0">
-                    <span className="text-warm-800 font-medium">{r.name}</span>
-                    <span className="text-xs text-warm-500">
+                    <span className="text-warm-800 dark:text-warm-200 font-medium">{r.name}</span>
+                    <span className="text-xs text-warm-500 dark:text-warm-400">
                       {new Date(r.joinedAt).toLocaleDateString()}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-warm-500 text-sm text-center py-4">
+              <p className="text-warm-500 dark:text-warm-400 text-sm text-center py-4">
                 No referrals yet — share your link to get started!
               </p>
             )}

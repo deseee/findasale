@@ -29,7 +29,7 @@ export default function HubDetailPage() {
       <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white">
         <div className="max-w-6xl mx-auto px-4 py-12 text-center">
           <h1 className="text-2xl font-bold text-sage-900 mb-4">Hub Not Found</h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
             The hub you're looking for doesn't exist or has been removed.
           </p>
           <Link href="/hubs" className="text-sage-600 hover:text-sage-700 font-medium">
@@ -81,39 +81,39 @@ export default function HubDetailPage() {
           )}
 
           {/* Hub Info */}
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h1 className="text-4xl font-bold text-sage-900 mb-2">{hub.name}</h1>
                 {hub.organizerName && (
-                  <p className="text-gray-600">Hosted by <span className="font-semibold">{hub.organizerName}</span></p>
+                  <p className="text-gray-600 dark:text-gray-400">Hosted by <span className="font-semibold">{hub.organizerName}</span></p>
                 )}
               </div>
             </div>
 
             {hub.description && (
-              <p className="text-gray-700 mb-6 leading-relaxed">{hub.description}</p>
+              <p className="text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">{hub.description}</p>
             )}
 
             {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 border-t border-gray-200">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
               <div>
                 <div className="text-2xl font-bold text-sage-600">{hub.stats.totalSales}</div>
-                <div className="text-sm text-gray-600">Sales</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Sales</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-sage-600">{hub.stats.totalItems}</div>
-                <div className="text-sm text-gray-600">Items</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Items</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-sage-600">
                   ${hub.stats.priceRangeUSD[0].toFixed(0)}-${hub.stats.priceRangeUSD[1].toFixed(0)}
                 </div>
-                <div className="text-sm text-gray-600">Price Range</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Price Range</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-sage-600">{hub.radiusKm} km</div>
-                <div className="text-sm text-gray-600">Radius</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Radius</div>
               </div>
             </div>
           </div>
@@ -129,20 +129,20 @@ export default function HubDetailPage() {
                   <Link
                     key={sale.id}
                     href={`/sales/${sale.id}`}
-                    className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 group"
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 group"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-sage-900 group-hover:text-sage-700 transition-colors">
                           {sale.title}
                         </h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                           📍 {sale.address}, {sale.city}, {sale.state}
                         </p>
-                        <p className="text-sm text-gray-600">by {sale.organizerName}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">by {sale.organizerName}</p>
                       </div>
                       <div className="text-right ml-4">
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
                           {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
                         </div>
                         <div className="text-sm font-medium text-sage-600 mt-2">View →</div>
@@ -157,7 +157,7 @@ export default function HubDetailPage() {
           {/* CTA */}
           {user?.role === 'ORGANIZER' && (
             <div className="bg-sage-50 rounded-lg p-6 border border-sage-200 text-center">
-              <p className="text-gray-700 mb-4">Interested in joining this hub?</p>
+              <p className="text-gray-700 dark:text-gray-300 mb-4">Interested in joining this hub?</p>
               <Link
                 href="/organizer/hubs"
                 className="inline-block bg-sage-600 hover:bg-sage-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"

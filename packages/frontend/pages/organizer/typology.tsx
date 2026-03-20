@@ -17,6 +17,7 @@ import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useToast } from '../../components/ToastContext';
 import TypologyBadge from '../../components/TypologyBadge';
 import Skeleton from '../../components/Skeleton';
+import TierGate from '../../components/TierGate';
 import {
   useItemTypology,
   useClassifyItem,
@@ -216,10 +217,7 @@ const TypologyPage = () => {
     router.push('/login');
     return null;
   }
-  if (!canAccess('PRO')) {
-    router.push('/organizer/upgrade');
-    return null;
-  }
+  // TierGate handles PRO access check in the JSX below
 
   // Fetch organizer's sales
   const { data: sales = [], isLoading: salesLoading } = useQuery<Sale[]>({
@@ -262,6 +260,7 @@ const TypologyPage = () => {
   const activeSale = sales.find((s) => s.id === selectedSaleId);
 
   return (
+    <TierGate requiredTier="PRO" featureName="Typology Classifier" description="AI-powered item classification that helps you categorize estate sale items into collector types for better targeting.">
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>Typology Classifier — FindA.Sale</title>
@@ -351,6 +350,7 @@ const TypologyPage = () => {
         )}
       </div>
     </div>
+    </TierGate>
   );
 };
 

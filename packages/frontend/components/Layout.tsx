@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
-import { SectionHeader } from './TierGatedNav';
+import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
@@ -80,37 +80,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <Link href="/organizer/premium" className="block px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
             </Link>
-            {canAccess('PRO') && (
-              <Link href="/organizer/insights" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                Insights
-              </Link>
-            )}
-            {canAccess('TEAMS') && (
-              <Link href="/organizer/workspace" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                Workspace
-              </Link>
-            )}
+            <TierGatedNavLink href="/organizer/insights" label="Insights" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/workspace" label="Workspace" requiredTier="TEAMS" />
 
-            {canAccess('PRO') && (
-              <>
-                <SectionHeader label="Pro Tools" />
-                <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Command Center
-                </Link>
-                <Link href="/organizer/typology" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Typology Classifier
-                </Link>
-                <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Fraud Signals
-                </Link>
-                <Link href="/organizer/offline" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Offline Mode
-                </Link>
-                <Link href="/organizer/appraisals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Appraisals
-                </Link>
-              </>
-            )}
+            <SectionHeader label="Pro Tools" />
+            <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
 
             <SectionHeader label="Organizer Tools" />
             <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -124,9 +102,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </Link>
             <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               UGC Moderation
-            </Link>
-            <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Performance
             </Link>
           </>
         )}

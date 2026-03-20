@@ -23,8 +23,8 @@ const ReferPage = () => {
   }, [code, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-warm-50">
-      <p className="text-warm-600">Just a moment…</p>
+    <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
+      <p className="text-warm-600 dark:text-warm-400">Just a moment…</p>
     </div>
   );
 };

@@ -67,7 +67,7 @@ const MessageThreadPage = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-warm-50 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
         <Head><title>Messages – FindA.Sale</title></Head>
         <Link href="/login" className="px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold">Log in</Link>
       </div>
@@ -76,11 +76,11 @@ const MessageThreadPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-warm-50 flex items-center justify-center">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center">
         <Head><title>Messages – FindA.Sale</title></Head>
         <div className="text-center">
           <div className="animate-spin w-8 h-8 rounded-full border-2 border-amber-600 border-t-transparent mx-auto mb-4" />
-          <p className="text-warm-600">Loading conversation...</p>
+          <p className="text-warm-600 dark:text-warm-400">Loading conversation...</p>
         </div>
       </div>
     );
@@ -88,10 +88,10 @@ const MessageThreadPage = () => {
 
   if (isError || !data) {
     return (
-      <div className="min-h-screen bg-warm-50 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
         <Head><title>Messages – FindA.Sale</title></Head>
         <div className="text-center">
-          <p className="text-warm-600 mb-6">Conversation not found.</p>
+          <p className="text-warm-600 dark:text-warm-400 mb-6">Conversation not found.</p>
           <Link href="/messages" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors">
             Back to messages
           </Link>
@@ -106,14 +106,14 @@ const MessageThreadPage = () => {
     : conversation.organizer.businessName;
 
   return (
-    <div className="min-h-screen bg-warm-50 flex flex-col">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
       <Head>
         <title>{otherName} – Messages – FindA.Sale</title>
       </Head>
 
       {/* Header */}
-      <div className="bg-white border-b border-warm-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
-        <Link href="/messages" className="text-warm-500 hover:text-warm-900 p-1 -ml-1" aria-label="Back">
+      <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <Link href="/messages" className="text-warm-500 dark:text-warm-400 hover:text-warm-900 dark:text-warm-100 p-1 -ml-1" aria-label="Back">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
@@ -122,7 +122,7 @@ const MessageThreadPage = () => {
           {otherName.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-warm-900 truncate">{otherName}</p>
+          <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">{otherName}</p>
           {conversation.sale && (
             <Link href={`/sales/${conversation.sale.id}`} className="text-xs text-amber-600 hover:underline truncate block">
               {conversation.sale.title}
@@ -144,7 +144,7 @@ const MessageThreadPage = () => {
                 className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-snug ${
                   isMine
                     ? 'bg-amber-600 text-white rounded-br-sm'
-                    : 'bg-white text-warm-900 border border-warm-200 rounded-bl-sm'
+                    : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 border border-warm-200 dark:border-gray-700 rounded-bl-sm'
                 }`}
               >
                 {msg.body}
@@ -161,7 +161,7 @@ const MessageThreadPage = () => {
       {/* Input */}
       <form
         onSubmit={handleSend}
-        className="fixed bottom-0 left-0 right-0 bg-white border-t border-warm-200 p-3 pb-safe flex gap-2 items-end z-20"
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 p-3 pb-safe flex gap-2 items-end z-20"
       >
         <textarea
           value={body}
@@ -174,7 +174,7 @@ const MessageThreadPage = () => {
           }}
           rows={1}
           placeholder="Type a message…"
-          className="flex-1 resize-none rounded-xl border border-warm-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 max-h-28 overflow-y-auto"
+          className="flex-1 resize-none rounded-xl border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-900 max-h-28 overflow-y-auto"
         />
         <button
           type="submit"

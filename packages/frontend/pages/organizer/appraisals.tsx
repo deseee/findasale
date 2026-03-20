@@ -21,6 +21,7 @@ import {
 import { useToast } from '../../components/ToastContext';
 import AppraisalResponseForm from '../../components/AppraisalResponseForm';
 import Skeleton from '../../components/Skeleton';
+import TierGate from '../../components/TierGate';
 
 type Tab = 'my-requests' | 'community-feed';
 
@@ -67,11 +68,6 @@ const AppraisalsPage = () => {
 
   if (!user || user.role !== 'ORGANIZER') {
     router.push('/login');
-    return null;
-  }
-
-  if (!canAccess('PRO')) {
-    router.push('/organizer/upgrade');
     return null;
   }
 
@@ -245,6 +241,7 @@ const AppraisalsPage = () => {
         <title>Appraisals - FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Appraisals" description="Get community and AI-powered appraisals on items. Submit requests, browse the feed, and contribute your expertise.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -473,6 +470,7 @@ const AppraisalsPage = () => {
           )}
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

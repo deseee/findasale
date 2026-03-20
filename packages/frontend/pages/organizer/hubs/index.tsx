@@ -23,7 +23,7 @@ export default function OrganizerHubsPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-gray-600 mb-6">You must be an organizer to manage hubs.</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">You must be an organizer to manage hubs.</p>
           <Link href="/" className="text-sage-600 hover:text-sage-700 font-medium">
             Back to Home
           </Link>
@@ -59,7 +59,7 @@ export default function OrganizerHubsPage() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-sage-900">Your Sale Hubs</h1>
-              <p className="text-gray-600 mt-2">Create and manage coordinated sale hubs</p>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">Create and manage coordinated sale hubs</p>
             </div>
             <Link
               href="/organizer/hubs/create"
@@ -73,7 +73,7 @@ export default function OrganizerHubsPage() {
           {isLoading ? (
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="bg-white rounded-lg shadow h-24 animate-pulse"></div>
+                <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow h-24 animate-pulse"></div>
               ))}
             </div>
           ) : error ? (
@@ -81,8 +81,8 @@ export default function OrganizerHubsPage() {
               <p>Error loading hubs: {error instanceof Error ? error.message : 'Unknown error'}</p>
             </div>
           ) : !data?.hubs.length ? (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center">
-              <p className="text-gray-600 text-lg mb-4">You haven't created any hubs yet.</p>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center">
+              <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">You haven't created any hubs yet.</p>
               <Link
                 href="/organizer/hubs/create"
                 className="text-sage-600 hover:text-sage-700 font-medium"
@@ -95,12 +95,12 @@ export default function OrganizerHubsPage() {
               {data.hubs.map((hub) => (
                 <div
                   key={hub.id}
-                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-sage-900">{hub.name}</h3>
-                      <p className="text-sm text-gray-600 mt-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                         {hub.saleCount} {hub.saleCount === 1 ? 'sale' : 'sales'}
                         {hub.saleDate && (
                           <> • Event: {new Date(hub.saleDate).toLocaleDateString()}</>
@@ -121,7 +121,7 @@ export default function OrganizerHubsPage() {
                       </Link>
                       <button
                         onClick={() => handleDeleteHub(hub.id)}
-                        className="px-4 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors"
+                        className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors"
                       >
                         Delete
                       </button>
@@ -129,7 +129,7 @@ export default function OrganizerHubsPage() {
                   </div>
 
                   {/* Hub Link */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <a
                       href={`/hubs/${hub.slug}`}
                       target="_blank"

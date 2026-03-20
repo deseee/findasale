@@ -94,7 +94,7 @@ export default function CreateHubPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-gray-600 mb-6">You must be an organizer to create hubs.</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">You must be an organizer to create hubs.</p>
           <Link href="/" className="text-sage-600 hover:text-sage-700 font-medium">
             Back to Home
           </Link>
@@ -119,16 +119,16 @@ export default function CreateHubPage() {
 
           {/* Header */}
           <h1 className="text-3xl font-bold text-sage-900 mb-2">Create a New Hub</h1>
-          <p className="text-gray-600 mb-8">
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
             Group your nearby sales into a discoverable hub for shoppers to find and plan their routes.
           </p>
 
           {/* Form */}
-          <div className="bg-white rounded-lg shadow-md p-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Hub Name */}
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Hub Name *
                 </label>
                 <input
@@ -137,15 +137,15 @@ export default function CreateHubPage() {
                   value={formData.name}
                   onChange={handleNameChange}
                   placeholder="e.g., Downtown Estate Sales Weekend"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                   required
                 />
-                <p className="text-sm text-gray-600 mt-1">This is the public name shoppers will see</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">This is the public name shoppers will see</p>
               </div>
 
               {/* Slug */}
               <div>
-                <label htmlFor="slug" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="slug" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   URL Slug *
                 </label>
                 <input
@@ -154,17 +154,17 @@ export default function CreateHubPage() {
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
                   placeholder="downtown-estate-sales-weekend"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                   required
                 />
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   Auto-generated from name. Must be unique across all hubs.
                 </p>
               </div>
 
               {/* Description */}
               <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Description
                 </label>
                 <textarea
@@ -173,23 +173,23 @@ export default function CreateHubPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Tell shoppers about this hub, the types of items, neighborhood, etc."
                   rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                 />
               </div>
 
               {/* Location */}
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Hub Location</h3>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Hub Location</h3>
 
                 {geoError && (
-                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                  <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg text-amber-800 text-sm">
                     {geoError}
                   </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="lat" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Latitude *
                     </label>
                     <input
@@ -198,12 +198,12 @@ export default function CreateHubPage() {
                       step="0.0001"
                       value={formData.lat}
                       onChange={(e) => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                       required
                     />
                   </div>
                   <div>
-                    <label htmlFor="lng" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="lng" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Longitude *
                     </label>
                     <input
@@ -212,13 +212,13 @@ export default function CreateHubPage() {
                       step="0.0001"
                       value={formData.lng}
                       onChange={(e) => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                       required
                     />
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   {formData.lat && formData.lng
                     ? `Hub center: ${formData.lat.toFixed(4)}, ${formData.lng.toFixed(4)}`
                     : 'Enter your hub center coordinates'}
@@ -227,7 +227,7 @@ export default function CreateHubPage() {
 
               {/* Radius */}
               <div>
-                <label htmlFor="radiusKm" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="radiusKm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Search Radius (km) *
                 </label>
                 <input
@@ -237,16 +237,16 @@ export default function CreateHubPage() {
                   min="0.1"
                   value={formData.radiusKm}
                   onChange={(e) => setFormData({ ...formData, radiusKm: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                   required
                 />
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   Shoppers will see all sales within {formData.radiusKm} km of the hub center
                 </p>
               </div>
 
               {/* Submit */}
-              <div className="flex gap-3 pt-6 border-t border-gray-200">
+              <div className="flex gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <button
                   type="submit"
                   disabled={createHubMutation.isPending}
@@ -256,14 +256,14 @@ export default function CreateHubPage() {
                 </button>
                 <Link
                   href="/organizer/hubs"
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition-colors text-center"
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:text-gray-300 font-medium py-3 rounded-lg transition-colors text-center"
                 >
                   Cancel
                 </Link>
               </div>
 
               {createHubMutation.error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
                   {createHubMutation.error instanceof Error
                     ? createHubMutation.error.message
                     : 'Failed to create hub'}

@@ -40,7 +40,7 @@ const ChecklistPage = () => {
 
   if (authLoading || saleLoading) {
     return (
-      <div className="min-h-screen bg-warm-50 p-4">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4">
         <div className="max-w-4xl mx-auto">
           <Skeleton className="h-10 w-64 mb-8" />
           <Skeleton className="h-96 w-full" />
@@ -51,11 +51,11 @@ const ChecklistPage = () => {
 
   if (saleError || !sale) {
     return (
-      <div className="min-h-screen bg-warm-50 p-4">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="card p-6 text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Sale Not Found</h1>
-            <p className="text-gray-600 mb-4">We couldn't find the sale you're looking for.</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Sale Not Found</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">We couldn't find the sale you're looking for.</p>
             <Link
               href="/organizer/dashboard"
               className="inline-block px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
@@ -75,7 +75,7 @@ const ChecklistPage = () => {
         <meta name="description" content="Organize your sale with our day-of checklist" />
       </Head>
 
-      <div className="min-h-screen bg-warm-50 p-4">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-8">
@@ -94,8 +94,8 @@ const ChecklistPage = () => {
               Back to Dashboard
             </Link>
 
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Sale Checklist</h1>
-            <p className="text-lg text-gray-700">{sale.title}</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Sale Checklist</h1>
+            <p className="text-lg text-gray-700 dark:text-gray-300">{sale.title}</p>
           </div>
 
           {/* Checklist Component */}

@@ -358,7 +358,7 @@ const ReviewPage = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-white py-8">
+      <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <Skeleton className="h-10 w-48 mb-8" />
           <div className="space-y-4">
@@ -376,7 +376,7 @@ const ReviewPage = () => {
         <title>Review & Publish - FindA.Sale</title>
       </Head>
 
-      <main className="min-h-screen bg-warm-50 py-8">
+      <main className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <div className="mb-8 flex items-center justify-between">
             <Link
@@ -387,7 +387,7 @@ const ReviewPage = () => {
             </Link>
             <button
               onClick={() => setShowBuyerPreview(true)}
-              className="px-4 py-2 bg-white border border-warm-300 rounded-lg text-warm-700 hover:bg-warm-50 font-medium text-sm"
+              className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 font-medium text-sm"
             >
               👁 Buyer Preview
             </button>
@@ -398,22 +398,22 @@ const ReviewPage = () => {
               <div className="mb-6">
                 <button
                   onClick={() => setShowBuyerPreview(false)}
-                  className="px-4 py-2 bg-white border border-warm-300 rounded-lg text-warm-700 hover:bg-warm-50 font-medium text-sm"
+                  className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 font-medium text-sm"
                 >
                   Back to Editing
                 </button>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
                 <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-4">
                   Preview only
                 </div>
-                <h2 className="text-2xl font-bold text-warm-900 mb-6">Buyer Preview</h2>
+                <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">Buyer Preview</h2>
 
                 <div className="grid grid-cols-2 gap-4">
                   {previewItems.map((item) => (
-                    <div key={item.id} className="bg-white border border-warm-200 rounded-lg overflow-hidden">
-                      <div className="aspect-square bg-warm-100 overflow-hidden">
+                    <div key={item.id} className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                      <div className="aspect-square bg-warm-100 dark:bg-gray-700 overflow-hidden">
                         {item.photoUrls[0] && (
                           <img
                             src={buildCloudinaryUrl(item.photoUrls[0], {
@@ -426,13 +426,13 @@ const ReviewPage = () => {
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="font-semibold text-warm-900 text-sm truncate">
+                        <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm truncate">
                           {item.title}
                         </p>
                         <p className="text-amber-700 font-bold text-sm mt-1">
                           {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}
                         </p>
-                        <p className="text-warm-600 text-xs mt-1">{item.category || 'Uncategorized'}</p>
+                        <p className="text-warm-600 dark:text-warm-400 text-xs mt-1">{item.category || 'Uncategorized'}</p>
                       </div>
                     </div>
                   ))}
@@ -441,9 +441,9 @@ const ReviewPage = () => {
             </>
           ) : (
             <>
-              <div className="bg-white rounded-lg shadow-sm border border-warm-200 p-6 mb-8">
-                <h1 className="text-3xl font-bold text-warm-900 mb-2">Review & Publish</h1>
-                <p className="text-warm-600 mb-4">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
+                <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Review & Publish</h1>
+                <p className="text-warm-600 dark:text-warm-400 mb-4">
                   {items.length} item{items.length !== 1 ? 's' : ''} in this sale.
                   {items.filter((i) => i.draftStatus !== 'PUBLISHED').length > 0 && (
                     <span className="ml-1 text-amber-600 font-medium">
@@ -457,8 +457,8 @@ const ReviewPage = () => {
                   const clearCount = items.filter(i => i.healthScore?.grade === 'clear').length;
                   const blockedCount = items.filter(i => i.healthScore?.grade === 'blocked').length;
                   return (
-                    <div className="mb-4 p-3 bg-warm-50 rounded-lg border border-warm-200">
-                      <div className="text-sm text-warm-700">
+                    <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-900 rounded-lg border border-warm-200 dark:border-gray-700">
+                      <div className="text-sm text-warm-700 dark:text-warm-300">
                         <span className="font-medium">{clearCount}/{items.length} items ready to publish</span>
                         {blockedCount > 0 && <span className="ml-2 text-red-600 font-medium">{blockedCount} blocked</span>}
                       </div>
@@ -494,13 +494,13 @@ const ReviewPage = () => {
                     <Skeleton className="h-16 w-full" />
                   </div>
                 ) : items.length === 0 ? (
-                  <div className="text-center py-12 text-warm-600">
+                  <div className="text-center py-12 text-warm-600 dark:text-warm-400">
                     <p>No items in this sale yet.</p>
                   </div>
                 ) : (
                   <>
                     {/* Select All Header */}
-                    <div className="bg-white border border-warm-200 rounded-lg p-3 mb-3 flex items-center gap-3">
+                    <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-3 mb-3 flex items-center gap-3">
                       <input
                         type="checkbox"
                         checked={selectedItems.size === items.length && items.length > 0}
@@ -511,9 +511,9 @@ const ReviewPage = () => {
                             setSelectedItems(new Set());
                           }
                         }}
-                        className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500 cursor-pointer"
                       />
-                      <span className="text-sm font-medium text-warm-700">
+                      <span className="text-sm font-medium text-warm-700 dark:text-warm-300">
                         {selectedItems.size === 0
                           ? `Select all ${items.length} item${items.length !== 1 ? 's' : ''}`
                           : `${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''} selected`}
@@ -521,7 +521,7 @@ const ReviewPage = () => {
                     </div>
 
                     {selectedItems.size > 0 && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex flex-wrap items-center gap-3">
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg p-3 mb-3 flex flex-wrap items-center gap-3">
                         <span className="text-sm font-medium text-amber-800">{selectedItems.size} selected</span>
                         <div className="flex items-center gap-2">
                           <input
@@ -531,7 +531,7 @@ const ReviewPage = () => {
                             placeholder="Bulk price..."
                             value={bulkPrice}
                             onChange={(e) => setBulkPrice(e.target.value)}
-                            className="border border-warm-300 rounded px-2 py-1 text-sm w-28"
+                            className="border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm w-28"
                           />
                           <button
                             onClick={handleBulkPrice}
@@ -544,7 +544,7 @@ const ReviewPage = () => {
                         <select
                           value={bulkCategory}
                           onChange={(e) => { setBulkCategory(e.target.value); handleBulkCategory(e.target.value); }}
-                          className="border border-warm-300 rounded px-2 py-1 text-sm"
+                          className="border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm"
                         >
                           <option value="">Bulk category...</option>
                           {CATEGORIES.map((cat) => (
@@ -553,7 +553,7 @@ const ReviewPage = () => {
                         </select>
                         <button
                           onClick={() => setSelectedItems(new Set())}
-                          className="px-3 py-1 border border-warm-300 text-warm-700 text-sm rounded hover:bg-warm-50"
+                          className="px-3 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-warm-700 dark:text-warm-300 text-sm rounded hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
                         >
                           Clear
                         </button>
@@ -565,11 +565,11 @@ const ReviewPage = () => {
                       return (
                         <div
                           key={item.id}
-                          className={`bg-white border rounded-lg overflow-hidden ${confidenceBorderClass(item.aiConfidence, item.isAiTagged)}`}
+                          className={`bg-white dark:bg-gray-800 border rounded-lg overflow-hidden ${confidenceBorderClass(item.aiConfidence, item.isAiTagged)}`}
                         >
                           {/* Collapsed row — always visible */}
                           <div
-                            className="p-4 flex items-center gap-4 cursor-pointer hover:bg-warm-50"
+                            className="p-4 flex items-center gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
                             onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
                           >
                             <input
@@ -582,15 +582,15 @@ const ReviewPage = () => {
                                 else next.delete(item.id);
                                 setSelectedItems(next);
                               }}
-                              className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500"
+                              className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500"
                               onClick={(e) => e.stopPropagation()}
                             />
                             {item.photoUrls[0] && (
                               <img src={item.photoUrls[0]} alt={item.title} className="w-16 h-16 object-cover rounded flex-shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-warm-900 truncate">{item.title}</p>
-                              <p className="text-sm text-warm-600">
+                              <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
+                              <p className="text-sm text-warm-600 dark:text-warm-400">
                                 {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
                               </p>
                               {/* Sprint 1: Health score bar */}
@@ -628,7 +628,7 @@ const ReviewPage = () => {
                                   ? 'bg-green-100 text-green-700'
                                   : item.draftStatus === 'PENDING_REVIEW'
                                   ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-warm-100 text-warm-600'
+                                  : 'bg-warm-100 dark:bg-gray-700 text-warm-600'
                               }`}>
                                 {item.draftStatus === 'PUBLISHED' ? 'Published' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
                               </span>
@@ -640,11 +640,11 @@ const ReviewPage = () => {
                           {expandedItemId === item.id && (() => {
                             const editState = getEditState(item);
                             return (
-                              <div className="border-t border-warm-200 p-4 bg-warm-50 space-y-4">
+                              <div className="border-t border-warm-200 dark:border-gray-700 p-4 bg-warm-50 dark:bg-gray-900 space-y-4">
 
                                 {/* Photos */}
                                 <div>
-                                  <label className="block text-xs font-medium text-warm-700 mb-2">Photos</label>
+                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">Photos</label>
                                   <ItemPhotoManager
                                     itemId={item.id}
                                     initialPhotos={item.photoUrls || []}
@@ -653,36 +653,36 @@ const ReviewPage = () => {
 
                                 {/* Title */}
                                 <div>
-                                  <label className="block text-xs font-medium text-warm-700 mb-1">Title</label>
+                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Title</label>
                                   <input
                                     type="text"
                                     value={editState.title}
                                     onChange={(e) => handleEditChange(item.id, 'title', e.target.value)}
-                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                   />
                                 </div>
 
                                 {/* Description */}
                                 <div>
-                                  <label className="block text-xs font-medium text-warm-700 mb-1">Description</label>
+                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Description</label>
                                   <textarea
                                     rows={3}
                                     value={editState.description}
                                     onChange={(e) => handleEditChange(item.id, 'description', e.target.value)}
-                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                   />
                                 </div>
 
                                 {/* Price */}
                                 <div>
-                                  <label className="block text-xs font-medium text-warm-700 mb-1">Price ($)</label>
+                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Price ($)</label>
                                   <input
                                     type="number"
                                     min="0"
                                     step="0.01"
                                     value={editState.price}
                                     onChange={(e) => handleEditChange(item.id, 'price', parseFloat(e.target.value) || 0)}
-                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                   />
                                   <div className="mt-2">
                                     <PriceSuggestion
@@ -697,11 +697,11 @@ const ReviewPage = () => {
                                 {/* Category + Condition */}
                                 <div className="flex gap-3">
                                   <div className="flex-1">
-                                    <label className="block text-xs font-medium text-warm-700 mb-1">Category</label>
+                                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Category</label>
                                     <select
                                       value={editState.category}
                                       onChange={(e) => handleEditChange(item.id, 'category', e.target.value)}
-                                      className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                      className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                     >
                                       <option value="">Select category...</option>
                                       {CATEGORIES.map((cat) => (
@@ -710,11 +710,11 @@ const ReviewPage = () => {
                                     </select>
                                   </div>
                                   <div className="flex-1">
-                                    <label className="block text-xs font-medium text-warm-700 mb-1">Condition</label>
+                                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
                                     <select
                                       value={editState.condition}
                                       onChange={(e) => handleEditChange(item.id, 'condition', e.target.value)}
-                                      className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                      className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                     >
                                       <option value="">Select condition...</option>
                                       <option value="NEW">New</option>
@@ -728,7 +728,7 @@ const ReviewPage = () => {
 
                                 {/* #64: Condition Grade Picker */}
                                 <div className="mt-3">
-                                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
                                     Condition Grade
                                     {item.suggestedConditionGrade && (
                                       <span className="ml-2 text-xs text-indigo-500 font-normal">AI suggests: {item.suggestedConditionGrade}</span>
@@ -742,7 +742,7 @@ const ReviewPage = () => {
                                         <button
                                           key={grade}
                                           onClick={() => handleEditChange(item.id, 'conditionGrade', grade)}
-                                          className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${current === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}
+                                          className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${current === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-indigo-400'}`}
                                           title={labels[grade]}
                                         >
                                           {grade}
@@ -760,12 +760,12 @@ const ReviewPage = () => {
 
                                 {/* Sprint 1: Tag Picker */}
                                 <div className="mt-3">
-                                  <label className="text-sm font-medium text-gray-700 mb-1 block">Tags</label>
+                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Tags</label>
 
                                   {/* AI suggested chips */}
                                   {item.suggestedTags && item.suggestedTags.length > 0 && (
                                     <div className="mb-2">
-                                      <span className="text-xs text-gray-500 mr-1">AI suggested:</span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">AI suggested:</span>
                                       {item.suggestedTags.map(tag => (
                                         <button
                                           key={tag}
@@ -773,7 +773,7 @@ const ReviewPage = () => {
                                           className={`inline-flex items-center mr-1 mb-1 px-2 py-0.5 rounded-full text-xs border transition-colors
                                             ${(getEditState(item).tags || item.tags || []).includes(tag)
                                               ? 'bg-indigo-100 border-indigo-400 text-indigo-700'
-                                              : 'bg-gray-50 border-gray-300 text-gray-600 hover:border-indigo-300'
+                                              : 'bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-gray-600 dark:text-gray-400 hover:border-indigo-300'
                                             }`}
                                         >
                                           <span className="mr-1 text-indigo-500 font-bold">AI</span>{tag}
@@ -791,7 +791,7 @@ const ReviewPage = () => {
                                         className={`text-xs px-2 py-1 rounded border truncate transition-colors
                                           ${(getEditState(item).tags || item.tags || []).includes(tag)
                                             ? 'bg-indigo-100 border-indigo-400 text-indigo-700 font-medium'
-                                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-indigo-300'
+                                            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-indigo-300'
                                           }`}
                                       >
                                         {tag}
@@ -803,7 +803,7 @@ const ReviewPage = () => {
                                   <input
                                     type="text"
                                     placeholder="Add a custom tag..."
-                                    className="w-full border border-warm-300 rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') {
                                         handleAddCustomTag(item.id, (e.target as HTMLInputElement).value);
@@ -830,19 +830,19 @@ const ReviewPage = () => {
 
                                 {/* Quantity */}
                                 <div className="w-32">
-                                  <label className="block text-xs font-medium text-warm-700 mb-1">Quantity</label>
+                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Quantity</label>
                                   <input
                                     type="number"
                                     min="1"
                                     step="1"
                                     value={editState.quantity}
                                     onChange={(e) => handleEditChange(item.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                   />
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex items-center justify-between pt-1 border-t border-warm-200">
+                                <div className="flex items-center justify-between pt-1 border-t border-warm-200 dark:border-gray-700">
                                   <div className="flex items-center gap-3">
                                     <Link
                                       href={`/organizer/edit-item/${item.id}`}
@@ -855,7 +855,7 @@ const ReviewPage = () => {
                                       disabled={updateItemMutation.isPending || item.healthScore?.grade === 'blocked'}
                                       className={`px-3 py-1.5 text-sm font-medium rounded-lg disabled:opacity-50 ${
                                         item.draftStatus === 'PUBLISHED'
-                                          ? 'bg-warm-100 text-warm-700 hover:bg-warm-200'
+                                          ? 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200'
                                           : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400'
                                       }`}
                                     >

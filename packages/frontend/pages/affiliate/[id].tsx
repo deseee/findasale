@@ -17,7 +17,7 @@ const AffiliateRedirect = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <p className="text-warm-600">Redirecting...</p>
+      <p className="text-warm-600 dark:text-warm-400">Redirecting...</p>
     </div>
   );
 };

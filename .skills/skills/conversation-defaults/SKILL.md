@@ -409,6 +409,37 @@ Why this exists: Patrick identified (S178) that 11 scheduled tasks generate dail
 
 ---
 
+## Rule 30: Never stop between subagent returns when work remains (CRITICAL)
+
+When a subagent (Skill dispatch) returns and there are remaining items on the todo list, **immediately dispatch the next work item**. Do not narrate, summarize, or wait for Patrick to say "continue."
+
+**GATE (fires every time a Skill/Agent returns):**
+- Ask: "Are there remaining incomplete items on the todo list?"
+  - YES → Dispatch the next item immediately. Do not output a summary. Do not pause.
+  - NO → Report completion to Patrick.
+- Ask: "Did the subagent say 'Context-Maintenance Triggered: no'?"
+  - This is the subagent's internal bookkeeping. It does NOT mean "stop and report." Ignore it and check the todo list.
+
+**The anti-pattern (BANNED):**
+1. Subagent returns with handoff summary
+2. Main window narrates what the subagent did
+3. Main window stops and waits for Patrick to say "continue"
+4. Patrick says "continue"
+5. Main window dispatches next subagent
+6. Repeat — wasting one full round-trip per subagent
+
+**The correct pattern:**
+1. Subagent returns
+2. Main window checks todo list → items remain → dispatches next subagent immediately
+3. If multiple independent items remain, dispatch them in parallel
+4. Only report to Patrick when ALL todo items are complete or blocked
+
+**Exception:** If the subagent flagged something under "Blocked / Flagged" that requires Patrick's input before continuing, then pause and ask. Otherwise, keep going.
+
+Why this exists: Session 209 — main window stopped after every single dev subagent return (4 times), requiring Patrick to say "continue" each time. Patrick: "WHY ARE YOU STOPPING!!!! DEPLOY SUBAGENTS!!!!!" and "you stopped again. why?" The behavior burned 4 round-trips of wasted narration. This rule makes continuous execution the default. (Added 2026-03-20, Session 209.)
+
+---
+
 ## Fallback: If This Skill Was Not Loaded at Session Start
 
 conversation-defaults requires system injection to fire automatically. If it was
@@ -446,3 +477,5 @@ forward — session init does not need to be re-run.
 | 26. Subagent Output Aggregation Manifest | Active (added 2026-03-15, Session 169) |
 | 27. [LOST — no record found] | UNRECOVERABLE |
 | 28. Scheduled task findings triage at session init | Active (added 2026-03-16, Session 178) |
+| 29. Roadmap formatting enforcement | Active (added 2026-03-19, Session 204) |
+| 30. Never stop between subagent returns (CRITICAL) | Active (added 2026-03-20, Session 209) |

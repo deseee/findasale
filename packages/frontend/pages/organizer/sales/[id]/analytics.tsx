@@ -81,13 +81,13 @@ const PerSaleAnalyticsPage = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm">
             ← Dashboard
           </Link>
-          <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700">Failed to load sale analytics. Please try again.</p>
+          <div className="mt-8 p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-red-700 dark:text-red-300">Failed to load sale analytics. Please try again.</p>
           </div>
         </div>
       </div>
@@ -97,11 +97,11 @@ const PerSaleAnalyticsPage = () => {
   // Skeleton loading state
   if (analyticsLoading) {
     return (
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="mb-8">
             <div className="h-8 w-64 bg-warm-200 rounded mb-2 animate-pulse"></div>
-            <div className="h-4 w-80 bg-warm-100 rounded animate-pulse"></div>
+            <div className="h-4 w-80 bg-warm-100 dark:bg-gray-700 rounded animate-pulse"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {[1, 2, 3].map((i) => (
@@ -142,27 +142,27 @@ const PerSaleAnalyticsPage = () => {
         <title>{analytics.saleName} - Analytics - FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white border-b border-warm-200 px-4 py-4">
+        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">
           <div className="max-w-6xl mx-auto flex items-center gap-3">
-            <Link href="/organizer/dashboard" className="text-warm-400 hover:text-warm-600 text-sm">
+            <Link href="/organizer/dashboard" className="text-warm-400 hover:text-warm-600 dark:text-warm-400 text-sm">
               ← Dashboard
             </Link>
             <span className="text-warm-300">/</span>
-            <Link href="/organizer/insights" className="text-warm-400 hover:text-warm-600 text-sm">
+            <Link href="/organizer/insights" className="text-warm-400 hover:text-warm-600 dark:text-warm-400 text-sm">
               Insights
             </Link>
             <span className="text-warm-300">/</span>
-            <h1 className="text-lg font-semibold text-warm-900">{analytics.saleName}</h1>
+            <h1 className="text-lg font-semibold text-warm-900 dark:text-warm-100">{analytics.saleName}</h1>
           </div>
         </div>
 
         <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
           {/* Title */}
           <div>
-            <h2 className="text-2xl font-bold text-warm-900">Sale Analytics</h2>
-            <p className="text-warm-600 text-sm mt-1">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Sale Analytics</h2>
+            <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
               Performance metrics and shopper engagement for {analytics.saleName}
             </p>
           </div>
@@ -170,62 +170,62 @@ const PerSaleAnalyticsPage = () => {
           {/* Key Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Items Sold
               </p>
               <p className="text-3xl font-bold text-green-600">{analytics.itemsSold}</p>
-              <p className="text-xs text-warm-500 mt-2">of {analytics.totalItems} items</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">of {analytics.totalItems} items</p>
             </div>
 
             <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Conversion Rate
               </p>
               <p className="text-3xl font-bold text-indigo-600">{conversionRate}%</p>
-              <p className="text-xs text-warm-500 mt-2">Items sold ratio</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Items sold ratio</p>
             </div>
 
             <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Total Revenue
               </p>
               <p className="text-3xl font-bold text-green-700">${analytics.totalRevenue.toFixed(2)}</p>
-              <p className="text-xs text-warm-500 mt-2">{analytics.purchaseCount} purchases</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{analytics.purchaseCount} purchases</p>
             </div>
 
             <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Shopper Interest
               </p>
               <p className="text-3xl font-bold text-amber-600">{analytics.wishlistCount}</p>
-              <p className="text-xs text-warm-500 mt-2">Wishlist adds</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Wishlist adds</p>
             </div>
           </div>
 
           {/* Secondary Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Unique Visitors
               </p>
-              <p className="text-3xl font-bold text-warm-900">{analytics.uniqueVisitors}</p>
-              <p className="text-xs text-warm-500 mt-2">Subscribers</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{analytics.uniqueVisitors}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Subscribers</p>
             </div>
 
             <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Available Items
               </p>
-              <p className="text-3xl font-bold text-warm-900">{analytics.itemsAvailable}</p>
-              <p className="text-xs text-warm-500 mt-2">Not yet sold</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{analytics.itemsAvailable}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Not yet sold</p>
             </div>
 
             <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 On Hold
               </p>
               <p className="text-3xl font-bold text-amber-600">{analytics.itemsOnHold}</p>
-              <p className="text-xs text-warm-500 mt-2">Reserved items</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Reserved items</p>
             </div>
           </div>
 
@@ -235,7 +235,7 @@ const PerSaleAnalyticsPage = () => {
               {/* Item Status Donut */}
               {itemStatusData.length > 0 && (
                 <div className="card p-6">
-                  <h3 className="text-lg font-semibold text-warm-900 mb-6">Item Status Distribution</h3>
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Item Status Distribution</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
@@ -262,7 +262,7 @@ const PerSaleAnalyticsPage = () => {
               {/* Revenue Timeline */}
               {isClient && analytics.revenueTimeline && analytics.revenueTimeline.length > 0 && (
                 <div className="card p-6">
-                  <h3 className="text-lg font-semibold text-warm-900 mb-6">Revenue Timeline</h3>
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Revenue Timeline</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={analytics.revenueTimeline}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -298,22 +298,22 @@ const PerSaleAnalyticsPage = () => {
           {/* Top Items by Favorites */}
           {analytics.topItems.length > 0 && (
             <div className="card p-6">
-              <h3 className="text-lg font-semibold text-warm-900 mb-6">Top Items (by favorites)</h3>
+              <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Top Items (by favorites)</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-warm-200">
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Title</th>
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Price</th>
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Status</th>
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Favorites</th>
+                    <tr className="border-b border-warm-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Title</th>
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Price</th>
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Status</th>
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Favorites</th>
                     </tr>
                   </thead>
                   <tbody>
                     {analytics.topItems.map((item) => (
-                      <tr key={item.id} className="border-b border-warm-100 hover:bg-warm-50">
-                        <td className="py-3 px-4 text-warm-900 font-medium">{item.title}</td>
-                        <td className="py-3 px-4 font-semibold text-warm-900">
+                      <tr key={item.id} className="border-b border-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
+                        <td className="py-3 px-4 text-warm-900 dark:text-warm-100 font-medium">{item.title}</td>
+                        <td className="py-3 px-4 font-semibold text-warm-900 dark:text-warm-100">
                           ${item.price.toFixed(2)}
                         </td>
                         <td className="py-3 px-4">
@@ -329,7 +329,7 @@ const PerSaleAnalyticsPage = () => {
                             {item.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-warm-600">{item.favoriteCount} ❤️</td>
+                        <td className="py-3 px-4 text-warm-600 dark:text-warm-400">{item.favoriteCount} ❤️</td>
                       </tr>
                     ))}
                   </tbody>
@@ -341,7 +341,7 @@ const PerSaleAnalyticsPage = () => {
           {/* Pickup Appointments */}
           {analytics.pickupAppointments.length > 0 && (
             <div className="card p-6">
-              <h3 className="text-lg font-semibold text-warm-900 mb-6">Pickup Appointment Schedule</h3>
+              <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Pickup Appointment Schedule</h3>
               <div className="space-y-4">
                 {analytics.pickupAppointments.map((slot, idx) => {
                   const startDate = new Date(slot.startsAt).toLocaleDateString();
@@ -356,13 +356,13 @@ const PerSaleAnalyticsPage = () => {
                   const availableSpots = Math.max(0, slot.capacity - slot.booked);
 
                   return (
-                    <div key={idx} className="border border-warm-200 rounded-lg p-4 hover:bg-warm-50">
+                    <div key={idx} className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-semibold text-warm-900">
+                          <p className="font-semibold text-warm-900 dark:text-warm-100">
                             {startDate} • {startTime} - {endTime}
                           </p>
-                          <p className="text-sm text-warm-600 mt-1">
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">
                             {slot.booked} of {slot.capacity} slots booked
                           </p>
                         </div>
@@ -385,18 +385,18 @@ const PerSaleAnalyticsPage = () => {
 
           {/* Shopper Engagement Summary */}
           <div className="card p-6">
-            <h3 className="text-lg font-semibold text-warm-900 mb-4">Shopper Engagement</h3>
+            <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Shopper Engagement</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <p className="text-sm text-warm-600 mb-1">Unique Visitors</p>
-                <p className="text-2xl font-bold text-warm-900">{analytics.uniqueVisitors}</p>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Unique Visitors</p>
+                <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{analytics.uniqueVisitors}</p>
               </div>
               <div>
-                <p className="text-sm text-warm-600 mb-1">Wishlist Adds</p>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Wishlist Adds</p>
                 <p className="text-2xl font-bold text-amber-600">{analytics.wishlistCount}</p>
               </div>
               <div>
-                <p className="text-sm text-warm-600 mb-1">Waitlist Entries</p>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Waitlist Entries</p>
                 <p className="text-2xl font-bold text-indigo-600">{analytics.waitlistCount}</p>
               </div>
             </div>

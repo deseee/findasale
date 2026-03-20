@@ -33,7 +33,7 @@ const SUGGESTED_CATEGORIES = ['Furniture', 'Antiques', 'Clothing', 'Books', 'Too
 const ItemCard = ({ item }: { item: any }) => (
   <Link
     href={`/items/${item.id}`}
-    className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+    className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
   >
     {item.photoUrls?.[0] ? (
       <img
@@ -48,12 +48,12 @@ const ItemCard = ({ item }: { item: any }) => (
       </div>
     )}
     <div className="p-3 flex-1 flex flex-col">
-      <h3 className="text-sm font-semibold text-warm-900 line-clamp-1 mb-1">{item.title}</h3>
+      <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 line-clamp-1 mb-1">{item.title}</h3>
       {item.price != null && (
         <p className="text-amber-600 font-bold text-sm">${Number(item.price).toFixed(2)}</p>
       )}
       {item.sale && (
-        <p className="text-xs text-warm-500 mt-auto pt-1 line-clamp-1">
+        <p className="text-xs text-warm-500 dark:text-warm-400 mt-auto pt-1 line-clamp-1">
           {item.sale.title} &middot; {item.sale.city}, {item.sale.state}
         </p>
       )}
@@ -188,7 +188,7 @@ const SearchPage = () => {
   const itemsCount = data?.items?.length ?? 0;
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{q ? `"${q}" — Search` : 'Search'} — FindA.Sale</title>
         <meta name="description" content={q ? `Search results for ${q} on FindA.Sale` : 'Search sales and items on FindA.Sale'} />
@@ -204,7 +204,7 @@ const SearchPage = () => {
               key={q}
               placeholder="Search sales, items, keywords…"
               aria-label="Search sales and items"
-              className="flex-1 px-4 py-3 border border-warm-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-warm-900"
+              className="flex-1 px-4 py-3 border border-warm-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100"
               autoFocus={!q}
             />
             <button
@@ -230,13 +230,13 @@ const SearchPage = () => {
         {/* Empty / short query state */}
         {!q && !isShowingVisualResults && (
           <div className="text-center py-16">
-            <p className="text-warm-500 text-lg mb-6">What are you looking for?</p>
+            <p className="text-warm-500 dark:text-warm-400 text-lg mb-6">What are you looking for?</p>
             <div className="flex flex-wrap justify-center gap-2">
               {SUGGESTED_CATEGORIES.map((cat) => (
                 <Link
                   key={cat}
                   href={`/categories/${cat.toLowerCase()}`}
-                  className="px-4 py-2 bg-white border border-warm-200 hover:border-amber-400 text-warm-700 rounded-full text-sm transition-colors shadow-sm"
+                  className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 hover:border-amber-400 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors shadow-sm"
                 >
                   {cat}
                 </Link>
@@ -246,14 +246,14 @@ const SearchPage = () => {
         )}
 
         {q && q.length < 2 && (
-          <p className="text-center text-warm-500 py-8">Please enter at least 2 characters.</p>
+          <p className="text-center text-warm-500 dark:text-warm-400 py-8">Please enter at least 2 characters.</p>
         )}
 
         {/* Visual search results */}
         {isShowingVisualResults && (
           <>
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-warm-900 mb-3">Visual Search Results</h2>
+              <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">Visual Search Results</h2>
               {visualResults!.detectedLabels.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4">
                   {visualResults!.detectedLabels.map((label) => (
@@ -266,7 +266,7 @@ const SearchPage = () => {
                   ))}
                 </div>
               )}
-              <p className="text-sm text-warm-600 mb-4">
+              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
                 Found {visualResults!.results.length} item{visualResults!.results.length !== 1 ? 's' : ''} matching your photo
               </p>
             </div>
@@ -279,13 +279,13 @@ const SearchPage = () => {
               </div>
             ) : (
               <div className="text-center py-8 mb-12">
-                <p className="text-warm-500">No items found matching your photo. Try searching by text.</p>
+                <p className="text-warm-500 dark:text-warm-400">No items found matching your photo. Try searching by text.</p>
               </div>
             )}
 
             {q && (
               <div className="border-t pt-8">
-                <p className="text-sm text-warm-600 mb-4">Or continue with your text search:</p>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Or continue with your text search:</p>
               </div>
             )}
           </>
@@ -316,7 +316,7 @@ const SearchPage = () => {
               {/* Main content area */}
               <div className="flex-1 min-w-0">
                 {/* Tabs */}
-                <div className="flex gap-6 mb-6 border-b border-warm-200">
+                <div className="flex gap-6 mb-6 border-b border-warm-200 dark:border-gray-700">
                   {(['all', 'sales', 'items'] as SearchTab[]).map((t) => (
                     <button
                       key={t}
@@ -324,7 +324,7 @@ const SearchPage = () => {
                       className={`pb-2 font-medium capitalize transition-colors ${
                         tab === t
                           ? 'border-b-2 border-amber-600 text-amber-600'
-                          : 'text-warm-600 hover:text-warm-900'
+                          : 'text-warm-600 dark:text-warm-400 hover:text-warm-900'
                       }`}
                     >
                       {t}
@@ -342,14 +342,14 @@ const SearchPage = () => {
                     {(tab === 'all' || tab === 'sales') && (
                       <section className="mb-10">
                         {tab === 'all' && (
-                          <h2 className="text-lg font-semibold text-warm-900 mb-4">
+                          <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">
                             Sales <span className="text-warm-400 font-normal">({salesCount})</span>
                           </h2>
                         )}
                         {salesCount > 0 ? (
                           <>
                             {salesCount > 1 && (
-                              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                                 <button
                                   onClick={() => {
                                     const addresses = data!.sales
@@ -387,7 +387,7 @@ const SearchPage = () => {
                     {/* Items — Sprint 4b: FTS-powered on items tab, generic on all tab */}
                     {tab === 'all' && (
                       <section>
-                        <h2 className="text-lg font-semibold text-warm-900 mb-4">
+                        <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">
                           Items <span className="text-warm-400 font-normal">({itemsCount})</span>
                         </h2>
                         {itemsCount > 0 ? (
@@ -454,7 +454,7 @@ const SearchPage = () => {
                             <Link
                               key={cat}
                               href={`/categories/${cat.toLowerCase()}`}
-                              className="px-3 py-1 bg-warm-200 hover:bg-warm-300 text-warm-700 rounded-full text-sm transition-colors"
+                              className="px-3 py-1 bg-warm-200 hover:bg-warm-300 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors"
                             >
                               {cat}
                             </Link>

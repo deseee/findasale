@@ -193,15 +193,15 @@ const OrganizerPayoutsPage = () => {
         <title>Payouts - FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-4">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4">
           <div className="max-w-2xl mx-auto flex items-center gap-3">
-            <Link href="/organizer/dashboard" className="text-gray-400 hover:text-gray-600 text-sm">
+            <Link href="/organizer/dashboard" className="text-gray-400 hover:text-gray-600 dark:text-gray-400 text-sm">
               ← Dashboard
             </Link>
             <span className="text-gray-300">/</span>
-            <h1 className="text-lg font-semibold text-gray-900">Payouts</h1>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Payouts</h1>
           </div>
         </div>
 
@@ -209,10 +209,10 @@ const OrganizerPayoutsPage = () => {
 
           {/* Feature #11: Referral discount banner */}
           {organizerProfile?.referralDiscountActive && organizerProfile.referralDiscountExpiry && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex items-start gap-3">
               <span className="text-green-600 text-lg mt-0.5">🎉</span>
               <div>
-                <p className="text-sm font-semibold text-green-800">Referral discount active — 0% platform fee</p>
+                <p className="text-sm font-semibold text-green-800 dark:text-green-200">Referral discount active — 0% platform fee</p>
                 <p className="text-xs text-green-700 mt-0.5">
                   Your platform fee is waived until{' '}
                   <strong>{new Date(organizerProfile.referralDiscountExpiry).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>
@@ -223,8 +223,8 @@ const OrganizerPayoutsPage = () => {
           )}
 
           {/* Balance card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
               Stripe Balance
             </h2>
             {balanceLoading ? (
@@ -232,16 +232,16 @@ const OrganizerPayoutsPage = () => {
             ) : (
               <div className="flex gap-8">
                 <div>
-                  <p className="text-3xl font-bold text-gray-900">
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                     ${(balance?.available ?? 0).toFixed(2)}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">Available</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Available</p>
                 </div>
                 <div>
                   <p className="text-3xl font-bold text-gray-400">
                     ${(balance?.pending ?? 0).toFixed(2)}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">Pending</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Pending</p>
                 </div>
               </div>
             )}
@@ -249,8 +249,8 @@ const OrganizerPayoutsPage = () => {
 
           {/* Cash Fee Balance card — shown only when balance > 0 */}
           {cashFeeBalance > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
                 Cash Fee Balance
               </h2>
               <div className="space-y-4">
@@ -259,7 +259,7 @@ const OrganizerPayoutsPage = () => {
                     ${cashFeeBalance.toFixed(2)}
                   </p>
                   {earnings?.cashFeeBalanceUpdatedAt && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       Last updated: {new Date(earnings.cashFeeBalanceUpdatedAt).toLocaleDateString()}
                     </p>
                   )}
@@ -267,7 +267,7 @@ const OrganizerPayoutsPage = () => {
 
                 {/* 30-day stale warning */}
                 {isCashFeeStale() && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 p-3">
                     <p className="text-sm text-amber-800">
                       <span className="font-semibold">⚠️ Cash fee balance hasn't been cleared in 30+ days.</span> It will be deducted from your next payout.
                     </p>
@@ -278,8 +278,8 @@ const OrganizerPayoutsPage = () => {
           )}
 
           {/* Payout schedule */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
               Automatic Payout Schedule
             </h2>
             <p className="text-xs text-gray-400 mb-4">
@@ -299,7 +299,7 @@ const OrganizerPayoutsPage = () => {
                       className={`py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
                         currentInterval === interval
                           ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
                       }`}
                     >
                       {INTERVAL_LABELS[interval]}
@@ -321,8 +321,8 @@ const OrganizerPayoutsPage = () => {
           </div>
 
           {/* Manual payout */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
               Request a Payout
             </h2>
             <p className="text-xs text-gray-400 mb-4">
@@ -333,7 +333,7 @@ const OrganizerPayoutsPage = () => {
             <form onSubmit={handlePayoutSubmit} className="space-y-4">
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Amount (USD)
                 </label>
                 <div className="relative">
@@ -345,7 +345,7 @@ const OrganizerPayoutsPage = () => {
                     value={payoutAmount}
                     onChange={(e) => setPayoutAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full pl-7 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-7 pr-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 {balance && (
@@ -366,7 +366,7 @@ const OrganizerPayoutsPage = () => {
 
               {/* Cash fee deduction info — shown only if balance > 0 */}
               {cashFeeBalance > 0 && (
-                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 p-3 space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-amber-800">Cash fee deduction:</span>
                     <span className="font-semibold text-amber-900">-${cashFeeBalance.toFixed(2)}</span>
@@ -384,7 +384,7 @@ const OrganizerPayoutsPage = () => {
 
               {/* Method */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Method</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Method</label>
                 <div className="flex gap-3">
                   {(['standard', 'instant'] as const).map((m) => (
                     <button
@@ -394,7 +394,7 @@ const OrganizerPayoutsPage = () => {
                       className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
                         payoutMethod === m
                           ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
                       }`}
                     >
                       {m === 'standard' ? 'Standard (1–5 days)' : 'Instant (1–30 min)'}
@@ -414,9 +414,9 @@ const OrganizerPayoutsPage = () => {
           </div>
 
           {/* Earnings Breakdown — Feature #9 */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-1">
-              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                 Earnings Breakdown
               </h2>
               <a
@@ -446,11 +446,11 @@ const OrganizerPayoutsPage = () => {
                     { label: 'Est. Stripe Fees', value: -earnings.totals.totalStripeFees, color: 'text-orange-500' },
                     { label: 'Est. Net Payout', value: earnings.totals.totalNetPayout, color: 'text-green-600' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-center">
+                    <div key={label} className="rounded-lg border border-gray-100 bg-gray-50 dark:bg-gray-900 p-3 text-center">
                       <p className={`text-lg font-bold ${color}`}>
                         {value < 0 ? '-' : ''}${Math.abs(value).toFixed(2)}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</p>
                     </div>
                   ))}
                 </div>
@@ -471,9 +471,9 @@ const OrganizerPayoutsPage = () => {
                     </thead>
                     <tbody>
                       {earnings.items.map((item) => (
-                        <tr key={item.purchaseId} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <tr key={item.purchaseId} className="border-b border-gray-50 hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition-colors">
                           <td className="py-2 pr-3 text-gray-800 max-w-[140px] truncate">{item.itemTitle}</td>
-                          <td className="py-2 pr-3 text-gray-500 hidden sm:table-cell max-w-[120px] truncate">{item.saleTitle}</td>
+                          <td className="py-2 pr-3 text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-[120px] truncate">{item.saleTitle}</td>
                           <td className="py-2 pr-3 text-gray-400 text-xs hidden md:table-cell whitespace-nowrap">
                             {new Date(item.purchaseDate).toLocaleDateString()}
                           </td>

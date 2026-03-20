@@ -19,6 +19,7 @@ import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useToast } from '../../components/ToastContext';
 import { useSaleFraudSignals, useReviewSignal, confidenceToRiskLevel, type FraudSignal, type RiskLevel } from '../../hooks/useBidBot';
 import Skeleton from '../../components/Skeleton';
+import TierGate from '../../components/TierGate';
 import api from '../../lib/api';
 
 interface Sale {
@@ -92,12 +93,6 @@ const FraudSignalsPage = () => {
     return null;
   }
 
-  // Redirect if PRO tier not available
-  if (!canAccess('PRO')) {
-    router.push('/organizer/upgrade');
-    return null;
-  }
-
   const handleReviewSignal = async (signalId: string, outcome: 'DISMISSED' | 'CONFIRMED') => {
     try {
       await reviewMutation.mutateAsync({
@@ -118,6 +113,7 @@ const FraudSignalsPage = () => {
         <title>Fraud Signals - FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Fraud Signals" description="Monitor suspicious bidding patterns, flag potential fraud, and protect your sales with AI-powered detection.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -323,6 +319,7 @@ const FraudSignalsPage = () => {
           )}
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

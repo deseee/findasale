@@ -93,7 +93,7 @@ const NotificationsPage = () => {
     return (
       <Layout>
         <div className="container mx-auto px-4 py-16">
-          <p className="text-center text-warm-500">
+          <p className="text-center text-warm-500 dark:text-warm-400">
             Please log in to view your notifications.
           </p>
           <div className="text-center mt-4">
@@ -197,7 +197,7 @@ const NotificationsPage = () => {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-warm-900">Notifications</h1>
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">Notifications</h1>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
@@ -215,7 +215,7 @@ const NotificationsPage = () => {
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 filter === 'all'
                   ? 'bg-amber-600 text-white'
-                  : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+                  : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
               }`}
             >
               All
@@ -225,7 +225,7 @@ const NotificationsPage = () => {
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 filter === 'unread'
                   ? 'bg-amber-600 text-white'
-                  : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+                  : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
               }`}
             >
               Unread {unreadCount > 0 && `(${unreadCount})`}
@@ -235,7 +235,7 @@ const NotificationsPage = () => {
           {/* Content */}
           {isLoading ? (
             <div className="text-center py-12">
-              <p className="text-warm-500">Loading notifications...</p>
+              <p className="text-warm-500 dark:text-warm-400">Loading notifications...</p>
             </div>
           ) : displayedNotifications.length === 0 ? (
             <EmptyState
@@ -255,7 +255,7 @@ const NotificationsPage = () => {
                 })
                 .map(([group, notifs]) => (
                   <div key={group}>
-                    <h2 className="text-sm font-semibold text-warm-500 uppercase tracking-wide mb-3">
+                    <h2 className="text-sm font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-3">
                       {group}
                     </h2>
                     <div className="space-y-2">
@@ -264,8 +264,8 @@ const NotificationsPage = () => {
                           key={notification.id}
                           className={`rounded-lg border p-4 transition-colors cursor-pointer ${
                             notification.read
-                              ? 'border-warm-200 bg-white hover:bg-warm-50'
-                              : 'border-amber-200 bg-amber-50 hover:bg-amber-100'
+                              ? 'border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-warm-50'
+                              : 'border-amber-200 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100'
                           }`}
                           onClick={() => handleNavigate(notification)}
                         >
@@ -276,10 +276,10 @@ const NotificationsPage = () => {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <h3 className="font-semibold text-warm-900">
+                                  <h3 className="font-semibold text-warm-900 dark:text-warm-100">
                                     {notification.title}
                                   </h3>
-                                  <p className="text-sm text-warm-600 mt-1">
+                                  <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">
                                     {notification.body}
                                   </p>
                                 </div>
@@ -287,7 +287,7 @@ const NotificationsPage = () => {
                                   <div className="flex-shrink-0 h-2 w-2 bg-amber-600 rounded-full mt-1.5" />
                                 )}
                               </div>
-                              <p className="text-xs text-warm-500 mt-2">
+                              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
                                 {timeAgo(notification.createdAt)}
                               </p>
                             </div>
@@ -296,7 +296,7 @@ const NotificationsPage = () => {
                                 e.stopPropagation();
                                 handleDeleteNotification(notification.id);
                               }}
-                              className="flex-shrink-0 text-warm-300 hover:text-warm-500 p-1"
+                              className="flex-shrink-0 text-warm-300 hover:text-warm-500 dark:text-warm-400 p-1"
                               aria-label="Delete notification"
                             >
                               <svg

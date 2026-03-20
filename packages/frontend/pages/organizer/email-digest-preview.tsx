@@ -83,7 +83,7 @@ export default function EmailDigestPreview() {
   if (authLoading || settingsLoading) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -108,19 +108,19 @@ export default function EmailDigestPreview() {
             <Link href="/organizer/insights" className="text-sm text-amber-700 hover:text-amber-900 mb-4 inline-block">
               ← Back to Analytics
             </Link>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Weekly Email Digest</h1>
-            <p className="text-gray-600">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Weekly Email Digest</h1>
+            <p className="text-gray-600 dark:text-gray-400">
               Here's what your weekly organizer digest email looks like. Every Monday morning at 9 AM, you'll receive
               a summary of your sales performance.
             </p>
           </div>
 
           {/* Toggle Section */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-1">Email Digest Preference</h2>
-                <p className="text-sm text-gray-600">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Email Digest Preference</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   {isEmailEnabled
                     ? 'You will receive this digest every Monday morning at 9 AM.'
                     : 'You have disabled this email. Enable it to start receiving weekly digests.'}
@@ -131,7 +131,7 @@ export default function EmailDigestPreview() {
                 disabled={updatePreferenceMutation.isPending}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                   isEmailEnabled
-                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                    ? 'bg-red-100 text-red-700 dark:text-red-300 hover:bg-red-200'
                     : 'bg-green-100 text-green-700 hover:bg-green-200'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
@@ -141,16 +141,16 @@ export default function EmailDigestPreview() {
           </div>
 
           {/* Email Preview */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="bg-gray-100 px-6 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">Email Preview</h2>
-              <p className="text-sm text-gray-600 mt-1">This is how your weekly digest appears in your inbox.</p>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="bg-gray-100 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Email Preview</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">This is how your weekly digest appears in your inbox.</p>
             </div>
 
             {/* Email Content */}
             <div className="p-6">
               <div
-                className="bg-white border border-gray-300 rounded-lg overflow-hidden"
+                className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden"
                 style={{ maxWidth: '600px', margin: '0 auto' }}
               >
                 {/* Email Header */}
@@ -161,31 +161,31 @@ export default function EmailDigestPreview() {
 
                 {/* Email Body */}
                 <div className="px-8 py-8">
-                  <p className="text-gray-900 font-medium mb-1">Hi {mockDigest.businessName},</p>
-                  <p className="text-gray-700 text-sm mb-6">
+                  <p className="text-gray-900 dark:text-gray-100 font-medium mb-1">Hi {mockDigest.businessName},</p>
+                  <p className="text-gray-700 dark:text-gray-300 text-sm mb-6">
                     Here's how your sales performed from {previewDate}:
                   </p>
 
                   {/* Stats Grid */}
                   <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="bg-blue-50 rounded-lg p-4 text-center">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
                       <div className="text-2xl font-bold text-blue-700">{mockDigest.totalItemsSold}</div>
-                      <div className="text-xs text-gray-600 mt-1">Items Sold</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Items Sold</div>
                     </div>
-                    <div className="bg-amber-50 rounded-lg p-4 text-center">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
                       <div className="text-2xl font-bold text-amber-700">${mockDigest.totalRevenue.toFixed(2)}</div>
-                      <div className="text-xs text-gray-600 mt-1">Revenue</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Revenue</div>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-4 text-center">
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
                       <div className="text-2xl font-bold text-green-700">{mockDigest.newFollowers}</div>
-                      <div className="text-xs text-gray-600 mt-1">New Followers</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">New Followers</div>
                     </div>
                   </div>
 
                   {/* Activity Section */}
-                  <div className="bg-red-50 border-l-4 border-red-600 rounded p-4 mb-8">
-                    <div className="font-semibold text-gray-900 text-sm mb-3">Your Sale Activity This Week</div>
-                    <div className="space-y-2 text-sm text-gray-700">
+                  <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-600 rounded p-4 mb-8">
+                    <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-3">Your Sale Activity This Week</div>
+                    <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                       <div>
                         <span className="mr-2">📊</span>
                         {mockDigest.totalItemViews} item views
@@ -200,11 +200,11 @@ export default function EmailDigestPreview() {
                   {/* Top Items Section */}
                   {mockDigest.topItems.length > 0 && (
                     <div className="mb-8">
-                      <h3 className="font-semibold text-gray-900 text-sm mb-4">Top Selling Items</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-4">Top Selling Items</h3>
                       <div className="space-y-3">
                         {mockDigest.topItems.map((item, idx) => (
-                          <div key={idx} className="border border-gray-200 rounded-lg p-3">
-                            <div className="font-medium text-gray-900 text-sm">{item.title}</div>
+                          <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">{item.title}</div>
                             <div className="text-amber-700 font-bold text-sm mt-1">${item.price.toFixed(2)}</div>
                           </div>
                         ))}
@@ -215,12 +215,12 @@ export default function EmailDigestPreview() {
                   {/* Upcoming Sales */}
                   {mockDigest.upcomingSales.length > 0 && (
                     <div className="mb-8">
-                      <h3 className="font-semibold text-gray-900 text-sm mb-4">Upcoming Sales</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-4">Upcoming Sales</h3>
                       <div className="space-y-3">
                         {mockDigest.upcomingSales.map((sale, idx) => (
-                          <div key={idx} className="border border-gray-200 rounded-lg p-3">
-                            <div className="font-medium text-gray-900 text-sm">{sale.title}</div>
-                            <div className="text-gray-600 text-xs mt-1">{sale.startDate}</div>
+                          <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">{sale.title}</div>
+                            <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">{sale.startDate}</div>
                           </div>
                         ))}
                       </div>
@@ -228,7 +228,7 @@ export default function EmailDigestPreview() {
                   )}
 
                   {/* CTA Button */}
-                  <div className="text-center py-6 border-t border-gray-200">
+                  <div className="text-center py-6 border-t border-gray-200 dark:border-gray-700">
                     <a
                       href="/organizer/dashboard"
                       className="inline-block px-7 py-3 bg-teal-700 text-white rounded-lg font-semibold text-sm hover:bg-teal-800"
@@ -239,18 +239,18 @@ export default function EmailDigestPreview() {
                 </div>
 
                 {/* Email Footer */}
-                <div className="bg-gray-50 px-8 py-5 border-t border-gray-200 text-center">
-                  <p className="text-xs text-gray-600">
+                <div className="bg-gray-50 dark:bg-gray-900 px-8 py-5 border-t border-gray-200 dark:border-gray-700 text-center">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     You're receiving this because you're an organizer on{' '}
                     <a href="/" className="text-teal-700">
                       FindA.Sale
                     </a>
                     .<br />
-                    <a href="/organizer/settings" className="text-gray-600 hover:text-gray-900">
+                    <a href="/organizer/settings" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:text-gray-100">
                       Manage email preferences
                     </a>
                     {' '}·{' '}
-                    <a href="/unsubscribe" className="text-gray-600 hover:text-gray-900">
+                    <a href="/unsubscribe" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:text-gray-100">
                       Unsubscribe
                     </a>
                   </p>
@@ -260,7 +260,7 @@ export default function EmailDigestPreview() {
           </div>
 
           {/* Info Section */}
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
             <h3 className="font-semibold text-blue-900 mb-2">About Your Weekly Digest</h3>
             <ul className="text-sm text-blue-800 space-y-2 list-disc list-inside">
               <li>Sent every Monday morning at 9 AM EST</li>

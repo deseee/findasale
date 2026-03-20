@@ -24,6 +24,7 @@ import CategoryBreakdownChart from '../../components/PerformanceDashboard/Catego
 import HoldMetricsCard from '../../components/PerformanceDashboard/HoldMetricsCard';
 import RecommendationsPanel from '../../components/PerformanceDashboard/RecommendationsPanel';
 import PostPerformanceCard from '../../components/PostPerformanceCard'; // #18: Post Performance Analytics
+import TierGate from '../../components/TierGate';
 
 interface Insights {
   totalSalesCount: number;
@@ -262,6 +263,7 @@ const OrganizerInsightsPage = () => {
         <title>Insights - FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Insights" description="Lifetime analytics across all your sales — revenue trends, category breakdowns, top items, and performance benchmarks.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">
@@ -582,6 +584,7 @@ const OrganizerInsightsPage = () => {
           </div>
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

@@ -13,7 +13,7 @@ const OfflinePage = () => {
       <Head>
         <title>Offline - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800 flex items-center justify-center px-4">
         <div className="text-center max-w-md">
           <div className="mb-6">
             <svg
@@ -30,8 +30,8 @@ const OfflinePage = () => {
               />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-warm-900 mb-2">You're Offline</h1>
-          <p className="text-warm-600 mb-6">
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">You're Offline</h1>
+          <p className="text-warm-600 dark:text-warm-400 mb-6">
             It looks like you've lost your internet connection. Please check your connection and try again.
           </p>
           <button

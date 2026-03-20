@@ -168,10 +168,10 @@ export default function UpgradePage() {
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
-            <h1 className="font-fraunces text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            <h1 className="font-fraunces text-4xl md:text-5xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               Choose Your Plan
             </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
               Every plan includes everything you need to run your estate sales successfully.
             </p>
             <Link
@@ -184,13 +184,13 @@ export default function UpgradePage() {
 
           {/* Billing Toggle */}
           <div className="flex justify-center mb-8">
-            <div className="inline-flex rounded-lg border border-gray-300 bg-white p-1">
+            <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-1">
               <button
                 onClick={() => setBillingInterval('monthly')}
                 className={`px-6 py-2 rounded-md font-medium transition ${
                   billingInterval === 'monthly'
                     ? 'bg-sage-600 text-white'
-                    : 'text-gray-700 hover:text-gray-900'
+                    : 'text-gray-700 dark:text-gray-300 hover:text-gray-900'
                 }`}
               >
                 Monthly
@@ -200,7 +200,7 @@ export default function UpgradePage() {
                 className={`px-6 py-2 rounded-md font-medium transition relative ${
                   billingInterval === 'annual'
                     ? 'bg-sage-600 text-white'
-                    : 'text-gray-700 hover:text-gray-900'
+                    : 'text-gray-700 dark:text-gray-300 hover:text-gray-900'
                 }`}
               >
                 Annual
@@ -214,7 +214,7 @@ export default function UpgradePage() {
           </div>
 
           {/* Trial Callout */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8 max-w-2xl mx-auto">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8 max-w-2xl mx-auto">
             <p className="text-center text-blue-900 font-medium">
               🎉 7-day free trial on PRO — no credit card charged until day 8
             </p>
@@ -228,7 +228,7 @@ export default function UpgradePage() {
                 className={`rounded-xl border-2 overflow-hidden transition ${
                   currentTier === tier.tier
                     ? 'border-sage-600 bg-sage-50'
-                    : 'border-gray-200 bg-white hover:border-sage-400'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-sage-400'
                 }`}
               >
                 {/* Badge for current plan */}
@@ -240,7 +240,7 @@ export default function UpgradePage() {
 
                 {/* Card Content */}
                 <div className="p-8">
-                  <h2 className="font-fraunces text-2xl font-bold text-gray-900 mb-2">
+                  <h2 className="font-fraunces text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                     {tier.name}
                   </h2>
 
@@ -250,14 +250,14 @@ export default function UpgradePage() {
                       <p className="text-4xl font-bold text-sage-600">Free</p>
                     ) : tier.tier === 'TEAMS' ? (
                       <div>
-                        <p className="text-4xl font-bold text-gray-900">
+                        <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">
                           ${billingInterval === 'monthly' ? tier.monthlyPrice : (tier.annualPrice / 12).toFixed(0)}/mo
                         </p>
-                        <p className="text-sm text-gray-600">Billed {billingInterval === 'annual' ? 'annually' : 'monthly'}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Billed {billingInterval === 'annual' ? 'annually' : 'monthly'}</p>
                       </div>
                     ) : (
                       <div>
-                        <p className="text-4xl font-bold text-gray-900">
+                        <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">
                           ${billingInterval === 'monthly' ? tier.monthlyPrice : (tier.annualPrice / 12).toFixed(0)}/mo
                         </p>
                         {billingInterval === 'annual' && (
@@ -265,7 +265,7 @@ export default function UpgradePage() {
                             Save ${(tier.monthlyPrice * 12 - tier.annualPrice).toFixed(0)}/year
                           </p>
                         )}
-                        <p className="text-sm text-gray-600">Billed {billingInterval === 'annual' ? 'annually' : 'monthly'}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Billed {billingInterval === 'annual' ? 'annually' : 'monthly'}</p>
                       </div>
                     )}
                   </div>
@@ -292,7 +292,7 @@ export default function UpgradePage() {
                       disabled={tier.disabled || loadingPriceId !== null}
                       className={`w-full py-3 px-4 rounded-lg font-semibold text-center transition mb-8 ${
                         currentTier === tier.tier
-                          ? 'bg-gray-100 text-gray-700 cursor-default'
+                          ? 'bg-gray-100 text-gray-700 dark:text-gray-300 cursor-default'
                           : 'bg-sage-600 text-white hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed'
                       }`}
                     >
@@ -306,12 +306,12 @@ export default function UpgradePage() {
 
                   {/* Features */}
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-gray-900">Includes:</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">Includes:</h3>
                     <ul className="space-y-3">
                       {tier.features.map((feature, idx) => (
                         <li key={idx} className="flex items-start">
                           <span className="text-sage-600 mr-3 font-bold">✓</span>
-                          <span className="text-gray-700">{feature}</span>
+                          <span className="text-gray-700 dark:text-gray-300">{feature}</span>
                         </li>
                       ))}
                     </ul>
@@ -323,25 +323,25 @@ export default function UpgradePage() {
 
           {/* FAQ Section */}
           <div className="mt-16 max-w-2xl mx-auto">
-            <h2 className="font-fraunces text-3xl font-bold text-gray-900 mb-8 text-center">
+            <h2 className="font-fraunces text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8 text-center">
               Questions?
             </h2>
             <div className="space-y-6">
               <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Can I switch plans anytime?</h3>
-                <p className="text-gray-600">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Can I switch plans anytime?</h3>
+                <p className="text-gray-600 dark:text-gray-400">
                   Yes! You can upgrade or downgrade anytime. If you downgrade, your plan will remain active until the end of your current billing period.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 mb-2">What happens after my free trial?</h3>
-                <p className="text-gray-600">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">What happens after my free trial?</h3>
+                <p className="text-gray-600 dark:text-gray-400">
                   After your 7-day free trial ends, we'll charge your card for your subscription. You can cancel anytime before the trial ends.
                 </p>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Do you offer refunds?</h3>
-                <p className="text-gray-600">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Do you offer refunds?</h3>
+                <p className="text-gray-600 dark:text-gray-400">
                   If you're not satisfied with your purchase, contact us within 7 days for a full refund.
                 </p>
               </div>
