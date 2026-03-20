@@ -53,7 +53,7 @@ export const bidRateLimiter = async (req: AuthRequest, res: Response, next: Next
     const redisKey = `bid:${userId}`;
 
     // Fetch all bid timestamps for this user in the last 60 seconds
-    const bidTimestamps = await redisClient.zrangebyscore(redisKey, now - windowMs, now);
+    const bidTimestamps = await redisClient.zRangeByScore(redisKey, String(now - windowMs), String(now));
 
     if (bidTimestamps.length >= maxBids) {
       return res.status(429).json({
@@ -62,7 +62,7 @@ export const bidRateLimiter = async (req: AuthRequest, res: Response, next: Next
     }
 
     // Record this bid timestamp
-    await redisClient.zadd(redisKey, { score: now, member: `${now}-${Math.random()}` });
+    await redisClient.zAdd(redisKey, { score: now, value: `${now}-${Math.random()}` });
 
     // Set expiration on the key (90 seconds to be safe)
     await redisClient.expire(redisKey, 90);
