@@ -144,13 +144,7 @@ const OrganizerInsightsPage = () => {
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
-  // Redirect if not authenticated or not an organizer
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
-    router.push('/login');
-    return null;
-  }
-
-  // Fetch aggregate insights data
+  // Fetch aggregate insights data — hooks before any conditional return
   const { data: insights, isLoading: insightsLoading, error } = useQuery({
     queryKey: ['organizer-insights', user?.id],
     queryFn: async () => {
@@ -199,6 +193,12 @@ const OrganizerInsightsPage = () => {
     enabled: !!user?.id,
   });
 
+  // Auth guard — after all hooks
+  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+    router.push('/login');
+    return null;
+  }
+
   const handleSaleChange = (saleId: string) => {
     setSelectedSaleId(saleId);
   };
@@ -210,18 +210,18 @@ const OrganizerInsightsPage = () => {
   };
 
   if (authLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return <div className="min-h-screen flex items-center justify-center dark:bg-gray-900">Loading...</div>;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm">
             ← Dashboard
           </Link>
-          <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700">Failed to load insights. Please try again.</p>
+          <div className="mt-8 p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-red-700 dark:text-red-300">Failed to load insights. Please try again.</p>
           </div>
         </div>
       </div>
@@ -231,17 +231,17 @@ const OrganizerInsightsPage = () => {
   // Skeleton loading state
   if (insightsLoading) {
     return (
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="mb-8">
-            <div className="h-8 w-64 bg-warm-200 rounded mb-2 animate-pulse"></div>
-            <div className="h-4 w-80 bg-warm-100 rounded animate-pulse"></div>
+            <div className="h-8 w-64 bg-warm-200 dark:bg-gray-700 rounded mb-2 animate-pulse"></div>
+            <div className="h-4 w-80 bg-warm-100 dark:bg-gray-800 rounded animate-pulse"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="card p-6">
-                <div className="h-4 w-24 bg-warm-200 rounded mb-2 animate-pulse"></div>
-                <div className="h-10 w-32 bg-warm-200 rounded animate-pulse"></div>
+              <div key={i} className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                <div className="h-4 w-24 bg-warm-200 dark:bg-gray-700 rounded mb-2 animate-pulse"></div>
+                <div className="h-10 w-32 bg-warm-200 dark:bg-gray-700 rounded animate-pulse"></div>
               </div>
             ))}
           </div>
@@ -358,12 +358,12 @@ const OrganizerInsightsPage = () => {
           {/* Secondary Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Conversion Rate */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Conversion Rate
               </p>
-              <p className="text-3xl font-bold text-indigo-600">{insights.conversionRate.toFixed(1)}%</p>
-              <p className="text-xs text-warm-500 mt-2">
+              <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{insights.conversionRate.toFixed(1)}%</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
                 {insights.totalItems > 0
                   ? `${insights.totalItemsSold} of ${insights.totalItems} items sold`
                   : 'No items yet'}
@@ -371,41 +371,41 @@ const OrganizerInsightsPage = () => {
             </div>
 
             {/* Available Items */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Available Items
               </p>
-              <p className="text-3xl font-bold text-warm-900">{insights.totalItemsAvailable}</p>
-              <p className="text-xs text-warm-500 mt-2">Not yet sold</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalItemsAvailable}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Not yet sold</p>
             </div>
 
             {/* Average Item Price */}
-            <div className="card p-6">
-              <p className="text-warm-600 text-xs font-semibold uppercase tracking-wide mb-2">
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                 Avg Item Price
               </p>
-              <p className="text-3xl font-bold text-warm-900">${insights.avgItemPrice.toFixed(2)}</p>
-              <p className="text-xs text-warm-500 mt-2">Average price</p>
+              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${insights.avgItemPrice.toFixed(2)}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Average price</p>
             </div>
           </div>
 
           {/* Items by Category */}
           {insights.categoryBreakdown.length > 0 && (
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-warm-900 mb-6">Items by Category</h3>
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Items by Category</h3>
               <div className="space-y-4">
                 {insights.categoryBreakdown.map((cat) => {
                   const percentage = (cat.count / maxCategoryCount) * 100;
                   return (
                     <div key={cat.category}>
                       <div className="flex justify-between items-baseline mb-2">
-                        <span className="text-sm font-medium text-warm-900 capitalize">
+                        <span className="text-sm font-medium text-warm-900 dark:text-warm-100 capitalize">
                           {cat.category}
                         </span>
-                        <span className="text-xs font-semibold text-warm-600">{cat.count}</span>
+                        <span className="text-xs font-semibold text-warm-600 dark:text-warm-400">{cat.count}</span>
                       </div>
                       {/* Pure CSS bar chart */}
-                      <div className="w-full h-6 bg-warm-100 rounded-full overflow-hidden">
+                      <div className="w-full h-6 bg-warm-100 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-amber-500 to-amber-600 rounded-full transition-all duration-300"
                           style={{ width: `${percentage}%` }}
@@ -420,34 +420,34 @@ const OrganizerInsightsPage = () => {
 
           {/* Top Items Table */}
           {insights.topItems.length > 0 && (
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-warm-900 mb-6">Top Items (by price)</h3>
+            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Top Items (by price)</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-warm-200">
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Title</th>
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Category</th>
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Price</th>
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700">Status</th>
+                    <tr className="border-b border-warm-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Title</th>
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Category</th>
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Price</th>
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {insights.topItems.map((item) => (
-                      <tr key={item.id} className="border-b border-warm-100 hover:bg-warm-50">
-                        <td className="py-3 px-4 text-warm-900 font-medium">{item.title}</td>
-                        <td className="py-3 px-4 text-warm-600 capitalize">{item.category}</td>
-                        <td className="py-3 px-4 font-semibold text-warm-900">
+                      <tr key={item.id} className="border-b border-warm-100 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700">
+                        <td className="py-3 px-4 text-warm-900 dark:text-warm-100 font-medium">{item.title}</td>
+                        <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">{item.category}</td>
+                        <td className="py-3 px-4 font-semibold text-warm-900 dark:text-warm-100">
                           ${item.price.toFixed(2)}
                         </td>
                         <td className="py-3 px-4">
                           <span
                             className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                               item.status === 'SOLD'
-                                ? 'bg-green-100 text-green-700'
+                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
                                 : item.status === 'AVAILABLE'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-warm-100 text-warm-700'
+                                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                                  : 'bg-warm-100 dark:bg-warm-900 text-warm-700 dark:text-warm-200'
                             }`}
                           >
                             {item.status}
@@ -463,8 +463,8 @@ const OrganizerInsightsPage = () => {
 
           {/* Empty State */}
           {insights.totalItems === 0 && (
-            <div className="card p-12 text-center">
-              <p className="text-warm-600 mb-4">No items listed yet.</p>
+            <div className="card p-12 text-center dark:bg-gray-800 dark:border-gray-700">
+              <p className="text-warm-600 dark:text-warm-400 mb-4">No items listed yet.</p>
               <Link
                 href="/organizer/add-items"
                 className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
@@ -475,16 +475,16 @@ const OrganizerInsightsPage = () => {
           )}
 
           {/* Per-Sale Breakdown Section */}
-          <hr className="my-12 border-warm-300" />
+          <hr className="my-12 border-warm-300 dark:border-gray-700" />
 
           <div className="space-y-8">
-            <h2 className="text-2xl font-bold text-warm-900">Per-Sale Breakdown</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Per-Sale Breakdown</h2>
 
             {/* Sale Selector & Date Range Controls */}
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-warm-900 mb-2">
+                  <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
                     Select Sale
                   </label>
                   <SaleSelector
@@ -494,7 +494,7 @@ const OrganizerInsightsPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-warm-900 mb-2">
+                  <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
                     Date Range
                   </label>
                   <DateRangeSelector
@@ -507,8 +507,8 @@ const OrganizerInsightsPage = () => {
 
             {/* Placeholder when no sale selected */}
             {!selectedSaleId && (
-              <div className="card p-12 text-center">
-                <p className="text-warm-600">Select a sale above to see its breakdown</p>
+              <div className="card p-12 text-center dark:bg-gray-800 dark:border-gray-700">
+                <p className="text-warm-600 dark:text-warm-400">Select a sale above to see its breakdown</p>
               </div>
             )}
 
@@ -517,9 +517,9 @@ const OrganizerInsightsPage = () => {
               <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                    <div key={i} className="card p-6">
-                      <div className="h-4 w-24 bg-warm-200 rounded mb-2 animate-pulse"></div>
-                      <div className="h-10 w-32 bg-warm-200 rounded animate-pulse"></div>
+                    <div key={i} className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                      <div className="h-4 w-24 bg-warm-200 dark:bg-gray-700 rounded mb-2 animate-pulse"></div>
+                      <div className="h-10 w-32 bg-warm-200 dark:bg-gray-700 rounded animate-pulse"></div>
                     </div>
                   ))}
                 </div>
@@ -529,7 +529,7 @@ const OrganizerInsightsPage = () => {
             {selectedSaleId && metricsData && (
               <div className="space-y-8">
                 {/* Date Range Info */}
-                <div className="text-xs text-warm-600 text-center">
+                <div className="text-xs text-warm-600 dark:text-warm-400 text-center">
                   {metricsData.dateRange.label}
                   {metricsData.cacheExpiry && (
                     <span className="ml-2">
@@ -542,15 +542,15 @@ const OrganizerInsightsPage = () => {
                 <MetricsGrid data={metricsData.metrics} />
 
                 {/* Top Items Table */}
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h3 className="text-xl font-semibold text-warm-900 mb-4">Top Selling Items</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                  <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-4">Top Selling Items</h3>
                   <TopItemsTable items={metricsData.metrics.itemMetrics.topSellingItems} />
                 </div>
 
                 {/* Category Breakdown Chart */}
                 {metricsData.metrics.itemMetrics.categoryBreakdown.length > 0 && (
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-xl font-semibold text-warm-900 mb-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-4">
                       Category Breakdown
                     </h3>
                     <CategoryBreakdownChart
@@ -576,7 +576,7 @@ const OrganizerInsightsPage = () => {
                 />
 
                 {/* Refresh Info */}
-                <div className="text-center text-xs text-warm-600 pt-4 border-t border-warm-200">
+                <div className="text-center text-xs text-warm-600 dark:text-warm-400 pt-4 border-t border-warm-200 dark:border-gray-700">
                   Last updated: {new Date(metricsData.lastUpdated).toLocaleString()}
                 </div>
               </div>
