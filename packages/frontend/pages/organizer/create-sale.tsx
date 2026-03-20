@@ -188,7 +188,7 @@ const CreateSalePage = () => {
                   disabled={!formData.title.trim() || isGeneratingDesc}
                   className="text-xs bg-sage-600 hover:bg-sage-700 text-white py-1 px-3 rounded-full disabled:opacity-40 transition-colors flex items-center gap-1"
                 >
-                  {isGeneratingDesc ? 'Generating…' : '✨ Generate'}
+                  {isGeneratingDesc ? 'Generating\u2026' : '\u2728 Generate'}
                 </button>
               </div>
               <textarea
