@@ -12,7 +12,7 @@ import { AuthRequest } from '../middleware/auth';
 export const createWorkspace = async (req: AuthRequest, res: Response) => {
   try {
     const { name } = req.body;
-    const organizerId = req.user?.organizerId;
+    const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -82,7 +82,7 @@ export const createWorkspace = async (req: AuthRequest, res: Response) => {
  */
 export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
   try {
-    const organizerId = req.user?.organizerId;
+    const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -147,7 +147,7 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
 export const inviteMember = async (req: AuthRequest, res: Response) => {
   try {
     const { email, role } = req.body;
-    const organizerId = req.user?.organizerId;
+    const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -239,7 +239,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
  */
 export const acceptInvite = async (req: AuthRequest, res: Response) => {
   try {
-    const organizerId = req.user?.organizerId;
+    const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -285,7 +285,7 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
 export const removeMember = async (req: AuthRequest, res: Response) => {
   try {
     const { organizerId: targetOrganizerId } = req.params;
-    const organizerId = req.user?.organizerId;
+    const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -346,7 +346,7 @@ export const removeMember = async (req: AuthRequest, res: Response) => {
  */
 export const listMembers = async (req: AuthRequest, res: Response) => {
   try {
-    const organizerId = req.user?.organizerId;
+    const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
       return res.status(401).json({ error: 'Unauthorized' });

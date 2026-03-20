@@ -14,7 +14,8 @@ interface EncyclopediaCardProps {
  */
 const EncyclopediaCard: React.FC<EncyclopediaCardProps> = ({ entry, compact = false }) => {
   // Extract plain text excerpt from markdown
-  const getExcerpt = (markdown: string, maxLength: number = 150) => {
+  const getExcerpt = (markdown: string | null | undefined, maxLength: number = 150) => {
+    if (!markdown) return '';
     // Remove markdown syntax
     const text = markdown
       .replace(/^#+\s+/gm, '') // Remove headers
