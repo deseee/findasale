@@ -51,8 +51,10 @@ export const discoverHubs = async (req: Request, res: Response) => {
       const limitNum = parseInt(limit as string) || 20;
 
       // Fetch all active hubs and filter by distance in memory
+      // P1-C: Cap at 500 hubs to prevent unbounded memory consumption
       const allHubs = await prisma.saleHub.findMany({
         where: { isActive: true },
+        take: 500,
         include: {
           memberships: { select: { id: true } },
           organizer: { select: { businessName: true } },

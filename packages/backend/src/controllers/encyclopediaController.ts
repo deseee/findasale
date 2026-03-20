@@ -144,6 +144,15 @@ export const updateEntry = async (req: AuthRequest, res: Response) => {
     const { entryId } = req.params;
     const { title, subtitle, content, category, tags, changeNote } = req.body;
 
+    // P1-A: Verify ownership before allowing update
+    const entry = await encyclopediaService.getEntry(entryId);
+    if (!entry) {
+      return res.status(404).json({ message: 'Entry not found' });
+    }
+    if (entry.authorId !== req.user.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
     const result = await encyclopediaService.updateEntry(
       entryId,
       req.user.id,
