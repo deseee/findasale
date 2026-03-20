@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-20 (v65 — Added 15 brand-spreading ideas from Innovation session: 4 BUILD NOW (S1) items in Backlog, 6 DEFER S2 + 2 DEFER S3 items in Deferred section, 3 REJECT items in Rejected section. Multi-platform social templates, QR auto-embedding, Nextdoor export, CSV inventory syndication, shopper/organizer referrals, community challenges, brand kit expansion, hall of fame, feature request form, print-to-QR kit, AI content generation, TikTok auto-gen; rejected: Instagram stickers, white-label B2B, watermark variants.)
+**Last Updated:** 2026-03-20 (v66 — S211 comprehensive Chrome audit: updated Chrome column for 25+ features based on 70-route visual audit across 5 user roles. #19 Passkey QA confirmed. 7 features marked ⚠️ (bugs found). See `claude_docs/audits/chrome-audit-comprehensive-S211.md`.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -83,12 +83,12 @@ Production MVP launched Q1 2026.
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| — | Create / Edit / Publish / Archive Sales | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Core workflow |
+| — | Create / Edit / Publish / Archive Sales | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Core workflow |
 | — | Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Enum validation + validation matrix |
 | 5 | Listing Type Schema Validation | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS |
-| — | Sale Map with Geocoding | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | `/api/geocode` |
+| — | Sale Map with Geocoding | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/api/geocode` |
 | 35 | Entrance Pin / Front Door Locator | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Shopper convenience, parking + entrance detail |
-| — | Sale Calendar View | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Organizer + shopper views |
+| — | Sale Calendar View | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Organizer + shopper views |
 | — | Item Add / Edit / Delete / Status | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S125 | ✅ | 📋 | Core CRUD |
 | — | Photo Upload (Single + Multi) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/api/upload` with Cloudinary |
 | — | Rapidfire Camera Mode | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Multi-photo AI draft pipeline |
@@ -100,7 +100,7 @@ Production MVP launched Q1 2026.
 | — | Sale Checklist | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Per-sale custom checklist |
 | — | Email Reminders to Shoppers | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/api/reminders` |
 | — | Push Notification Subscriptions | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/api/push` VAPID |
-| — | Notification Inbox | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | In-app notification center |
+| — | Notification Inbox | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | In-app notification center |
 | — | Organizer Digest Emails | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Weekly activity summaries |
 | — | Basic Organizer Profile | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | businessName, phone, bio, website |
 | — | Organizer Public Profile Page | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | `/organizers/[slug]` |
@@ -111,24 +111,24 @@ Production MVP launched Q1 2026.
 | — | Flash Deals | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Time-limited price drops |
 | — | Reviews (Receive + View) | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Shopper → sale + organizer |
 | — | Contact Form | PUB | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/api/contact` |
-| — | Stripe Terminal POS (v2) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Multi-item + cash, 10% fee parity |
+| — | Stripe Terminal POS (v2) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Multi-item + cash, 10% fee parity |
 | — | Payout Transparency / Earnings Dashboard | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Item-level fee breakdown + PDF |
 | 11 | Organizer Referral (Fee Bypass) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | referralDiscountExpiry |
 | — | Tiers Backend Infrastructure | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | N/A | `/api/tiers` — getMyTier, syncTier |
-| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | ✅ | ✅ | ✅ | ⚠️ | 📋 | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI |
+| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI |
 | 71 | Organizer Reputation Score | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | 1-5 star public score + reputation.tsx frontend |
 | 22 | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | — | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Network API detection, localStorage, LowBandwidthContext |
-| 19 | Passkey / WebAuthn Login | ORG | SIMPLE | ✅ | ✅ | ✅ | 🔧 | 📋 | ⚠️ | 📋 | P0 concurrent challenge race fixed, end-to-end re-QA + merge pending |
+| 19 | Passkey / WebAuthn Login | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | QA confirmed, clear to deploy |
 | — | A/B Testing Infrastructure | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | N/A | Internal optimization tool |
 | — | Invites | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Invite-to-sale / invite-to-platform |
-| — | Disputes Management | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Trust & safety |
+| — | Disputes Management | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Trust & safety |
 
 ### Organizer — Analytics & Intelligence [PRO]
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
 | — | Seller Performance Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Per-sale analytics + insights |
-| — | Organizer Insights (Lifetime) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Cross-sale totals + benchmarking |
+| — | Organizer Insights (Lifetime) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Cross-sale totals + benchmarking |
 | 8 | Batch Operations Toolkit | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Bulk price/status/category/tag/photo |
 | — | CSV Listing Import | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Bulk upload item lists from CSV |
 | 27 | CSV / JSON / Text Listing Exports | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Multi-format output (Listing Factory) |
@@ -140,8 +140,8 @@ Production MVP launched Q1 2026.
 | 18 | Post Performance Analytics | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | UTM tracking on social template downloads |
 | 41 | Flip Report | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Item resale potential scoring |
 | 17 | Bid Bot Detector + Fraud Score | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | FraudBadge on holds page, fraud-signals.tsx |
-| 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ✅S194 | ✅ | 📋 | Multi-user workspace, role management |
-| 68 | Command Center Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Per-sale widget dashboard |
+| 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | Multi-user workspace, role management |
+| 68 | Command Center Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | Per-sale widget dashboard |
 
 ### Organizer — Marketing & Brand Amplification [SIMPLE/PRO mixed]
 
@@ -150,11 +150,11 @@ Production MVP launched Q1 2026.
 | 27 | Social Templates (3 tones × 2 platforms) | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | Instagram/Facebook copy |
 | 27 | Cloudinary Watermark on Photo Exports | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | Brand protection |
 | 27 | CSV/JSON Listing Exports (Listing Factory) | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | Multi-platform sharing |
-| 31 | Brand Kit | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Colors, logo, socials (auto-propagates) |
+| 31 | Brand Kit | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Colors, logo, socials (auto-propagates) |
 | 33 | Share Card Factory (OG Tags) | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | Branded social previews, dynamic OG images |
-| — | Message Templates | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Saved organizer reply templates |
+| — | Message Templates | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | — | 📋 | Saved organizer reply templates |
 | 34 | Hype Meter | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | Real-time social proof |
-| 63 | Dark Mode + Accessibility | BOTH | FREE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | Tailwind dark variants, WCAG 2.1 AA, high-contrast outdoor mode |
+| 63 | Dark Mode + Accessibility | BOTH | FREE | — | ✅ | ✅ | ✅ | ⚠️ | — | 📋 | Tailwind dark variants, WCAG 2.1 AA, high-contrast outdoor mode |
 | 67 | Social Proof Notifications | BOTH | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | Engagement aggregation (favorites, bids, holds) |
 
 ### Organizer — Sales Tools & Workflow [SIMPLE/PRO mixed]
@@ -177,19 +177,19 @@ Production MVP launched Q1 2026.
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| — | Browse Sales (Homepage + Map) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | `/map`, `/` |
-| — | Sale Detail Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/sales/[slug]` |
+| — | Browse Sales (Homepage + Map) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/map`, `/` |
+| — | Sale Detail Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | — | 📋 | `/sales/[slug]` |
 | — | Item Detail Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/items/[id]` |
-| — | Full-Text Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Advanced filters + location |
+| — | Full-Text Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Advanced filters + location |
 | — | Category Browsing | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | `/categories` index + `/categories/[slug]` |
 | — | Tag Browsing | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | `/tags/[slug]` ISR pages |
-| — | Surprise Me / Serendipity Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/surprise-me` random discovery |
+| — | Surprise Me / Serendipity Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | — | 📋 | `/surprise-me` random discovery |
 | — | Sale Calendar (Upcoming) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/calendar` |
 | — | iCal / Calendar Export | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Download .ics file for sales + items |
 | — | QR Code Signs (Yard + Item Labels) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Printable QR codes linking to sales/items |
 | — | QR Scan Analytics | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Tracking + insights on QR scans |
-| — | City Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/cities` + `/city/[slug]` city-level browsing |
-| — | Neighborhood Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/neighborhoods/[slug]` local discovery |
+| — | City Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ⚠️ | — | 📋 | `/cities` + `/city/[slug]` city-level browsing |
+| — | Neighborhood Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | — | 📋 | `/neighborhoods/[slug]` local discovery |
 | — | Trending Items / Sales | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | — | 📋 | `/trending` page + API |
 | — | Activity Feed | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | — | 📋 | `/feed` page + API |
 | — | Route Planning (Multi-Sale) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/api/routes` OSRM-based |
@@ -200,9 +200,9 @@ Production MVP launched Q1 2026.
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| — | Wishlists | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Full CRUD, distinct from favorites |
+| — | Wishlists | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ⚠️ | — | 📋 | Full CRUD, distinct from favorites |
 | — | Saved Searches with notifyOnNew | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Auto-notify on new matches |
-| — | Shopper ↔ Organizer Messaging | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Threaded conversations |
+| — | Shopper ↔ Organizer Messaging | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | ⚠️ | — | 📋 | Threaded conversations |
 | — | Buying Pools | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Group buying on items |
 | — | Bounties (Item Requests) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Shopper want-ads |
 | — | Reviews (Submit Sale / Organizer) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Via `/api/reviews` |
@@ -244,11 +244,11 @@ Production MVP launched Q1 2026.
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 46 | Treasure Typology Classifier | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx |
+| 46 | Treasure Typology Classifier | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx |
 | 51 | Sale Ripples | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Social proof activity tracking. RippleIndicator auto-records. ripples.tsx analytics. **Neon migration pending.** |
-| 52 | Estate Sale Encyclopedia | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Wiki-style knowledge base; EncyclopediaCard.tsx |
+| 52 | Estate Sale Encyclopedia | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | Wiki-style knowledge base; EncyclopediaCard.tsx |
 | 54 | Crowdsourced Appraisal (Base) | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Request/submit/vote appraisals; AI Sprint 3 deferred |
-| 60 | Premium Tier Bundle | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. Sprint 2 frontend complete. |
+| 60 | Premium Tier Bundle | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. Sprint 2 frontend complete. |
 | 69 | Local-First Offline Mode | BOTH | PRO | — | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Service worker sync queue; offline catalog |
 | 70 | Live Sale Feed | SHO | SIMPLE | ✅ | ✅ | ✅ | 📋 | 📋 | — | 📋 | Real-time sale activity feed. **BLOCKED S210** — requires: (1) Railway Redis add-on (Option A approved 2026-03-20) + `REDIS_URL` env + `@socket.io/redis-adapter`+`ioredis` deps; (2) JWT auth on Socket.io handshake; (3) `NEXT_PUBLIC_SOCKET_URL` Vercel env var. Memory leak + event name mismatch already fixed (S210). |
 | 47 | UGC Photo Tags | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Shopper-submitted item photos + moderation |
@@ -270,7 +270,7 @@ Production MVP launched Q1 2026.
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 19 | Passkey / WebAuthn Support | ORG | SIMPLE | ✅ | ✅ | ✅ | 🔧 | 📋 | ⚠️ | 📋 | P0 race condition fixed. End-to-end re-QA + merge pending |
+| 19 | Passkey / WebAuthn Support | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | QA confirmed, clear to deploy |
 | 51 | Sale Ripples | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Schema + API + frontend complete. Neon migration applied |
 | 54 | Crowdsourced Appraisal AI | BOTH | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Sprint 2 frontend built. Sprint 3 (Stripe billing + Claude Haiku vision) deferred |
 | 60 | Premium Tier Bundle | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. Sprint 2 complete |

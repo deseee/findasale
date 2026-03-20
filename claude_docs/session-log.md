@@ -2,6 +2,61 @@
 
 ## Recent Sessions
 
+### 2026-03-20 · Session 211
+
+**Comprehensive Chrome Visual Audit — ALL tiers, ALL roles**
+
+**Work Completed:**
+
+**Phase 1 — Tier Fix Infrastructure:**
+- Discovered all organizer test accounts had `subscriptionTier: "SIMPLE"` regardless of intended tier
+- Created `POST /api/dev/fix-seed-tiers` endpoint (gated to user1@example.com only)
+- Created `PATCH /api/admin/organizers/:id/tier` admin endpoint for future tier changes
+- Pushed 4 backend files via MCP (2 batches of 3+1 per CLAUDE.md §5), cache-busted Dockerfile to force Railway redeploy
+- Called fix endpoint via Chrome MCP fetch — user1→ADMIN, user2→PRO, user3→TEAMS confirmed in JWT
+
+**Phase 2-5 — Chrome Visual Audit (70+ routes, 5 user roles):**
+- Phase 1: 20 public routes (unauthenticated)
+- Phase 2: 14 shopper routes (user11@example.com)
+- Phase 3: 35 organizer routes (user1@example.com, SIMPLE)
+- Phase 4: 19 PRO organizer routes (user2@example.com, PRO)
+- Phase 5: 5 TEAMS organizer routes (user3@example.com, TEAMS)
+- Phase 2b: 11 shopper routes re-verified
+
+**Findings Summary:**
+- 7 P0 bugs: tier display bug (systemic), workspace 401, command-center crash, typology crash, wishlists redirect, /organizer/sales 404, encyclopedia crash
+- 6 P1 issues: premium dark mode (16 lb), insights dark mode (17-18 lb), messages blank, cities empty, subscription error, webhooks tier gating
+- 10 dark mode regressions cataloged with light-bg element counts
+- 8 P2 UX issues (ThemeToggle, duplicate nav, unicode escape, missing titles)
+- 9 unbuilt feature pages (expected 404s) documented
+- 6 secondary routes identified for follow-up audit (categories, tags, public profiles, etc.)
+
+**Report:** `claude_docs/audits/chrome-audit-comprehensive-S211.md`
+
+**Context docs wrap:**
+- Roadmap v66: Chrome column updated for 25+ features (✅ or ⚠️)
+- #19 Passkey marked QA ✅ + Chrome ✅ in both shipped table and in-progress table
+- STATE.md updated with P0 bug list and current status
+- next-session-prompt.md rewritten for S212 P0 fix sprint
+
+**Files changed (code — pushed via MCP mid-session):**
+- `packages/backend/src/routes/dev.ts` (NEW)
+- `packages/backend/src/controllers/adminController.ts` (MODIFIED — added updateOrganizerTier)
+- `packages/backend/src/routes/admin.ts` (MODIFIED — added tier update route)
+- `packages/backend/src/index.ts` (MODIFIED — added dev route mount)
+- `packages/backend/Dockerfile.production` (MODIFIED — cache bust)
+
+**Files changed (docs — wrap push):**
+- `claude_docs/audits/chrome-audit-comprehensive-S211.md` (finalized)
+- `claude_docs/strategy/roadmap.md` (v66 — Chrome column updates)
+- `claude_docs/STATE.md` (S211 complete)
+- `claude_docs/session-log.md` (this entry)
+- `claude_docs/next-session-prompt.md` (S212 plan)
+
+**Session scoreboard:** Files changed: 10 | Compressions: 1 | Subagents: dev×1 | Push method: MCP (code) + MCP (docs)
+
+---
+
 ### 2026-03-20 · Session 210
 
 **QA: Passkey #19 + Live Sale Feed #70 (parallel code review)**
