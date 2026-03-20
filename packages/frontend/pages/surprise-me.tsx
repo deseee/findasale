@@ -113,7 +113,7 @@ const SurpriseMePage = () => {
             <select
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
-              className="border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-warm-800 dark:text-warm-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-warm-800 dark:text-warm-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:focus:ring-amber-500"
             >
               {PRICE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -131,7 +131,7 @@ const SurpriseMePage = () => {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-warm-800 dark:text-warm-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-warm-800 dark:text-warm-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:focus:ring-amber-500"
             >
               <option value="">Any category</option>
               {CATEGORIES.map((cat) => (
@@ -166,11 +166,11 @@ const SurpriseMePage = () => {
         {isLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm animate-pulse">
-                <div className="aspect-square bg-warm-200" />
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm animate-pulse border border-warm-100 dark:border-gray-700">
+                <div className="aspect-square bg-warm-200 dark:bg-gray-700" />
                 <div className="p-3 space-y-2">
-                  <div className="h-4 bg-warm-200 rounded w-3/4" />
-                  <div className="h-3 bg-warm-200 rounded w-1/2" />
+                  <div className="h-4 bg-warm-200 dark:bg-gray-700 rounded w-3/4" />
+                  <div className="h-3 bg-warm-200 dark:bg-gray-700 rounded w-1/2" />
                 </div>
               </div>
             ))}
@@ -196,7 +196,7 @@ const SurpriseMePage = () => {
             <div className="flex justify-center gap-3">
               <button
                 onClick={() => { setMaxPrice(''); setCategory(''); handleSurpriseMe(); }}
-                className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-800 dark:text-warm-200 font-semibold py-2 px-5 rounded-lg transition-colors text-sm"
+                className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-200 font-semibold py-2 px-5 rounded-lg transition-colors text-sm border border-warm-200 dark:border-gray-600"
               >
                 Clear filters
               </button>
@@ -218,10 +218,10 @@ const SurpriseMePage = () => {
                 <Link
                   key={item.id}
                   href={`/items/${item.id}`}
-                  className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-warm-100 hover:border-amber-200 group"
+                  className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-warm-100 dark:border-gray-700 hover:border-amber-200 dark:hover:border-amber-700 group"
                 >
                   {/* Photo */}
-                  <div className="aspect-square relative bg-warm-100 dark:bg-gray-700 overflow-hidden">
+                  <div className="aspect-square relative bg-warm-100 dark:bg-gray-700 overflow-hidden border-b border-warm-100 dark:border-gray-700">
                     {item.photoUrls?.[0] ? (
                       <Image
                         src={item.photoUrls[0]}

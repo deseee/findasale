@@ -67,14 +67,14 @@ const ShopperPurchasesPage = () => {
               <h2 className="text-lg font-semibold text-green-800 dark:text-green-200 mb-3">🎟️ My Coupons</h2>
               <div className="flex flex-wrap gap-3">
                 {coupons.map((c: any) => (
-                  <div key={c.id} className="bg-white dark:bg-gray-800 border border-green-300 rounded-lg px-4 py-3 flex items-center gap-3">
+                  <div key={c.id} className="bg-white dark:bg-gray-800 border border-green-300 dark:border-green-700 rounded-lg px-4 py-3 flex items-center gap-3">
                     <div>
-                      <p className="font-mono font-bold text-green-700 text-lg tracking-widest">{c.code}</p>
+                      <p className="font-mono font-bold text-green-700 dark:text-green-400 text-lg tracking-widest">{c.code}</p>
                       <p className="text-xs text-warm-500 dark:text-warm-400">${c.discountValue} off · Expires {new Date(c.expiresAt).toLocaleDateString()}</p>
                     </div>
                     <button
                       onClick={() => navigator.clipboard.writeText(c.code).catch(() => {})}
-                      className="text-xs text-green-600 hover:text-green-800 dark:text-green-200 font-medium border border-green-300 rounded px-2 py-1"
+                      className="text-xs text-green-600 hover:text-green-800 dark:text-green-200 dark:hover:text-green-100 font-medium border border-green-300 dark:border-green-700 rounded px-2 py-1"
                     >
                       Copy
                     </button>
@@ -111,7 +111,7 @@ const ShopperPurchasesPage = () => {
           ) : purchases && purchases.length > 0 ? (
             <div className="space-y-4">
               {purchases.map((purchase: any) => (
-                <div key={purchase.id} className="card p-6 flex justify-between items-center">
+                <div key={purchase.id} className="bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 card p-6 flex justify-between items-center">
                   <div>
                     <h3 className="font-semibold text-lg text-warm-900 dark:text-warm-100 mb-1">{purchase.itemTitle}</h3>
                     <p className="text-sm text-warm-600 dark:text-warm-400">From: {purchase.organizerName}</p>
@@ -120,7 +120,7 @@ const ShopperPurchasesPage = () => {
                   <div className="text-right">
                     <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">${purchase.amount}</p>
                     <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
-                      purchase.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      purchase.status === 'completed' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300' : 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
                     }`}>
                       {purchase.status}
                     </span>

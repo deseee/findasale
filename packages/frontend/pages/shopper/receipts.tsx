@@ -66,7 +66,7 @@ const ShopperReceiptsPage = () => {
             <button
               onClick={() => setTab('receipts')}
               className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                tab === 'receipts' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                tab === 'receipts' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               }`}
               style={tab === 'receipts' ? { borderColor: '#8FB897', color: '#8FB897' } : {}}
             >
@@ -75,7 +75,7 @@ const ShopperReceiptsPage = () => {
             <button
               onClick={() => setTab('returns')}
               className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                tab === 'returns' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                tab === 'returns' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               }`}
               style={tab === 'returns' ? { borderColor: '#8FB897', color: '#8FB897' } : {}}
             >
@@ -117,14 +117,14 @@ const ShopperReceiptsPage = () => {
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Requested {new Date(returnReq.requestedAt).toLocaleDateString()}</p>
                         </div>
                         <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                          returnReq.status === 'PENDING' ? 'bg-yellow-50 text-yellow-700'
-                          : returnReq.status === 'APPROVED' ? 'bg-green-50 dark:bg-green-900/20 text-green-700'
-                          : 'bg-red-50 dark:bg-red-900/20 text-red-700'
+                          returnReq.status === 'PENDING' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+                          : returnReq.status === 'APPROVED' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
                         }`}>
                           {returnReq.status}
                         </span>
                       </div>
-                      <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 rounded">
+                      <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded">
                         <p className="text-sm text-gray-700 dark:text-gray-300"><span className="font-semibold">Reason:</span> {returnReq.reason}</p>
                       </div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">

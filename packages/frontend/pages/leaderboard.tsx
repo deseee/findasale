@@ -93,7 +93,7 @@ const Leaderboard = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex gap-4 mb-8 border-b border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100">
+          <div className="flex gap-4 mb-8 border-b border-warm-300 dark:border-gray-700 dark:bg-gray-800 dark:text-warm-100">
             <button
               onClick={() => setActiveTab('shoppers')}
               className={`px-6 py-3 font-semibold transition-colors ${
@@ -134,14 +134,14 @@ const Leaderboard = () => {
           {!loading && activeTab === 'shoppers' && (
             <div className="space-y-3">
               {shoppers.length === 0 ? (
-                <div className="text-center py-12 bg-warm-50 dark:bg-gray-900 rounded-lg">
+                <div className="text-center py-12 bg-warm-50 dark:bg-gray-800 rounded-lg">
                   <p className="text-warm-600 dark:text-warm-400">No shoppers yet. Be the first to earn badges!</p>
                 </div>
               ) : (
                 shoppers.map((shopper) => (
                   <div
                     key={shopper.userId}
-                    className={`bg-gradient-to-r ${getRankColor(shopper.rank)} rounded-lg p-4 border border-warm-200 dark:border-gray-700 transition-transform hover:scale-102`}
+                    className={`bg-gradient-to-r ${getRankColor(shopper.rank)} dark:from-gray-800 dark:to-gray-700 rounded-lg p-4 border border-warm-200 dark:border-gray-700 transition-transform hover:scale-102`}
                   >
                     <div className="flex items-center justify-between">
                       {/* Rank and Name */}
@@ -170,7 +170,7 @@ const Leaderboard = () => {
                             <div
                               key={badge.id}
                               title={badge.name}
-                              className="flex items-center justify-center w-10 h-10 rounded-full bg-warm-200 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-lg"
+                              className="flex items-center justify-center w-10 h-10 rounded-full bg-warm-200 border border-warm-300 dark:border-gray-700 dark:bg-gray-800 dark:text-warm-100 text-lg"
                             >
                               {badge.iconUrl ? (
                                 <img
@@ -198,14 +198,14 @@ const Leaderboard = () => {
           {!loading && activeTab === 'organizers' && (
             <div className="space-y-3">
               {organizers.length === 0 ? (
-                <div className="text-center py-12 bg-warm-50 dark:bg-gray-900 rounded-lg">
+                <div className="text-center py-12 bg-warm-50 dark:bg-gray-800 rounded-lg">
                   <p className="text-warm-600 dark:text-warm-400">No organizers yet.</p>
                 </div>
               ) : (
                 organizers.map((org) => (
                   <div
                     key={org.organizerId}
-                    className={`bg-gradient-to-r ${getRankColor(org.rank)} rounded-lg p-4 border border-warm-200 dark:border-gray-700 transition-transform hover:scale-102`}
+                    className={`bg-gradient-to-r ${getRankColor(org.rank)} dark:from-gray-800 dark:to-gray-700 rounded-lg p-4 border border-warm-200 dark:border-gray-700 transition-transform hover:scale-102`}
                   >
                     <div className="flex items-center justify-between">
                       {/* Rank and Name */}
@@ -239,7 +239,7 @@ const Leaderboard = () => {
           )}
 
           {/* Footer Note */}
-          <div className="mt-12 bg-sage-50 border border-sage-200 rounded-lg p-6 text-center">
+          <div className="mt-12 bg-sage-50 dark:bg-gray-800 border border-sage-200 dark:border-gray-700 rounded-lg p-6 text-center">
             <p className="text-warm-700 dark:text-warm-300">
               The leaderboard updates daily based on activity. Complete sales, earn badges, and climb the ranks!
             </p>

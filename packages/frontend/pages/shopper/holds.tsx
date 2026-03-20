@@ -110,7 +110,7 @@ const ShopperHoldsPage = () => {
               <p className="text-warm-600 dark:text-warm-400">Loading your holds…</p>
             </div>
           ) : activeHolds.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center border border-warm-200 dark:border-gray-700">
               <p className="text-warm-700 dark:text-warm-300 text-lg mb-4">You don't have any active holds yet.</p>
               <Link
                 href="/sales"
@@ -146,7 +146,7 @@ const ShopperHoldsPage = () => {
                           </p>
                         </div>
                         {hold.item.price && (
-                          <p className="text-lg font-bold text-amber-700 mt-2">${(hold.item.price / 100).toFixed(2)}</p>
+                          <p className="text-lg font-bold text-amber-700 dark:text-amber-500 mt-2">${(hold.item.price / 100).toFixed(2)}</p>
                         )}
                         <div className="mt-3">
                           <HoldTimer expiresAt={hold.expiresAt} onExpiry={() => handleHoldExpiry(hold.id)} />
@@ -166,7 +166,7 @@ const ShopperHoldsPage = () => {
                       <button
                         onClick={() => handleReleaseHold(hold.id)}
                         disabled={cancelMutation.isPending}
-                        className="border border-red-400 text-red-600 hover:bg-red-50 dark:bg-red-900/20 font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                        className="border border-red-400 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 dark:bg-red-900/20 font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50"
                       >
                         {cancelMutation.isPending ? 'Releasing…' : 'Release Hold'}
                       </button>
@@ -182,7 +182,7 @@ const ShopperHoldsPage = () => {
               <h2 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-4">Released Holds</h2>
               <div className="space-y-2">
                 {expiredHolds.map((hold) => (
-                  <div key={hold.id} className="bg-warm-50 dark:bg-gray-900 rounded-lg p-4 border border-warm-200 dark:border-gray-700">
+                  <div key={hold.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-warm-200 dark:border-gray-700">
                     <Link href={`/items/${hold.item.id}`} className="text-warm-700 dark:text-warm-300 hover:text-amber-600">
                       {hold.item.title}
                     </Link>

@@ -236,7 +236,7 @@ const SearchPage = () => {
                 <Link
                   key={cat}
                   href={`/categories/${cat.toLowerCase()}`}
-                  className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 hover:border-amber-400 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors shadow-sm"
+                  className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors shadow-sm"
                 >
                   {cat}
                 </Link>
@@ -259,7 +259,7 @@ const SearchPage = () => {
                   {visualResults!.detectedLabels.map((label) => (
                     <span
                       key={label}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 text-sm rounded-full"
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm rounded-full"
                     >
                       🏷️ {label}
                     </span>
@@ -324,7 +324,7 @@ const SearchPage = () => {
                       className={`pb-2 font-medium capitalize transition-colors ${
                         tab === t
                           ? 'border-b-2 border-amber-600 text-amber-600'
-                          : 'text-warm-600 dark:text-warm-400 hover:text-warm-900'
+                          : 'text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-200'
                       }`}
                     >
                       {t}
@@ -349,7 +349,7 @@ const SearchPage = () => {
                         {salesCount > 0 ? (
                           <>
                             {salesCount > 1 && (
-                              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg">
                                 <button
                                   onClick={() => {
                                     const addresses = data!.sales
@@ -454,7 +454,7 @@ const SearchPage = () => {
                             <Link
                               key={cat}
                               href={`/categories/${cat.toLowerCase()}`}
-                              className="px-3 py-1 bg-warm-200 hover:bg-warm-300 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors"
+                              className="px-3 py-1 bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors"
                             >
                               {cat}
                             </Link>

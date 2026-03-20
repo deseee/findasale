@@ -208,7 +208,7 @@ const MapPage = () => {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                   showHeatmap
                     ? 'bg-amber-600 text-white hover:bg-amber-700'
-                    : 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200'
+                    : 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200 dark:hover:bg-gray-600'
                 }`}
                 title="Toggle neighborhood heatmap overlay"
               >
@@ -250,7 +250,7 @@ const MapPage = () => {
                 className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                   dateFilter === f
                     ? 'bg-amber-600 text-white border-amber-600'
-                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-amber-400'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-amber-400 dark:hover:border-gray-500'
                 }`}
               >
                 {f === 'all' ? 'All' : f === 'today' ? 'Today' : f === 'this-weekend' ? 'This Weekend' : 'This Week'}

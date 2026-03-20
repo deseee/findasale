@@ -215,7 +215,7 @@ const NotificationsPage = () => {
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 filter === 'all'
                   ? 'bg-amber-600 text-white'
-                  : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
+                  : 'bg-warm-100 dark:bg-gray-800 text-warm-900 dark:text-warm-100 hover:bg-warm-200 dark:hover:bg-gray-700'
               }`}
             >
               All
@@ -225,7 +225,7 @@ const NotificationsPage = () => {
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 filter === 'unread'
                   ? 'bg-amber-600 text-white'
-                  : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
+                  : 'bg-warm-100 dark:bg-gray-800 text-warm-900 dark:text-warm-100 hover:bg-warm-200 dark:hover:bg-gray-700'
               }`}
             >
               Unread {unreadCount > 0 && `(${unreadCount})`}
@@ -264,8 +264,8 @@ const NotificationsPage = () => {
                           key={notification.id}
                           className={`rounded-lg border p-4 transition-colors cursor-pointer ${
                             notification.read
-                              ? 'border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-warm-50'
-                              : 'border-amber-200 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100'
+                              ? 'border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-warm-50 dark:hover:bg-gray-700'
+                              : 'border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
                           }`}
                           onClick={() => handleNavigate(notification)}
                         >

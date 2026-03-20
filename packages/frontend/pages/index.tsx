@@ -33,7 +33,7 @@ interface Sale {
 type DateFilter = 'all' | 'upcoming' | 'this-weekend' | 'this-month';
 
 const SaleCardSkeleton = () => (
-  <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
+  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden flex flex-col">
     <Skeleton className="aspect-square w-full rounded-none" />
     <div className="p-3 space-y-2 flex flex-col flex-1">
       <Skeleton className="h-4 w-3/4" />
@@ -202,7 +202,7 @@ const HomePage = () => {
 
       <main className="container mx-auto px-4 py-8">
         <section className="mb-12 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-amber-600 mb-4">Discover Amazing Deals</h1>
+          <h1 className="text-4xl md:text-5xl font-bold text-amber-600 dark:text-amber-400 mb-4">Discover Amazing Deals</h1>
           <p className="text-xl text-warm-700 dark:text-gray-300 max-w-2xl mx-auto">
             Find estate sales, garage sales, and auctions near you with FindA.Sale
           </p>
@@ -249,7 +249,7 @@ const HomePage = () => {
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-grow">
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-warm-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-warm-400 dark:text-gray-500"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -288,19 +288,19 @@ const HomePage = () => {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               {feedData?.personalized && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-medium text-amber-700">
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-full text-xs font-medium text-amber-700 dark:text-amber-400">
                   ✨ Picked for you
                 </span>
               )}
               {!feedData?.personalized && sales && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs font-medium text-blue-700">
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-medium text-blue-700 dark:text-blue-400">
                   📍 Sales Near You
                 </span>
               )}
-              <h2 className="text-3xl font-bold text-warm-900">Featured Sales</h2>
+              <h2 className="text-3xl font-bold text-warm-900 dark:text-gray-100">Featured Sales</h2>
             </div>
             {!isLoading && sales && (
-              <span className="text-sm text-warm-500">
+              <span className="text-sm text-warm-500 dark:text-gray-400">
                 {filteredSales.length} of {sales.length} sale{sales.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -313,7 +313,7 @@ const HomePage = () => {
           ) : isError ? (
             <div className="text-center py-12">
               <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h2>
-              <p className="text-warm-600 mb-4">There was a problem loading sales data.</p>
+              <p className="text-warm-600 dark:text-gray-400 mb-4">There was a problem loading sales data.</p>
               <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
                 Retry
               </button>
@@ -326,7 +326,7 @@ const HomePage = () => {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-warm-600">
+              <p className="text-warm-600 dark:text-gray-400">
                 {searchQuery || dateFilter !== 'all'
                   ? 'No sales match your search. Try adjusting your filters.'
                   : 'No sales available at the moment. Check back later!'}
