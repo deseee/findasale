@@ -63,7 +63,16 @@ const OrganizerProfilePage = () => {
   });
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  if (isError || !organizer) return <div className="min-h-screen flex items-center justify-center">Organizer not found</div>;
+  if (isError || !organizer) return (
+    <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
+      <div className="text-center px-4 max-w-md">
+        <div className="text-5xl mb-4">🏷️</div>
+        <h1 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-2">Organizer not found</h1>
+        <p className="text-warm-500 dark:text-gray-400 mb-6">This organizer profile doesn't exist or may have moved.</p>
+        <Link href="/" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Browse Sales</Link>
+      </div>
+    </div>
+  );
 
   const upcomingSales = organizer.sales.filter(s => new Date(s.endDate) >= new Date());
   const pastSales = organizer.sales.filter(s => new Date(s.endDate) < new Date());

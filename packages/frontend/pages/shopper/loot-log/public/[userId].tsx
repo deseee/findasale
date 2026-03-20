@@ -21,9 +21,9 @@ export default function PublicLootLogPage() {
 
   if (error || !lootLogData) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-xl text-slate-700 mb-4">Loot Log not found or is private</p>
+      <div className="flex items-center justify-center min-h-screen bg-warm-50">
+        <div className="text-center px-4 max-w-md">
+          <p className="text-xl text-warm-700 mb-4">Loot Log not found or is private</p>
           <Link href="/">
             <a className="px-6 py-2 bg-[#8FB897] text-white rounded-lg">Back to Home</a>
           </Link>
@@ -46,14 +46,14 @@ export default function PublicLootLogPage() {
         <meta name="description" content={`${userName}'s estate sale purchases`} />
       </Head>
 
-      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <main className="min-h-screen bg-gradient-to-b from-warm-50 to-white">
         <div className="max-w-6xl mx-auto px-4 py-12">
           {/* Header */}
           <div className="mb-12">
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">
+            <h1 className="text-4xl font-bold text-warm-900 mb-2">
               {userName}&apos;s Loot Log
             </h1>
-            <p className="text-slate-600">
+            <p className="text-warm-600">
               {lootLogData.total} {lootLogData.total === 1 ? 'treasure' : 'treasures'} found
             </p>
           </div>
@@ -61,10 +61,10 @@ export default function PublicLootLogPage() {
           {/* Gallery Grid */}
           {isEmpty ? (
             <div className="text-center py-24">
-              <p className="text-2xl font-semibold text-slate-700 mb-4">
+              <p className="text-2xl font-semibold text-warm-700 mb-4">
                 No treasures shared yet
               </p>
-              <p className="text-slate-600">
+              <p className="text-warm-600">
                 Come back soon to see what {userName} finds!
               </p>
             </div>
@@ -73,7 +73,7 @@ export default function PublicLootLogPage() {
               <div className="grid grid-cols-3 gap-6 mb-12">
                 {lootLogData.purchases.map((purchase) => (
                   <div key={purchase.id} className="group">
-                    <div className="relative w-full h-48 bg-slate-200 rounded-lg overflow-hidden mb-3">
+                    <div className="relative w-full h-48 bg-warm-200 rounded-lg overflow-hidden mb-3">
                       {purchase.item.imageUrl ? (
                         <Image
                           src={purchase.item.imageUrl}
@@ -83,16 +83,16 @@ export default function PublicLootLogPage() {
                           className="group-hover:scale-105 transition"
                         />
                       ) : (
-                        <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 text-white text-sm">
+                        <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-warm-300 to-warm-400 text-white text-sm">
                           No image
                         </div>
                       )}
                     </div>
-                    <h3 className="font-semibold text-slate-900 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">
+                    <h3 className="font-semibold text-warm-900 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">
                       {purchase.item.title}
                     </h3>
-                    <p className="text-sm text-slate-600 mb-1">{purchase.item.category}</p>
-                    <p className="text-xs text-slate-500">{purchase.sale.title}</p>
+                    <p className="text-sm text-warm-600 mb-1">{purchase.item.category}</p>
+                    <p className="text-xs text-warm-500">{purchase.sale.title}</p>
                   </div>
                 ))}
               </div>

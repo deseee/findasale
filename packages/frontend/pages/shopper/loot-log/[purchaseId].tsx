@@ -32,9 +32,9 @@ export default function PurchaseDetailPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-xl text-slate-700 mb-4">Purchase not found</p>
+      <div className="flex items-center justify-center min-h-screen bg-warm-50">
+        <div className="text-center px-4 max-w-md">
+          <p className="text-xl text-warm-700 mb-4">Purchase not found</p>
           <Link
             href="/shopper/loot-log"
             className="px-6 py-2 bg-[#8FB897] text-white rounded-lg"
@@ -58,7 +58,7 @@ export default function PurchaseDetailPage() {
         <title>{purchase?.item?.title || 'Purchase'} — My Loot Log</title>
       </Head>
 
-      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <main className="min-h-screen bg-gradient-to-b from-warm-50 to-white">
         <div className="max-w-2xl mx-auto px-4 py-12">
           {/* Back Link */}
           <Link
@@ -69,10 +69,10 @@ export default function PurchaseDetailPage() {
           </Link>
 
           {/* Detail Card */}
-          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-lg">
+          <div className="bg-white rounded-lg border border-warm-200 overflow-hidden shadow-lg">
             <div className="grid grid-cols-2 gap-8 p-8">
               {/* Image */}
-              <div className="flex items-center justify-center bg-slate-100 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-center bg-warm-100 rounded-lg overflow-hidden">
                 {purchase?.item?.imageUrl ? (
                   <Image
                     src={purchase.item.imageUrl}
@@ -82,7 +82,7 @@ export default function PurchaseDetailPage() {
                     objectFit="cover"
                   />
                 ) : (
-                  <div className="w-full h-80 flex items-center justify-center text-slate-400">
+                  <div className="w-full h-80 flex items-center justify-center text-warm-400">
                     No image available
                   </div>
                 )}
@@ -91,7 +91,7 @@ export default function PurchaseDetailPage() {
               {/* Details */}
               <div className="flex flex-col justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">{purchase?.item?.title}</h1>
+                  <h1 className="text-3xl font-bold text-warm-900 mb-4">{purchase?.item?.title}</h1>
 
                   <div className="space-y-4 mb-8">
                     <InfoRow label="Category" value={purchase?.item?.category} />
@@ -101,8 +101,8 @@ export default function PurchaseDetailPage() {
                   </div>
 
                   {/* Sale Info */}
-                  <div className="border-t border-slate-200 pt-6">
-                    <h3 className="font-semibold text-slate-900 mb-4">Sale Information</h3>
+                  <div className="border-t border-warm-200 pt-6">
+                    <h3 className="font-semibold text-warm-900 mb-4">Sale Information</h3>
                     <div className="space-y-2">
                       <InfoRow label="Sale Name" value={purchase?.sale?.title} />
                       <InfoRow
@@ -138,8 +138,8 @@ export default function PurchaseDetailPage() {
 function InfoRow({ label, value }: { label: string; value: string | undefined }) {
   return (
     <div className="flex justify-between">
-      <span className="text-slate-600">{label}</span>
-      <span className="font-semibold text-slate-900">{value || 'N/A'}</span>
+      <span className="text-warm-600">{label}</span>
+      <span className="font-semibold text-warm-900">{value || 'N/A'}</span>
     </div>
   );
 }

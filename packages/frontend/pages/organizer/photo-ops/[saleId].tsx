@@ -97,8 +97,11 @@ const PhotoOpsPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-amber-900 mb-2">Upgrade to PRO</h2>
+            <p className="text-sm text-amber-800 mb-2">
+              Mark your best photo spots on the map and let shoppers know where to find the most Instagrammable finds at your sale.
+            </p>
             <p className="text-sm text-amber-800 mb-4">
-              Photo Op Stations is a PRO-tier feature. Upgrade your account to create branded photo spots at your sales.
+              Photo Op Stations is a PRO-tier feature.
             </p>
             <a
               href="/organizer/upgrade"

@@ -92,17 +92,17 @@ const FavoritesPage = () => {
         <title>My Favorites – FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-warm-50">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">
 
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/shopper/dashboard" className="text-warm-500 hover:text-warm-700">
+            <Link href="/shopper/dashboard" className="text-warm-500 hover:text-warm-700 dark:text-warm-400 dark:hover:text-warm-300">
               ←
             </Link>
-            <h1 className="text-2xl font-bold text-warm-900">My Favorites</h1>
+            <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">My Favorites</h1>
             {data && (
-              <span className="ml-auto text-sm text-warm-500">
+              <span className="ml-auto text-sm text-warm-500 dark:text-warm-400">
                 {data.total} item{data.total !== 1 ? 's' : ''}
               </span>
             )}
@@ -115,8 +115,8 @@ const FavoritesPage = () => {
                 onClick={() => setActiveCategory(ALL_CATEGORY)}
                 className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   activeCategory === ALL_CATEGORY
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-white text-warm-700 border border-warm-200 hover:bg-warm-100'
+                    ? 'bg-amber-600 text-white dark:bg-amber-700'
+                    : 'bg-white text-warm-700 border border-warm-200 hover:bg-warm-100 dark:bg-gray-800 dark:text-warm-200 dark:border-gray-700 dark:hover:bg-gray-700'
                 }`}
               >
                 All
@@ -127,8 +127,8 @@ const FavoritesPage = () => {
                   onClick={() => setActiveCategory(cat)}
                   className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                     activeCategory === cat
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-white text-warm-700 border border-warm-200 hover:bg-warm-100'
+                      ? 'bg-amber-600 text-white dark:bg-amber-700'
+                      : 'bg-white text-warm-700 border border-warm-200 hover:bg-warm-100 dark:bg-gray-800 dark:text-warm-200 dark:border-gray-700 dark:hover:bg-gray-700'
                   }`}
                 >
                   {CATEGORY_LABELS[cat] ?? cat}
@@ -146,7 +146,7 @@ const FavoritesPage = () => {
 
           {/* Error */}
           {isError && (
-            <div className="text-center py-12 text-warm-500">
+            <div className="text-center py-12 text-warm-500 dark:text-warm-400">
               <p className="text-4xl mb-3">⚠️</p>
               <p>Failed to load favorites. Please try again.</p>
             </div>
@@ -158,12 +158,12 @@ const FavoritesPage = () => {
               {activeCategory !== ALL_CATEGORY ? (
                 <div className="text-center py-16">
                   <p className="text-5xl mb-4">🏷️</p>
-                  <h2 className="text-xl font-semibold text-warm-900 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-4">
                     No {CATEGORY_LABELS[activeCategory] ?? activeCategory} favorites yet
                   </h2>
                   <button
                     onClick={() => setActiveCategory(ALL_CATEGORY)}
-                    className="text-amber-600 hover:underline text-sm font-medium"
+                    className="text-amber-600 hover:underline text-sm font-medium dark:text-amber-400"
                   >
                     View all favorites
                   </button>
@@ -183,40 +183,40 @@ const FavoritesPage = () => {
           {!isLoading && !isError && items.length > 0 && (
             <div className="space-y-4">
               {items.map(item => (
-                <div key={item.id} className="card overflow-hidden">
+                <div key={item.id} className="card overflow-hidden dark:bg-gray-800 dark:border-gray-700">
                   <Link href={`/items/${item.id}`} className="block">
                     <div className="flex gap-3 p-3">
                       {item.photoUrls?.[0] ? (
                         <img
                           src={item.photoUrls[0]}
                           alt={item.title}
-                          className="w-20 h-20 object-cover rounded-lg flex-shrink-0 bg-warm-100"
+                          className="w-20 h-20 object-cover rounded-lg flex-shrink-0 bg-warm-100 dark:bg-gray-700"
                         />
                       ) : (
-                        <div className="w-20 h-20 rounded-lg bg-warm-100 flex items-center justify-center flex-shrink-0">
+                        <div className="w-20 h-20 rounded-lg bg-warm-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
                           <span className="text-2xl">🏷️</span>
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-warm-900 truncate">{item.title}</p>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
                         {item.price != null && (
-                          <p className="text-amber-700 font-bold">${item.price.toFixed(2)}</p>
+                          <p className="text-amber-700 dark:text-amber-400 font-bold">${item.price.toFixed(2)}</p>
                         )}
-                        <p className="text-warm-500 text-xs mt-0.5 truncate">
+                        <p className="text-warm-500 dark:text-warm-400 text-xs mt-0.5 truncate">
                           {item.sale.organizer.businessName} · {item.sale.title}
                         </p>
                         <div className="flex gap-2 mt-1.5">
                           {item.category && (
-                            <span className="text-xs bg-warm-100 text-warm-600 px-2 py-0.5 rounded-full">
+                            <span className="text-xs bg-warm-100 text-warm-600 dark:bg-gray-700 dark:text-warm-300 px-2 py-0.5 rounded-full">
                               {CATEGORY_LABELS[item.category] ?? item.category}
                             </span>
                           )}
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
                             item.status === 'AVAILABLE'
-                              ? 'bg-green-50 text-green-700'
+                              ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300'
                               : item.status === 'SOLD'
-                              ? 'bg-red-50 text-red-600'
-                              : 'bg-warm-100 text-warm-600'
+                              ? 'bg-red-50 text-red-600 dark:bg-red-900 dark:text-red-300'
+                              : 'bg-warm-100 text-warm-600 dark:bg-gray-700 dark:text-warm-300'
                           }`}>
                             {item.status === 'AVAILABLE' ? 'Available' : item.status === 'SOLD' ? 'Sold' : item.status}
                           </span>
