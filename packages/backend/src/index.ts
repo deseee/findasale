@@ -151,6 +151,7 @@ import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import { initLiveFeed } from './services/liveFeedService'; // Feature #70: Live Sale Feed
+import { initBidRateLimiter } from './middleware/bidRateLimiter'; // #95: Bidding velocity rate limiter
 import './jobs/auctionJob';
 import './jobs/notificationJob';
 import './jobs/emailReminderJob';
@@ -409,6 +410,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();
+
+  // #95: Initialize bid rate limiter (Redis)
+  initBidRateLimiter();
 
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {

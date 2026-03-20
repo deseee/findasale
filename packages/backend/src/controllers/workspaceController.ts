@@ -15,11 +15,11 @@ export const createWorkspace = async (req: AuthRequest, res: Response) => {
     const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ error: 'Workspace name is required' });
+      return res.status(400).json({ message: 'Workspace name is required' });
     }
 
     // Verify organizer exists and is TEAMS tier
@@ -29,16 +29,16 @@ export const createWorkspace = async (req: AuthRequest, res: Response) => {
     });
 
     if (!organizer) {
-      return res.status(404).json({ error: 'Organizer not found' });
+      return res.status(404).json({ message: 'Organizer not found' });
     }
 
     if (organizer.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ error: 'TEAMS tier required' });
+      return res.status(403).json({ message: 'TEAMS tier required' });
     }
 
     // Check if organizer already has a workspace
     if (organizer.workspace) {
-      return res.status(400).json({ error: 'Workspace already exists' });
+      return res.status(400).json({ message: 'Workspace already exists' });
     }
 
     // Generate slug from name
@@ -72,7 +72,7 @@ export const createWorkspace = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error creating workspace:', error);
-    return res.status(500).json({ error: 'Failed to create workspace' });
+    return res.status(500).json({ message: 'Failed to create workspace' });
   }
 };
 
@@ -85,7 +85,7 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
     const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     // Check if this organizer owns a workspace
@@ -127,14 +127,14 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
     }
 
     if (!workspace) {
-      return res.status(404).json({ error: 'No workspace found' });
+      return res.status(404).json({ message: 'No workspace found' });
     }
 
     return res.json(workspace);
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error fetching workspace:', error);
-    return res.status(500).json({ error: 'Failed to fetch workspace' });
+    return res.status(500).json({ message: 'Failed to fetch workspace' });
   }
 };
 
@@ -150,15 +150,15 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     if (!email || typeof email !== 'string') {
-      return res.status(400).json({ error: 'Email is required' });
+      return res.status(400).json({ message: 'Email is required' });
     }
 
     if (!role || !['OWNER', 'ADMIN', 'MEMBER'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role' });
+      return res.status(400).json({ message: 'Invalid role' });
     }
 
     // Get the organizer's workspace
@@ -167,7 +167,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     });
 
     if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+      return res.status(404).json({ message: 'Workspace not found' });
     }
 
     // Check if requester is OWNER or ADMIN
@@ -182,7 +182,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     const isAdmin = requester && requester.role === 'ADMIN';
 
     if (!isOwner && !isAdmin) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+      return res.status(403).json({ message: 'Insufficient permissions' });
     }
 
     // Find organizer by email
@@ -194,7 +194,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     });
 
     if (!invitedOrganizer) {
-      return res.status(404).json({ error: 'Organizer not found' });
+      return res.status(404).json({ message: 'Organizer not found' });
     }
 
     // Check if already a member
@@ -208,7 +208,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Already a member' });
+      return res.status(400).json({ message: 'Already a member' });
     }
 
     // Create membership (pending acceptance)
@@ -229,7 +229,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error inviting member:', error);
-    return res.status(500).json({ error: 'Failed to invite member' });
+    return res.status(500).json({ message: 'Failed to invite member' });
   }
 };
 
@@ -242,7 +242,7 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
     const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     // Find pending invite for this organizer
@@ -254,7 +254,7 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
     });
 
     if (!member) {
-      return res.status(404).json({ error: 'No pending invitations' });
+      return res.status(404).json({ message: 'No pending invitations' });
     }
 
     // Accept the invite
@@ -273,7 +273,7 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error accepting invite:', error);
-    return res.status(500).json({ error: 'Failed to accept invite' });
+    return res.status(500).json({ message: 'Failed to accept invite' });
   }
 };
 
@@ -288,11 +288,11 @@ export const removeMember = async (req: AuthRequest, res: Response) => {
     const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     if (!targetOrganizerId) {
-      return res.status(400).json({ error: 'Target organizer ID is required' });
+      return res.status(400).json({ message: 'Target organizer ID is required' });
     }
 
     // Get the workspace
@@ -301,17 +301,17 @@ export const removeMember = async (req: AuthRequest, res: Response) => {
     });
 
     if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+      return res.status(404).json({ message: 'Workspace not found' });
     }
 
     // Only owner can remove members
     if (workspace.ownerId !== organizerId) {
-      return res.status(403).json({ error: 'Only workspace owner can remove members' });
+      return res.status(403).json({ message: 'Only workspace owner can remove members' });
     }
 
     // Can't remove the owner
     if (targetOrganizerId === workspace.ownerId) {
-      return res.status(400).json({ error: 'Cannot remove workspace owner' });
+      return res.status(400).json({ message: 'Cannot remove workspace owner' });
     }
 
     // Find and delete the membership
@@ -325,7 +325,7 @@ export const removeMember = async (req: AuthRequest, res: Response) => {
     });
 
     if (!member) {
-      return res.status(404).json({ error: 'Member not found' });
+      return res.status(404).json({ message: 'Member not found' });
     }
 
     await prisma.workspaceMember.delete({
@@ -336,7 +336,7 @@ export const removeMember = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error removing member:', error);
-    return res.status(500).json({ error: 'Failed to remove member' });
+    return res.status(500).json({ message: 'Failed to remove member' });
   }
 };
 
@@ -349,7 +349,7 @@ export const listMembers = async (req: AuthRequest, res: Response) => {
     const organizerId = req.user?.organizerProfile?.id;
 
     if (!organizerId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     // Find workspace (owned by this organizer or member of)
@@ -370,7 +370,7 @@ export const listMembers = async (req: AuthRequest, res: Response) => {
     }
 
     if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+      return res.status(404).json({ message: 'Workspace not found' });
     }
 
     const members = await prisma.workspaceMember.findMany({
@@ -395,6 +395,6 @@ export const listMembers = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error listing members:', error);
-    return res.status(500).json({ error: 'Failed to list members' });
+    return res.status(500).json({ message: 'Failed to list members' });
   }
 };

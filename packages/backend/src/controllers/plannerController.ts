@@ -44,14 +44,13 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
 
     // Validate request
     if (!messages || !Array.isArray(messages)) {
-      res.status(400).json({ error: 'Invalid request: messages array required' });
+      res.status(400).json({ message: 'Invalid request: messages array required' });
       return;
     }
 
     // Rate limit: max 20 messages per session
     if (messages.length > 20) {
-      res.status(429).json({
-        error: 'Too many messages. Please start a new conversation or contact us.',
+      res.status(429).json({ message: 'Too many messages. Please start a new conversation or contact us.',
         contactUrl: '/contact',
       });
       return;
@@ -60,7 +59,7 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     // Validate API key
     if (!ANTHROPIC_API_KEY) {
       console.error('ANTHROPIC_API_KEY not configured');
-      res.status(503).json({ error: 'AI service unavailable. Please try again later.' });
+      res.status(503).json({ message: 'AI service unavailable. Please try again later.' });
       return;
     }
 
@@ -92,7 +91,7 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     const reply: string = response.data.content?.[0]?.text ?? '';
 
     if (!reply) {
-      res.status(500).json({ error: 'No response from AI service' });
+      res.status(500).json({ message: 'No response from AI service' });
       return;
     }
 
@@ -102,15 +101,15 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
 
     if (axios.isAxiosError(error)) {
       if (error.response?.status === 401) {
-        res.status(503).json({ error: 'AI service authentication failed' });
+        res.status(503).json({ message: 'AI service authentication failed' });
         return;
       }
       if (error.response?.status === 429) {
-        res.status(429).json({ error: 'AI service rate limit exceeded. Please try again shortly.' });
+        res.status(429).json({ message: 'AI service rate limit exceeded. Please try again shortly.' });
         return;
       }
     }
 
-    res.status(500).json({ error: 'Failed to process request. Please try again.' });
+    res.status(500).json({ message: 'Failed to process request. Please try again.' });
   }
 }

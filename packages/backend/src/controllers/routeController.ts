@@ -36,8 +36,7 @@ export const planRoute = async (req: Request, res: Response): Promise<void> => {
     };
 
     if (!Array.isArray(saleIds) || saleIds.length < MIN_SALES || saleIds.length > MAX_SALES) {
-      res.status(400).json({
-        error: `Select between ${MIN_SALES} and ${MAX_SALES} sales to plan a route.`,
+      res.status(400).json({ message: `Select between ${MIN_SALES} and ${MAX_SALES} sales to plan a route.`,
         code: 'INVALID_INPUT',
       });
       return;
@@ -59,8 +58,7 @@ export const planRoute = async (req: Request, res: Response): Promise<void> => {
       .filter((s): s is SaleRow => !!s && typeof s.lat === 'number' && typeof s.lng === 'number');
 
     if (orderedSales.length < MIN_SALES) {
-      res.status(400).json({
-        error: 'Not enough published sales with location data. Try selecting different sales.',
+      res.status(400).json({ message: 'Not enough published sales with location data. Try selecting different sales.',
         code: 'SALES_NOT_FOUND',
       });
       return;
@@ -80,8 +78,7 @@ export const planRoute = async (req: Request, res: Response): Promise<void> => {
       const osrmRes = await axios.get(osrmUrl, { timeout: 8000 });
       routeData = osrmRes.data;
     } catch {
-      res.status(503).json({
-        error: 'Route planning is temporarily unavailable. Open in Google Maps to plan manually.',
+      res.status(503).json({ message: 'Route planning is temporarily unavailable. Open in Google Maps to plan manually.',
         code: 'ROUTE_SERVICE_UNAVAILABLE',
         fallbackUrl: buildGoogleMapsUrl(orderedSales),
       });
@@ -89,8 +86,7 @@ export const planRoute = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (routeData.code !== 'Ok' || !routeData.routes?.length) {
-      res.status(400).json({
-        error: 'Unable to calculate a route. Try fewer sales or sales in the same area.',
+      res.status(400).json({ message: 'Unable to calculate a route. Try fewer sales or sales in the same area.',
         code: 'ROUTE_NOT_FOUND',
         fallbackUrl: buildGoogleMapsUrl(orderedSales),
       });
@@ -117,6 +113,6 @@ export const planRoute = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (err) {
     console.error('[routeController] planRoute error:', err);
-    res.status(500).json({ error: 'An unexpected error occurred. Please try again.' });
+    res.status(500).json({ message: 'An unexpected error occurred. Please try again.' });
   }
 };

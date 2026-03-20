@@ -43,14 +43,14 @@ interface ServerItemChange {
 export async function batchSync(req: AuthRequest, res: Response) {
   try {
     if (!req.user?.organizerProfile) {
-      return res.status(401).json({ error: 'Organizer profile not found' });
+      return res.status(401).json({ message: 'Organizer profile not found' });
     }
 
     const { operations, clientState } = req.body;
     const organizerId = req.user.organizer?.id;
 
     if (!Array.isArray(operations) || operations.length === 0) {
-      return res.status(400).json({ error: 'No operations provided' });
+      return res.status(400).json({ message: 'No operations provided' });
     }
 
     // Validate timestamp bounds (within 30 days)
@@ -60,8 +60,7 @@ export async function batchSync(req: AuthRequest, res: Response) {
     for (const op of operations) {
       const opTime = new Date(op.timestamp);
       if (opTime < thirtyDaysAgo) {
-        return res.status(400).json({
-          error: `Operation from ${op.timestamp} is older than 30 days`,
+        return res.status(400).json({ message: `Operation from ${op.timestamp} is older than 30 days`,
           retryable: false,
         });
       }
@@ -138,7 +137,7 @@ export async function batchSync(req: AuthRequest, res: Response) {
     });
   } catch (error: any) {
     console.error('[Sync] Batch sync failed:', error);
-    res.status(500).json({ error: 'Internal server error', retryable: true });
+    res.status(500).json({ message: 'Internal server error', retryable: true });
   }
 }
 
@@ -159,9 +158,7 @@ async function handleCreateItem(operation: SyncOperation, organizerId: string) {
       });
 
       if (existing) {
-        return {
-          error: {
-            error: `Item with SKU ${payload.sku} already exists`,
+        return { message: { message: `Item with SKU ${payload.sku} already exists`,
             retryable: false,
           },
         };
@@ -192,9 +189,7 @@ async function handleCreateItem(operation: SyncOperation, organizerId: string) {
       },
     };
   } catch (error: any) {
-    return {
-      error: {
-        error: error.message || 'Failed to create item',
+    return { message: { message: error.message || 'Failed to create item',
         retryable: true,
       },
     };
@@ -209,9 +204,7 @@ async function handleUpdateItem(operation: SyncOperation) {
 
   try {
     if (!itemId) {
-      return {
-        error: {
-          error: 'itemId required for UPDATE_ITEM',
+      return { message: { message: 'itemId required for UPDATE_ITEM',
           retryable: false,
         },
       };
@@ -223,9 +216,7 @@ async function handleUpdateItem(operation: SyncOperation) {
     });
 
     if (!currentItem) {
-      return {
-        error: {
-          error: 'Item not found',
+      return { message: { message: 'Item not found',
           retryable: false,
         },
       };
@@ -256,9 +247,7 @@ async function handleUpdateItem(operation: SyncOperation) {
 
     // Check if item is SOLD (prevent updates to sold items)
     if (currentItem.status === 'SOLD') {
-      return {
-        error: {
-          error: 'Cannot update sold item',
+      return { message: { message: 'Cannot update sold item',
           retryable: false,
         },
       };
@@ -288,9 +277,7 @@ async function handleUpdateItem(operation: SyncOperation) {
       },
     };
   } catch (error: any) {
-    return {
-      error: {
-        error: error.message || 'Failed to update item',
+    return { message: { message: error.message || 'Failed to update item',
         retryable: true,
       },
     };
@@ -305,9 +292,7 @@ async function handleDeleteItem(operation: SyncOperation) {
 
   try {
     if (!itemId) {
-      return {
-        error: {
-          error: 'itemId required for DELETE_ITEM',
+      return { message: { message: 'itemId required for DELETE_ITEM',
           retryable: false,
         },
       };
@@ -319,9 +304,7 @@ async function handleDeleteItem(operation: SyncOperation) {
     });
 
     if (!item) {
-      return {
-        error: {
-          error: 'Item not found',
+      return { message: { message: 'Item not found',
           retryable: false,
         },
       };
@@ -342,9 +325,7 @@ async function handleDeleteItem(operation: SyncOperation) {
       },
     };
   } catch (error: any) {
-    return {
-      error: {
-        error: error.message || 'Failed to delete item',
+    return { message: { message: error.message || 'Failed to delete item',
         retryable: true,
       },
     };

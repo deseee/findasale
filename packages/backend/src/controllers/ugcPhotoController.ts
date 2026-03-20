@@ -21,19 +21,19 @@ interface ModeratePhotoRequest {
 export const submitPhoto = async (req: AuthRequest, res: Response) => {
   try {
     if (!(req as any).user?.id) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const { photoUrl, caption, tags, itemId, saleId } = req.body as SubmitPhotoRequest;
 
     // Validate required fields
     if (!photoUrl) {
-      return res.status(400).json({ error: 'photoUrl is required' });
+      return res.status(400).json({ message: 'photoUrl is required' });
     }
 
     // Validate itemId or saleId provided
     if (!itemId && !saleId) {
-      return res.status(400).json({ error: 'itemId or saleId is required' });
+      return res.status(400).json({ message: 'itemId or saleId is required' });
     }
 
     const photo = await prisma.uGCPhoto.create({
@@ -52,7 +52,7 @@ export const submitPhoto = async (req: AuthRequest, res: Response) => {
     res.status(201).json(photo);
   } catch (error) {
     console.error('Error submitting photo:', error);
-    res.status(500).json({ error: 'Failed to submit photo' });
+    res.status(500).json({ message: 'Failed to submit photo' });
   }
 };
 
@@ -84,7 +84,7 @@ export const getApprovedPhotosForSale = async (req: Request, res: Response) => {
     res.json(photos);
   } catch (error) {
     console.error('Error fetching photos for sale:', error);
-    res.status(500).json({ error: 'Failed to fetch photos' });
+    res.status(500).json({ message: 'Failed to fetch photos' });
   }
 };
 
@@ -116,7 +116,7 @@ export const getApprovedPhotosForItem = async (req: Request, res: Response) => {
     res.json(photos);
   } catch (error) {
     console.error('Error fetching photos for item:', error);
-    res.status(500).json({ error: 'Failed to fetch photos' });
+    res.status(500).json({ message: 'Failed to fetch photos' });
   }
 };
 
@@ -126,7 +126,7 @@ export const getApprovedPhotosForItem = async (req: Request, res: Response) => {
 export const getMyPhotos = async (req: AuthRequest, res: Response) => {
   try {
     if (!(req as any).user?.id) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const photos = await prisma.uGCPhoto.findMany({
@@ -141,7 +141,7 @@ export const getMyPhotos = async (req: AuthRequest, res: Response) => {
     res.json(photos);
   } catch (error) {
     console.error('Error fetching user photos:', error);
-    res.status(500).json({ error: 'Failed to fetch photos' });
+    res.status(500).json({ message: 'Failed to fetch photos' });
   }
 };
 
@@ -151,7 +151,7 @@ export const getMyPhotos = async (req: AuthRequest, res: Response) => {
 export const likePhoto = async (req: AuthRequest, res: Response) => {
   try {
     if (!(req as any).user?.id) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const { photoId } = req.params;
@@ -185,7 +185,7 @@ export const likePhoto = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, liked: true });
   } catch (error) {
     console.error('Error liking photo:', error);
-    res.status(500).json({ error: 'Failed to like photo' });
+    res.status(500).json({ message: 'Failed to like photo' });
   }
 };
 
@@ -195,7 +195,7 @@ export const likePhoto = async (req: AuthRequest, res: Response) => {
 export const unlikePhoto = async (req: AuthRequest, res: Response) => {
   try {
     if (!(req as any).user?.id) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const { photoId } = req.params;
@@ -224,7 +224,7 @@ export const unlikePhoto = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, liked: false });
   } catch (error) {
     console.error('Error unliking photo:', error);
-    res.status(500).json({ error: 'Failed to unlike photo' });
+    res.status(500).json({ message: 'Failed to unlike photo' });
   }
 };
 
@@ -234,14 +234,14 @@ export const unlikePhoto = async (req: AuthRequest, res: Response) => {
 export const moderatePhoto = async (req: AuthRequest, res: Response) => {
   try {
     if (!(req as any).user?.id || !(req as any).user?.organizerProfile?.id) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const { photoId } = req.params;
     const { status } = req.body as ModeratePhotoRequest;
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
+      return res.status(400).json({ message: 'Invalid status' });
     }
 
     const photoIdNum = parseInt(photoId);
@@ -264,13 +264,13 @@ export const moderatePhoto = async (req: AuthRequest, res: Response) => {
     });
 
     if (!photo) {
-      return res.status(404).json({ error: 'Photo not found' });
+      return res.status(404).json({ message: 'Photo not found' });
     }
 
     // Verify organizer ownership
     const ownedSaleId = photo.sale?.organizerId || photo.item?.sale?.organizerId;
     if (ownedSaleId !== (req as any).user.organizerProfile.id) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     const updated = await prisma.uGCPhoto.update({
@@ -285,7 +285,7 @@ export const moderatePhoto = async (req: AuthRequest, res: Response) => {
     res.json(updated);
   } catch (error) {
     console.error('Error moderating photo:', error);
-    res.status(500).json({ error: 'Failed to moderate photo' });
+    res.status(500).json({ message: 'Failed to moderate photo' });
   }
 };
 
@@ -295,7 +295,7 @@ export const moderatePhoto = async (req: AuthRequest, res: Response) => {
 export const getPendingPhotosForOrganizer = async (req: AuthRequest, res: Response) => {
   try {
     if (!(req as any).user?.id || !(req as any).user?.organizerProfile?.id) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     // Get all pending photos linked to organizer's sales
@@ -351,6 +351,6 @@ export const getPendingPhotosForOrganizer = async (req: AuthRequest, res: Respon
     res.json(photos);
   } catch (error) {
     console.error('Error fetching pending photos:', error);
-    res.status(500).json({ error: 'Failed to fetch pending photos' });
+    res.status(500).json({ message: 'Failed to fetch pending photos' });
   }
 };

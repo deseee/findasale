@@ -185,7 +185,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       }
     });
     if (statusCode === 503) res.set('Retry-After', '60');
-    res.status(statusCode).json({ error: 'stripe_' + (type?.replace('_error', '') || 'unknown'), message });
+    res.status(statusCode).json({ message: 'stripe_' + (type?.replace('_error', '') || 'unknown'), message });
   }
 };
 

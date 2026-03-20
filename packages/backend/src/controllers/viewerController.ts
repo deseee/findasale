@@ -37,7 +37,7 @@ export const getViewerCount = (req: Request, res: Response) => {
   const { saleId } = req.params;
 
   if (!saleId) {
-    return res.status(400).json({ error: 'saleId is required' });
+    return res.status(400).json({ message: 'saleId is required' });
   }
 
   const viewers = saleViewers.get(saleId);
@@ -63,7 +63,7 @@ export const pingViewer = (req: Request, res: Response) => {
   const { viewerId } = req.body;
 
   if (!saleId || !viewerId) {
-    return res.status(400).json({ error: 'saleId and viewerId are required' });
+    return res.status(400).json({ message: 'saleId and viewerId are required' });
   }
 
   // Initialize sale viewers map if needed
@@ -92,7 +92,7 @@ export const removeViewer = (req: Request, res: Response) => {
   const { saleId, viewerId } = req.params;
 
   if (!saleId || !viewerId) {
-    return res.status(400).json({ error: 'saleId and viewerId are required' });
+    return res.status(400).json({ message: 'saleId and viewerId are required' });
   }
 
   const viewers = saleViewers.get(saleId);

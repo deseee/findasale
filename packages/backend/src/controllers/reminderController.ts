@@ -8,7 +8,7 @@ export const getReminderForSale = async (req: AuthRequest, res: Response) => {
     const { saleId } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const reminder = await prisma.saleReminder.findFirst({
@@ -18,7 +18,7 @@ export const getReminderForSale = async (req: AuthRequest, res: Response) => {
     return res.json({ reminder });
   } catch (error) {
     console.error('Error getting reminder:', error);
-    return res.status(500).json({ error: 'Failed to get reminder' });
+    return res.status(500).json({ message: 'Failed to get reminder' });
   }
 };
 
@@ -28,16 +28,16 @@ export const createReminder = async (req: AuthRequest, res: Response) => {
     const { saleId, reminderType = 'email' } = req.body;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     if (!saleId) {
-      return res.status(400).json({ error: 'saleId is required' });
+      return res.status(400).json({ message: 'saleId is required' });
     }
 
     const sale = await prisma.sale.findUnique({ where: { id: saleId } });
     if (!sale) {
-      return res.status(404).json({ error: 'Sale not found' });
+      return res.status(404).json({ message: 'Sale not found' });
     }
 
     // Upsert: create or reactivate
@@ -52,7 +52,7 @@ export const createReminder = async (req: AuthRequest, res: Response) => {
     return res.status(201).json({ reminder });
   } catch (error) {
     console.error('Error creating reminder:', error);
-    return res.status(500).json({ error: 'Failed to create reminder' });
+    return res.status(500).json({ message: 'Failed to create reminder' });
   }
 };
 
@@ -62,13 +62,13 @@ export const deleteReminder = async (req: AuthRequest, res: Response) => {
     const { reminderId } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const reminder = await prisma.saleReminder.findUnique({ where: { id: reminderId } });
 
     if (!reminder || reminder.userId !== userId) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     await prisma.saleReminder.delete({ where: { id: reminderId } });
@@ -76,6 +76,6 @@ export const deleteReminder = async (req: AuthRequest, res: Response) => {
     return res.json({ success: true });
   } catch (error) {
     console.error('Error deleting reminder:', error);
-    return res.status(500).json({ error: 'Failed to delete reminder' });
+    return res.status(500).json({ message: 'Failed to delete reminder' });
   }
 };

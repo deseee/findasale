@@ -12,11 +12,11 @@ export const getPerformanceMetricsHandler = async (req: AuthRequest, res: Respon
   try {
     // Auth gate
     if (!req.user) {
-      return res.status(401).json({ error: 'unauthorized', message: 'Authentication required' });
+      return res.status(401).json({ message: 'unauthorized', message: 'Authentication required' });
     }
 
     if (req.user.role !== 'ORGANIZER') {
-      return res.status(403).json({ error: 'forbidden', message: 'Organizer access required' });
+      return res.status(403).json({ message: 'forbidden', message: 'Organizer access required' });
     }
 
     // Get organizer ID from user
@@ -26,7 +26,7 @@ export const getPerformanceMetricsHandler = async (req: AuthRequest, res: Respon
     });
 
     if (!organizer) {
-      return res.status(403).json({ error: 'forbidden', message: 'Organizer profile not found' });
+      return res.status(403).json({ message: 'forbidden', message: 'Organizer profile not found' });
     }
 
     // Parse query params
@@ -39,14 +39,13 @@ export const getPerformanceMetricsHandler = async (req: AuthRequest, res: Respon
 
     // Validate saleId
     if (!saleId || typeof saleId !== 'string' || !saleId.trim()) {
-      return res.status(400).json({ error: 'bad_request', message: 'saleId is required' });
+      return res.status(400).json({ message: 'bad_request', message: 'saleId is required' });
     }
 
     // Validate date range if custom
     const effectiveRange = range || '30d';
     if (effectiveRange === 'custom' && (!from || !to)) {
-      return res.status(400).json({
-        error: 'bad_request',
+      return res.status(400).json({ message: 'bad_request',
         message: 'from and to are required when range=custom (ISO8601 format)',
       });
     }
@@ -57,10 +56,10 @@ export const getPerformanceMetricsHandler = async (req: AuthRequest, res: Respon
       metrics = await getPerformanceMetrics(organizer.id, saleId, effectiveRange, from, to);
     } catch (error: any) {
       if (error.message.includes('Sale not found')) {
-        return res.status(404).json({ error: 'not_found', message: 'Sale not found' });
+        return res.status(404).json({ message: 'not_found', message: 'Sale not found' });
       }
       if (error.message.includes('does not own')) {
-        return res.status(403).json({ error: 'forbidden', message: 'You do not have access to this sale' });
+        return res.status(403).json({ message: 'forbidden', message: 'You do not have access to this sale' });
       }
       throw error;
     }
@@ -68,6 +67,6 @@ export const getPerformanceMetricsHandler = async (req: AuthRequest, res: Respon
     res.status(200).json(metrics);
   } catch (error) {
     console.error('Error fetching performance metrics:', error);
-    res.status(500).json({ error: 'server_error', message: 'Failed to compute performance metrics' });
+    res.status(500).json({ message: 'server_error', message: 'Failed to compute performance metrics' });
   }
 };

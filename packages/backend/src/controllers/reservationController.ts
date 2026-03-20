@@ -190,23 +190,18 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
     const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
     if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
 
-    const { saleId, sort, limit, offset } = req.query as { saleId?: string; sort?: string; limit?: string; offset?: string };
+    const { saleId, sort, page, limit } = req.query as { saleId?: string; sort?: string; page?: string; limit?: string };
 
     // P2 #11: Parse pagination params with defaults and validation
+    let pageNum = Math.max(1, parseInt(page as string) || 1);
     let pageLimit = 50; // default
-    let pageOffset = 0; // default
     if (limit) {
       const parsed = parseInt(limit, 10);
       if (!isNaN(parsed) && parsed > 0 && parsed <= 200) {
         pageLimit = parsed;
       }
     }
-    if (offset) {
-      const parsed = parseInt(offset, 10);
-      if (!isNaN(parsed) && parsed >= 0) {
-        pageOffset = parsed;
-      }
-    }
+    const pageSkip = (pageNum - 1) * pageLimit;
 
     const where: any = {
       status: { in: ['PENDING', 'CONFIRMED'] },
@@ -239,17 +234,17 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
         },
         orderBy,
         take: pageLimit,
-        skip: pageOffset,
+        skip: pageSkip,
       }),
       prisma.itemReservation.count({ where }),
     ]);
 
     res.json({
       holds: reservations,
-      total,
+      page: pageNum,
       limit: pageLimit,
-      offset: pageOffset,
-      hasMore: pageOffset + pageLimit < total,
+      total,
+      pages: Math.ceil(total / pageLimit),
     });
   } catch (error) {
     console.error('[reservations] getOrganizerHolds error:', error);

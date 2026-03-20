@@ -31,6 +31,6 @@ export const getHeatmapHandler = async (
     res.status(200).json(response);
   } catch (error: any) {
     console.error('Error fetching heatmap:', error);
-    res.status(400).json({ error: error.message || 'Invalid heatmap query' });
+    res.status(400).json({ message: error.message || 'Invalid heatmap query' });
   }
 };

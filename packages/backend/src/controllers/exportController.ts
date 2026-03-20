@@ -80,7 +80,7 @@ export const exportEstatesalesCSV = async (
     const userId = req.user?.id;
 
     if (!userId) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ message: 'Authentication required' });
       return;
     }
 
@@ -108,19 +108,19 @@ export const exportEstatesalesCSV = async (
 
     // Verify sale exists
     if (!sale) {
-      res.status(400).json({ error: 'Sale not found' });
+      res.status(400).json({ message: 'Sale not found' });
       return;
     }
 
     // Verify organizer ownership
     if (sale.organizer.userId !== userId) {
-      res.status(403).json({ error: 'Not authorized' });
+      res.status(403).json({ message: 'Not authorized' });
       return;
     }
 
     // Verify published items exist
     if (!sale.items || sale.items.length === 0) {
-      res.status(400).json({ error: 'No published items to export' });
+      res.status(400).json({ message: 'No published items to export' });
       return;
     }
 
@@ -162,7 +162,7 @@ export const exportEstatesalesCSV = async (
     res.status(200).send(csvContent);
   } catch (error) {
     console.error('exportEstatesalesCSV error:', error);
-    res.status(500).json({ error: 'Export failed' });
+    res.status(500).json({ message: 'Export failed' });
   }
 };
 
@@ -179,7 +179,7 @@ export const exportFacebookJSON = async (
     const userId = req.user?.id;
 
     if (!userId) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ message: 'Authentication required' });
       return;
     }
 
@@ -207,19 +207,19 @@ export const exportFacebookJSON = async (
 
     // Verify sale exists
     if (!sale) {
-      res.status(400).json({ error: 'Sale not found' });
+      res.status(400).json({ message: 'Sale not found' });
       return;
     }
 
     // Verify organizer ownership
     if (sale.organizer.userId !== userId) {
-      res.status(403).json({ error: 'Not authorized' });
+      res.status(403).json({ message: 'Not authorized' });
       return;
     }
 
     // Verify published items exist
     if (!sale.items || sale.items.length === 0) {
-      res.status(400).json({ error: 'No published items to export' });
+      res.status(400).json({ message: 'No published items to export' });
       return;
     }
 
@@ -253,7 +253,7 @@ export const exportFacebookJSON = async (
     res.status(200).json(facebookData);
   } catch (error) {
     console.error('exportFacebookJSON error:', error);
-    res.status(500).json({ error: 'Export failed' });
+    res.status(500).json({ message: 'Export failed' });
   }
 };
 
@@ -270,7 +270,7 @@ export const exportCraigslistText = async (
     const userId = req.user?.id;
 
     if (!userId) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ message: 'Authentication required' });
       return;
     }
 
@@ -297,19 +297,19 @@ export const exportCraigslistText = async (
 
     // Verify sale exists
     if (!sale) {
-      res.status(400).json({ error: 'Sale not found' });
+      res.status(400).json({ message: 'Sale not found' });
       return;
     }
 
     // Verify organizer ownership
     if (sale.organizer.userId !== userId) {
-      res.status(403).json({ error: 'Not authorized' });
+      res.status(403).json({ message: 'Not authorized' });
       return;
     }
 
     // Verify published items exist
     if (!sale.items || sale.items.length === 0) {
-      res.status(400).json({ error: 'No published items to export' });
+      res.status(400).json({ message: 'No published items to export' });
       return;
     }
 
@@ -359,7 +359,7 @@ export const exportCraigslistText = async (
     res.status(200).send(textContent);
   } catch (error) {
     console.error('exportCraigslistText error:', error);
-    res.status(500).json({ error: 'Export failed' });
+    res.status(500).json({ message: 'Export failed' });
   }
 };
 
@@ -382,7 +382,7 @@ export const exportOrganizer = async (
     const userId = req.user?.id;
 
     if (!userId) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ message: 'Authentication required' });
       return;
     }
 
@@ -392,7 +392,7 @@ export const exportOrganizer = async (
     });
 
     if (!organizer) {
-      res.status(404).json({ error: 'Organizer profile not found' });
+      res.status(404).json({ message: 'Organizer profile not found' });
       return;
     }
 
@@ -562,7 +562,7 @@ export const exportOrganizer = async (
     await archive.finalize();
   } catch (error) {
     console.error('exportOrganizer error:', error);
-    res.status(500).json({ error: 'Export failed' });
+    res.status(500).json({ message: 'Export failed' });
   }
 };
 

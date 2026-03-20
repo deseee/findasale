@@ -13,7 +13,7 @@ export async function recordClickHandler(req: Request, res: Response): Promise<v
     const { saleId, utm_source, utm_medium, utm_campaign, utm_content } = req.query;
 
     if (!saleId || typeof saleId !== 'string') {
-      res.status(400).json({ error: 'saleId required' });
+      res.status(400).json({ message: 'saleId required' });
       return;
     }
 
@@ -47,7 +47,7 @@ export async function getStatsHandler(req: AuthRequest, res: Response): Promise<
     const { saleId } = req.params;
 
     if (!saleId) {
-      res.status(400).json({ error: 'saleId required' });
+      res.status(400).json({ message: 'saleId required' });
       return;
     }
 
@@ -60,6 +60,6 @@ export async function getStatsHandler(req: AuthRequest, res: Response): Promise<
     });
   } catch (err) {
     console.error('getStatsHandler error:', err);
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    res.status(500).json({ message: 'Failed to fetch stats' });
   }
 }
