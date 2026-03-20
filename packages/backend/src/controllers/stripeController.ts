@@ -41,7 +41,7 @@ const sendReceiptEmail = async (purchase: {
   try {
     const html = buildEmail({
       preheader: `Receipt for ${purchase.item?.title ?? 'your purchase'}`,
-      headline: 'Your purchase is confirmed! 🎉',
+      headline: 'Your purchase is confirmed! \uD83C\uDF89',
       body: `<p>Hi ${purchase.user.name},</p><p>Your payment of <strong>$${purchase.amount.toFixed(2)}</strong> for <strong>${purchase.item?.title ?? 'an item'}</strong> from <em>${purchase.sale?.title ?? 'a sale'}</em> has been confirmed.</p><p>Thank you for your purchase! The organizer will be in touch about pickup.</p>`,
       ctaText: 'View Purchase History',
       ctaUrl: historyUrl,
@@ -149,7 +149,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       // Check for rate limit errors (503)
       else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Too many requests — please try again in a minute';
+        message = 'Too many requests \u2014 please try again in a minute';
       }
       // All other errors remain 500
       else {
@@ -170,7 +170,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
         }
       } else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Too many requests — please try again in a minute';
+        message = 'Too many requests \u2014 please try again in a minute';
       }
     }
 
@@ -185,7 +185,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       }
     });
     if (statusCode === 503) res.set('Retry-After', '60');
-    res.status(statusCode).json({ message: 'stripe_' + (type?.replace('_error', '') || 'unknown'), message });
+    res.status(statusCode).json({ message });
   }
 };
 
@@ -461,7 +461,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!endpointSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET is not configured — webhook verification cannot proceed');
+    console.error('STRIPE_WEBHOOK_SECRET is not configured \u2014 webhook verification cannot proceed');
     return res.status(500).send('Webhook Error: STRIPE_WEBHOOK_SECRET not configured');
   }
 
@@ -480,12 +480,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
       where: { eventId: event.id }
     });
     if (existingEvent) {
-      console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) — skipping reprocessing`);
+      console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) \u2014 skipping reprocessing`);
       return res.json({ received: true, duplicate: true });
     }
   } catch (err) {
     console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, err);
-    // Continue anyway — better to process twice than to lose an event
+    // Continue anyway \u2014 better to process twice than to lose an event
   }
 
   switch (event.type) {
@@ -529,14 +529,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           generateReceipt(purchase.id).catch(err => console.error('[receipt] Failed to generate receipt:', err));
         });
 
-        // Feature: Abandoned Checkout Recovery — mark this checkout as completed
+        // Feature: Abandoned Checkout Recovery \u2014 mark this checkout as completed
         await prisma.checkoutAttempt.updateMany({
           where: { paymentIntent: paymentIntent.id },
           data: { completedAt: new Date() },
         }).catch(err => console.warn('[checkout-recovery] Failed to mark checkout as completed:', err));
 
         if (paymentIntent.metadata?.itemId) {
-          // CA3: Concurrent purchase guard — check item status before marking SOLD
+          // CA3: Concurrent purchase guard \u2014 check item status before marking SOLD
           // If another buyer's PI already marked it SOLD, refund this one automatically
           const item = await prisma.item.findUnique({
             where: { id: paymentIntent.metadata.itemId },
@@ -544,7 +544,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           });
 
           if (item && item.status === 'SOLD' && purchase.status !== 'PAID') {
-            // Second buyer won the race — refund silently and stop
+            // Second buyer won the race \u2014 refund silently and stop
             console.warn(
               `CA3 concurrent purchase: item ${paymentIntent.metadata.itemId} already SOLD, ` +
               `refunding PI ${paymentIntent.id}`
@@ -616,7 +616,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }).catch(err => console.warn('Failed to increment affiliate conversion:', err));
         }
 
-        // POS purchases (source: POS) have no buyer account — skip buyer-only features
+        // POS purchases (source: POS) have no buyer account \u2014 skip buyer-only features
         const isPOS = paymentIntent.metadata?.source === 'POS';
 
         if (!isPOS && purchase.userId) {
@@ -674,7 +674,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           });
         }
         // Note: POS receipt is sent directly by terminalController.captureTerminalPaymentIntent
-        // (which runs before the webhook). The webhook is secondary for POS — it provides
+        // (which runs before the webhook). The webhook is secondary for POS \u2014 it provides
         // idempotency only. No duplicate receipt is sent here.
 
         // X1: Fire webhooks (non-blocking)
@@ -708,10 +708,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
       // Find the purchase by looking up the payment intent from the charge
       try {
-        // dispute.charge may be a string ID or an expanded Charge object — normalize to string
+        // dispute.charge may be a string ID or an expanded Charge object \u2014 normalize to string
         const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
         const charge = await stripe().charges.retrieve(chargeId);
-        // charge.payment_intent may be a string ID or an expanded PaymentIntent object — normalize
+        // charge.payment_intent may be a string ID or an expanded PaymentIntent object \u2014 normalize
         const paymentIntentId = typeof charge.payment_intent === 'string'
           ? charge.payment_intent
           : charge.payment_intent?.id ?? null;
