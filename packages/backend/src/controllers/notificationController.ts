@@ -186,7 +186,7 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
     // Get Twilio client
     const twilioClient = getTwilioClient();
     if (!twilioClient || !process.env.TWILIO_PHONE_NUMBER) {
-      return res.status(503).json({ error: 'SMS service not configured' });
+      return res.status(503).json({ message: 'SMS service not configured' });
     }
 
     // Get subscribers with phone numbers

@@ -25,7 +25,7 @@ export const getTrendingItems = async (req: Request, res: Response) => {
     res.json({ items });
   } catch (error) {
     console.error('getTrendingItems error:', error);
-    res.status(500).json({ error: 'Failed to fetch trending items' });
+    res.status(500).json({ message: 'Failed to fetch trending items' });
   }
 };
 
@@ -69,6 +69,6 @@ export const getTrendingSales = async (req: Request, res: Response) => {
     res.json({ sales: salesWithFollowers });
   } catch (error) {
     console.error('getTrendingSales error:', error);
-    res.status(500).json({ error: 'Failed to fetch trending sales' });
+    res.status(500).json({ message: 'Failed to fetch trending sales' });
   }
 };

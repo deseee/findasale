@@ -15,7 +15,7 @@ export const getMyTier = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Not authenticated' });
+      return res.status(401).json({ message: 'Not authenticated' });
     }
 
     // Get organizer by user ID
@@ -24,7 +24,7 @@ export const getMyTier = async (req: AuthRequest, res: Response) => {
     });
 
     if (!organizer) {
-      return res.status(404).json({ error: 'Organizer profile not found' });
+      return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
     // Get tier benefits and progress
@@ -39,7 +39,7 @@ export const getMyTier = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching organizer tier:', error);
-    res.status(500).json({ error: 'Failed to fetch organizer tier' });
+    res.status(500).json({ message: 'Failed to fetch organizer tier' });
   }
 };
 
@@ -61,7 +61,7 @@ export const getOrganizerPublicTier = async (req: any, res: Response) => {
     });
 
     if (!organizer) {
-      return res.status(404).json({ error: 'Organizer not found' });
+      return res.status(404).json({ message: 'Organizer not found' });
     }
 
     const benefits = getTierBenefits(organizer.tier as any);
@@ -75,7 +75,7 @@ export const getOrganizerPublicTier = async (req: any, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching organizer public tier:', error);
-    res.status(500).json({ error: 'Failed to fetch organizer tier' });
+    res.status(500).json({ message: 'Failed to fetch organizer tier' });
   }
 };
 
@@ -98,6 +98,6 @@ export const syncTierForOrganizer = async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Tier synced', organizer });
   } catch (error) {
     console.error('Error syncing organizer tier:', error);
-    res.status(500).json({ error: 'Failed to sync organizer tier' });
+    res.status(500).json({ message: 'Failed to sync organizer tier' });
   }
 };

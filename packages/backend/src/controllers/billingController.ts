@@ -100,7 +100,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
 
     if (!webhookSecret) {
       console.error('STRIPE_WEBHOOK_SECRET not set');
-      return res.status(500).json({ error: 'Webhook secret not configured' });
+      return res.status(500).json({ message: 'Webhook secret not configured' });
     }
 
     // Construct and verify event
@@ -109,7 +109,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } catch (err: any) {
       console.error('Webhook signature verification failed:', err.message);
-      return res.status(400).json({ error: 'Webhook signature verification failed' });
+      return res.status(400).json({ message: 'Webhook signature verification failed' });
     }
 
     // Check idempotency
@@ -184,7 +184,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
     res.json({ received: true });
   } catch (error) {
     console.error('Webhook processing error:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+    res.status(500).json({ message: 'Webhook processing failed' });
   }
 };
 

@@ -72,7 +72,7 @@ export const uploadSalePhotos = async (req: Request, res: Response): Promise<voi
   try {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
-      res.status(400).json({ error: 'No files provided' });
+      res.status(400).json({ message: 'No files provided' });
       return;
     }
 
@@ -101,8 +101,7 @@ export const uploadSalePhotos = async (req: Request, res: Response): Promise<voi
 
     if (invalidUrls > 0) {
       const errorCount = partialErrors.length + invalidUrls;
-      res.status(500).json({
-        error: `Upload failed for ${errorCount} file${errorCount !== 1 ? 's' : ''}`,
+      res.status(500).json({ message: `Upload failed for ${errorCount} file${errorCount !== 1 ? 's' : ''}`,
         partialErrors: [...partialErrors, `${invalidUrls} file${invalidUrls !== 1 ? 's' : ''} uploaded but returned invalid URLs`],
       });
       return;
@@ -111,7 +110,7 @@ export const uploadSalePhotos = async (req: Request, res: Response): Promise<voi
     res.json({ urls, imageVariants, ...(partialErrors.length ? { partialErrors } : {}) });
   } catch (error) {
     console.error('uploadSalePhotos error:', error);
-    res.status(500).json({ error: 'Upload failed' });
+    res.status(500).json({ message: 'Upload failed' });
   }
 };
 
@@ -120,7 +119,7 @@ export const uploadItemPhoto = async (req: Request, res: Response): Promise<void
   try {
     const file = req.file;
     if (!file) {
-      res.status(400).json({ error: 'No file provided' });
+      res.status(400).json({ message: 'No file provided' });
       return;
     }
 
@@ -128,7 +127,7 @@ export const uploadItemPhoto = async (req: Request, res: Response): Promise<void
     res.json({ url: urls.original, imageVariants: urls });
   } catch (error) {
     console.error('uploadItemPhoto error:', error);
-    res.status(500).json({ error: 'Upload failed' });
+    res.status(500).json({ message: 'Upload failed' });
   }
 };
 
@@ -139,7 +138,7 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
   try {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
-      res.status(400).json({ error: 'No files provided' });
+      res.status(400).json({ message: 'No files provided' });
       return;
     }
 
@@ -201,7 +200,7 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
     res.json({ results: output });
   } catch (error) {
     console.error('rapidBatchUpload error:', error);
-    res.status(500).json({ error: 'Batch processing failed' });
+    res.status(500).json({ message: 'Batch processing failed' });
   }
 };
 
@@ -211,7 +210,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
   try {
     const file = req.file;
     if (!file) {
-      res.status(400).json({ error: 'No file provided' });
+      res.status(400).json({ message: 'No file provided' });
       return;
     }
 
@@ -254,19 +253,19 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
       const raw = response.data.response.replace(/```json\n?|\n?```/g, '').trim();
       parsed = JSON.parse(raw);
     } catch {
-      res.status(422).json({ error: 'AI returned unparseable response', raw: response.data.response });
+      res.status(422).json({ message: 'AI returned unparseable response', raw: response.data.response });
       return;
     }
 
     res.json(parsed);
   } catch (error: any) {
     if (error.code === 'ECONNREFUSED') {
-      res.status(503).json({ error: 'AI service unavailable' });
+      res.status(503).json({ message: 'AI service unavailable' });
     } else if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
-      res.status(504).json({ error: 'AI service timed out' });
+      res.status(504).json({ message: 'AI service timed out' });
     } else {
       console.error('analyzePhotoWithAI error:', error);
-      res.status(500).json({ error: 'Photo analysis failed' });
+      res.status(500).json({ message: 'Photo analysis failed' });
     }
   }
 };
@@ -278,7 +277,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
 export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user || req.user.role !== 'ORGANIZER') {
-      res.status(403).json({ error: 'Organizer access required' });
+      res.status(403).json({ message: 'Organizer access required' });
       return;
     }
 
@@ -286,12 +285,12 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     const file = req.file;
 
     if (!saleId) {
-      res.status(400).json({ error: 'saleId is required' });
+      res.status(400).json({ message: 'saleId is required' });
       return;
     }
 
     if (!file) {
-      res.status(400).json({ error: 'No image provided' });
+      res.status(400).json({ message: 'No image provided' });
       return;
     }
 
@@ -304,12 +303,12 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     });
 
     if (!sale) {
-      res.status(404).json({ error: 'Sale not found' });
+      res.status(404).json({ message: 'Sale not found' });
       return;
     }
 
     if (sale.organizer.userId !== req.user.id) {
-      res.status(403).json({ error: 'Not your sale' });
+      res.status(403).json({ message: 'Not your sale' });
       return;
     }
 
@@ -320,7 +319,7 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
       photoUrl = urls.original;
     } catch (uploadErr) {
       console.error('[rapidfire] Cloudinary upload failed:', uploadErr);
-      res.status(500).json({ error: 'Image upload failed' });
+      res.status(500).json({ message: 'Image upload failed' });
       return;
     }
 
@@ -351,6 +350,6 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     });
   } catch (error) {
     console.error('[rapidfire] uploadRapidfire error:', error);
-    res.status(500).json({ error: 'Upload failed' });
+    res.status(500).json({ message: 'Upload failed' });
   }
 };

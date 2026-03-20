@@ -50,12 +50,12 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
     const { imageUrls } = req.body;
 
     if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
-      res.status(400).json({ error: 'imageUrls must be a non-empty array' });
+      res.status(400).json({ message: 'imageUrls must be a non-empty array' });
       return;
     }
 
     if (imageUrls.length > 20) {
-      res.status(400).json({ error: 'Maximum 20 images allowed per batch' });
+      res.status(400).json({ message: 'Maximum 20 images allowed per batch' });
       return;
     }
 
@@ -192,6 +192,6 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
     });
   } catch (error) {
     console.error('batchAnalyzeImages error:', error);
-    res.status(500).json({ error: 'Batch analysis failed' });
+    res.status(500).json({ message: 'Batch analysis failed' });
   }
 };

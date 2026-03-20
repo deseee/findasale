@@ -22,7 +22,7 @@ export const createRipple = async (req: Request | AuthRequest, res: Response) =>
     const result = recordRippleSchema.safeParse(req.body);
 
     if (!result.success) {
-      return res.status(400).json({ error: 'Invalid request body', details: result.error.errors });
+      return res.status(400).json({ message: 'Invalid request body', details: result.error.errors });
     }
 
     const { type, metadata } = result.data;
@@ -33,7 +33,7 @@ export const createRipple = async (req: Request | AuthRequest, res: Response) =>
     res.status(201).json({ message: 'Ripple recorded', saleId, type });
   } catch (error) {
     console.error('Error recording ripple:', error);
-    res.status(500).json({ error: 'Failed to record ripple' });
+    res.status(500).json({ message: 'Failed to record ripple' });
   }
 };
 
@@ -51,7 +51,7 @@ export const getRippleSummaryHandler = async (req: Request, res: Response) => {
     res.json(summary);
   } catch (error) {
     console.error('Error getting ripple summary:', error);
-    res.status(500).json({ error: 'Failed to get ripple summary' });
+    res.status(500).json({ message: 'Failed to get ripple summary' });
   }
 };
 
@@ -69,7 +69,7 @@ export const getRippleTrendHandler = async (req: Request, res: Response) => {
     const trendHours = hours ? Math.min(parseInt(hours as string, 10), 720) : 24; // Max 30 days
 
     if (isNaN(trendHours) || trendHours < 1) {
-      return res.status(400).json({ error: 'Invalid hours parameter. Must be a positive number.' });
+      return res.status(400).json({ message: 'Invalid hours parameter. Must be a positive number.' });
     }
 
     const trend = await getRippleTrend(saleId, trendHours);
@@ -77,6 +77,6 @@ export const getRippleTrendHandler = async (req: Request, res: Response) => {
     res.json(trend);
   } catch (error) {
     console.error('Error getting ripple trend:', error);
-    res.status(500).json({ error: 'Failed to get ripple trend' });
+    res.status(500).json({ message: 'Failed to get ripple trend' });
   }
 };

@@ -18,6 +18,8 @@ import {
 } from '../controllers/itemController';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
+import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account age gate
+import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
@@ -702,7 +704,7 @@ router.get('/', getItemsBySaleId);
 router.post('/', authenticate, upload.array('images', 5), createItem);
 router.put('/:id', authenticate, updateItem);
 router.delete('/:id', authenticate, deleteItem);
-router.post('/:id/bid', authenticate, placeBid);
+router.post('/:id/bid', authenticate, bidRateLimiter, accountAgeGate, placeBid);
 router.post('/:id/analyze', authenticate, analyzeItemTags);
 
 // Phase 16: Photo management

@@ -8,7 +8,7 @@ export const getMyLootLog = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const page = parseInt(req.query.page as string) || 1;
@@ -60,7 +60,7 @@ export const getMyLootLog = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('getMyLootLog error:', error);
-    res.status(500).json({ error: 'Failed to fetch loot log' });
+    res.status(500).json({ message: 'Failed to fetch loot log' });
   }
 };
 
@@ -71,7 +71,7 @@ export const getLootLogStats = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     // Get all PAID purchases for this user
@@ -120,7 +120,7 @@ export const getLootLogStats = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('getLootLogStats error:', error);
-    res.status(500).json({ error: 'Failed to fetch loot log stats' });
+    res.status(500).json({ message: 'Failed to fetch loot log stats' });
   }
 };
 
@@ -133,7 +133,7 @@ export const getLootLogItem = async (req: Request, res: Response) => {
     const { purchaseId } = req.params;
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const purchase = await prisma.purchase.findUnique({
@@ -152,17 +152,17 @@ export const getLootLogItem = async (req: Request, res: Response) => {
     });
 
     if (!purchase) {
-      return res.status(404).json({ error: 'Purchase not found' });
+      return res.status(404).json({ message: 'Purchase not found' });
     }
 
     if (purchase.userId !== userId) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     res.json(purchase);
   } catch (error) {
     console.error('getLootLogItem error:', error);
-    res.status(500).json({ error: 'Failed to fetch purchase detail' });
+    res.status(500).json({ message: 'Failed to fetch purchase detail' });
   }
 };
 
@@ -186,7 +186,7 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'User profile not found' });
+      return res.status(404).json({ message: 'User profile not found' });
     }
 
     const [purchases, total] = await Promise.all([
@@ -245,6 +245,6 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('getPublicLootLog error:', error);
-    res.status(500).json({ error: 'Failed to fetch public loot log' });
+    res.status(500).json({ message: 'Failed to fetch public loot log' });
   }
 };

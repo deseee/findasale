@@ -789,17 +789,17 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
   };
 
   if (!title || typeof title !== 'string' || title.trim() === '') {
-    res.status(400).json({ error: 'title is required' });
+    res.status(400).json({ message: 'title is required' });
     return;
   }
 
   if (title.trim().length > 300) {
-    res.status(400).json({ error: 'title must be 300 characters or fewer' });
+    res.status(400).json({ message: 'title must be 300 characters or fewer' });
     return;
   }
 
   if (!isAnthropicAvailable()) {
-    res.status(503).json({ error: 'AI description service unavailable' });
+    res.status(503).json({ message: 'AI description service unavailable' });
     return;
   }
 
@@ -814,14 +814,14 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
     });
 
     if (!description) {
-      res.status(503).json({ error: 'AI description service unavailable' });
+      res.status(503).json({ message: 'AI description service unavailable' });
       return;
     }
 
     res.json({ description });
   } catch (error) {
     console.error('Error generating sale description:', error);
-    res.status(500).json({ error: 'Failed to generate description' });
+    res.status(500).json({ message: 'Failed to generate description' });
   }
 };
 

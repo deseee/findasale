@@ -11,11 +11,11 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
 
     if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({ error: 'AI service unavailable' });
+      return res.status(503).json({ message: 'AI service unavailable' });
     }
 
     if (!saleId || !platform) {
-      return res.status(400).json({ error: 'saleId and platform are required' });
+      return res.status(400).json({ message: 'saleId and platform are required' });
     }
 
     const sale = await prisma.sale.findFirst({
@@ -31,7 +31,7 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
     });
 
     if (!sale) {
-      return res.status(404).json({ error: 'Sale not found' });
+      return res.status(404).json({ message: 'Sale not found' });
     }
 
     const platformGuidelines: Record<string, string> = {
@@ -79,6 +79,6 @@ Write only the post text, no explanations.`;
     res.json({ post: postText, platform });
   } catch (error) {
     console.error('generateSocialPost error:', error);
-    res.status(500).json({ error: 'Failed to generate post' });
+    res.status(500).json({ message: 'Failed to generate post' });
   }
 };

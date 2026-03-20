@@ -118,7 +118,7 @@ export const discoverHubs = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error discovering hubs:', error);
-    res.status(500).json({ error: 'Failed to discover hubs' });
+    res.status(500).json({ message: 'Failed to discover hubs' });
   }
 };
 
@@ -145,7 +145,7 @@ export const getHub = async (req: Request, res: Response) => {
                 startDate: true,
                 endDate: true,
                 organizer: { select: { businessName: true } },
-                items: { select: { price: true } },
+                _count: { select: { items: true } },
               },
             },
           },
@@ -155,22 +155,19 @@ export const getHub = async (req: Request, res: Response) => {
     });
 
     if (!hub) {
-      return res.status(404).json({ error: 'Hub not found' });
+      return res.status(404).json({ message: 'Hub not found' });
     }
 
-    // Calculate price range
-    let minPrice = Infinity,
-      maxPrice = 0;
-    let totalItems = 0;
-    hub.memberships.forEach((m) => {
-      m.sale.items.forEach((item) => {
-        if (item.price) {
-          minPrice = Math.min(minPrice, item.price);
-          maxPrice = Math.max(maxPrice, item.price);
-        }
-      });
-      totalItems += m.sale.items.length;
+    // P2 #16: Fix N+1 by using aggregation for price range and count for item totals
+    const priceAgg = await prisma.item.aggregate({
+      where: { sale: { hubMemberships: { some: { hubId: hub.id } } } },
+      _min: { price: true },
+      _max: { price: true },
     });
+
+    const totalItems = hub.memberships.reduce((sum, m) => sum + m.sale._count.items, 0);
+    const minPrice = priceAgg._min.price ?? 0;
+    const maxPrice = priceAgg._max.price ?? 0;
 
     res.json({
       hub: {
@@ -200,13 +197,13 @@ export const getHub = async (req: Request, res: Response) => {
         stats: {
           totalItems,
           totalSales: hub.memberships.length,
-          priceRangeUSD: minPrice === Infinity ? [0, 0] : [minPrice, maxPrice],
+          priceRangeUSD: [minPrice, maxPrice],
         },
       },
     });
   } catch (error) {
     console.error('Error getting hub:', error);
-    res.status(500).json({ error: 'Failed to get hub' });
+    res.status(500).json({ message: 'Failed to get hub' });
   }
 };
 
@@ -215,7 +212,7 @@ export const getHub = async (req: Request, res: Response) => {
 export const createHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerId) {
-      return res.status(401).json({ error: 'Not authenticated as organizer' });
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const validated = createHubSchema.parse(req.body);
@@ -226,7 +223,7 @@ export const createHub = async (req: AuthRequest, res: Response) => {
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Slug already in use' });
+      return res.status(400).json({ message: 'Slug already in use' });
     }
 
     const hub = await prisma.saleHub.create({
@@ -239,10 +236,10 @@ export const createHub = async (req: AuthRequest, res: Response) => {
     res.json({ hubId: hub.id, slug: hub.slug });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ message: error.errors });
     }
     console.error('Error creating hub:', error);
-    res.status(500).json({ error: 'Failed to create hub' });
+    res.status(500).json({ message: 'Failed to create hub' });
   }
 };
 
@@ -251,7 +248,7 @@ export const createHub = async (req: AuthRequest, res: Response) => {
 export const updateHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerId) {
-      return res.status(401).json({ error: 'Not authenticated as organizer' });
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const { hubId } = req.params;
@@ -263,11 +260,11 @@ export const updateHub = async (req: AuthRequest, res: Response) => {
     });
 
     if (!hub) {
-      return res.status(404).json({ error: 'Hub not found' });
+      return res.status(404).json({ message: 'Hub not found' });
     }
 
     if (hub.organizerId !== req.user.organizerId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ message: 'Unauthorized' });
     }
 
     await prisma.saleHub.update({
@@ -278,10 +275,10 @@ export const updateHub = async (req: AuthRequest, res: Response) => {
     res.json({ updated: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ message: error.errors });
     }
     console.error('Error updating hub:', error);
-    res.status(500).json({ error: 'Failed to update hub' });
+    res.status(500).json({ message: 'Failed to update hub' });
   }
 };
 
@@ -290,7 +287,7 @@ export const updateHub = async (req: AuthRequest, res: Response) => {
 export const deleteHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerId) {
-      return res.status(401).json({ error: 'Not authenticated as organizer' });
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const { hubId } = req.params;
@@ -300,11 +297,11 @@ export const deleteHub = async (req: AuthRequest, res: Response) => {
     });
 
     if (!hub) {
-      return res.status(404).json({ error: 'Hub not found' });
+      return res.status(404).json({ message: 'Hub not found' });
     }
 
     if (hub.organizerId !== req.user.organizerId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ message: 'Unauthorized' });
     }
 
     await prisma.saleHub.update({
@@ -315,7 +312,7 @@ export const deleteHub = async (req: AuthRequest, res: Response) => {
     res.json({ deleted: true });
   } catch (error) {
     console.error('Error deleting hub:', error);
-    res.status(500).json({ error: 'Failed to delete hub' });
+    res.status(500).json({ message: 'Failed to delete hub' });
   }
 };
 
@@ -324,7 +321,7 @@ export const deleteHub = async (req: AuthRequest, res: Response) => {
 export const listMyHubs = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerId) {
-      return res.status(401).json({ error: 'Not authenticated as organizer' });
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const hubs = await prisma.saleHub.findMany({
@@ -346,7 +343,7 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error listing hubs:', error);
-    res.status(500).json({ error: 'Failed to list hubs' });
+    res.status(500).json({ message: 'Failed to list hubs' });
   }
 };
 
@@ -355,7 +352,7 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
 export const joinHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerId) {
-      return res.status(401).json({ error: 'Not authenticated as organizer' });
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const { hubId } = req.params;
@@ -367,7 +364,7 @@ export const joinHub = async (req: AuthRequest, res: Response) => {
     });
 
     if (!hub) {
-      return res.status(404).json({ error: 'Hub not found' });
+      return res.status(404).json({ message: 'Hub not found' });
     }
 
     // Verify all sales belong to current organizer
@@ -379,7 +376,7 @@ export const joinHub = async (req: AuthRequest, res: Response) => {
     });
 
     if (sales.length !== validated.saleIds.length) {
-      return res.status(400).json({ error: 'Not all sales belong to you' });
+      return res.status(400).json({ message: 'Not all sales belong to you' });
     }
 
     // Add memberships
@@ -406,10 +403,10 @@ export const joinHub = async (req: AuthRequest, res: Response) => {
     res.json({ added, skipped });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ message: error.errors });
     }
     console.error('Error joining hub:', error);
-    res.status(500).json({ error: 'Failed to join hub' });
+    res.status(500).json({ message: 'Failed to join hub' });
   }
 };
 
@@ -418,7 +415,7 @@ export const joinHub = async (req: AuthRequest, res: Response) => {
 export const leaveHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerId) {
-      return res.status(401).json({ error: 'Not authenticated as organizer' });
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const { hubId, saleId } = req.params;
@@ -429,7 +426,7 @@ export const leaveHub = async (req: AuthRequest, res: Response) => {
     });
 
     if (!sale || sale.organizerId !== req.user.organizerId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ message: 'Unauthorized' });
     }
 
     await prisma.saleHubMembership.delete({
@@ -441,7 +438,7 @@ export const leaveHub = async (req: AuthRequest, res: Response) => {
     res.json({ removed: true });
   } catch (error) {
     console.error('Error leaving hub:', error);
-    res.status(500).json({ error: 'Failed to leave hub' });
+    res.status(500).json({ message: 'Failed to leave hub' });
   }
 };
 
@@ -450,7 +447,7 @@ export const leaveHub = async (req: AuthRequest, res: Response) => {
 export const setHubEvent = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerId) {
-      return res.status(401).json({ error: 'Not authenticated as organizer' });
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const { hubId } = req.params;
@@ -462,11 +459,11 @@ export const setHubEvent = async (req: AuthRequest, res: Response) => {
     });
 
     if (!hub) {
-      return res.status(404).json({ error: 'Hub not found' });
+      return res.status(404).json({ message: 'Hub not found' });
     }
 
     if (hub.organizerId !== req.user.organizerId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      return res.status(403).json({ message: 'Unauthorized' });
     }
 
     const updated = await prisma.saleHub.update({
@@ -480,9 +477,9 @@ export const setHubEvent = async (req: AuthRequest, res: Response) => {
     res.json({ updated: true, saleDate: updated.saleDate, eventName: updated.eventName });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+      return res.status(400).json({ message: error.errors });
     }
     console.error('Error setting hub event:', error);
-    res.status(500).json({ error: 'Failed to set hub event' });
+    res.status(500).json({ message: 'Failed to set hub event' });
   }
 };

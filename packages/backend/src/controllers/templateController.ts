@@ -14,7 +14,7 @@ const DEFAULT_TEMPLATES = [
 export const getTemplates = async (req: AuthRequest, res: Response) => {
   try {
     const organizerId = req.user?.id;
-    if (!organizerId) return res.status(401).json({ error: 'Authentication required' });
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
 
     let templates = await prisma.messageTemplate.findMany({
       where: { organizerId },
@@ -35,17 +35,17 @@ export const getTemplates = async (req: AuthRequest, res: Response) => {
     res.json({ templates });
   } catch (error) {
     console.error('getTemplates error:', error);
-    res.status(500).json({ error: 'Failed to fetch templates' });
+    res.status(500).json({ message: 'Failed to fetch templates' });
   }
 };
 
 export const createTemplate = async (req: AuthRequest, res: Response) => {
   try {
     const organizerId = req.user?.id;
-    if (!organizerId) return res.status(401).json({ error: 'Authentication required' });
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
 
     const { title, body, category } = req.body;
-    if (!title || !body) return res.status(400).json({ error: 'title and body are required' });
+    if (!title || !body) return res.status(400).json({ message: 'title and body are required' });
 
     const template = await prisma.messageTemplate.create({
       data: { organizerId, title, body, category: category || 'general' },
@@ -54,14 +54,14 @@ export const createTemplate = async (req: AuthRequest, res: Response) => {
     res.status(201).json({ template });
   } catch (error) {
     console.error('createTemplate error:', error);
-    res.status(500).json({ error: 'Failed to create template' });
+    res.status(500).json({ message: 'Failed to create template' });
   }
 };
 
 export const updateTemplate = async (req: AuthRequest, res: Response) => {
   try {
     const organizerId = req.user?.id;
-    if (!organizerId) return res.status(401).json({ error: 'Authentication required' });
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
 
     const { id } = req.params;
     const { title, body, category } = req.body;
@@ -71,32 +71,32 @@ export const updateTemplate = async (req: AuthRequest, res: Response) => {
       data: { ...(title && { title }), ...(body && { body }), ...(category && { category }) },
     });
 
-    if (result.count === 0) return res.status(404).json({ error: 'Template not found' });
+    if (result.count === 0) return res.status(404).json({ message: 'Template not found' });
     res.json({ success: true });
   } catch (error) {
     console.error('updateTemplate error:', error);
-    res.status(500).json({ error: 'Failed to update template' });
+    res.status(500).json({ message: 'Failed to update template' });
   }
 };
 
 export const deleteTemplate = async (req: AuthRequest, res: Response) => {
   try {
     const organizerId = req.user?.id;
-    if (!organizerId) return res.status(401).json({ error: 'Authentication required' });
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
 
     const { id } = req.params;
     await prisma.messageTemplate.deleteMany({ where: { id, organizerId } });
     res.json({ success: true });
   } catch (error) {
     console.error('deleteTemplate error:', error);
-    res.status(500).json({ error: 'Failed to delete template' });
+    res.status(500).json({ message: 'Failed to delete template' });
   }
 };
 
 export const trackTemplateUse = async (req: AuthRequest, res: Response) => {
   try {
     const organizerId = req.user?.id;
-    if (!organizerId) return res.status(401).json({ error: 'Authentication required' });
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
 
     const { id } = req.params;
     await prisma.messageTemplate.updateMany({

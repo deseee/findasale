@@ -17,7 +17,7 @@ export const getOrganizerReputation = async (req: any, res: Response) => {
     res.json(reputation);
   } catch (error) {
     console.error('Error fetching organizer reputation:', error);
-    res.status(500).json({ error: 'Failed to fetch organizer reputation' });
+    res.status(500).json({ message: 'Failed to fetch organizer reputation' });
   }
 };
 
@@ -64,7 +64,7 @@ export const getSimpleReputation = async (req: any, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching simple reputation:', error);
-    res.status(500).json({ error: 'Failed to fetch organizer reputation' });
+    res.status(500).json({ message: 'Failed to fetch organizer reputation' });
   }
 };
 
@@ -111,6 +111,6 @@ export const recalculateReputation = async (req: AuthRequest, res: Response) => 
     });
   } catch (error) {
     console.error('Error recalculating reputation:', error);
-    res.status(500).json({ error: 'Failed to recalculate reputation' });
+    res.status(500).json({ message: 'Failed to recalculate reputation' });
   }
 };
