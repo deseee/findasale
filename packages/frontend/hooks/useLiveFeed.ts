@@ -65,8 +65,8 @@ export const useLiveFeed = (saleId: string): UseLiveFeedReturn => {
         setConnected(false);
       });
 
-      // Handle feed events
-      socketRef.current.on('FEED_EVENT', (event: any) => {
+      // Handle feed events — store reference for cleanup
+      const handleFeedEvent = (event: any) => {
         console.log('[useLiveFeed] Received event:', event);
         // Convert timestamp string to Date if needed
         const feedEvent: FeedEvent = {
@@ -75,7 +75,9 @@ export const useLiveFeed = (saleId: string): UseLiveFeedReturn => {
         };
         // Prepend to events array (newest first), keep max 20
         setEvents((prev) => [feedEvent, ...prev.slice(0, 19)]);
-      });
+      };
+
+      socketRef.current.on('FEED_EVENT', handleFeedEvent);
     } else if (socketRef.current.connected) {
       // Socket already connected, just join the feed
       socketRef.current.emit('JOIN_SALE_FEED', saleId);
@@ -83,10 +85,12 @@ export const useLiveFeed = (saleId: string): UseLiveFeedReturn => {
       setConnected(true);
     }
 
-    // Cleanup: leave feed on unmount
+    // Cleanup: leave feed and remove listeners on unmount
     return () => {
       if (socketRef.current) {
         socketRef.current.emit('LEAVE_SALE_FEED', saleId);
+        socketRef.current.off('FEED_EVENT');
+        socketRef.current.disconnect();
       }
     };
   }, [saleId]);

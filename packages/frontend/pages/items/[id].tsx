@@ -236,7 +236,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
       });
 
       newSocket.on('connect', () => {
-        newSocket!.emit('join-item', { itemId: id });
+        newSocket!.emit('join:item', id);
       });
 
       newSocket.on('bid-placed', (_data: unknown) => {
