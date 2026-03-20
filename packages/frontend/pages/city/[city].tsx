@@ -20,7 +20,7 @@ import SaleCard from '../../components/SaleCard';
 interface Sale {
   id: string;
   title: string;
-  description?: string;
+  description: string;
   city: string;
   state: string;
   zip: string;
@@ -30,7 +30,10 @@ interface Sale {
   photoUrls: string[];
   tags: string[];
   organizer: {
+    id: string;
     businessName: string;
+    reputationTier?: string;
+    reputationScore?: number;
     avgRating?: number;
   };
   _count?: {
