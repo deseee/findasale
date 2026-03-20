@@ -98,23 +98,18 @@ const ItemLibraryPage: React.FC = () => {
     }
   };
 
-  // Check authorization
-  if (!user || user.role !== 'ORGANIZER') {
-    return (
-      <Layout>
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">Please log in as an organizer to access the item library.</p>
-        </div>
-      </Layout>
-    );
-  }
-
   return (
     <>
       <Head>
         <title>Item Library | FindA.Sale</title>
       </Head>
       <Layout>
+        {/* Check authorization */}
+        {!user || user.role !== 'ORGANIZER' ? (
+          <div className="text-center py-12">
+            <p className="text-gray-600 dark:text-gray-400">Please log in as an organizer to access the item library.</p>
+          </div>
+        ) : (
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Item Library</h1>
@@ -246,6 +241,7 @@ const ItemLibraryPage: React.FC = () => {
             </div>
           )}
         </div>
+        )}
       </Layout>
     </>
   );
