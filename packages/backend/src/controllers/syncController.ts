@@ -91,22 +91,22 @@ export async function batchSync(req: AuthRequest, res: Response) {
         // Process operation by type
         if (operation.type === 'CREATE_ITEM') {
           const result = await handleCreateItem(operation, organizerId);
-          if (result.error) {
-            failed.push({ localId: operation.localId, ...result.error });
+          if (result.message) {
+            failed.push({ localId: operation.localId, ...result.message });
           } else {
             synced.push(result.data!);
           }
         } else if (operation.type === 'UPDATE_ITEM') {
           const result = await handleUpdateItem(operation);
-          if (result.error) {
-            failed.push({ localId: operation.localId, ...result.error });
+          if (result.message) {
+            failed.push({ localId: operation.localId, ...result.message });
           } else {
             synced.push(result.data!);
           }
         } else if (operation.type === 'DELETE_ITEM') {
           const result = await handleDeleteItem(operation);
-          if (result.error) {
-            failed.push({ localId: operation.localId, ...result.error });
+          if (result.message) {
+            failed.push({ localId: operation.localId, ...result.message });
           } else {
             synced.push(result.data!);
           }
