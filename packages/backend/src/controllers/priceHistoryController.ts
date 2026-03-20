@@ -12,6 +12,7 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
       where: { id },
       select: {
         saleId: true,
+        draftStatus: true,
         sale: { select: { status: true } }
       }
     });
@@ -22,6 +23,11 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
 
     // Return 404 if sale is not published (don't leak resource existence via 403)
     if (item.sale.status !== 'PUBLISHED') {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // P1-B: Return 404 if item itself is not published/visible
+    if (item.draftStatus && item.draftStatus !== 'PUBLISHED') {
       return res.status(404).json({ message: 'Item not found' });
     }
 

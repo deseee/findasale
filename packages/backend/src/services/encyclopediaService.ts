@@ -81,6 +81,15 @@ export const createEntry = async (
 };
 
 /**
+ * Get entry by ID (internal — used for ownership checks)
+ */
+export const getEntry = async (entryId: string): Promise<any> => {
+  return await prisma.encyclopediaEntry.findUnique({
+    where: { id: entryId }
+  });
+};
+
+/**
  * Get entry by slug with full details (published only for non-authors)
  */
 export const getEntryBySlug = async (
