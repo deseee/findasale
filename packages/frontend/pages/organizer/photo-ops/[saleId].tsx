@@ -91,10 +91,12 @@ const PhotoOpsPage: React.FC = () => {
     setShowForm(false);
   };
 
-  if (!isPro) {
-    return (
-      <Layout>
-        <div className="max-w-4xl mx-auto px-4 py-8">
+  if (!saleId) return null;
+
+  return (
+    <Layout>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {!isPro ? (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-amber-900 mb-2">Upgrade to PRO</h2>
             <p className="text-sm text-amber-800 mb-2">
@@ -110,17 +112,9 @@ const PhotoOpsPage: React.FC = () => {
               View Plans
             </a>
           </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!saleId) return null;
-
-  return (
-    <Layout>
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">Photo Op Stations</h1>
+        ) : (
+          <div>
+          <h1 className="text-3xl font-bold mb-8">Photo Op Stations</h1>
 
         {/* Add Station Button */}
         {!showForm && (
@@ -268,6 +262,8 @@ const PhotoOpsPage: React.FC = () => {
             ))
           )}
         </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
