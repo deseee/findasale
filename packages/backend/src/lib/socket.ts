@@ -1,5 +1,8 @@
 // V1: Socket.io singleton — initialized once in index.ts, shared across controllers
 import { Server, Socket } from 'socket.io';
+import { createClient } from 'redis';
+import { createAdapter } from '@socket.io/redis-adapter';
+import jwt from 'jsonwebtoken';
 
 let _io: Server | undefined;
 
@@ -17,7 +20,43 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
     transports: ['websocket', 'polling'],
   });
 
+  // Feature #70: Redis adapter for multi-instance deployment
+  // Graceful degradation: if Redis unavailable, continue without adapter (single-instance mode)
+  if (process.env.REDIS_URL) {
+    try {
+      const pubClient = createClient({ url: process.env.REDIS_URL });
+      const subClient = pubClient.duplicate();
+
+      Promise.all([pubClient.connect(), subClient.connect()])
+        .then(() => {
+          _io!.adapter(createAdapter(pubClient, subClient));
+          console.log('[socket] Redis adapter connected');
+        })
+        .catch((err) => {
+          console.warn('[socket] Redis connection failed — continuing without adapter:', err.message);
+        });
+    } catch (error) {
+      console.warn('[socket] Redis adapter initialization failed:', error);
+    }
+  } else {
+    console.log('[socket] REDIS_URL not set — running without adapter (single-instance mode)');
+  }
+
   _io.on('connection', (socket: Socket) => {
+    // Feature #70: JWT socket auth middleware — extract and verify token from handshake
+    // Unauthenticated connections allowed for public live feed viewing
+    const token = socket.handshake.auth.token as string | undefined;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+        socket.data.userId = decoded.id;
+        socket.data.role = decoded.role;
+      } catch (err) {
+        // Invalid/expired token — log silently, allow connection for public feed access
+        console.log('[socket] Invalid token on connection:', (err as any).message);
+      }
+    }
+    // socket.data.userId remains undefined if no valid token
     socket.on('join:item', (itemId: unknown) => {
       if (typeof itemId === 'string' && itemId.length > 0 && itemId.length < 128) {
         socket.join(`item:${itemId}`);
