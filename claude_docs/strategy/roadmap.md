@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-19 (v64 — Added pre-wire annotations to 9 deferred items: Canary Deploy, Audit Library, Affiliate Program, Consignment Integration, QuickBooks Integration, Estate Planning Toolkit, Multi-Language Support, API-First Toolkit, Agentic AI Scout. Pre-wire notes identify schema fields, config stubs, and framework installs that can be done before revisit triggers are met.)
+**Last Updated:** 2026-03-20 (v65 — Added 15 brand-spreading ideas from Innovation session: 4 BUILD NOW (S1) items in Backlog, 6 DEFER S2 + 2 DEFER S3 items in Deferred section, 3 REJECT items in Rejected section. Multi-platform social templates, QR auto-embedding, Nextdoor export, CSV inventory syndication, shopper/organizer referrals, community challenges, brand kit expansion, hall of fame, feature request form, print-to-QR kit, AI content generation, TikTok auto-gen; rejected: Instagram stickers, white-label B2B, watermark variants.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -287,6 +287,15 @@ Production MVP launched Q1 2026.
 
 ## Backlog — Prioritized
 
+### Brand Spreading & Viral Growth [S1 BUILD NOW]
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
+| 122 | Multi-Platform Social Templates Expansion | ORG | SIMPLE | — | — | — | — | — | — | — | Add TikTok, Pinterest, Nextdoor, Threads to existing social share templates. Platform-native copy + dimensions for each. Low complexity. |
+| 123 | QR Code Auto-Embedding in Exports | ORG | SIMPLE | — | ✅ | ✅ | — | — | — | — | Cloudinary overlay: embed FindA.Sale QR code in every watermarked photo export. Organizer toggle to disable per-item. Very low complexity. |
+| 124 | Nextdoor Export Template | ORG | SIMPLE | — | ✅ | ✅ | — | — | — | — | One-click export of sale to Nextdoor-formatted card (photos, location, time, event type). API if available; fallback = formatted copy-paste. Low complexity. |
+| 125 | Inventory Syndication CSV Export (eBay / Amazon / Facebook Marketplace) | ORG | PRO | — | ✅ | ✅ | — | — | — | — | Export inventory as pre-formatted listing packages (CSV first). Promise API integration in S2. Medium complexity. |
+
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
 | 72 | Dual-Role Account Schema | BOTH | SIMPLE | — | — | — | — | — | — | — | `roles[]` array + `subscriptions[]` table. Replaces any single `role` enum. Architect ADR required before dev. Gate for #73, #74, #75. |
@@ -385,6 +394,19 @@ Production MVP launched Q1 2026.
 | Video-to-inventory | ORG | TEAMS | Vision models can't reliably segment rooms yet | Late 2026+ |
 | AR Furniture Preview | SHO | TEAMS | Hardware not ready | Long-term R&D |
 
+### Brand Spreading & Viral Growth [S2-S3 DEFER]
+
+| Feature | Role | Tier | Reason | Revisit Trigger |
+|---------|------|------|--------|-----------------|
+| Shopper Referral + Affiliate Mechanics | SHO/ORG | FREE | Shoppers earn 5% store credit on referrals; organizers earn 2-3% override. Leaderboard + badges. Needs financial model clarity first. | After pricing + financial model validated |
+| Community Challenge / "Hunt Week" Viral Events | SHO | FREE | Weekly themed hunts with prizes, featured placement. Drives virality but needs organizer volume first. | After 50+ concurrent active sales |
+| Organizer Brand Kit Expansion | ORG | PRO | Custom fonts, branded email signature, printable business cards, letterhead, social headers, yard sign PDFs with QR codes. | After Brand Kit v1 proves user adoption |
+| Organizer Hall of Fame Leaderboard | ORG | SIMPLE | Top organizers by items sold/revenue/ratings. Monthly featured spotlight + badges. Community gamification. | After 100+ organizers + 6 months data |
+| Community "Feature Your Sale" Request Form | SHO | FREE | Shoppers nominate sales for featured homepage placement. Moderation queue. Low complexity. | After homepage design stabilizes |
+| Print-to-QR Sign Kit | ORG | SIMPLE | Downloadable PDF toolkit: yard signs, directional signs, table tents, hang tags, car magnets with QR codes. | When organizers request print collateral |
+| AI Content Generation for Organizers (S3) | ORG | PRO | Claude Haiku auto-writes 10 social post variants per sale. Organizer picks + posts. Defer until templates prove demand. | After Social Templates adoption tracked |
+| TikTok / Reels Auto-Generation (S3) | ORG | PRO | 15-second video from photos. Needs video generation, music licensing. Defer until social templates validate demand. | After Social Templates uptake proven |
+
 ### Advanced Organizer Features
 
 | Feature | Role | Tier | Reason | Revisit Trigger |
@@ -471,6 +493,16 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 ---
 
 ## Rejected by Board
+
+### Innovation Session — Brand Spreading [REJECT]
+
+| Idea | Role | Tier | Reason |
+|------|------|------|--------|
+| Shopper Instagram Sticker Sharing | SHO | FREE | Instagram API too restrictive. Revisit Q3 if partnership emerges. |
+| White-Label Resale Platform (B2B) | ORG | TEAMS | Too early. Revisit after 10+ paying organizers + $5K+ MRR proven. |
+| Marketplace Watermark Variants | ORG | SIMPLE | Too micro-tactical. Merge into Nextdoor export template work. |
+
+### Historical Rejections
 
 | Idea | Role | Tier | Reason |
 |------|------|------|--------|

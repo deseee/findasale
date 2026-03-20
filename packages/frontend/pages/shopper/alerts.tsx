@@ -105,7 +105,7 @@ function AlertsPage() {
           )}
 
           {alerts && alerts.length === 0 && !isLoading && (
-            <div className="rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 p-12 text-center">
+            <div className="rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-warm-100 p-12 text-center">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No alerts yet</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">Create your first wishlist alert to get notified when matching items appear</p>
               <button
@@ -120,7 +120,7 @@ function AlertsPage() {
           {alerts && alerts.length > 0 && (
             <div className="space-y-4">
               {alerts.map((alert) => (
-                <div key={alert.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <div key={alert.id} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{alert.name}</h3>
@@ -145,14 +145,14 @@ function AlertsPage() {
                     <div className="flex gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleEdit(alert)}
-                        className="px-3 py-1 rounded-lg text-sm text-[#8fb897] border border-[#8fb897] hover:bg-[#f0fdf4]"
+                        className="px-3 py-1 rounded-lg text-sm text-[#8fb897] border border-[#8fb897] hover:bg-[#f0fdf4] dark:hover:bg-gray-700"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(alert.id)}
                         disabled={deleteAlert.isPending}
-                        className="px-3 py-1 rounded-lg text-sm text-red-600 border border-red-300 hover:bg-red-50 dark:bg-red-900/20 disabled:opacity-50"
+                        className="px-3 py-1 rounded-lg text-sm text-red-600 dark:text-red-400 border border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/40 dark:bg-red-900/20 disabled:opacity-50"
                       >
                         {deleteAlert.isPending ? 'Deleting...' : 'Delete'}
                       </button>

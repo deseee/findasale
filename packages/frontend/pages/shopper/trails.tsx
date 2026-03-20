@@ -27,7 +27,7 @@ export default function MyTrailsPage() {
           <title>My Treasure Trails | FindA.Sale</title>
         </Head>
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold mb-8 text-slate-900 dark:text-white">My Treasure Trails</h1>
+          <h1 className="text-3xl font-bold mb-8 text-warm-900 dark:text-warm-100">My Treasure Trails</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[...Array(4)].map((_, i) => (
               <Skeleton key={i} className="h-32" />
@@ -50,7 +50,7 @@ export default function MyTrailsPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">My Treasure Trails</h1>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">My Treasure Trails</h1>
           <Link
             href="/shopper/trails/create"
             className="px-4 py-2 bg-sage-600 dark:bg-sage-500 text-white rounded-lg hover:bg-sage-700 dark:hover:bg-sage-600 transition font-semibold"
@@ -74,18 +74,18 @@ export default function MyTrailsPage() {
               <Link
                 key={trail.id}
                 href={`/shopper/trails/${trail.id}`}
-                className="p-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-lg dark:hover:shadow-lg dark:shadow-black/20 transition"
+                className="p-6 rounded-lg border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-lg dark:hover:shadow-lg dark:shadow-black/20 transition"
               >
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">
                   {trail.name}
                 </h3>
                 {trail.description && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
                     {trail.description}
                   </p>
                 )}
 
-                <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                <div className="space-y-2 text-sm text-warm-700 dark:text-warm-300">
                   <div className="flex justify-between">
                     <span>Stops:</span>
                     <span className="font-semibold">{trail.stops?.length || 0}</span>
@@ -106,7 +106,7 @@ export default function MyTrailsPage() {
                   )}
 
                   {trail.isCompleted && (
-                    <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-2 pt-2 border-t border-warm-200 dark:border-gray-700">
                       <span className="text-green-600 dark:text-green-400">✓</span>
                       <span className="font-semibold text-green-600 dark:text-green-400">Completed</span>
                     </div>
@@ -123,7 +123,7 @@ export default function MyTrailsPage() {
           </div>
         )}
 
-        <p className="text-center text-sm text-slate-600 dark:text-slate-400 mt-8">
+        <p className="text-center text-sm text-warm-600 dark:text-warm-400 mt-8">
           {totalCount} trail{totalCount !== 1 ? 's' : ''} total
         </p>
       </div>

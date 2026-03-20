@@ -123,7 +123,7 @@ const ShopperDisputesPage = () => {
               <button
                 onClick={() => { setFilterStatus(''); setCurrentPage(1); }}
                 className={`px-4 py-2 rounded-lg font-medium transition ${
-                  filterStatus === '' ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-600 hover:bg-warm-50 dark:hover:bg-gray-700'
+                  filterStatus === '' ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:bg-warm-50 dark:hover:bg-gray-700'
                 }`}
               >
                 All
@@ -133,7 +133,7 @@ const ShopperDisputesPage = () => {
                   key={status}
                   onClick={() => { setFilterStatus(status); setCurrentPage(1); }}
                   className={`px-4 py-2 rounded-lg font-medium transition ${
-                    filterStatus === status ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-600 hover:bg-warm-50 dark:hover:bg-gray-700'
+                    filterStatus === status ? 'bg-amber-600 text-white' : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:bg-warm-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   {getStatusLabel(status)}
@@ -156,33 +156,33 @@ const ShopperDisputesPage = () => {
                   <table className="w-full">
                     <thead className="bg-warm-100 dark:bg-gray-700 border-b border-warm-200 dark:border-gray-600">
                       <tr>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900 dark:text-gray-200">Date</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Item</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Reason</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Status</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900">Resolution</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Date</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Item</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Reason</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Status</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Resolution</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-warm-200">
+                    <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
                       {disputes.map((dispute) => (
-                        <tr key={dispute.id} className="hover:bg-warm-50 transition">
-                          <td className="px-6 py-4 text-sm text-warm-700">{formatDate(dispute.createdAt)}</td>
-                          <td className="px-6 py-4 text-sm text-warm-900 font-medium">
+                        <tr key={dispute.id} className="hover:bg-warm-50 dark:hover:bg-gray-700 transition">
+                          <td className="px-6 py-4 text-sm text-warm-700 dark:text-warm-300">{formatDate(dispute.createdAt)}</td>
+                          <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">
                             <Link href={`/item/${dispute.itemId}`} className="text-amber-600 hover:text-amber-700 underline">View Item</Link>
                           </td>
-                          <td className="px-6 py-4 text-sm text-warm-700">{getReasonLabel(dispute.reason)}</td>
+                          <td className="px-6 py-4 text-sm text-warm-700 dark:text-warm-300">{getReasonLabel(dispute.reason)}</td>
                           <td className="px-6 py-4">
                             <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadgeColor(dispute.status)}`}>
                               {getStatusLabel(dispute.status)}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-sm text-warm-600">
+                          <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                             {dispute.resolution ? (
                               <details>
                                 <summary className="cursor-pointer text-amber-600 hover:text-amber-700">View</summary>
-                                <p className="mt-2 text-warm-700 text-xs">{dispute.resolution}</p>
+                                <p className="mt-2 text-warm-700 dark:text-warm-300 text-xs">{dispute.resolution}</p>
                               </details>
-                            ) : <span className="text-warm-400">—</span>}
+                            ) : <span className="text-warm-400 dark:text-warm-500">—</span>}
                           </td>
                         </tr>
                       ))}
@@ -196,7 +196,7 @@ const ShopperDisputesPage = () => {
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-2 border border-warm-300 rounded-lg text-warm-700 font-medium hover:bg-warm-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
                     Previous
                   </button>
@@ -206,7 +206,7 @@ const ShopperDisputesPage = () => {
                         key={page}
                         onClick={() => setCurrentPage(page)}
                         className={`px-3 py-2 rounded-lg font-medium transition ${
-                          page === currentPage ? 'bg-amber-600 text-white' : 'border border-warm-300 text-warm-700 hover:bg-warm-50'
+                          page === currentPage ? 'bg-amber-600 text-white' : 'border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700'
                         }`}
                       >
                         {page}
@@ -216,7 +216,7 @@ const ShopperDisputesPage = () => {
                   <button
                     onClick={() => setCurrentPage(Math.min(pagination.pages, currentPage + 1))}
                     disabled={currentPage === pagination.pages}
-                    className="px-3 py-2 border border-warm-300 rounded-lg text-warm-700 font-medium hover:bg-warm-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
                     Next
                   </button>

@@ -2,6 +2,95 @@
 
 ## Recent Sessions
 
+### 2026-03-20 · Session 210
+
+**QA: Passkey #19 + Live Sale Feed #70 (parallel code review)**
+
+**#19 Passkey — READY TO DEPLOY ✅**
+- P0 race fix confirmed: per-request UUID challengeId correctly eliminates concurrent collision
+- Challenge TTL (5 min) + one-time use + cleanup interval all working
+- Rate limiting applied (10 req/15 min on all passkey endpoints)
+- Frontend: browser compat check, cancel/retry handling, loading states all correct
+- JWT payload matches password login format
+- Medium caveat: counter update has a narrow race window for concurrent logins with same key — acceptable, not blocking
+- No code changes needed. Clear to deploy.
+
+**#70 Live Sale Feed — BLOCKED ❌ (5 issues)**
+- P0: No Redis adapter — in-memory Socket.io fails with >1 Railway replica
+- P1 (security): No JWT auth in Socket.io handshake — any client can join any sale room
+- P1 (memory leak): `useLiveFeed` missing `socket.off()` and `socket.disconnect()` on unmount — listeners accumulate across navigation
+- P1 (CORS): `NEXT_PUBLIC_SOCKET_URL` not set in production env — falls back to localhost, breaks on Vercel
+- P1 (silent failure): Event name mismatch — frontend emits `join-item`, backend listens `join:item` — item page real-time updates never fire
+- P2: No server-side disconnect handler (logging/debug)
+- Estimated remediation: 5–8 hours (Redis setup, JWT auth, cleanup fixes, Railway config, env var)
+- **Action required:** Dispatch findasale-dev + findasale-ops for fixes before #70 can ship
+
+**Files changed this session:** None (QA/audit only)
+
+---
+
+### 2026-03-20 · Session 209
+
+**Dark Mode Completion Sweep — 16 Files**
+
+**Work Completed:**
+
+**Phase 1 — Audit:**
+Scanned 20 pages for dark mode coverage using Explore agent. Results:
+- ✅ Solid (10+ dark: classes): collector-passport, settings, profile, wishlists, challenges
+- 🟡 Gaps: map, search, feed, calendar, trending, leaderboard, notifications, alerts, holds, purchases, receipts, trails, disputes, surprise-me
+- 🔴 Critical: index.tsx (landing page — only 6 dark: classes)
+- SaleCard confirmed partial (11 dark: classes, gaps on container bg, content area, placeholder)
+
+**Phase 2 — Fixes (4 parallel dev agents, all TypeScript clean):**
+- **SaleCard.tsx**: Card container (bg-white + border), content area bg, placeholder bg + opacity, organizer row text-gray-700
+- **pages/index.tsx**: Landing page — badges (amber/blue), headings, counts, error/empty states
+- **pages/map.tsx**: Heatmap toggle + filter chip dark: states
+- **pages/search.tsx**: Category suggestion links, visual search labels, route planning CTA border, tab nav, no-results section
+- **pages/feed.tsx**: Login CTA, top nav description, error/empty states, "all caught up" section
+- **pages/calendar.tsx**: Sale event items (bg-amber-50 → dark:bg-amber-900/20), borders, text
+- **pages/trending.tsx**: Skeleton loaders (bg-white → dark:bg-gray-800)
+- **pages/leaderboard.tsx**: Gradient backgrounds, rank cards, badge backgrounds, footer note
+- **pages/notifications.tsx**: Filter buttons, notification card hover states
+- **pages/shopper/alerts.tsx**: Empty state card, alert items, Edit/Delete button dark states
+- **pages/shopper/holds.tsx**: No-holds card, price display, Release button
+- **pages/shopper/purchases.tsx**: Coupon card/code/button, purchase cards, status badges
+- **pages/shopper/receipts.tsx**: Tab buttons, status badges, return reason background
+- **pages/shopper/trails.tsx**: Full slate→warm palette migration + dark: coverage
+- **pages/shopper/disputes.tsx**: Filter buttons, table headers/rows, pagination
+- **pages/surprise-me.tsx**: Select focus, skeleton loaders, clear filters, item cards, photo section
+
+**QA Results:**
+- Zero TypeScript errors across all 16 modified files (verified per agent)
+- Dark mode coverage: 21+ pages now fully or substantially covered
+
+**Files Changed (S209) — add to S208 push block:**
+1. `packages/frontend/components/SaleCard.tsx`
+2. `packages/frontend/pages/index.tsx`
+3. `packages/frontend/pages/map.tsx`
+4. `packages/frontend/pages/search.tsx`
+5. `packages/frontend/pages/feed.tsx`
+6. `packages/frontend/pages/calendar.tsx`
+7. `packages/frontend/pages/trending.tsx`
+8. `packages/frontend/pages/leaderboard.tsx`
+9. `packages/frontend/pages/notifications.tsx`
+10. `packages/frontend/pages/shopper/alerts.tsx`
+11. `packages/frontend/pages/shopper/holds.tsx`
+12. `packages/frontend/pages/shopper/purchases.tsx`
+13. `packages/frontend/pages/shopper/receipts.tsx`
+14. `packages/frontend/pages/shopper/trails.tsx`
+15. `packages/frontend/pages/shopper/disputes.tsx`
+16. `packages/frontend/pages/surprise-me.tsx`
+
+**Outstanding / Not Done:**
+- Chrome MCP visual verification (MCP unavailable again — deferred to S210)
+- pages/shopper/collector-passport.tsx has inline hex colors (#8fb897 etc.) without dark: equivalents — low priority
+- #19 Passkey re-QA, #70 Live Sale Feed testing — not addressed this session
+
+**Next:** Patrick pushes S208+S209 combined block (33 files total — in STATE.md). S210: Chrome MCP verification if available; Passkey/Live Sale Feed QA.
+
+---
+
 ### 2026-03-20 · Session 208
 
 **Documentation Audit + Dark Mode Completion + Badge/UX Fixes**

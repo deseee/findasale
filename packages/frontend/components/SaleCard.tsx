@@ -87,7 +87,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const badge = getStatusBadge();
 
   return (
-    <div className="card overflow-hidden hover:shadow-card-hover transition-shadow flex flex-col dark:bg-gray-800 dark:border dark:border-gray-700">
+    <div className="card bg-white dark:bg-gray-800 overflow-hidden hover:shadow-card-hover dark:hover:shadow-lg transition-shadow flex flex-col border border-gray-200 dark:border-gray-700">
       {/* ── Image area (60% visual weight) — 1:1 square ── */}
       <Link href={`/sales/${sale.id}`} className="block relative aspect-square bg-warm-200 dark:bg-gray-700 overflow-hidden">
         {/* Tier 1: LQIP blurred background (loads instantly) */}
@@ -121,11 +121,11 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             loading="lazy"
           />
         ) : (!photoUrl || imgError) ? (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700">
             <img
               src="/images/placeholder.svg"
               alt=""
-              className="w-12 h-12 opacity-25"
+              className="w-12 h-12 opacity-25 dark:opacity-40"
               aria-hidden="true"
             />
           </div>
@@ -143,7 +143,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
       </Link>
 
       {/* ── Content area (40% visual weight) ── */}
-      <div className="flex flex-col flex-1 p-3">
+      <div className="flex flex-col flex-1 p-3 bg-white dark:bg-gray-800">
         <Link href={`/sales/${sale.id}`} className="flex-1">
           <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-1">
             {sale.title}
@@ -152,7 +152,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
           </p>
         </Link>
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2 text-gray-700 dark:text-gray-300">
           <div className="flex items-center gap-1 min-w-0 flex-wrap">
             <Link
               href={`/organizers/${sale.organizer.id}`}

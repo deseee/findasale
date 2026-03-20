@@ -7,6 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 209 COMPLETE (2026-03-20) — DARK MODE SWEEP (16 files):**
+- Audited 20 pages for dark mode gaps — 1 critical (index.tsx), 14 partial (🟡), 5 solid (✅)
+- Fixed SaleCard.tsx dark mode — card container bg, content area bg, placeholder icon opacity, organizer row
+- Fixed pages/index.tsx — landing page dark mode (badges, headings, counts, error/empty states)
+- Fixed pages/map.tsx, search.tsx, feed.tsx — public discovery pages
+- Fixed pages/calendar.tsx, trending.tsx, leaderboard.tsx, notifications.tsx — content pages
+- Fixed pages/shopper/alerts.tsx, holds.tsx, purchases.tsx, receipts.tsx, trails.tsx (+ slate→warm migration), disputes.tsx — shopper pages
+- Fixed pages/surprise-me.tsx — utility page
+- All TypeScript clean (zero errors across all 16 files). Staged for Patrick push (see block below).
+- Last Updated: 2026-03-20
+
 **Session 208 COMPLETE (2026-03-20) — DOCUMENTATION + AUDIT + CODE FIXES (DARK MODE + UX + NAV):**
 - Updated BUSINESS_PLAN.md to v2 (platform fee correction, Platform Safety section, Section 12 B2B/pipeline analysis)
 - Updated roadmap.md to v64 (pre-wire annotations on 9 deferred items)
@@ -30,17 +41,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Post-Beta:** Featured Placement $29.99/7d, AI Tagging Premium $4.99/mo (SIMPLE), Affiliate 2–3%, B2B Data Products (DEFERRED)
 - **Sources:** pricing-and-tiers-overview-2026-03-19.md (complete spec), BUSINESS_PLAN.md (updated), b2b-b2e-b2c-innovation-broad-2026-03-19.md (B2B/B2E/B2C strategy)
 
-**Pending Patrick push (Session 208 — ALL CHANGES):**
+**Pending Patrick push (S208 + S209 combined — ALL CHANGES):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/components/Layout.tsx
 git add packages/frontend/components/SaleCard.tsx
 git add "packages/frontend/pages/items/[id].tsx"
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/pages/map.tsx
+git add packages/frontend/pages/search.tsx
+git add packages/frontend/pages/feed.tsx
+git add packages/frontend/pages/calendar.tsx
+git add packages/frontend/pages/trending.tsx
+git add packages/frontend/pages/leaderboard.tsx
+git add packages/frontend/pages/notifications.tsx
+git add packages/frontend/pages/surprise-me.tsx
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add "packages/frontend/pages/organizer/flip-report/[saleId].tsx"
 git add "packages/frontend/pages/organizer/photo-ops/[saleId].tsx"
 git add "packages/frontend/pages/organizers/[id].tsx"
 git add packages/frontend/pages/shopper/favorites.tsx
+git add packages/frontend/pages/shopper/alerts.tsx
+git add packages/frontend/pages/shopper/holds.tsx
+git add packages/frontend/pages/shopper/purchases.tsx
+git add packages/frontend/pages/shopper/receipts.tsx
+git add packages/frontend/pages/shopper/trails.tsx
+git add packages/frontend/pages/shopper/disputes.tsx
 git add "packages/frontend/pages/shopper/loot-log/[purchaseId].tsx"
 git add "packages/frontend/pages/shopper/loot-log/public/[userId].tsx"
 git add packages/frontend/pages/shopper/loyalty.tsx
@@ -51,7 +77,7 @@ git add claude_docs/audits/chrome-audit-2026-03-20.md
 git add claude_docs/ux-spotchecks/nav-dashboard-consolidation-2026-03-20.md
 git add claude_docs/STATE.md
 git add claude_docs/session-log.md
-git commit -m "S208: dark mode (shopper nav/favorites/loyalty/SaleCard), badge fix, empty states, upsell copy, nav consolidation (5 items), dashboard mobile collapse"
+git commit -m "S208+S209: dark mode sweep (27 files) — shopper nav, 16 pages, SaleCard; badge fix; empty states; upsell copy; nav consolidation"
 .\push.ps1
 ```
 
@@ -63,13 +89,11 @@ git commit -m "S208: dark mode (shopper nav/favorites/loyalty/SaleCard), badge f
 
 ---
 
-**Next up (S209+) — DARK MODE COMPLETION + NAV DENSITY + DASHBOARD CONSOLIDATION:**
-- [ ] Chrome MCP visual verification (deferred — MCP unavailable this session)
-- [ ] Dark mode audit remaining pages (Explore, Map, search, etc. — not yet audited)
-- [ ] Nav density reduction (currently 17–24 items per nav; requires UX/architect decision)
-- [ ] Dashboard button consolidation (25 buttons → grouped actions; requires UX decision)
-- [ ] #19 Passkey re-QA — end-to-end after P0 race fix
-- [ ] #70 Live Sale Feed — needs live Socket.io testing
+**Next up (S211+):**
+- [ ] Chrome MCP visual verification of dark mode fixes (deferred — MCP unavailable S208–S210)
+- [ ] #19 Passkey — CLEAR TO DEPLOY ✅ (code review passed S210)
+- [ ] #70 Live Sale Feed — BLOCKED ❌ — dispatch findasale-dev to fix 5 issues (Redis adapter, JWT auth on socket, useLiveFeed cleanup, NEXT_PUBLIC_SOCKET_URL env, join-item→join:item event name)
+- [ ] Nav density + dashboard button review (S208 changes live after push — verify UX)
 
 ---
 

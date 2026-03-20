@@ -168,15 +168,15 @@ const CalendarPage = () => {
                     </h3>
                     <div className="space-y-2">
                       {daySales.map((sale) => (
-                        <div key={sale.id} className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div key={sale.id} className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/30 rounded-lg">
                           <Link
                             href={`/sales/${sale.id}`}
                             className="block hover:text-amber-700 transition"
                           >
-                            <p className="font-semibold text-amber-900 line-clamp-1">{sale.title}</p>
-                            <p className="text-sm text-amber-700">{sale.city}, {sale.state}</p>
+                            <p className="font-semibold text-amber-900 dark:text-amber-300 line-clamp-1">{sale.title}</p>
+                            <p className="text-sm text-amber-700 dark:text-amber-400">{sale.city}, {sale.state}</p>
                           </Link>
-                          <div className="mt-2 pt-2 border-t border-amber-200">
+                          <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-900/30">
                             <RemindMeButton saleId={sale.id} saleName={sale.title} />
                           </div>
                         </div>
@@ -224,10 +224,10 @@ const CalendarPage = () => {
                       </div>
                       <div className="space-y-1">
                         {daySales.slice(0, 1).map((sale) => (
-                          <div key={sale.id} className="bg-amber-50 rounded p-1.5 border border-amber-200">
+                          <div key={sale.id} className="bg-amber-50 dark:bg-amber-900/20 rounded p-1.5 border border-amber-200 dark:border-amber-900/30">
                             <Link
                               href={`/sales/${sale.id}`}
-                              className="block text-xs text-amber-900 hover:text-amber-700 transition font-medium line-clamp-1"
+                              className="block text-xs text-amber-900 dark:text-amber-300 hover:text-amber-700 transition font-medium line-clamp-1"
                               title={sale.title}
                             >
                               {sale.title}
@@ -238,7 +238,7 @@ const CalendarPage = () => {
                           </div>
                         ))}
                         {daySales.length > 1 && (
-                          <div className="text-xs text-amber-700 px-1.5 py-0.5 font-medium">
+                          <div className="text-xs text-amber-700 dark:text-amber-400 px-1.5 py-0.5 font-medium">
                             +{daySales.length - 1} more
                           </div>
                         )}
