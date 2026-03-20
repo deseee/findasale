@@ -859,27 +859,21 @@ export const getCities = async (req: Request, res: Response) => {
   try {
     const now = new Date();
 
-    const cityData = await prisma.sale.groupBy({
-      by: ['city'],
-      where: {
-        status: 'PUBLISHED',
-        endDate: { gte: now },
-      },
-      _count: {
-        _all: true
-      },
-      orderBy: [
-        { _count: { _all: 'desc' } },
-        { city: 'asc' }
-      ]
-    });
+    const cityData = await prisma.$queryRaw<{ city: string; count: bigint }[]>`
+      SELECT city, COUNT(*) as count
+      FROM "Sale"
+      WHERE status = 'PUBLISHED'
+        AND "endDate" >= ${now}
+        AND city IS NOT NULL
+        AND TRIM(city) != ''
+      GROUP BY city
+      ORDER BY count DESC, city ASC
+    `;
 
-    const response = cityData
-      .filter(item => item.city && item.city.trim() !== '')
-      .map(item => ({
-        city: item.city,
-        count: item._count._all
-      }));
+    const response = cityData.map(item => ({
+      city: item.city,
+      count: Number(item.count),
+    }));
 
     res.json(response);
   } catch (error: any) {
