@@ -87,6 +87,7 @@ import plannerRoutes from './routes/planner'; // Planning assistant chatbot
 import organizerDigestRoutes from './routes/organizerDigest'; // Organizer weekly digest manual trigger
 import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import adminRoutes from './routes/admin'; // Admin panel
+import devRoutes from './routes/dev'; // Dev utilities
 import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
 import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
 import pickupRoutes from './routes/pickup'; // Pickup Appointment Scheduling
@@ -307,6 +308,7 @@ app.use('/api/planner', plannerRoutes); // Planning assistant chatbot
 app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
 app.use('/api/admin', adminRoutes); // Admin panel
+app.use('/api/dev', devRoutes); // Dev utilities
 app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
 app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"
 app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling

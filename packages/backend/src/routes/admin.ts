@@ -9,6 +9,7 @@ import {
   getSales,
   deleteSale,
   getRecentActivity,
+  updateOrganizerTier,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -28,6 +29,7 @@ router.patch('/users/:userId/suspend', suspendUser);
 router.get('/sales', getSales);
 router.delete('/sales/:saleId', deleteSale);
 router.get('/activity', getRecentActivity);
+router.patch('/organizers/:organizerId/tier', updateOrganizerTier);
 
 // Beta invite management
 router.get('/invites', listInvites);

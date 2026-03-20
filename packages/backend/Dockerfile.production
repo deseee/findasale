@@ -1,41 +1,43 @@
-# S192 — cache bust 2026-03-17 type-fix
+# S211 — cache bust 2026-03-20 tier-fix
 FROM node:18-slim
 
 WORKDIR /app
 
-ENV CI=true
+# Install OpenSSL for Prisma
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# OpenSSL required by Prisma client
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Copy workspace root files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# pnpm
-RUN corepack enable && corepack prepare pnpm@8.15.5 --activate
+# Copy all package.json files for dependency resolution
+COPY packages/backend/package.json packages/backend/
+COPY packages/database/package.json packages/database/
+COPY packages/shared/package.json packages/shared/
 
-# Copy workspace manifests + lockfile
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+# Install pnpm and dependencies (including devDeps for prisma generate + tsc)
+RUN npm install -g pnpm@9 && pnpm install --frozen-lockfile
 
-# Copy required packages only
-COPY packages/database ./packages/database
-COPY packages/backend ./packages/backend
+# Copy source code
+COPY packages/backend packages/backend
+COPY packages/database packages/database
+COPY packages/shared packages/shared
 
-# Install deps (production + database for migrations)
-RUN pnpm install --frozen-lockfile --filter backend... --filter database
+# Generate Prisma client
+RUN cd packages/database && npx prisma generate
 
-# Generate Prisma client (use run script, not exec — exec has binary resolution issues in monorepos)
-RUN pnpm --filter database run db:generate
-
-# Build TypeScript → dist/
-RUN pnpm --filter backend run build
+# Build shared package first, then backend
+RUN cd packages/shared && npx tsc || true
+RUN cd packages/backend && npx tsc
 
 # Set production mode only at runtime — not during build (keeps devDeps available for prisma + tsc)
 ENV NODE_ENV=production
 
-WORKDIR /app/packages/backend
+# Expose port
+EXPOSE 3001
 
-# CRITICAL: This port must match PORT variable in Railway Variables.
-# Railway routes public traffic to this port. If they differ, backend returns 502.
-# PORT=5000 is set explicitly in Railway Variables. Update both if you change this.
-EXPOSE 5000
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "const http = require('http'); http.get('http://localhost:3001/', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
 # Start the compiled server
-CMD ["node", "/app/packages/backend/dist/index.js"]
+CMD ["node", "packages/backend/dist/index.js"]

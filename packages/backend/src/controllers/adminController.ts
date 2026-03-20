@@ -314,3 +314,38 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to fetch activity' });
   }
 };
+
+// PATCH /api/admin/organizers/:organizerId/tier — update organizer subscription tier
+export const updateOrganizerTier = async (req: AuthRequest, res: Response) => {
+  try {
+    const { organizerId } = req.params;
+    const { tier } = req.body;
+
+    // Validate tier value against enum
+    if (!['SIMPLE', 'PRO', 'TEAMS'].includes(tier)) {
+      return res.status(400).json({ message: 'Invalid subscription tier. Must be SIMPLE, PRO, or TEAMS.' });
+    }
+
+    // Update organizer tier and increment tokenVersion to invalidate stale JWTs
+    const updatedOrganizer = await prisma.organizer.update({
+      where: { id: organizerId },
+      data: {
+        subscriptionTier: tier,
+        tokenVersion: {
+          increment: 1,
+        },
+      },
+      select: {
+        id: true,
+        subscriptionTier: true,
+        tokenVersion: true,
+        businessName: true,
+      },
+    });
+
+    res.json(updatedOrganizer);
+  } catch (error) {
+    console.error('Error updating organizer tier:', error);
+    res.status(500).json({ message: 'Failed to update organizer tier' });
+  }
+};
