@@ -284,38 +284,61 @@ At the heart of FindA.Sale is a radical simplification: **photos are the primary
 - Lower memory footprint (important for older shoppers' phones)
 - Easier A/B testing (no approval cycle)
 
-### Pricing Model (Locked Decision)
+### Pricing Model (LOCKED — Session 207, Patrick approved)
 
-**Organizer-Paid Platform Fees:**
-- **All transactions:** 10% of sale amount
+**Organizer Platform Fees (Simple Binary Model):**
+- **SIMPLE tier (Free):** 10% of sale amount
+- **PRO tier ($29/month):** 8% of sale amount
+- **TEAMS tier ($79/month):** 8% of sale amount
 - **Listing fees:** $0
 - **Account maintenance:** $0
-- **Rationale:** Simple, transparent, organizer-aligned (we earn when they earn)
+- **Rationale:** "We earn when you earn" — simple binary (free=10%, subscriber=8%)
 
-**Example Cost Breakdown ($5,000 Sale):**
+**Overages (Beyond Tier Allocations):**
+- **SIMPLE:** $0.10/item beyond 200 items/sale
+- **PRO:** $0.05/item beyond 500 items/sale
+- **TEAMS:** $0.05/item beyond 2,000 items/sale (soft cap, negotiable)
+
+**Tier Limits (Capacity):**
+| Metric | SIMPLE | PRO | TEAMS |
+|--------|--------|-----|-------|
+| Items per sale | 200 included | 500 included | 2,000 included |
+| Photos per item | 5 | 10 | 15 |
+| Photos per month | 500 | 5,000 | 30,000 |
+| AI tags per month | 100 | 2,000 | Unlimited (soft cap 5,000) |
+| Concurrent active sales | 1–3 | Unlimited | Unlimited |
+
+**Shopper Monetization:**
+- **Buyer Premium on Auctions:** 5% on auction items ONLY (splits 95% organizer / 5% platform)
+- **Hunt Pass:** $4.99/30 days — PAUSED until 1,000+ DAU + 30% repeat rate
+- **Premium Shopper Tier:** DEFERRED to 2027 Q2
+
+**Example Cost Breakdown (PRO Organizer, $5,000 Sale):**
 | Component | Amount | Notes |
 |-----------|--------|-------|
 | Gross sale | $5,000 | Organizer receipts |
-| FindA.Sale fee (10%) | –$500 | Deducted at payout |
+| FindA.Sale fee (8%) | –$400 | PRO subscriber rate |
 | Stripe processing (2.9% + $0.30) | –$145 | Stripe's standard rate |
-| **Organizer net payout** | **$4,355** | Received within 24 hours |
+| Monthly PRO subscription | –$29 | (paid separately) |
+| **Organizer net payout** | **$4,600 + monthly benefit** | Received within 24 hours |
 
-**Post-Beta Subscription Tiers (Q2+ 2026, conditional on validation):**
+**Post-Beta Subscription Tiers (Q2+ 2026):**
 - **Simple (Free):** 10% fee, core features, basic analytics
-- **Pro ($29/month):** 10% fee, advanced analytics, inventory library, AI tools, voice-to-tag
-- **Teams ($79/month):** 10% fee, unlimited multi-user, team analytics, integrations
+- **Pro ($29/month or $290/year):** 8% fee, advanced analytics, inventory library, unlimited sales, batch operations, brand kit, exports
+- **Teams ($79/month or $790/year):** 8% fee, multi-user access, API, webhooks, white-label, priority support
 
-**Post-Beta Add-Ons:**
-- **AI Tagging Premium:** $0.05/item beyond 50 free tags per sale (cost to us: $0.01, margin: 80%)
-- **Featured Listing:** $50–100 per featured placement slot
-- **Bulk Discount:** 200+ items/month = $0.03/tag
+**Post-Beta Add-Ons (Deferred):**
+- **Featured Placement:** $29.99 per 7-day featured sale listing
+- **AI Tagging Premium:** $4.99/month for unlimited tags (SIMPLE-tier only; PRO/TEAMS bundled unlimited)
+- **Affiliate Commissions:** 2–3% on referred organizers
+- **B2B Data Products:** DEFERRED (see b2b-b2e-b2c-innovation-broad-2026-03-19.md)
 
-**Competitive Positioning:**
+**Competitive Positioning (Updated):**
 - EstateSales.NET: $99/sale + $2.95/item = 13–20% effective rate
 - MaxSold: 15–30% commission (managed service)
 - AuctionNinja: $19/month + $250 setup + 2% fee
 - DIY Auctions: 10% fee (auction-only, no organizer tools)
-- **FindA.Sale: 10% flat, zero upfront, best organizer tools + shopper discovery**
+- **FindA.Sale: 10%/8%/8% tiered, zero upfront, subscription optional, best organizer tools + shopper discovery**
 
 ---
 
@@ -643,25 +666,32 @@ Four categories of competitors, none controlling both organizer tools and shoppe
 
 ## 8. Financial Plan
 
-### Revenue Model
+### Revenue Model (LOCKED)
 
-**Primary Revenue: Platform Fees**
-- **Fixed-Price Sales:** 10% of gross transaction amount
-- **Auction Sales:** 10% of gross transaction amount
+**Primary Revenue: Tiered Platform Fees**
+- **SIMPLE tier (Free):** 10% of gross transaction amount
+- **PRO tier ($29/month):** 8% of gross transaction amount
+- **TEAMS tier ($79/month):** 8% of gross transaction amount
 - **Listing Fees:** $0
 - **Account Maintenance:** $0
+- **Auction Buyer Premium:** 5% on auction items ONLY
 
-**Formula:**
+**Formula (Blended, Assumes 30% Paid Tier Penetration):**
 ```
-Monthly Revenue = (All GMV × 0.10)
-Example: $100K monthly GMV × 10% = $10K monthly revenue to FindA.Sale
+Monthly Revenue = (GMV × 0.10 × 0.70) + (GMV × 0.08 × 0.30) + (Subscription Revenue)
+Example: $100K GMV with 30% PRO/TEAMS = ($100K × 0.097) + ($870/mo sub) = $10.67K
 ```
 
-**Post-Beta Revenue Streams (Q2+ 2026, Conditional):**
-1. **Subscription Tiers:** Simple (free), Pro ($29/month), Teams ($79/month) — all tiers 10% platform fee
-2. **AI Tagging Premium:** $0.05/item beyond 50 free tags/sale
-3. **Featured Placement:** $50–100 per featured sale slot
-4. **Affiliate Commissions:** 2–3% on referred organizers
+**Subscription Revenue (Annual):**
+- PRO: $29/month × 12 = $348/organizer/year
+- TEAMS: $79/month × 12 = $948/organizer/year
+- Example: 50 organizers (40 PRO + 10 TEAMS) = $16.9K annual subscription revenue
+
+**Post-Beta Revenue Streams (Q2+ 2026, Deferred Until Scale):**
+1. **Featured Placement:** $29.99 per 7-day featured sale (with transparency label)
+2. **AI Tagging Premium:** $4.99/month for unlimited tags (SIMPLE heavy users only)
+3. **Affiliate Commissions:** 2–3% on referred organizers
+4. **B2B Data Products:** Aggregated secondhand market intelligence, valuation API, trend reports (DEFERRED to 200+ organizers)
 
 ### Revenue Projections (Conservative)
 

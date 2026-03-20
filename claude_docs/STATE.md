@@ -7,29 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 206 COMPLETE (2026-03-19) — ROADMAP RESTORATION AUDIT:**
-- Restored Patrick's Checklist to roadmap.md (business formation, credentials, beta recruitment, pre-beta prep)
-- Moved automations + connectors to STATE.md (see Active Infrastructure below)
-- Confirmed all Agent Task Queue items done — section retired
-- Promoted 9 deferred items to backlog (#84–#92)
-- Roadmap now at v61
+**Session 207 COMPLETE (2026-03-19) — PRICING LOCK + B2B/B2E/B2C INNOVATION + ROADMAP V63:**
+- Locked all pricing decisions (10%/8%/8% tiered, 5% auction buyer premium, $29/$79 subscriptions, overages model)
+- Created pricing-and-tiers-overview-2026-03-19.md with full locked specifications
+- Updated BUSINESS_PLAN.md: pricing sections, revenue model, subscription tiers, post-beta add-ons
+- Added 15 B2B/B2E/B2C innovation items to roadmap Deferred section (require 200+ organizers)
+- Added tiered photo storage migration (#121) as P1 Platform Safety item
+- Roadmap now at v63 (from v62); total deferred innovations: 43 items
+- Updated session-log.md with Session 207 work summary
 
-**Pending Patrick pushes:**
+**Pricing Model (LOCKED — Session 207):**
+- **SIMPLE (Free):** 10% platform fee, 200 items/sale included, 5 photos/item, 100 AI tags/month
+- **PRO ($29/month or $290/year):** 8% platform fee, 500 items/sale, 10 photos/item, 2,000 AI tags/month, unlimited concurrent sales, batch operations, analytics, brand kit, exports
+- **TEAMS ($79/month or $790/year):** 8% platform fee, 2,000 items/sale, 15 photos/item, unlimited AI tags, multi-user access, API/webhooks, white-label, priority support
+- **Overages:** SIMPLE $0.10/item beyond 200; PRO $0.05/item beyond 500; TEAMS $0.05/item (soft cap)
+- **Shopper Monetization:** 5% buyer premium on auction items ONLY; Hunt Pass $4.99/mo (PAUSED); Premium Shopper (DEFERRED to 2027 Q2)
+- **Post-Beta:** Featured Placement $29.99/7d, AI Tagging Premium $4.99/mo (SIMPLE), Affiliate 2–3%, B2B Data Products (DEFERRED)
+- **Sources:** pricing-and-tiers-overview-2026-03-19.md (complete spec), BUSINESS_PLAN.md (updated), b2b-b2e-b2c-innovation-broad-2026-03-19.md (B2B/B2E/B2C strategy)
+
+**Pending Patrick pushes (Session 207):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/index.ts
-git commit -m "S205: register 13 dead backend routes"
+git add claude_docs/strategy/pricing-and-tiers-overview-2026-03-19.md claude_docs/strategy/BUSINESS_PLAN.md claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/session-log.md
+git commit -m "S207: lock pricing model, add B2B/B2E/B2C innovation roadmap items, tiered photo storage"
 .\push.ps1
-```
-```powershell
-git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/session-log.md claude_docs/next-session-prompt.md
-git commit -m "S206: restore Patrick checklist, promote 9 deferred to backlog, automations to STATE"
-.\push.ps1
-```
-
-**Also pending — delete 3 junk files:**
-```powershell
-Remove-Item claude_docs\operations\patrick-checklist.md, claude_docs\operations\automated-checks.md, claude_docs\operations\agent-task-queue.md
 ```
 
 **DB test accounts (Neon production — current):**

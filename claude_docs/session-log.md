@@ -2,6 +2,59 @@
 
 ## Recent Sessions
 
+### 2026-03-19 · Session 207
+
+**Pricing Lock + B2B/B2E/B2C Innovation + Records Wrap**
+
+**Work Completed (3 Phases):**
+
+**Phase 1 — Comprehensive Strategic Reviews:**
+- Full Pricing Model Review: 10%/8%/8% tiered structure, subscription fees, overages, buyer premium, post-beta streams
+- Advisory Board Competitive Analysis: EstateSales.NET (13–20% effective rate), MaxSold (15–30%), DIY Auctions (10% flat) — FindA.Sale positioned 10%/8%/8%
+- Customer Champion Voice Interview: Pain points (transparency, speed, support), pricing expectations ($20–$30 acceptable), feature priorities (batch operations, analytics)
+- Investor Financial Model Review: Unit economics, CAC/LTV ratios, 3-year projections, B2B data product opportunities
+- Anti-abuse system design: 7 attack vectors, 28 roadmap items (P0: 13, P1: 15)
+- Hidden risks & business gotchas: 15+ material risks (cost escalation, vendor lock-in, reputation, compliance)
+- Total cost of ownership (TCO) analysis: 13 services, 3 growth scenarios, 5 surprise bill risks
+
+**Phase 2 — Pricing Lock + Documentation:**
+- Created `/claude_docs/strategy/pricing-and-tiers-overview-2026-03-19.md` (complete spec, 200+ lines, all tiers, overages, post-beta streams)
+- Updated `/claude_docs/strategy/BUSINESS_PLAN.md`: Pricing Model section (10%/8%/8%, tier limits, overages), Revenue Model section (blended formula, subscription revenue, post-beta streams)
+- 11 strategy docs produced in S207: pricing overview, B2B/B2E/B2C broad innovation, B2B/B2E estate-focused, photo storage strategy, plus 7 analysis docs (pricing analysis, competitive intel, customer champion, investor feedback, anti-abuse, TCO, hidden risks)
+
+**Phase 3 — Roadmap & Records Update:**
+- Updated `/claude_docs/strategy/roadmap.md` v62 → v63: Added #121 Tiered Photo Storage (P1), added 15 B2B/B2E/B2C innovation items to Deferred section (require 200+ organizers)
+- Updated `/claude_docs/STATE.md`: Pricing model details, pending push instructions, next session context
+- Updated `/claude_docs/session-log.md` with this entry
+
+**Files Changed (S207):**
+1. `claude_docs/strategy/pricing-and-tiers-overview-2026-03-19.md` — CREATED (new pricing spec, LOCKED status)
+2. `claude_docs/strategy/BUSINESS_PLAN.md` — EDITED (pricing sections updated to reflect 10%/8%/8% model, buyer premium, overages, post-beta streams)
+3. `claude_docs/strategy/roadmap.md` — EDITED (v62→v63, added #121 tiered photo storage, added 15 B2B/B2E/B2C innovation items to Deferred section)
+4. `claude_docs/STATE.md` — EDITED (pricing model documented, pending pushes listed)
+5. `claude_docs/session-log.md` — EDITED (this entry)
+
+**Locked Pricing Decisions (Patrick Approved):**
+- ✅ SIMPLE: 10% fee, 200 items/sale, $0.10/item overage
+- ✅ PRO: $29/month, 8% fee, 500 items/sale, $0.05/item overage
+- ✅ TEAMS: $79/month, 8% fee, 2,000 items/sale, $0.05/item overage
+- ✅ Shopper 5% buyer premium (auction items only)
+- ✅ Hunt Pass $4.99/mo (paused until scale)
+- ✅ Featured Placement $29.99/7d (post-beta)
+- ✅ B2B/B2E/B2C data products deferred (200+ organizers trigger)
+- ✅ No Founding Organizer program (standard rates apply post-beta)
+
+**Key Achievements:**
+- All pricing model decisions locked (decision velocity: 6 major reviews → 1 locked model in S207)
+- 11 strategy docs produced (complete coverage: pricing, innovation, anti-abuse, TCO, risks, storage)
+- 15 B2B/B2E/B2C innovations added to roadmap (future revenue moats, 200+ organizer prerequisite)
+- Roadmap v63 complete (43 total deferred innovations across all categories)
+- STATE.md updated for next session context
+
+**Next:** Patrick approves pricing lock + roadmap v63. Dev dispatch for anti-abuse P0 batch (84h, 3–4 subagent rounds). Pricing announcement prep for beta organizers (60-day notice before beta end).
+
+---
+
 ### 2026-03-19 · Session 206
 
 **Roadmap Restoration Audit — Patrick's Checklist + Deferred Promotions**

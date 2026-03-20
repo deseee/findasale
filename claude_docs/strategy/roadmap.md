@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-19 (v61 — Restored Patrick's Checklist (business formation, credentials, beta recruitment, pre-beta prep). Moved automations + connectors to STATE.md. Promoted 9 deferred items (#84–#92) to backlog — revisit triggers met or Patrick override. Confirmed Agent Task Queue + Sync Points all resolved.)
+**Last Updated:** 2026-03-19 (v63 — Session 207 Wrap: Added B2B/B2E/B2C Innovation Deferred section (15 revenue-stream items requiring 200+ organizers), Tiered Photo Storage (P1 Platform Safety), and updated pricing model to 10%/8%/8% tiered with 5% auction buyer premium. Total deferred innovations: 43 items.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -314,6 +314,49 @@ Production MVP launched Q1 2026.
 
 ---
 
+## Platform Safety & Cost Control
+
+### Before Beta (P0)
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
+| 93 | Bidder Account Age Gate (7-day) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Prevents throwaway shill accounts; blocks bids <7 days post-signup. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+| 94 | Same-IP Bidder Detection | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags bids from accounts sharing organizer IP/device fingerprint; manual review queue. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+| 95 | Bidding Velocity Limits | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Rate-limits 10+ bids in <1 minute per account. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+| 96 | Buyer Premium Disclosure (4-Point Visibility) | PLATFORM | ALL | — | ✅ | ✅ | — | — | — | N/A | Checkout UI shows premium as separate line item; checkbox confirmation required before payment. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
+| 97 | Post-Purchase Confirmation Email (Premium Breakdown) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Itemized email sent within 1 hour of auction win; evidence record for chargebacks. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
+| 98 | Chargeback Defense Documentation | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Auto-capture checkout evidence, email delivery, acknowledgment; submit to Stripe on dispute. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
+| 99 | Export Rate Limiting (1/month) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | CSV/JSON exports limited to 1 per month per account; prevents data harvesting. See anti-abuse-system-design-2026-03-19.md §Vector 1 |
+| 100 | First-Month Refund Cap (50%) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Refunds capped at 50% if requested <30 days post-signup. See anti-abuse-system-design-2026-03-19.md §Vector 1 |
+| 101 | Email Verification (Unique per Organizer) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Hard gate: no multi-account signup with same email. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
+| 102 | Payment Method Deduplication | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Links organizer accounts sharing Stripe card/PayPal; suggests merge to Pro tier. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
+| 103 | Photo Retention Policy (90-day archive, 1-year delete) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Auto-archive after 90 days, delete after 1 year; reduces Cloudinary costs indefinitely. See total-cost-of-ownership-2026-03-19.md §Section 3 |
+| 104 | AI Cost Ceiling + Ollama Fallback | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Auto-switch to Ollama if Claude API cost exceeds monthly threshold. See total-cost-of-ownership-2026-03-19.md §Section 5 |
+| 105 | Cloudinary Bandwidth Monitoring + Alerts | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Alert when bandwidth exceeds threshold; prevents surprise overage bills. See total-cost-of-ownership-2026-03-19.md §Risk #1 |
+
+### Before Growth (P1)
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
+| 106 | Organizer Reputation Scoring System | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | 1-5 star score based on chargebacks, bid cancellations, returns; visible badge on sales. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+| 107 | Chargeback + Collusion Tracking | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags pattern of chargebacks + same-IP bidding; suspension after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+| 108 | Winning Bid Velocity Check (low vs. value) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags auctions with winning bid <10% of estimated value; holds payment 24h for review. See anti-abuse-system-design-2026-03-19.md §Vector 3 |
+| 109 | Off-Platform Transaction Detection (Post-Sale Monitoring) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | 30-day pattern detection: low-price sales with no activity flagged. See anti-abuse-system-design-2026-03-19.md §Vector 3 |
+| 110 | IP-Based Soft Linking (Multi-Account Detection) | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Suggests merge for accounts from same IP with >3 concurrent sales in <7 days. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
+| 111 | Bot/Scraper Rate Limiting on CDN | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Rate limits image endpoints; prevents bot harvesting via Cloudinary bandwidth spike. See total-cost-of-ownership-2026-03-19.md §Section 4 |
+| 112 | Database Record Archival Policy (Soft-Delete) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Quarterly soft-delete of old sales/items; reduces Neon compute bloat. See total-cost-of-ownership-2026-03-19.md §Section 3 |
+| 113 | Async AI Tagging Queue (Prevent Rate-Limit Spikes) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Background worker processes tags; prevents Claude API rate limiting during peak uploads. See total-cost-of-ownership-2026-03-19.md §Risk #4 |
+| 114 | Bid Cancellation Audit Trail | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Tracks bid cancellations; pattern flagged after 5+ cancellations + 3+ chargebacks. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+| 115 | Verified Purchase Badge on Reviews | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Only non-refunded past purchasers can leave reviews; prevents fake review spam. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
+| 116 | Review Timing Anomaly Detection | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags reviews <1 hour post-purchase or from same IP within 24 hours; manual moderation queue. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
+| 117 | Chargeback Response + Serial Buyer Account Suspension | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags buyers at 2+ chargebacks; suspends after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
+| 118 | Photo Compression at Upload (Reduce Storage Bloat) | PLATFORM | ALL | — | ✅ | ✅ | — | — | — | N/A | Auto-compress photos on-device; reject images <100×100px or >50MB. See anti-abuse-system-design-2026-03-19.md §Novel Vector C |
+| 119 | Aggregate Chargeback Monitoring (Stripe Health) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Tracks monthly chargeback rate; triggers pre-auth + payment hold if >0.8%, account escalation if >1%. See anti-abuse-system-design-2026-03-19.md §Novel Vector D |
+| 120 | Sale Cancellation Audit (Rapid Cancellation Detection) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags sales cancelled <2h post-publication with >100 holds; requires organizer explanation. See anti-abuse-system-design-2026-03-19.md §Novel Vector A |
+| 121 | Tiered Photo Storage Migration (Cloudinary → B2/Bunny) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Implements 3-tier strategy: Active (0–90d on Cloudinary), Warm (90d–2y on B2 + Bunny CDN), Cold (2y+ metadata-only). Saves ~70% storage cost; enables B2B analytics. See photo-storage-strategy-2026-03-19.md |
+
+---
+
 ## Deferred & Long-Term Hold
 
 ### Infrastructure & Platform
@@ -378,6 +421,28 @@ Production MVP launched Q1 2026.
 | AI Buying Agent Scout | SHO | PRO | Personal AI shopping agent. Learns taste, proactively watches sales, auto-notifies. Premium $9.99/mo. | After ML pipeline + personalization data |
 | Estate Planning Toolkit | ORG | TEAMS | Heir/executor liquidation assistant: inventory builder, appraisal integration, tax reporting. Upstream demand creation. | After core organizer features stable |
 | State of Estate Sales Report | ORG | PAID_ADDON | Monthly anonymized data report: pricing trends, category velocity, regional hotspots. B2B intelligence ($199/yr). | After 6+ months transaction data |
+
+### B2B/B2E/B2C Innovation Streams (Future Revenue Moats)
+
+Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonymized transaction data (pricing, categories, locations, inventory patterns) to be credible. See `claude_docs/strategy/b2b-b2e-b2c-innovation-broad-2026-03-19.md` (full analysis) and `claude_docs/strategy/b2b-b2e-innovation-2026-03-19.md` (estate-focused opportunities).
+
+| Feature | Role | Tier | Reason | Revisit Trigger |
+|---------|------|------|--------|-----------------|
+| Secondhand Market Intelligence Feed (B2B) | B2B | PAID_ADDON | Aggregated data: category pricing trends, regional inventory velocity, seasonal patterns. Target: antique dealers, resellers, retailers. $99–$499/mo. | After 200+ organizers + 12+ months data |
+| Home Contents Valuation API (B2B for Appraisers/Insurers) | B2B | PAID_ADDON | Real-transaction valuation models trained on FindA.Sale data (not appraisal comps). License API to estate appraisers, insurance companies, tax professionals. $499–$999/mo. | After 200+ organizers + 6+ months credible data |
+| Antiques Dealer Early Access Platform (B2B) | B2B | PAID_ADDON | Dedicated marketplace + curated feeds for professional dealers. First access to high-value estates. Target: antiquarians, gallery owners, auction houses. Premium subscription or commission on referrals. | After 200+ organizers + professional demand validation |
+| Valuation Engine API Licensing (B2B) | B2B | PAID_ADDON | White-label API for eBay, Shopify, and marketplace integrations. Real-time pricing suggestions powered by our dataset. Revenue: API fees + per-query pricing. | After API-First Toolkit ships — Q1 2027+ |
+| Flea Market Operator White-Label Platform (B2B) | B2B | TEAMS | White-label FindA.Sale for flea market operators (100+ vendors/weekend). Customizable vendor registration, booth lookup, item aggregation. Revenue: $1K–$5K/month per operator. | After core features stable + multi-organizer workflows proven |
+| Municipal Economic Intelligence (B2E) | B2E | PAID_ADDON | Sell anonymized estate sale data to city planners, economic development authorities. Insights: household wealth distribution, downsizing trends, real estate health signals. Target: City Planner Associations. $500–$2K/month. | After 200+ organizers across 10+ cities |
+| Moving Company Logistics Integration (B2B) | B2B | PAID_ADDON | White-label partnership + data feed. Help moving companies identify estate liquidation opportunities. Revenue: commission on referrals or subscription access. | After 500+ organizers |
+| Nonprofit Fundraising Suite (B2C) | B2C | PAID_ADDON | Turnkey platform for nonprofits to run rummage/silent auctions. FindA.Sale handles fulfillment; nonprofit gets 100% of proceeds. Revenue: 10% of non-profit GMV. | After core nonprofit features prove demand |
+| Consignment Shop Operations Suite (B2B) | B2B | TEAMS | Full SaaS for independent consignment shops (inventory, multi-vendor, POS, settlement). FindA.Sale becomes fulfillment + marketing layer. Revenue: $99–$199/month per shop. | After core organizer features stable + consignment demand validated |
+| Organizer Certification Program (B2C/B2B) | B2C | PAID_ADDON | Accredited training + badge program for professional estate organizers. Courses: valuation, pricing psychology, buyer psychology, legal compliance. Revenue: $99/course, lifetime access, badge marketplace. | After 1,000+ shoppers + 200+ organizers |
+| Shopper Behavior API (B2B) | B2B | PAID_ADDON | Anonymized behavioral data: search patterns, purchase intent, seasonal demand, demographic affinities. License to retailers, category managers, B2C marketplaces. $499–$999/mo. | After 10,000+ shoppers + 12+ months behavioral data |
+| Circular Economy Data Feed (B2E) | B2E | PAID_ADDON | ESG/sustainability data: avg item lifecycle cost, resale % by category, waste reduction metrics. Target: ESG consultants, corporate sustainability teams, nonprofits. $199–$499/mo. | After 300+ organizers + data cleanup |
+| Liquidation Insurance Product (B2B) | B2B | PAID_ADDON | Partner with specialty insurer: FindA.Sale users insure auction liquidations against underperformance. Revenue: 3–5% commission on policies written. | After 200+ organizers + claims data validated |
+| Estate Sale Futures Market (Speculative R&D) | B2B | TEAMS | Speculative — bundle future estate sales; institutional buyers bid on portfolios. High-risk, high-reward. Regulatory review required. Legal TBD. | Long-term R&D — post-2027 |
+| Full-Service Liquidation Platform (Speculative R&D) | ORG | TEAMS | Speculative — FindA.Sale hires liquidation coordinators; coordinates end-to-end estate liquidation for high-value estates. Revenue: 12–18% of GMV. Operational complexity TBD. | Long-term R&D — post-2027 |
 
 ### Gamification Research (Innovation Round 3)
 
