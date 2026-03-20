@@ -17,6 +17,7 @@ import {
   getSaleActivity,
   generateSaleDescriptionHandler,
   getSaleStatus,
+  getCities,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
@@ -29,6 +30,7 @@ const router = Router();
 // Public routes
 router.get('/', listSales);
 router.get('/search', searchSales);
+router.get('/cities', getCities); // Get cities with active sales counts
 router.get('/heatmap', getHeatmapHandler); // Feature #28: Neighborhood heatmap
 router.get('/neighborhood/:slug', getSalesByNeighborhood); // U2: SEO landing pages
 router.get('/city/:city', getSalesByCity); // Bug fix: City page route
