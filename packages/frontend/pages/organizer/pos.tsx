@@ -14,6 +14,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 
@@ -423,9 +424,13 @@ export default function POSPage() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4 md:p-6 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <>
+      <Head>
+        <title>Point of Sale | FindA.Sale</title>
+      </Head>
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4 md:p-6 max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 font-fraunces">POS</h1>
           <p className="text-sm text-warm-500 dark:text-warm-400">In-person payments</p>
@@ -825,6 +830,7 @@ export default function POSPage() {
           ← Back to Dashboard
         </a>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
