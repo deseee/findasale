@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import {
   BarChart,
   Bar,
@@ -125,8 +126,12 @@ export default function RipplesPage() {
   const selectedSale = salesWithRipples?.find((s) => s.saleId === selectedSaleId);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <>
+      <Head>
+        <title>Ripples | FindA.Sale</title>
+      </Head>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Sale Ripples Analytics</h1>
           <p className="text-gray-600 dark:text-gray-400">
@@ -267,8 +272,9 @@ export default function RipplesPage() {
             )}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

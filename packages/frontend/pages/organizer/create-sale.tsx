@@ -308,7 +308,7 @@ const CreateSalePage = () => {
             {/* Neighborhood — U2 (autocomplete input, replaces scrolling dropdown) */}
             <div>
               <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Neighborhood <span className="text-warm-400 font-normal">(optional \u2014 helps shoppers find you)</span>
+                Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
               </label>
               <input
                 id="neighborhood"
