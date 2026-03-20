@@ -98,9 +98,26 @@ export default function SubscriptionPage() {
         <div className="min-h-screen bg-white dark:bg-gray-800 p-8">
           <div className="max-w-2xl mx-auto">
             <h1 className="font-fraunces text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">Subscription Settings</h1>
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-              <p className="text-red-900">Failed to load subscription information</p>
-            </div>
+
+            {/* SIMPLE tier users: show friendly message */}
+            {tier === 'SIMPLE' ? (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+                <h2 className="font-semibold text-blue-900 mb-3">You're on the Free Plan</h2>
+                <p className="text-blue-800 mb-4">
+                  Upgrade to PRO to unlock batch operations, analytics, exports, and more.
+                </p>
+                <Link href="/organizer/upgrade" className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition">
+                  Upgrade to PRO
+                </Link>
+              </div>
+            ) : (
+              /* PRO/TEAMS users: show support message if subscription failed to load */
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
+                <p className="text-amber-900">
+                  Subscription managed externally or not yet configured. Contact support@finda.sale if you need help.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </>
