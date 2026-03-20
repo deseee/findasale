@@ -88,13 +88,14 @@ export default function LootLogPage() {
           {/* Gallery Grid */}
           {isEmpty ? (
             <div className="text-center py-24">
-              <p className="text-2xl font-semibold text-slate-700 dark:text-gray-300 mb-4">No treasures found yet</p>
-              <p className="text-slate-600 dark:text-gray-400 mb-8">Start attending sales and making purchases to build your loot log!</p>
+              <p className="text-4xl mb-4">🏺</p>
+              <p className="text-2xl font-semibold text-slate-700 dark:text-gray-300 mb-2">Your loot log is empty</p>
+              <p className="text-slate-600 dark:text-gray-400 mb-8">Make your first purchase at an estate sale to start building your collection history.</p>
               <Link
-                href="/sales"
-                className="px-6 py-3 bg-[#8FB897] text-white rounded-lg hover:bg-opacity-90 transition inline-block"
+                href="/"
+                className="px-6 py-3 bg-[#8FB897] text-white rounded-lg hover:bg-opacity-90 transition inline-block font-semibold"
               >
-                Browse Sales
+                Find a Sale Near You
               </Link>
             </div>
           ) : (

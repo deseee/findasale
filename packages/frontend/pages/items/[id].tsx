@@ -627,6 +627,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
         <CheckoutModal
           itemId={item.id}
           itemTitle={item.title}
+          listingType={item.listingType}
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={() => {
             setShowCheckoutModal(false);

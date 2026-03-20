@@ -20,21 +20,24 @@ interface PaymentFormProps {
   saleName?: string;
   saleAddress?: string;
   saleDates?: string;
+  buyerPremium?: number;  // 5% buyer premium for auction items
+  isAuction?: boolean;    // true if item is an auction
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, isAuction = false, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tosAgreed, setTosAgreed] = useState(false);
+  const [buyerPremiumAgreed, setBuyerPremiumAgreed] = useState(!isAuction); // auto-agree if not auction
   const [paymentSucceeded, setPaymentSucceeded] = useState(false);
 
   // itemPrice is already post-discount (server returns finalPriceCents/100)
-  // total = discounted item price + platform fee
-  const total = itemPrice + platformFee;
+  // total = discounted item price + platform fee + buyer premium
+  const total = itemPrice + platformFee + buyerPremium;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +163,12 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             <span>−${discountApplied.toFixed(2)}</span>
           </div>
         )}
+        {buyerPremium > 0 && (
+          <div className="flex justify-between text-warm-600">
+            <span>Buyer Premium (5%)</span>
+            <span>${buyerPremium.toFixed(2)}</span>
+          </div>
+        )}
         <div className="flex justify-between font-bold text-warm-900 border-t border-warm-300 pt-2 mt-2">
           <span>Total Due</span>
           <span>${total.toFixed(2)}</span>
@@ -185,6 +194,22 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             Try Again
           </button>
         </div>
+      )}
+
+      {/* Buyer Premium consent (auction items only) */}
+      {isAuction && buyerPremium > 0 && (
+        <label className="flex items-start gap-2 mb-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={buyerPremiumAgreed}
+            onChange={(e) => setBuyerPremiumAgreed(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-warm-300 accent-amber-600"
+            aria-required="true"
+          />
+          <span className="text-xs text-warm-600 leading-relaxed">
+            I understand a 5% buyer premium applies to auction purchases.
+          </span>
+        </label>
       )}
 
       {/* ToS consent */}
@@ -224,7 +249,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         </button>
         <button
           type="submit"
-          disabled={!stripe || !elements || isSubmitting || !tosAgreed}
+          disabled={!stripe || !elements || isSubmitting || !tosAgreed || !buyerPremiumAgreed}
           className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Processing...' : `Pay $${total.toFixed(2)}`}
@@ -240,16 +265,18 @@ interface CheckoutModalProps {
   itemId?: string;
   purchaseId?: string;
   itemTitle: string;
+  listingType?: string;   // AUCTION, FIXED, etc. (for buyer premium disclosure)
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: CheckoutModalProps) => {
+const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, onSuccess }: CheckoutModalProps) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [itemPrice, setItemPrice] = useState(0);
   const [originalAmount, setOriginalAmount] = useState<number | undefined>(undefined);
   const [platformFee, setPlatformFee] = useState(0);
   const [discountApplied, setDiscountApplied] = useState(0);
+  const [buyerPremium, setBuyerPremium] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [resolvedTitle, setResolvedTitle] = useState(itemTitle);
   const [saleName, setSaleName] = useState<string>('');
@@ -294,6 +321,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
         setClientSecret(data.clientSecret);
         setItemPrice(data.totalAmount);
         setPlatformFee(data.platformFee);
+        if (data.buyerPremium) setBuyerPremium(data.buyerPremium);
         if (data.saleName) setSaleName(data.saleName);
         if (data.saleAddress) setSaleAddress(data.saleAddress);
         if (data.saleDates) setSaleDates(data.saleDates);
@@ -397,6 +425,8 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, onClose, onSuccess }: Ch
                   originalAmount={originalAmount}
                   platformFee={platformFee}
                   discountApplied={discountApplied}
+                  buyerPremium={buyerPremium}
+                  isAuction={listingType === 'AUCTION'}
                   saleName={saleName}
                   saleAddress={saleAddress}
                   saleDates={saleDates}

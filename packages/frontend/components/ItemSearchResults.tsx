@@ -141,9 +141,20 @@ const ItemSearchResults: React.FC<ItemSearchResultsProps> = ({
       <div className="text-center py-16">
         <p className="text-3xl mb-3">🔍</p>
         <p className="text-warm-800 font-semibold mb-1">
-          {query ? `No items found for "${query}"` : 'No items found'}
+          {query ? `We couldn't find "${query}"` : 'No items match your search'}
         </p>
-        <p className="text-warm-500 text-sm mb-2">Try adjusting your filters or searching with different keywords.</p>
+        <p className="text-warm-500 text-sm mb-4">
+          {query ? 'Try different keywords or browse nearby sales for hidden gems.' : 'Start browsing estate sales to discover unique finds.'}
+        </p>
+        <button
+          onClick={() => {
+            // Navigate to browse page — would need router context
+            window.location.href = '/';
+          }}
+          className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
+        >
+          Browse All Sales
+        </button>
       </div>
     );
   }

@@ -19,6 +19,7 @@ import Link from 'next/link';
 import PickupSlotManager from '../../../components/PickupSlotManager';
 import EntrancePinPicker from '../../../components/EntrancePinPicker'; // Feature 35: Front Door Locator
 import Skeleton from '../../../components/Skeleton';
+import PublishCelebration from '../../../components/PublishCelebration';
 
 const EditSalePage = () => {
   const router = useRouter();
@@ -29,6 +30,7 @@ const EditSalePage = () => {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [entrancePinTooFar, setEntrancePinTooFar] = useState(false);
+  const [showPublishCelebration, setShowPublishCelebration] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -159,18 +161,29 @@ const EditSalePage = () => {
       }
 
       await api.patch(`/sales/${id}/status`, { status: newStatus });
-      showToast(
-        newStatus === 'PUBLISHED' ? 'Sale is now live!' : 'Sale is now hidden',
-        'success'
-      );
-      // Refetch the sale data
-      await new Promise(resolve => setTimeout(resolve, 500));
-      router.push(`/organizer/edit-sale/${id}`);
+
+      // Show celebration only when publishing (transitioning to PUBLISHED)
+      if (newStatus === 'PUBLISHED') {
+        setShowPublishCelebration(true);
+      } else {
+        showToast('Sale is now hidden', 'success');
+        // Refetch the sale data
+        await new Promise(resolve => setTimeout(resolve, 500));
+        router.push(`/organizer/edit-sale/${id}`);
+      }
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
     } finally {
       setIsTogglingStatus(false);
     }
+  };
+
+  const handlePublishCelebrationClose = () => {
+    setShowPublishCelebration(false);
+    // Refetch and redirect after celebration
+    setTimeout(() => {
+      router.push(`/organizer/edit-sale/${id}`);
+    }, 300);
   };
 
   if (authLoading || isLoading) {
@@ -195,6 +208,15 @@ const EditSalePage = () => {
       <Head>
         <title>Edit Sale - FindA.Sale</title>
       </Head>
+
+      <PublishCelebration
+        isOpen={showPublishCelebration}
+        saleName={sale?.title || ''}
+        saleId={String(id) || ''}
+        salePhotoUrl={sale?.photoUrls?.[0] || null}
+        onClose={handlePublishCelebrationClose}
+      />
+
       <div className="min-h-screen bg-white dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">

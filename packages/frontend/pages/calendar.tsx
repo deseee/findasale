@@ -153,13 +153,19 @@ const CalendarPage = () => {
             </div>
           ) : isError || !sales || sales.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-warm-600 dark:text-gray-400">No sales found. Try adjusting your dates.</p>
+              <p className="text-3xl mb-3">📅</p>
+              <p className="text-warm-700 dark:text-gray-300 font-semibold mb-2">No estate sales scheduled for these dates</p>
+              <p className="text-warm-600 dark:text-gray-400 text-sm">Estate sales typically happen on weekends. Check back closer to the weekend or browse all sales by location.</p>
             </div>
           ) : isMobile ? (
             // Mobile: Vertical list grouped by date
             <div className="space-y-4">
               {mobileListDays.length === 0 ? (
-                <p className="text-center text-warm-600 dark:text-gray-400 py-6">No sales this month</p>
+                <div className="text-center py-6">
+                  <p className="text-3xl mb-3">📅</p>
+                  <p className="text-warm-700 dark:text-gray-300 font-semibold">No sales this month</p>
+                  <p className="text-warm-600 dark:text-gray-400 text-sm mt-1">Browse previous or upcoming months to find estate sales.</p>
+                </div>
               ) : (
                 mobileListDays.map(({ date, sales: daySales }) => (
                   <div key={format(date, 'yyyy-MM-dd')} className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 dark:bg-gray-800">

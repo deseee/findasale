@@ -195,8 +195,8 @@ const AdminUsers = () => {
           </div>
 
           {users.length === 0 && (
-            <div className="text-center py-8 text-warm-500 dark:text-warm-400">
-              No users found
+            <div className="text-center py-8">
+              <p className="text-warm-600 dark:text-gray-400">No users match your search or filters.</p>
             </div>
           )}
         </div>

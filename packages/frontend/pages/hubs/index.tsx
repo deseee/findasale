@@ -102,7 +102,9 @@ export default function HubsPage() {
             </div>
           ) : !data?.hubs.length ? (
             <div className="text-center py-12">
-              <p className="text-gray-600 dark:text-gray-400 text-lg">No hubs found in your area. Try increasing the search radius.</p>
+              <p className="text-3xl mb-3">🏘️</p>
+              <p className="text-gray-700 dark:text-gray-300 font-semibold mb-2">No organizer hubs near you yet</p>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">Try increasing your search radius or browse individual sales in your area.</p>
             </div>
           ) : (
             <>

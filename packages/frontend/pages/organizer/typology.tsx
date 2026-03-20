@@ -339,8 +339,10 @@ const TypologyPage = () => {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="text-center py-16 text-warm-400 dark:text-gray-500">
-            <p className="text-sm">No items found in this sale.</p>
+          <div className="text-center py-16">
+            <p className="text-3xl mb-3">📦</p>
+            <p className="text-warm-700 dark:text-gray-400 font-semibold mb-2">No items in this sale yet</p>
+            <p className="text-warm-500 dark:text-gray-500 text-sm">Add items to your inventory to start building this sale's catalog.</p>
           </div>
         ) : (
           <div className="space-y-3">
