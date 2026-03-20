@@ -31,6 +31,7 @@ import OrganizerReputation from '../../components/OrganizerReputation'; // #71: 
 import VerifiedBadge from '../../components/VerifiedBadge'; // Feature #16
 import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
 import { RippleIndicator } from '../../components/RippleIndicator'; // Feature #51: Sale Ripples
+import { LiveFeedTicker } from '../../components/LiveFeedTicker'; // Feature #70: Live Activity Ticker
 
 interface Sale {
   id: string;
@@ -515,6 +516,11 @@ const SaleDetailPage = () => {
 
             {/* Live Activity Feed */}
             <ActivityFeed saleId={sale.id} />
+
+            {/* Feature #70: Live Feed Ticker — real-time sale events (SOLD, HOLD, PRICE_DROP) */}
+            <div className="mb-8">
+              <LiveFeedTicker saleId={sale.id} />
+            </div>
 
             {/* Pickup Scheduling */}
             {user && <PickupBookingCard saleId={sale.id} />}
