@@ -3,11 +3,10 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
-import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
 import UsageBar from '../../components/UsageBar';
 
 interface Subscription {
-  tier: 'SIMPLE' | 'PRO' | 'TEAMS';
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -121,7 +120,7 @@ export default function SubscriptionPage() {
           <h1 className="font-fraunces text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">Subscription Settings</h1>
 
           {/* SIMPLE Plan Message */}
-          {subscription.tier === 'SIMPLE' && (
+          {tier === 'SIMPLE' && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
               <h2 className="font-semibold text-blue-900 mb-3">You're on the Free Plan</h2>
               <p className="text-blue-800 mb-4">
@@ -134,7 +133,7 @@ export default function SubscriptionPage() {
           )}
 
           {/* PRO/TEAMS Plan Details */}
-          {(subscription.tier === 'PRO' || subscription.tier === 'TEAMS') && (
+          {(tier === 'PRO' || tier === 'TEAMS') && (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
               {/* Current Plan Section */}
               <div className="p-8 border-b border-gray-200 dark:border-gray-700">
@@ -143,7 +142,7 @@ export default function SubscriptionPage() {
                 <div className="grid grid-cols-2 gap-6 mb-8">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Plan</p>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{subscription.tier}</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{tier}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Billing Interval</p>
@@ -200,7 +199,7 @@ export default function SubscriptionPage() {
               </div>
 
               {/* Usage Stats Section */}
-              {(subscription.tier === 'PRO' || subscription.tier === 'TEAMS') && (
+              {(tier === 'PRO' || tier === 'TEAMS') && (
                 <div className="p-8 border-t border-gray-200 dark:border-gray-700">
                   <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Usage Overview</h3>
 
@@ -210,12 +209,12 @@ export default function SubscriptionPage() {
                       <UsageBar
                         label="Items per Sale Limit"
                         current={0}
-                        limit={subscription.tier === 'PRO' ? 500 : 9999}
+                        limit={tier === 'PRO' ? 500 : 9999}
                         unit="items"
                         showPercent={false}
                       />
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        {subscription.tier === 'PRO'
+                        {tier === 'PRO'
                           ? 'PRO: 500 items per sale'
                           : 'TEAMS: Unlimited items per sale'}
                       </p>
@@ -226,12 +225,12 @@ export default function SubscriptionPage() {
                       <UsageBar
                         label="Photos per Item Limit"
                         current={0}
-                        limit={subscription.tier === 'PRO' ? 10 : 9999}
+                        limit={tier === 'PRO' ? 10 : 9999}
                         unit="photos"
                         showPercent={false}
                       />
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        {subscription.tier === 'PRO'
+                        {tier === 'PRO'
                           ? 'PRO: 10 photos per item'
                           : 'TEAMS: Unlimited photos per item'}
                       </p>
@@ -289,7 +288,7 @@ export default function SubscriptionPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-8">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Cancel Subscription?</h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Your {subscription.tier} subscription will remain active until{' '}
+                  Your {tier} subscription will remain active until{' '}
                   <strong>
                     {subscription.currentPeriodEnd
                       ? new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {

@@ -205,29 +205,16 @@ const TypologyPage = () => {
   const { showToast } = useToast();
   const [selectedSaleId, setSelectedSaleId] = useState<string>('');
 
-  // Auth guard
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600" />
-      </div>
-    );
-  }
-  if (!user || user.role !== 'ORGANIZER') {
-    router.push('/login');
-    return null;
-  }
-  // TierGate handles PRO access check in the JSX below
-
-  // Fetch organizer's sales
+  // Fetch organizer's sales — hooks must be called before any conditional return
   const { data: sales = [], isLoading: salesLoading } = useQuery<Sale[]>({
-    queryKey: ['organizer-sales-typology', user.id],
+    queryKey: ['organizer-sales-typology', user?.id],
     queryFn: async () => {
       const res = await api.get('/sales/mine');
       return (res.data.sales ?? []).filter(
         (s: Sale) => s.status === 'PUBLISHED' || s.status === 'DRAFT'
       );
     },
+    enabled: !!user,
     staleTime: 2 * 60 * 1000,
   });
 
@@ -243,6 +230,20 @@ const TypologyPage = () => {
   });
 
   const batchMutation = useBatchClassifySale();
+
+  // Auth guard — after all hooks
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600" />
+      </div>
+    );
+  }
+  if (!user || user.role !== 'ORGANIZER') {
+    router.push('/login');
+    return null;
+  }
+  // TierGate handles PRO access check in the JSX below
 
   const handleBatchClassify = async () => {
     if (!selectedSaleId) return;
