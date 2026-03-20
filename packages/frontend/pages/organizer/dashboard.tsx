@@ -69,6 +69,7 @@ const OrganizerDashboard = () => {
   const [showSaleSelector, setShowSaleSelector] = useState(false);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [showTierTools, setShowTierTools] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
@@ -145,6 +146,16 @@ const OrganizerDashboard = () => {
     if (simpleModeSaved === 'true') {
       setIsSimpleMode(true);
     }
+  }, []);
+
+  // Detect mobile view (md breakpoint is 768px)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    setIsMobileView(mediaQuery.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobileView(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
   // Show wizard if onboarding not complete (and not dismissed via localStorage)
@@ -346,10 +357,14 @@ const OrganizerDashboard = () => {
               </div>
             </div>
 
-            {/* Section 2: Essential Tools (always visible) */}
-            <div>
-              <h3 className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Essential Tools</h3>
-              <div className="flex flex-wrap gap-4">
+            {/* Section 2: Essential Tools (collapsible on mobile, visible on desktop) */}
+            <details open={!isMobileView} className="group">
+              <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors md:pointer-events-none md:cursor-default">
+                <span className="group-open:hidden md:hidden">▶</span>
+                <span className="hidden group-open:inline">▼</span>
+                Essential Tools
+              </summary>
+              <div className="flex flex-wrap gap-4 md:mt-0">
                 <Link
                   href="/organizer/print-inventory"
                   className="bg-purple-100 hover:bg-purple-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-purple-900 dark:text-purple-100 font-bold py-2 px-6 rounded-lg transition-colors"
@@ -369,14 +384,14 @@ const OrganizerDashboard = () => {
                   📝 Message Templates
                 </Link>
               </div>
-            </div>
+            </details>
 
-            {/* Section 3: Pro & Teams Tools (collapsible) */}
-            <details open={canAccess('PRO') || canAccess('TEAMS')} className="group">
+            {/* Section 3: Pro Features (collapsible) */}
+            <details open={!isMobileView && (canAccess('PRO') || canAccess('TEAMS'))} className="group">
               <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors">
                 <span className="group-open:hidden">▶</span>
                 <span className="hidden group-open:inline">▼</span>
-                Pro & Teams Tools
+                Pro Features
               </summary>
               <div className="mt-3 ml-3 flex flex-wrap gap-4">
                 {canAccess('PRO') && (
@@ -465,12 +480,12 @@ const OrganizerDashboard = () => {
               </div>
             </details>
 
-            {/* Section 4: Community & Growth (collapsible) */}
-            <details>
+            {/* Section 4: Community (collapsible, closed by default) */}
+            <details open={!isMobileView ? false : undefined}>
               <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors">
                 <span className="group-open:hidden">▶</span>
                 <span className="hidden group-open:inline">▼</span>
-                Community & Growth
+                Community
               </summary>
               <div className="mt-3 ml-3 flex flex-wrap gap-4">
                 <Link
