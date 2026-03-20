@@ -42,7 +42,7 @@ const OrganizerPremiumPage = () => {
         <Head>
           <title>Premium Plans | FindA.Sale</title>
         </Head>
-        <div className="min-h-screen bg-white dark:bg-gray-800 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-white dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
             <div className="space-y-8">
               <Skeleton className="h-12 w-64" />
@@ -106,7 +106,7 @@ const OrganizerPremiumPage = () => {
 
           {/* Current Tier Badge */}
           <div className="text-center mb-12">
-            <div className="inline-block bg-white dark:bg-gray-800 border-2 border-sage-200 rounded-lg px-6 py-4 shadow-sm">
+            <div className="inline-block bg-white dark:bg-gray-800 border-2 border-sage-200 dark:border-gray-600 rounded-lg px-6 py-4 shadow-sm">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Current Plan</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{currentTierInfo.label}</p>
               {subscription?.status && (
@@ -332,7 +332,7 @@ const OrganizerPremiumPage = () => {
               )}
               <Link
                 href="/organizer/dashboard"
-                className="inline-block bg-white dark:bg-gray-800 text-sage-600 border-2 border-sage-600 px-8 py-3 rounded-lg font-semibold hover:bg-sage-50 transition"
+                className="inline-block bg-white dark:bg-gray-800 text-sage-600 border-2 border-sage-600 px-8 py-3 rounded-lg font-semibold hover:bg-sage-50 dark:hover:bg-gray-700 transition"
               >
                 Back to Dashboard
               </Link>

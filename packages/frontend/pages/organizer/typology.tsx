@@ -205,7 +205,7 @@ const TypologyPage = () => {
   const { showToast } = useToast();
   const [selectedSaleId, setSelectedSaleId] = useState<string>('');
 
-  // Fetch organizer's sales
+  // Fetch organizer's sales — hooks must be called before any conditional return
   const { data: sales = [], isLoading: salesLoading } = useQuery<Sale[]>({
     queryKey: ['organizer-sales-typology', user?.id],
     queryFn: async () => {
@@ -231,7 +231,7 @@ const TypologyPage = () => {
 
   const batchMutation = useBatchClassifySale();
 
-  // Auth guard
+  // Auth guard — after all hooks
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">

@@ -18,7 +18,7 @@ import Head from 'next/head';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────────────
 
 interface Sale {
   id: string;
@@ -55,7 +55,7 @@ interface CashPaymentResponse {
   cashFeeBalance: number;
 }
 
-// ─── Component ──────────────────────────────────────────────────────────────
+// ─── Component ─────────────────────────────────────────────────────────────────────
 
 export default function POSPage() {
   const { user, isLoading: loading } = useAuth();
@@ -95,7 +95,7 @@ export default function POSPage() {
   const terminalRef = useRef<any>(null);
   const sdkLoadedRef = useRef(false);
 
-  // ─── Auth guard ─────────────────────────────────────────────────────────
+  // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!loading && (!user || user.role !== 'ORGANIZER')) {
@@ -103,7 +103,7 @@ export default function POSPage() {
     }
   }, [user, loading, router]);
 
-  // ─── Load sales ─────────────────────────────────────────────────────────
+  // ─── Load sales ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!user || user.role !== 'ORGANIZER') return;
@@ -118,7 +118,7 @@ export default function POSPage() {
       .catch(err => console.error('[pos] Failed to load sales:', err));
   }, [user]);
 
-  // ─── Initialize Stripe Terminal SDK ─────────────────────────────────────
+  // ─── Initialize Stripe Terminal SDK ───────────────────────────────────────────────────────
 
   const initTerminal = useCallback(async () => {
     if (sdkLoadedRef.current) return;
@@ -168,7 +168,7 @@ export default function POSPage() {
     }
   }, []);
 
-  // ─── Item search ─────────────────────────────────────────────────────────
+  // ─── Item search ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!selectedSaleId || !itemSearch.trim()) {
@@ -188,14 +188,14 @@ export default function POSPage() {
     return () => clearTimeout(timeout);
   }, [itemSearch, selectedSaleId]);
 
-  // ─── Sync inline cash numpad → cashReceived ──────────────────────────────
+  // ─── Sync inline cash numpad → cashReceived ────────────────────────────────────────────
 
   useEffect(() => {
     const cents = parseInt(cashNumpadValue || '0', 10);
     setCashReceived(cents / 100);
   }, [cashNumpadValue]);
 
-  // ─── Cart operations ────────────────────────────────────────────────────
+  // ─── Cart operations ────────────────────────────────────────────────────────────────────
 
   const addToCart = (item: Item | { title: string; amount: number }) => {
     if ('price' in item) {
@@ -257,7 +257,7 @@ export default function POSPage() {
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
   const cartChange = Math.max(0, cashReceived - cartTotal);
 
-  // ─── Numpad operations (price entry only) ───────────────────────────────
+  // ─── Numpad operations (price entry only) ───────────────────────────────────────────
 
   const handleNumpadKey = (key: string) => {
     if (key === 'backspace') {
@@ -266,7 +266,7 @@ export default function POSPage() {
       setNumpadValue('');
     } else if (key === '00') {
       setNumpadValue(prev => prev + '00');
-    } else if (/^\\d$/.test(key)) {
+    } else if (/^\d$/.test(key)) {
       setNumpadValue(prev => prev + key);
     }
   };
@@ -285,7 +285,7 @@ export default function POSPage() {
     }
   };
 
-  // ─── Payment flows ──────────────────────────────────────────────────────
+  // ─── Payment flows ───────────────────────────────────────────────────────────────────
 
   const handleCharge = async () => {
     if (!cart.length || !terminalRef.current) return;
@@ -409,7 +409,7 @@ export default function POSPage() {
     setLastCashFee(null);
   };
 
-  // ─── Reader status badge ─────────────────────────────────────────────────
+  // ─── Reader status badge ───────────────────────────────────────────────────────────────────
 
   const readerBadge = {
     idle: { label: 'Reader not connected', color: 'bg-warm-200 text-warm-700' },
@@ -421,7 +421,7 @@ export default function POSPage() {
 
   if (loading || !user) return null;
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  // ─── Render ──────────────────────────────────────────────────────────────────────────────
 
   return (
     <>
