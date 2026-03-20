@@ -255,6 +255,8 @@ model Sale {
   hubMemberships    SaleHubMembership[] @relation("SaleHubMemberships")
   // Feature #51: Sale Ripples — social proof activity feed
   ripples           SaleRipple[]
+  // Feature #72: Affiliate Payouts linked to sales
+  affiliatePayouts  AffiliatePayout[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
