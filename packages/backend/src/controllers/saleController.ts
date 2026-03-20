@@ -850,7 +850,7 @@ export const getSaleStatus = async (req: Request, res: Response) => {
 };
 
 /**
- * Get cities with active sales and item counts
+ * Get cities with active sales counts
  * GET /api/sales/cities
  * Public endpoint (no auth required)
  * Returns: [{ city: string, count: number }, ...] sorted by count DESC, then alphabetically
@@ -864,13 +864,12 @@ export const getCities = async (req: Request, res: Response) => {
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
-        city: { not: null }
       },
       _count: {
-        id: true
+        _all: true
       },
       orderBy: [
-        { _count: { id: 'desc' } },
+        { _count: { _all: 'desc' } },
         { city: 'asc' }
       ]
     });
@@ -879,7 +878,7 @@ export const getCities = async (req: Request, res: Response) => {
       .filter(item => item.city && item.city.trim() !== '')
       .map(item => ({
         city: item.city,
-        count: item._count.id
+        count: item._count._all
       }));
 
     res.json(response);
