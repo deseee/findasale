@@ -11,6 +11,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
+import TierGate from '../../components/TierGate';
 
 const ALL_EVENTS = [
   { value: 'bid.placed',          label: 'Bid placed' },
@@ -89,9 +90,10 @@ const OrganizerWebhooksPage = () => {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
   return (
-    <>
-      <Head><title>Webhooks - FindA.Sale</title></Head>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <TierGate requiredTier="TEAMS" featureName="Webhooks" description="Send real-time event notifications to Zapier, Make, or custom endpoints. Available on TEAMS and above.">
+      <>
+        <Head><title>Webhooks - FindA.Sale</title></Head>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4">
           <div className="max-w-3xl mx-auto flex items-center gap-3">
             <Link href="/organizer/dashboard" className="text-gray-400 hover:text-gray-600 dark:text-gray-400 text-sm">← Dashboard</Link>
@@ -232,7 +234,8 @@ const OrganizerWebhooksPage = () => {
           )}
         </div>
       </div>
-    </>
+      </>
+    </TierGate>
   );
 };
 

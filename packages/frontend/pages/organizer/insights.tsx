@@ -444,10 +444,10 @@ const OrganizerInsightsPage = () => {
                           <span
                             className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                               item.status === 'SOLD'
-                                ? 'bg-green-100 text-green-700'
+                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
                                 : item.status === 'AVAILABLE'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-warm-100 text-warm-700'
+                                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                                  : 'bg-warm-100 dark:bg-warm-900 text-warm-700 dark:text-warm-200'
                             }`}
                           >
                             {item.status}
@@ -481,7 +481,7 @@ const OrganizerInsightsPage = () => {
             <h2 className="text-2xl font-bold text-warm-900">Per-Sale Breakdown</h2>
 
             {/* Sale Selector & Date Range Controls */}
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-warm-900 mb-2">
@@ -542,14 +542,14 @@ const OrganizerInsightsPage = () => {
                 <MetricsGrid data={metricsData.metrics} />
 
                 {/* Top Items Table */}
-                <div className="bg-white rounded-lg shadow p-6">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                   <h3 className="text-xl font-semibold text-warm-900 mb-4">Top Selling Items</h3>
                   <TopItemsTable items={metricsData.metrics.itemMetrics.topSellingItems} />
                 </div>
 
                 {/* Category Breakdown Chart */}
                 {metricsData.metrics.itemMetrics.categoryBreakdown.length > 0 && (
-                  <div className="bg-white rounded-lg shadow p-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 className="text-xl font-semibold text-warm-900 mb-4">
                       Category Breakdown
                     </h3>

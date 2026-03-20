@@ -28,6 +28,8 @@ const CommandCenterPage = () => {
   const { showToast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('active');
 
+  const { data, isLoading, error, refetch } = useCommandCenter(selectedStatus);
+
   // Show loading spinner during auth check
   if (authLoading) {
     return (
@@ -45,8 +47,6 @@ const CommandCenterPage = () => {
     router.push('/login');
     return null;
   }
-
-  const { data, isLoading, error, refetch } = useCommandCenter(selectedStatus);
 
   // Handle API errors
   if (error) {

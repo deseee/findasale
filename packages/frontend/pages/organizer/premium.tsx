@@ -91,7 +91,7 @@ const OrganizerPremiumPage = () => {
         <meta name="description" content="Upgrade your FindA.Sale organizer account with premium features and tools" />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-br from-white via-sage-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gradient-to-br from-white via-sage-50 to-white dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           {/* Hero Section */}
           <div className="text-center mb-16">
@@ -137,8 +137,8 @@ const OrganizerPremiumPage = () => {
             {/* SIMPLE */}
             <div className={`rounded-lg border-2 p-8 transition ${
               tier === 'SIMPLE'
-                ? 'border-sage-600 bg-sage-50 shadow-lg'
-                : 'border-gray-200 dark:border-gray-700 bg-white'
+                ? 'border-sage-600 bg-sage-50 dark:bg-gray-900 shadow-lg'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
             }`}>
               <h3 className="font-fraunces text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">SIMPLE</h3>
               <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">Free</p>
@@ -171,8 +171,8 @@ const OrganizerPremiumPage = () => {
             {/* PRO */}
             <div className={`rounded-lg border-2 p-8 transition ${
               tier === 'PRO'
-                ? 'border-sage-600 bg-sage-50 shadow-lg'
-                : 'border-gray-200 dark:border-gray-700 bg-white'
+                ? 'border-sage-600 bg-sage-50 dark:bg-gray-900 shadow-lg'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
             }`}>
               <h3 className="font-fraunces text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">PRO</h3>
               <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">$29</p>
@@ -223,8 +223,8 @@ const OrganizerPremiumPage = () => {
             {/* TEAMS */}
             <div className={`rounded-lg border-2 p-8 transition ${
               tier === 'TEAMS'
-                ? 'border-sage-600 bg-sage-50 shadow-lg'
-                : 'border-gray-200 dark:border-gray-700 bg-white'
+                ? 'border-sage-600 bg-sage-50 dark:bg-gray-900 shadow-lg'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
             }`}>
               <h3 className="font-fraunces text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">TEAMS</h3>
               <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">$79</p>
@@ -274,7 +274,7 @@ const OrganizerPremiumPage = () => {
           </div>
 
           {/* FAQ Section */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 mb-16">
             <h2 className="font-fraunces text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">
               Frequently Asked Questions
             </h2>

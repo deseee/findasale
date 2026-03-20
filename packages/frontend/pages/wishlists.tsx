@@ -60,7 +60,7 @@ const WishlistsPage = () => {
   // Redirect if not logged in
   useEffect(() => {
     if (user === null) {
-      router.push('/auth/login');
+      router.push('/login');
     }
   }, [user, router]);
 

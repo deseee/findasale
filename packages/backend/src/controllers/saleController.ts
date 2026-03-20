@@ -848,3 +848,36 @@ export const getSaleStatus = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+/**
+ * Get cities with active sales and item counts
+ * GET /api/sales/cities
+ * Public endpoint (no auth required)
+ * Returns: [{ city: string, count: number }, ...] sorted by count DESC, then alphabetically
+ */
+export const getCities = async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+
+    const cityData = await prisma.$queryRaw<{ city: string; count: bigint }[]>`
+      SELECT city, COUNT(*) as count
+      FROM "Sale"
+      WHERE status = 'PUBLISHED'
+        AND "endDate" >= ${now}
+        AND city IS NOT NULL
+        AND TRIM(city) != ''
+      GROUP BY city
+      ORDER BY count DESC, city ASC
+    `;
+
+    const response = cityData.map(item => ({
+      city: item.city,
+      count: Number(item.count),
+    }));
+
+    res.json(response);
+  } catch (error: any) {
+    console.error('[cities] Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};

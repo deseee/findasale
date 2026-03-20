@@ -47,13 +47,13 @@ const MessagesPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
       <Head>
         <title>Messages – FindA.Sale</title>
         <meta name="description" content="Your messages on FindA.Sale" />
       </Head>
 
-      <main className="container mx-auto px-4 py-8 max-w-2xl pb-24">
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-2xl pb-24">
         <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">Messages</h1>
 
         {/* Loading */}

@@ -31,42 +31,8 @@ const OrganizerReputationPage = () => {
 
   const { data: reputation, isLoading, error } = useReputationBreakdown(user?.id || '');
 
-  if (authLoading || isLoading) {
-    return (
-      <Layout>
-        <Head>
-          <title>Reputation | FindA.Sale</title>
-        </Head>
-        <div className="min-h-screen bg-white dark:bg-gray-900">
-          <div className="max-w-4xl mx-auto px-4 py-12">
-            <Skeleton className="h-12 w-48 mb-6" />
-            <Skeleton className="h-40 w-full mb-8" />
-            <Skeleton className="h-96 w-full" />
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
   if (!user || user.role !== 'ORGANIZER') {
     return null;
-  }
-
-  if (error) {
-    return (
-      <Layout>
-        <Head>
-          <title>Reputation | FindA.Sale</title>
-        </Head>
-        <div className="min-h-screen bg-white dark:bg-gray-900 py-12">
-          <EmptyState
-            heading="Unable to Load Reputation"
-            subtext="We couldn't fetch your reputation data. Please try again later."
-            cta={{ label: 'Back to Dashboard', href: '/organizer/dashboard' }}
-          />
-        </div>
-      </Layout>
-    );
   }
 
   const getScoreColor = (score: number) => {
@@ -92,6 +58,23 @@ const OrganizerReputationPage = () => {
         <title>Reputation | FindA.Sale</title>
       </Head>
 
+      {authLoading || isLoading ? (
+        <div className="min-h-screen bg-white dark:bg-gray-900">
+          <div className="max-w-4xl mx-auto px-4 py-12">
+            <Skeleton className="h-12 w-48 mb-6" />
+            <Skeleton className="h-40 w-full mb-8" />
+            <Skeleton className="h-96 w-full" />
+          </div>
+        </div>
+      ) : error ? (
+        <div className="min-h-screen bg-white dark:bg-gray-900 py-12">
+          <EmptyState
+            heading="Unable to Load Reputation"
+            subtext="We couldn't fetch your reputation data. Please try again later."
+            cta={{ label: 'Back to Dashboard', href: '/organizer/dashboard' }}
+          />
+        </div>
+      ) : (
       <div className="min-h-screen bg-white dark:bg-gray-900">
         {/* Header */}
         <div className="bg-gradient-to-r from-sage-green/10 to-sage-green/5 dark:from-gray-800 dark:to-gray-900 py-12 px-4">
@@ -298,6 +281,7 @@ const OrganizerReputationPage = () => {
           </div>
         </div>
       </div>
+      )}
     </Layout>
   );
 };
