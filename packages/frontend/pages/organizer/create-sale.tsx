@@ -188,7 +188,7 @@ const CreateSalePage = () => {
                   disabled={!formData.title.trim() || isGeneratingDesc}
                   className="text-xs bg-sage-600 hover:bg-sage-700 text-white py-1 px-3 rounded-full disabled:opacity-40 transition-colors flex items-center gap-1"
                 >
-                  {isGeneratingDesc ? 'Generating\u2026' : '\u2728 Generate'}
+                  {isGeneratingDesc ? 'Generating…' : '✨ Generate'}
                 </button>
               </div>
               <textarea
@@ -308,7 +308,7 @@ const CreateSalePage = () => {
             {/* Neighborhood — U2 (autocomplete input, replaces scrolling dropdown) */}
             <div>
               <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Neighborhood <span className="text-warm-400 font-normal">(optional \u2014 helps shoppers find you)</span>
+                Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
               </label>
               <input
                 id="neighborhood"
