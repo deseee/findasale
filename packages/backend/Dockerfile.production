@@ -1,4 +1,4 @@
-# S223 — cache bust 2026-03-21 bug25-null-draftStatus-fix
+# S227 — cache bust 2026-03-21 unblock-stripe-checkout-route
 FROM node:18-slim
 
 WORKDIR /app
