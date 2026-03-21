@@ -8,6 +8,7 @@ interface User {
   firstName?: string;
   businessName?: string;
   role: string;
+  roles?: string[]; // Feature #72 Phase 2: Array of roles
   points: number;
   referralCode?: string;
   categoryInterests?: string[];
@@ -51,6 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           firstName: payload.firstName || '',
           businessName: payload.businessName || '',
           role: payload.role,
+          roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
           points: payload.points || 0,
           referralCode: payload.referralCode || '',
           organizerTier: payload.subscriptionTier || 'SIMPLE',
@@ -78,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firstName: payload.firstName || '',
         businessName: payload.businessName || '',
         role: payload.role,
+        roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
         points: payload.points || 0,
         referralCode: payload.referralCode || '',
         organizerTier: payload.subscriptionTier || 'SIMPLE',
