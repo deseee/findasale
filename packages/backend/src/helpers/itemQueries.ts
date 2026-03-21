@@ -13,6 +13,7 @@
  * Use getPublicItemsBySaleId for common "items in a public sale" queries.
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -32,9 +33,15 @@ import { prisma } from '../lib/prisma';
  * TypeScript may show type errors until migration deploys — that's expected.
  * Bug #25 fix: Exclude only DRAFT status; show PENDING_REVIEW and PUBLISHED items.
  */
-export const PUBLIC_ITEM_FILTER = {
-  NOT: { draftStatus: 'DRAFT' }
-} as const;
+// TEMPORARY: draftStatus filter disabled because:
+// 1. Schema defines draftStatus as String (required) with @default("DRAFT")
+// 2. Legacy/seeded rows have NULL draftStatus in the database
+// 3. Prisma rejects { draftStatus: null } at runtime for required String fields
+// 4. Rapidfire Mode (which creates DRAFT items) hasn't launched yet
+// Re-enable this filter when Rapidfire Mode launches and a migration backfills
+// NULL draftStatus values to a valid status (e.g. 'PUBLISHED').
+// TODO: Make draftStatus String? (optional) or backfill NULLs before re-enabling.
+export const PUBLIC_ITEM_FILTER: Prisma.ItemWhereInput = {};
 
 /**
  * getPublicItemsBySaleId(saleId)

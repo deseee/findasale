@@ -130,16 +130,24 @@ function OnboardingShower() {
 /**
  * Show organizer onboarding modal for new ORGANIZER users on first login.
  * Completion flag is stored on backend (Organizer.onboardingComplete) and included in JWT.
+ * CRITICAL: Do NOT show to ADMIN-only users. Show ONLY to users with ORGANIZER role.
  */
 function OrganizerOnboardingShower() {
   const { user, login } = useAuth();
+  const router = useRouter();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (!user || !user.roles?.includes('ORGANIZER')) return;
-    if (user.onboardingComplete) return; // Already onboarded — don't show
+    if (!user) return;
+    // Show ONLY if user has ORGANIZER role (excludes ADMIN-only users)
+    if (!user.roles?.includes('ORGANIZER')) return;
+    // Don't show if already onboarded
+    if (user.onboardingComplete) return;
+    // Only show on organizer pages — not public pages like /inspiration, /trending
+    const orgPages = ['/organizer', '/dashboard', '/manage-sales', '/create-sale'];
+    if (!orgPages.some(p => router.pathname.startsWith(p))) return;
     setShow(true);
-  }, [user]);
+  }, [user, router.pathname]);
 
   const handleClose = async () => {
     try {
