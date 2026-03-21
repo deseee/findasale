@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 // Extend Express Request type
 export interface AuthRequest extends Request {
   user?: any & {
+    roles?: string[]; // Feature #72 Phase 2: Array of roles
     organizerProfile?: {
       subscriptionTier?: string;
       [key: string]: any;
@@ -22,10 +23,14 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
     const token = authHeader.split(' ')[1];
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) return next();
-    const decoded = jwt.verify(token, jwtSecret) as { id: string };
+    const decoded = jwt.verify(token, jwtSecret) as { id: string; role?: string; roles?: string[] };
 
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
-    if (user) req.user = user;
+    if (user) {
+      req.user = user;
+      // Feature #72 Phase 2: Attach roles array from JWT or fallback to single-role array
+      req.user.roles = decoded.roles || (decoded.role ? [decoded.role] : user.roles || []);
+    }
   } catch {
     // Invalid/expired token — proceed as unauthenticated, do not block
   }
@@ -42,7 +47,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     const token = authHeader.split(' ')[1];
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error('JWT_SECRET is not set');
-    const decoded = jwt.verify(token, jwtSecret) as { id: string; role?: string; tokenVersion?: number; organizerTokenVersion?: number };
+    const decoded = jwt.verify(token, jwtSecret) as { id: string; role?: string; roles?: string[]; tokenVersion?: number; organizerTokenVersion?: number };
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
@@ -67,6 +72,8 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
     // Attach user to request
     req.user = user;
+    // Feature #72 Phase 2: Attach roles array from JWT or fallback to single-role array
+    req.user.roles = decoded.roles || (decoded.role ? [decoded.role] : user.roles || []);
     // Attach organizer profile for tier checks
     if (user.organizer) {
       req.user.organizerProfile = user.organizer;
