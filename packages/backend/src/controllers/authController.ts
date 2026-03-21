@@ -200,12 +200,14 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
+    // Feature #72 Phase 2: Include roles array, keep role for backward compatibility
     const token = jwt.sign(
       {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
+        roles: user.roles || [user.role], // Fallback to single-role array if roles is empty
         points: user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
@@ -291,6 +293,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         email:        user.email,
         name:         user.name,
         role:         user.role,
+        roles:        user.roles || [user.role], // Fallback to single-role array if roles is empty
         points:       user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
@@ -316,29 +319,95 @@ export const oauthLogin = async (req: Request, res: Response) => {
   }
 };
 
+// Feature #72 Phase 2 + Stream A: Password reset with generic response for account enumeration prevention
+export const requestPasswordReset = async (req: Request, res: Response) => {
+  try {
+    const { email: rawEmail } = req.body;
+    const email = rawEmail?.trim().toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    // Generic response regardless of whether email exists (Stream A: account enumeration prevention)
+    const genericResponse = { message: 'If that email exists, you\'ll receive a reset link' };
+
+    // Attempt to find user by email
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    // If user not found, return generic success and exit
+    if (!user) {
+      return res.status(200).json(genericResponse);
+    }
+
+    // If user found, generate reset token and save it
+    const resetToken = randomUUID();
+    const resetTokenExpiry = new Date();
+    resetTokenExpiry.setHours(resetTokenExpiry.getHours() + 1); // Token valid for 1 hour
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: resetToken,
+        passwordResetExpiry: resetTokenExpiry
+      }
+    });
+
+    // TODO: Send email with reset link (non-blocking)
+    // const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    // await sendPasswordResetEmail(user.email, user.name, resetLink);
+
+    // Return generic response regardless of success
+    res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error('Password reset request error:', error);
+    // Generic error response to prevent enumeration
+    res.status(500).json({ message: 'Server error processing your request' });
+  }
+};
+
 export const login = async (req: Request, res: Response) => {
   try {
     const { email: rawLoginEmail, password } = req.body;
     const email = rawLoginEmail?.trim().toLowerCase();
+
+    // #106: Account enumeration prevention
+    // Measure timing start to ensure both paths take similar time
+    const timingStart = Date.now();
+    const targetMinDuration = 300; // 300ms minimum for bcrypt timing attack prevention
 
     // Find user
     const user = await prisma.user.findUnique({
       where: { email }
     });
 
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid credentials - User not found' });
+    // If user not found OR password is wrong, use generic message
+    // This prevents attackers from enumerating valid email addresses
+    let passwordMatch = false;
+    if (user && user.password) {
+      passwordMatch = await bcrypt.compare(password, user.password);
+    } else if (!user) {
+      // Compute a dummy hash to match timing of actual password check
+      // This prevents timing attacks that detect user existence
+      await bcrypt.compare(password, '$2a$10$dummyhashtopreventtimingatttacks.thishashnevermatches');
+    }
+
+    // Ensure minimum duration to prevent timing attacks
+    const elapsedMs = Date.now() - timingStart;
+    if (elapsedMs < targetMinDuration) {
+      await new Promise(resolve => setTimeout(resolve, targetMinDuration - elapsedMs));
+    }
+
+    // Generic error message regardless of whether email exists or password is wrong
+    if (!user || !passwordMatch) {
+      return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     // Check if user has a password (some OAuth users might not)
     if (!user.password) {
       return res.status(400).json({ message: 'Account not set up for password login. Please contact support.' });
-    }
-
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid credentials - Incorrect password' });
     }
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
@@ -350,12 +419,14 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
+    // Feature #72 Phase 2: Include roles array, keep role for backward compatibility
     const token = jwt.sign(
       {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
+        roles: user.roles || [user.role], // Fallback to single-role array if roles is empty
         points: user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
