@@ -144,7 +144,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
 
       {/* ── Content area (40% visual weight) ── */}
       <div className="flex flex-col flex-1 p-3 bg-white dark:bg-gray-800">
-        <Link href={`/sales/${sale.id}`} className="flex-1">
+        <Link href={`/sales/${sale.id}`} className="flex-1 block">
           <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-1">
             {sale.title}
           </h3>

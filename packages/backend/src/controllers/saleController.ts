@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import QRCode from 'qrcode';
 import { handleFavoriteBadge } from './userController';
-import { prisma } from '../lib/prisma';
+import { prisma, Prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 import { syncOrganizerTier } from '../services/tierService';
@@ -859,16 +859,19 @@ export const getCities = async (req: Request, res: Response) => {
   try {
     const now = new Date();
 
-    const cityData = await prisma.$queryRaw<{ city: string; count: bigint }[]>`
-      SELECT city, COUNT(*) as count
-      FROM "Sale"
-      WHERE status = 'PUBLISHED'
-        AND "endDate" >= ${now}
-        AND city IS NOT NULL
-        AND TRIM(city) != ''
-      GROUP BY city
-      ORDER BY count DESC, city ASC
-    `;
+    // #105: SQL Injection hardening - use Prisma.sql for parameterized queries
+    const cityData = await prisma.$queryRaw<{ city: string; count: bigint }[]>(
+      Prisma.sql`
+        SELECT city, COUNT(*) as count
+        FROM "Sale"
+        WHERE status = 'PUBLISHED'
+          AND "endDate" >= ${now}
+          AND city IS NOT NULL
+          AND TRIM(city) != ''
+        GROUP BY city
+        ORDER BY count DESC, city ASC
+      `
+    );
 
     const response = cityData.map(item => ({
       city: item.city,
