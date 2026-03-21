@@ -121,7 +121,7 @@ const ThreadDetailPage = () => {
           </Link>
           <div>
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-              {otherParty?.name || otherParty?.businessName || 'Unknown'}
+              {(otherParty && ('businessName' in otherParty ? otherParty.businessName : otherParty.name)) || 'Unknown'}
             </h1>
             {thread.conversation.sale && (
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
