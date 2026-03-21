@@ -104,17 +104,27 @@ function OAuthBridge() {
 /**
  * Phase 27: Show 3-step onboarding modal to new shoppers on first login.
  * Organizers and admins are excluded. Completion stored in localStorage.
+ * CRITICAL: Only show on first shopper page (homepage, trending), not on
+ * secondary pages like /shopper/favorites, /shopper/messages, /inspiration.
  */
 function OnboardingShower() {
   const { user } = useAuth();
+  const router = useRouter();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     if (!user || user.roles?.includes('ORGANIZER') || user.roles?.includes('ADMIN')) return;
     if (typeof window === 'undefined') return;
+
+    // Only show on first-time shopper pages (homepage, trending)
+    // Do NOT show on secondary pages like /favorites, /messages, /inspiration
+    const shopperFirstPages = ['/', '/trending', '/index'];
+    const isFirstPage = shopperFirstPages.some(p => router.pathname === p || router.pathname.startsWith(p));
+    if (!isFirstPage) return;
+
     const done = localStorage.getItem('findasale_onboarded');
     if (!done) setShow(true);
-  }, [user]);
+  }, [user, router.pathname]);
 
   const handleComplete = () => {
     if (typeof window !== 'undefined') {

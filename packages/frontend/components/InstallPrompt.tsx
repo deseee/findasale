@@ -54,14 +54,12 @@ export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showAndroid, setShowAndroid] = useState(false);
   const [showIOS, setShowIOS] = useState(false);
-  const [dismissed, setDismissedState] = useState(false);
 
   useEffect(() => {
     // Check dismissal and standalone status on mount
     if (isStandalone() || isDismissed()) {
       setShowAndroid(false);
       setShowIOS(false);
-      setDismissedState(true);
       return;
     }
 
@@ -73,8 +71,9 @@ export default function InstallPrompt() {
 
     const handler = (e: Event) => {
       e.preventDefault();
-      // Only show if not dismissed in this session
-      if (!dismissed && !isDismissed()) {
+      // Check both sessionStorage (per-session) and localStorage (30-day dismissal)
+      const sessionDismissed = typeof window !== 'undefined' && sessionStorage.getItem('pwa-banner-dismissed-session');
+      if (!sessionDismissed && !isDismissed()) {
         setDeferredPrompt(e);
         setShowAndroid(true);
       }
@@ -82,7 +81,7 @@ export default function InstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handler as EventListener);
     return () => window.removeEventListener('beforeinstallprompt', handler as EventListener);
-  }, [dismissed]);
+  }, []);
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
@@ -96,7 +95,10 @@ export default function InstallPrompt() {
 
   const handleDismiss = () => {
     setDismissed();
-    setDismissedState(true);
+    // Also set session-level dismissal to prevent re-appearance on navigation
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('pwa-banner-dismissed-session', '1');
+    }
     setShowAndroid(false);
     setShowIOS(false);
   };
