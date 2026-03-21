@@ -6,6 +6,7 @@ import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService
 import { enqueueProcessRapidDraft } from '../jobs/processRapidDraft';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -39,6 +40,7 @@ interface CloudinaryUrls {
 }
 
 // Upload a single buffer to Cloudinary — returns multi-res URLs
+// Also tracks bandwidth usage (#105)
 const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<CloudinaryUrls> =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -50,6 +52,13 @@ const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<Cloud
       },
       (error, result) => {
         if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
+
+        // Track Cloudinary serve for bandwidth monitoring (#105)
+        // Each image upload typically produces 4 variants (original + 3 eager transforms)
+        trackCloudinaryServe(); // original
+        trackCloudinaryServe(); // thumbnail
+        trackCloudinaryServe(); // optimized
+        trackCloudinaryServe(); // full
 
         const eager = result.eager || [];
         resolve({

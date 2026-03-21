@@ -12,6 +12,7 @@
 
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
+import { trackAITokens, estimateTokensForRequest } from '../lib/aiCostTracker';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -109,6 +110,12 @@ async function getHaikuAnalysis(
       : '';
 
   try {
+    // Estimate tokens for cost tracking (#104)
+    const systemPrompt = `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
+
+Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).`;
+    const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
+
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
@@ -163,6 +170,11 @@ Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: materi
     );
 
     const content: string = response.data.content?.[0]?.text ?? '';
+
+    // Track token usage for cost ceiling (#104)
+    const responseTokens = Math.ceil(content.length / 4) + 50; // rough estimate
+    trackAITokens(estimatedTokens + responseTokens);
+
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as AITagResult;
     // Ensure tags is always an array even if Haiku omits the field
@@ -214,6 +226,15 @@ async function suggestCuratedTags(visionLabels: string[]): Promise<string[]> {
 
   try {
     const curatedTagsList = CURATED_TAGS.join(', ');
+    const prompt = `Given these visual labels from an image: ${visionLabels.join(', ')}
+
+Suggest up to 5 tags from this curated vocabulary that are visually evident in the image:
+${curatedTagsList}
+
+Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern", "walnut", "hand-painted"]`;
+
+    // Estimate tokens for cost tracking (#104)
+    const estimatedTokens = estimateTokensForRequest(prompt, false);
 
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
@@ -223,12 +244,7 @@ async function suggestCuratedTags(visionLabels: string[]): Promise<string[]> {
         messages: [
           {
             role: 'user',
-            content: `Given these visual labels from an image: ${visionLabels.join(', ')}
-
-Suggest up to 5 tags from this curated vocabulary that are visually evident in the image:
-${curatedTagsList}
-
-Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern", "walnut", "hand-painted"]`,
+            content: prompt,
           },
         ],
       },
@@ -243,6 +259,11 @@ Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern"
     );
 
     const content: string = response.data.content?.[0]?.text ?? '';
+
+    // Track token usage for cost ceiling (#104)
+    const responseTokens = Math.ceil(content.length / 4) + 25;
+    trackAITokens(estimatedTokens + responseTokens);
+
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as string[];
 
@@ -274,6 +295,10 @@ async function suggestConditionGrade(imageBase64: string, mimeType: string): Pro
   }
 
   try {
+    const prompt = `Assess the condition of the item in this photo and suggest a single grade:`;
+    // Estimate tokens for cost tracking (#104)
+    const estimatedTokens = estimateTokensForRequest(prompt, true);
+
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
@@ -317,6 +342,11 @@ If uncertain, suggest B. Return ONLY the single letter (S, A, B, C, or D), no ex
     );
 
     const content: string = response.data.content?.[0]?.text ?? '';
+
+    // Track token usage for cost ceiling (#104)
+    const responseTokens = Math.ceil(content.length / 4) + 20;
+    trackAITokens(estimatedTokens + responseTokens);
+
     const grade = content.trim().toUpperCase().charAt(0);
 
     // Validate grade is one of S|A|B|C|D, default to B if invalid
@@ -406,6 +436,18 @@ export async function generateSaleDescription(input: SaleDescriptionInput): Prom
       : '';
   const auctionContext = isAuctionSale ? 'This is an auction-style sale.' : '';
 
+  const prompt = `You are helping an estate sale organizer in ${city}, ${regionConfig.state} write a compelling 2–3 sentence listing description.
+
+Sale title: "${title}"
+${tagContext}
+${dateContext}
+${auctionContext}
+
+Write a friendly, inviting description that shoppers will see on the listing. Use a warm tone. Mention the city if relevant. Do NOT make up specific items or prices — only reference what's provided. Respond with just the description text, no quotes, no explanation.`;
+
+  // Estimate tokens for cost tracking (#104)
+  const estimatedTokens = estimateTokensForRequest(prompt, false);
+
   const response = await axios.post(
     'https://api.anthropic.com/v1/messages',
     {
@@ -414,14 +456,7 @@ export async function generateSaleDescription(input: SaleDescriptionInput): Prom
       messages: [
         {
           role: 'user',
-          content: `You are helping an estate sale organizer in ${city}, ${regionConfig.state} write a compelling 2–3 sentence listing description.
-
-Sale title: "${title}"
-${tagContext}
-${dateContext}
-${auctionContext}
-
-Write a friendly, inviting description that shoppers will see on the listing. Use a warm tone. Mention the city if relevant. Do NOT make up specific items or prices — only reference what's provided. Respond with just the description text, no quotes, no explanation.`,
+          content: prompt,
         },
       ],
     },
@@ -436,6 +471,11 @@ Write a friendly, inviting description that shoppers will see on the listing. Us
   );
 
   const text: string = response.data.content?.[0]?.text ?? '';
+
+  // Track token usage for cost ceiling (#104)
+  const responseTokens = Math.ceil(text.length / 4) + 100;
+  trackAITokens(estimatedTokens + responseTokens);
+
   return text.trim() || null;
 }
 
@@ -482,15 +522,7 @@ export async function suggestPrice(
         ? `Comparable sales from our platform:\n${comps.map(c => `- "${c.title}": sold for $${c.price} (${c.soldAt})`).join('\n')}\n\n`
         : '';
 
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: ANTHROPIC_MODEL,
-        max_tokens: 200,
-        messages: [
-          {
-            role: 'user',
-            content: `You are an estate sale pricing expert. Based on typical ${regionConfig.city}, ${regionConfig.state} estate sale prices, suggest a fair price for this item.
+    const prompt = `You are an estate sale pricing expert. Based on typical ${regionConfig.city}, ${regionConfig.state} estate sale prices, suggest a fair price for this item.
 
 Item: ${title}
 Category: ${category}
@@ -499,7 +531,20 @@ Condition: ${condition}
 ${compsContext}Respond with ONLY valid JSON in this exact format:
 {"low": 5, "high": 25, "suggested": 15, "reasoning": "Similar vintage items sell for $10-25 at local estate sales"}
 
-Be realistic and conservative — estate sale prices are typically 20-50% of retail. Condition heavily affects value.`,
+Be realistic and conservative — estate sale prices are typically 20-50% of retail. Condition heavily affects value.`;
+
+    // Estimate tokens for cost tracking (#104)
+    const estimatedTokens = estimateTokensForRequest(prompt, false);
+
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 200,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
           },
         ],
       },
@@ -514,6 +559,11 @@ Be realistic and conservative — estate sale prices are typically 20-50% of ret
     );
 
     const content: string = response.data.content?.[0]?.text ?? '';
+
+    // Track token usage for cost ceiling (#104)
+    const responseTokens = Math.ceil(content.length / 4) + 75;
+    trackAITokens(estimatedTokens + responseTokens);
+
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as PriceSuggestion;
 

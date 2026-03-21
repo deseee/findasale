@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { getMonthlyAICost, resetMonthlyAICost } from '../lib/aiCostTracker';
+import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 
 // GET /api/admin/stats — platform overview
 export const getStats = async (req: AuthRequest, res: Response) => {
@@ -347,5 +349,81 @@ export const updateOrganizerTier = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error updating organizer tier:', error);
     res.status(500).json({ message: 'Failed to update organizer tier' });
+  }
+};
+
+// GET /api/admin/ai-usage — #104 AI Cost Ceiling + Usage Tracking
+export const getAIUsage = async (req: AuthRequest, res: Response) => {
+  try {
+    const usage = getMonthlyAICost();
+    const costPercentage = (usage.estimatedCost / usage.ceiling) * 100;
+
+    res.json({
+      monthKey: usage.monthKey,
+      tokensUsed: usage.tokensUsed,
+      estimatedCost: parseFloat(usage.estimatedCost.toFixed(2)),
+      ceiling: usage.ceiling,
+      costPercentage: parseFloat(costPercentage.toFixed(1)),
+      status: usage.estimatedCost >= usage.ceiling ? 'EXCEEDED' : 'NORMAL',
+    });
+  } catch (error) {
+    console.error('Error fetching AI usage:', error);
+    res.status(500).json({ message: 'Failed to fetch AI usage' });
+  }
+};
+
+// POST /api/admin/ai-usage/reset — #104 Reset monthly AI cost counter (admin only)
+export const resetAIUsage = async (req: AuthRequest, res: Response) => {
+  try {
+    resetMonthlyAICost();
+    res.json({ message: 'AI usage counter reset successfully' });
+  } catch (error) {
+    console.error('Error resetting AI usage:', error);
+    res.status(500).json({ message: 'Failed to reset AI usage' });
+  }
+};
+
+// GET /api/admin/cloudinary-usage — #105 Cloudinary Bandwidth Monitoring + Alerts
+export const getCloudinaryUsage = async (req: AuthRequest, res: Response) => {
+  try {
+    const monthlyUsage = getMonthlyCloudinaryEstimate();
+    const todayUsage = getTodayCloudinaryUsage();
+    const threshold = getBandwidthThreshold();
+
+    const usagePercentage = (monthlyUsage.estimatedBandwidthGB / threshold.limitGB) * 100;
+
+    res.json({
+      today: {
+        dateKey: todayUsage.dateKey,
+        serveCount: todayUsage.serveCount,
+        estimatedBandwidthGB: parseFloat(todayUsage.estimatedBandwidthGB.toFixed(2)),
+      },
+      month: {
+        monthKey: monthlyUsage.monthKey,
+        serveCount: monthlyUsage.serveCount,
+        estimatedBandwidthGB: parseFloat(monthlyUsage.estimatedBandwidthGB.toFixed(2)),
+      },
+      threshold: {
+        limitGB: threshold.limitGB,
+        thresholdGB: parseFloat(threshold.thresholdGB.toFixed(2)),
+        thresholdPct: threshold.thresholdPct,
+      },
+      status: monthlyUsage.estimatedBandwidthGB >= threshold.thresholdGB ? 'WARNING' : 'NORMAL',
+      usagePercentage: parseFloat(usagePercentage.toFixed(1)),
+    });
+  } catch (error) {
+    console.error('Error fetching Cloudinary usage:', error);
+    res.status(500).json({ message: 'Failed to fetch Cloudinary usage' });
+  }
+};
+
+// POST /api/admin/cloudinary-usage/reset — #105 Reset daily Cloudinary serve count (admin only)
+export const resetCloudinaryUsage = async (req: AuthRequest, res: Response) => {
+  try {
+    resetTodayCloudinaryUsage();
+    res.json({ message: 'Cloudinary usage counter reset successfully' });
+  } catch (error) {
+    console.error('Error resetting Cloudinary usage:', error);
+    res.status(500).json({ message: 'Failed to reset Cloudinary usage' });
   }
 };
