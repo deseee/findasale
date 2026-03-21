@@ -28,7 +28,7 @@ const isValidRedirectUri = (uri: string | null | undefined): boolean => {
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, inviteCode, businessName, phone, businessAddress } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -98,6 +98,39 @@ export const register = async (req: Request, res: Response) => {
 
       return newUser;
     });
+
+    // Feature #74: Save role-based email consent
+    // Create UserRoleSubscription and RoleConsent records for consent tracking
+    if (consentOrganizer && effectiveRole === 'ORGANIZER') {
+      // Get the organizer's UserRoleSubscription record
+      const orgRoleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: { userId: user.id, role: 'ORGANIZER' }
+      });
+      if (orgRoleSubscription) {
+        await prisma.roleConsent.create({
+          data: {
+            subscriptionId: orgRoleSubscription.id,
+            role: 'ORGANIZER',
+            marketingOptInAt: new Date()
+          }
+        });
+      }
+    }
+    if (consentShopper && effectiveRole === 'USER') {
+      // Get the user's UserRoleSubscription record for SHOPPER role
+      const shopperRoleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: { userId: user.id, role: 'SHOPPER' }
+      });
+      if (shopperRoleSubscription) {
+        await prisma.roleConsent.create({
+          data: {
+            subscriptionId: shopperRoleSubscription.id,
+            role: 'SHOPPER',
+            marketingOptInAt: new Date()
+          }
+        });
+      }
+    }
 
     // Handle referral if provided
     if (referralCode) {

@@ -21,6 +21,8 @@ const RegisterPage = () => {
     referralCode: '',
     inviteCode: '',
   });
+  const [organizerEmailConsent, setOrganizerEmailConsent] = useState(false);
+  const [shopperEmailConsent, setShopperEmailConsent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -70,6 +72,10 @@ const RegisterPage = () => {
         payload.businessName = formData.businessName;
         payload.phone = formData.phone;
         payload.businessAddress = formData.businessAddress;
+        payload.consentOrganizer = organizerEmailConsent;
+      }
+      if (formData.role === 'USER') {
+        payload.consentShopper = shopperEmailConsent;
       }
       const response = await api.post('/auth/register', payload);
 
@@ -269,6 +275,74 @@ const RegisterPage = () => {
               </div>
             </div>
           )}
+
+          {/* Email consent checkboxes */}
+          <div className="space-y-3 py-2">
+            {formData.role === 'ORGANIZER' && (
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={organizerEmailConsent}
+                  onChange={(e) => setOrganizerEmailConsent(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-sm text-warm-700 dark:text-warm-300">
+                  Yes, send me sale management alerts by email
+                  <br />
+                  <span className="text-xs text-warm-500 dark:text-warm-400">(item sold, new reservations, payout updates)</span>
+                </span>
+              </label>
+            )}
+            {formData.role === 'USER' && (
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={shopperEmailConsent}
+                  onChange={(e) => setShopperEmailConsent(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-sm text-warm-700 dark:text-warm-300">
+                  Yes, send me nearby sale alerts and special deals
+                  <br />
+                  <span className="text-xs text-warm-500 dark:text-warm-400">(emails about sales near you, new discoveries, flash deals)</span>
+                </span>
+              </label>
+            )}
+            {formData.role !== 'ORGANIZER' && formData.role !== 'USER' && (
+              <>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={organizerEmailConsent}
+                    onChange={(e) => setOrganizerEmailConsent(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                  />
+                  <span className="text-sm text-warm-700 dark:text-warm-300">
+                    Yes, send me sale management alerts by email
+                    <br />
+                    <span className="text-xs text-warm-500 dark:text-warm-400">(item sold, new reservations, payout updates)</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={shopperEmailConsent}
+                    onChange={(e) => setShopperEmailConsent(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                  />
+                  <span className="text-sm text-warm-700 dark:text-warm-300">
+                    Yes, send me nearby sale alerts and special deals
+                    <br />
+                    <span className="text-xs text-warm-500 dark:text-warm-400">(emails about sales near you, new discoveries, flash deals)</span>
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+
+          <div className="text-xs text-warm-500 dark:text-warm-400 text-center">
+            By creating an account, you agree to our <Link href="/terms" className="text-amber-600 hover:text-amber-500">Terms of Service</Link>
+          </div>
 
           <div>
             <button
