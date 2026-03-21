@@ -2,6 +2,42 @@
 
 ## Recent Sessions
 
+### 2026-03-21 · Session 226
+
+**Projects-First Workflow Proposal — Phase 1 Implementation**
+
+**Work completed:**
+- Researched advisory board 3-layer architecture (full board / subcommittees / standalone agents). Confirmed it's deliberate, kept intact.
+- Merged CORE.md (295 lines) into root CLAUDE.md — now 286 lines, 12 sections. Eliminated ~200 lines duplication.
+- Added pain point fixes: large file MCP guidance (§5), PowerShell bracket escaping (§5), schema block mandate strengthened (§6), QA dispatch gate with role×tier matrix (§7).
+- Updated all 4 package CLAUDE.md files (CORE.md → root CLAUDE.md reference). Added @findasale/shared import ban to frontend, Vercel build warning to shared.
+- Trimmed conversation-defaults from 30 rules to 13 active (v7). Rule 6 rewritten ("expand smartly"), Rule 10 modernized, Rule 28 strengthened (action ALL findings).
+- Full advisory board reviewed proposal: 11-0-1 Go. All 5 concerns addressed in proposal.
+- Pushed proposal file to GitHub with board review outcome.
+- Updated global CLAUDE.md (removed stale context.md/update-context.js references, updated §7 reference).
+- Packaged conversation-defaults v7 as .skill file for Patrick to install.
+- Audited S164–S225 pain points, created memory file for 4 recurring patterns.
+
+**Files pushed to GitHub (3 commits):**
+- `CLAUDE.md` (root) — merged with CORE.md, v5.0
+- `packages/frontend/CLAUDE.md` — added import ban
+- `packages/backend/CLAUDE.md` — updated reference
+- `packages/database/CLAUDE.md` — updated reference
+- `packages/shared/CLAUDE.md` — added Vercel warning
+- `.skills/skills/conversation-defaults/SKILL.md` — v7
+- `claude_docs/operations/projects-first-workflow-proposal.md` — full proposal
+
+**Files changed locally (not in git):**
+- `.claude/CLAUDE.md` (global Cowork config) — updated Session Start, §7 reference
+
+**Pending Patrick actions:**
+- Install `conversation-defaults.skill` from project folder via Cowork UI
+- Optionally delete temp draft files: `CLAUDE.md.new`, `conversation-defaults-new.md`, `global-claude-md-new.md`
+
+**Token notes:** 2 Explore agent dispatches (advisory board research, pain point audit). 3 MCP push batches. No dev dispatches.
+
+---
+
 ### 2026-03-21 · Session 225
 
 **Comprehensive Audit S212–S224 + Chrome Verification + 3 Bug Fixes**

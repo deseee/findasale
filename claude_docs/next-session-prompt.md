@@ -1,58 +1,58 @@
-# Next Session Prompt — S225
+# Next Session Prompt — S227
 
-## Primary Objective: Comprehensive Audit S205–S224
+## Primary Objective: Projects-First Workflow — Phase 2 & Phase 3
 
-Patrick has requested a systematic audit of ALL sessions from S205 through S224 to verify that:
-1. Every bug found in those sessions is fixed and deployed
-2. Every fix that was deployed has been Chrome-verified live
-3. No regressions introduced by the S224 feature batch
+Phase 1 (Build & Fix) is complete and pushed. This session implements the remaining two phases.
 
-## Audit Scope
+## Phase 2 — Friction Audit + QA Validation (~1 hour)
 
-Read session-log.md entries for S205–S224. For each session, extract:
-- Bugs found (P0/P1/P2/P3)
-- Fixes reported as shipped
-- Chrome verification status (was it actually verified live?)
+### 2a. Update daily-friction-audit scheduled task
+- Add auto-dispatch action loop: ALL findings (HIGH, MEDIUM, LOW) auto-dispatch the appropriate agent (findasale-records for doc staleness, findasale-dev for code issues) in the same run.
+- Only the most minor cosmetic findings may persist 1-2 days without action.
+- If a finding persists 3+ consecutive audits → escalate to Patrick with `## Patrick Direct` block.
+- If auto-dispatched fix fails → re-classify finding as BLOCKED with error reason, escalate next session start.
 
-Cross-reference against current STATE.md "Remaining unfixed" list.
+### 2b. Reduce context-freshness-check to weekly
+- Change scheduled task frequency from daily to weekly. Projects auto-loads mean daily freshness checks are less critical.
 
-## Known Outstanding Items (as of S224)
+### 2c. Run a test QA audit
+- Pick one feature (suggestion: /favorites or /pricing) and run the new QA dispatch pattern:
+  1. Identify roles × tiers × operations
+  2. Generate specific test scenarios
+  3. Batch by page into focused dispatches
+  4. Track results in conversation
+- This validates the QA DISPATCH GATE added to CLAUDE.md §7.
 
-### Patrick Actions Required First:
-- [ ] prisma migrate deploy + prisma generate against Neon (#72 Phase 2 dual-role schema)
-  Command: cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-           $env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
-           npx prisma migrate deploy
-           npx prisma generate
+### 2d. Verify Phase 1 changes
+- Confirm subagent routing still works (dispatch one small task to findasale-dev).
+- Confirm conversation-defaults v7 is active (check if Patrick installed the .skill file).
+- Confirm CORE.md is no longer being loaded (it should be superseded by root CLAUDE.md).
 
-### Unverified / Possibly Unverified Fixes:
-- Inspiration nav link missing from Layout nav (S218 added it, may have been dropped in later commit)
-- /pricing page (NEW S224) — needs Chrome verification
-- /shopper/favorites (NEW S224) — needs Chrome verification (requires login as shopper)
-- /shopper/messages + /organizer/messages (NEW S224) — needs Chrome verification
-- FavoriteButton on ItemCard/InspirationGrid/sale detail (NEW S224) — needs Chrome verification
-- PWA install banner fix (S224) — needs Chrome verification (dismiss, navigate, confirm no reappear)
-- Leaderboard sort (S224) — needs Chrome verification (Frank should be #1 after Railway deploys)
+## Phase 3 — Cleanup (only after Phase 2 is QA'd)
 
-### Feature Gaps Still Open:
-- #73 Two-Channel Notification System (gated by #72 Prisma migration)
-- #74 Role-Aware Registration Consent Flow (gated by #72)
-- #75 Tier Lapse State Logic (gated by #72)
+### 3a. Delete from active use (keep in git history):
+- `.checkpoint-manifest.json`
+- `MESSAGE_BOARD.json`
 
-### Pre-Beta Safety Items Remaining:
-- #106 Organizer Reputation Scoring
-- #107 Chargeback + Collusion Tracking
-- #108 Winning Bid Velocity Check
-- #109 Off-Platform Transaction Detection
+### 3b. Archive skills:
+- `context-maintenance` — merge essential logic (STATE.md + session-log sync) into `findasale-records`, then archive standalone skill.
+- `findasale-push-coordinator` — push rules are in CLAUDE.md now; dedicated agent adds overhead without value.
 
-## Session Start Instructions
+### 3c. Remove CORE.md from active use
+- Content now lives in root CLAUDE.md. CORE.md stays in git history but should not be loaded or referenced.
 
-1. Load STATE.md + this file
-2. Ask Patrick if Prisma migration ran (it's the blocker for messaging + auth)
-3. Chrome-verify all S224 new features first (pricing, favorites, messages)
-4. Then audit S205–S224 session-log entries systematically
-5. Flag any bug reported as "fixed" that has no Chrome verification entry
-6. Dispatch dev for any confirmed regressions found
+## Pre-Session Checklist
+
+1. Load STATE.md
+2. Confirm Patrick installed conversation-defaults.skill (ask if unclear)
+3. Check if S225 push block was completed (InstallPrompt.tsx, _app.tsx, InspirationGrid.tsx)
+4. Check scheduled tasks list to find daily-friction-audit and context-freshness-check task IDs
+
+## Reference
+
+- Proposal: `claude_docs/operations/projects-first-workflow-proposal.md`
+- Board review: 11-0-1 Go with modifications (all addressed in proposal)
+- Phase 1 commits: a5e58dd, c8a5242, 3b2c879
 
 ## Vercel URL
 https://findasale-git-main-patricks-projects-f27190f8.vercel.app
