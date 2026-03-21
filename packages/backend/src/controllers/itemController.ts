@@ -1092,7 +1092,7 @@ export const getInspirationItems = async (req: Request, res: Response): Promise<
       where: {
         status: 'AVAILABLE',
         draftStatus: 'PUBLISHED',
-        photoUrls: { not: { equals: [] } },
+        photoUrls: { isEmpty: false },
         sale: {
           status: 'PUBLISHED',
         },
