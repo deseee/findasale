@@ -30,7 +30,7 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
         },
       },
       orderBy: {
-        streakPoints: 'desc',
+        streakPoints: { sort: 'desc', nulls: 'last' },
       },
       take: 20,
     });

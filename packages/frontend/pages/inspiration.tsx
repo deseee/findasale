@@ -93,15 +93,6 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
 
         {/* Grid */}
         <InspirationGrid items={items} isLoading={isLoading} />
-
-        {/* Empty State */}
-        {!isLoading && items.length === 0 && !error && (
-          <div className="text-center py-16">
-            <p className="text-warm-600 dark:text-warm-400 text-lg">
-              No items available yet. Check back soon!
-            </p>
-          </div>
-        )}
       </div>
     </Layout>
   );

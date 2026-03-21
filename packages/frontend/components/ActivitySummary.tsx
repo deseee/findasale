@@ -26,7 +26,7 @@ const ActivitySummary: React.FC = () => {
       return {
         totalPurchases: (purchasesRes.data || []).length,
         activeWatchlist: (subscriptionsRes.data || []).length,
-        savedItems: (favoritesRes.data || []).length,
+        savedItems: favoritesRes.data?.total ?? (favoritesRes.data?.favorites || []).length,
         streakPoints: userRes.data?.streakPoints || userRes.data?.points || 0,
       };
     },

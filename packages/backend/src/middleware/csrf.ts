@@ -89,6 +89,13 @@ export const validateCsrfToken = (req: Request, res: Response, next: NextFunctio
     return next();
   }
 
+  // JWT Bearer auth is inherently CSRF-safe (attackers cannot set custom headers cross-origin)
+  // Skip double-submit cookie check when a valid Bearer token is present
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
   // Parse cookies manually
   const cookies = parseCookies(req.headers.cookie);
   const cookieToken = cookies[CSRF_COOKIE_NAME];

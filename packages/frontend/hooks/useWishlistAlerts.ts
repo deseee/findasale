@@ -8,8 +8,9 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '../lib/api';
 
-const API_BASE = '/api/wishlist-alerts';
+const API_BASE = '/wishlist-alerts';
 
 interface WishlistAlert {
   id: string;
@@ -52,12 +53,8 @@ export const useWishlistAlerts = () => {
   return useQuery({
     queryKey: ['wishlistAlerts'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/my`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<WishlistAlert[]>;
+      const res = await api.get(`${API_BASE}/my`);
+      return res.data as WishlistAlert[];
     },
   });
 };
@@ -69,14 +66,8 @@ export const useCreateAlert = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: AlertInput) => {
-      const res = await fetch(API_BASE, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<WishlistAlert>;
+      const res = await api.post(API_BASE, input);
+      return res.data as WishlistAlert;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlistAlerts'] });
@@ -91,14 +82,8 @@ export const useUpdateAlert = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: AlertInput & { id: string }) => {
-      const res = await fetch(`${API_BASE}/${id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<WishlistAlert>;
+      const res = await api.patch(`${API_BASE}/${id}`, input);
+      return res.data as WishlistAlert;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlistAlerts'] });
@@ -113,11 +98,7 @@ export const useDeleteAlert = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API_BASE}/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await api.delete(`${API_BASE}/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlistAlerts'] });
