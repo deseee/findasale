@@ -133,10 +133,18 @@ export const issueLoyaltyCoupon = async (
     return;
   }
 
-  // Generate unique code — retry once on collision (extremely rare)
-  let code = generateCouponCode();
-  const existing = await prisma.coupon.findUnique({ where: { code } });
-  if (existing) code = generateCouponCode();
+  // Generate unique code — retry up to 3 times on collision (extremely rare)
+  let code = '';
+  let existing = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    code = generateCouponCode();
+    existing = await prisma.coupon.findUnique({ where: { code } });
+    if (!existing) break;
+  }
+  if (existing) {
+    console.error('[coupon] Failed to generate unique coupon code after 3 attempts');
+    throw new Error('Failed to generate unique coupon code');
+  }
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 90);

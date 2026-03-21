@@ -44,21 +44,30 @@ export const createInvite = async (req: AuthRequest, res: Response) => {
 // GET /admin/invites — list all invites with status
 export const listInvites = async (req: AuthRequest, res: Response) => {
   try {
-    const invites = await prisma.betaInvite.findMany({
-      include: {
-        usedBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            createdAt: true
+    // #97: Admin pagination limits — cap at 100 rows max to prevent data exfiltration
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 100);
+    const skip = Math.max(0, (Math.max(1, parseInt(req.query.page as string) || 1) - 1) * limit);
+
+    const [invites, total] = await Promise.all([
+      prisma.betaInvite.findMany({
+        include: {
+          usedBy: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              createdAt: true
+            }
           }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.betaInvite.count(),
+    ]);
 
     // Map to include status
     const invitesWithStatus = invites.map(invite => ({
@@ -66,7 +75,15 @@ export const listInvites = async (req: AuthRequest, res: Response) => {
       status: invite.usedAt ? 'used' : 'unused'
     }));
 
-    res.json(invitesWithStatus);
+    res.json({
+      invites: invitesWithStatus,
+      pagination: {
+        page: Math.max(1, parseInt(req.query.page as string) || 1),
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     console.error('Error listing invites:', error);
     res.status(500).json({ message: 'Failed to list invites' });
