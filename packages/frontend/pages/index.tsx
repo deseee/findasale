@@ -81,10 +81,21 @@ const HomePage = () => {
   const sales = feedData?.sales as Sale[] | undefined;
 
   useEffect(() => {
+    // Bug #24: Make geolocation non-blocking with timeout fallback
     if (navigator.geolocation) {
+      const timeoutId = setTimeout(() => {
+        console.warn('Geolocation request timed out after 5s');
+      }, 5000);
+
       navigator.geolocation.getCurrentPosition(
-        (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
-        (error) => console.error('Error getting location:', error)
+        (position) => {
+          clearTimeout(timeoutId);
+          setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        },
+        (error) => {
+          clearTimeout(timeoutId);
+          console.error('Geolocation error (non-blocking):', error.message);
+        }
       );
     }
 
