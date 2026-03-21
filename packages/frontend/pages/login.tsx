@@ -40,7 +40,11 @@ const LoginPage = () => {
         router.push('/');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred during login');
+      if (err.response?.status === 429) {
+        setError('Too many login attempts. Please wait a few minutes and try again.');
+      } else {
+        setError(err.response?.data?.message || 'An error occurred during login');
+      }
     } finally {
       setLoading(false);
     }
