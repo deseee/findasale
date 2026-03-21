@@ -239,7 +239,7 @@ const TypologyPage = () => {
       </div>
     );
   }
-  if (!user || user.role !== 'ORGANIZER') {
+  if (!user || !user.roles?.includes('ORGANIZER')) {
     router.push('/login');
     return null;
   }

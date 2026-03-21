@@ -63,7 +63,7 @@ const BrandKitPage = () => {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   // Redirect if not authenticated or not an organizer
-  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

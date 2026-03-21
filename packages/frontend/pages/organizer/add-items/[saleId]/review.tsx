@@ -161,7 +161,7 @@ const ReviewPage = () => {
     }
   }, [router.query.preview]);
 
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

@@ -26,14 +26,14 @@ const ABTestsPage = () => {
 
   // Redirect if not admin
   useEffect(() => {
-    if (!userLoading && (!user || user.role !== 'ADMIN')) {
+    if (!userLoading && (!user || !user.roles?.includes('ADMIN'))) {
       router.push('/');
     }
   }, [user, userLoading, router]);
 
   // Fetch test results
   useEffect(() => {
-    if (user?.role !== 'ADMIN') return;
+    if (!user?.roles?.includes('ADMIN')) return;
 
     const fetchResults = async () => {
       try {

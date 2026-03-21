@@ -34,7 +34,7 @@ const OrganizerPayoutsPage = () => {
   const [payoutMethod, setPayoutMethod] = useState<'standard' | 'instant'>('standard');
   const [selectedInterval, setSelectedInterval] = useState<Interval | null>(null);
 
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

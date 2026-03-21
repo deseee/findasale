@@ -29,7 +29,7 @@ const usePoints = (enabled = true) => {
       return response.data as PointsData;
     },
     enabled,
-    staleTime: 30_000, // 30 seconds
+    staleTime: 300_000, // 300 seconds
   });
 };
 

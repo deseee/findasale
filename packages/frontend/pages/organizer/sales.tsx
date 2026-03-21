@@ -44,7 +44,7 @@ const OrganizerSalesPage = () => {
   });
 
   // Auth guard — after all hooks
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

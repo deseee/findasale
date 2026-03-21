@@ -34,7 +34,7 @@ const LoginPage = () => {
       const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
       if (redirect && redirect.startsWith('/')) {
         router.push(redirect);
-      } else if (response.data.user.role === 'ORGANIZER') {
+      } else if (response.data.user.roles?.includes('ORGANIZER')) {
         router.push('/organizer/dashboard');
       } else {
         router.push('/');
@@ -62,7 +62,7 @@ const LoginPage = () => {
       const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
       if (redirect && redirect.startsWith('/')) {
         router.push(redirect);
-      } else if (result.user.role === 'ORGANIZER') {
+      } else if (result.user.roles?.includes('ORGANIZER')) {
         router.push('/organizer/dashboard');
       } else {
         router.push('/');

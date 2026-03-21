@@ -110,7 +110,7 @@ function OnboardingShower() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (!user || user.role === 'ORGANIZER' || user.role === 'ADMIN') return;
+    if (!user || user.roles?.includes('ORGANIZER') || user.roles?.includes('ADMIN')) return;
     if (typeof window === 'undefined') return;
     const done = localStorage.getItem('findasale_onboarded');
     if (!done) setShow(true);
@@ -136,7 +136,7 @@ function OrganizerOnboardingShower() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (!user || user.role !== 'ORGANIZER') return;
+    if (!user || !user.roles?.includes('ORGANIZER')) return;
     if (user.onboardingComplete) return; // Already onboarded — don't show
     setShow(true);
   }, [user]);

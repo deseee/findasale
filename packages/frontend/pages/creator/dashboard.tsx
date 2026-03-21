@@ -42,7 +42,7 @@ const CreatorDashboard = () => {
   const [activeTab, setActiveTab] = useState<'analytics' | 'settings'>('analytics');
 
   // Redirect if not authenticated or not a creator
-  if (!isLoading && (!user || user.role !== 'CREATOR')) {
+  if (!isLoading && (!user || !user.roles?.includes('CREATOR'))) {
     router.push('/login');
     return null;
   }

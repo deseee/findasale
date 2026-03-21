@@ -33,7 +33,7 @@ const AdminInvitesPage = () => {
 
   // Guard: redirect if not admin
   useEffect(() => {
-    if (!isLoading && (!user || user.role !== 'ADMIN')) {
+    if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
       router.push('/');
     }
   }, [user, isLoading, router]);
@@ -114,7 +114,7 @@ const AdminInvitesPage = () => {
     );
   }
 
-  if (!user || user.role !== 'ADMIN') {
+  if (!user || !user.roles?.includes('ADMIN')) {
     return null;
   }
 

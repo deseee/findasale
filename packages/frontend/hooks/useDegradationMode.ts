@@ -44,8 +44,8 @@ export function useDegradationMode() {
 
     fetchHealth();
 
-    // Poll every 10 seconds
-    const interval = setInterval(fetchHealth, 10000);
+    // Poll every 60 seconds
+    const interval = setInterval(fetchHealth, 60000);
 
     return () => clearInterval(interval);
   }, [user, setIsDegraded, setLatencyMs]);

@@ -31,7 +31,7 @@ export default function FlipReportIndexPage() {
 
   // Redirect if not authenticated or not an organizer
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+    if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
       router.push('/login');
     }
   }, [user, authLoading, router]);
@@ -43,7 +43,7 @@ export default function FlipReportIndexPage() {
       const res = await api.get('/sales/mine');
       return res.data.sales || [];
     },
-    enabled: !!user && user.role === 'ORGANIZER',
+    enabled: !!user && user.roles?.includes('ORGANIZER'),
   });
 
   // Auto-redirect if exactly one sale
@@ -64,7 +64,7 @@ export default function FlipReportIndexPage() {
     );
   }
 
-  if (!user || user.role !== 'ORGANIZER') {
+  if (!user || !user.roles?.includes('ORGANIZER')) {
     return null;
   }
 

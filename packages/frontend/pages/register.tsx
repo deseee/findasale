@@ -77,7 +77,7 @@ const RegisterPage = () => {
       login(response.data.token);
       
       // Redirect based on user role
-      if (response.data.user.role === 'ORGANIZER') {
+      if (response.data.user.roles?.includes('ORGANIZER')) {
         router.push('/organizer/dashboard');
       } else {
         router.push('/');

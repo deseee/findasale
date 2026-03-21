@@ -42,7 +42,7 @@ const CreateSalePage = () => {
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
-  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

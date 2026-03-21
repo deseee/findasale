@@ -133,7 +133,7 @@ const ProfilePage = () => {
                   </span>
                 )}
                 <span className="bg-green-100 text-green-800 dark:text-green-200 text-sm font-medium px-2.5 py-0.5 rounded">
-                  {user.role === 'USER' ? 'Shopper' : user.role}
+                  {user.roles?.includes('USER') && !user.roles?.includes('ORGANIZER') ? 'Shopper' : user.role}
                 </span>
               </div>
             </div>

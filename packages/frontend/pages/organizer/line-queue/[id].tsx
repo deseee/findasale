@@ -52,7 +52,7 @@ const LineQueuePage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

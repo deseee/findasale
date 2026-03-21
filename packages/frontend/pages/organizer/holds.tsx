@@ -43,7 +43,7 @@ const OrganizerHoldsPage = () => {
   const [sortBy, setSortBy] = useState<'expiry' | 'created'>('expiry');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

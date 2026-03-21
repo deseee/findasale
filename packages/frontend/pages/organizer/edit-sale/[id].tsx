@@ -60,7 +60,7 @@ const EditSalePage = () => {
     return distance > 0.0045; // Beyond ~0.5 miles / 0.8 km
   };
 
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

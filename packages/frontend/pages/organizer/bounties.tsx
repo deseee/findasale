@@ -41,7 +41,7 @@ const OrganizerBountiesPage = () => {
   const [fulfillBountyId, setFulfillBountyId] = useState<string | null>(null);
   const [fulfillItemId, setFulfillItemId] = useState('');
 
-  if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

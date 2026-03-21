@@ -25,7 +25,7 @@ const OrganizerReputationPage = () => {
 
   // Redirect if not authenticated or not an organizer
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'ORGANIZER')) {
+    if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
       router.push('/login');
     }
   }, [user, authLoading, router]);
@@ -41,7 +41,7 @@ const OrganizerReputationPage = () => {
 
   const { data: reputation, isLoading, error } = useReputationBreakdown(organizerId);
 
-  if (!user || user.role !== 'ORGANIZER') {
+  if (!user || !user.roles?.includes('ORGANIZER')) {
     return null;
   }
 
@@ -112,7 +112,7 @@ const OrganizerReputationPage = () => {
             <div className="flex items-end gap-6 mb-6">
               <div>
                 <div className={`text-6xl font-bold ${scoreColor} mb-2`}>
-                  {reputation?.score.toFixed(1) || '0.0'}
+                  {(reputation?.score || 0).toFixed(1)}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">out of 5.0 stars</div>
               </div>

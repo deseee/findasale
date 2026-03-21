@@ -101,7 +101,7 @@ const MessageThreadPage = () => {
   }
 
   const { conversation, messages } = data;
-  const otherName = user.role === 'ORGANIZER'
+  const otherName = user.roles?.includes('ORGANIZER')
     ? conversation.shopperUser.name
     : conversation.organizer.businessName;
 

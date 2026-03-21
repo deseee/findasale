@@ -68,7 +68,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         <span className="block px-3 py-2 text-sm text-warm-500 truncate">
           Hi, {user.name || user.email}
         </span>
-        {user.role === 'ORGANIZER' && (
+        {user.roles?.includes('ORGANIZER') && (
           <>
             <SectionHeader label="Primary" />
             <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -105,7 +105,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </Link>
           </>
         )}
-        {(user.role === 'USER' || user.role === 'ADMIN') && (
+        {user.roles?.includes('USER') && (
           <>
             <Link href="/shopper/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               My Profile
@@ -154,7 +154,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </Link>
           </>
         )}
-        {user.role === 'ADMIN' && (
+        {user.roles?.includes('ADMIN') && (
           <Link href="/admin" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium bg-amber-50 dark:bg-amber-900/20">
             Admin Panel
           </Link>
@@ -209,7 +209,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
               {/* Show Explore/Browse for all users, Map for all users */}
-              {isClient && user && (user.role === 'USER' || user.role === 'ADMIN' || user.role === 'ORGANIZER') && (
+              {isClient && user && (user.roles?.includes('USER') || user.roles?.includes('ADMIN') || user.roles?.includes('ORGANIZER')) && (
                 <>
                   <Link href="/" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Explore</Link>
                   <Link href="/map" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Map</Link>
@@ -358,7 +358,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </Link>
           ))}
           <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
-            {isClient && user?.role === 'ORGANIZER' ? (
+            {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
                 {/* Primary organizer links */}
                 <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -471,7 +471,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 <li><Link href="/leaderboard" className="text-warm-400 hover:text-white">Leaderboard</Link></li>
                 <li><Link href="/contact" className="text-warm-400 hover:text-white">Contact</Link></li>
                 <li><Link href="/faq" className="text-warm-400 hover:text-white">FAQ</Link></li>
-                {isClient && user?.role === 'ORGANIZER' && (
+                {isClient && user?.roles?.includes('ORGANIZER') && (
                   <>
                     <li><Link href="/organizer/dashboard" className="text-warm-400 hover:text-white">Dashboard</Link></li>
                     <li><Link href="/organizer/create-sale" className="text-warm-400 hover:text-white">Create Sale</Link></li>

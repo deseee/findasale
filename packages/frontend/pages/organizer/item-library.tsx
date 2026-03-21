@@ -103,7 +103,7 @@ const ItemLibraryPage: React.FC = () => {
         <title>Item Library | FindA.Sale</title>
       </Head>
       {/* Check authorization */}
-      {!user || user.role !== 'ORGANIZER' ? (
+      {!user || !user.roles?.includes('ORGANIZER') ? (
         <div className="text-center py-12">
           <p className="text-gray-600 dark:text-gray-400">Please log in as an organizer to access the item library.</p>
         </div>

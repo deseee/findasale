@@ -34,7 +34,7 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
   const { data } = useQuery({
     queryKey: ['message-templates'],
     queryFn: () => api.get('/message-templates').then(r => r.data),
-    enabled: !!user && user.role === 'ORGANIZER',
+    enabled: !!user && user.roles?.includes('ORGANIZER'),
   });
 
   const useMutation_ = useMutation({
@@ -56,7 +56,7 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['message-templates'] }),
   });
 
-  if (!user || user.role !== 'ORGANIZER') return null;
+  if (!user || !user.roles?.includes('ORGANIZER')) return null;
 
   const templates: Template[] = data?.templates || [];
   const categories = ['all', ...Array.from(new Set(templates.map(t => t.category)))];

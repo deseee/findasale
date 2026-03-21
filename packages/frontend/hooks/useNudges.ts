@@ -30,7 +30,7 @@ const useNudges = (enabled = true) => {
       return response.data as NudgesData;
     },
     enabled,
-    staleTime: 60_000, // 60 seconds
+    staleTime: 300_000, // 300 seconds
   });
 
   return {

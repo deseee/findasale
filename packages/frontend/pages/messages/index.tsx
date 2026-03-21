@@ -86,7 +86,7 @@ const MessagesPage = () => {
             <div className="text-5xl mb-4">💬</div>
             <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No messages yet</h2>
             <p className="text-warm-600 dark:text-warm-400 mb-6">
-              {user.role === 'ORGANIZER'
+              {user.roles?.includes('ORGANIZER')
                 ? 'Shoppers can message you from a sale page.'
                 : 'Browse sales and tap "Message Organizer" to ask a question.'}
             </p>
@@ -102,7 +102,7 @@ const MessagesPage = () => {
             {conversations.map(conv => {
               const preview = conv.messages[0];
               const unread = conv._count.messages;
-              const otherName = user.role === 'ORGANIZER'
+              const otherName = user.roles?.includes('ORGANIZER')
                 ? conv.shopperUser?.name ?? 'Shopper'
                 : conv.organizer?.businessName ?? 'Organizer';
               const timeAgo = new Date(conv.lastMessageAt).toLocaleDateString();

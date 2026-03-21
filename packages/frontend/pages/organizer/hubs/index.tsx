@@ -18,7 +18,7 @@ export default function OrganizerHubsPage() {
   const { data, isLoading, error } = useMyHubs();
   const deleteHubMutation = useDeleteHub('');
 
-  if (!user?.role || !['ORGANIZER'].includes(user.role)) {
+  if (!user?.roles || !user.roles.includes('ORGANIZER')) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

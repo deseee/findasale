@@ -73,7 +73,7 @@ const OrganizerDashboard = () => {
   const [isMobileView, setIsMobileView] = useState(false);
 
   // Redirect if not authenticated or not an organizer
-  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }
@@ -564,7 +564,7 @@ const OrganizerDashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div className="card p-6">
                   <p className="text-warm-600 dark:text-warm-300 text-sm">Active Sales</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{salesData?.length || 0}</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{salesData?.filter((s: any) => s.status === 'PUBLISHED').length || 0}</p>
                 </div>
                 <div className="card p-6">
                   <p className="text-warm-600 dark:text-warm-300 text-sm">Total Items</p>
@@ -603,7 +603,7 @@ const OrganizerDashboard = () => {
               )}
 
               {/* H1: How It Works card */}
-              {!orgProfile?.onboardingComplete && (
+              {orgProfile && !orgProfile.onboardingComplete && (
                 <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-6">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">How It Works</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

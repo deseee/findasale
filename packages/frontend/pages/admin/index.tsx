@@ -30,7 +30,7 @@ const AdminDashboard = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!isLoading && (!user || user.role !== 'ADMIN')) {
+    if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
       router.push('/');
     }
   }, [user, isLoading, router]);
@@ -53,7 +53,7 @@ const AdminDashboard = () => {
       }
     };
 
-    if (user?.role === 'ADMIN') {
+    if (user?.roles?.includes('ADMIN')) {
       fetchData();
     }
   }, [user]);
@@ -68,7 +68,7 @@ const AdminDashboard = () => {
     );
   }
 
-  if (!user || user.role !== 'ADMIN') {
+  if (!user || !user.roles?.includes('ADMIN')) {
     return null;
   }
 

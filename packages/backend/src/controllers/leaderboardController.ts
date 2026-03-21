@@ -64,15 +64,12 @@ export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
           },
         },
       },
-      orderBy: {
-        totalSales: 'desc',
-      },
-      take: 20,
+      take: 100, // Fetch more to ensure we can sort all before slicing top 20
     });
 
     // Fetch sale and item counts for each organizer
     const leaderboardData = await Promise.all(
-      organizers.map(async (org, index) => {
+      organizers.map(async (org) => {
         const [completedSalesCount, totalItems] = await Promise.all([
           prisma.sale.count({
             where: {
@@ -91,7 +88,6 @@ export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
         ]);
 
         return {
-          rank: index + 1,
           organizerId: org.id.slice(0, 4), // Mask for privacy
           organizerName: org.businessName,
           completedSales: completedSalesCount,
@@ -100,9 +96,23 @@ export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
       })
     );
 
-    res.json(leaderboardData);
+    // Sort by completed sales count (descending), then by total items sold (descending)
+    const sorted = leaderboardData
+      .sort((a, b) => {
+        if (b.completedSales !== a.completedSales) {
+          return b.completedSales - a.completedSales;
+        }
+        return b.totalItemsSold - a.totalItemsSold;
+      })
+      .slice(0, 20)
+      .map((org, index) => ({
+        rank: index + 1,
+        ...org,
+      }));
+
+    res.json(sorted);
   } catch (error) {
     console.error('Error fetching organizer leaderboard:', error);
-    res.status(500).json({ message: 'Server error while fetching organizer leaderboard' });
+    res.status(500).json({ message: 'Server error while fetching leaderboard' });
   }
 };

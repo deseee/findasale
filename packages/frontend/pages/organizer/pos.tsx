@@ -98,7 +98,7 @@ export default function POSPage() {
   // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!loading && (!user || user.role !== 'ORGANIZER')) {
+    if (!loading && (!user || !user.roles?.includes('ORGANIZER'))) {
       router.replace('/login');
     }
   }, [user, loading, router]);
@@ -106,7 +106,7 @@ export default function POSPage() {
   // ─── Load sales ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!user || user.role !== 'ORGANIZER') return;
+    if (!user || !user.roles?.includes('ORGANIZER')) return;
     api
       .get<{ sales?: Sale[]; data?: Sale[] }>('/sales/mine')
       .then(res => {

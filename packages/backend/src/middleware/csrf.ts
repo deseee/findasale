@@ -50,9 +50,18 @@ const parseCookies = (cookieHeader: string | undefined): Record<string, string> 
 /**
  * Middleware to set CSRF token cookie on all requests
  * Called before route handlers to ensure token is available for forms
+ * BUG #30 FIX: Do not refresh token on OPTIONS preflight requests — this breaks the
+ * token validation cycle because the preflight response sets a new token, but the
+ * subsequent POST request arrives with the old token value from the preflight.
  */
 export const csrfTokenCookie = (req: Request, res: Response, next: NextFunction) => {
-  // Always set a new CSRF token for every request (fresh tokens improve security)
+  // Skip token refresh on preflight OPTIONS requests (they don't carry state)
+  // This allows the token to remain stable across the preflight-POST cycle
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
+  // For all other requests, set a new CSRF token for every request (fresh tokens improve security)
   const token = generateCsrfToken();
 
   // Build Set-Cookie header manually (no cookie-parser dependency)

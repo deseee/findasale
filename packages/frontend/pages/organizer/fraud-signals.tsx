@@ -63,7 +63,7 @@ const FraudSignalsPage = () => {
       const res = await api.get('/sales/mine');
       return res.data.sales || [];
     },
-    enabled: !!user && user.role === 'ORGANIZER',
+    enabled: !!user && user.roles?.includes('ORGANIZER'),
   });
 
   // Fetch fraud signals for selected sale
@@ -88,7 +88,7 @@ const FraudSignalsPage = () => {
   }
 
   // Redirect if not authenticated or not organizer
-  if (!user || user.role !== 'ORGANIZER') {
+  if (!user || !user.roles?.includes('ORGANIZER')) {
     router.push('/login');
     return null;
   }
