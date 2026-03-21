@@ -172,6 +172,16 @@ const OrganizerDashboard = () => {
     }
   }, [orgProfile]);
 
+  // Handle Stripe checkout success redirect
+  useEffect(() => {
+    if (router.query.upgrade === 'success' && user?.organizerTier) {
+      const tierName = user.organizerTier === 'PRO' ? 'PRO' : 'TEAMS';
+      showToast(`You're now on ${tierName}! Welcome to an upgraded experience.`, 'success');
+      // Clear the query param from URL
+      router.replace(router.pathname, undefined, { shallow: true });
+    }
+  }, [router.query.upgrade, user?.organizerTier, router, showToast]);
+
   // Handle sale cloning
   const handleCloneSale = async (saleId: string) => {
     setCloningId(saleId);
