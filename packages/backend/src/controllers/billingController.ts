@@ -19,7 +19,6 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
 
     const { priceId, billingInterval } = req.body as { priceId: string; billingInterval: 'monthly' | 'annual' };
 
-    // Validate priceId against env vars
     const validPriceIds = [
       process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
       process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
@@ -31,7 +30,6 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
       return res.status(400).json({ message: 'Invalid price ID' });
     }
 
-    // Get organizer
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
       include: { user: true },
@@ -41,10 +39,8 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    // Determine if this is a new subscriber (no prior stripeCustomerId)
     const isNewSubscriber = !organizer.stripeCustomerId;
 
-    // Get or create Stripe customer
     let customerId = organizer.stripeCustomerId;
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -53,14 +49,12 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
       });
       customerId = customer.id;
 
-      // Save customer ID to organizer
       await prisma.organizer.update({
         where: { id: organizer.id },
         data: { stripeCustomerId: customerId },
       });
     }
 
-    // Build checkout session config
     const sessionConfig: any = {
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
@@ -69,12 +63,10 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
       cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/organizer/upgrade?canceled=true`,
     };
 
-    // Apply trial coupon for new subscribers only
     if (isNewSubscriber && process.env.STRIPE_TRIAL_COUPON_ID) {
       sessionConfig.discounts = [{ coupon: process.env.STRIPE_TRIAL_COUPON_ID }];
     }
 
-    // Create checkout session
     const session = await stripe.checkout.sessions.create(sessionConfig);
 
     if (!session.url) {
@@ -90,8 +82,8 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
 
 /**
  * POST /api/billing/webhook
- * Handle Stripe webhook events (subscription lifecycle, payment events)
- * NO authentication — signature verified with STRIPE_WEBHOOK_SECRET
+ * Handle Stripe webhook events (subscription lifecycle)
+ * Feature #75: Tier Lapse State Logic integrated here
  */
 export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
   try {
@@ -103,7 +95,6 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ message: 'Webhook secret not configured' });
     }
 
-    // Construct and verify event
     let event;
     try {
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
@@ -112,7 +103,6 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Webhook signature verification failed' });
     }
 
-    // Check idempotency
     const alreadyProcessed = await prisma.processedWebhookEvent.findUnique({
       where: { eventId: event.id },
     });
@@ -121,7 +111,6 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       return res.json({ received: true });
     }
 
-    // Handle event types
     switch (event.type) {
       case 'customer.subscription.created': {
         const subscription: any = event.data.object;
@@ -174,8 +163,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       case 'invoice.payment_failed': {
         const invoice: any = event.data.object;
         console.warn(`Payment failed for subscription ${invoice.subscription}`);
-        // DO NOT downgrade immediately — Stripe will retry with dunning
-        // Optionally send email notification (future enhancement)
+        // Do NOT downgrade immediately — Stripe will retry with dunning
         break;
       }
 
@@ -209,11 +197,9 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       }
 
       default:
-        // Ignore unhandled event types
         break;
     }
 
-    // Mark as processed
     await prisma.processedWebhookEvent.create({
       data: { eventId: event.id },
     });
@@ -227,7 +213,6 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
 
 /**
  * GET /api/billing/subscription
- * Get current subscription status for authenticated organizer
  */
 export const getSubscription = async (req: AuthRequest, res: Response) => {
   try {
@@ -243,7 +228,6 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    // If no subscription, return SIMPLE tier
     if (!organizer.stripeSubscriptionId) {
       return res.json({
         tier: 'SIMPLE',
@@ -255,13 +239,10 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Fetch subscription from Stripe
     try {
       const subscription: any = await stripe.subscriptions.retrieve(organizer.stripeSubscriptionId);
       const priceData = subscription.items.data[0]?.price;
       const priceId = priceData?.id;
-
-      // Map price ID to tier
       const tier = getTierFromPriceId(priceId);
 
       res.json({
@@ -274,7 +255,6 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       });
     } catch (stripeError) {
       console.error('Failed to fetch subscription from Stripe, falling back to DB:', stripeError);
-      // Graceful degradation: return organizer's DB tier
       res.json({
         tier: organizer.subscriptionTier,
         status: organizer.subscriptionStatus,
@@ -292,7 +272,6 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/billing/cancel
- * Cancel organizer's subscription (at end of current period)
  */
 export const cancelSubscription = async (req: AuthRequest, res: Response) => {
   try {
@@ -312,20 +291,15 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No active subscription to cancel' });
     }
 
-    // Update subscription in Stripe
     const subscription: any = await stripe.subscriptions.update(organizer.stripeSubscriptionId, {
       cancel_at_period_end: true,
     });
 
-    // Update organizer in DB
     await prisma.organizer.update({
       where: { id: organizer.id },
-      data: {
-        subscriptionStatus: 'scheduled_for_cancellation',
-      },
+      data: { subscriptionStatus: 'scheduled_for_cancellation' },
     });
 
-    // Return updated subscription info
     const priceData = subscription.items.data[0]?.price;
     const priceId = priceData?.id;
     const tier = getTierFromPriceId(priceId);
@@ -344,9 +318,6 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/**
- * Helper: Get organizer ID from Stripe customer (to handle webhook events)
- */
 async function getOrganizerIdFromStripeCustomer(customerId: string): Promise<string | null> {
   const organizer = await prisma.organizer.findFirst({
     where: { stripeCustomerId: customerId },
@@ -355,17 +326,12 @@ async function getOrganizerIdFromStripeCustomer(customerId: string): Promise<str
   return organizer?.id || null;
 }
 
-/**
- * Helper: Map Stripe price ID to tier (PRO, TEAMS, or SIMPLE)
- */
 function getTierFromPriceId(priceId: string | null): SubscriptionTier {
   if (!priceId) return 'SIMPLE';
-
   const proMonthly = process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
   const proAnnual = process.env.STRIPE_PRO_ANNUAL_PRICE_ID;
   const teamsMonthly = process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID;
   const teamsAnnual = process.env.STRIPE_TEAMS_ANNUAL_PRICE_ID;
-
   if (priceId === proMonthly || priceId === proAnnual) return 'PRO' as SubscriptionTier;
   if (priceId === teamsMonthly || priceId === teamsAnnual) return 'TEAMS' as SubscriptionTier;
   return 'SIMPLE';

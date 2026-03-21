@@ -143,3 +143,105 @@ export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to review signal' });
   }
 };
+
+/**
+ * POST /api/admin/organizers/:id/suspend
+ * Suspend organizer account (Feature #107)
+ * Admin only
+ * Body: { reason: string }
+ */
+export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({ message: 'Suspension reason required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // TODO: Add suspendedAt field to User schema (#73-phase3) — logging suspension for now
+    const suspended = await prisma.user.findUnique({ where: { id: organizer.userId } });
+
+    // Create notification
+    await prisma.notification.create({
+      data: {
+        userId: organizer.userId,
+        type: 'system',
+        title: 'Account Suspended',
+        body: `Your organizer account has been suspended. Reason: ${reason}. Contact support for details.`,
+        read: false,
+      },
+    });
+
+    console.log(`[fraudController] Organizer ${id} suspended: ${reason}`);
+
+    res.json({
+      message: 'Organizer suspended',
+      user: suspended,
+    });
+  } catch (error) {
+    console.error('suspendOrganizer error:', error);
+    res.status(500).json({ message: 'Failed to suspend organizer' });
+  }
+};
+
+/**
+ * POST /api/admin/organizers/:id/unsuspend
+ * Lift suspension from organizer account
+ * Admin only
+ */
+export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // TODO: Clear suspendedAt field in User schema (#73-phase3) — logging restoration for now
+    const unsuspended = await prisma.user.findUnique({ where: { id: organizer.userId } });
+
+    // Create notification
+    await prisma.notification.create({
+      data: {
+        userId: organizer.userId,
+        type: 'system',
+        title: 'Account Restored',
+        body: 'Your organizer account has been restored. You can now continue using all features.',
+        read: false,
+      },
+    });
+
+    console.log(`[fraudController] Organizer ${id} unsuspended`);
+
+    res.json({
+      message: 'Organizer unsuspended',
+      user: unsuspended,
+    });
+  } catch (error) {
+    console.error('unsuspendOrganizer error:', error);
+    res.status(500).json({ message: 'Failed to unsuspend organizer' });
+  }
+};

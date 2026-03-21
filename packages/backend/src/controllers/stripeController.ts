@@ -41,7 +41,7 @@ const sendReceiptEmail = async (purchase: {
   try {
     const html = buildEmail({
       preheader: `Receipt for ${purchase.item?.title ?? 'your purchase'}`,
-      headline: 'Your purchase is confirmed! \uD83C\uDF89',
+      headline: 'Your purchase is confirmed! 🎉',
       body: `<p>Hi ${purchase.user.name},</p><p>Your payment of <strong>$${purchase.amount.toFixed(2)}</strong> for <strong>${purchase.item?.title ?? 'an item'}</strong> from <em>${purchase.sale?.title ?? 'a sale'}</em> has been confirmed.</p><p>Thank you for your purchase! The organizer will be in touch about pickup.</p>`,
       ctaText: 'View Purchase History',
       ctaUrl: historyUrl,
@@ -66,7 +66,6 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    // Check if organizer already has a Stripe account
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id }
     });
@@ -75,14 +74,11 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    // If organizer already has a Stripe Connect ID
     if (organizer.stripeConnectId) {
       try {
-        // First, try to create a login link (works only if account is fully onboarded)
         const loginLink = await stripe().accounts.createLoginLink(organizer.stripeConnectId);
         return res.json({ url: loginLink.url });
       } catch (loginError: any) {
-        // If login link fails because onboarding is incomplete, create a new account link
         if (loginError.message?.includes('not completed onboarding')) {
           const accountLink = await stripe().accountLinks.create({
             account: organizer.stripeConnectId,
@@ -92,12 +88,10 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
           });
           return res.json({ url: accountLink.url });
         }
-        // Re-throw other errors
         throw loginError;
       }
     }
 
-    // No existing Stripe account: create a new one
     const account = await stripe().accounts.create({
       type: 'express',
       email: req.user.email,
@@ -108,13 +102,11 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Save the account ID to the organizer profile
     await prisma.organizer.update({
       where: { userId: req.user.id },
       data: { stripeConnectId: account.id }
     });
 
-    // Create an account link for onboarding
     const accountLink = await stripe().accountLinks.create({
       account: account.id,
       refresh_url: `${process.env.FRONTEND_URL}/organizer/dashboard`,
@@ -124,7 +116,6 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
 
     res.json({ url: accountLink.url });
   } catch (error: unknown) {
-    // P1 Bug 3: Detect Stripe error types and return appropriate status codes with user-friendly messages
     let statusCode = 500;
     let message = 'Failed to create Stripe Connect account';
     let type = undefined;
@@ -133,11 +124,8 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
     if (error instanceof Error) {
       type = (error as any).type;
       errorCode = (error as any).code;
-
-      // Check for Stripe validation errors (400)
       if (type === 'invalid_request_error') {
         statusCode = 400;
-        // P1-C: Provide actionable error messages for common validation errors
         if (errorCode === 'missing_field' || error.message?.includes('email')) {
           message = 'A valid email address is required for Stripe account setup';
         } else if (errorCode === 'invalid_param') {
@@ -145,20 +133,15 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
         } else {
           message = error.message || 'Invalid request parameters';
         }
-      }
-      // Check for rate limit errors (503)
-      else if (type === 'rate_limit_error') {
+      } else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Too many requests \u2014 please try again in a minute';
-      }
-      // All other errors remain 500
-      else {
+        message = 'Too many requests — please try again in a minute';
+      } else {
         message = error.message;
       }
     } else if (error && typeof error === 'object') {
       type = (error as any).type;
       errorCode = (error as any).code;
-
       if (type === 'invalid_request_error') {
         statusCode = 400;
         if (errorCode === 'missing_field' || (error as any).message?.includes('email')) {
@@ -170,26 +153,17 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
         }
       } else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Too many requests \u2014 please try again in a minute';
+        message = 'Too many requests — please try again in a minute';
       }
     }
 
-    console.error('Stripe Connect account creation error:', {
-      type,
-      code: errorCode,
-      statusCode,
-      message,
-      env: {
-        hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
-        nodeEnv: process.env.NODE_ENV,
-      }
-    });
+    console.error('Stripe Connect account creation error:', { type, code: errorCode, statusCode, message });
     if (statusCode === 503) res.set('Retry-After', '60');
     res.status(statusCode).json({ message });
   }
 };
 
-// P2 Bug 2: Webhook failure recovery — query Stripe for charge status if Purchase record missing
+// P2 Bug 2: Webhook failure recovery
 export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -201,13 +175,11 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'paymentIntentId is required' });
     }
 
-    // Check if Purchase already exists
     const existingPurchase = await prisma.purchase.findUnique({
       where: { stripePaymentIntentId: paymentIntentId },
     });
 
     if (existingPurchase) {
-      // Purchase already created, return status
       return res.json({
         status: existingPurchase.status,
         purchaseId: existingPurchase.id,
@@ -215,10 +187,8 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Query Stripe API for this payment intent
     const paymentIntent = await stripe().paymentIntents.retrieve(paymentIntentId);
 
-    // If payment succeeded, create the Purchase record from metadata
     if (paymentIntent.status === 'succeeded') {
       const { itemId, saleId, userId } = paymentIntent.metadata || {};
       if (!itemId || !saleId || !userId) {
@@ -227,7 +197,6 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      // Create Purchase record retroactively
       const purchase = await prisma.purchase.create({
         data: {
           userId,
@@ -240,13 +209,11 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
         },
       });
 
-      // Update item status to SOLD
       const updatedItem = await prisma.item.update({
         where: { id: itemId },
         data: { status: 'SOLD' },
       }).catch(err => console.warn('Failed to update item status during recovery:', err));
 
-      // Feature #70: Emit live feed event
       if (updatedItem) {
         try {
           const io = getIO();
@@ -269,7 +236,6 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Payment not yet succeeded or failed
     return res.json({
       status: paymentIntent.status,
       message: `Payment intent status: ${paymentIntent.status}`,
@@ -313,7 +279,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // P0 Fix 3: Prevent race condition — check item is still AVAILABLE
     if (item.status !== 'AVAILABLE') {
       return res.status(409).json({ message: `Item is no longer available (status: ${item.status})` });
     }
@@ -322,7 +287,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Organizer has not set up payment processing' });
     }
 
-    // P0 Fix 4: Prevent organizer from purchasing their own items
     if (item.sale.organizer.userId === req.user.id) {
       return res.status(400).json({ message: 'You cannot purchase items from your own sale' });
     }
@@ -347,22 +311,18 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid price value' });
     }
 
-    // CA3: Stripe minimum charge is $0.50 — reject below that to avoid Stripe error
     if (price < 0.5) {
       return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
     }
 
-    // W1: Add shipping cost if buyer opted in and item ships
     let shippingCost = 0;
     if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
       shippingCost = item.shippingPrice;
     }
 
-    // QA: payment flow — B1: Fee now read from FeeStructure table at transaction time
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const baseFeePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
+    const baseFeePercent = feeStructure?.feeRate ?? 0.10;
 
-    // Feature #11: Waive platform fee if organizer has an active referral discount
     const discountExpiry = item.sale.organizer.referralDiscountExpiry;
     const hasReferralDiscount = discountExpiry != null && discountExpiry > new Date();
     const feePercent = hasReferralDiscount ? 0 : baseFeePercent;
@@ -370,7 +330,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const priceCents = Math.round((price + shippingCost) * 100);
     const platformFeeAmount = Math.round(priceCents * feePercent);
 
-    // Sprint 3: Coupon redemption — validate and apply discount before creating PI
     let couponId: string | undefined;
     let discountAmount = 0;
     if (couponCode) {
@@ -391,7 +350,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }
     const finalPriceCents = priceCents - discountAmount;
 
-    // Include coupon context in idempotency key — different coupon = different PI
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
     const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;
 
@@ -421,7 +379,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         userId: req.user.id,
         itemId: item.id,
         saleId: item.sale.id,
-        amount: finalPriceCents / 100, // actual charged amount (post-discount)
+        amount: finalPriceCents / 100,
         platformFeeAmount: platformFeeAmount / 100,
         stripePaymentIntentId: paymentIntent.id,
         status: 'PENDING',
@@ -429,7 +387,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       }
     });
 
-    // Feature: Abandoned Checkout Recovery — track this payment intent for recovery emails
     await prisma.checkoutAttempt.upsert({
       where: { paymentIntent: paymentIntent.id },
       create: {
@@ -444,8 +401,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       clientSecret: paymentIntent.client_secret,
       purchaseId: purchase.id,
       platformFee: platformFeeAmount / 100,
-      totalAmount: finalPriceCents / 100, // post-discount price (what Stripe charges)
-      originalAmount: price,              // pre-discount item price (for display reference)
+      totalAmount: finalPriceCents / 100,
+      originalAmount: price,
       discountApplied: discountAmount / 100,
       ...(couponCode ? { couponCode } : {}),
     });
@@ -461,7 +418,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!endpointSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET is not configured \u2014 webhook verification cannot proceed');
+    console.error('STRIPE_WEBHOOK_SECRET is not configured — webhook verification cannot proceed');
     return res.status(500).send('Webhook Error: STRIPE_WEBHOOK_SECRET not configured');
   }
 
@@ -474,18 +431,16 @@ export const webhookHandler = async (req: Request, res: Response) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // P0 Fix 2: Webhook Retry Idempotency — check if this event was already processed
   try {
     const existingEvent = await prisma.processedWebhookEvent.findUnique({
       where: { eventId: event.id }
     });
     if (existingEvent) {
-      console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) \u2014 skipping reprocessing`);
+      console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) — skipping reprocessing`);
       return res.json({ received: true, duplicate: true });
     }
   } catch (err) {
     console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, err);
-    // Continue anyway \u2014 better to process twice than to lose an event
   }
 
   switch (event.type) {
@@ -524,27 +479,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
           data: { status: 'PAID' },
         });
 
-        // #62: Generate digital receipt (fire-and-forget)
         setImmediate(() => {
           generateReceipt(purchase.id).catch(err => console.error('[receipt] Failed to generate receipt:', err));
         });
 
-        // Feature: Abandoned Checkout Recovery \u2014 mark this checkout as completed
         await prisma.checkoutAttempt.updateMany({
           where: { paymentIntent: paymentIntent.id },
           data: { completedAt: new Date() },
         }).catch(err => console.warn('[checkout-recovery] Failed to mark checkout as completed:', err));
 
         if (paymentIntent.metadata?.itemId) {
-          // CA3: Concurrent purchase guard \u2014 check item status before marking SOLD
-          // If another buyer's PI already marked it SOLD, refund this one automatically
           const item = await prisma.item.findUnique({
             where: { id: paymentIntent.metadata.itemId },
             select: { status: true },
           });
 
           if (item && item.status === 'SOLD' && purchase.status !== 'PAID') {
-            // Second buyer won the race \u2014 refund silently and stop
             console.warn(
               `CA3 concurrent purchase: item ${paymentIntent.metadata.itemId} already SOLD, ` +
               `refunding PI ${paymentIntent.id}`
@@ -562,7 +512,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
             data: { status: 'SOLD' },
           });
 
-          // Feature #70: Emit live feed event
           if (soldItem) {
             try {
               const io = getIO();
@@ -577,7 +526,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
               console.warn('[liveFeed] Failed to emit sold event:', err);
             }
 
-            // Feature #14: Push sale status update
             try {
               const io = getIO();
               await pushSaleStatus(io, soldItem.saleId);
@@ -585,7 +533,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
               console.warn('[saleStatus] Failed to push status update:', err);
             }
 
-            // Feature #14: Send organizer alert email (fire-and-forget)
             try {
               const saleData = await prisma.sale.findUnique({
                 where: { id: soldItem.saleId },
@@ -616,18 +563,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }).catch(err => console.warn('Failed to increment affiliate conversion:', err));
         }
 
-        // POS purchases (source: POS) have no buyer account \u2014 skip buyer-only features
         const isPOS = paymentIntent.metadata?.source === 'POS';
 
         if (!isPOS && purchase.userId) {
-          // Award purchase badge
           await handlePurchaseBadge(purchase.userId);
 
-          // Features #58-59: Check and award achievements for purchase
           checkAndAward(purchase.userId, 'PURCHASE_MADE')
             .catch(err => console.warn('[achievement] Failed to award purchase achievement:', err));
 
-          // Phase 19: Award 10 points for purchase
           awardPoints(
             purchase.userId,
             'PURCHASE',
@@ -637,21 +580,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
             'Purchased an item',
           ).catch(err => console.warn('[points] Failed to award purchase points:', err));
 
-          // Feature #29: Award MAKE_PURCHASE stamp (fire-and-forget)
           awardStamp(purchase.userId, 'MAKE_PURCHASE', purchase.saleId ?? undefined)
             .catch(err => console.warn('[loyalty] Failed to award purchase stamp:', err));
 
-          // Sprint 3: Issue loyalty coupon (fire-and-forget)
           issueLoyaltyCoupon(purchase.userId, purchase.id)
             .catch(err => console.warn('[coupon] Failed to issue loyalty coupon:', err));
 
-          // Sprint 3: Mark applied coupon as used if one was redeemed
           if (paymentIntent.metadata?.couponId) {
             markCouponUsed(paymentIntent.metadata.couponId, purchase.id)
               .catch(err => console.warn('[coupon] Failed to mark coupon used:', err));
           }
 
-          // Create in-app notification for purchase confirmation (fire-and-forget)
           createNotification(
             purchase.userId,
             'purchase',
@@ -661,9 +600,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
           ).catch(err => console.error('[notification] Failed to create purchase notification:', err));
         }
 
-        // Send receipt email:
-        // - Online: to the registered buyer's email
-        // - POS: to buyerEmail in metadata (if provided), skip if none
         if (!isPOS && purchase.user) {
           await sendReceiptEmail({
             id: purchase.id,
@@ -673,11 +609,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             sale: purchase.sale,
           });
         }
-        // Note: POS receipt is sent directly by terminalController.captureTerminalPaymentIntent
-        // (which runs before the webhook). The webhook is secondary for POS \u2014 it provides
-        // idempotency only. No duplicate receipt is sent here.
 
-        // X1: Fire webhooks (non-blocking)
         const orgUserId = (purchase.sale as any)?.organizer?.userId;
         if (orgUserId) {
           setImmediate(() =>
@@ -707,7 +639,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
       const dispute = event.data.object;
       console.log(`[stripe] Chargeback initiated: dispute_id=${dispute.id}, charge_id=${dispute.charge}`);
 
-      // Find the purchase by looking up the payment intent from the charge
       try {
         // dispute.charge may be a string ID or an expanded Charge object — normalize to string
         const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
@@ -746,14 +677,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.warn(`[stripe] Unhandled event type: ${event.type}`);
   }
 
-  // P0 Fix 2: Record this event as processed (idempotency)
   try {
     await prisma.processedWebhookEvent.create({
       data: { eventId: event.id }
     });
   } catch (err) {
     console.warn(`[webhook] Failed to record processed event ${event.id}:`, err);
-    // Don't fail the webhook response if we can't record it
   }
 
   res.json({ received: true });
