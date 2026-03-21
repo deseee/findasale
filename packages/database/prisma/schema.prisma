@@ -33,7 +33,7 @@ model User {
   // Organizer referral credits: accumulated platform fee discounts
   organizerCredits  Float      @default(0)
   organizer         Organizer?
-  roleSubscriptions UserRoleSubscription[] // Feature #72: Dual-role account subscriptions
+  roleSubscriptions UserRoleSubscription[] @relation("roleSubscriptions") // Feature #72: Dual-role account subscriptions
   purchases     Purchase[]
   favorites     Favorite[]
   bids          Bid[]
