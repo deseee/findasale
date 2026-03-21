@@ -345,7 +345,7 @@ app.use('/api/nudges', nudgeRoutes);                             // Feature 61: 
 app.use('/api/social-proof', socialProofRoutes);                 // Feature 67: Social Proof Notifications
 app.use('/api/snooze', snoozeRoutes);                            // Feature 23: Unsubscribe-to-Snooze
 app.use('/api/organizer/command-center', commandCenterRoutes);    // #68 Sprint 1: Command Center Dashboard
-app.use('/api', reputationRoutes);                                 // #71: Organizer Reputation Score
+app.use('/api/organizers', reputationRoutes);                      // #71: Organizer Reputation Score
 app.use('/api/city-heat', cityHeatRoutes);                         // Phase 5: #49 City Heat Index
 app.use('/api/link-clicks', linkClickRoutes);                      // #18: Post Performance Analytics
 app.use('/api/receipts', receiptRoutes);                             // #62: Digital Receipts
