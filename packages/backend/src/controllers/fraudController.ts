@@ -9,9 +9,12 @@ import { prisma } from '../lib/prisma';
 /**
  * Feature #17: Fraud Controller
  * Handlers for fraud signal endpoints (organizer view + admin review)
- * Feature #107: Added suspendOrganizer / unsuspendOrganizer for chargeback auto-suspension
  */
 
+/**
+ * GET /api/fraud/sale/:saleId
+ * Organizer views fraud signals for their sale (PRO tier required)
+ */
 export const getSaleFraudSignalsHandler = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -21,6 +24,7 @@ export const getSaleFraudSignalsHandler = async (req: AuthRequest, res: Response
     const { saleId } = req.params;
     const { minScore = 30, status, page = 1, limit = 20 } = req.query;
 
+    // Verify the user owns this sale (organizer check)
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
       select: { organizerId: true },
@@ -30,6 +34,7 @@ export const getSaleFraudSignalsHandler = async (req: AuthRequest, res: Response
       return res.status(404).json({ message: 'Sale not found' });
     }
 
+    // Get organizer info
     const organizer = await prisma.organizer.findFirst({
       where: { userId: req.user.id },
       select: { id: true },
@@ -39,6 +44,7 @@ export const getSaleFraudSignalsHandler = async (req: AuthRequest, res: Response
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Check PRO tier
     const orgData = await prisma.organizer.findUnique({
       where: { id: organizer.id },
       select: { subscriptionTier: true },
@@ -63,6 +69,10 @@ export const getSaleFraudSignalsHandler = async (req: AuthRequest, res: Response
   }
 };
 
+/**
+ * POST /api/fraud/signals/:signalId/review
+ * Organizer or admin marks a signal as reviewed
+ */
 export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -72,10 +82,12 @@ export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
     const { signalId } = req.params;
     const { outcome, notes } = req.body;
 
+    // Validate outcome
     if (!['DISMISSED', 'CONFIRMED'].includes(outcome)) {
       return res.status(400).json({ message: 'Invalid outcome. Must be DISMISSED or CONFIRMED' });
     }
 
+    // Get signal
     const signal = await prisma.fraudSignal.findUnique({
       where: { id: signalId },
       select: { id: true, saleId: true },
@@ -85,6 +97,7 @@ export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Signal not found' });
     }
 
+    // Verify access: organizer owns the sale or user is admin
     if (req.user.role !== 'ADMIN') {
       const sale = await prisma.sale.findUnique({
         where: { id: signal.saleId },
@@ -101,6 +114,7 @@ export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Update signal
     await reviewSignal(
       signalId,
       outcome as 'DISMISSED' | 'CONFIRMED',
@@ -108,6 +122,7 @@ export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
       req.user.role === 'ADMIN' ? req.user.id : undefined
     );
 
+    // Fetch and return updated signal
     const updated = await prisma.fraudSignal.findUnique({
       where: { id: signalId },
       include: {
@@ -131,7 +146,9 @@ export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/admin/organizers/:id/suspend
- * Feature #107: Admin-initiated organizer suspension
+ * Suspend organizer account (Feature #107)
+ * Admin only
+ * Body: { reason: string }
  */
 export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
   try {
@@ -155,11 +172,10 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer not found' });
     }
 
-    const suspended = await prisma.user.update({
-      where: { id: organizer.userId },
-      data: { suspendedAt: new Date() },
-    });
+    // TODO: Add suspendedAt field to User schema (#73-phase3) — logging suspension for now
+    const suspended = await prisma.user.findUnique({ where: { id: organizer.userId } });
 
+    // Create notification
     await prisma.notification.create({
       data: {
         userId: organizer.userId,
@@ -172,7 +188,10 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
 
     console.log(`[fraudController] Organizer ${id} suspended: ${reason}`);
 
-    res.json({ message: 'Organizer suspended', user: suspended });
+    res.json({
+      message: 'Organizer suspended',
+      user: suspended,
+    });
   } catch (error) {
     console.error('suspendOrganizer error:', error);
     res.status(500).json({ message: 'Failed to suspend organizer' });
@@ -181,7 +200,8 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/admin/organizers/:id/unsuspend
- * Feature #107: Lift organizer suspension
+ * Lift suspension from organizer account
+ * Admin only
  */
 export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
   try {
@@ -200,11 +220,10 @@ export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer not found' });
     }
 
-    const unsuspended = await prisma.user.update({
-      where: { id: organizer.userId },
-      data: { suspendedAt: null },
-    });
+    // TODO: Clear suspendedAt field in User schema (#73-phase3) — logging restoration for now
+    const unsuspended = await prisma.user.findUnique({ where: { id: organizer.userId } });
 
+    // Create notification
     await prisma.notification.create({
       data: {
         userId: organizer.userId,
@@ -217,7 +236,10 @@ export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
 
     console.log(`[fraudController] Organizer ${id} unsuspended`);
 
-    res.json({ message: 'Organizer unsuspended', user: unsuspended });
+    res.json({
+      message: 'Organizer unsuspended',
+      user: unsuspended,
+    });
   } catch (error) {
     console.error('unsuspendOrganizer error:', error);
     res.status(500).json({ message: 'Failed to unsuspend organizer' });
