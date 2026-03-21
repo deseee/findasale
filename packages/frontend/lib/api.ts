@@ -8,13 +8,26 @@ const api = axios.create({
   },
 });
 
-// Add a request interceptor to include the auth token
+// Add a request interceptor to include the auth token and CSRF token
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
+      // #1: Include JWT bearer token for authentication
       const token = localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      // #104: CSRF Protection - include CSRF token from cookie in header for state-mutating requests
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method?.toUpperCase() || '')) {
+        const csrfToken = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('csrf-token='))
+          ?.split('=')[1];
+
+        if (csrfToken) {
+          config.headers['x-csrf-token'] = csrfToken;
+        }
       }
     }
     return config;

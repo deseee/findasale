@@ -53,6 +53,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
 import saleRoutes from './routes/sales';
@@ -261,6 +262,16 @@ app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 // JSON parser with 1 MB body size limit to prevent payload attacks
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// #104: CSRF protection — set token on all requests, validate on state-mutating routes
+app.use(csrfTokenCookie);
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Validate CSRF token on POST, PUT, PATCH, DELETE requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return validateCsrfToken(req, res, next);
+  }
+  next();
+});
 
 // #98: Request correlation ID for end-to-end tracing
 app.use(correlationIdMiddleware);

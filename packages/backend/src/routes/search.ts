@@ -311,7 +311,8 @@ router.get('/random', async (req: Request, res: Response) => {
         ) <= ${radiusKm}`
       : Prisma.empty;
 
-    const rows = await prisma.$queryRaw<RawItem[]>`
+    // #105: SQL Injection hardening - already using Prisma.sql template with Prisma.raw conditions
+    const rows = await prisma.$queryRaw<RawItem[]>(Prisma.sql`
       SELECT
         i.id,
         i.title,
@@ -338,7 +339,7 @@ router.get('/random', async (req: Request, res: Response) => {
         ${locationCondition}
       ORDER BY RANDOM()
       LIMIT ${limit}
-    `;
+    `);
 
     const items = rows.map((row) => ({
       id: row.id,
