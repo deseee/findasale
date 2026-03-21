@@ -141,7 +141,7 @@ const SaleDetailPage = () => {
       .catch(() => { /* non-fatal */ });
   }, [id, user]);
 
-  const { data: sale, isLoading, isError } = useQuery({
+  const { data: sale, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['sale', id],
     queryFn: async () => {
       if (!id) throw new Error('No sale ID provided');
@@ -249,11 +249,21 @@ const SaleDetailPage = () => {
   }
 
   if (isError || !sale) {
+    // Bug #19: Check for 429 rate limit vs 404 not found
+    const status = (queryError as any)?.response?.status;
+    const is429 = status === 429;
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-2">Sale not found</h1>
-          <p className="text-warm-600 dark:text-gray-400 mb-6">The sale you're looking for doesn't exist.</p>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-2">
+            {is429 ? 'Too many requests' : 'Sale not found'}
+          </h1>
+          <p className="text-warm-600 dark:text-gray-400 mb-6">
+            {is429
+              ? 'You\'re browsing too fast. Please wait a moment and refresh.'
+              : 'The sale you\'re looking for doesn\'t exist.'}
+          </p>
           <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium">
             Back to browse sales
           </Link>

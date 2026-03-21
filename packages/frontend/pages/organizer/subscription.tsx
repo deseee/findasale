@@ -110,14 +110,96 @@ export default function SubscriptionPage() {
                   Upgrade to PRO
                 </Link>
               </div>
-            ) : (
-              /* PRO/TEAMS users: show support message if subscription failed to load */
+            ) : tier === 'TEAMS' ? (
+              /* TEAMS users: show tier info even without Stripe subscription */
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                <div className="p-8 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your TEAMS Plan</h2>
+
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-8">
+                    <p className="text-green-900 dark:text-green-200">
+                      Your TEAMS plan is managed by your organization admin. Contact your account administrator for billing inquiries.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Plan Tier</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">TEAMS</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</p>
+                      <div className="flex items-center">
+                        <span className="inline-block w-2 h-2 rounded-full mr-2 bg-green-500"></span>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Included Features</h3>
+                  <ul className="space-y-3 mb-8">
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Unlimited Items per Sale</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">No limits on inventory</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Unlimited Photos per Item</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Showcase your items fully</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Multi-User Team Workspace</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Invite and manage team members with custom roles</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">API Access & Webhooks</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Integrate with your systems</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Advanced Analytics & Insights</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Data export, reports, and detailed metrics</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Priority Support</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">24-hour response time</p>
+                      </div>
+                    </li>
+                  </ul>
+
+                  <div className="flex gap-4">
+                    <Link
+                      href="/organizer/upgrade"
+                      className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition"
+                    >
+                      Compare All Plans
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : tier === 'PRO' ? (
+              /* PRO users: show support message if subscription failed to load */
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
-                <p className="text-amber-900">
+                <p className="text-amber-900 dark:text-amber-200">
                   Subscription managed externally or not yet configured. Contact support@finda.sale if you need help.
                 </p>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </>
