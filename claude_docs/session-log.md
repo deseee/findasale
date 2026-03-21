@@ -4,23 +4,20 @@
 
 ### 2026-03-21 · Session 223
 
-**S222 Audit Bug Fix Sprint — 7 Bugs Fixed (57 files)**
+**S222 Audit Bug Fix Sprint — 7 Bugs Fixed + Chrome Verified + UX Fixes**
 
 **Work completed:**
-- **BUG #22 (P0) FIXED:** Role guard migration — 46 frontend files, 56 patterns migrated from `user.role !== 'ORGANIZER'` to `!user.roles?.includes('ORGANIZER')`. Login + register redirect fixed for ADMIN users. 0 TS errors.
-- **BUG #25 (P1) FIXED:** Sale detail items empty — `PUBLIC_ITEM_FILTER` in `itemQueries.ts` changed from requiring `draftStatus: 'PUBLISHED'` to excluding only `DRAFT`. Allows PENDING_REVIEW and legacy items to show publicly.
-- **BUG #20 (P1) FIXED:** Leaderboard sort — removed stale `orderBy: { totalSales: 'desc' }` from Prisma query, fetch 100 organizers, sort by actual `completedSalesCount` DESC post-query, then slice top 20.
-- **BUG #30 (P1) FIXED:** Follow button CSRF race — `csrf.ts` was regenerating token on OPTIONS preflight, causing mismatch on the subsequent POST. Added `if (req.method === 'OPTIONS') return next()` guard.
-- **BUG #15 (P2) FIXED:** Reputation crash — unsafe `reputation?.score.toFixed(1)` → `(reputation?.score || 0).toFixed(1)`.
-- **BUG #3 (P2) FIXED:** Dashboard active sales count — now filters to `status === 'PUBLISHED'` only.
-- **BUG #7 (P2) FIXED:** How It Works section — condition changed to require `orgProfile && !orgProfile.onboardingComplete`.
-- **BUG #27 (P2) SKIPPED:** Unlabeled counters not found in current codebase — may be stale or removed feature.
+- **7 S222 bugs fixed (early session):** #22 (P0 role guards, 46 files), #25 (P1 items empty), #20 (P1 leaderboard sort), #30 (P1 CSRF follow), #15 (P2 reputation crash), #3 (P2 dashboard count), #7 (P2 How It Works)
+- **BUG #25 deep dive:** 5 iterative pushes to resolve Prisma NULL semantics. Final fix: `PUBLIC_ITEM_FILTER = {}` (empty) since Rapidfire Mode hasn't launched. Hardcoded `draftStatus: 'PUBLISHED'` in inspiration endpoint also fixed locally but itemController.ts too large for MCP push.
+- **Chrome verification PASS:** Sale detail items, trending, homepage, organizer leaderboard tab, role guards, dashboard count, How It Works, 429 toast — all verified working in production.
+- **Welcome popup fix:** Scoped OrganizerOnboardingShower to organizer pages only (was firing on /inspiration and all public pages for Nina/ADMIN users).
+- **Install banner fix:** Hardened InstallPrompt.tsx dismissal — mount-time reset, double-check before show, render-time guard.
 
-**Decisions:** `PUBLIC_ITEM_FILTER` should exclude DRAFT only (not require PUBLISHED) so legacy and pending-review items appear. CSRF middleware must skip token refresh on OPTIONS preflight to avoid breaking the preflight→POST cycle.
+**Decisions:** `PUBLIC_ITEM_FILTER` disabled entirely (`{}`) until Rapidfire Mode launches and legacy NULL draftStatus values are backfilled. Organizer onboarding popup scoped to `/organizer`, `/dashboard`, `/manage-sales`, `/create-sale` routes only.
 
-**Next up:** Chrome-verify all 7 fixes deployed. Continue P2/P3 queue: #13 (Inspiration ISR), #23 (subscription page), #26 (favorite button), #28 (Hunt Pass overlap), #29 (Message Organizer button), #6/#8/#19 (429 error handling), #24 (geolocation login stall).
+**Next up:** Patrick push itemController.ts (inspiration fix). Fix shopper leaderboard sort. Continue P2/P3 queue: #13, #23, #26, #28, #29, #24.
 
-**Blockers:** None — all fixes are code changes, no schema migrations.
+**Blockers:** itemController.ts too large for MCP push — Patrick must push manually via PS1.
 
 ---
 

@@ -7,17 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 222 COMPLETE (2026-03-21) — FULL QA AUDIT (4 ROLES) + RATE LIMIT FIX + 18 BUGS IDENTIFIED:**
-- ✅ **Rate limit architecture fixed:** 7 files pushed. Polling reduced, global limit raised 200→500, /health/latency exempted.
-- ✅ **Leaderboard crash fixed:** badges optional + ?. null safety. Verified deployed — page loads with 20 shoppers.
-- ✅ **Re-audit complete:** Tested PRO (Oscar), SIMPLE/ADMIN (Nina), TEAMS (Quincy), Shopper (Ian). Create-sale form verified.
-- ✅ **POS fix verified:** BUG #17 was rate-limit related — POS now shows 2 published sales correctly.
-- **18 confirmed bugs (unfixed — see `claude_docs/audits/s222-qa-audit.md`):**
-  - P0-CRITICAL: #22 (role guard blocks ADMIN users from all organizer pages — 40+ instances of `user.role !== 'ORGANIZER'`)
-  - P1-HIGH: #20 (leaderboard sort broken), #25 (sale detail items always empty), #30 (follow button POST never fires)
-  - P2-MEDIUM: #3 (dashboard counts DRAFT as active), #7 (How It Works on null), #13 (Inspiration ISR empty), #15 (reputation crash), #23 (subscription page useless without Stripe), #26 (no favorite/save button), #27 (unlabeled counters), #28 (Hunt Pass + PWA overlap), #29 (no Message Organizer button)
-  - P3-LOW: #6 (no 429 UI messaging), #8 (false empty state), #19 (sale detail "not found" on 429), #24 (login stalls on geolocation)
-- Last Updated: 2026-03-21
+**Session 223 COMPLETE (2026-03-21) — S222 BUG FIX SPRINT + CHROME VERIFICATION + UX FIXES:**
+- ✅ **7 of 18 S222 bugs FIXED (S223 early):** #22 (P0 role guards, 46 files), #25 (P1 items empty), #20 (P1 leaderboard sort), #30 (P1 CSRF follow), #15 (P2 reputation crash), #3 (P2 dashboard count), #7 (P2 How It Works)
+- ✅ **BUG #25 deep fix:** `PUBLIC_ITEM_FILTER` disabled (set to `{}`) because legacy/seeded items have NULL `draftStatus` and Prisma rejects null on required String fields. Re-enable when Rapidfire Mode launches and NULLs are backfilled.
+- ✅ **Chrome-verified deployed:** Sale detail items ✅, trending page ✅, homepage ✅, organizer leaderboard tab ✅, role guards ✅, dashboard count ✅, How It Works ✅, 429 toast ✅
+- ✅ **Welcome popup scoped:** OrganizerOnboardingShower now only fires on /organizer, /dashboard, /manage-sales, /create-sale (was showing on all pages including /inspiration)
+- ✅ **Install banner hardened:** InstallPrompt.tsx — mount-time state reset, double-check before showing, render-time guard
+- ⚠️ **itemController.ts inspiration fix LOCAL ONLY:** `draftStatus: 'PUBLISHED'` → `...PUBLIC_ITEM_FILTER` at line ~1094. File too large for MCP push (40KB). Patrick must push manually.
+- **Remaining unfixed bugs from S222:**
+  - P1: Shopper leaderboard sort still broken (separate from organizer tab fix)
+  - P2: #13 (Inspiration page empty — blocked by itemController push), #23 (subscription page — needs Stripe products), #26 (no favorite button — feature gap), #28 (Hunt Pass + PWA overlap), #29 (no Message Organizer — feature gap)
+  - P3: #19 (sale detail "not found" on 429), #24 (login stalls on geolocation)
 - Last Updated: 2026-03-21
 
 **Session 221 COMPLETE (2026-03-21) — LIVE PRO FEATURE AUDIT AS OSCAR (USER2) + BUG FIXES:**

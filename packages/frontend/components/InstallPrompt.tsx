@@ -56,7 +56,12 @@ export default function InstallPrompt() {
   const [showIOS, setShowIOS] = useState(false);
 
   useEffect(() => {
-    if (isStandalone() || isDismissed()) return;
+    // Check dismissal and standalone status on mount
+    if (isStandalone() || isDismissed()) {
+      setShowAndroid(false);
+      setShowIOS(false);
+      return;
+    }
 
     if (isIOS()) {
       // Show the iOS instructions tooltip once per dismissal period
@@ -66,8 +71,11 @@ export default function InstallPrompt() {
 
     const handler = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
-      setShowAndroid(true);
+      // Double-check dismissal before showing Android prompt
+      if (!isDismissed()) {
+        setDeferredPrompt(e);
+        setShowAndroid(true);
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handler as EventListener);
@@ -89,6 +97,11 @@ export default function InstallPrompt() {
     setShowAndroid(false);
     setShowIOS(false);
   };
+
+  // Final guard: never render if dismissed or standalone (double-check at render time)
+  if ((showAndroid || showIOS) && (isDismissed() || isStandalone())) {
+    return null;
+  }
 
   if (showAndroid) {
     return (
