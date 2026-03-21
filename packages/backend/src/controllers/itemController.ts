@@ -1082,3 +1082,45 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     res.status(500).json({ message: 'Server error while fetching draft items' });
   }
 };
+
+// Feature #78: Inspiration Gallery — top items by AI confidence from published sales
+export const getInspirationItems = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 48, 100);
+
+    const items = await prisma.item.findMany({
+      where: {
+        status: 'AVAILABLE',
+        draftStatus: 'PUBLISHED',
+        photoUrls: { not: { equals: [] } },
+        sale: {
+          status: 'PUBLISHED',
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        photoUrls: true,
+        price: true,
+        aiConfidence: true,
+        category: true,
+        sale: {
+          select: {
+            id: true,
+            title: true,
+            organizer: {
+              select: { businessName: true },
+            },
+          },
+        },
+      },
+      orderBy: { aiConfidence: 'desc' },
+      take: limit,
+    });
+
+    res.json({ items });
+  } catch (err) {
+    console.error('GET /api/items/inspiration error:', err);
+    res.status(500).json({ message: 'Failed to fetch inspiration items.' });
+  }
+};

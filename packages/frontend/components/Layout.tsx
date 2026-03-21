@@ -110,6 +110,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <Link href="/shopper/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               My Profile
             </Link>
+            <Link href="/inspiration" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              Inspiration Gallery
+            </Link>
             <Link href="/wishlists" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               My Wishlists
             </Link>
@@ -210,6 +213,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 <>
                   <Link href="/" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Explore</Link>
                   <Link href="/map" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Map</Link>
+                  <Link href="/inspiration" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Inspiration</Link>
                 </>
               )}
               {/* Static nav links for all users */}

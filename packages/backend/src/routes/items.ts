@@ -15,6 +15,7 @@ import {
   getItemDraftStatus,
   getDraftItemsBySaleId,
   publishItem,
+  getInspirationItems,
 } from '../controllers/itemController';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
@@ -41,6 +42,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Sprint 4a: FTS search endpoints — MUST be declared before /:id to avoid param capture
 router.get('/search', searchItemsHandler);           // GET /api/items/search?q=...
 router.get('/categories', getItemCategoriesHandler); // GET /api/items/categories
+router.get('/inspiration', getInspirationItems);     // GET /api/items/inspiration — Feature #78
 
 // Phase 2B: Rapidfire Mode — Organizer-only draft items for review page
 // Must be before /:id to prevent 'drafts' being captured as an item ID

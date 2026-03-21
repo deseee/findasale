@@ -12,6 +12,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import useCountUp from '../../hooks/useCountUp';
 import { TierGatedButton } from '../../components/TierGatedNav';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier';
@@ -96,6 +97,9 @@ const OrganizerDashboard = () => {
     },
     enabled: !!user?.id,
   });
+
+  // Feature #79: Count-up animation for earnings total
+  const animatedRevenue = useCountUp(analyticsData?.totalRevenue || 0, 1200);
 
   // Phase 22: Fetch organizer tier + progress data
   const { data: orgProfile } = useQuery({
@@ -568,7 +572,7 @@ const OrganizerDashboard = () => {
                 </div>
                 <div className="card p-6">
                   <p className="text-warm-600 dark:text-warm-300 text-sm">Total Revenue</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${(analyticsData?.totalRevenue || 0).toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${animatedRevenue.toFixed(2)}</p>
                 </div>
               </div>
 
