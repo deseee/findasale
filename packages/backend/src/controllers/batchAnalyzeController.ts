@@ -10,6 +10,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService';
 import axios from 'axios';
+import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -81,6 +82,9 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
 
       const batchResults = await Promise.allSettled(
         batch.map(async (photoUrl: string) => {
+          // Track Cloudinary serve for bandwidth monitoring (#105)
+          trackCloudinaryServe();
+
           // Download image from Cloudinary
           let imageBuffer: Buffer;
           try {

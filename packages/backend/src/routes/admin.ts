@@ -10,6 +10,10 @@ import {
   deleteSale,
   getRecentActivity,
   updateOrganizerTier,
+  getAIUsage,
+  resetAIUsage,
+  getCloudinaryUsage,
+  resetCloudinaryUsage,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -35,5 +39,13 @@ router.patch('/organizers/:organizerId/tier', updateOrganizerTier);
 router.get('/invites', listInvites);
 router.post('/invites', createInvite);
 router.delete('/invites/:inviteId', deleteInvite);
+
+// #104 AI Cost Ceiling + Usage Tracking
+router.get('/ai-usage', getAIUsage);
+router.post('/ai-usage/reset', resetAIUsage);
+
+// #105 Cloudinary Bandwidth Monitoring + Alerts
+router.get('/cloudinary-usage', getCloudinaryUsage);
+router.post('/cloudinary-usage/reset', resetCloudinaryUsage);
 
 export default router;
