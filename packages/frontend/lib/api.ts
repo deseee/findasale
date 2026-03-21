@@ -47,6 +47,29 @@ api.interceptors.response.use(
       }
     }
 
+    // Handle 429 Too Many Requests — rate limit exceeded
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers['retry-after'];
+      const retryAfterMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
+      const message = `Rate limited. Please wait ${Math.ceil(retryAfterMs / 1000)}s before retrying.`;
+
+      console.warn(`[429 Rate Limit] ${message}`, { retryAfter, error });
+
+      // Store notification in sessionStorage so components can access it (works without React context)
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('rateLimit429', JSON.stringify({ message, timestamp: Date.now() }));
+      }
+
+      // Dispatch custom event for toast notification (captured by app root or layout)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('rateLimit429', {
+            detail: { message, retryAfterMs },
+          })
+        );
+      }
+    }
+
     // E5: When the backend returns 400 with a Zod `errors` array, attach a
     // human-readable `validationMessage` so callers can display per-field feedback.
     if (error.response?.status === 400 && Array.isArray(error.response.data?.errors)) {
