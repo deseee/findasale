@@ -92,21 +92,21 @@ export async function batchSync(req: AuthRequest, res: Response) {
         if (operation.type === 'CREATE_ITEM') {
           const result = await handleCreateItem(operation, organizerId);
           if (result.message) {
-            failed.push({ localId: operation.localId, ...result.message });
+            failed.push({ localId: operation.localId, error: result.message.message, retryable: result.message.retryable });
           } else {
             synced.push(result.data!);
           }
         } else if (operation.type === 'UPDATE_ITEM') {
           const result = await handleUpdateItem(operation);
           if (result.message) {
-            failed.push({ localId: operation.localId, ...result.message });
+            failed.push({ localId: operation.localId, error: result.message.message, retryable: result.message.retryable });
           } else {
             synced.push(result.data!);
           }
         } else if (operation.type === 'DELETE_ITEM') {
           const result = await handleDeleteItem(operation);
           if (result.message) {
-            failed.push({ localId: operation.localId, ...result.message });
+            failed.push({ localId: operation.localId, error: result.message.message, retryable: result.message.retryable });
           } else {
             synced.push(result.data!);
           }
