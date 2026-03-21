@@ -1091,7 +1091,9 @@ export const getInspirationItems = async (req: Request, res: Response): Promise<
     const items = await prisma.item.findMany({
       where: {
         status: 'AVAILABLE',
-        draftStatus: 'PUBLISHED',
+        // draftStatus filter disabled — legacy/seeded items have NULL draftStatus
+        // Re-enable when Rapidfire Mode launches: draftStatus: 'PUBLISHED',
+        ...PUBLIC_ITEM_FILTER,
         photoUrls: { isEmpty: false },
         sale: {
           status: 'PUBLISHED',
