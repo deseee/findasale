@@ -7,7 +7,7 @@
  * - TEAMS ($79/month): 8% fee, 2,000 items/sale, 15 photos/item, unlimited AI tags, multi-user, API/webhooks, white-label, priority support
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -93,6 +93,16 @@ const PricingPage = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancelledMessage, setCancelledMessage] = useState<string | null>(null);
+
+  // Handle cancelled checkout redirect
+  useEffect(() => {
+    if (router.query.upgrade === 'cancelled') {
+      setCancelledMessage('Checkout cancelled. You\'re still on SIMPLE.');
+      // Clear the query param from URL
+      router.replace(router.pathname, undefined, { shallow: true });
+    }
+  }, [router.query.upgrade, router]);
 
   const handleUpgrade = async (tier: PricingTier) => {
     // Logged-out users go to register
@@ -117,7 +127,7 @@ const PricingPage = () => {
     setError(null);
 
     try {
-      const response = await api.post('/api/stripe/checkout-session', {
+      const response = await api.post('/stripe/checkout-session', {
         priceId: tier.stripePrice,
         successUrl: `${window.location.origin}/organizer/dashboard?upgrade=success`,
         cancelUrl: `${window.location.origin}/pricing?upgrade=cancelled`,
@@ -141,6 +151,27 @@ const PricingPage = () => {
       return 'Current Plan';
     }
     return '';
+  };
+
+  const getButtonLabel = (tier: PricingTier): string => {
+    // Loading state
+    if (loading === tier.id) return 'Processing...';
+
+    // User logged out
+    if (!user) {
+      if (tier.id === 'SIMPLE') return 'Get Started Free';
+      return `Sign up for ${tier.name}`;
+    }
+
+    // User logged in
+    const isCurrentTier = user.organizerTier === tier.id;
+    if (isCurrentTier) return 'Current Plan';
+
+    if (tier.id === 'SIMPLE') {
+      return 'Downgrade to Free';
+    }
+
+    return `Upgrade to ${tier.name}`;
   };
 
   return (
@@ -168,6 +199,13 @@ const PricingPage = () => {
           {error && (
             <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <p className="text-red-800 dark:text-red-200">{error}</p>
+            </div>
+          )}
+
+          {/* Cancelled message */}
+          {cancelledMessage && (
+            <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-blue-800 dark:text-blue-200">{cancelledMessage}</p>
             </div>
           )}
 
@@ -240,7 +278,7 @@ const PricingPage = () => {
                             : 'bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-300 dark:hover:bg-gray-600'
                       }`}
                     >
-                      {loading === tier.id ? 'Processing...' : isCurrentTier ? 'Current Plan' : tier.id === 'SIMPLE' ? 'Get Started' : 'Upgrade'}
+                      {getButtonLabel(tier)}
                     </button>
 
                     {/* Features list */}
