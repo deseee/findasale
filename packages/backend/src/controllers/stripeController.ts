@@ -783,3 +783,80 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to issue refund' });
   }
 };
+
+// Create a Stripe Checkout Session for subscription upgrades (#23: Pricing page)
+export const createCheckoutSession = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { priceId, successUrl, cancelUrl } = req.body;
+
+    if (!priceId) {
+      return res.status(400).json({ message: 'priceId is required' });
+    }
+
+    // Validate priceId is one of the allowed subscription prices
+    const allowedPrices = [
+      'price_1TDUQsLTUdEUnHOTzG6cVDwu', // PRO
+      'price_1TDUQtLTUdEUnHOTCEoNL6oz', // TEAMS
+    ];
+    if (!allowedPrices.includes(priceId)) {
+      return res.status(400).json({ message: 'Invalid price ID' });
+    }
+
+    // Build callback URLs
+    const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+    const successUri = successUrl || `${baseUrl}/organizer/dashboard?upgrade=success`;
+    const cancelUri = cancelUrl || `${baseUrl}/pricing?upgrade=cancelled`;
+
+    // Get or create Stripe customer
+    let stripeCustomerId = req.user.stripeCustomerId || '';
+    if (!stripeCustomerId) {
+      const customer = await stripe().customers.create({
+        email: req.user.email,
+        name: req.user.name,
+      });
+      stripeCustomerId = customer.id;
+      // Store customer ID in User model (if available in Prisma User)
+      // For now, we'll just use it for this session
+    }
+
+    // Create Checkout Session
+    const session = await stripe().checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      customer: stripeCustomerId,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: successUri,
+      cancel_url: cancelUri,
+      metadata: {
+        userId: req.user.id,
+      },
+    });
+
+    res.json({
+      sessionId: session.id,
+      url: session.url,
+    });
+  } catch (error: unknown) {
+    console.error('Stripe checkout session creation error:', error);
+    let message = 'Failed to create checkout session';
+    let statusCode = 500;
+
+    if (error instanceof Error) {
+      if (error.message?.includes('Invalid')) {
+        statusCode = 400;
+        message = 'Invalid price or customer information';
+      }
+    }
+
+    res.status(statusCode).json({ message });
+  }
+};

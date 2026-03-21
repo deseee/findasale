@@ -54,12 +54,14 @@ export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showAndroid, setShowAndroid] = useState(false);
   const [showIOS, setShowIOS] = useState(false);
+  const [dismissed, setDismissedState] = useState(false);
 
   useEffect(() => {
     // Check dismissal and standalone status on mount
     if (isStandalone() || isDismissed()) {
       setShowAndroid(false);
       setShowIOS(false);
+      setDismissedState(true);
       return;
     }
 
@@ -71,8 +73,8 @@ export default function InstallPrompt() {
 
     const handler = (e: Event) => {
       e.preventDefault();
-      // Double-check dismissal before showing Android prompt
-      if (!isDismissed()) {
+      // Only show if not dismissed in this session
+      if (!dismissed && !isDismissed()) {
         setDeferredPrompt(e);
         setShowAndroid(true);
       }
@@ -80,7 +82,7 @@ export default function InstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handler as EventListener);
     return () => window.removeEventListener('beforeinstallprompt', handler as EventListener);
-  }, []);
+  }, [dismissed]);
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
@@ -94,6 +96,7 @@ export default function InstallPrompt() {
 
   const handleDismiss = () => {
     setDismissed();
+    setDismissedState(true);
     setShowAndroid(false);
     setShowIOS(false);
   };

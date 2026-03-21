@@ -6,6 +6,7 @@ import {
   getPendingPayment,
   createRefund,
   recoverPaymentIntent,
+  createCheckoutSession,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown } from '../controllers/payoutController';
@@ -32,6 +33,9 @@ router.post('/recover-payment-intent', authenticate, recoverPaymentIntent);
 
 // Organizer refund
 router.post('/refund/:purchaseId', authenticate, createRefund);
+
+// Subscription checkout (#23: Pricing page)
+router.post('/checkout-session', authenticate, createCheckoutSession);
 
 // V2: Instant payouts — balance + on-demand payouts + schedule management
 router.get('/balance', authenticate, getBalance);

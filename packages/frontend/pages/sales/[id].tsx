@@ -8,6 +8,7 @@ import CheckoutModal from '../../components/CheckoutModal';
 import { useToast } from '../../components/ToastContext';
 import { format, parseISO } from 'date-fns';
 import SaleSubscription from '../../components/SaleSubscription';
+import FavoriteButton from '../../components/FavoriteButton';
 import CSVImportModal from '../../components/CSVImportModal';
 import SaleShareButton from '../../components/SaleShareButton';
 import SaleQRCode from '../../components/SaleQRCode';
@@ -24,7 +25,6 @@ import { getThumbnailUrl, getOptimizedUrl, getLqipUrl } from '../../lib/imageUti
 import ReviewsSection from '../../components/ReviewsSection';
 import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
-import ActivityFeed from '../../components/ActivityFeed';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
 import SaleOGMeta from '../../components/SaleOGMeta'; // Feature #43: OG Image Generator
 import OrganizerReputation from '../../components/OrganizerReputation'; // #71: Organizer Reputation Score
@@ -32,6 +32,7 @@ import VerifiedBadge from '../../components/VerifiedBadge'; // Feature #16
 import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
 import { RippleIndicator } from '../../components/RippleIndicator'; // Feature #51: Sale Ripples
 import { LiveFeedTicker } from '../../components/LiveFeedTicker'; // Feature #70: Live Activity Ticker
+import MessageComposeModal from '../../components/MessageComposeModal'; // Feature #29: Message Organizer
 
 interface Sale {
   id: string;
@@ -112,6 +113,7 @@ const SaleDetailPage = () => {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [downloadingKit, setDownloadingKit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
 
   // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
@@ -226,6 +228,11 @@ const SaleDetailPage = () => {
     } finally {
       setDownloadingKit(false);
     }
+  };
+
+  const handleMessageSuccess = (conversationId: string) => {
+    setMessageModalOpen(false);
+    router.push(`/messages/${conversationId}`);
   };
 
   if (isLoading) {
@@ -352,7 +359,22 @@ const SaleDetailPage = () => {
               <BadgeDisplay badges={sale.organizer.badges || []} />
             </div>
             {!isOrganizer && (
-              <div className="ml-4 flex-shrink-0">
+              <div className="ml-4 flex-shrink-0 flex flex-col gap-2">
+                {user ? (
+                  <button
+                    onClick={() => setMessageModalOpen(true)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium"
+                  >
+                    Message Organizer
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-center"
+                  >
+                    Sign in to Message
+                  </Link>
+                )}
                 <FollowOrganizerButton
                   organizerId={sale.organizer.userId}
                   organizerName={sale.organizer.businessName}
@@ -523,9 +545,6 @@ const SaleDetailPage = () => {
                 </button>
               )}
             </div>
-
-            {/* Live Activity Feed */}
-            <ActivityFeed saleId={sale.id} />
 
             {/* Feature #70: Live Feed Ticker — real-time sale events (SOLD, HOLD, PRICE_DROP) */}
             <div className="mb-8">
@@ -740,19 +759,24 @@ const SaleDetailPage = () => {
                 )
                 .map((item) => (
                 <div key={item.id} className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-                  <Link href={`/items/${item.id}`} className="block">
-                    {item.photoUrls.length > 0 ? (
-                      <img
-                        src={getOptimizedUrl(item.photoUrls[0])}
-                        alt={item.title}
-                        className="w-full h-48 object-cover"
-                       loading="lazy"/>
-                    ) : (
-                      <div className="bg-warm-200 dark:bg-gray-700 h-48 flex items-center justify-center">
-                        <span className="text-warm-500 dark:text-gray-400">No image</span>
-                      </div>
-                    )}
-                  </Link>
+                  <div className="relative">
+                    <Link href={`/items/${item.id}`} className="block">
+                      {item.photoUrls.length > 0 ? (
+                        <img
+                          src={getOptimizedUrl(item.photoUrls[0])}
+                          alt={item.title}
+                          className="w-full h-48 object-cover"
+                         loading="lazy"/>
+                      ) : (
+                        <div className="bg-warm-200 dark:bg-gray-700 h-48 flex items-center justify-center">
+                          <span className="text-warm-500 dark:text-gray-400">No image</span>
+                        </div>
+                      )}
+                    </Link>
+                    <div className="absolute top-2 right-2">
+                      <FavoriteButton itemId={item.id} variant="icon" size="md" />
+                    </div>
+                  </div>
                   <div className="p-4">
                     <h3 className="font-bold text-lg mb-2 text-warm-900 dark:text-gray-100">{item.title}</h3>
                     <p className="text-warm-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">{item.description}</p>
@@ -923,6 +947,14 @@ const SaleDetailPage = () => {
       {sale.photoUrls.length > 0 && (
         <SaleTourGallery photos={sale.photoUrls} saleTitle={sale.title} isOpen={tourOpen} onClose={() => setTourOpen(false)} initialIndex={currentPhotoIndex} />
       )}
+
+      <MessageComposeModal
+        open={messageModalOpen}
+        onClose={() => setMessageModalOpen(false)}
+        organizerId={sale.organizer.id}
+        saleId={sale.id}
+        onSuccess={handleMessageSuccess}
+      />
     </div>
   );
 };

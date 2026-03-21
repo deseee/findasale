@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import FavoriteButton from './FavoriteButton';
 
 interface InspirationItem {
   id: string;
@@ -90,12 +91,15 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
                   </svg>
                 </div>
               )}
-              {/* Confidence Badge */}
-              {item.aiConfidence && item.aiConfidence > 0 && (
-                <div className="absolute top-2 right-2 bg-amber-600 text-white px-2 py-1 rounded text-xs font-semibold">
-                  {Math.round(item.aiConfidence * 100)}%
-                </div>
-              )}
+              {/* Confidence Badge + Favorite Button — top-right */}
+              <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
+                {item.aiConfidence && item.aiConfidence > 0 && (
+                  <div className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-semibold">
+                    {Math.round(item.aiConfidence * 100)}%
+                  </div>
+                )}
+                <FavoriteButton itemId={item.id} variant="icon" size="md" />
+              </div>
             </div>
 
             {/* Card Content */}

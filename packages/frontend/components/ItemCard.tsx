@@ -4,6 +4,7 @@ import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import RarityBadge from './RarityBadge';
+import FavoriteButton from './FavoriteButton';
 
 interface Item {
   id: string;
@@ -110,12 +111,13 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
             </span>
           )}
 
-          {/* Feature #57: Rarity badge — top-right */}
-          {item.rarity && item.rarity !== 'COMMON' && (
-            <div className="absolute top-2 right-2">
+          {/* Feature #57: Rarity badge + Feature #26: Favorite button — top-right */}
+          <div className="absolute top-2 right-2 flex flex-col gap-2">
+            {item.rarity && item.rarity !== 'COMMON' && (
               <RarityBadge rarity={item.rarity} size="sm" />
-            </div>
-          )}
+            )}
+            <FavoriteButton itemId={item.id} variant="icon" size="md" />
+          </div>
 
           {/* B2: AI tagging disclosure badge — bottom-right */}
           {item.isAiTagged && (
