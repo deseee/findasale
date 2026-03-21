@@ -2,3 +2,42 @@
 FROM node:18-slim
 
 WORKDIR /app
+
+# Install OpenSSL for Prisma
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace root files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy all package.json files for dependency resolution
+COPY packages/backend/package.json packages/backend/
+COPY packages/database/package.json packages/database/
+COPY packages/shared/package.json packages/shared/
+
+# Install pnpm and dependencies (including devDeps for prisma generate + tsc)
+RUN npm install -g pnpm@9 && pnpm install --frozen-lockfile
+
+# Copy source code
+COPY packages/backend packages/backend
+COPY packages/database packages/database
+COPY packages/shared packages/shared
+
+# Generate Prisma client
+RUN cd packages/database && npx prisma generate
+
+# Build shared package first, then backend
+RUN cd packages/shared && npx tsc || true
+RUN cd packages/backend && npx tsc
+
+# Set production mode only at runtime — not during build (keeps devDeps available for prisma + tsc)
+ENV NODE_ENV=production
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "const http = require('http'); http.get('http://localhost:3001/', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
+
+# Start the compiled server
+CMD ["node", "packages/backend/dist/index.js"]
