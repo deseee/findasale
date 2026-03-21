@@ -34,9 +34,9 @@ interface InspirationPageProps {
 
 const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], error }) => {
   const [items, setItems] = useState<InspirationItem[]>(initialItems);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(initialItems.length === 0);
 
-  // Client-side refresh for fresh items
+  // Client-side fetch: always on mount to keep fresh, OR as fallback if ISR failed
   useEffect(() => {
     const fetchItems = async () => {
       setIsLoading(true);
@@ -51,7 +51,7 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
       }
     };
 
-    // Fetch on client to keep fresh (ISR baseline from build)
+    // Fetch on client to keep fresh (ISR baseline from build), or as fallback if empty
     if (typeof window !== 'undefined') {
       fetchItems();
     }
