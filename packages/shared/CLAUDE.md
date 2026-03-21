@@ -2,9 +2,8 @@
 
 Scope: packages/shared
 
-Behavior rules: CORE.md  
-Project contract: root CLAUDE.md  
-Stack authority: STACK.md  
+Project contract: root CLAUDE.md
+Stack authority: STACK.md
 
 If conflict exists between this file and root CLAUDE.md,
 root prevails.
@@ -44,6 +43,17 @@ If modifying contract types:
 5. Update STATE.md if contract changed
 
 No silent contract drift.
+
+---
+
+## 4. Vercel Build Warning
+
+This package's exports are **not reliably resolved at Vercel build time**.
+Frontend must not depend on `@findasale/shared` imports. If frontend needs
+a type from this package, it should copy the type definition locally.
+
+Evidence: Sessions 196–202 — seven consecutive Vercel build failures from
+unresolved @findasale/shared imports.
 
 ---
 
