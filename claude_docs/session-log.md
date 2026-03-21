@@ -2,6 +2,30 @@
 
 ## Recent Sessions
 
+### 2026-03-21 · Session 224
+
+**Chrome Verification + Bug Sprint + Feature Build (#23/#26/#28/#29)**
+
+**Work completed:**
+- Chrome: /inspiration PASS, leaderboard sort PASS (after fix), sale detail PASS
+- Shopper leaderboard sort: root cause = sorted by streakPoints in DB, display score not matching rank. Fixed by computing score first then sorting
+- PWA install banner: session-state dismissal added (was re-appearing every page nav)
+- Duplicate Live Activity widget on sale detail: ActivityFeed removed, LiveFeedTicker kept
+- #19 + #24: confirmed already fixed
+- Stripe prices created: Pro $29/mo + Teams $79/mo (test mode)
+- /pricing page built with tier comparison + Stripe checkout
+- FavoriteButton component + /shopper/favorites integration
+- Message Organizer: compose modal + full inbox + thread pages
+
+**Files changed:** leaderboardController.ts, stripeController.ts, routes/stripe.ts, InspirationGrid.tsx, InstallPrompt.tsx, ItemCard.tsx, Layout.tsx, sales/[id].tsx, FavoriteButton.tsx (NEW), MessageComposeModal.tsx (NEW), useConversations.ts (NEW), useFavorite.ts (NEW), useReplyInThread.ts (NEW), useSendMessage.ts (NEW), useThread.ts (NEW), messages/[conversationId].tsx (NEW), organizer/messages.tsx (NEW), pricing.tsx (NEW), shopper/messages.tsx (NEW)
+
+**Pending Patrick actions:**
+- prisma migrate deploy + prisma generate against Neon (#72 Phase 2)
+
+**Token notes:** Multi-agent session. 4 dev agents dispatched. TS clean on both packages before push.
+
+---
+
 ### 2026-03-21 · Session 223
 
 **S222 Audit Bug Fix Sprint — 7 Bugs Fixed + Chrome Verified + UX Fixes**

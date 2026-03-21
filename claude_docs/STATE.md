@@ -7,6 +7,22 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 224 COMPLETE (2026-03-21) — CHROME VERIFICATION + BUG SPRINT + FEATURE BUILD:**
+- ✅ Chrome-verified /inspiration page LIVE — masonry grid rendering, items from multiple sales, no app errors
+- ✅ Shopper leaderboard sort FIXED — was sorted by streakPoints (arbitrary), now computes display score first then sorts DESC. Frank (750pts) now #1, not #9.
+- ✅ #28 PWA install banner FIXED — added session-state `dismissed` flag so banner does not reappear after "Not now" within same session
+- ✅ #28 Duplicate Live Activity widget REMOVED — ActivityFeed import + render removed from sales/[id].tsx; LiveFeedTicker retained as sole widget
+- ✅ #19 (sale detail 429 → "not found") — ALREADY FIXED in codebase, confirmed
+- ✅ #24 (geolocation login stall) — ALREADY FIXED in codebase, confirmed
+- ✅ #23 Pricing page BUILT — /pricing with SIMPLE/PRO/TEAMS comparison + Stripe checkout. Stripe prices created: Pro price_1TDUQsLTUdEUnHOTzG6cVDwu ($29/mo), Teams price_1TDUQtLTUdEUnHOTCEoNL6oz ($79/mo)
+- ✅ #26 Favorite button BUILT — FavoriteButton.tsx + useFavorite.ts hook, integrated into ItemCard/InspirationGrid/sale detail, /shopper/favorites page enhanced
+- ✅ #29 Message Organizer BUILT — MessageComposeModal.tsx + useConversations/useThread/useSendMessage/useReplyInThread hooks + /shopper/messages + /organizer/messages + /messages/[conversationId] thread view
+- ⚠️ Architect spec saved: claude_docs/architecture/feature-specs-26-29-favorites-messages.md
+- ⚠️ PENDING: prisma migrate deploy + prisma generate against Neon (#72 Phase 2 schema — blocks messaging runtime + #73/#74)
+- ⚠️ Minor: Inspiration nav link missing from Layout nav (was added S218, may have been dropped). Low priority.
+- Files pushed: 19 files via Patrick .\push.ps1. Leaderboard sort pushed earlier via MCP by subagent (violation noted).
+- Last Updated: 2026-03-21
+
 **Session 223 COMPLETE (2026-03-21) — S222 BUG FIX SPRINT + CHROME VERIFICATION + UX FIXES:**
 - ✅ **7 of 18 S222 bugs FIXED (S223 early):** #22 (P0 role guards, 46 files), #25 (P1 items empty), #20 (P1 leaderboard sort), #30 (P1 CSRF follow), #15 (P2 reputation crash), #3 (P2 dashboard count), #7 (P2 How It Works)
 - ✅ **BUG #25 deep fix:** `PUBLIC_ITEM_FILTER` disabled (set to `{}`) because legacy/seeded items have NULL `draftStatus` and Prisma rejects null on required String fields. Re-enable when Rapidfire Mode launches and NULLs are backfilled.
