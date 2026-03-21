@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import Layout from '../../components/Layout';
 import LibraryItemCard from '../../components/LibraryItemCard';
 import useItemLibrary from '../../hooks/useItemLibrary';
 import { useAuth } from '../../components/AuthContext';
@@ -103,14 +102,13 @@ const ItemLibraryPage: React.FC = () => {
       <Head>
         <title>Item Library | FindA.Sale</title>
       </Head>
-      <Layout>
-        {/* Check authorization */}
-        {!user || user.role !== 'ORGANIZER' ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600 dark:text-gray-400">Please log in as an organizer to access the item library.</p>
-          </div>
-        ) : (
-        <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Check authorization */}
+      {!user || user.role !== 'ORGANIZER' ? (
+        <div className="text-center py-12">
+          <p className="text-gray-600 dark:text-gray-400">Please log in as an organizer to access the item library.</p>
+        </div>
+      ) : (
+      <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Item Library</h1>
             <p className="text-gray-600 dark:text-gray-400">Manage your consignment rack and pull items into sales.</p>
@@ -242,7 +240,6 @@ const ItemLibraryPage: React.FC = () => {
           )}
         </div>
         )}
-      </Layout>
     </>
   );
 };

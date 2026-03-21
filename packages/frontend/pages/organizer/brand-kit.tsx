@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -37,6 +38,7 @@ const BrandKitPage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
+  const { tier } = useOrganizerTier();
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading_, setIsLoading_] = useState(true);
@@ -72,6 +74,12 @@ const BrandKitPage = () => {
       try {
         const response = await api.get('/organizers/me');
         const data = response.data;
+
+        if (!data.id) {
+          showToast('Failed to fetch organizer ID', 'error');
+          setIsLoading_(false);
+          return;
+        }
 
         // Also fetch the full profile to get all brand fields
         const orgResponse = await api.get(`/organizers/${data.id}`);
@@ -138,7 +146,7 @@ const BrandKitPage = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await api.patch('/organizers/me', {
+      const payload: any = {
         businessName: formData.businessName,
         bio: formData.bio,
         website: formData.website,
@@ -150,10 +158,16 @@ const BrandKitPage = () => {
         brandPrimaryColor: formData.brandPrimaryColor,
         brandSecondaryColor: formData.brandSecondaryColor,
         customStorefrontSlug: formData.customStorefrontSlug,
-        brandFontFamily: formData.brandFontFamily,
-        brandBannerImageUrl: formData.brandBannerImageUrl,
-        brandAccentColor: formData.brandAccentColor,
-      });
+      };
+
+      // Only include PRO fields if user is PRO or TEAMS
+      if (tier !== 'SIMPLE') {
+        payload.brandFontFamily = formData.brandFontFamily;
+        payload.brandBannerImageUrl = formData.brandBannerImageUrl;
+        payload.brandAccentColor = formData.brandAccentColor;
+      }
+
+      await api.patch('/organizers/me', payload);
       showToast('Brand Kit updated successfully', 'success');
     } catch (error: any) {
       console.error('Failed to save brand kit:', error);
@@ -402,56 +416,106 @@ const BrandKitPage = () => {
               </div>
 
               {/* PRO Features Section */}
-              <div className="border-t border-warm-200 dark:border-gray-700 pt-8 bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
-                <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
-                  <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-0.5 rounded">PRO</span>
+              <div className={`border-t border-warm-200 dark:border-gray-700 pt-8 p-6 rounded-lg border ${
+                tier === 'SIMPLE'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                  : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+              }`}>
+                <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${
+                  tier === 'SIMPLE'
+                    ? 'text-blue-900 dark:text-blue-100'
+                    : 'text-green-900 dark:text-green-100'
+                }`}>
+                  <span className={`text-white text-xs font-bold px-2.5 py-0.5 rounded ${
+                    tier === 'SIMPLE'
+                      ? 'bg-blue-600'
+                      : 'bg-green-600'
+                  }`}>
+                    {tier === 'SIMPLE' ? 'PRO' : tier}
+                  </span>
                   Advanced Brand Customization
                 </h2>
-                <p className="text-sm text-blue-800 dark:text-blue-200 mb-6">
-                  These features are available to PRO and TEAMS tier subscribers. Upgrade your plan to customize fonts, banners, and accent colors.
+                <p className={`text-sm mb-6 ${
+                  tier === 'SIMPLE'
+                    ? 'text-blue-800 dark:text-blue-200'
+                    : 'text-green-800 dark:text-green-200'
+                }`}>
+                  {tier === 'SIMPLE'
+                    ? 'These features are available to PRO and TEAMS tier subscribers. Upgrade your plan to customize fonts, banners, and accent colors.'
+                    : 'Customize your brand fonts, banners, and accent colors to match your business identity.'}
                 </p>
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Font Family</label>
+                    <label className={`block text-sm font-medium mb-1 ${
+                      tier === 'SIMPLE'
+                        ? 'text-blue-900 dark:text-blue-100'
+                        : 'text-green-900 dark:text-green-100'
+                    }`}>Font Family</label>
                     <input
                       type="text"
                       name="brandFontFamily"
                       value={formData.brandFontFamily || ''}
                       onChange={handleInputChange}
                       placeholder="e.g., Georgia"
-                      disabled
-                      className="w-full px-4 py-2 border border-blue-300 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 disabled:opacity-75"
+                      disabled={tier === 'SIMPLE'}
+                      className={`w-full px-4 py-2 border rounded-lg font-mono text-sm ${
+                        tier === 'SIMPLE'
+                          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
+                          : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100'
+                      }`}
                     />
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your brand font</p>
+                    {tier === 'SIMPLE' && (
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your brand font</p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Banner Image URL</label>
+                    <label className={`block text-sm font-medium mb-1 ${
+                      tier === 'SIMPLE'
+                        ? 'text-blue-900 dark:text-blue-100'
+                        : 'text-green-900 dark:text-green-100'
+                    }`}>Banner Image URL</label>
                     <input
                       type="url"
                       name="brandBannerImageUrl"
                       value={formData.brandBannerImageUrl || ''}
                       onChange={handleInputChange}
                       placeholder="https://example.com/banner.jpg"
-                      disabled
-                      className="w-full px-4 py-2 border border-blue-300 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 disabled:opacity-75"
+                      disabled={tier === 'SIMPLE'}
+                      className={`w-full px-4 py-2 border rounded-lg ${
+                        tier === 'SIMPLE'
+                          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
+                          : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100'
+                      }`}
                     />
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to add a custom banner image</p>
+                    {tier === 'SIMPLE' && (
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to add a custom banner image</p>
+                    )}
                   </div>
 
                   <div className="flex items-end gap-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Accent Color</label>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        tier === 'SIMPLE'
+                          ? 'text-blue-900 dark:text-blue-100'
+                          : 'text-green-900 dark:text-green-100'
+                      }`}>Accent Color</label>
                       <input
                         type="text"
                         name="brandAccentColor"
                         value={formData.brandAccentColor || ''}
                         onChange={handleInputChange}
                         placeholder="#FF6B6B"
-                        disabled
-                        className="w-full px-4 py-2 border border-blue-300 dark:border-blue-700 rounded-lg font-mono text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 disabled:opacity-75"
+                        disabled={tier === 'SIMPLE'}
+                        className={`w-full px-4 py-2 border rounded-lg font-mono text-sm ${
+                          tier === 'SIMPLE'
+                            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
+                            : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100'
+                        }`}
                       />
-                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your accent color</p>
+                      {tier === 'SIMPLE' && (
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your accent color</p>
+                      )}
                     </div>
                   </div>
                 </div>

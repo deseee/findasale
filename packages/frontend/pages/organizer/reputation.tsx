@@ -5,22 +5,23 @@
  * to improve. Accessible only to authenticated organizers.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useReputationBreakdown } from '../../hooks/useReputation';
 import ReputationBadge from '../../components/ReputationBadge';
-import Layout from '../../components/Layout';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { ArrowUp, TrendingUp, AlertCircle, Check } from 'lucide-react';
+import api from '../../lib/api';
 
 const OrganizerReputationPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const [organizerId, setOrganizerId] = useState<string>('');
 
   // Redirect if not authenticated or not an organizer
   useEffect(() => {
@@ -29,7 +30,16 @@ const OrganizerReputationPage = () => {
     }
   }, [user, authLoading, router]);
 
-  const { data: reputation, isLoading, error } = useReputationBreakdown(user?.id || '');
+  // Fetch organizer ID from /organizers/me
+  useEffect(() => {
+    if (user?.id) {
+      api.get('/organizers/me')
+        .then(res => setOrganizerId(res.data.id))
+        .catch(err => console.error('Failed to fetch organizer ID', err));
+    }
+  }, [user?.id]);
+
+  const { data: reputation, isLoading, error } = useReputationBreakdown(organizerId);
 
   if (!user || user.role !== 'ORGANIZER') {
     return null;
@@ -53,7 +63,7 @@ const OrganizerReputationPage = () => {
   const scoreBg = getScoreBg(reputation?.score || 0);
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Reputation | FindA.Sale</title>
       </Head>
@@ -282,7 +292,7 @@ const OrganizerReputationPage = () => {
         </div>
       </div>
       )}
-    </Layout>
+    </>
   );
 };
 
