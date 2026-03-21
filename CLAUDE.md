@@ -2,7 +2,7 @@
 
 Scope: Entire monorepo
 
-Behavior rules: CORE.md  
+Behavior rules: This file (CLAUDE.md)
 Stack authority: STACK.md  
 Project memory: STATE.md  
 Security: SECURITY.md  
@@ -79,7 +79,7 @@ at session start and not visible in any file — missing them causes wasted fall
 
 **GitHub MCP (`mcp__github__*`):**
 Use `mcp__github__push_files` for **small targeted changes only** with two hard limits:
-1. **≤3 files per push** (CORE.md §10 is authoritative — stricter than earlier 5-file guidance)
+1. **≤3 files per push** (hard limit — stricter than any earlier 5-file guidance)
 2. **Total file content ≤ 25,000 tokens combined** — read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
 
 The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for small batches.
@@ -124,7 +124,7 @@ npx prisma generate         # regenerates TypeScript client with new fields
 Agent handoff templates include "Context Checkpoint: yes/no." This is internal bookkeeping, not a stopping point.
 
 - **Checkpoint = "no":** Do not pause, narrate, or acknowledge. Continue immediately.
-- **Checkpoint = "yes":** Dispatch context-maintenance silently. Do not pause — continue working.
+- **Checkpoint = "yes":** Dispatch findasale-records silently. Do not pause — continue working.
 - **Never** stop work to discuss a checkpoint with Patrick. They are invisible infrastructure.
 
 ---
@@ -144,7 +144,7 @@ Reference authoritative file instead.
 ## 9. Skill Roster (Token Efficiency)
 
 Custom `findasale-*` skills always preferred over generic plugin equivalents.
-Full routing rules: CORE.md §9.
+Custom findasale-* skills always take priority over generic plugin equivalents.
 
 **Patrick action (optional):** Disable unused plugin categories from Cowork UI
 to reduce skill list noise. Recommended disables: sales, finance, brand-voice,
@@ -217,8 +217,6 @@ MUST go through subagents. This is not advisory — it is a hard gate.
 
 **Allowed inline edits (exhaustive list):**
 - Doc files (`.md` in `claude_docs/`, skills, `CLAUDE.md`)
-- `.checkpoint-manifest.json` updates
-- `MESSAGE_BOARD.json` updates
 - Single-line config fixes explicitly requested by Patrick
 - Conversation-defaults and skill SKILL.md files
 

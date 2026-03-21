@@ -28,8 +28,8 @@ You are the single authority on what gets written to:
 
 **Tier 1 — Behavior-shaping (Patrick approval required)**
 - All `CLAUDE.md` files (repo + Patrick's global Cowork CLAUDE.md)
-- `claude_docs/CORE.md`
 - `claude_docs/SECURITY.md`
+- ~~`claude_docs/CORE.md`~~ — **RETIRED S227** (superseded by root CLAUDE.md; kept in git history only, do not load)
 - `claude_docs/self_healing_skills.md` — encodes fix patterns Claude applies automatically
 - `claude_docs/session-safeguards.md` — governs session behavior guardrails
 - `claude_docs/patrick-language-map.md` — defines how Claude interprets Patrick's phrasing
@@ -199,7 +199,7 @@ CLAUDE.md rules. You own them with the same rigor as Tier 1 files.
 
 Review with: list all scheduled tasks via the `mcp__scheduled-tasks__list_scheduled_tasks` tool.
 
-Known tasks as of last audit (2026-03-11 — 11 registered, 0 disabled):
+Known tasks as of last audit (2026-03-21 S227 — 11 registered, 0 disabled):
 - `findasale-health-scout` — weekly health scan (Sunday 11pm)
 - `findasale-competitor-monitor` — weekly competitive intel pipeline (Monday 8am)
 - `findasale-ux-spotcheck` — weekly rotating UX code review (Wednesday 9am)
@@ -207,15 +207,16 @@ Known tasks as of last audit (2026-03-11 — 11 registered, 0 disabled):
 - `findasale-session-warmup` — on-demand environment health check (manual only)
 - `findasale-session-wrap` — on-demand session wrap (manual only)
 - `findasale-workflow-retrospective` — monthly meta-audit of AI workflow (8th of month, 9am)
-- `context-freshness-check` — daily STATE.md + context.md staleness check (8am daily)
-- `findasale-power-user-sweep` — weekly improvement sweep (Sunday 10pm)
-- `daily-friction-audit` — daily workflow friction scan (M-F 8:38am, owned by findasale-workflow) [added post-advisory-board]
-- `weekly-pipeline-briefing` — organizer acquisition pipeline briefing (Monday 9am, owned by findasale-sales-ops) [added post-advisory-board]
+- `context-freshness-check` — **weekly** STATE.md + context.md staleness check (**Monday 8am** — changed from daily S227)
+- `findasale-power-user-sweep` — weekly improvement sweep (Monday 3am)
+- `daily-friction-audit` — workflow friction scan with **auto-dispatch action loop** (M-F 8:38am; prompt updated S227 to dispatch findasale-records/findasale-dev for all non-cosmetic findings)
+- `weekly-pipeline-briefing` — organizer acquisition pipeline briefing (Monday 9am, owned by findasale-sales-ops)
 
-Note: `weekly-industry-intel` was deleted (was disabled since 2026-03-09; merged into findasale-competitor-monitor).
-`findasale-nightly-context` is NOT registered (merged into context-freshness-check).
-`findasale-workflow-review` has been superseded by `findasale-workflow-retrospective`.
-**Prompt-level audit pending** for `daily-friction-audit` and `weekly-pipeline-briefing` — prompts not yet verified (stored in Windows OneDrive, outside VM access).
+Note: `weekly-industry-intel` deleted (merged into findasale-competitor-monitor).
+`findasale-nightly-context` NOT registered (merged into context-freshness-check).
+`findasale-workflow-review` superseded by `findasale-workflow-retrospective`.
+`context-maintenance` skill archived S227 — session wrap now owned by this agent (findasale-records).
+`findasale-push-coordinator` skill archived S227 — push rules consolidated in root CLAUDE.md §5.
 
 ### Scheduled Task Audit Protocol
 
@@ -309,7 +310,7 @@ Log violations in the session wrap report. Delete temp files. Escalate directory
 
 At the end of any meaningful work session, run these steps in order:
 
-1. **Session log update**: Append to `claude_docs/logs/session-log.md`:
+1. **Session log update**: Prepend (top) to `claude_docs/logs/session-log.md` — keep only the 5 most recent entries, delete older ones:
    ```
    ## Session [N] — [date]
    ### Completed
@@ -329,6 +330,12 @@ At the end of any meaningful work session, run these steps in order:
 
 4. **COMPLETED_PHASES.md**: If a full phase or sprint completed, add a summary
    entry. Keep it brief — one paragraph max per phase.
+
+4b. **Stamp .last-wrap**: After writing next-session-prompt.md, stamp the wrap timestamp:
+   ```bash
+   PROJECT_ROOT=$(ls -d /sessions/*/mnt/FindaSale 2>/dev/null | head -1)
+   date -u +"%Y-%m-%dT%H:%M:%SZ" > "$PROJECT_ROOT/claude_docs/.last-wrap"
+   ```
 
 5. **Wrap commit — include self-created files**: The wrap process itself writes
    files (STATE.md, session-log.md, next-session-prompt.md, context.md,
