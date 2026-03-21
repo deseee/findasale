@@ -134,7 +134,7 @@ const LiveFeedWidget: React.FC<LiveFeedWidgetProps> = ({ saleId }) => {
       </div>
 
       {/* Footer: Connection Status */}
-      {!connected && (
+      {!connected && events.length > 0 && (
         <div className="px-4 py-2 bg-[#6B8F71]/5 border-t border-[#6B8F71]/20 text-xs text-[#6B8F71]">
           Reconnecting...
         </div>

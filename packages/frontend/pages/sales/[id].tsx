@@ -281,7 +281,7 @@ const SaleDetailPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
-          \u2190 Back to browse sales
+          ← Back to browse sales
         </Link>
 
         {/* Sale Header */}
@@ -524,9 +524,6 @@ const SaleDetailPage = () => {
 
             {/* Pickup Scheduling */}
             {user && <PickupBookingCard saleId={sale.id} />}
-
-            {/* Reviews Section */}
-            <ReviewsSection mode="sale" saleId={sale.id} />
           </div>
         </div>
 

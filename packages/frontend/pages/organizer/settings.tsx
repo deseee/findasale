@@ -60,6 +60,12 @@ const OrganizerSettingsPage = () => {
   });
 
   useEffect(() => {
+    if (user?.businessName) {
+      setBusinessName(user.businessName);
+    }
+  }, [user?.businessName]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const saved = localStorage.getItem('findasale_font_size');
     if (saved) {

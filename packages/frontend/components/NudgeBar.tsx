@@ -23,6 +23,11 @@ const NudgeBar: React.FC = () => {
     return null;
   }
 
+  // Nudges are shopper-only features — don't show to organizers
+  if (user?.role === 'ORGANIZER') {
+    return null;
+  }
+
   const handleDismiss = () => {
     setDismissed(true);
     setVisible(false);

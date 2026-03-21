@@ -149,7 +149,7 @@ const ProfilePage = () => {
               {pointsData.tier === 'Hunter' && `${500 - pointsData.points} pts to reach Estate Pro.`}
               {pointsData.tier === 'Estate Pro' && 'You\'ve reached the top tier!'}
             </p>
-            {pointsData.transactions.length > 0 ? (
+            {pointsData.points > 0 ? (
               <ul className="divide-y divide-warm-100">
                 {pointsData.transactions.map((tx) => (
                   <li key={tx.id} className="flex justify-between items-center py-2 text-sm">
