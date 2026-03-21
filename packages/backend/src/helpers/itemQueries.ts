@@ -13,6 +13,7 @@
  * Use getPublicItemsBySaleId for common "items in a public sale" queries.
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -33,7 +34,7 @@ import { prisma } from '../lib/prisma';
  * Bug #25 fix: Exclude only DRAFT status; show PENDING_REVIEW and PUBLISHED items.
  * Also handles NULL draftStatus (legacy/seeded items without explicit status).
  */
-export const PUBLIC_ITEM_FILTER = {
+export const PUBLIC_ITEM_FILTER: Prisma.ItemWhereInput = {
   OR: [
     { draftStatus: null },
     { draftStatus: 'PENDING_REVIEW' },
