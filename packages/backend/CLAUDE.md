@@ -2,9 +2,8 @@
 
 Scope: packages/backend
 
-Behavior rules: CORE.md  
-Project contract: root CLAUDE.md  
-Stack authority: STACK.md  
+Project contract: root CLAUDE.md
+Stack authority: STACK.md
 
 If conflict exists between this file and root CLAUDE.md,
 root prevails.

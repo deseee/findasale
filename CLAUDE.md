@@ -3,15 +3,21 @@
 Scope: Entire monorepo
 
 Behavior rules: This file (CLAUDE.md)
-Stack authority: STACK.md  
-Project memory: STATE.md  
-Security: SECURITY.md  
-Recovery: RECOVERY.md  
+Stack authority: STACK.md
+Project memory: STATE.md
+Security: SECURITY.md
+Recovery: RECOVERY.md
 
 If conflict exists between this file and a package CLAUDE.md,
 this file prevails.
 
 Package-level files must not redefine behavior or architecture.
+
+**Authority order:** User → this file → conversation-defaults
+→ Package CLAUDE.md → STACK.md → STATE.md → SECURITY.md
+
+**Skill routing:** Always prefer `findasale-*` custom skills over generic plugin
+equivalents. Custom skills have project context; generics don't.
 
 ---
 
@@ -52,59 +58,85 @@ No API formatting outside backend.
 
 ---
 
-## 4. Operational Rules
+## 4. Execution Rules
 
-- Never use `git add -A` — stage files explicitly by name
-- **Git push**: Patrick uses `.\push.ps1` from PowerShell (NOT `git push` directly). The script self-heals: clears index.lock, CRLF phantoms, fetches + merges (never rebases — rebase is broken with `core.autocrlf=true` on Windows). See `push.ps1` in repo root.
-- **Deployments**: Frontend is on **Vercel**, backend is on **Railway**. Both auto-deploy only when a new commit is pushed to `main` — there are no manual redeploy buttons on either platform. To force a redeploy with no pending changes, make a trivial commit (e.g. add a comment) and push via MCP `push_files`. Never tell Patrick to click a redeploy button on either platform.
-- **Railway stuck / not rebuilding**: If Railway hasn't picked up recent commits or is looping on a stale error, DO NOT ask Patrick to check webhooks, GitHub settings, or Railway dashboards. Immediately push a trivial change to `packages/backend/Dockerfile.production` — update the cache-bust comment at line 1 with today's date (e.g. `# S188 — cache bust 2026-03-17`). This always unblocks Railway. Use Chrome MCP (`mcp__Claude_in_Chrome__*`) to inspect Railway build logs directly if needed. This situation has recurred every session — the fix is always the same: push something.
-- Full safety and backup rules: `claude_docs/SECURITY.md`
-- **Statusline reinstall (session init):** The Cowork VM resets each session. At session start, silently run:
-  ```bash
-  if [ ! -f ~/.claude/statusline-token-usage.sh ]; then
-    mkdir -p ~/.claude
-    cp /sessions/*/mnt/FindaSale/scripts/statusline-token-usage.sh ~/.claude/statusline-token-usage.sh
-    chmod +x ~/.claude/statusline-token-usage.sh
-    printf '{"statusLine":{"type":"command","command":"%s"}}\n' "$HOME/.claude/statusline-token-usage.sh" > ~/.claude/settings.json
-  fi
-  ```
-  Script source: `scripts/statusline-token-usage.sh` in repo root.
+**Flow:** Survey → Plan → Execute → Verify → Report. Never skip Verify.
+
+**Diff-only:** Output only changed sections. No full rewrites unless Patrick
+says "rewrite the whole file." Announce approach before every file write:
+"Editing [file] lines X–Y" or "Rewriting [file] — confirmed by Patrick."
+
+**Read before write:** MUST read any existing file before editing it.
+Write-without-read is a rule violation, not a guideline.
+
+**Batch work:** Continue until blocked, not until comfortable. Only valid
+stops: (a) needs Patrick's input, (b) ambiguous failure, (c) batch complete.
+Do not ask "shall I continue?" mid-batch.
+
+**Environment gate:** Before any shell, PowerShell, or Prisma command — STOP. Verify dev-environment skill is loaded this session. If not, invoke Skill('dev-environment') immediately. Do not proceed without it active.
+
+**Never tell Patrick to manually resolve git issues.** Use Read + Edit + MCP push to fix merge conflicts, stale branches, and rebase errors yourself. Exception: genuine repo corruption requiring `git init`.
+
+**File creation path validation:** Before creating any new file in `claude_docs/`, verify the path against `claude_docs/operations/file-creation-schema.md`.
+
+**Compression logging:** When context is compressed, log:
+`[COMPRESS] Session N turn M: kept [what], lost [what], ~Xk→Yk tokens`
+Include this in session-log.md at wrap.
+
+**Post-compression mandatory re-read:** Immediately after any compression event, re-read this file §5 (Push Rules) before resuming work. Push rules are the first lost after compression. No exceptions.
 
 ---
 
-## 5. MCP Tool Awareness (Session-Critical)
+## 5. Push Rules
 
-At session start, Claude must check which MCP tools are active. They are injected
-at session start and not visible in any file — missing them causes wasted fallbacks.
+**MCP GitHub limits:** Max 3 files per `push_files` call. Total file content ≤25,000 tokens combined per call. Read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
 
 **GitHub MCP (`mcp__github__*`):**
 Use `mcp__github__push_files` for **small targeted changes only** with two hard limits:
 1. **≤3 files per push** (hard limit — stricter than any earlier 5-file guidance)
 2. **Total file content ≤ 25,000 tokens combined** — read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
 
-The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for small batches.
+**Large file guidance:** If a single file exceeds ~500 lines, push it solo via `create_or_update_file`. If it exceeds ~800 lines, hand off to Patrick with PS1 block. Never batch a large file with other files.
 
-**Bulk pushes (>5 files OR >25k tokens) must always be done manually by Patrick from PowerShell:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add [specific files]
-git commit -m "..."
-.\push.ps1
-```
-**IMPORTANT:** Always tell Patrick to use `.\push.ps1` instead of `git push`. The script handles index.lock cleanup, CRLF phantom clearing, fetch + merge (not rebase), and auto-retry on rejection.
-Never attempt to push the full codebase via MCP — it burns tokens and fails at scale.
-At session wrap, Claude must tell Patrick exactly which files changed so he can git add them.
+**MCP vs PowerShell:** Use MCP for 1–3 small files already in context.
+Tell Patrick `.\push.ps1` for 4+ files, large files, or session wrap.
+
+**Pre-push verification:** Read function/type signatures before pushing
+TypeScript. Grep entire frontend for a pattern before pushing a build fix.
+One Read call prevents 3 failed deploys.
+
+**MCP file content rule:** `create_or_update_file` replaces the entire remote file — it does not merge or append. Always read the full file first. Always push the COMPLETE file content, never truncated or partial lines. Truncated schema.prisma (S166) and itemController.ts (S167) both broke Railway builds. No exceptions.
+
+**MCP truncation gate (mandatory pre-push check):** Before every `create_or_update_file` call, compare: (a) line count of the content you are about to push vs. (b) line count of the file currently on GitHub. If the push content is more than 20% shorter than the existing file AND you did not intend to delete code, STOP — you are about to truncate. Re-read the local file in full and rebuild the push content.
+
+**Complete push instruction blocks:** Every push block given to Patrick must list ALL modified tracked files, ALL new untracked files, ALL merge-conflict-resolved files, and ALL migration files. No partial lists. One complete block per push.
+
+**Commit block format (always):** Any time git commit instructions are given to Patrick, provide a complete copy-paste block:
+1. `cd` to project root (if needed)
+2. Explicit `git add [file1] [file2]...` lines (never `git add -A`)
+3. `git commit -m "..."`  with full message
+4. `.\push.ps1` (PowerShell script, never `git push` directly)
+Never use `&&` (bash only). Never use placeholders.
+
+**PowerShell escaping:** For paths containing brackets (e.g., `[saleId].tsx`), use `-LiteralPath` in Remove-Item commands. PowerShell interprets brackets as wildcards.
+
+**Merge conflict re-staging:** After resolving any merge conflict, explicitly re-stage ALL files that were in conflict state before committing.
+
+**Standing rules:** STATE.md pushes only at wrap. Wrap-only docs (session-log, STATE, next-session-prompt) never MCP-pushed mid-session. package.json and pnpm-lock.yaml always committed together.
+
+**After MCP push:** Do not edit those files locally without `git fetch` first.
+
+**Git push:** Patrick uses `.\push.ps1` from PowerShell (NOT `git push` directly). The script self-heals: clears index.lock, CRLF phantoms, fetches + merges (never rebases). Never tell Patrick to use `git push`.
+
+**Subagent push ban:** Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the main session may execute `push_files` calls. Subagents return output with file changes listed; main session batches into consolidated MCP pushes (≤3 files per call) or provides Patrick a single comprehensive push block.
 
 Repo: `deseee/findasale` — Branch: `main`
-
-**Other MCPs:** Note any active connectors (Slack, Notion, etc.) in the session
-start announcement so Patrick knows what's available without having to ask.
 
 ---
 
 ## 6. Schema Change Protocol (Prisma)
 
-Any session that modifies `schema.prisma` or adds a migration SQL file **MUST** include these two Patrick manual actions in the handoff — no exceptions:
+Any session that modifies `schema.prisma` or adds a migration SQL file **MUST** include these two Patrick manual actions in the handoff — no exceptions. The DATABASE_URL override MUST appear copy-paste-ready in the actual block Patrick receives:
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -119,72 +151,7 @@ npx prisma generate         # regenerates TypeScript client with new fields
 
 ---
 
-## 7. Context Checkpoints — No-Pause Rule
-
-Agent handoff templates include "Context Checkpoint: yes/no." This is internal bookkeeping, not a stopping point.
-
-- **Checkpoint = "no":** Do not pause, narrate, or acknowledge. Continue immediately.
-- **Checkpoint = "yes":** Dispatch findasale-records silently. Do not pause — continue working.
-- **Never** stop work to discuss a checkpoint with Patrick. They are invisible infrastructure.
-
----
-
-## 8. Context Discipline
-
-Do not restate:
-- Tech stack
-- Security rules
-- Recovery steps
-- Behavioral compression rules
-
-Reference authoritative file instead.
-
----
-
-## 9. Skill Roster (Token Efficiency)
-
-Custom `findasale-*` skills always preferred over generic plugin equivalents.
-Custom findasale-* skills always take priority over generic plugin equivalents.
-
-**Patrick action (optional):** Disable unused plugin categories from Cowork UI
-to reduce skill list noise. Recommended disables: sales, finance, brand-voice,
-enterprise-search, productivity. Full analysis: `claude_docs/operations/skill-roster-recommendation.md`
-
----
-
-## 10. Push Instruction Complete Block Guarantee
-
-Every git instruction block provided to Patrick must be copy-paste-ready and include:
-1. `cd` to project root (if needed)
-2. Explicit `git add [file1] [file2]...` lines (never `git add -A`)
-3. `git commit -m "..."` with full message
-4. `.\push.ps1` (PowerShell script, never `git push` directly)
-
-Never use placeholders, never omit the script, never use `&&` (bash only).
-
-**File delivery rule:** When creating any file Patrick needs to view, install, or act on
-(INSTALL docs, skill files, research output, etc.), ALWAYS save it to the workspace
-folder and present a clickable `computer://` link. Never describe file contents inline
-without also providing the link. Patrick should never have to hunt for a file.
-
----
-
-## 11. Subagent Push Ban (Experimental, S169–171)
-
-Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the main session may execute `push_files` calls.
-
-**Subagent protocol:**
-- Subagents return output with file changes listed
-- Main session batches into consolidated MCP pushes (≤3 files per call)
-- OR main session provides Patrick a single comprehensive push block for `.\push.ps1`
-
-**Rationale:** Prevent multi-round git-push cycles caused by uncoordinated subagent pushes. Sessions 166–168 showed 3–4 rounds per dispatch. Goal: reduce to 1–2.
-
-**Review date:** 2026-03-25 (5-session pilot)
-
----
-
-## 12. Subagent-First Implementation Gate (CRITICAL)
+## 7. Subagent-First Implementation Gate (CRITICAL)
 
 The main window is an **orchestrator**, not an implementer. All code implementation
 MUST go through subagents. This is not advisory — it is a hard gate.
@@ -200,83 +167,126 @@ MUST go through subagents. This is not advisory — it is a hard gate.
 **What counts as "code":** Any `.ts`, `.tsx`, `.js`, `.jsx`, `.css`, `.json` (non-doc),
 `.prisma`, config file, or any file under `packages/`.
 
-**Main window responsibilities (exhaustive):**
-- Read specs, context, and roadmap
-- Decide what needs building
-- Write clear dispatch prompts to subagents (include file paths, spec references, constraints)
-- Receive and review subagent output
-- Coordinate pushes (MCP or Patrick PS1 block)
-- Report to Patrick
-
-**Main window NEVER does:**
-- Write controllers, routes, components, or utilities
-- Create new code files in `packages/`
-- Implement features inline — even "simple" ones
-- Read 500+ lines of code to understand structure for inline implementation
-  (instead, include the file path in the subagent dispatch and let the subagent read it)
-
 **Allowed inline edits (exhaustive list):**
 - Doc files (`.md` in `claude_docs/`, skills, `CLAUDE.md`)
 - Single-line config fixes explicitly requested by Patrick
 - Conversation-defaults and skill SKILL.md files
 
-**Self-check:** If you are about to use the `Read` tool on a code file to understand
-its structure so you can write code based on it — STOP. You are about to violate
-this rule. Dispatch a subagent instead.
-
-**Origin:** Session 170 — main window read 940-line itemController.ts, 393-line
-promote.tsx, 256-line items.ts route, and wrote 4 new code files inline
-(socialController, social route, tagController, tags route) plus 2 index.ts edits.
-Burned ~30k tokens that should have been a subagent dispatch. Patrick flagged it
-as a direct violation of the existing "default to subagents" instruction in global
-CLAUDE.md. This section elevates that instruction to a hard gate with explicit
-allowed/disallowed lists. (Added 2026-03-15, Session 170.)
+**QA DISPATCH GATE (fires when orchestrator dispatches QA work):**
+Before dispatching any QA or audit task:
+1. Identify which roles are affected (SHOPPER, ORGANIZER, ADMIN)
+2. Identify which tiers are affected (FREE, SIMPLE, PRO, TEAMS)
+3. Identify what data operations the feature performs (create, read, update, delete)
+4. Generate specific test scenarios for each role × tier × operation combination
+5. Batch scenarios by feature or page into focused dispatches (not one-per-scenario)
+6. Do NOT dispatch a single "audit everything" task
 
 ---
 
-## 13. Schema-First Pre-Flight Gate (Dev Subagents — Mandatory)
+## 8. Schema-First Pre-Flight Gate (Dev Subagents — Mandatory)
 
 Before any component edit or new file that renders or references database-model data,
 dev subagents MUST complete all four steps below. No exceptions. No assumptions.
 
-**GATE (fires before touching any `.ts`, `.tsx`, or `.prisma` file under `packages/`):**
-
 **Step 1 — Schema verify:**
 Read `packages/database/prisma/schema.prisma`. Confirm every model field referenced
-in the component or hook actually exists in the schema. If a field doesn't exist —
-STOP. Do not invent a type. Do not add a field inline. Escalate to Patrick or Architect.
+in the component or hook actually exists in the schema.
 
 **Step 2 — Hook shape verify:**
-Read the relevant hook file (`hooks/use*.ts`). Confirm the return shape before
-destructuring in a component. Critical distinction:
+Read the relevant hook file. Confirm the return shape before destructuring.
 - `useState`-based hooks do NOT return `{ isLoading, data }` — they return values directly.
 - `react-query`-based hooks DO return `{ data, isLoading, isError }`.
-- Never assume. Always read. One wrong destructure = one Vercel failure.
+- Never assume. Always read.
 
 **Step 3 — Controller/service type verify:**
 If the component references fields from an API response, read the relevant controller
-file's return type. Do not derive field names from variable names or guesses.
+file's return type.
 
 **Step 4 — Post-edit TypeScript check (mandatory before returning):**
-After every batch of changes, run:
 ```bash
 cd packages/frontend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules
 ```
-Zero errors required before returning output to main session. Do not return partial
-fixes. If errors remain, fix them in the same dispatch round.
+Zero errors required before returning output to main session.
 
-**Forbidden patterns (immediate red flag — stop and re-read):**
-- `import { anything } from '@findasale/shared'` — forbidden, always causes Vercel failure
+**Forbidden patterns:**
+- `import { anything } from '@findasale/shared'` — always causes Vercel build failure
 - Destructuring `{ isLoading }` from a hook without verifying it returns that shape
 - Adding a field to a type definition without confirming it exists in schema.prisma
-- Returning from a dispatch with TypeScript errors still present
-
-**Origin:** Sessions 196–202 — seven consecutive Vercel build failures caused by
-fabricated field names, wrong `@findasale/shared` imports, missing `createdAt` in JWT
-payload, `isLoading` destructured from a `useState` hook, and incorrect data nesting
-(`queueData?.data?.data` vs `queueData?.data`). Each failure cost 1–3 repair rounds.
-This gate was added 2026-03-18 (Session 202) at Patrick's direction. It is permanent.
 
 ---
 
-Status: Project Authority Layer
+## 9. MCP Tool Awareness
+
+At session start, check which MCP tools are active. They are injected at session start and not visible in any file.
+
+**GitHub MCP (`mcp__github__*`):**
+Use `mcp__github__push_files` for small targeted changes only with two hard limits:
+1. ≤3 files per push
+2. Total file content ≤25,000 tokens combined
+
+The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for small batches.
+
+**Bulk pushes** (>3 files OR >25k tokens) must always be done manually by Patrick from PowerShell via `.\push.ps1`.
+
+**Railway stuck / not rebuilding:** Push a trivial change to `packages/backend/Dockerfile.production` — update the cache-bust comment with today's date. This always unblocks Railway.
+
+**Deployments:** Frontend on Vercel, backend on Railway. Both auto-deploy on push to `main`. No manual redeploy buttons — to force a redeploy, make a trivial commit and push.
+
+---
+
+## 10. Operational Rules
+
+**Context checkpoints (no-pause rule):** Agent handoff "Context Checkpoint: yes/no" is internal bookkeeping. Never pause work to discuss a checkpoint.
+
+**Escalation channel:** Any subagent may include a `## Patrick Direct` section when it believes the main session is ignoring a P0/P1 finding, dispatching work that contradicts a locked decision, operating on stale context, or burning tokens on a wrong path. Evidence required. One per agent per session. Main session surfaces verbatim — no filtering.
+
+**Red-flag veto gate:** Changes touching auth flows, payment processing, data deletion, or security config require sign-off from Architect or Hacker before Dev dispatch.
+
+**Handoff protocol:** When Agent A's work creates a task for Agent B, write a structured handoff block with: task, context files, locked decisions, constraints, acceptance criteria, cited file versions. Main session passes handoff blocks as-is.
+
+**Skill update protocol:** Editing a SKILL.md in git does NOT activate the change. Active skills are read-only at `/sessions/[session-id]/mnt/.skills/skills/`. To activate: package as `.skill` zip, Patrick installs via Cowork UI.
+
+---
+
+## 11. Token Efficiency Rules
+
+**T1 — Compaction summaries:** ≤15 lines / ~1.5k tokens. One-liner outcomes only.
+
+**T2 — No production code in session init:** Never read production code files >200 lines during init or in the main window. Reference by path; subagents read code.
+
+**T3 — Mid-dispatch checkpoints are NON-BLOCKING:** Context < 80% → log silently. 80–89% → log warning, continue. ≥ 90% → evaluate remaining work, wrap if major work remains.
+
+**T4 — Session-log rotation:** Keep 3 most recent entries. Move oldest to `claude_docs/session-log-archive.md`.
+
+**T5 — STATE.md size gate:** If >250 lines, archive oldest completed-features section.
+
+---
+
+## 12. Session Wrap
+
+Before ending any session:
+
+1. Update session-log.md (completed work, files changed, compression events)
+2. Update next-session-prompt.md (next task, blockers, pending Patrick actions). NEVER include credentials.
+3. Provide Patrick the `.\push.ps1` block — every changed file as explicit `git add [file]` lines.
+4. Track subagent files: maintain running changed-files list. Cross-reference against `git status` at wrap.
+
+---
+
+## Reference Docs (load on demand, not at init)
+
+| Need | File |
+|------|------|
+| Recurring bug patterns | `self-healing/self_healing_skills.md` |
+| Session safeguards | `operations/session-safeguards.md` |
+| Patrick's shorthand | `operations/patrick-language-map.md` |
+| Model routing | `operations/model-routing.md` |
+| Wrap protocol | `WRAP_PROTOCOL_QUICK_REFERENCE.md` |
+| Tech stack | `STACK.md` |
+| Security | `SECURITY.md` |
+| Recovery | `RECOVERY.md` |
+| File creation paths | `operations/file-creation-schema.md` |
+
+---
+
+Status: Project Authority Layer (v5.0, Session 226 — merged CORE.md, added pain point fixes)

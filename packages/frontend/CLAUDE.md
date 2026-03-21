@@ -2,9 +2,8 @@
 
 Scope: packages/frontend
 
-Behavior rules: CORE.md  
-Project contract: root CLAUDE.md  
-Stack authority: STACK.md  
+Project contract: root CLAUDE.md
+Stack authority: STACK.md
 
 If conflict exists between this file and root CLAUDE.md,
 root prevails.
@@ -39,6 +38,17 @@ Use shared types when available.
 
 No direct database access.
 No business rule duplication.
+
+---
+
+## 4. Import Ban
+
+**Never import from `@findasale/shared`** — always causes Vercel build failure.
+Use local type definitions instead. If a shared type is needed, copy it into
+a local types file within packages/frontend.
+
+Evidence: Sessions 196–202 — seven consecutive Vercel build failures caused
+by @findasale/shared imports that fail resolution at Vercel build time.
 
 ---
 
