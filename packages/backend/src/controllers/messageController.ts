@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { createNotification } from '../lib/notificationService';
 
 // GET /api/messages — list all conversations for the current user
 export const getConversations = async (req: AuthRequest, res: Response) => {
@@ -195,6 +196,16 @@ export const replyInThread = async (req: AuthRequest, res: Response) => {
         data: { lastMessageAt: new Date() },
       }),
     ]);
+
+    // Notify the recipient of the new message
+    const recipientId = isOrganizer ? conversation.shopperUserId : conversation.organizer.userId;
+    createNotification({
+      userId: recipientId,
+      type: 'message',
+      title: 'New message from ' + message.sender.name,
+      body: message.body.substring(0, 100),
+      link: `/messages/${conversationId}`,
+    }).catch(() => {});
 
     res.status(201).json(message);
   } catch (error) {

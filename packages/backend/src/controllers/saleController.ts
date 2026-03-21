@@ -5,6 +5,7 @@ import { handleFavoriteBadge } from './userController';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
+import { createNotification } from '../lib/notificationService';
 import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
 import { syncOrganizerTier } from '../services/tierService';
 import { notifyMatchedBuyers } from '../services/buyerMatchService';
@@ -424,6 +425,19 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     const updated = await prisma.sale.update({ where: { id }, data: { status } });
 
     if (status === 'PUBLISHED' && existingSale.status === 'DRAFT') {
+      // Notify organizer that sale is now live
+      prisma.organizer.findUnique({ where: { id: updated.organizerId }, select: { userId: true } }).then((org) => {
+        if (org?.userId) {
+          createNotification({
+            userId: org.userId,
+            type: 'sale_published',
+            title: 'Sale is now live',
+            body: `Your sale "${updated.title}" is now live and visible to shoppers`,
+            link: `/organizer/sales/${updated.id}`,
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+
       notifyFollowersOfNewSale(updated).catch(() => {});
       notifyMatchedBuyers(updated.id).catch((err) => {
         console.error('[buyerMatch] Failed to notify matched buyers:', err);

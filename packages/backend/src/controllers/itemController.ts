@@ -14,6 +14,7 @@ import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sa
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
+import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tier lapse enforcement
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -370,6 +371,22 @@ export const createItem = async (req: AuthRequest, res: Response) => {
 
     if (sale.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // Feature #75: Check tier limits if organizer is lapsed
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      select: { subscriptionTier: true, tierLapsedAt: true }
+    });
+
+    if (organizer?.tierLapsedAt) {
+      const saleLimit = await checkSaleOverLimit(saleId, organizer.subscriptionTier);
+      if (saleLimit.isOverLimit) {
+        return res.status(403).json({
+          message: `Your subscription has lapsed. You have ${saleLimit.itemCount} items (limit: ${saleLimit.limit}). Upgrade to add more items.`,
+          code: 'TIER_LIMIT_EXCEEDED'
+        });
+      }
     }
 
     // Resolve photo URLs: accept pre-uploaded URLs from body, or upload files now

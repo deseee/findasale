@@ -4,7 +4,8 @@ import { AuthRequest } from '../middleware/auth';
 import { Resend } from 'resend';
 import { handlePurchaseBadge } from './userController';
 import { awardPoints } from '../services/pointsService';
-import { createNotification } from '../services/notificationService';
+import { createNotification as createNotificationEmail } from '../services/notificationService';
+import { createNotification } from '../lib/notificationService';
 import { prisma } from '../lib/prisma';
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { buildEmail } from '../services/emailTemplateService';
@@ -479,6 +480,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
           data: { status: 'PAID' },
         });
 
+        // Notify organizer of payment received
+        if (purchase.sale?.organizer?.userId) {
+          createNotification({
+            userId: purchase.sale.organizer.userId,
+            type: 'payment_received',
+            title: 'Payment received',
+            body: `Payment of $${(paymentIntent.amount_received / 100).toFixed(2)} received for "${purchase.item?.title || 'item'}"`,
+            link: `/organizer/sales/${purchase.saleId}`,
+          }).catch(() => {});
+        }
+
         setImmediate(() => {
           generateReceipt(purchase.id).catch(err => console.error('[receipt] Failed to generate receipt:', err));
         });
@@ -671,6 +683,140 @@ export const webhookHandler = async (req: Request, res: Response) => {
       } catch (err) {
         console.error(`[stripe] Failed to process dispute ${dispute.id}:`, err);
       }
+      break;
+    }
+    case 'customer.subscription.deleted': {
+      // Feature #75: Tier Lapse State Logic — Subscription cancelled
+      const subscription = event.data.object;
+
+      const organizer = await prisma.organizer.findUnique({
+        where: { stripeCustomerId: subscription.customer },
+        include: { user: { select: { email: true, name: true } } }
+      });
+
+      if (!organizer) {
+        console.warn(`[webhook] Subscription deleted for unknown customer ${subscription.customer}`);
+        break;
+      }
+
+      // Downgrade to SIMPLE, record lapse time
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: {
+          subscriptionTier: 'SIMPLE',
+          subscriptionStatus: 'canceled',
+          stripeSubscriptionId: null,
+          tierLapsedAt: new Date(),
+          tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWT tier claims
+        }
+      });
+
+      // Fire async job: send "Tier Lapsed" email
+      setImmediate(() => {
+        const resend = getResendClient();
+        if (resend && organizer.user?.email) {
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+          resend.emails.send({
+            from: fromEmail,
+            to: organizer.user.email,
+            subject: 'Your FindA.Sale PRO subscription has been canceled',
+            html: `<p>Hi ${organizer.user.name || 'Organizer'},</p><p>Your FindA.Sale subscription has been canceled. You've been downgraded to SIMPLE tier.</p>`,
+          }).catch(err => console.warn('[tier-lapse] Failed to send lapse email:', err));
+        }
+      });
+
+      break;
+    }
+    case 'invoice.payment_failed': {
+      // Feature #75: Tier Lapse State Logic — Payment failure, grace period begins
+      const invoice = event.data.object;
+
+      const organizer = await prisma.organizer.findUnique({
+        where: { stripeCustomerId: invoice.customer },
+        include: { user: { select: { email: true, name: true } } }
+      });
+
+      if (!organizer) {
+        console.warn(`[webhook] Payment failed for unknown customer ${invoice.customer}`);
+        break;
+      }
+
+      // Mark subscription as past_due but do NOT downgrade yet (grace period)
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: {
+          subscriptionStatus: 'past_due',
+        }
+      });
+
+      // Fire async job: send "Payment Failed" email with retry link
+      setImmediate(() => {
+        const resend = getResendClient();
+        if (resend && organizer.user?.email) {
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+          const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+          resend.emails.send({
+            from: fromEmail,
+            to: organizer.user.email,
+            subject: 'Action required: Your FindA.Sale payment failed',
+            html: `<p>Hi ${organizer.user.name || 'Organizer'},</p><p>Your recent payment for FindA.Sale failed. Please update your payment method: <a href="${baseUrl}/organizer/billing">Update Payment</a></p><p>You have 3 days to retry.</p>`,
+          }).catch(err => console.warn('[payment-failed] Email send failed:', err));
+        }
+      });
+
+      break;
+    }
+    case 'customer.subscription.updated': {
+      // Feature #75: Tier Lapse State Logic — Resume or upgrade after lapse/payment recovery
+      const subscription = event.data.object;
+
+      const organizer = await prisma.organizer.findUnique({
+        where: { stripeCustomerId: subscription.customer }
+      });
+
+      if (!organizer) {
+        console.warn(`[webhook] Subscription updated for unknown customer ${subscription.customer}`);
+        break;
+      }
+
+      // If resuming from lapse or past_due, clear lapse flags and update tier
+      if (organizer.tierLapsedAt || organizer.subscriptionStatus === 'past_due') {
+        // Map Stripe price ID to tier
+        let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
+        if (subscription.items?.data?.[0]?.price?.id) {
+          const priceId = subscription.items.data[0].price.id;
+          if (priceId === 'price_1TDUQsLTUdEUnHOTzG6cVDwu') newTier = 'PRO';
+          else if (priceId === 'price_1TDUQtLTUdEUnHOTCEoNL6oz') newTier = 'TEAMS';
+        }
+
+        await prisma.organizer.update({
+          where: { id: organizer.id },
+          data: {
+            subscriptionTier: newTier,
+            subscriptionStatus: subscription.status,
+            tierLapsedAt: null, // Clear lapse flag
+            tierLapseWarning: null, // Clear warning flag
+            tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWTs
+          }
+        });
+      } else if (subscription.status === 'active' || subscription.status === 'past_due') {
+        // Normal update: sync subscription status and tier with Stripe
+        let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
+        if (subscription.items?.data?.[0]?.price?.id) {
+          const priceId = subscription.items.data[0].price.id;
+          if (priceId === 'price_1TDUQsLTUdEUnHOTzG6cVDwu') newTier = 'PRO';
+          else if (priceId === 'price_1TDUQtLTUdEUnHOTCEoNL6oz') newTier = 'TEAMS';
+        }
+
+        await prisma.organizer.update({
+          where: { id: organizer.id },
+          data: {
+            subscriptionStatus: subscription.status,
+            subscriptionTier: newTier,
+          }
+        });
+      }
+
       break;
     }
     default:
