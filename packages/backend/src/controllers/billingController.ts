@@ -147,7 +147,26 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         const subscription: any = event.data.object;
         const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
         if (organizerId) {
+          // Feature #75: Downgrade to SIMPLE tier on lapse, but keep User roles intact
+          // Do NOT remove ORGANIZER role — only downgrade subscription tier
           await syncTier(organizerId, 'canceled', null);
+
+          // Record tier lapse timestamp for UserRoleSubscription
+          const user = await prisma.user.findFirst({
+            where: { organizer: { id: organizerId } },
+            select: { id: true }
+          });
+
+          if (user) {
+            await prisma.userRoleSubscription.updateMany({
+              where: { userId: user.id, role: 'ORGANIZER' },
+              data: {
+                tierLapsedAt: new Date(),
+                subscriptionTier: 'SIMPLE',
+              }
+            });
+            console.log(`[billing] Tier lapsed for organizer ${organizerId}, downgraded to SIMPLE`);
+          }
         }
         break;
       }
@@ -166,7 +185,25 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         const priceId = subscription.items.data[0]?.price.id;
         const organizerId = await getOrganizerIdFromStripeCustomer(invoice.customer);
         if (organizerId) {
+          // Feature #75: Restore tier on payment recovery
           await syncTier(organizerId, 'active', priceId);
+
+          // Clear tier lapse timestamp
+          const user = await prisma.user.findFirst({
+            where: { organizer: { id: organizerId } },
+            select: { id: true }
+          });
+
+          if (user) {
+            await prisma.userRoleSubscription.updateMany({
+              where: { userId: user.id, role: 'ORGANIZER' },
+              data: {
+                tierLapsedAt: null,
+                tierResumedAt: new Date(),
+              }
+            });
+            console.log(`[billing] Tier resumed for organizer ${organizerId}`);
+          }
         }
         break;
       }

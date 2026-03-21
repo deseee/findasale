@@ -54,32 +54,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - ✅ **MESSAGE_BOARD.json:** Updated with safety audit completion message
 - Last Updated: 2026-03-21
 
-**Next up (S218):**
-- [ ] **PATRICK ACTION (S217 output):** Run git commands for #102 price validation:
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale
-  git add packages/backend/src/controllers/itemController.ts
-  git commit -m "Add price validation to item create/update endpoints (#102)"
-  .\push.ps1
-  ```
-- [ ] **Continue Pre-Beta Safety:** Next batch #104–#107 (CSRF, SQL injection, account enumeration, DDoS)
-- [ ] **Verify #72 Phase 1 Migration Status:** Confirm Patrick has run Prisma migrate deploy + generate before proceeding with Phase 2
-- [ ] **PATRICK ACTION (S216 blocker):** Run Prisma migration for #72 Phase 1:
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-  $env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
-  npx prisma migrate deploy
-  npx prisma generate
-  ```
-- [ ] #72 Phase 2: JWT generation + auth middleware updates (gated by Phase 1 migration)
-- [ ] #73 Two-Channel Notifications (gated by #72)
-- [ ] #74 Role-Aware Registration Consent (gated by #72)
-- [ ] #75 Tier Lapse State Logic (gated by #72)
-- [ ] Chrome re-verify: create-sale flow after date input fix deployed
-- [ ] #51 Sale Ripples: Neon migration + `prisma generate` still pending (Patrick action, lower priority than #72)
-- [ ] Platform safety continued: #100-#121 from pre-beta safety list
-- [ ] P2: Sale card click handler on homepage carousel
-- [ ] P2: LiveFeedTicker live event verification
+**Session 218 COMPLETE (2026-03-20) — SECURITY HARDENING BATCH + #72 PHASE 2 + FEATURES (#78, #79, #104, #105) + CHROME P0 FIX:**
+- ✅ **Security Hardening #104–#107:** CSRF double-submit cookie middleware (csrf.ts new), SQL injection fix (Prisma.sql in saleController getCities), account enumeration defense (generic login errors + timing attack dummy bcrypt in authController), requestPasswordReset generic response. Audit doc: security-audit-s218.md
+- ✅ **#72 Phase 2 — Dual-Role JWT + Auth Middleware:** JWT payload now includes `roles: string[]` at all 3 generation points (login, register, oauthLogin). Auth middleware attaches `req.user.roles`. AuthContext updated on frontend. Backward-compatible (`role` retained alongside `roles`). Files: auth.ts (middleware), AuthContext.tsx.
+- ✅ **#78 Inspiration Page:** Masonry item gallery (`/inspiration`), ISR 300s, items sorted by aiConfidence DESC, limit 48. New backend route `GET /api/items/inspiration`. Nav link added to Layout. Files: inspiration.tsx (new), InspirationGrid.tsx (new), itemController.ts, routes/items.ts, Layout.tsx
+- ✅ **#79 Earnings Counter Animation:** Revolut-style count-up on organizer dashboard earnings total. useCountUp hook with requestAnimationFrame + easing. Files: useCountUp.ts (new), organizer/dashboard.tsx
+- ✅ **Roadmap #104 AI Cost Ceiling:** Redis-based token tracking, monthly ceiling via `AI_COST_CEILING_USD` env var, auto-alert. Files: aiCostTracker.ts (new), cloudAIService.ts, adminController.ts, batchAnalyzeController.ts
+- ✅ **Roadmap #105 Cloudinary Bandwidth Monitoring:** Serve-event tracker, 80% threshold alert. Files: cloudinaryBandwidthTracker.ts (new), uploadController.ts, routes/admin.ts
+- ✅ **P0 Chrome fix:** Featured Sales carousel cards — title/location/dates now visible. File: SaleCard.tsx
+- ✅ **Chrome audit P2 results:** Sale card navigation PASS. LiveFeedTicker rendering PASS.
+- Last Updated: 2026-03-20
+
+**Next up (S219):**
+- [ ] QA: #72 Phase 2 auth middleware (flagged — touches JWT + auth)
+- [ ] Chrome verify: /inspiration page renders correctly, Earnings Counter animation fires
+- [ ] Continue pre-beta safety: #106–#109 (Organizer Reputation Scoring, Chargeback+Collusion Tracking, Winning Bid Velocity Check, Off-Platform Transaction Detection)
+- [ ] #73 Two-Channel Notification System (gated by #72 ✅ now unblocked)
+- [ ] #74 Role-Aware Registration Consent Flow (gated by #72 ✅)
+- [ ] #75 Tier Lapse State Logic (gated by #72 ✅)
+- [ ] New env vars needed on Railway: `AI_COST_CEILING_USD` (set to monthly budget), `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`, verify `RESEND_API_KEY` + `RESEND_FROM_EMAIL`
 
 ---
 

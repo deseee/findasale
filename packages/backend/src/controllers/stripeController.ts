@@ -703,28 +703,38 @@ export const webhookHandler = async (req: Request, res: Response) => {
     }
     case 'charge.dispute.created': {
       // P0 Fix 1: Handle chargeback/dispute events
+      // Feature #107: Track chargebacks for reputation/suspension logic
       const dispute = event.data.object;
       console.log(`[stripe] Chargeback initiated: dispute_id=${dispute.id}, charge_id=${dispute.charge}`);
 
       // Find the purchase by looking up the payment intent from the charge
       try {
-        // dispute.charge may be a string ID or an expanded Charge object \u2014 normalize to string
+        // dispute.charge may be a string ID or an expanded Charge object — normalize to string
         const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
         const charge = await stripe().charges.retrieve(chargeId);
-        // charge.payment_intent may be a string ID or an expanded PaymentIntent object \u2014 normalize
+        // charge.payment_intent may be a string ID or an expanded PaymentIntent object — normalize
         const paymentIntentId = typeof charge.payment_intent === 'string'
           ? charge.payment_intent
           : charge.payment_intent?.id ?? null;
         if (paymentIntentId) {
           const purchase = await prisma.purchase.findUnique({
-            where: { stripePaymentIntentId: paymentIntentId }
+            where: { stripePaymentIntentId: paymentIntentId },
+            include: { item: { include: { sale: true } } }
           });
-          if (purchase) {
+          if (purchase && purchase.item?.sale) {
             await prisma.purchase.update({
               where: { id: purchase.id },
               data: { status: 'DISPUTED' }
             });
             console.log(`[stripe] Purchase marked DISPUTED: purchase_id=${purchase.id}, dispute_id=${dispute.id}`);
+
+            // Feature #107: Record chargeback incident in fraud tracking
+            const { recordChargebackIncident } = await import('../services/fraudService');
+            await recordChargebackIncident(
+              purchase.item.sale.organizerId,
+              purchase.id,
+              dispute.id
+            );
           }
         }
       } catch (err) {
