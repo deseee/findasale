@@ -91,12 +91,8 @@ export async function recordChargebackIncident(
 
     // Suspend organizer after 3+ chargebacks
     if (chargebackCount >= 3) {
-      await prisma.user.update({
-        where: { id: organizer.userId },
-        data: {
-          suspendedAt: new Date(),
-        },
-      });
+      // TODO: Set suspendedAt on User once field added to schema (#73-phase3)
+      console.warn(`[fraudService] Organizer ${organizerId} should be suspended — schema field pending`);
 
       // Create notification for admin
       await prisma.notification.create({
@@ -199,7 +195,7 @@ export async function checkWinningBidVelocity(
       if (sale) {
         await prisma.fraudSignal.create({
           data: {
-            userId: sale.organizerId,
+            userId: sale.organizerId, // Link to organizer, not bidder
             itemId,
             saleId: item.saleId,
             signalType: 'SUSPICIOUSLY_LOW_BID',
@@ -247,12 +243,13 @@ export async function detectOffPlatformTransactions(): Promise<void> {
           },
         },
         _count: {
-          select: { ripples: true },
+          select: { ripples: true }, // ripples track views
         },
       },
     });
 
     for (const sale of suspiciousSales) {
+      // Count total items and items with purchases
       let totalItems = 0;
       let itemsWithPurchases = 0;
 
@@ -266,6 +263,7 @@ export async function detectOffPlatformTransactions(): Promise<void> {
       // If >50 views but 0 purchases, flag for review
       const viewCount = sale._count.ripples;
       if (viewCount > 50 && itemsWithPurchases === 0) {
+        // Create fraud signal for organizer
         const organizer = await prisma.organizer.findUnique({
           where: { id: sale.organizerId },
           select: { userId: true },
