@@ -324,6 +324,29 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity } = req.body;
     const files = req.files as Express.Multer.File[];
 
+    // #102: Validate price >= 0
+    if (price !== undefined && price !== null) {
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ message: 'Price must be a non-negative number.' });
+      }
+    }
+
+    // #102: Validate auction prices >= 0
+    if (auctionStartPrice !== undefined && auctionStartPrice !== null) {
+      const parsedPrice = parseFloat(auctionStartPrice);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ message: 'Auction start price must be a non-negative number.' });
+      }
+    }
+
+    if (auctionReservePrice !== undefined && auctionReservePrice !== null) {
+      const parsedPrice = parseFloat(auctionReservePrice);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ message: 'Auction reserve price must be a non-negative number.' });
+      }
+    }
+
     // Feature #5: Validate listing type if provided
     if (listingType !== undefined && !VALID_LISTING_TYPES.includes(listingType)) {
       return res.status(400).json({
@@ -437,6 +460,29 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
     const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity } = req.body;
+
+    // #102: Validate price >= 0
+    if (price !== undefined && price !== null) {
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ message: 'Price must be a non-negative number.' });
+      }
+    }
+
+    // #102: Validate auction prices >= 0
+    if (auctionStartPrice !== undefined && auctionStartPrice !== null) {
+      const parsedPrice = parseFloat(auctionStartPrice);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ message: 'Auction start price must be a non-negative number.' });
+      }
+    }
+
+    if (auctionReservePrice !== undefined && auctionReservePrice !== null) {
+      const parsedPrice = parseFloat(auctionReservePrice);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ message: 'Auction reserve price must be a non-negative number.' });
+      }
+    }
 
     // Feature #5: Validate listing type if provided
     if (listingType !== undefined && !VALID_LISTING_TYPES.includes(listingType)) {
