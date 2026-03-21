@@ -13,8 +13,8 @@ const useUnreadMessages = (enabled: boolean) => {
       return res.data;
     },
     enabled,
-    refetchInterval: 30_000, // 30s polling
-    staleTime: 20_000,
+    refetchInterval: 120_000, // 120s polling
+    staleTime: 90_000,
   });
 };
 
