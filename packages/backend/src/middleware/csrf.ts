@@ -79,6 +79,16 @@ export const validateCsrfToken = (req: Request, res: Response, next: NextFunctio
     return next();
   }
 
+  // Skip CSRF for unauthenticated auth endpoints
+  // These endpoints are stateless and don't use cookies for authentication (JWT is in localStorage)
+  // CSRF protection only meaningful for authenticated state-mutating requests
+  // Cross-origin architecture makes double-submit pattern impossible for unauthenticated requests
+  if (req.path.includes('/auth/login') || req.path.includes('/auth/register') ||
+      req.path.includes('/auth/oauth') || req.path.includes('/auth/forgot-password') ||
+      req.path.includes('/auth/reset-password')) {
+    return next();
+  }
+
   // Parse cookies manually
   const cookies = parseCookies(req.headers.cookie);
   const cookieToken = cookies[CSRF_COOKIE_NAME];
