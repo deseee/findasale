@@ -34,7 +34,7 @@ const OrganizerSalesPage = () => {
   }, []);
 
   // Fetch organizer's sales — hooks must be called before conditional returns
-  const { data: sales = [], isLoading: salesLoading } = useQuery({
+  const { data: sales = [], isLoading: salesLoading, error: salesError, refetch: refetchSales } = useQuery({
     queryKey: ['organizer-sales', user?.id],
     queryFn: async () => {
       const response = await api.get('/sales/mine');
@@ -116,8 +116,23 @@ const OrganizerSalesPage = () => {
             </Link>
           </div>
 
+          {/* Error State */}
+          {salesError && (
+            <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg">
+              <p className="text-red-700 dark:text-red-200 mb-3">
+                Unable to load sales. Please try again.
+              </p>
+              <button
+                onClick={() => refetchSales()}
+                className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Sales Grid */}
-          {sales.length > 0 ? (
+          {!salesError && sales.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sales.map((sale: Sale) => (
                 <div
@@ -160,7 +175,7 @@ const OrganizerSalesPage = () => {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : !salesError ? (
             <div className="text-center py-12">
               <p className="text-warm-600 dark:text-warm-400 mb-6">
                 No sales yet. Create your first estate sale to get started.
@@ -172,7 +187,7 @@ const OrganizerSalesPage = () => {
                 Create Your First Sale
               </Link>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </>
