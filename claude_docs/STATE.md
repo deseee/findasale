@@ -44,7 +44,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next up (S217):**
+**Session 217 COMPLETE (2026-03-21) — PRE-BETA SAFETY AUDIT + #102 PRICE VALIDATION:**
+- ✅ **#100–#103 Pre-Beta Safety Audit:** 4 items audited. #100 (password reset rate limit) ✅ already implemented. #101 (sale publish ownership check) ✅ already implemented. #102 (item price >= 0 validation) ⚠️ MISSING → FIXED. Added price validation to itemController.ts createItem() and updateItem() for price, auctionStartPrice, auctionReservePrice. #103 (Stripe webhook signature verification) ✅ already implemented.
+- ✅ **File Changed:** packages/backend/src/controllers/itemController.ts (price validation added, ~60 lines)
+- ✅ **TypeScript Check:** PASS (0 errors)
+- ✅ **MESSAGE_BOARD.json:** Updated with safety audit completion message
+- Last Updated: 2026-03-21
+
+**Next up (S218):**
+- [ ] **PATRICK ACTION (S217 output):** Run git commands for #102 price validation:
+  ```powershell
+  cd C:\Users\desee\ClaudeProjects\FindaSale
+  git add packages/backend/src/controllers/itemController.ts
+  git commit -m "Add price validation to item create/update endpoints (#102)"
+  .\push.ps1
+  ```
+- [ ] **Continue Pre-Beta Safety:** Next batch #104–#107 (CSRF, SQL injection, account enumeration, DDoS)
+- [ ] **Verify #72 Phase 1 Migration Status:** Confirm Patrick has run Prisma migrate deploy + generate before proceeding with Phase 2
 - [ ] **PATRICK ACTION (S216 blocker):** Run Prisma migration for #72 Phase 1:
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
