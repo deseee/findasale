@@ -17,19 +17,21 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
         streakPoints: true,
         points: true,
       },
-      orderBy: {
-        streakPoints: 'desc',
-      },
       take: 50,
     });
 
-    // Sort nulls last, then truncate to top 20
-    const sorted = users
+    // Compute score for each user, then sort by score DESC with nulls last
+    const usersWithScore = users.map((user) => ({
+      ...user,
+      score: (user.streakPoints ?? 0) > 0 ? user.streakPoints : user.points,
+    }));
+
+    const sorted = usersWithScore
       .sort((a, b) => {
-        if (a.streakPoints === null && b.streakPoints === null) return 0;
-        if (a.streakPoints === null) return 1;
-        if (b.streakPoints === null) return -1;
-        return b.streakPoints - a.streakPoints;
+        if (a.score === null && b.score === null) return 0;
+        if (a.score === null) return 1;
+        if (b.score === null) return -1;
+        return b.score - a.score;
       })
       .slice(0, 20);
 
@@ -38,7 +40,7 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       rank: index + 1,
       userId: user.id.slice(0, 4), // Mask user ID for privacy
       name: user.name.split(' ')[0] || 'Shopper', // First name only
-      score: (user.streakPoints ?? 0) > 0 ? user.streakPoints : user.points,
+      score: user.score,
     }));
 
     res.json(leaderboard);
