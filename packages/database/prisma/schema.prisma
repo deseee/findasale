@@ -14,7 +14,8 @@ model User {
   email         String     @unique
   password      String?    // Optional: OAuth users won't have a password
   name          String
-  role          String     @default("USER") // USER, ORGANIZER, ADMIN
+  role          String     @default("USER") // USER, ORGANIZER, ADMIN (deprecated — use roles array in Phase 3)
+  roles         String[]   @default(["USER"]) // ["USER"], ["USER", "ORGANIZER"], ["USER", "ORGANIZER", "ADMIN"]
   points        Int        @default(0)
   phone         String?
   createdAt     DateTime   @default(now())
@@ -32,6 +33,7 @@ model User {
   // Organizer referral credits: accumulated platform fee discounts
   organizerCredits  Float      @default(0)
   organizer         Organizer?
+  roleSubscriptions UserRoleSubscription[] // Feature #72: Dual-role account subscriptions
   purchases     Purchase[]
   favorites     Favorite[]
   bids          Bid[]
@@ -197,6 +199,72 @@ model Organizer {
   workspaceMemberships WorkspaceMember[] @relation("OrganizerWorkspaces")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// Feature #72: Dual-Role Account — Per-role subscription state, tier, and consent
+model UserRoleSubscription {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade, name: "roleSubscriptions")
+
+  role              String   // "ORGANIZER" | "SHOPPER" (always paired with a User.roles entry)
+
+  // Subscription state (ORGANIZER role only; SHOPPER is always active)
+  subscriptionTier  SubscriptionTier @default(SIMPLE) // SIMPLE | PRO | TEAMS
+  subscriptionStatus String?          // active, trialing, past_due, canceled, null
+  trialEndsAt       DateTime?
+  stripeCustomerId  String?
+  stripeSubscriptionId String?
+
+  // Tier expiry (Feature #75 gate)
+  tierLapseWarning  DateTime?  // When to send tier-lapse warning email (e.g., 7 days before trialEndsAt)
+  tierLapsedAt      DateTime?  // When tier actually lapsed (SIMPLE fallback or canceled)
+  tierResumedAt     DateTime?  // When user reactivated subscription
+
+  // Token version for tier JWT (SECURITY FIX P0-1)
+  tokenVersion      Int       @default(0) // Increment on tier upgrade
+
+  // ORGANIZER ONLY: Stripe Connect (for payouts)
+  stripeConnectId   String?
+
+  // ORGANIZER ONLY: Reputation tier (Feature #71)
+  reputationTier    String    @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
+  verificationStatus String   @default("NONE") // NONE | PENDING | VERIFIED | REJECTED
+  verifiedAt        DateTime?
+
+  // Feature #74: Role-specific consent
+  consentRecord     RoleConsent?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([userId, role]) // One subscription per role per user
+  @@index([userId])
+  @@index([role])
+}
+
+// Feature #72+74: Role-Specific Consent Records
+model RoleConsent {
+  id                String   @id @default(cuid())
+  subscriptionId    String   @unique
+  roleSubscription  UserRoleSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  role              String   // "ORGANIZER" | "SHOPPER"
+
+  // Consent timestamps: null = not yet consented
+  termsAcceptedAt   DateTime?
+  privacyAcceptedAt DateTime?
+  businessVerificationAcceptedAt DateTime? // ORGANIZER only
+  paymentMethodAcceptedAt DateTime?        // ORGANIZER only
+  marketingOptInAt  DateTime?              // SHOPPER only
+
+  // Marketing email opt-out per role
+  emailOptOut       Boolean   @default(false)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([subscriptionId])
 }
 
 model Sale {
