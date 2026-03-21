@@ -39,7 +39,7 @@ export const PUBLIC_ITEM_FILTER = {
     { draftStatus: 'PENDING_REVIEW' },
     { draftStatus: 'PUBLISHED' },
   ],
-} as const;
+};
 
 /**
  * getPublicItemsBySaleId(saleId)
