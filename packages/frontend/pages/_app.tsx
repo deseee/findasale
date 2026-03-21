@@ -172,6 +172,27 @@ function DegradationMonitor() {
 }
 
 /**
+ * Bug #6: Listen for 429 rate limit events from api.ts interceptor
+ * and display user-visible toast notification
+ */
+function RateLimitListener() {
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    const handleRateLimit = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { message } = customEvent.detail;
+      showToast(message, 'warning');
+    };
+
+    window.addEventListener('rateLimit429', handleRateLimit);
+    return () => window.removeEventListener('rateLimit429', handleRateLimit);
+  }, [showToast]);
+
+  return null;
+}
+
+/**
  * #18: Capture and record UTM parameters on page load
  * Fires a silent pixel call to record social link clicks
  */
@@ -239,6 +260,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <PushSubscriber />
               <InstallPrompt />
               <NudgeBar />
+              {/* Bug #6: Rate limit toast listener */}
+              <RateLimitListener />
               {/* Feature #20: Proactive Degradation Mode */}
               <DegradationMonitor />
               <DegradationBanner />
