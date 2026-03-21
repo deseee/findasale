@@ -10,7 +10,7 @@ interface ShopperRank {
   name: string;
   city: string | null;
   score: number;
-  badges: Array<{
+  badges?: Array<{
     id: string;
     name: string;
     iconUrl: string | null;
@@ -165,8 +165,8 @@ const Leaderboard = () => {
 
                       {/* Badges */}
                       <div className="flex gap-2">
-                        {shopper.badges.length > 0 ? (
-                          shopper.badges.slice(0, 3).map((badge) => (
+                        {(shopper.badges?.length ?? 0) > 0 ? (
+                          shopper.badges?.slice(0, 3).map((badge) => (
                             <div
                               key={badge.id}
                               title={badge.name}
