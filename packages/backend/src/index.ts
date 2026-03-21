@@ -178,7 +178,7 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 // V1: Wrap Express in a bare HTTP server so Socket.io can share the same port
 const httpServer = http.createServer(app);
 
-// ─── Security ──────────────────────────────────────────────────────────────────────────────────────────────
+// ─── Security ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // Trust the first proxy (ngrok / reverse proxy) so rate-limiter and IP detection work correctly
 app.set('trust proxy', 1);
@@ -216,14 +216,14 @@ app.use(
   })
 );
 
-// Global rate limit — 200 req / 15 min per IP (prevents brute force and scraping)
+// Global rate limit — 500 req / 15 min per IP (prevents brute force and scraping)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  skip: (req) => req.path.startsWith('/api/viewers'),  // viewer endpoints have their own limiter
+  skip: (req) => req.path.startsWith('/api/viewers') || req.path === '/api/health/latency',  // viewer and health endpoints have their own limiter
 });
 app.use(globalLimiter);
 
