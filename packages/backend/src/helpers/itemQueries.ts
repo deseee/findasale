@@ -31,9 +31,14 @@ import { prisma } from '../lib/prisma';
  * Note: draftStatus field is added in Phase 1A migration.
  * TypeScript may show type errors until migration deploys — that's expected.
  * Bug #25 fix: Exclude only DRAFT status; show PENDING_REVIEW and PUBLISHED items.
+ * Also handles NULL draftStatus (legacy/seeded items without explicit status).
  */
 export const PUBLIC_ITEM_FILTER = {
-  NOT: { draftStatus: 'DRAFT' }
+  OR: [
+    { draftStatus: null },
+    { draftStatus: 'PENDING_REVIEW' },
+    { draftStatus: 'PUBLISHED' },
+  ],
 } as const;
 
 /**
