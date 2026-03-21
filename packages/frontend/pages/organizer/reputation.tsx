@@ -12,7 +12,6 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useReputationBreakdown } from '../../hooks/useReputation';
 import ReputationBadge from '../../components/ReputationBadge';
-import Layout from '../../components/Layout';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { ArrowUp, TrendingUp, AlertCircle, Check } from 'lucide-react';
@@ -53,7 +52,7 @@ const OrganizerReputationPage = () => {
   const scoreBg = getScoreBg(reputation?.score || 0);
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Reputation | FindA.Sale</title>
       </Head>
@@ -282,7 +281,7 @@ const OrganizerReputationPage = () => {
         </div>
       </div>
       )}
-    </Layout>
+    </>
   );
 };
 

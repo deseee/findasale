@@ -61,7 +61,7 @@ const FraudSignalsPage = () => {
     queryKey: ['sales', 'mine'],
     queryFn: async () => {
       const res = await api.get('/sales/mine');
-      return res.data.data || [];
+      return res.data.sales || [];
     },
     enabled: !!user && user.role === 'ORGANIZER',
   });
