@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-03-22 (S237) — Transactional Email Provider (Resend → Brevo or Postmark)
+
+**Status:** DEFERRED
+**Made by:** Patrick
+**Rationale:** Resend free tier (100 emails/day) exhausted by weekly digest job on Sundays. Brevo free tier = 300/day (3x headroom, no cost). Postmark = best deliverability, $15/mo. Migration is a 1-file backend change (notificationService.ts API key + SDK swap). No urgency while user count is low; revisit when daily transactional emails routinely exceed 80 or before general launch.
+
+---
+
 ## 2026-03-18 (S198) — Roadmap 13-Column Schema + #51 Implementation Gap
 
 **Status:** APPROVED (schema + gap identification)
