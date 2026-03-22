@@ -16,6 +16,24 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### Session 233 — 2026-03-22 — Full Bug Queue Dispatch: 24 QA Bugs + 11 Sentry Errors Fixed
+
+**Worked on:** (1) Dispatched all 24 bugs from qa-audit-2026-03-22.md to findasale-dev in 5 parallel batches (P0s, High, Medium/API, Medium/Logic, Low/Polish). All fixed and pushed by Patrick. (2) Dispatched findasale-records to cross-check previous audits (s222, s227, passkey-s200) — found S227 missed bug (requireOrganizer blocking ADMIN, fixed in same batch). (3) Checked Sentry via Chrome MCP — found 11 live production errors not in the audit. Dispatched 3 parallel dev batches (backend, frontend-logic, frontend-infra) to fix all 11. All fixed and pushed. (4) Confirmed Sentry IS working (BUG-20 503 was intermittent). (5) Queued passkey race condition (S200 unverified P0) for findasale-hacker next session.
+
+**Decisions:** uuid downgraded to v9 (v13 ESM-only incompatible with CommonJS backend). CORS hardened at code level (not env-var-only) so misconfigured env can never block production. API base URL localhost bug in `lib/api.ts` was a silent P0 affecting all production API calls on the frontend — fixed. BUG-06/08/12/21 confirmed already working correctly in codebase.
+
+**Token efficiency:** High. 9 parallel subagent dispatches across two rounds. Zero wasted turns — rule 30 (no-stop between agent returns) held. Records + dev + hacker queued all in one session.
+
+**Token burn:** ~150k tokens (est.), 0 compressions. Near ceiling — wrapped on schedule.
+
+**Next up:** Dispatch findasale-hacker on passkey race condition (S200). Features #106–#109 pre-beta safety batch. Run Prisma actions (still blocking #73/#74/#75). Verify Sentry errors resolve after deploy.
+
+**Blockers:** Prisma actions pending Patrick. Railway env vars pending Patrick. Passkey security audit queued.
+
+**Files changed:** 23 QA bug fix files (backend controllers/routes + frontend pages/components) + 11 Sentry fix files (backend package.json, index.ts + 9 frontend files) — both pushed by Patrick via `.\push.ps1`. Full file list in two push blocks delivered in-session. | Compressions: 0 | Subagents: 9 (5× findasale-dev, 1× findasale-records, 3× general-purpose dev) | Push method: Patrick PS1 (×2)
+
+---
+
 ### Session 232 — 2026-03-22 — Comprehensive Live QA Audit (24 Bugs, NO-GO Verdict)
 
 **Worked on:** Full live browser QA audit of https://finda.sale across all roles (Nina/ADMIN, Oscar/PRO Organizer, Ian/Shopper) using Chrome MCP. Tested all major flows: homepage, login/logout, organizer dashboard, sale management, item management, messages, shopper favorites, admin, Stripe upgrade, follow system. Found 24 bugs total.
@@ -87,21 +105,5 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Files changed:** `packages/backend/src/controllers/stripeController.ts`, `packages/backend/src/controllers/authController.ts`, `packages/frontend/hooks/useNotifications.ts` (deleted), `packages/frontend/components/AuthContext.tsx`, `packages/frontend/pages/notifications.tsx`, `packages/frontend/pages/organizer/dashboard.tsx`, `claude_docs/STATE.md`, `claude_docs/logs/session-log.md`, `claude_docs/next-session-prompt.md` | Compressions: 0 | Subagents: 1 (findasale-qa) | Push method: Patrick PS1 (3 commits)
 
 ---
-
-### Session 227 — 2026-03-21 — Workflow Cleanup Sprint (Phase 2+3): Friction Audit Action Loop, Skill Archival, CLAUDE.md v5.0 Finalization
-
-**Worked on:** (1) Phase 2a: Updated `daily-friction-audit` scheduled task with auto-dispatch action loop — HIGH/MEDIUM/LOW findings now auto-dispatch to findasale-records or findasale-dev; 3+ consecutive appearances triggers `## Patrick Direct` block; cosmetic items may defer 1-2 days. (2) Phase 2b: Changed `context-freshness-check` from daily to weekly Monday 8am (cron: `0 8 * * 1`). (3) Phase 2c: QA audit on /pricing page — 2 WARN findings: unauthenticated "Upgrade" button text (should be "Sign up for PRO/TEAMS"), no `?upgrade=success/cancelled` handling on dashboard return from Stripe. (4) Phase 3a: Deleted `.checkpoint-manifest.json` and `MESSAGE_BOARD.json`. (5) Phase 3b: Archived `context-maintenance` and `findasale-push-coordinator` skills — source SKILL.md files updated with ARCHIVED frontmatter + redirect notices; .skill packages built and presented to Patrick. (6) Phase 3c: CORE.md fully retired — CLAUDE.md v5.0 is now the single authority; all references updated. (7) Resolved CLAUDE.md 3-region merge conflict — kept v5.0 §§7-12 from remote, Behavior rules line from HEAD, both MCP limits sections. (8) Railway Dockerfile cache-bust pushed via MCP — forces fresh Docker build to unblock Stripe checkout 404.
-
-**Decisions:** CORE.md retired (S226 merge + S227 finalization). context-maintenance + findasale-push-coordinator skills archived — findasale-records owns session wrap, CLAUDE.md §5+§11 own push rules. Stripe 404 root cause: stale Railway Docker layer (route existed in code, not a code bug).
-
-**Token efficiency:** No subagent code dispatches — all doc/config work. 1 QA audit subagent. Low-medium burn. 1 compression event (context exhausted → continued in new session).
-
-**Token burn:** ~90k tokens (est.), 1 compression.
-
-**Next up:** Verify Railway rebuilt + Stripe checkout 404 resolved. Fix 2 /pricing WARN findings (findasale-dev dispatch). Continue product roadmap.
-
-**Blockers:** Railway rebuild in progress (Dockerfile cache-bust commit 57fabb05 pushed ~22:44 UTC). Stripe checkout verification pending Railway completion.
-
-**Files changed:** `packages/backend/Dockerfile.production` (S227 cache-bust — MCP push), `CLAUDE.md` (v5.0 finalized, merge conflict resolved — MCP push), `claude_docs/skills-package/context-maintenance/SKILL.md` (archived), `claude_docs/skills-package/findasale-push-coordinator/SKILL.md` (archived), `claude_docs/skills-package/findasale-records/SKILL.md` (wrap steps + scheduled tasks list updated), `claude_docs/logs/session-log.md`, `claude_docs/next-session-prompt.md`, `claude_docs/STATE.md` | Compressions: 1 | Subagents: 1 (findasale-qa for /pricing audit) | Push method: MCP (2 files) + Patrick PS1 (wrap files)
 
 

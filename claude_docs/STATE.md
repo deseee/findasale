@@ -7,6 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 233 COMPLETE (2026-03-22) — FULL BUG QUEUE DISPATCH (24 QA BUGS + 11 SENTRY ERRORS FIXED):**
+- ✅ All 24 bugs from qa-audit-2026-03-22.md dispatched to findasale-dev in 5 parallel batches — all fixed and pushed
+- ✅ P0 BUG-01: Messages thread blank — `min-h-screen` → `h-full` fix in `messages/[id].tsx`
+- ✅ P0 BUG-02: Stripe checkout 404 — created missing `pages/api/billing/checkout.ts` proxy route
+- ✅ HIGH BUG-03: Stripe Customer Portal wired — new backend endpoint + frontend subscription page button
+- ✅ HIGH BUG-04: `/admin/invites` crash fixed — `response.invites` destructured correctly
+- ✅ HIGH BUG-05: Follow button + follow-status 404 — new `GET /:id/follow-status` backend route added
+- ✅ MEDIUM BUG-07: Edit Sale dates now pre-populated from fetched data
+- ✅ MEDIUM BUG-10: Photo-ops 404 — remounted as sales subroute
+- ✅ MEDIUM BUG-11: Sale detail over-fetch fixed (staleTime: 3000 on react-query)
+- ✅ MEDIUM BUG-13: Ripples 403 on shopper page load — ORGANIZER role gate added in RippleIndicator
+- ✅ MEDIUM BUG-14: Pricing page now role-differentiates (shoppers see free-access message)
+- ✅ MEDIUM BUG-15: TreasureHuntBanner dark mode fixed; billing pages already had dark mode
+- ✅ MEDIUM BUG-16: Dual status badges removed from add-items page
+- ✅ LOW BUG-17/18: Unicode escape literals fixed in edit-sale
+- ✅ LOW BUG-19: AI confidence badge removed from InspirationGrid
+- ✅ LOW BUG-22/23: Auth redirects corrected; `/access-denied` page created
+- ✅ LOW BUG-24: PWA prompt 7-day localStorage suppression
+- ✅ LOW BUG-25: Dead route aliases added to next.config.js
+- ✅ S227 missed bug: `requireOrganizer` middleware now allows ADMIN role (was blocking 403 in S227 audit)
+- ✅ SENTRY NODEJS-1 (FATAL, 160 events): uuid@13 ESM crash — downgraded to `uuid@^9.0.0`
+- ✅ SENTRY NODEJS-3 (30 events): CORS — hardcoded `finda.sale` + `www.finda.sale` as guaranteed allowed origins
+- ✅ SENTRY NEXTJS-1 (119 events): map page `.map()` crash — defensive `Array.isArray()` guard
+- ✅ SENTRY NEXTJS-3 (121 events): QuotaExceededError — localStorage writes wrapped in try/catch, queue capped at 50
+- ✅ SENTRY NEXTJS-5/7 (74 events): Stripe.js SSR load failure — lazy `typeof window` init in CheckoutModal + HuntPassModal
+- ✅ SENTRY NEXTJS-6 (21 events): Hooks violation on add-items — all useQuery calls moved above early returns
+- ✅ SENTRY NEXTJS-8 (22 events): API base URL was `http://localhost:5000/api` in production — fixed to `/api` in `lib/api.ts`
+- ✅ SENTRY NEXTJS-2 (31 events): Leaflet `_leaflet_pos` crash — `typeof window` guard in `SaleMapInner.tsx`
+- ✅ SENTRY NEXTJS-4 (11 events): ServiceWorker registration failure — graceful catch in `_app.tsx`
+- ⚠️ BUG-20 Sentry 503: Confirmed intermittent — Sentry IS working (11 issues captured). No code fix needed.
+- ⚠️ BUG-12/21/06/08: Confirmed already working correctly in codebase — no fix needed
+- ⚠️ PENDING: Passkey concurrent session race condition (S200 unverified P0) — queued for findasale-hacker next session
+- ⚠️ PENDING: Features #106–#109 pre-beta safety batch (deferred — bug queue took full session)
+- ⚠️ PENDING: `prisma migrate deploy + prisma generate` against Neon (still blocking #73/#74/#75 runtime)
+- ⚠️ PENDING: Railway env vars `AI_COST_CEILING_USD=5.00`, `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
+- Last Updated: 2026-03-22
+
 **Session 232 COMPLETE (2026-03-22) — COMPREHENSIVE LIVE QA AUDIT (24 BUGS, NO-GO):**
 - ✅ Full live app QA audit at https://finda.sale — all roles (SHOPPER, ORGANIZER, ADMIN), all major flows
 - ✅ Report written: `claude_docs/operations/qa-audit-2026-03-22.md`
