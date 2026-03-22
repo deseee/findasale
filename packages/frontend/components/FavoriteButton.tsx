@@ -122,11 +122,10 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
         title={user ? (isFavorited ? 'Remove from saves' : 'Add to saves') : 'Sign in to save'}
       >
         <Heart
-          className={`${sizeClasses[size].icon} transition-all ${
-            isFavorited
-              ? 'fill-red-500 stroke-red-500'
-              : 'stroke-current hover:stroke-red-500'
-          }`}
+          className={`${sizeClasses[size].icon} transition-all`}
+          fill={isFavorited ? 'currentColor' : 'none'}
+          stroke={isFavorited ? 'rgb(239, 68, 68)' : 'currentColor'}
+          strokeWidth={isFavorited ? 0 : 2}
         />
       </button>
     );
@@ -145,9 +144,9 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
       title={user ? undefined : 'Sign in to save'}
     >
       <Heart
-        className={`w-5 h-5 transition-all ${
-          isFavorited ? 'fill-current' : ''
-        }`}
+        className="w-5 h-5 transition-all"
+        fill={isFavorited ? 'currentColor' : 'none'}
+        strokeWidth={isFavorited ? 0 : 2}
       />
       <span>{isFavorited ? 'Saved' : label}</span>
     </button>
