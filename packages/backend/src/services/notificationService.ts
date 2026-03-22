@@ -2,7 +2,8 @@ import { prisma } from '../lib/prisma';
 
 /**
  * Creates a notification record and stores it in the inbox.
- * Fire-and-forget: callers should wrap this in .catch() for error handling.
+ * Fire-and-forget: fails silently on error (Feature #109: graceful degradation).
+ * Does not throw — prevents notification failures from crashing the process.
  */
 export async function createNotification(
   userId: string,
@@ -22,7 +23,8 @@ export async function createNotification(
       },
     });
   } catch (err) {
-    console.error('[notification] Failed to create notification:', err);
-    throw err;
+    // Feature #109: Graceful degradation — log but don't throw
+    // Notification failures should not crash the application
+    console.warn('[notification] Failed to create notification:', err instanceof Error ? err.message : err);
   }
 }

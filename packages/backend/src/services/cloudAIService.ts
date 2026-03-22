@@ -72,29 +72,35 @@ export function isAnthropicAvailable(): boolean {
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
 export async function getVisionLabels(imageBase64: string): Promise<string[]> {
-  const response = await axios.post(
-    `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
-    {
-      requests: [
-        {
-          image: { content: imageBase64 },
-          features: [
-            { type: 'LABEL_DETECTION', maxResults: 15 },
-            { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
-          ],
-        },
-      ],
-    },
-    { timeout: 15000 }
-  );
+  try {
+    const response = await axios.post(
+      `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+      {
+        requests: [
+          {
+            image: { content: imageBase64 },
+            features: [
+              { type: 'LABEL_DETECTION', maxResults: 15 },
+              { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
+            ],
+          },
+        ],
+      },
+      { timeout: 15000 }
+    );
 
-  const annotations = response.data.responses?.[0];
-  const labels: string[] = (annotations?.labelAnnotations ?? []).map((l: any) => l.description);
-  const objects: string[] = (annotations?.localizedObjectAnnotations ?? []).map((o: any) => o.name);
+    const annotations = response.data.responses?.[0];
+    const labels: string[] = (annotations?.labelAnnotations ?? []).map((l: any) => l.description);
+    const objects: string[] = (annotations?.localizedObjectAnnotations ?? []).map((o: any) => o.name);
 
-  // Objects first (more specific), then labels — deduplicated
-  const combined = [...new Set([...objects, ...labels])];
-  return combined.slice(0, 15);
+    // Objects first (more specific), then labels — deduplicated
+    const combined = [...new Set([...objects, ...labels])];
+    return combined.slice(0, 15);
+  } catch (error: any) {
+    // Feature #109: Graceful degradation — return empty labels on Vision API failure
+    console.warn('[cloudAIService] Google Vision API error:', error.message || error);
+    return [];
+  }
 }
 
 // ── Step 2: Claude Haiku structured analysis ──────────────────────────────────
@@ -422,21 +428,22 @@ export interface SaleDescriptionInput {
 /**
  * Generate a 2–3 sentence sale listing description using Claude Haiku.
  * Returns null if ANTHROPIC_API_KEY is not configured.
- * Throws on API errors so the caller can handle/log them.
+ * Feature #109: Returns null on API errors (graceful degradation).
  */
 export async function generateSaleDescription(input: SaleDescriptionInput): Promise<string | null> {
   if (!ANTHROPIC_API_KEY) return null;
 
-  const { title, tags = [], city = regionConfig.city, isAuctionSale = false, startDate, endDate } = input;
+  try {
+    const { title, tags = [], city = regionConfig.city, isAuctionSale = false, startDate, endDate } = input;
 
-  const tagContext = tags.length > 0 ? `Featured categories/items: ${tags.join(', ')}.` : '';
-  const dateContext =
-    startDate && endDate
-      ? `Sale runs ${new Date(startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} through ${new Date(endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
-      : '';
-  const auctionContext = isAuctionSale ? 'This is an auction-style sale.' : '';
+    const tagContext = tags.length > 0 ? `Featured categories/items: ${tags.join(', ')}.` : '';
+    const dateContext =
+      startDate && endDate
+        ? `Sale runs ${new Date(startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} through ${new Date(endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+        : '';
+    const auctionContext = isAuctionSale ? 'This is an auction-style sale.' : '';
 
-  const prompt = `You are helping an estate sale organizer in ${city}, ${regionConfig.state} write a compelling 2–3 sentence listing description.
+    const prompt = `You are helping an estate sale organizer in ${city}, ${regionConfig.state} write a compelling 2–3 sentence listing description.
 
 Sale title: "${title}"
 ${tagContext}
@@ -445,38 +452,43 @@ ${auctionContext}
 
 Write a friendly, inviting description that shoppers will see on the listing. Use a warm tone. Mention the city if relevant. Do NOT make up specific items or prices — only reference what's provided. Respond with just the description text, no quotes, no explanation.`;
 
-  // Estimate tokens for cost tracking (#104)
-  const estimatedTokens = estimateTokensForRequest(prompt, false);
+    // Estimate tokens for cost tracking (#104)
+    const estimatedTokens = estimateTokensForRequest(prompt, false);
 
-  const response = await axios.post(
-    'https://api.anthropic.com/v1/messages',
-    {
-      model: ANTHROPIC_MODEL,
-      max_tokens: 150,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    },
-    {
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 150,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
       },
-      timeout: 20000,
-    }
-  );
+      {
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        timeout: 20000,
+      }
+    );
 
-  const text: string = response.data.content?.[0]?.text ?? '';
+    const text: string = response.data.content?.[0]?.text ?? '';
 
-  // Track token usage for cost ceiling (#104)
-  const responseTokens = Math.ceil(text.length / 4) + 100;
-  trackAITokens(estimatedTokens + responseTokens);
+    // Track token usage for cost ceiling (#104)
+    const responseTokens = Math.ceil(text.length / 4) + 100;
+    trackAITokens(estimatedTokens + responseTokens);
 
-  return text.trim() || null;
+    return text.trim() || null;
+  } catch (error: any) {
+    // Feature #109: Graceful degradation — return null on API failure
+    console.warn('[cloudAIService] Sale description generation error:', error.message || error);
+    return null;
+  }
 }
 
 // ── Price Suggestion API ──────────────────────────────────────────────────────

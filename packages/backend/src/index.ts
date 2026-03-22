@@ -53,6 +53,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
+import { createClient, RedisClientType } from 'redis';
 import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
@@ -150,6 +152,7 @@ import feedbackRoutes from './routes/feedback';                 // User Feedback
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
+import { requestTimeout } from './middleware/requestTimeout'; // Feature #108: Global request timeout (30s)
 import { correlationIdMiddleware } from './middleware/correlationId'; // #98: Request tracing
 import { initSocket } from './lib/socket'; // V1: Socket.io live bidding
 import { initLiveFeed } from './services/liveFeedService'; // Feature #70: Live Sale Feed
@@ -224,6 +227,36 @@ app.use(
   })
 );
 
+// Feature #106: Initialize Redis client for distributed rate limiting
+// Falls back gracefully to in-memory store if Redis is unavailable
+let redisRateLimitClient: RedisClientType | null = null;
+if (process.env.REDIS_URL) {
+  try {
+    redisRateLimitClient = createClient({ url: process.env.REDIS_URL });
+    redisRateLimitClient.on('error', (err) => {
+      console.error('[rateLimit] Redis error:', err);
+      redisRateLimitClient = null; // graceful degradation
+    });
+    redisRateLimitClient.connect().catch((err) => {
+      console.error('[rateLimit] Failed to connect to Redis:', err);
+      redisRateLimitClient = null;
+    });
+  } catch (error) {
+    console.error('[rateLimit] Failed to initialize Redis client:', error);
+    redisRateLimitClient = null;
+  }
+}
+
+// Build store config for rate limiters
+const createRateLimitStore = () => {
+  if (redisRateLimitClient && redisRateLimitClient.isOpen) {
+    return new RedisStore({
+      sendCommand: (...args: string[]) => redisRateLimitClient!.sendCommand(args),
+    });
+  }
+  return undefined; // Falls back to default in-memory store
+};
+
 // Global rate limit — 500 req / 15 min per IP (prevents brute force and scraping)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -232,6 +265,7 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
   skip: (req) => req.path.startsWith('/api/viewers') || req.path === '/api/health/latency',  // viewer and health endpoints have their own limiter
+  store: createRateLimitStore(),
 });
 app.use(globalLimiter);
 
@@ -252,6 +286,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
+  store: createRateLimitStore(),
 });
 
 // Contact form limiter — 5 submissions / 15 min per IP (M3: prevents spam campaigns)
@@ -292,6 +327,10 @@ app.use(sentryUserContext);
 // Feature #20: Proactive Degradation Mode
 // Monitors latency and adds degradation headers when threshold exceeded
 app.use(degradationMode);
+
+// Feature #108: Global request timeout guard (30 seconds)
+// Prevents handlers from blocking indefinitely; returns 503 on timeout
+app.use(requestTimeout(30000));
 
 // Health check endpoint
 app.get('/', (req, res) => {
