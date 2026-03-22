@@ -15,7 +15,9 @@ let L: any;
 let orangeIcon: any, greenIcon: any, amberIcon: any, grayIcon: any;
 
 if (typeof window !== 'undefined') {
-  L = require('leaflet').default;
+  // Leaflet is CJS — no .default export. Fall back to the module itself if .default is undefined.
+  const leafletModule = require('leaflet');
+  L = leafletModule.default ?? leafletModule;
 
   // Fix Leaflet's default icon paths (broken in webpack/Next.js builds)
   delete (L.Icon.Default.prototype as any)._getIconUrl;
