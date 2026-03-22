@@ -310,23 +310,8 @@ const AddItemsDetailPage = () => {
     itemCount?: number;
   } | null>(null);
 
-  // P1-A: Validate saleId on route ready
-  useEffect(() => {
-    if (router.isReady && !saleId) {
-      router.replace('/organizer/dashboard');
-    }
-  }, [router.isReady, saleId, router]);
-
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
-  // P1-A: Loading guard — don't render if saleId is falsy
-  if (!saleId) {
-    return null;
-  }
-
+  // CRITICAL: All hooks must be called unconditionally at top of component (before any early returns)
+  // React hooks rule: call hooks in the same order on every render
   const { data: sale } = useQuery({
     queryKey: ['sale', saleId],
     queryFn: async () => {
@@ -346,6 +331,24 @@ const AddItemsDetailPage = () => {
     },
     enabled: !!saleId && !inMutationFlight.current,
   });
+
+  // P1-A: Validate saleId on route ready
+  useEffect(() => {
+    if (router.isReady && !saleId) {
+      router.replace('/organizer/dashboard');
+    }
+  }, [router.isReady, saleId, router]);
+
+  // Early returns after all hooks
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
+
+  // P1-A: Loading guard — don't render if saleId is falsy
+  if (!saleId) {
+    return null;
+  }
 
   const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
   const draftCount = items.filter((i: any) => computeDraftStatus(i) === 'DRAFT').length;

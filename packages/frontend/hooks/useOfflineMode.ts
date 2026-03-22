@@ -157,7 +157,11 @@ export function useTriggerSync() {
     },
     onSuccess: (data) => {
       // Update lastSyncedAt in localStorage
-      localStorage.setItem('lastSyncedAt', new Date().toISOString());
+      try {
+        localStorage.setItem('lastSyncedAt', new Date().toISOString());
+      } catch (err) {
+        console.warn('[useTriggerSync] Failed to save lastSyncedAt:', err);
+      }
 
       // Remove successfully synced items from queue
       if (data.synced.length > 0) {
@@ -166,9 +170,13 @@ export function useTriggerSync() {
           let queue = queueStr ? JSON.parse(queueStr) : [];
           const syncedLocalIds = data.synced.map(s => s.localId);
           queue = queue.filter((item: OfflineQueueItem) => !syncedLocalIds.includes(item.localId));
+
+          // Enforce queue size limit: keep only most recent 50 items to avoid quota exceeded
+          queue = queue.slice(-50);
+
           localStorage.setItem('offlineQueue', JSON.stringify(queue));
         } catch (err) {
-          console.error('[useTriggerSync] Error updating localStorage:', err);
+          console.error('[useTriggerSync] Error updating offline queue:', err);
         }
       }
 
@@ -179,11 +187,13 @@ export function useTriggerSync() {
           let queue = queueStr ? JSON.parse(queueStr) : [];
           queue = queue.map((item: OfflineQueueItem) => {
             const failed = data.failed.find(f => f.localId === item.localId);
-            if (failed) {
+            if (failed && (item.retryCount || 0) < 3) {
               return { ...item, retryCount: (item.retryCount || 0) + 1 };
             }
             return item;
           });
+          // Enforce queue size limit: keep only most recent 50 items
+          queue = queue.slice(-50);
           localStorage.setItem('offlineQueue', JSON.stringify(queue));
         } catch (err) {
           console.error('[useTriggerSync] Error updating retry count:', err);

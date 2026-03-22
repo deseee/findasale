@@ -56,7 +56,8 @@ const MapPage = () => {
       try {
         // Backend filters by status: 'PUBLISHED' by default
         const response = await api.get('/sales?limit=200');
-        return response.data.sales as Sale[];
+        const salesData = response.data.sales ?? response.data;
+        return Array.isArray(salesData) ? salesData : [];
       } catch (err: any) {
         console.error('Error fetching sales:', err);
         throw new Error('Failed to load sales. Please try again later.');

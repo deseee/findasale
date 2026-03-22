@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
 import {
   Elements,
   PaymentElement,
@@ -8,7 +8,15 @@ import {
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+// Lazy-initialize Stripe on client-side only to avoid SSR errors
+let stripePromise: Promise<Stripe | null> | null = null;
+const getStripePromise = () => {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  if (!stripePromise) {
+    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+  }
+  return stripePromise;
+};
 
 // Inner form rendered inside the Elements provider
 interface PaymentFormProps {
@@ -418,7 +426,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
             )}
 
             {clientSecret && (
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <Elements stripe={getStripePromise()} options={{ clientSecret }}>
                 <PaymentForm
                   itemTitle={resolvedTitle}
                   itemPrice={itemPrice}

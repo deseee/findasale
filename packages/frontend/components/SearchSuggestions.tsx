@@ -50,7 +50,12 @@ const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
     const updated = [trimmed, ...recentSearches.filter((s) => s !== trimmed)].slice(0, 8);
     setRecentSearches(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('recentSearches', JSON.stringify(updated));
+      try {
+        localStorage.setItem('recentSearches', JSON.stringify(updated));
+      } catch (e) {
+        // QuotaExceededError or other storage errors — continue without caching
+        console.warn('Failed to save recent searches to localStorage:', e);
+      }
     }
     if (onSelectSuggestion) {
       onSelectSuggestion(trimmed);
