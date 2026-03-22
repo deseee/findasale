@@ -178,9 +178,9 @@ const PricingPage = () => {
     <>
       <Head>
         <title>Pricing - FindA.Sale</title>
-        <meta name="description" content="Choose the perfect plan for your estate sale business." />
+        <meta name="description" content="Choose the perfect plan for managing your sales." />
         <meta property="og:title" content="Pricing - FindA.Sale" />
-        <meta property="og:description" content="Choose the perfect plan for your estate sale business." />
+        <meta property="og:description" content="Choose the perfect plan for managing your sales." />
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
@@ -191,7 +191,7 @@ const PricingPage = () => {
               Simple, Transparent Pricing
             </h1>
             <p className="text-xl text-warm-600 dark:text-warm-300">
-              Choose the plan that fits your estate sale business
+              Choose the plan that fits your business
             </p>
           </div>
 
@@ -214,7 +214,7 @@ const PricingPage = () => {
           {user?.role === 'USER' ? (
             <div className="mb-12 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-center">
               <p className="text-blue-900 dark:text-blue-200 text-lg">
-                💙 You have free access to browse all sales! Create an account as an organizer to start managing your estate sales.
+                💙 You have free access to browse all sales! Create an account as an organizer to start managing your sales.
               </p>
             </div>
           ) : null}

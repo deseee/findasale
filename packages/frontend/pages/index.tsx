@@ -163,16 +163,16 @@ const HomePage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>FindA.Sale - Find Estate Sales Near You</title>
-        <meta name="description" content="Find estate sales and auctions near you" />
-        <meta property="og:title" content="FindA.Sale — Find Estate Sales Near You" />
-        <meta property="og:description" content="Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales." />
+        <title>FindA.Sale - Find Sales Near You</title>
+        <meta name="description" content="Find estate sales, garage sales, yard sales, and auctions near you" />
+        <meta property="og:title" content="FindA.Sale — Find Sales Near You" />
+        <meta property="og:description" content="Browse estate sales, garage sales, yard sales, and auctions near you. Bid, buy, and discover unique items from local sales." />
         <meta property="og:url" content="https://finda.sale" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="FindA.Sale — Find Estate Sales Near You" />
-        <meta name="twitter:description" content="Browse estate sales and auctions near you. Bid, buy, and discover unique items from local estate sales." />
+        <meta name="twitter:title" content="FindA.Sale — Find Sales Near You" />
+        <meta name="twitter:description" content="Browse estate sales, garage sales, and auctions near you. Bid, buy, and discover unique items from local sales." />
         {/* Structured data — Organization + WebSite schema for Google */}
         <script
           type="application/ld+json"
@@ -183,7 +183,7 @@ const HomePage = () => {
               name: 'FindA.Sale',
               url: 'https://finda.sale',
               logo: 'https://finda.sale/icons/icon-512x512.png',
-              description: 'Local estate sale marketplace — browse, buy, and sell estate sale items online',
+              description: 'Secondary sales marketplace — browse, buy, and sell items from estate sales, garage sales, and auctions online',
               address: {
                 '@type': 'PostalAddress',
                 addressLocality: defaultCity,
