@@ -9,6 +9,7 @@ import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
 import OfflineIndicator from './OfflineIndicator'; // Feature #69: Local-First Offline Mode
+import AvatarDropdown from './AvatarDropdown';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -209,10 +210,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
-              {/* Show Explore/Browse for all users, Map for all users */}
+              {/* Show Browse/Map/Inspiration for all users */}
               {isClient && user && (user.roles?.includes('USER') || user.roles?.includes('ADMIN') || user.roles?.includes('ORGANIZER')) && (
                 <>
-                  <Link href="/" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Explore</Link>
+                  <Link href="/feed" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Feed</Link>
                   <Link href="/map" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Map</Link>
                   <Link href="/inspiration" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Inspiration</Link>
                 </>
@@ -243,14 +244,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                     </svg>
                   </Link>
                   <div className="border-l border-warm-300 dark:border-gray-700 pl-4 flex items-center gap-2">
-                    <span className="text-warm-900 dark:text-warm-100 text-sm">Hi, {user.name || user.email}</span>
                     <NotificationBell />
                     {isLowBandwidth && (
                       <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Low-Bandwidth Mode enabled — photos optimized for slow connections">
                         Low BW
                       </span>
                     )}
-                    <button onClick={handleLogout} className="text-warm-900 dark:text-warm-300 hover:text-amber-600">Logout</button>
+                    <AvatarDropdown />
                   </div>
                 </>
               ) : (
@@ -401,26 +401,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 </Link>
 
                 {/* Pro Tools Section */}
-                {canAccess('PRO') && (
-                  <>
-                    <SectionHeader label="Pro Tools" />
-                    <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Command Center
-                    </Link>
-                    <Link href="/organizer/typology" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Typology Classifier
-                    </Link>
-                    <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Fraud Signals
-                    </Link>
-                    <Link href="/organizer/offline" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Offline Mode
-                    </Link>
-                    <Link href="/organizer/appraisals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Appraisals
-                    </Link>
-                  </>
-                )}
+                <SectionHeader label="Pro Tools" />
+                <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
               </>
             ) : (
               authLinks
