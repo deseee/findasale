@@ -373,13 +373,13 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
-    // Feature #75: Check tier limits if organizer is lapsed
+    // Feature #75: Check tier limits if organizer is in SIMPLE tier
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
-      select: { subscriptionTier: true, tierLapsedAt: true }
+      select: { subscriptionTier: true }
     });
 
-    if (organizer?.tierLapsedAt) {
+    if (organizer?.subscriptionTier === 'SIMPLE') {
       const saleLimit = await checkSaleOverLimit(saleId, organizer.subscriptionTier);
       if (saleLimit.isOverLimit) {
         return res.status(403).json({
