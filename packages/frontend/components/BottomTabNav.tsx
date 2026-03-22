@@ -6,7 +6,7 @@ import useUnreadMessages from '../hooks/useUnreadMessages';
 
 /**
  * BottomTabNav — Phase 25 mobile bottom navigation
- * 5 primary tabs: Browse, Map, Saved, Messages, Profile
+ * 5 primary tabs: Browse, Map, Saved, Messages, Profile/Dashboard
  * Hidden on desktop (md+). Fixed to bottom with safe-area padding.
  */
 
@@ -69,12 +69,14 @@ const BottomTabNav = () => {
   const { user } = useAuth();
   const { data: unreadData } = useUnreadMessages(!!user);
 
-  // Profile tab destination depends on user role
-  const profileHref = user?.role === 'ORGANIZER'
+  // Profile tab destination and label depend on user role
+  const isOrganizer = user?.role === 'ORGANIZER';
+  const profileHref = isOrganizer
     ? '/organizer/dashboard'
     : user
       ? '/shopper/dashboard'
       : '/login';
+  const profileLabel = isOrganizer ? 'Dashboard' : 'Profile';
 
   const tabs: Tab[] = [
     {
@@ -103,7 +105,7 @@ const BottomTabNav = () => {
     },
     {
       href: profileHref,
-      label: 'Profile',
+      label: profileLabel,
       icon: ProfileIcon,
       matchPaths: ['/organizer', '/shopper', '/profile', '/login', '/register'],
     },
