@@ -102,8 +102,9 @@ const ProfilePage = () => {
     );
   }
 
-  // Check if user is organizer-only (no USER role)
-  const isOrganizerOnly = user.roles?.includes('ORGANIZER') && !user.roles?.includes('USER');
+  // Check if user is organizer or admin — hide shopper-only sections (Hunt Pass, Bids, etc.)
+  // Use user.role (single field, always reliable) NOT user.roles array (defaults to ["USER"] for legacy accounts)
+  const isOrganizerOnly = user.role === 'ORGANIZER' || user.role === 'ADMIN';
 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
