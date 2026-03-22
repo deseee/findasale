@@ -167,7 +167,8 @@ export const listSales = async (req: Request, res: Response) => {
 
 export const getMySales = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -251,16 +252,18 @@ export const getSale = async (req: Request, res: Response) => {
 
 export const createSale = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
-    
+
     const saleData = saleCreateSchema.parse(req.body);
-    
+
     let organizerId = req.user.organizerProfile?.id;
-    if (!organizerId && req.user.role === 'ADMIN') {
+    if (!organizerId && isAdmin) {
       organizerId = req.body.organizerId;
-    } else if (!organizerId && req.user.role === 'ORGANIZER') {
+    } else if (!organizerId && hasOrganizerRole) {
       let organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile) {
         organizerProfile = await prisma.organizer.create({
@@ -291,17 +294,19 @@ export const createSale = async (req: AuthRequest, res: Response) => {
 
 export const updateSale = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
-    
+
     const { id } = req.params;
     const saleData = saleUpdateSchema.parse(req.body);
-    
+
     const existingSale = await prisma.sale.findUnique({ where: { id } });
     if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
-    
-    if (req.user.role !== 'ADMIN') {
+
+    if (!isAdmin) {
       const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only update your own sales.' });
@@ -336,15 +341,17 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
 
 export const deleteSale = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Access denied. Organizer/Admin access required.' });
     }
-    
+
     const { id } = req.params;
     const existingSale = await prisma.sale.findUnique({ where: { id } });
     if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
-    
-    if (req.user.role !== 'ADMIN') {
+
+    if (!isAdmin) {
       const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only delete your own sales.' });
@@ -388,7 +395,9 @@ export const searchSales = async (req: Request, res: Response) => {
 
 export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -403,7 +412,7 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     const existingSale = await prisma.sale.findUnique({ where: { id } });
     if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
 
-    if (req.user.role !== 'ADMIN') {
+    if (!isAdmin) {
       const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only update your own sales.' });
@@ -503,15 +512,17 @@ export const trackQrScan = async (req: Request, res: Response) => {
 
 export const generateQRCode = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
     const { id } = req.params;
     const existingSale = await prisma.sale.findUnique({ where: { id } });
     if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
-    
-    if (req.user.role !== 'ADMIN') {
+
+    if (!isAdmin) {
       const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only generate QR codes for your own sales.' });
@@ -656,7 +667,9 @@ export const getSalesByCity = async (req: Request, res: Response) => {
 
 export const cloneSale = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -669,7 +682,7 @@ export const cloneSale = async (req: AuthRequest, res: Response) => {
     }
 
     // Verify ownership (unless admin)
-    if (req.user.role !== 'ADMIN') {
+    if (!isAdmin) {
       const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || sourceSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only clone your own sales.' });

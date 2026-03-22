@@ -114,7 +114,8 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
   try {
     const { businessName, phone, address } = req.body;
 
-    if (req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) {
       return res.status(403).json({ message: 'Only organizers can set up an organizer profile' });
     }
 

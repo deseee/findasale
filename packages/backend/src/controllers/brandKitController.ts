@@ -100,7 +100,8 @@ export const getBrandKitBySlug = async (req: AuthRequest, res: Response) => {
  */
 export const updateBrandKit = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 

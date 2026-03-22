@@ -15,7 +15,8 @@ export const getPerformanceMetricsHandler = async (req: AuthRequest, res: Respon
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    if (req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user.roles?.includes('ORGANIZER') || req.user.role === 'ORGANIZER';
+    if (!hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 

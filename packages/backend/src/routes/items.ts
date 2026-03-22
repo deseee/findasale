@@ -61,7 +61,8 @@ router.post('/:itemId/publish', authenticate, publishItem);
 router.post('/bulk', authenticate, requireTier('PRO'), async (req, res) => {
   try {
     const authReq = req as AuthRequest;
-    if (!authReq.user || authReq.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = authReq.user?.roles?.includes('ORGANIZER') || authReq.user?.role === 'ORGANIZER';
+    if (!authReq.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -568,7 +569,8 @@ router.post('/bulk', authenticate, requireTier('PRO'), async (req, res) => {
 router.post('/bulk/photos', authenticate, async (req, res) => {
   try {
     const authReq = req as AuthRequest;
-    if (!authReq.user || authReq.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = authReq.user?.roles?.includes('ORGANIZER') || authReq.user?.role === 'ORGANIZER';
+    if (!authReq.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 

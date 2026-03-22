@@ -315,7 +315,8 @@ export const oauthLogin = async (req: Request, res: Response) => {
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile = null;
-    if (user.role === 'ORGANIZER') {
+    const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
+    if (hasOrganizerRole) {
       organizerProfile = await prisma.organizer.findUnique({
         where: { userId: user.id }
       });
@@ -447,7 +448,8 @@ export const login = async (req: Request, res: Response) => {
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile = null;
-    if (user.role === 'ORGANIZER') {
+    const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
+    if (hasOrganizerRole) {
       organizerProfile = await prisma.organizer.findUnique({
         where: { userId: user.id }
       });

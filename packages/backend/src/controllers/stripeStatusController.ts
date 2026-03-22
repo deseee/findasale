@@ -5,7 +5,8 @@ import { AuthRequest } from '../middleware/auth';
 
 export const getAccountStatus = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied.' });
     }
 

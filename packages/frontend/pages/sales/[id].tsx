@@ -376,7 +376,7 @@ const SaleDetailPage = () => {
                   </Link>
                 )}
                 <FollowOrganizerButton
-                  organizerId={sale.organizer.userId}
+                  organizerId={sale.organizer.id}
                   organizerName={sale.organizer.businessName}
                 />
               </div>

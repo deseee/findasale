@@ -20,7 +20,8 @@ const getOrganizerStripeId = async (userId: string): Promise<string | null> => {
  */
 export const getBalance = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 
@@ -51,7 +52,8 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
  */
 export const getPayoutSchedule = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 
@@ -83,7 +85,8 @@ export const getPayoutSchedule = async (req: AuthRequest, res: Response) => {
  */
 export const updatePayoutSchedule = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 
@@ -127,7 +130,8 @@ export const updatePayoutSchedule = async (req: AuthRequest, res: Response) => {
  */
 export const createPayout = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 
@@ -262,7 +266,8 @@ export interface EarningsBreakdownItem {
  */
 export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 

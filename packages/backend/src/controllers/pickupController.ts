@@ -6,7 +6,8 @@ import { AuthRequest } from '../middleware/auth';
 export const createSlot = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    if (req.user.role !== 'ORGANIZER') return res.status(403).json({ message: 'Organizers only' });
+    const hasOrganizerRole = req.user.roles?.includes('ORGANIZER') || req.user.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const { saleId, startsAt, endsAt, capacity } = req.body;
 
@@ -89,7 +90,8 @@ export const getSlots = async (req: AuthRequest, res: Response) => {
 export const deleteSlot = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    if (req.user.role !== 'ORGANIZER') return res.status(403).json({ message: 'Organizers only' });
+    const hasOrganizerRole = req.user.roles?.includes('ORGANIZER') || req.user.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const { slotId } = req.params;
 

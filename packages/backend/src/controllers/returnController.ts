@@ -32,7 +32,8 @@ export const requestReturnHandler = async (req: AuthRequest, res: Response) => {
 
 export const resolveReturnHandler = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 

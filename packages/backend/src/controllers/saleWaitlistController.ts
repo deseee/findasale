@@ -71,7 +71,8 @@ export const getSaleWaitlistStatus = async (req: AuthRequest, res: Response) => 
 // POST /api/sale-waitlist/:saleId/notify — organizer triggers when new items are added
 export const notifySaleWaitlist = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer only' });
     }
     const { saleId } = req.params;

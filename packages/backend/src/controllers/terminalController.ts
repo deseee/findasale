@@ -24,7 +24,8 @@ const stripe = () => getStripe();
  */
 const resolveOrganizer = async (req: AuthRequest, res: Response, opts: { requireStripe?: boolean } = {}) => {
   const { requireStripe = true } = opts;
-  if (!req.user || req.user.role !== 'ORGANIZER') {
+  const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+  if (!req.user || !hasOrganizerRole) {
     res.status(403).json({ message: 'Organizer access required' });
     return null;
   }
@@ -63,7 +64,8 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
     const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
 
     if (isSimulated) {
-      if (!req.user || req.user.role !== 'ORGANIZER') {
+      const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+      if (!req.user || !hasOrganizerRole) {
         return res.status(403).json({ message: 'Organizer access required' });
       }
       const token = await stripe().terminal.connectionTokens.create({});

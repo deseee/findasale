@@ -19,7 +19,9 @@ const formatDate = (dateStr: string | Date): string => {
 
 export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 

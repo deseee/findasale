@@ -13,7 +13,8 @@ const DEFAULT_HOLD_HOURS = 48; // #24: default hold duration (was 24h)
 export const placeHold = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    if (req.user.role === 'ORGANIZER') return res.status(403).json({ message: 'Organizers cannot place holds' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (hasOrganizerRole) return res.status(403).json({ message: 'Organizers cannot place holds' });
 
     const { itemId, note } = req.body;
     if (!itemId) return res.status(400).json({ message: 'itemId is required' });
@@ -115,7 +116,7 @@ export const cancelHold = async (req: AuthRequest, res: Response) => {
     const reservation = await prisma.itemReservation.findUnique({ where: { id } });
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
 
-    const isOrganizer = req.user.role === 'ORGANIZER';
+    const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (!isOrganizer && reservation.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
@@ -185,7 +186,8 @@ export const getItemReservation = async (req: AuthRequest, res: Response) => {
 export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    if (req.user.role !== 'ORGANIZER') return res.status(403).json({ message: 'Organizers only' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
     if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
@@ -256,7 +258,8 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
 export const getOrganizerHoldCount = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    if (req.user.role !== 'ORGANIZER') return res.status(403).json({ message: 'Organizers only' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
     if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
@@ -279,7 +282,8 @@ export const getOrganizerHoldCount = async (req: AuthRequest, res: Response) => 
 export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    if (req.user.role !== 'ORGANIZER') return res.status(403).json({ message: 'Organizers only' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const { ids, action } = req.body as { ids: string[]; action: string };
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -372,7 +376,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
 export const updateHold = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    if (req.user.role !== 'ORGANIZER') return res.status(403).json({ message: 'Organizers only' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const { id } = req.params;
     const { status } = req.body;

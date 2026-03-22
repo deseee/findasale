@@ -9,7 +9,7 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
     const userId = req.user.id;
-    const isOrganizer = req.user.role === 'ORGANIZER';
+    const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
 
     let conversations;
 
@@ -79,7 +79,7 @@ export const getThread = async (req: AuthRequest, res: Response) => {
     if (!conversation) return res.status(404).json({ message: 'Conversation not found' });
 
     // Access check: user must be shopper or organizer in this conversation
-    const isOrganizer = req.user.role === 'ORGANIZER';
+    const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     const ownedByUser = isOrganizer
       ? conversation.organizer.userId === userId
       : conversation.shopperUserId === userId;
@@ -175,7 +175,7 @@ export const replyInThread = async (req: AuthRequest, res: Response) => {
 
     if (!conversation) return res.status(404).json({ message: 'Conversation not found' });
 
-    const isOrganizer = req.user.role === 'ORGANIZER';
+    const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     const ownedByUser = isOrganizer
       ? conversation.organizer.userId === userId
       : conversation.shopperUserId === userId;
@@ -220,7 +220,7 @@ export const getUnreadCount = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
     const userId = req.user.id;
-    const isOrganizer = req.user.role === 'ORGANIZER';
+    const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
 
     let count: number;
 

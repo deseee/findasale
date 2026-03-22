@@ -100,7 +100,8 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -318,7 +319,8 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
 
 export const createItem = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -471,7 +473,8 @@ export const createItem = async (req: AuthRequest, res: Response) => {
 
 export const updateItem = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -594,7 +597,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
 export const deleteItem = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -733,7 +737,8 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
 
 export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -920,7 +925,8 @@ export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
 // Phase 2B: Rapidfire Mode — Publish endpoint with optimistic lock and draftStatus gate
 export const publishItem = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 

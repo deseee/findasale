@@ -10,7 +10,8 @@ const router = Router();
 // Authenticated: get revenue analytics for the current organizer
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (!req.user.roles?.includes('ORGANIZER') && req.user.role !== 'ORGANIZER')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -85,7 +86,8 @@ router.get('/performance', authenticate, getPerformanceMetricsHandler);
 // PATCH /organizers/me — update current organizer's profile (businessName, phone, bio, onboardingComplete)
 router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (!req.user.roles?.includes('ORGANIZER') && req.user.role !== 'ORGANIZER')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -130,7 +132,8 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
 // POST /organizers/me/onboarding-complete — mark onboarding as completed, return fresh JWT
 router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (!req.user.roles?.includes('ORGANIZER') && req.user.role !== 'ORGANIZER')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -180,7 +183,8 @@ router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, re
 // Must be registered before /:id to avoid being swallowed by the wildcard
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (!req.user.roles?.includes('ORGANIZER') && req.user.role !== 'ORGANIZER')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -265,7 +269,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
 // Streams a CSV of all items in the given sale (organizer-owned sales only)
 router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (!req.user.roles?.includes('ORGANIZER') && req.user.role !== 'ORGANIZER')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 

@@ -63,7 +63,8 @@ const sendReceiptEmail = async (purchase: {
 // Create a Stripe Connect account for an organizer
 export const createConnectAccount = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
@@ -888,7 +889,9 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
 // Issue a refund (organizer or admin only)
 export const createRefund = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || (req.user.role !== 'ORGANIZER' && req.user.role !== 'ADMIN')) {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Organizer or admin access required' });
     }
 
@@ -905,7 +908,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Purchase not found' });
     }
 
-    if (req.user.role === 'ORGANIZER' && purchase.sale?.organizer?.userId !== req.user.id) {
+    if (hasOrganizerRole && purchase.sale?.organizer?.userId !== req.user.id) {
       return res.status(403).json({ message: 'You can only refund purchases from your own sales' });
     }
 

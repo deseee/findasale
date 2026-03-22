@@ -45,7 +45,8 @@ const addItemSchema = z.object({
 // GET /api/checklist/:saleId — get checklist, create with defaults if none exists
 export const getChecklist = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -90,7 +91,8 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
 // PATCH /api/checklist/:saleId — update item completion status or label
 export const updateChecklist = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -165,7 +167,8 @@ export const updateChecklist = async (req: AuthRequest, res: Response) => {
 // POST /api/checklist/:saleId/items — add a custom checklist item
 export const addChecklistItem = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
@@ -229,7 +232,8 @@ export const addChecklistItem = async (req: AuthRequest, res: Response) => {
 // DELETE /api/checklist/:saleId/items/:itemId — delete a custom checklist item
 export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 

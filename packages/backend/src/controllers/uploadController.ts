@@ -285,7 +285,8 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
 // Returns { itemId, status: 'DRAFT' }
 export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
       res.status(403).json({ message: 'Organizer access required' });
       return;
     }
