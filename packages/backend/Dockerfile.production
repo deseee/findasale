@@ -1,4 +1,4 @@
-# S227 — cache bust 2026-03-21 unblock-stripe-checkout-route
+# S234 — cache bust 2026-03-22 uuid-lockfile-fix
 FROM node:18-slim
 
 WORKDIR /app
