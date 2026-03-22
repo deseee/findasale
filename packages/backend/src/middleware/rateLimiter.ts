@@ -3,10 +3,10 @@
  *
  * Custom rate limiters for sensitive photo-op endpoints.
  * - photoShareLimiter: 10 requests per user/IP per hour on share POST
- * - shareLikeLimiter: 30 requests per user/IP per 15 minutes on like POST
+ * - shareLikeLimiter: 30 requests per 15 minutes per user/IP
  *
- * Note: validate.xForwardedForHeader is disabled because trust proxy is set
- * to 1 in index.ts, which correctly normalises req.ip via X-Forwarded-For.
+ * validate: false disables all express-rate-limit v8 runtime validations.
+ * Trust proxy is correctly set to 1 in index.ts; validations are noise here.
  */
 
 import rateLimit from 'express-rate-limit';
@@ -27,7 +27,7 @@ export const photoShareLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10,
   keyGenerator: getKeyGenerator,
-  validate: { xForwardedForHeader: false },
+  validate: false,
   message: 'Too many photo shares submitted from this IP, please try again later.',
   standardHeaders: false,
   legacyHeaders: false,
@@ -40,7 +40,7 @@ export const shareLikeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 30,
   keyGenerator: getKeyGenerator,
-  validate: { xForwardedForHeader: false },
+  validate: false,
   message: 'Too many like requests from this IP, please try again later.',
   standardHeaders: false,
   legacyHeaders: false,
