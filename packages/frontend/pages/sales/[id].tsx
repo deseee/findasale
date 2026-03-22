@@ -298,18 +298,18 @@ const SaleDetailPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
-          ← Back to browse sales
+          ← Back to home
         </Link>
 
         {/* Sale Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             <div className="flex-1">
-              <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-2">{sale.title}</h1>
+              <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-50 mb-2">{sale.title}</h1>
               <div className="mb-4">
                 <RippleIndicator saleId={sale.id} size="md" />
               </div>
-              <p className="text-lg text-warm-700 dark:text-gray-400 mb-4">
+              <p className="text-lg text-warm-700 dark:text-gray-300 mb-4">
                 {sale.address}, {sale.city}, {sale.state} {sale.zip}
               </p>
               <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
@@ -317,9 +317,9 @@ const SaleDetailPage = () => {
               </p>
               {sale.status && (
                 <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                  sale.status === 'active' ? 'bg-green-100 text-green-800' :
-                  sale.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
-                  'bg-gray-100 text-gray-800'
+                  sale.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' :
+                  sale.status === 'upcoming' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' :
+                  'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                 }`}>
                   {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
                 </span>
@@ -335,9 +335,9 @@ const SaleDetailPage = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-2">Organized by</h2>
+              <h2 className="text-xl font-bold text-warm-900 dark:text-gray-50 mb-2">Organized by</h2>
               <div className="flex items-center gap-2 mb-2">
-                <p className="text-lg font-semibold text-warm-800 dark:text-gray-200">{sale.organizer.businessName}</p>
+                <p className="text-lg font-semibold text-warm-800 dark:text-gray-100">{sale.organizer.businessName}</p>
                 <VerifiedBadge status={sale.organizer.verificationStatus} size="md" />
                 {/* Phase 31: Show tier badge if SILVER or GOLD */}
                 {sale.organizer.tier && (sale.organizer.tier === 'SILVER' || sale.organizer.tier === 'GOLD') && (
@@ -353,7 +353,7 @@ const SaleDetailPage = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-sm font-medium text-warm-700 dark:text-gray-300">Rating:</span>
                   <span className="text-sm text-warm-600 dark:text-gray-400">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
-                  <span className="text-sm text-warm-500 dark:text-gray-500">({sale.organizer.reviewCount || 0} reviews)</span>
+                  <span className="text-sm text-warm-500 dark:text-gray-400">({sale.organizer.reviewCount || 0} reviews)</span>
                 </div>
               )}
               <BadgeDisplay badges={sale.organizer.badges || []} />
@@ -558,10 +558,10 @@ const SaleDetailPage = () => {
 
         {/* Photo Gallery \u2014 Phase 18: click to open lightbox */}
         {sale.photoUrls && sale.photoUrls.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4 text-warm-900">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+            <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">
               Photos
-              <span className="ml-2 text-sm font-normal text-warm-400">
+              <span className="ml-2 text-sm font-normal text-warm-400 dark:text-gray-500">
                 ({sale.photoUrls.length})
               </span>
             </h2>
@@ -596,8 +596,8 @@ const SaleDetailPage = () => {
 
         {/* Description */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-4">About</h2>
-          <p className="text-warm-700 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
+          <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">About</h2>
+          <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
         </div>
 
         {/* Feature #47: UGC Photo Gallery */}
@@ -615,7 +615,7 @@ const SaleDetailPage = () => {
 
         {/* Map Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">Location</h2>
+          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
           {sale.lat && sale.lng ? (
             <SaleMap
               singlePin={{
@@ -644,7 +644,7 @@ const SaleDetailPage = () => {
         {/* Items Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50">
               {sale.isAuctionSale ? 'Auction Items' : 'Items for Sale'}
             </h2>
             {isOrganizer && sale.items.length > 0 && (
@@ -701,7 +701,7 @@ const SaleDetailPage = () => {
           {/* Category Filter */}
           {sale.items && sale.items.some((item) => item.category) && (
             <div className="mb-6">
-              <p className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Filter by category:</p>
+              <p className="text-sm font-medium text-warm-700 dark:text-gray-200 mb-2">Filter by category:</p>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedCategory(null)}
@@ -769,7 +769,7 @@ const SaleDetailPage = () => {
                          loading="lazy"/>
                       ) : (
                         <div className="bg-warm-200 dark:bg-gray-700 h-48 flex items-center justify-center">
-                          <span className="text-warm-500 dark:text-gray-400">No image</span>
+                          <span className="text-warm-500 dark:text-gray-400 text-sm">No image</span>
                         </div>
                       )}
                     </Link>
@@ -778,8 +778,8 @@ const SaleDetailPage = () => {
                     </div>
                   </div>
                   <div className="p-4">
-                    <h3 className="font-bold text-lg mb-2 text-warm-900 dark:text-gray-100">{item.title}</h3>
-                    <p className="text-warm-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">{item.description}</p>
+                    <h3 className="font-bold text-lg mb-2 text-warm-900 dark:text-gray-50">{item.title}</h3>
+                    <p className="text-warm-600 dark:text-gray-300 text-sm mb-3 line-clamp-2">{item.description}</p>
 
                     {/* Category, Condition, Auction, and Status badges */}
                     {(item.category || item.condition || item.auctionEndTime || item.status === 'RESERVED' || item.status === 'SOLD' || item.status === 'PENDING') && (
@@ -806,7 +806,7 @@ const SaleDetailPage = () => {
                           </span>
                         )}
                         {item.condition && (
-                          <span className="inline-block bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-2 py-1 rounded text-xs font-medium">
+                          <span className="inline-block bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-100 px-2 py-1 rounded text-xs font-medium">
                             {item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}
                           </span>
                         )}
@@ -818,7 +818,7 @@ const SaleDetailPage = () => {
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <div>
-                            <span className="text-sm text-warm-600 dark:text-gray-400">Current Bid:</span>
+                            <span className="text-sm text-warm-600 dark:text-gray-300">Current Bid:</span>
                             <span className="font-bold text-amber-600 dark:text-amber-400 ml-1">
                               {formatPrice(item.currentBid || item.auctionStartPrice)}
                             </span>
@@ -832,7 +832,7 @@ const SaleDetailPage = () => {
                         </div>
                         
                         <div className="mb-2">
-                          <span className="text-sm text-warm-600 dark:text-gray-400">
+                          <span className="text-sm text-warm-600 dark:text-gray-300">
                             Minimum bid: {formatPrice((item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1))}
                           </span>
                         </div>
