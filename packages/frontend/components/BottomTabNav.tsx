@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
+import usePoints from '../hooks/usePoints';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 
 /**
@@ -67,10 +68,12 @@ type Tab = {
 const BottomTabNav = () => {
   const router = useRouter();
   const { user } = useAuth();
+  const isOrganizer = user?.role === 'ORGANIZER';
+  // Only fetch points for shoppers — organizers don't have a points balance
+  const { data: pointsData } = usePoints(!isOrganizer && !!user);
   const { data: unreadData } = useUnreadMessages(!!user);
 
   // Profile tab destination and label depend on user role
-  const isOrganizer = user?.role === 'ORGANIZER';
   const profileHref = isOrganizer
     ? '/organizer/dashboard'
     : user
@@ -127,6 +130,8 @@ const BottomTabNav = () => {
         {tabs.map((tab) => {
           const active = isActive(tab);
           const Icon = tab.icon;
+          const isProfileTab = tab.label === profileLabel && profileLabel === 'Profile';
+          const pts = isProfileTab && pointsData?.points ? pointsData.points : 0;
           return (
             <Link
               key={tab.label}
@@ -150,6 +155,11 @@ const BottomTabNav = () => {
               <span className="text-[10px] mt-0.5 font-medium leading-none" aria-hidden="true">
                 {tab.label}
               </span>
+              {pts > 0 && (
+                <span className="text-[8px] text-amber-500 leading-none mt-0.5" aria-hidden="true">
+                  {pts} pts
+                </span>
+              )}
             </Link>
           );
         })}
