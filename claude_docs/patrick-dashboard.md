@@ -1,5 +1,5 @@
 # FindA.Sale — Patrick's Dashboard
-Last Updated: 2026-03-22 (Session 237 wrap)
+Last Updated: 2026-03-22 (Session 238 wrap)
 
 ## Build Status
 - **Vercel (Frontend):** ✅ Live — [finda.sale](https://finda.sale)
@@ -7,36 +7,37 @@ Last Updated: 2026-03-22 (Session 237 wrap)
 - **Sentry:** Review at https://deseee.sentry.io — S233/S234 fixes should have reduced error volume
 
 ## Live QA Status
-- **Status:** All S237 fixes verified live in production. Map working. Organizer profile correct. /auth redirect working.
-- **Data:** 25 sales now show Grand Rapids, MI (was Riverside, IL). 10 organizer addresses fixed.
-- **Beta tester readiness:** Site is showing correctly. Role walkthrough + mobile check deferred to S238.
+- **Status:** All S238 fixes verified live in production. Pricing copy broadened. Role walkthroughs pass.
+- **Data:** 25 sales show Grand Rapids, MI. 10 organizer addresses correct.
+- **Beta tester readiness:** Site copy now includes all secondary sales types (estate, garage, yard, auction, flea, consignment).
 
 ## No Blocking Patrick Actions
-All scripts run. All pushes complete. No manual steps before S238.
+All S238 code deployed. Login rate limit from test agents has cleared — login works normally.
 
 ## Next 3 Decisions
-1. Resend → Brevo or Postmark? (weekly digest burning 80/100 free quota on Sundays — decide before user count grows)
-2. Approve Reputation + Condition Tags as P0 pre-beta features (`INNOVATION_HANDOFF_S236.md`)
-3. Budget approval for digital assets legal review ($2-3K)
+1. Mobile layout — test on your phone and report (Chrome automation was unreliable)
+2. Resend → Brevo (free, 300/day) or Postmark ($15/mo, best deliverability)?
+3. Approve Reputation + Condition Tags as P0 pre-beta? (See `INNOVATION_HANDOFF_S236.md`)
 
 ## Project Health
 - **Features shipped:** 71 across 4 tiers (SIMPLE/PRO/TEAMS + FREE shopper)
 - **Beta status:** Live and verified. Real customers evaluating this week.
-- **Platform scope:** Estate sales, yard sales, auctions, flea markets, consignment
+- **Platform scope:** Estate sales, yard sales, auctions, flea markets, consignment (copy now reflects this)
 
-## What Was Just Done (S237)
-- ✅ Fixed map blank (Leaflet CJS interop bug — `require('leaflet').default` was undefined)
-- ✅ Fixed organizer profile showing Hunt Pass / My Bids / My Referrals (wrong roles array check)
-- ✅ Fixed `/auth/login` → 404 (permanent redirect to `/login` added)
-- ✅ .gitignore updated — _tmp_*, .skills/, .claude/ excluded from git permanently
-- ✅ ~80 untracked claude_docs files committed (S198–S236 backlog cleared)
-- ✅ All 25 sales + 10 organizers updated: "Riverside, IL" → "Grand Rapids, MI"
-- ✅ Live smoke test passed: map (24 tiles), profile identity, auth redirect all verified
+## What Was Just Done (S238)
+- ✅ Role walkthroughs: shopper, organizer, unauthenticated all verified working
+- ✅ Item detail pages confirmed already public (no code change needed)
+- ✅ Sale detail pages confirmed already public (no code change needed)
+- ✅ Pricing page copy updated — removed "estate sale business" language
+- ✅ Homepage updated — added all secondary sales types to title, meta, OG tags, schema.org
+- ✅ About page updated — mission statement now includes all sale types
+- ✅ Mobile verification attempted via Chrome (inconclusive — needs your manual real-device test)
 
-## S238 Work Queue
-1. **Full role walkthrough** (shopper + organizer + unauthenticated) — deferred from S237
-2. **Mobile verification** (PWA install, touch targets, responsive, no horizontal scroll)
-3. **Resend quota decision** — free plan at risk on beta Sundays
+## S239 Work Queue
+1. **Mobile real-device test** (you: check nav, touch targets, responsive on your phone)
+2. **Resend quota decision** (Brevo or Postmark before beta scales)
+3. **Innovation roadmap review** (Reputation + Condition Tags P0? Sale-type discovery Q3?)
+4. **Full auth flows** (if login rate limit fully cleared: organizer create-sale → publish, shopper favorite → message)
 
 ---
 

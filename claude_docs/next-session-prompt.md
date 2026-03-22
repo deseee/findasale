@@ -1,53 +1,57 @@
-# Next Session Prompt — S238
+# Next Session Prompt — S239
 
-**Date:** 2026-03-22 (S237 wrap complete)
-**Status:** S237 fixes live in production. City/state data fixed. Beta testers evaluating this week.
+**Date:** 2026-03-22 (S238 wrap complete)
+**Status:** Pricing/marketing copy broadened to all secondary sales types. Beta testers evaluating this week.
 
 ---
 
-## No Pending Patrick Actions
+## No Blocking Patrick Actions
 
-All S237 work is done. The fix-seed-city.ts script ran successfully (25 sales + 10 organizers updated to Grand Rapids, MI). No blocking manual steps.
+S238 fixes deployed. Login rate limit from test agents has cleared — login works normally.
 
 ---
 
 ## Session Start Checklist
 
-1. Load `STATE.md` — reflects S237 completion
-2. No mandatory smoke test this session (S237 smoke test passed cleanly)
+1. Load STATE.md — reflects S238 completion
+2. Mandatory smoke test: verify pricing page at finda.sale shows updated copy (no "estate sale business" language)
 
 ---
 
-## S238 Priority: Role Walkthrough + Mobile Verification
+## S239 Priority
 
-**1. Full role walkthrough (deferred from S237):**
-- Walk through as SHOPPER (`user11@example.com` / `password123`): browse → search → view sale → view items → favorite → message organizer
-- Walk through as ORGANIZER (`user2@example.com` / `password123`): dashboard → create sale → add items → AI tagging → publish → view analytics
-- Walk through as unauthenticated user: browse → try to interact → login flow → back to where they were
+**1. Mobile real-device test (Patrick to run manually):**
+- Pull up finda.sale on your phone
+- Check: does nav collapse to hamburger? Do sale cards stack? Is pricing page readable?
+- Report what you see — browser automation was unreliable for this
 
-**2. Mobile verification:**
-- PWA install prompt working?
-- Touch targets large enough?
-- No horizontal scroll?
-- Navigation usable on small screens?
-
-**3. Resend quota decision (Patrick):**
+**2. Resend quota decision (Patrick call):**
 - Free plan: 100 emails/day. Weekly digest burns ~80/day on Sundays.
-- Brevo free: 300/day, no-code switch (1 backend file)
+- Brevo free: 300/day, 1 backend file change, no cost
 - Postmark: best deliverability, $15/mo
-- Decide before beta user count grows enough to risk Sunday quota failure
+- Decide before beta user count grows. Brevo is the fast safe choice.
+
+**3. Innovation decisions (Patrick review):**
+- Read `claude_docs/research/INNOVATION_HANDOFF_S236.md`
+- Confirm Reputation + Condition Tags as P0 pre-beta?
+- Confirm sale-type-aware discovery as Q3?
+
+**4. Organizer + shopper full auth flow (deferred from S237/S238):**
+- Once login rate limit cleared: do full authenticated walkthrough as user2@example.com
+- Test: dashboard → create sale → add items → AI tagging → publish
+- Test as user11@example.com: browse → favorite → message organizer
 
 ---
 
 ## Pending Patrick Decisions
 
-1. Review `claude_docs/research/INNOVATION_HANDOFF_S236.md` — confirm Reputation + Condition Tags as P0 pre-beta
-2. Confirm sale-type-aware discovery as Q3 feature
-3. Resend → Brevo or Postmark upgrade (see above)
+1. Mobile layout — test on real device and report
+2. Resend → Brevo (fast, free) or Postmark ($15/mo, better deliverability)
+3. Innovation: Reputation + Condition Tags as P0 pre-beta?
+4. Innovation: sale-type-aware discovery as Q3?
 
 ---
 
 ## Context Loading
 
-- `claude_docs/patrick-dashboard.md` — one-pager status
 - Test accounts: Shopper `user11@example.com`, PRO Organizer `user2@example.com`, SIMPLE+ADMIN `user1@example.com`, TEAMS `user3@example.com` (all `password123`)

@@ -16,6 +16,23 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### Session 238 — 2026-03-22 — Role Walkthroughs + Copy Broadening
+**Worked on:** (1) Shopper, organizer, and unauthenticated user role walkthroughs via Chrome MCP automation. (2) Mobile verification via Chrome MCP (inconclusive due to browser automation viewport limitations). (3) Investigated item detail page auth gate — code already confirms items are public (optionalAuthenticate on backend, no frontend gate). (4) Broadened pricing/marketing copy from estate-sale-only to include all secondary sales types: pricing.tsx (updated tier descriptions), index.tsx (updated title, meta description, OG tags, schema.org structured data), about.tsx (updated mission + organizer description). Patrick confirmed decisions on public sale/item access.
+
+**Decisions:** Sale detail pages and item pages confirmed already public (no code changes needed). Pricing copy broadening approved and deployed. Login rate limit during testing was test artifact (agents hammered auth endpoint), not a real bug — login works per S237 verification.
+
+**Token efficiency:** Medium. Chrome MCP for role walkthroughs + mobile test. Code investigation confirmed existing behavior. Copy updates small + straightforward.
+
+**Token burn:** ~45k tokens (est.), 0 compressions.
+
+**Next up:** Patrick mobile real-device test (manual). Patrick Resend quota decision (Brevo vs Postmark). Patrick innovation roadmap review. Full authenticated organizer + shopper flow deferred to S239.
+
+**Blockers:** Login rate limit has cleared (test agents no longer active). Mobile verification needs real device (Patrick manual test).
+
+**Files changed:** `packages/frontend/pages/pricing.tsx`, `packages/frontend/pages/index.tsx`, `packages/frontend/pages/about.tsx` | Compressions: 0 | Subagents: 0 (role walkthroughs via Chrome MCP only) | Push method: Commit 345941cd (Patrick)
+
+---
+
 ### Session 237 — 2026-03-22 — Smoke Test + Git Cleanup + Seed Data Fix
 
 **Worked on:** (1) Retried failed MCP push from S237 context carry-forward — pushed 3 fix files (SaleMapInner.tsx Leaflet CJS fix, profile.tsx organizer identity fix, next.config.js /auth redirect). (2) .gitignore updated: added _tmp_*, .skills/, .claude/, .last-wrap, package-lock.json, conversation-defaults-SKILL-*.tmp.* — all VM/Cowork noise now excluded. Pushed via MCP. (3) decisions-log.md updated with Brevo/Postmark email provider deferral entry. (4) Gave Patrick commit block for ~80 untracked claude_docs files (S198–S236 backlog) — Patrick ran and pushed. (5) Live smoke test: map working (24 tiles on /map, 8 tiles on sale detail). Organizer profile confirmed: no Hunt Pass/Bids/Referrals shown for Oscar Bell (user2, ORGANIZER). /auth/login → /login redirect confirmed. (6) Data quality audit: 16 sales exist but all say "Riverside, IL" (seed config bug). Items have good titles + realistic prices but generic descriptions. Dispatched fix script: `scripts/fix-seed-city.ts` updates city/state + strips " #N" title suffixes.

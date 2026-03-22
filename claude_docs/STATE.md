@@ -7,16 +7,20 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 237 COMPLETE (2026-03-22) — SMOKE TEST + GIT CLEANUP + SEED DATA FIX:**
-- ✅ **Live smoke test (mandatory §10):** All S237 fixes verified in production
-  - Map: working on /map (24 tiles) and sale detail pages (8 tiles) — Leaflet CJS interop fix confirmed
-  - Profile: organizer sees "Organizer" badge + no Hunt Pass/Bids/Referrals — `user.role` fix confirmed
-  - `/auth/login` → `/login` redirect confirmed (permanent redirect working)
-- ✅ **Git cleanup:** `.gitignore` updated (_tmp_*, .skills/, .claude/, .last-wrap, package-lock.json excluded). ~80 untracked claude_docs files committed in batch (Patrick ran the commit block). Decision log updated with Brevo/Postmark deferral.
-- ✅ **3 code fixes pushed:** SaleMapInner.tsx (Leaflet CJS), profile.tsx (isOrganizerOnly), next.config.js (/auth redirect) — commit `feba006`
-- ✅ **Seed data city fix:** `scripts/fix-seed-city.ts` created — fixes "Riverside, IL" → "Grand Rapids, MI" + removes " #N" number suffixes from sale titles. Patrick must run it against Neon (command provided below).
-- ⚠️ PENDING PATRICK ACTION: Run `scripts/fix-seed-city.ts` against Neon (see next-session-prompt for exact command)
-- ⚠️ PENDING: Full role walkthrough (shopper + unauthenticated) — deferred, not done this session
+**Session 238 COMPLETE (2026-03-22) — ROLE WALKTHROUGHS + COPY BROADENING:**
+- ✅ Role walkthroughs (shopper, organizer, unauthenticated) via Chrome MCP automation
+- ✅ Mobile verification attempted (browser automation — inconclusive, needs real device)
+- ✅ Confirmed item detail pages already public (optionalAuthenticate backend, no frontend gate)
+- ✅ Broadened pricing/marketing copy: removed estate-sale-only language, added garage sales/yard sales/auctions/flea markets
+  - `packages/frontend/pages/pricing.tsx` — updated tier descriptions to include all secondary sales types
+  - `packages/frontend/pages/index.tsx` — updated title, meta description, OG tags, schema.org
+  - `packages/frontend/pages/about.tsx` — updated mission statement to include all sale types
+- ⚠️ Login rate-limited during testing (test agents hammered auth endpoint) — not a real bug, login works per S237 verification
+- ⚠️ Mobile real-device test pending (Chrome automation viewport testing unreliable)
+- ⚠️ PENDING: Resend quota decision (Brevo free 300/day vs Postmark $15/mo) — weekly digest at risk on Sundays
+- ⚠️ PENDING: Review `claude_docs/research/INNOVATION_HANDOFF_S236.md` — confirm Reputation + Condition Tags as P0 pre-beta
+- ⚠️ PENDING: Confirm sale-type-aware discovery as Q3 feature
+- Commit 345941cd pushed to main (pricing/index/about copy updates)
 - Last Updated: 2026-03-22
 
 **Completed Sessions (carry forward knowledge):**
