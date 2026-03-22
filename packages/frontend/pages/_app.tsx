@@ -77,6 +77,15 @@ function ServiceWorkerUpdateNotifier() {
     };
 
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+
+    // Graceful error handling: SW registration may fail, but should not break the app
+    if (process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.ready.catch((err) => {
+        console.warn('[SW] Registration failed (non-critical):', err);
+        // Silent failure — app continues to work without SW
+      });
+    }
+
     return () => {
       navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
     };

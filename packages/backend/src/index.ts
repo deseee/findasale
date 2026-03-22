@@ -196,6 +196,14 @@ app.use(
 // Restrict CORS to known origins
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
 
+// Ensure production domains are always included for finda.sale
+if (!allowedOrigins.includes('https://finda.sale')) {
+  allowedOrigins.push('https://finda.sale');
+}
+if (!allowedOrigins.includes('https://www.finda.sale')) {
+  allowedOrigins.push('https://www.finda.sale');
+}
+
 // V1: Initialize Socket.io on the shared HTTP server — mirrors the Express CORS policy
 const io = initSocket(httpServer, allowedOrigins);
 
