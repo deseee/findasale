@@ -4,6 +4,7 @@ import {
   createCheckoutSession,
   getSubscription,
   cancelSubscription,
+  createBillingPortal,
   handleStripeWebhook,
 } from '../controllers/billingController';
 
@@ -13,6 +14,7 @@ const router = Router();
 router.post('/checkout', authenticate, createCheckoutSession);
 router.get('/subscription', authenticate, getSubscription);
 router.post('/cancel', authenticate, cancelSubscription);
+router.post('/portal', authenticate, createBillingPortal);
 
 // Webhook (no auth — signature verified in controller)
 // NOTE: Raw body middleware must be applied in index.ts BEFORE json parser for this route

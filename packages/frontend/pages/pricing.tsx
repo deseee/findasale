@@ -210,6 +210,15 @@ const PricingPage = () => {
           )}
 
           {/* Pricing Tiers */}
+          {/* BUG-14: Hide "Your Plan" section for shoppers (users with role USER) */}
+          {user?.role === 'USER' ? (
+            <div className="mb-12 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-center">
+              <p className="text-blue-900 dark:text-blue-200 text-lg">
+                💙 You have free access to browse all sales! Create an account as an organizer to start managing your estate sales.
+              </p>
+            </div>
+          ) : null}
+
           <div className="grid md:grid-cols-3 gap-8 mb-12">
             {TIERS.map((tier) => {
               const currentLabel = getCurrentTierLabel(tier);

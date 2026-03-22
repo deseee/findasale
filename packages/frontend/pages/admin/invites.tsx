@@ -44,7 +44,13 @@ const AdminInvitesPage = () => {
       try {
         setLoading(true);
         const res = await api.get('/admin/invites');
-        setInvites(res.data);
+        // API returns { invites: [...] }, destructure correctly
+        const { invites: invitesData } = res.data;
+        if (Array.isArray(invitesData)) {
+          setInvites(invitesData);
+        } else {
+          setError('Invalid invites data format');
+        }
       } catch (err) {
         console.error('Error fetching invites:', err);
         setError('Failed to load invites');

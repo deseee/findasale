@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRippleSummary, useRecordRipple } from '@/hooks/useRipples';
 import { Eye, Share2, Save, TrendingUp } from 'lucide-react';
 
@@ -21,17 +22,19 @@ export const RippleIndicator: React.FC<RippleIndicatorProps> = ({
   showTrend = false,
   className = '',
 }) => {
+  const { data: session } = useSession();
   const { data: summary, isLoading } = useRippleSummary(saleId);
   const { mutate: recordView } = useRecordRipple();
   const [hasRecordedView, setHasRecordedView] = useState(false);
 
-  // Record a view event when component mounts
+  // Record a view event when component mounts (only for organizers)
+  // BUG-13: Only fire ripples POST if user is organizer, not shopper
   useEffect(() => {
-    if (!hasRecordedView && saleId) {
+    if (!hasRecordedView && saleId && session?.user?.role === 'ORGANIZER') {
       recordView({ saleId, type: 'VIEW' });
       setHasRecordedView(true);
     }
-  }, [saleId, hasRecordedView]);
+  }, [saleId, hasRecordedView, session?.user?.role]);
 
   if (isLoading || !summary) {
     return (

@@ -38,10 +38,13 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
 };
 
 // Feature #72 / BUG #22: requireOrganizer checks both legacy `role` field and
-// the multi-role `roles` array so ADMIN users with the ORGANIZER role are not blocked.
+// the multi-role `roles` array. ADMIN users are included to allow admins to manage organizer features.
 export const requireOrganizer = (req: AuthRequest, res: Response, next: NextFunction) => {
   const hasOrganizerRole =
-    req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    req.user?.roles?.includes('ORGANIZER') ||
+    req.user?.role === 'ORGANIZER' ||
+    req.user?.roles?.includes('ADMIN') ||
+    req.user?.role === 'ADMIN';
   if (!req.user || !hasOrganizerRole) {
     return res.status(403).json({ message: 'Organizer access required.' });
   }

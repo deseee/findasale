@@ -23,6 +23,7 @@ import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
 import { getHeatmapHandler } from '../controllers/heatmapController'; // Feature #28
 import rippleRoutes from './ripples'; // Feature #51: Sale Ripples
+import photoOpsRoutes from './photoOps'; // Feature #39: Photo Op Stations
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -55,5 +56,8 @@ router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items lab
 
 // Feature #51: Sale Ripples — social proof activity tracking
 router.use('/:saleId/ripples', rippleRoutes);
+
+// Feature #39: Photo Op Stations — photo spot management
+router.use('/:saleId/photo-ops', photoOpsRoutes);
 
 export default router;

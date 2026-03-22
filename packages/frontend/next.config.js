@@ -144,6 +144,15 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
   },
 
+  // Route aliases for backwards compatibility
+  async redirects() {
+    return [
+      { source: '/create-sale', destination: '/organizer/create-sale', permanent: true },
+      { source: '/manage-sales', destination: '/organizer/sales', permanent: true },
+      { source: '/organizer/manage-sales', destination: '/organizer/sales', permanent: true },
+    ];
+  },
+
   // Security + performance headers on every response
   async headers() {
     return [

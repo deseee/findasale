@@ -35,25 +35,25 @@ const TreasureHuntBanner: React.FC = () => {
 
   return (
     <div className="mb-8">
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-600 rounded-lg p-6 shadow-sm">
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-l-4 border-amber-600 dark:border-amber-500 rounded-lg p-6 shadow-sm dark:shadow-lg">
         {/* Header */}
         <div className="flex items-center gap-2 mb-3">
           <span className="text-2xl">🗺️</span>
-          <h2 className="text-xl font-bold text-amber-900">Today's Treasure Hunt</h2>
+          <h2 className="text-xl font-bold text-amber-900 dark:text-amber-200">Today's Treasure Hunt</h2>
         </div>
 
         {/* Clue */}
-        <p className="text-warm-800 italic mb-4 text-sm">
+        <p className="text-warm-800 dark:text-warm-200 italic mb-4 text-sm">
           "{hunt.clue}"
         </p>
 
         {/* Category hint and reward */}
         <div className="flex items-center justify-between">
           <div className="flex gap-2 items-center">
-            <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded">
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 px-2 py-1 rounded">
               {hunt.category.toUpperCase()}
             </span>
-            <span className="text-sm text-amber-800">
+            <span className="text-sm text-amber-800 dark:text-amber-200">
               <span className="font-semibold">+{hunt.pointReward}</span> Hunt Pass points
             </span>
           </div>
@@ -61,7 +61,7 @@ const TreasureHuntBanner: React.FC = () => {
           {/* Status: found or CTA */}
           <div>
             {hunt.alreadyFound ? (
-              <div className="flex items-center gap-2 text-green-700 font-semibold text-sm">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-300 font-semibold text-sm">
                 <svg
                   className="w-5 h-5"
                   fill="currentColor"
@@ -76,11 +76,11 @@ const TreasureHuntBanner: React.FC = () => {
                 Found!
               </div>
             ) : user ? (
-              <p className="text-sm text-amber-800 font-medium">
+              <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
                 Find it to earn points!
               </p>
             ) : (
-              <p className="text-sm text-amber-700">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
                 <a href="/login" className="font-semibold hover:underline">
                   Sign in
                 </a>

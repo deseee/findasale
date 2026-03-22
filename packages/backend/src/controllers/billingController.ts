@@ -318,6 +318,44 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * POST /api/billing/portal
+ * Create a Stripe Billing Portal session for organizer account management
+ */
+export const createBillingPortal = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    if (!organizer.stripeCustomerId) {
+      return res.status(400).json({ message: 'No Stripe customer found. Please subscribe first.' });
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: organizer.stripeCustomerId,
+      return_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/organizer/subscription`,
+    });
+
+    if (!session.url) {
+      return res.status(500).json({ message: 'Failed to create billing portal session' });
+    }
+
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Billing portal session error:', error);
+    res.status(500).json({ message: 'Failed to create billing portal session' });
+  }
+};
+
 async function getOrganizerIdFromStripeCustomer(customerId: string): Promise<string | null> {
   const organizer = await prisma.organizer.findFirst({
     where: { stripeCustomerId: customerId },

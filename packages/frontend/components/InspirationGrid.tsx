@@ -99,13 +99,8 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
                   <span className="text-xs text-warm-500 dark:text-gray-400">No image</span>
                 </div>
               )}
-              {/* Confidence Badge + Favorite Button — top-right */}
+              {/* Favorite Button — top-right */}
               <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
-                {item.aiConfidence && item.aiConfidence > 0 && (
-                  <div className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-semibold">
-                    {Math.round(item.aiConfidence * 100)}%
-                  </div>
-                )}
                 <FavoriteButton itemId={item.id} variant="icon" size="md" />
               </div>
             </div>

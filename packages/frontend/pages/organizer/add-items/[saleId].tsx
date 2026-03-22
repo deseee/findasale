@@ -1580,15 +1580,12 @@ const AddItemsDetailPage = () => {
                           <td className="px-4 py-3 text-sm">
                             <div className="flex gap-2 flex-wrap items-center">
                               <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                                item.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' :
-                                item.status === 'SOLD' ? 'bg-red-100 text-red-700' :
-                                item.status === 'RESERVED' ? 'bg-orange-100 text-orange-700' :
-                                'bg-gray-100 text-gray-700'
+                                item.status === 'AVAILABLE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                item.status === 'SOLD' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                                item.status === 'RESERVED' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                                'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                               }`}>
                                 {item.status}
-                              </span>
-                              <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${statusColors[draftStatus as keyof typeof statusColors]}`}>
-                                {draftStatus.replace('_', ' ')}
                               </span>
                             </div>
                           </td>

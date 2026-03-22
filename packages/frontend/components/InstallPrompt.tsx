@@ -15,7 +15,7 @@
 import { useState, useEffect } from 'react';
 
 const DISMISS_KEY = 'findasale_install_dismissed_until';
-const DISMISS_DAYS = 30;
+const DISMISS_DAYS = 7;
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -71,9 +71,8 @@ export default function InstallPrompt() {
 
     const handler = (e: Event) => {
       e.preventDefault();
-      // Check both sessionStorage (per-session) and localStorage (30-day dismissal)
-      const sessionDismissed = typeof window !== 'undefined' && sessionStorage.getItem('pwa-banner-dismissed-session');
-      if (!sessionDismissed && !isDismissed()) {
+      // Check localStorage (7-day dismissal)
+      if (!isDismissed()) {
         setDeferredPrompt(e);
         setShowAndroid(true);
       }
@@ -95,10 +94,6 @@ export default function InstallPrompt() {
 
   const handleDismiss = () => {
     setDismissed();
-    // Also set session-level dismissal to prevent re-appearance on navigation
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('pwa-banner-dismissed-session', '1');
-    }
     setShowAndroid(false);
     setShowIOS(false);
   };

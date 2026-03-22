@@ -73,9 +73,15 @@ const OrganizerDashboard = () => {
   const [isMobileView, setIsMobileView] = useState(false);
 
   // Redirect if not authenticated or not an organizer
-  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
+  if (!isLoading) {
+    if (!user) {
+      router.push('/login?redirect=/organizer/dashboard');
+      return null;
+    }
+    if (!user.roles?.includes('ORGANIZER')) {
+      router.push('/access-denied');
+      return null;
+    }
   }
 
   // Fetch organizer's sales

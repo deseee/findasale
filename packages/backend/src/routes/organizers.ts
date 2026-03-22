@@ -429,6 +429,26 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET /:id/follow-status — check if current user follows organizer (authenticated)
+router.get('/:id/follow-status', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+
+    const organizerId = req.params.id;
+    const organizer = await prisma.organizer.findUnique({ where: { id: organizerId } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found' });
+
+    const follow = await prisma.follow.findUnique({
+      where: { userId_organizerId: { userId: req.user.id, organizerId } },
+    });
+
+    res.json({ isFollowing: !!follow });
+  } catch (error) {
+    console.error('Error checking follow status:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // POST /:id/follow — follow an organizer (authenticated)
 router.post('/:id/follow', authenticate, async (req: AuthRequest, res: Response) => {
   try {

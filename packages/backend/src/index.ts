@@ -361,7 +361,6 @@ app.use('/api/flip-report', flipReportRoutes);                       // Feature 
 app.use('/api/verification', verificationRoutes);                    // Feature #16: Verified Organizer Badge
 app.use('/api/loot-log', lootLogRoutes);                             // Feature #50: Loot Log
 app.use('/api/ugc-photos', ugcPhotoRoutes);                          // Feature #47: UGC Photo Tags
-app.use('/api/photo-ops', photoOpRoutes);                            // Feature #39: Photo Op Stations
 app.use('/api/health', healthRoutes);                                // Feature #20: Proactive Degradation Mode
 app.use('/api/achievements', achievementRoutes);                     // Features #58-59: Achievement Badges & Streak Rewards
 app.use('/api/fraud', fraudRoutes);                                  // Feature #17: Bid Bot Detector

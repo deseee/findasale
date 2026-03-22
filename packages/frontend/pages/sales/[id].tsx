@@ -151,6 +151,8 @@ const SaleDetailPage = () => {
       return response.data as Sale;
     },
     enabled: !!id,
+    staleTime: 3000, // BUG-11: Cache for 3s to avoid repeated fetches from child components/effects
+    refetchInterval: 5000, // Refresh for live bid updates
   });
 
   // Feature #39: Fetch photo op stations for this sale

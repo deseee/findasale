@@ -76,11 +76,17 @@ const EditSalePage = () => {
 
   useEffect(() => {
     if (sale) {
+      // Convert ISO date strings to YYYY-MM-DD format for input type="date"
+      const formatDate = (isoDate: string | undefined) => {
+        if (!isoDate) return '';
+        return new Date(isoDate).toISOString().split('T')[0];
+      };
+
       setFormData({
         title: sale.title,
         description: sale.description,
-        startDate: sale.startDate,
-        endDate: sale.endDate,
+        startDate: formatDate(sale.startDate),
+        endDate: formatDate(sale.endDate),
         address: sale.address,
         city: sale.city,
         state: sale.state,
@@ -231,7 +237,7 @@ const EditSalePage = () => {
               <div className="flex items-center gap-3">
                 {sale.status === 'PUBLISHED' ? (
                   <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-3 py-1 text-sm font-semibold">
-                    \u25cf LIVE
+                    ● LIVE
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold">
@@ -373,7 +379,7 @@ const EditSalePage = () => {
             {/* Neighborhood \u2014 autocomplete input */}
             <div>
               <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 mb-2">
-                Neighborhood <span className="text-warm-400 font-normal">(optional \u2014 helps shoppers find you)</span>
+                Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
               </label>
               <input
                 id="neighborhood"

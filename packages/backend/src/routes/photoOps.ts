@@ -18,11 +18,11 @@ import {
   likeShare,
 } from '../controllers/photoOpController';
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true }); // mergeParams to access :saleId from parent router
 
 // Station management (organizer PRO only)
-router.post('/sales/:saleId/photo-ops', authenticate, requireTier('PRO'), createStation);
-router.get('/sales/:saleId/photo-ops', listStations);
+router.post('/', authenticate, requireTier('PRO'), createStation);
+router.get('/', listStations);
 router.put('/:stationId', authenticate, updateStation);
 router.delete('/:stationId', authenticate, deleteStation);
 

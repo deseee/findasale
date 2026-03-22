@@ -22,6 +22,7 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [managingPlan, setManagingPlan] = useState(false);
 
   useEffect(() => {
     fetchSubscription();
@@ -70,6 +71,32 @@ export default function SubscriptionPage() {
       showToast('Failed to cancel subscription', 'error');
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const handleManagePlan = async () => {
+    setManagingPlan(true);
+    try {
+      const response = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          showToast('Failed to open billing portal', 'error');
+        }
+      } else {
+        showToast('Failed to access billing portal', 'error');
+      }
+    } catch (error) {
+      console.error('Error accessing billing portal:', error);
+      showToast('Failed to access billing portal', 'error');
+    } finally {
+      setManagingPlan(false);
     }
   };
 
@@ -352,9 +379,17 @@ export default function SubscriptionPage() {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Plan Actions</h3>
 
                 <div className="space-y-4">
+                  <button
+                    onClick={handleManagePlan}
+                    disabled={managingPlan}
+                    className="block w-full text-center bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-sage-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {managingPlan ? 'Opening Portal...' : 'Manage Plan'}
+                  </button>
+
                   <Link
                     href="/organizer/upgrade"
-                    className="block w-full text-center bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-sage-700 transition"
+                    className="block w-full text-center bg-gray-200 text-gray-900 py-3 px-4 rounded-lg font-semibold hover:bg-gray-300 transition dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
                   >
                     Change Plan
                   </Link>
