@@ -7,6 +7,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 239 COMPLETE (2026-03-22) — BUG FIXES + WORKFLOW AUTOMATION PLATEAU:**
+- ✅ NotificationBell dark mode fixed — all interactive states now have dark: variants. Pushed via MCP (commit fd4d87a)
+- ✅ Sale detail page layout fixed — removed duplicate Photos section, moved About into left column, reordered Items before UGC/Map. On Patrick's local disk, needs push.
+- ✅ **DECISIONS.md created** (`claude_docs/brand/DECISIONS.md`) — 9 standing design/product decisions (D-001 through D-009) including all-sale-types scope, dark mode, empty states, mobile-first, multi-endpoint testing, sale detail section order, teams cap (pending), loading states, error recovery
+- ✅ **Polish Agent skill created** (`findasale-polish`) — post-dev pre-production quality gate. Audits dark mode, mobile, empty/loading/error states, brand voice, multi-endpoint flows. Written to `claude_docs/skills-package/findasale-polish-SKILL.md`
+- ✅ **Dev skill patch written** — §14 DECISIONS.md pre-flight, §15 Human-Ready Gate, §16 Multi-Endpoint Testing. In `claude_docs/skills-package/dev-skill-patch-S239.md`
+- ✅ **QA skill patch written** — DECISIONS.md compliance check, Beta-Tester Perspective Gate, Multi-Endpoint Testing. In `claude_docs/skills-package/qa-skill-patch-S239.md`
+- ✅ **3 scheduled tasks created:**
+  - `weekly-full-site-audit` — Sunday 10pm, comprehensive every-route audit (dark mode, mobile, empty states, brand compliance, adversarial)
+  - `weekly-brand-drift-detector` — Monday 10am, brand voice drift scan against DECISIONS.md
+  - `monday-digest` — Monday 8am, Patrick-readable weekly summary to patrick-dashboard.md
+- ✅ Memories saved: design continuity enforcement, multi-endpoint testing, workflow automation plateau
+- ⚠️ PENDING PATRICK: Push `packages/frontend/pages/sales/[id].tsx` (sale detail fixes — on local disk)
+- ⚠️ PENDING PATRICK: Install 3 skill files from `claude_docs/skills-package/` (Polish Agent + dev/qa patches)
+- ⚠️ PENDING PATRICK: Run `weekly-full-site-audit` once manually to pre-approve Chrome MCP tools for automated runs
+- ⚠️ PENDING: D-007 Teams tier member cap decision (Patrick input needed)
+- Last Updated: 2026-03-22
+
 **Session 238 COMPLETE (2026-03-22) — ROLE WALKTHROUGHS + COPY BROADENING:**
 - ✅ Role walkthroughs (shopper, organizer, unauthenticated) via Chrome MCP automation
 - ✅ Mobile verification attempted (browser automation — inconclusive, needs real device)
