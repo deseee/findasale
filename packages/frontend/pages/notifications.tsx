@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useAuth } from '../components/AuthContext';
 import Layout from '../components/Layout';
 import EmptyState from '../components/EmptyState';
@@ -64,6 +65,7 @@ const getNotificationIcon = (type: string): string => {
 };
 
 const NotificationsPage = () => {
+  const router = useRouter();
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -155,7 +157,12 @@ const NotificationsPage = () => {
     }
 
     if (notification.link) {
-      window.location.href = notification.link;
+      const isExternal = notification.link.startsWith('http://') || notification.link.startsWith('https://');
+      if (isExternal) {
+        window.open(notification.link, '_blank', 'noopener,noreferrer');
+      } else {
+        router.push(notification.link);
+      }
     }
   };
 
