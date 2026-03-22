@@ -26,6 +26,7 @@
     "cloudinary": "^2.9.0",
     "cors": "^2.8.5",
     "express-rate-limit": "^8.2.1",
+    "rate-limit-redis": "^4.2.0",
     "helmet": "^8.1.0",
     "csv-parse": "^6.1.0",
     "dotenv": "^16.0.3",
