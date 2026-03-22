@@ -109,7 +109,7 @@ const NotificationBell = () => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-warm-900 hover:text-amber-600 focus:outline-none"
+        className="relative p-2 text-warm-900 dark:text-gray-200 hover:text-amber-600 focus:outline-none"
         aria-label="Notifications"
       >
         <svg
@@ -135,9 +135,9 @@ const NotificationBell = () => {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 rounded-lg border border-warm-300 bg-white shadow-lg z-50">
-          <div className="border-b border-warm-200 px-4 py-3 flex justify-between items-center">
-            <h3 className="font-semibold text-warm-900">Notifications</h3>
+        <div className="absolute right-0 mt-2 w-80 rounded-lg border border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-50">
+          <div className="border-b border-warm-200 dark:border-gray-700 px-4 py-3 flex justify-between items-center">
+            <h3 className="font-semibold text-warm-900 dark:text-gray-100">Notifications</h3>
             {unreadCount > 0 && (
               <button
                 onClick={async (e) => {
@@ -160,11 +160,11 @@ const NotificationBell = () => {
           </div>
 
           {isLoading ? (
-            <div className="px-4 py-8 text-center text-sm text-warm-500">
+            <div className="px-4 py-8 text-center text-sm text-warm-500 dark:text-gray-400">
               Loading...
             </div>
           ) : notifications.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-warm-500">
+            <div className="px-4 py-8 text-center text-sm text-warm-500 dark:text-gray-400">
               You're all caught up! No new notifications.
             </div>
           ) : (
@@ -173,19 +173,19 @@ const NotificationBell = () => {
                 <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
-                  className={`cursor-pointer border-b border-warm-100 px-4 py-3 hover:bg-warm-50 transition-colors ${
-                    !notification.read ? 'bg-amber-50' : ''
+                  className={`cursor-pointer border-b border-warm-100 dark:border-gray-700 px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors ${
+                    !notification.read ? 'bg-amber-50 dark:bg-amber-900/20' : ''
                   }`}
                 >
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex-1">
-                      <p className="font-medium text-sm text-warm-900">
+                      <p className="font-medium text-sm text-warm-900 dark:text-gray-100">
                         {notification.title}
                       </p>
-                      <p className="text-xs text-warm-600 mt-1">
+                      <p className="text-xs text-warm-600 dark:text-gray-300 mt-1">
                         {notification.body}
                       </p>
-                      <p className="text-xs text-warm-400 mt-2">
+                      <p className="text-xs text-warm-400 dark:text-gray-500 mt-2">
                         {timeAgo(notification.createdAt)}
                       </p>
                     </div>
@@ -193,7 +193,7 @@ const NotificationBell = () => {
                       onClick={(e) =>
                         handleDeleteNotification(e, notification.id)
                       }
-                      className="flex-shrink-0 text-warm-300 hover:text-warm-500"
+                      className="flex-shrink-0 text-warm-300 dark:text-gray-600 hover:text-warm-500 dark:hover:text-gray-400"
                       aria-label="Delete notification"
                     >
                       <svg
@@ -218,7 +218,7 @@ const NotificationBell = () => {
             <Link
               href="/notifications"
               onClick={() => setIsOpen(false)}
-              className="block w-full text-center border-t border-warm-200 px-4 py-3 text-sm text-amber-600 hover:text-amber-700 font-medium"
+              className="block w-full text-center border-t border-warm-200 dark:border-gray-700 px-4 py-3 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 font-medium"
             >
               View all notifications
             </Link>

@@ -3,12 +3,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
 import usePoints from '../hooks/usePoints';
-import PointsBadge from './PointsBadge';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 
 /**
  * BottomTabNav — Phase 25 mobile bottom navigation
- * 5 primary tabs: Browse, Map, Saved, Messages, Profile
+ * 5 primary tabs: Browse, Map, Saved, Messages, Profile/Dashboard
  * Hidden on desktop (md+). Fixed to bottom with safe-area padding.
  */
 
@@ -69,15 +68,18 @@ type Tab = {
 const BottomTabNav = () => {
   const router = useRouter();
   const { user } = useAuth();
-  const { data: pointsData } = usePoints(!!user);
+  const isOrganizer = user?.role === 'ORGANIZER';
+  // Only fetch points for shoppers — organizers don't have a points balance
+  const { data: pointsData } = usePoints(!isOrganizer && !!user);
   const { data: unreadData } = useUnreadMessages(!!user);
 
-  // Profile tab destination depends on user role
-  const profileHref = user?.role === 'ORGANIZER'
+  // Profile tab destination and label depend on user role
+  const profileHref = isOrganizer
     ? '/organizer/dashboard'
     : user
       ? '/shopper/dashboard'
       : '/login';
+  const profileLabel = isOrganizer ? 'Dashboard' : 'Profile';
 
   const tabs: Tab[] = [
     {
@@ -106,7 +108,7 @@ const BottomTabNav = () => {
     },
     {
       href: profileHref,
-      label: 'Profile',
+      label: profileLabel,
       icon: ProfileIcon,
       matchPaths: ['/organizer', '/shopper', '/profile', '/login', '/register'],
     },
@@ -128,6 +130,8 @@ const BottomTabNav = () => {
         {tabs.map((tab) => {
           const active = isActive(tab);
           const Icon = tab.icon;
+          const isProfileTab = tab.label === profileLabel && profileLabel === 'Profile';
+          const pts = isProfileTab && pointsData?.points ? pointsData.points : 0;
           return (
             <Link
               key={tab.label}
@@ -142,12 +146,6 @@ const BottomTabNav = () => {
             >
               <div className="relative">
                 <Icon active={active} />
-                {tab.label === 'Profile' && pointsData && pointsData.points > 0 && (
-                  <PointsBadge
-                    points={pointsData.points}
-                    className="absolute -top-1.5 -right-2.5"
-                  />
-                )}
                 {tab.label === 'Messages' && unreadData && unreadData.unread > 0 && (
                   <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center leading-none" aria-hidden="true">
                     {unreadData.unread > 9 ? '9+' : unreadData.unread}
@@ -157,6 +155,11 @@ const BottomTabNav = () => {
               <span className="text-[10px] mt-0.5 font-medium leading-none" aria-hidden="true">
                 {tab.label}
               </span>
+              {pts > 0 && (
+                <span className="text-[8px] text-amber-500 leading-none mt-0.5" aria-hidden="true">
+                  {pts} pts
+                </span>
+              )}
             </Link>
           );
         })}
