@@ -219,7 +219,7 @@ const PricingPage = () => {
             </div>
           ) : null}
 
-          <div className="grid md:grid-cols-3 gap-8 mb-12">
+          <div className="grid md:grid-cols-3 gap-4 md:gap-8 mb-12">
             {TIERS.map((tier) => {
               const currentLabel = getCurrentTierLabel(tier);
               const isCurrentTier = !!currentLabel;

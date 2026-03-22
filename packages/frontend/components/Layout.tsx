@@ -325,7 +325,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
-        className={`md:hidden fixed top-0 right-0 bottom-0 z-50 w-72 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`md:hidden fixed top-0 right-0 bottom-0 z-50 w-[85vw] sm:w-72 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col ${
           menuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

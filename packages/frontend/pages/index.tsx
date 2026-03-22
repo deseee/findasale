@@ -249,7 +249,7 @@ const HomePage = () => {
                       photoUrl: s.photoUrls?.[0],
                     }))}
                 userLocation={userLocation}
-                height="420px"
+                height="300px"
               />
             )}
           </div>
