@@ -458,6 +458,11 @@ const SaleDetailPage = () => {
                 </button>
               </div>
             )}
+            {/* About This Sale */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mt-8">
+              <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">About</h2>
+              <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
+            </div>
           </div>
 
           {/* Sidebar */}
@@ -556,91 +561,6 @@ const SaleDetailPage = () => {
             {/* Pickup Scheduling */}
             {user && <PickupBookingCard saleId={sale.id} />}
           </div>
-        </div>
-
-        {/* Photo Gallery \u2014 Phase 18: click to open lightbox */}
-        {sale.photoUrls && sale.photoUrls.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">
-              Photos
-              <span className="ml-2 text-sm font-normal text-warm-400 dark:text-gray-500">
-                ({sale.photoUrls.length})
-              </span>
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {sale.photoUrls.map((url, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setCurrentPhotoIndex(i); setLightboxOpen(true); }}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-warm-200 dark:border-gray-700 bg-warm-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  aria-label={`View photo ${i + 1} of ${sale.photoUrls.length}`}
-                >
-                  <img
-                    src={getThumbnailUrl(url) || url}
-                    alt={`${sale.title} photo ${i + 1}`}
-                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                    loading="lazy"
-                  />
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                    <svg
-                      className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow"
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                    </svg>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Description */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">About</h2>
-          <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
-        </div>
-
-        {/* Feature #47: UGC Photo Gallery */}
-        {ugcPhotos.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">
-              Community Photos
-              <span className="ml-2 text-sm font-normal text-warm-400 dark:text-gray-500">
-                ({ugcPhotos.length})
-              </span>
-            </h2>
-            <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
-          </div>
-        )}
-
-        {/* Map Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
-          {sale.lat && sale.lng ? (
-            <SaleMap
-              singlePin={{
-                lat: sale.lat,
-                lng: sale.lng,
-                label: `${sale.title} \u2014 ${sale.address}, ${sale.city}, ${sale.state}`,
-              }}
-              entrancePin={sale.entranceLat && sale.entranceLng ? {
-                lat: sale.entranceLat,
-                lng: sale.entranceLng,
-                note: sale.entranceNote,
-              } : undefined}
-              photoOpStations={photoOpStations}
-              height="360px"
-            />
-          ) : (
-            <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-              <p className="text-warm-500 dark:text-gray-400">Location not available</p>
-            </div>
-          )}
-          <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
-            {sale.address}, {sale.city}, {sale.state} {sale.zip}
-          </p>
         </div>
 
         {/* Items Section */}
@@ -918,6 +838,48 @@ const SaleDetailPage = () => {
             </div>
           )}
         </div>
+
+        {/* Feature #47: UGC Photo Gallery */}
+        {ugcPhotos.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+            <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">
+              Community Photos
+              <span className="ml-2 text-sm font-normal text-warm-400 dark:text-gray-500">
+                ({ugcPhotos.length})
+              </span>
+            </h2>
+            <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
+          </div>
+        )}
+
+        {/* Map Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
+          {sale.lat && sale.lng ? (
+            <SaleMap
+              singlePin={{
+                lat: sale.lat,
+                lng: sale.lng,
+                label: `${sale.title} \u2014 ${sale.address}, ${sale.city}, ${sale.state}`,
+              }}
+              entrancePin={sale.entranceLat && sale.entranceLng ? {
+                lat: sale.entranceLat,
+                lng: sale.entranceLng,
+                note: sale.entranceNote,
+              } : undefined}
+              photoOpStations={photoOpStations}
+              height="360px"
+            />
+          ) : (
+            <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+              <p className="text-warm-500 dark:text-gray-400">Location not available</p>
+            </div>
+          )}
+          <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
+            {sale.address}, {sale.city}, {sale.state} {sale.zip}
+          </p>
+        </div>
+
         {/* Phase 15: Reviews section */}
         <ReviewsSection
           mode="sale"
