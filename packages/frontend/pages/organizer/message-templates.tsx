@@ -24,7 +24,7 @@ export default function TemplatesPage() {
   const [editData, setEditData] = useState({ title: '', body: '', category: 'general' });
   const [isAdding, setIsAdding] = useState(false);
 
-  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
     router.push('/login');
     return null;
   }
@@ -66,7 +66,7 @@ export default function TemplatesPage() {
               <button onClick={() => setIsAdding(true)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition">
                 + New Template
               </button>
-              <Link href="/organizer/dashboard" className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-4 rounded-lg text-sm transition">
+              <Link href="/organizer/dashboard" className="bg-warm-200 hover:bg-warm-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-100 font-bold py-2 px-4 rounded-lg text-sm transition">
                 Back
               </Link>
             </div>
@@ -83,7 +83,7 @@ export default function TemplatesPage() {
                 <textarea value={editData.body} onChange={e => setEditData(d => ({ ...d, body: e.target.value }))} rows={4} placeholder="Response text..." className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none bg-white dark:bg-gray-700 dark:text-gray-100" />
                 <div className="flex gap-2">
                   <button onClick={() => createMutation.mutate(editData)} disabled={!editData.title || !editData.body || createMutation.isPending} className="bg-amber-600 text-white font-semibold py-2 px-4 rounded-lg text-sm disabled:opacity-50">Save</button>
-                  <button onClick={() => setIsAdding(false)} className="bg-warm-200 text-warm-700 font-semibold py-2 px-4 rounded-lg text-sm">Cancel</button>
+                  <button onClick={() => setIsAdding(false)} className="bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg text-sm">Cancel</button>
                 </div>
               </div>
             </div>
@@ -98,21 +98,21 @@ export default function TemplatesPage() {
                     <select value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100">
                       {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                     </select>
-                    <textarea value={editData.body} onChange={e => setEditData(d => ({ ...d, body: e.target.value }))} rows={4} className="w-full border border-warm-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                    <textarea value={editData.body} onChange={e => setEditData(d => ({ ...d, body: e.target.value }))} rows={4} className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none bg-white dark:bg-gray-700 dark:text-gray-100" />
                     <div className="flex gap-2">
                       <button onClick={() => updateMutation.mutate({ id: t.id, data: editData })} disabled={updateMutation.isPending} className="bg-amber-600 text-white font-semibold py-2 px-4 rounded-lg text-sm disabled:opacity-50">Save</button>
-                      <button onClick={() => setEditing(null)} className="bg-warm-200 text-warm-700 font-semibold py-2 px-4 rounded-lg text-sm">Cancel</button>
+                      <button onClick={() => setEditing(null)} className="bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg text-sm">Cancel</button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-start gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-warm-900">{t.title}</p>
-                        <span className="text-xs bg-warm-100 text-warm-600 px-2 py-0.5 rounded-full">{t.category}</span>
-                        {t.usageCount > 0 && <span className="text-xs text-warm-400">Used {t.usageCount}x</span>}
+                        <p className="font-semibold text-warm-900 dark:text-gray-100">{t.title}</p>
+                        <span className="text-xs bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-warm-300 px-2 py-0.5 rounded-full">{t.category}</span>
+                        {t.usageCount > 0 && <span className="text-xs text-warm-400 dark:text-warm-500">Used {t.usageCount}x</span>}
                       </div>
-                      <p className="text-sm text-warm-600">{t.body}</p>
+                      <p className="text-sm text-warm-600 dark:text-gray-300">{t.body}</p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
                       <button onClick={() => { setEditing(t.id); setEditData({ title: t.title, body: t.body, category: t.category }); }} className="text-xs text-amber-600 hover:underline font-medium">Edit</button>
@@ -125,7 +125,7 @@ export default function TemplatesPage() {
           </div>
 
           {templates.length === 0 && !isAdding && (
-            <div className="text-center py-12 text-warm-500">No templates yet. Add your first one above.</div>
+            <div className="text-center py-12 text-warm-500 dark:text-gray-400">No templates yet. Add your first one above.</div>
           )}
         </div>
       </div>
