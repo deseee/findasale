@@ -1,12 +1,13 @@
 import { randomBytes } from 'crypto';
+import { redis } from './redis';
 
 interface ChallengeEntry {
   challenge: string;
   expiresAt: number;
+  flow: 'auth' | 'registration';
 }
 
-const challengeMap = new Map<string, ChallengeEntry>();
-const CHALLENGE_TTL = 5 * 60 * 1000; // 5 minutes
+const CHALLENGE_TTL_SECONDS = 5 * 60; // 5 minutes
 
 // Helper to convert buffer to base64url
 function base64url(buffer: Buffer): string {
@@ -18,64 +19,71 @@ function base64url(buffer: Buffer): string {
 }
 
 /**
- * Generate a random challenge and store it for the user
- * @param userId User ID
+ * Generate a random challenge and store it in Redis
+ * @param challengeId Unique ID for this challenge (userId for registration, random UUID for auth)
+ * @param flow 'auth' or 'registration' to tag the flow type
  * @returns base64url-encoded challenge
  */
-export function generateAndStoreChallenge(userId: string): string {
+export function generateAndStoreChallenge(
+  challengeId: string,
+  flow: 'auth' | 'registration' = 'auth'
+): string {
   const challenge = base64url(randomBytes(32));
-  const expiresAt = Date.now() + CHALLENGE_TTL;
+  const expiresAt = Date.now() + CHALLENGE_TTL_SECONDS * 1000;
 
-  challengeMap.set(userId, { challenge, expiresAt });
+  const entry: ChallengeEntry = {
+    challenge,
+    expiresAt,
+    flow,
+  };
+
+  // Store in Redis with TTL; key format: passkey:challenge:{challengeId}
+  redis.setex(`passkey:challenge:${challengeId}`, CHALLENGE_TTL_SECONDS, JSON.stringify(entry));
+
   return challenge;
 }
 
 /**
- * Retrieve and validate a challenge for the user
- * Challenges are one-time use — they're deleted after retrieval
- * @param userId User ID
+ * Retrieve and validate a challenge
+ * Challenges are one-time use — atomically retrieved and deleted via Redis GETDEL
+ * @param challengeId Challenge ID
+ * @param expectedFlow Expected flow type ('auth' or 'registration')
  * @returns Challenge string if valid, null if expired or not found
  */
-export function getAndValidateChallenge(userId: string): string | null {
-  const entry = challengeMap.get(userId);
+export async function getAndValidateChallenge(
+  challengeId: string,
+  expectedFlow: 'auth' | 'registration' = 'auth'
+): Promise<string | null> {
+  // Atomic get + delete via Redis (simulated in in-memory redis.ts via getDel)
+  const raw = await redis.getDel(`passkey:challenge:${challengeId}`);
 
-  if (!entry) {
+  if (!raw) {
     return null;
   }
 
-  // Check if expired
-  if (Date.now() > entry.expiresAt) {
-    challengeMap.delete(userId);
-    return null;
-  }
+  try {
+    const entry: ChallengeEntry = JSON.parse(raw);
 
-  // One-time use: delete after retrieval
-  const challenge = entry.challenge;
-  challengeMap.delete(userId);
-
-  return challenge;
-}
-
-/**
- * Clear a challenge for the user (e.g., if user cancels flow)
- */
-export function clearChallenge(userId: string): void {
-  challengeMap.delete(userId);
-}
-
-/**
- * Cleanup expired challenges periodically
- */
-function cleanupExpiredChallenges(): void {
-  const now = Date.now();
-  for (const [key, { expiresAt }] of challengeMap) {
-    if (now > expiresAt) {
-      challengeMap.delete(key);
+    // Verify expiry
+    if (Date.now() > entry.expiresAt) {
+      return null;
     }
+
+    // Verify flow type matches
+    if (entry.flow !== expectedFlow) {
+      return null;
+    }
+
+    return entry.challenge;
+  } catch (error) {
+    console.error('Failed to parse challenge entry:', error);
+    return null;
   }
 }
 
-// Start cleanup interval — runs every 10 minutes
-setInterval(() => {
-  cleanupExpiredChallenges();
-}, 10 * 60 * 1000);
+/**
+ * Clear a challenge (e.g., if user cancels flow)
+ */
+export async function clearChallenge(challengeId: string): Promise<void> {
+  await redis.del(`passkey:challenge:${challengeId}`);
+}

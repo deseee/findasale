@@ -54,7 +54,7 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
     // so registerComplete can retrieve it by userId for expectedChallenge verification.
     // generateRegistrationOptions generates its own internal challenge — we discard it
     // and replace with ours so the two sides stay in sync.
-    const challenge = generateAndStoreChallenge(userId);
+    const challenge = generateAndStoreChallenge(userId, 'registration');
     const optionsWithChallenge = {
       ...options,
       challenge: challenge,
@@ -91,7 +91,7 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
     }
 
     // Retrieve and validate challenge (one-time use)
-    const challenge = getAndValidateChallenge(userId);
+    const challenge = await getAndValidateChallenge(userId, 'registration');
     if (!challenge) {
       return res
         .status(400)
@@ -111,7 +111,7 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
       });
 
       if (!verified.verified) {
-        clearChallenge(userId);
+        await clearChallenge(userId);
         return res
           .status(400)
           .json({ message: 'Registration verification failed' });
@@ -179,7 +179,7 @@ export const authenticateBegin = async (req: Request, res: Response) => {
   try {
     // Generate unique challengeId per request to support concurrent auth flows
     const challengeId = randomUUID();
-    const challenge = generateAndStoreChallenge(challengeId);
+    const challenge = generateAndStoreChallenge(challengeId, 'auth');
 
     // For now, we don't know which user is logging in, so allowCredentials is empty
     // The browser will use the resident key (discoverable credential) flow
@@ -298,7 +298,7 @@ export const authenticateComplete = async (req: Request, res: Response) => {
     const user = credential.user;
 
     // Retrieve challenge from storage using the challengeId from client (one-time use)
-    const challenge = getAndValidateChallenge(challengeId);
+    const challenge = await getAndValidateChallenge(challengeId, 'auth');
 
     if (!challenge) {
       return res.status(400).json({ message: 'Challenge not found or expired. Start authentication again.' });
@@ -330,13 +330,23 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         return res.status(401).json({ message: 'Authentication verification failed' });
       }
 
-      // Update counter to prevent replay attacks
-      await prisma.passkeyCredential.update({
-        where: { id: credential.id },
+      // Atomically update counter to prevent replay attacks
+      // Only update if the new counter is higher than the stored counter (prevents race condition)
+      const newCounter = verified.authenticationInfo?.newCounter || credential.counter;
+      const updated = await prisma.passkeyCredential.updateMany({
+        where: {
+          id: credential.id,
+          counter: { lt: newCounter }, // Only update if current counter is less than new counter
+        },
         data: {
-          counter: verified.authenticationInfo?.newCounter || credential.counter,
+          counter: newCounter,
         },
       });
+
+      // If no rows were updated, it indicates a replay attack or concurrent auth with same counter
+      if (updated.count === 0) {
+        return res.status(401).json({ message: 'Authentication replay detected' });
+      }
 
       // Load organizer if user is an organizer (for subscriptionTier and other fields in JWT)
       let organizerProfile = null;

@@ -39,4 +39,19 @@ export const redis = {
   async del(key: string): Promise<void> {
     store.delete(key);
   },
+
+  /**
+   * Atomic get + delete operation (Redis GETDEL equivalent)
+   * Prevents race conditions where multiple concurrent requests retrieve the same value
+   */
+  async getDel(key: string): Promise<string | null> {
+    const entry = store.get(key);
+    store.delete(key);
+
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+      return null;
+    }
+    return entry.value;
+  },
 };
