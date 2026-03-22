@@ -173,17 +173,17 @@ const FEATURES: Feature[] = [
 
 const FeatureCheck: React.FC<{ included: boolean | string }> = ({ included }) => {
   if (typeof included === 'string') {
-    return <span className="text-sm font-medium text-gray-900">{included}</span>;
+    return <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{included}</span>;
   }
 
   return included ? (
-    <span className="text-sage-600">
+    <span className="text-sage-600 dark:text-sage-400">
       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
       </svg>
     </span>
   ) : (
-    <span className="text-gray-300">
+    <span className="text-gray-400 dark:text-gray-500">
       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
       </svg>
@@ -201,24 +201,24 @@ const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier =
       <table className="w-full border-collapse">
         {/* Header */}
         <thead>
-          <tr className="border-b border-gray-200">
-            <th className="text-left py-4 px-4 font-semibold text-gray-900 min-w-48">Feature</th>
+          <tr className="border-b border-gray-200 dark:border-gray-700">
+            <th className="text-left py-4 px-4 font-semibold text-gray-900 dark:text-gray-100 min-w-48">Feature</th>
             <th className="text-center py-4 px-4">
               <div className="space-y-1">
-                <p className="font-semibold text-gray-900">SIMPLE</p>
-                <p className="text-sm text-gray-600">Free</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">SIMPLE</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Free</p>
               </div>
             </th>
             <th className="text-center py-4 px-4">
               <div className="space-y-1">
-                <p className="font-semibold text-gray-900">PRO</p>
-                <p className="text-sm text-gray-600">$29/mo</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">PRO</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">$29/mo</p>
               </div>
             </th>
             <th className="text-center py-4 px-4">
               <div className="space-y-1">
-                <p className="font-semibold text-gray-900">TEAMS</p>
-                <p className="text-sm text-gray-600">$79/mo</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">TEAMS</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">$79/mo</p>
               </div>
             </th>
           </tr>
@@ -229,9 +229,9 @@ const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier =
           {FEATURES.map((feature, index) => (
             <tr
               key={index}
-              className={`border-b border-gray-100 ${index % 2 === 1 ? 'bg-gray-50' : 'bg-white'}`}
+              className={`border-b border-gray-100 dark:border-gray-700 ${index % 2 === 1 ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}`}
             >
-              <td className="py-4 px-4 text-sm text-gray-700 font-medium">{feature.name}</td>
+              <td className="py-4 px-4 text-sm text-gray-700 dark:text-gray-300 font-medium">{feature.name}</td>
               <td className="py-4 px-4 text-center">
                 <FeatureCheck included={feature.simple} />
               </td>
@@ -249,7 +249,7 @@ const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier =
       {/* CTA Footer */}
       <div className="mt-8 flex flex-wrap gap-4 justify-center">
         {currentTier !== 'SIMPLE' && (
-          <p className="text-center text-sm text-gray-600 w-full">
+          <p className="text-center text-sm text-gray-600 dark:text-gray-400 w-full">
             You are currently on the {currentTier} plan.
           </p>
         )}

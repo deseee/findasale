@@ -89,7 +89,7 @@ export default function EmailDigestPreview() {
   }
 
   if (!user) {
-    router.push('/auth/login');
+    router.push('/login');
     return null;
   }
 

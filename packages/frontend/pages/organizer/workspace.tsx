@@ -54,7 +54,7 @@ export default function WorkspacePage() {
   }
 
   if (!user) {
-    router.push('/auth/login');
+    router.push('/login');
     return null;
   }
 

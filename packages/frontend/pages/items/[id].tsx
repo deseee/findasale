@@ -281,7 +281,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const handleAddToCart = async () => {
     if (!user) {
       showToast('Please log in to add items to cart', 'warning');
-      router.push('/auth/login');
+      router.push('/login');
       return;
     }
     addToCartMutation.mutate();
@@ -290,7 +290,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const handleLike = () => {
     if (!user) {
       showToast('Please log in to like items', 'warning');
-      router.push('/auth/login');
+      router.push('/login');
       return;
     }
 

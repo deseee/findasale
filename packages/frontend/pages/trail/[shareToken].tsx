@@ -133,7 +133,7 @@ export default function PublicTrailPage() {
                 Create your own treasure trails to plan your estate sale adventures!
               </p>
               <a
-                href="/auth/login"
+                href="/login"
                 className="inline-block px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 font-semibold transition"
               >
                 Sign In to Create Trails

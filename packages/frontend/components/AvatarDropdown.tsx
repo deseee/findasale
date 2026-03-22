@@ -186,7 +186,7 @@ const AvatarDropdown: React.FC = () => {
                 My Profile
               </Link>
               <Link
-                href="/wishlist"
+                href="/shopper/favorites"
                 className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
                 onClick={() => setIsOpen(false)}
               >

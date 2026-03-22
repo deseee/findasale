@@ -198,7 +198,7 @@ const BuyingPoolCard: React.FC<BuyingPoolCardProps> = ({
               </p>
             ) : (
               <p className="text-sm text-blue-700 text-center py-2">
-                <a href="/auth/login" className="font-semibold hover:underline">
+                <a href="/login" className="font-semibold hover:underline">
                   Log in to join
                 </a>
               </p>
@@ -237,7 +237,7 @@ const BuyingPoolCard: React.FC<BuyingPoolCardProps> = ({
               </button>
             ) : (
               <p className="text-sm text-blue-700 text-center py-2">
-                <a href="/auth/login" className="font-semibold hover:underline">
+                <a href="/login" className="font-semibold hover:underline">
                   Log in to start a pool
                 </a>
               </p>
