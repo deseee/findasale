@@ -90,7 +90,7 @@ import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import adminRoutes from './routes/admin'; // Admin panel
 import devRoutes from './routes/dev'; // Dev utilities
 import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
-import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
+import waitlistRoutes from './routes/waitlist'; // Item Waitlist / \"Notify Me\"
 import pickupRoutes from './routes/pickup'; // Pickup Appointment Scheduling
 import inviteRoutes from './routes/invites'; // Beta invite code validation
 import socialPostRoutes from './routes/socialPost'; // Social media post generator
@@ -230,6 +230,7 @@ const globalLimiter = rateLimit({
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: express.Request) => req.ip ?? req.socket.remoteAddress ?? 'unknown',
   message: { error: 'Too many requests, please try again later.' },
   skip: (req) => req.path.startsWith('/api/viewers') || req.path === '/api/health/latency',  // viewer and health endpoints have their own limiter
 });
@@ -241,6 +242,7 @@ const viewerLimiter = rateLimit({
   max: 120,                       // 120 req/min per IP (covers ~4 active sale tabs with 30s ping + 15s poll each)
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: express.Request) => req.ip ?? req.socket.remoteAddress ?? 'unknown',
   skip: () => false,
   message: { error: 'Too many viewer requests.' },
 });
@@ -251,6 +253,7 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: express.Request) => req.ip ?? req.socket.remoteAddress ?? 'unknown',
   message: { error: 'Too many authentication attempts, please try again later.' },
 });
 
@@ -260,6 +263,7 @@ const contactLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: express.Request) => req.ip ?? req.socket.remoteAddress ?? 'unknown',
   message: { error: 'Too many messages sent. Please wait before trying again.' },
 });
 
@@ -335,7 +339,7 @@ app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly dig
 app.use('/api/admin', adminRoutes); // Admin panel
 app.use('/api/dev', devRoutes); // Dev utilities
 app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
-app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"
+app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / \"Notify Me\"
 app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling
 app.use('/api/invites', inviteRoutes); // Beta invite code validation (public)
 app.use('/api/social-post', socialPostRoutes); // Social media post generator
