@@ -3,18 +3,19 @@
  *
  * Custom rate limiters for sensitive photo-op endpoints.
  * - photoShareLimiter: 10 requests per user/IP per hour on share POST
- * - shareLikeLimiter: 30 requests per user/IP per 15 minutes on like POST
+ * - shareLikeLimiter: 30 requests per 15 minutes on like POST
  */
 
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Request } from 'express';
 
 /**
- * Key generator: use user ID if authenticated, fall back to IP address
+ * Key generator: use user ID if authenticated, fall back to IP address.
+ * Uses ipKeyGenerator helper required by express-rate-limit v8 for IPv6 support.
  */
 const getKeyGenerator = (req: Request) => {
   const authReq = req as any;
-  return authReq.user?.id || req.ip || '0.0.0.0';
+  return authReq.user?.id ?? ipKeyGenerator(req);
 };
 
 /**
