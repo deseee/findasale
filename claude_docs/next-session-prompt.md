@@ -1,7 +1,7 @@
 # Next Session Prompt — S237
 
-**Date:** 2026-03-22 (S235 wrap complete → S236 active)
-**Status:** All S235 doc work + pushes complete. Skills installed. Prisma migrate deploy + Railway env vars CONFIRMED DONE (S234). No blocking Patrick actions.
+**Date:** 2026-03-22 (S235 wrap complete)
+**Status:** All S235 doc work + pushes complete. Skills installed. Patrick still needs Prisma + Railway env vars.
 
 ---
 
@@ -14,9 +14,21 @@
 
 ---
 
-## Pending Patrick Actions
+## Pending Patrick Actions (Must Complete Before S237 Starts)
 
-No blocking Patrick actions. Prisma + Railway env vars confirmed done (S234). All S235 skills installed.
+**1. Run Prisma + Railway env vars (S234 — CRITICAL BLOCKER):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+Then in Railway dashboard, set these environment variables:
+- `AI_COST_CEILING_USD=5.00`
+- `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
+
+(S235 skills already installed and deleted `updated-skills/` folder)
 
 ---
 
