@@ -313,7 +313,7 @@ const OrganizerDashboard = () => {
                   </div>
                   <div className="mt-4">
                     <button
-                      onClick={() => router.push('/organizer/billing')}
+                      onClick={() => router.push('/organizer/subscription')}
                       className="text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 underline"
                     >
                       Upgrade now →

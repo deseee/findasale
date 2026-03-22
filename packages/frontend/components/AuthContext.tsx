@@ -15,6 +15,7 @@ interface User {
   streakPoints?: number;
   huntPassActive?: boolean;
   organizerTier?: string;
+  tierLapsedAt?: string | null;
   notificationPrefs?: Record<string, boolean>;
   onboardingComplete?: boolean;
   createdAt?: string;
@@ -56,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           points: payload.points || 0,
           referralCode: payload.referralCode || '',
           organizerTier: payload.subscriptionTier || 'SIMPLE',
+          tierLapsedAt: payload.tierLapsedAt ?? null,
           onboardingComplete: payload.onboardingComplete ?? false,
           createdAt: payload.createdAt
         });
