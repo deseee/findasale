@@ -88,3 +88,13 @@ packages/database/package-lock.json
 
 # Session tracking (VM-local, not for git)
 .checkpoint-manifest.json
+
+# =========================
+# Cowork / Claude session artifacts (VM-local, never commit)
+# =========================
+_tmp_*
+.skills/
+.claude/
+.last-wrap
+conversation-defaults-SKILL-*.tmp.*
+package-lock.json
