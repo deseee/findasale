@@ -209,10 +209,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
-              {/* Show Explore/Browse for all users, Map for all users */}
+              {/* Show Feed/Map/Inspiration for authenticated users */}
               {isClient && user && (user.roles?.includes('USER') || user.roles?.includes('ADMIN') || user.roles?.includes('ORGANIZER')) && (
                 <>
-                  <Link href="/" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Explore</Link>
+                  <Link href="/feed" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Feed</Link>
                   <Link href="/map" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Map</Link>
                   <Link href="/inspiration" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Inspiration</Link>
                 </>
@@ -401,26 +401,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 </Link>
 
                 {/* Pro Tools Section */}
-                {canAccess('PRO') && (
-                  <>
-                    <SectionHeader label="Pro Tools" />
-                    <Link href="/organizer/command-center" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Command Center
-                    </Link>
-                    <Link href="/organizer/typology" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Typology Classifier
-                    </Link>
-                    <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Fraud Signals
-                    </Link>
-                    <Link href="/organizer/offline" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Offline Mode
-                    </Link>
-                    <Link href="/organizer/appraisals" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Appraisals
-                    </Link>
-                  </>
-                )}
+                <SectionHeader label="Pro Tools" />
+                <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
               </>
             ) : (
               authLinks
