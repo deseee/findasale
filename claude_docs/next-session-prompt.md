@@ -1,13 +1,11 @@
-# Next Session Prompt — S232
+# Next Session Prompt — S233
 
 **Date:** 2026-03-22
-**Status:** S231 COMPLETE — Bug queue done, AvatarDropdown shipped. Patrick manual push still required.
+**Status:** S232 COMPLETE — Live QA audit done. 24 bugs found. NO-GO verdict. S231 Patrick push still pending.
 
 ---
 
-## First: Complete the Manual Push
-
-Run this in PowerShell to push all S231 locally-changed files:
+## First: Complete the S231 Manual Push (Still Pending)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -40,7 +38,15 @@ git add packages/backend/src/routes/organizers.ts
 git add packages/backend/src/routes/users.ts
 git commit -m "S231: BUG #30 (Follow button organizer.id) + BUG #22 sweep (54 inline role checks, 24 files) + sale page dark mode fixes"
 
-# Step 3
+# Step 3 — S232 wrap docs
+git add claude_docs/operations/qa-audit-2026-03-22.md
+git add claude_docs/STATE.md
+git add claude_docs/logs/session-log.md
+git add claude_docs/next-session-prompt.md
+git add claude_docs/.last-wrap
+git commit -m "S232 wrap: live QA audit (24 bugs, NO-GO verdict), STATE, session-log"
+
+# Step 4
 .\push.ps1
 ```
 
@@ -64,18 +70,26 @@ MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831
 
 ---
 
-## 1. Chrome Verify AvatarDropdown
+## 1. Priority Bug Fixes (from qa-audit-2026-03-22.md)
 
-After push completes + Vercel deploys:
-- Log in as Nina (ADMIN user1@example.com / password123)
-- Desktop header should show amber initials circle + name, clicking opens dropdown with Dashboard, Plan a Sale, Subscription, Settings, Sign Out
-- Confirm old inline auth links (Hi, [name] text, inline Logout button) are gone
+Dispatch findasale-dev with the QA audit report. Fix in this order:
+
+| # | Bug | Severity | Fix hint |
+|---|-----|----------|----------|
+| BUG-01 | Messages thread blank page | P0 | Add `flex: 1` to thread component (replaces `min-h-screen`) |
+| BUG-02 | Stripe checkout → 404 | P0 | Create/verify `/api/billing/checkout` Next.js API route |
+| BUG-03 | Manage Plan dead-end (no portal) | High | Wire Stripe Customer Portal link for PRO users |
+| BUG-04 | `/admin/invites` crashes | High | Destructure `response.invites` (not `response.map(...)`) |
+| BUG-06 | Broken Picsum images | Medium | Add `fastly.picsum.photos` to `next.config.js` images.domains |
+| BUG-07/08 | Edit Sale dates + Edit Item category not pre-populated | Medium | Seed form state from fetched data on mount |
+| BUG-15 | Billing section hardcoded light theme | Medium | Full `dark:` pass on `/organizer/premium` + `/organizer/upgrade` |
+| BUG-17/18 | Raw unicode `\u25cf` / `\u2014` in badges | Low | Replace with actual characters or HTML entities |
+
+Full report: `claude_docs/operations/qa-audit-2026-03-22.md`
 
 ---
 
-## 2. Next Features: #106–#109 Pre-Beta Safety Batch
-
-After Prisma actions confirmed run:
+## 2. After Bug Fixes: Features #106–#109 Pre-Beta Safety Batch
 
 | # | Feature | Scope | Estimate |
 |---|---------|-------|----------|
@@ -91,9 +105,9 @@ After Prisma actions confirmed run:
 - Vercel URL: https://findasale-git-main-patricks-projects-f27190f8.vercel.app
 - Backend: https://backend-production-153c9.up.railway.app
 - Test accounts: Shopper user11, PRO user2, SIMPLE+ADMIN user1, TEAMS user3 (all password123)
-- Nav consolidation spec: `claude_docs/ux-spotchecks/nav-dashboard-consolidation-2026-03-20.md`
+- QA audit: `claude_docs/operations/qa-audit-2026-03-22.md`
 - CLAUDE.md v5.0 is single authority
 
 ---
 
-**Next Session Lead:** Verify push went through → Chrome verify AvatarDropdown → confirm Prisma done → dispatch #106–#109
+**Next Session Lead:** Complete S231+S232 push → dispatch findasale-dev for BUG-01 + BUG-02 (P0s) → verify Stripe checkout live → work down bug queue

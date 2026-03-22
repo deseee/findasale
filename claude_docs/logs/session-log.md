@@ -16,6 +16,24 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### Session 232 — 2026-03-22 — Comprehensive Live QA Audit (24 Bugs, NO-GO Verdict)
+
+**Worked on:** Full live browser QA audit of https://finda.sale across all roles (Nina/ADMIN, Oscar/PRO Organizer, Ian/Shopper) using Chrome MCP. Tested all major flows: homepage, login/logout, organizer dashboard, sale management, item management, messages, shopper favorites, admin, Stripe upgrade, follow system. Found 24 bugs total.
+
+**Decisions:** ⛔ NO-GO verdict — 2 P0 blockers prevent beta launch. P0-1: messages thread page renders blank for all users (min-h-screen flex collapse in Layout). P0-2: Stripe checkout 404 (POST /api/billing/checkout returns HTML, not JSON). Both must be fixed before any organizer-facing beta recruitment. Dark mode billing section (BUG-15) identified as systemic hardcoded light-theme pattern — needs full dark: pass on billing pages. PWA install prompt loops on every navigation (BUG-24 — sessionStorage fix already shipped S225 but may need revisit).
+
+**Token efficiency:** Chrome MCP browser-only session — zero subagent code dispatches. Efficient. Full audit scope with systematic role switching and console/network inspection.
+
+**Token burn:** ~120k tokens (est., 2 compression events across prior + current context window).
+
+**Next up:** Dispatch findasale-dev for P0 fixes (BUG-01 flex layout, BUG-02 checkout route, BUG-04 admin invites map). Then High + Medium bug queue. See recommended fix order in qa-audit-2026-03-22.md.
+
+**Blockers:** All 24 bugs in audit report unfixed. Patrick manual push from S231 still pending. Prisma actions still pending Patrick.
+
+**Files changed:** `claude_docs/operations/qa-audit-2026-03-22.md` (new), `claude_docs/STATE.md`, `claude_docs/logs/session-log.md`, `claude_docs/next-session-prompt.md` | Compressions: 2 | Subagents: findasale-records (wrap only) | Push method: Patrick PS1
+
+---
+
 ### Session 231 — 2026-03-22 — Bug Queue Completion + AvatarDropdown (P0 UX Fix)
 
 **Worked on:** (1) Verified BUG #22 live via Chrome MCP — Nina (ADMIN) now gets 200 from `GET /api/organizers/me`. (2) BUG #22 sweep: dispatched findasale-dev to fix all 54 inline `role !== 'ORGANIZER'` checks across 24 backend files (21 controllers + 3 routes). (3) Fixed BUG #30: `sales/[id].tsx` line 379 — `organizerId={sale.organizer.userId}` → `sale.organizer.id`. (4) Fixed BUG #31: `FavoriteButton.tsx` SVG fill via explicit props (Tailwind classes don't map to SVG attributes). (5) Fixed BUG #32: `favoriteController.ts` toggleItemFavorite now checks DB for existing record; verified bidirectional toggle live via Chrome API test. (6) Fixed BUG #33: `OnboardingModal.tsx` handleSkip writes localStorage synchronously before onComplete(). (7) Built `AvatarDropdown.tsx` (new component) — replaces 20+ inline desktop header auth links; wired into `Layout.tsx`. P0 UX fix per nav-dashboard-consolidation-2026-03-20 spec. (8) Layout.tsx: renamed Explore→Feed nav link; mobile Pro Tools section uses TierGatedNavLink. (9) Sale page: "Back to home" label, dark mode additions.
@@ -85,24 +103,5 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 **Blockers:** Railway rebuild in progress (Dockerfile cache-bust commit 57fabb05 pushed ~22:44 UTC). Stripe checkout verification pending Railway completion.
 
 **Files changed:** `packages/backend/Dockerfile.production` (S227 cache-bust — MCP push), `CLAUDE.md` (v5.0 finalized, merge conflict resolved — MCP push), `claude_docs/skills-package/context-maintenance/SKILL.md` (archived), `claude_docs/skills-package/findasale-push-coordinator/SKILL.md` (archived), `claude_docs/skills-package/findasale-records/SKILL.md` (wrap steps + scheduled tasks list updated), `claude_docs/logs/session-log.md`, `claude_docs/next-session-prompt.md`, `claude_docs/STATE.md` | Compressions: 1 | Subagents: 1 (findasale-qa for /pricing audit) | Push method: MCP (2 files) + Patrick PS1 (wrap files)
-
----
-
-### Session 226 — 2026-03-21 — CLAUDE.md v5.0 Merge + Projects-First Workflow + Conversation-Defaults Trim
-
-**Worked on:** (1) Phase 1 batch 1: Merged CORE.md behavioral rules into root CLAUDE.md (v5.0) — added QA dispatch gate, pain point fixes (MCP large file guidance, PowerShell escaping, schema block mandate). Updated frontend + backend CLAUDE.md (CORE.md references replaced with root CLAUDE.md). (2) Phase 1 batch 2: Updated database + shared CLAUDE.md references. Trimmed conversation-defaults from 482 to 235 lines (30 rules → 13, deprecated redundant rules). Added `@findasale/shared` Vercel warning to shared CLAUDE.md. (3) Projects-first workflow: Advisory board 11-0-1 approval for 4 changes (subagent-first gate, projects-first routing, QA dispatch pre-flight, session-log discipline). Document pushed to GitHub. (4) Deleted CORE.md from active use (behavior rules now owned by root CLAUDE.md).
-
-**Decisions:** CLAUDE.md v5.0 is authoritative. CORE.md stays in git history but is no longer loaded. Conversation-defaults pruned to essentials — full rules live in CLAUDE.md.
-
-**Token efficiency:** Bulk doc migration + board review. Low subagent usage. Medium burn.
-
-**Token burn:** ~70k tokens (est.), 0 compressions.
-
-**Next up:** S227 — Phase 2+3 of workflow cleanup (friction audit action loop, skill archival, CORE.md ref removal).
-
-**Blockers:** None — all S225 code confirmed deployed at Vercel + Railway.
-
-**Files changed:** `CLAUDE.md` (v5.0 — merged CORE.md), `packages/frontend/CLAUDE.md`, `packages/backend/CLAUDE.md`, `packages/database/CLAUDE.md`, `packages/shared/CLAUDE.md`, `.skills/skills/conversation-defaults/SKILL.md` (trimmed), `claude_docs/projects-first-workflow-proposal.md` (new) | Compressions: 0 | Subagents: 1 (findasale-advisory-board) | Push method: Patrick PS1
-
 
 

@@ -7,6 +7,20 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 232 COMPLETE (2026-03-22) — COMPREHENSIVE LIVE QA AUDIT (24 BUGS, NO-GO):**
+- ✅ Full live app QA audit at https://finda.sale — all roles (SHOPPER, ORGANIZER, ADMIN), all major flows
+- ✅ Report written: `claude_docs/operations/qa-audit-2026-03-22.md`
+- ⛔ **VERDICT: NO-GO for beta** — 2 P0 blockers
+- 🔴 P0 BUG-01: `/messages/[conversationId]` page renders blank for all users — `min-h-screen` flex collapse in Layout wrapper
+- 🔴 P0 BUG-02: Stripe checkout → `POST /api/billing/checkout` returns 404 HTML (JSON parse error; no Stripe redirect)
+- 🟠 HIGH BUG-03: "Manage Plan" → no Stripe Customer Portal (dead end for PRO users)
+- 🟠 HIGH BUG-04: `/admin/invites` crashes — `TypeError: n.map is not a function` (response.invites not destructured)
+- 🟠 HIGH BUG-05: Follow button fires zero network requests; `/api/organizers/[id]/follow-status` → 404
+- Medium/Low: broken Picsum images (BUG-06), unpopulated Edit Sale dates (BUG-07), unpopulated Edit Item category (BUG-08), billing section hardcoded light theme in dark mode (BUG-15), N+1 fetches (BUG-11/12), unicode escapes in badges (BUG-17/18), PWA prompt loop (BUG-24), 9 more
+- Total: 2 P0 Critical · 3 High · 10 Medium · 9 Low = 24 bugs
+- **Recommended fix order:** BUG-01 → BUG-02 → BUG-03 → BUG-04 → BUG-06 → BUG-07/08 → BUG-15 → BUG-17/18
+- Last Updated: 2026-03-22
+
 **Session 231 COMPLETE (2026-03-22) — BUG QUEUE COMPLETION + AVATAR DROPDOWN (P0 UX FIX):**
 - ✅ BUG #22 verified live: Chrome test confirmed Nina (ADMIN) gets 200 from `GET /api/organizers/me` — fix working
 - ✅ BUG #22 sweep: 54 inline `role !== 'ORGANIZER'` checks across 24 backend files (21 controllers + 3 routes) fixed
