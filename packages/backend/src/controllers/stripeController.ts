@@ -690,7 +690,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       const subscription = event.data.object;
       const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 
-      const organizer = await prisma.organizer.findUnique({
+      const organizer = await prisma.organizer.findFirst({
         where: { stripeCustomerId: customerId },
         include: { user: { select: { email: true, name: true } } }
       });
@@ -721,7 +721,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             to: organizer.user.email,
             subject: 'Your FindA.Sale PRO subscription has been canceled',
             html: `<p>Hi ${organizer.user.name || 'Organizer'},</p><p>Your FindA.Sale subscription has been canceled. You've been downgraded to SIMPLE tier.</p>`,
-          }).catch(err => console.warn('[tier-lapse] Failed to send lapse email:', err));
+          }).catch((err: unknown) => console.warn('[tier-lapse] Failed to send lapse email:', err));
         }
       });
 
@@ -730,9 +730,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'invoice.payment_failed': {
       // Feature #75: Tier Lapse State Logic — Payment failure, grace period begins
       const invoice = event.data.object;
-      const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer.id;
+      const rawCustomer = invoice.customer;
+      if (!rawCustomer) break;
+      const customerId = typeof rawCustomer === 'string' ? rawCustomer : rawCustomer.id;
 
-      const organizer = await prisma.organizer.findUnique({
+      const organizer = await prisma.organizer.findFirst({
         where: { stripeCustomerId: customerId },
         include: { user: { select: { email: true, name: true } } }
       });
@@ -761,7 +763,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             to: organizer.user.email,
             subject: 'Action required: Your FindA.Sale payment failed',
             html: `<p>Hi ${organizer.user.name || 'Organizer'},</p><p>Your recent payment for FindA.Sale failed. Please update your payment method: <a href="${baseUrl}/organizer/billing">Update Payment</a></p><p>You have 3 days to retry.</p>`,
-          }).catch(err => console.warn('[payment-failed] Email send failed:', err));
+          }).catch((err: unknown) => console.warn('[payment-failed] Email send failed:', err));
         }
       });
 
@@ -772,7 +774,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       const subscription = event.data.object;
       const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 
-      const organizer = await prisma.organizer.findUnique({
+      const organizer = await prisma.organizer.findFirst({
         where: { stripeCustomerId: customerId }
       });
 
