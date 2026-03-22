@@ -2,8 +2,6 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from './AuthContext';
-import usePoints from '../hooks/usePoints';
-import PointsBadge from './PointsBadge';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 
 /**
@@ -69,7 +67,6 @@ type Tab = {
 const BottomTabNav = () => {
   const router = useRouter();
   const { user } = useAuth();
-  const { data: pointsData } = usePoints(!!user);
   const { data: unreadData } = useUnreadMessages(!!user);
 
   // Profile tab destination depends on user role
@@ -142,12 +139,6 @@ const BottomTabNav = () => {
             >
               <div className="relative">
                 <Icon active={active} />
-                {tab.label === 'Profile' && pointsData && pointsData.points > 0 && (
-                  <PointsBadge
-                    points={pointsData.points}
-                    className="absolute -top-1.5 -right-2.5"
-                  />
-                )}
                 {tab.label === 'Messages' && unreadData && unreadData.unread > 0 && (
                   <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center leading-none" aria-hidden="true">
                     {unreadData.unread > 9 ? '9+' : unreadData.unread}
