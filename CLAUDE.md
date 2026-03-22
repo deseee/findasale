@@ -128,7 +128,7 @@ Never use `&&` (bash only). Never use placeholders.
 
 **Git push:** Patrick uses `.\push.ps1` from PowerShell (NOT `git push` directly). The script self-heals: clears index.lock, CRLF phantoms, fetches + merges (never rebases). Never tell Patrick to use `git push`.
 
-**Subagent push ban:** Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the main session may execute `push_files` calls. Subagents return output with file changes listed; main session batches into consolidated MCP pushes (≤3 files per call) or provides Patrick a single comprehensive push block.
+**Subagent push ban:** Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the main session may execute `push_files` calls. Subagents return output with file changes listed; main session batches into consolidated MCP pushes (≤3 files per call). This applies even when a subagent's batch would technically fit within 3-file/25k-token limits — the rule is absolute. Main session provides Patrick a single comprehensive push block when MCP isn't used.
 
 Repo: `deseee/findasale` — Branch: `main`
 
@@ -236,6 +236,8 @@ The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for smal
 
 ## 10. Operational Rules
 
+**Post-fix live verification (mandatory):** After ANY session that pushes bug fixes or feature code to production, the NEXT session must include a live-site smoke test (Chrome MCP at finda.sale) of all changed pages BEFORE starting new work. This is not optional and not something Patrick should have to request. Check the previous session's fix list in STATE.md, load each affected page, verify it works. If pages are broken, flag immediately and dispatch findasale-dev before any other work proceeds. Claude owns QA continuity — Patrick should never discover a broken page that Claude could have caught.
+
 **Context checkpoints (no-pause rule):** Agent handoff "Context Checkpoint: yes/no" is internal bookkeeping. Never pause work to discuss a checkpoint.
 
 **Escalation channel:** Any subagent may include a `## Patrick Direct` section when it believes the main session is ignoring a P0/P1 finding, dispatching work that contradicts a locked decision, operating on stale context, or burning tokens on a wrong path. Evidence required. One per agent per session. Main session surfaces verbatim — no filtering.
@@ -246,7 +248,7 @@ The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for smal
 
 **Skill update protocol:** Editing a SKILL.md in git does NOT activate the change. Active skills are read-only at `/sessions/[session-id]/mnt/.skills/skills/`. To activate: package as `.skill` zip, Patrick installs via Cowork UI.
 
-**Subagent file hygiene (hard rule):** Subagents must NEVER write files to the project root (`$PROJECT_ROOT/`), create directories not in the locked folder map (`operations/file-creation-schema.md`), or leave temp/handoff/artifact files in `claude_docs/` root. All scratch and working files go to the VM working directory (`/sessions/[session-id]/`). All deliverables go to the correct `claude_docs/` subdirectory. Violations are flagged by Records at session wrap — but the goal is zero violations, not clean-up.
+**Subagent file hygiene (hard rule):** Subagents must NEVER write files to the project root (`$PROJECT_ROOT/`), create directories not in the locked folder map (`operations/file-creation-schema.md`), or leave temp/handoff/artifact files in `claude_docs/` root. All scratch and working files go to the VM working directory (`/sessions/[session-id]/`). Temp files in the VM working directory are automatically cleaned up and are the correct location for subagent scratch work. All deliverables go to the correct `claude_docs/` subdirectory. Violations are flagged by Records at session wrap — but the goal is zero violations, not clean-up.
 
 ---
 

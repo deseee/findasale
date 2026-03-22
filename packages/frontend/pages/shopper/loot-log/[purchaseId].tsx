@@ -22,7 +22,7 @@ export default function PurchaseDetailPage() {
 
   // Redirect to login if not authenticated
   if (!authLoading && !user) {
-    router.push('/auth/login');
+    router.push('/login');
     return null;
   }
 

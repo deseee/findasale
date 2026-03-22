@@ -7,20 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 236 — IN PROGRESS**
+
+**Session 236 PARTIAL (2026-03-22) — AUDIT BLITZ + CONTEXT FIX + INNOVATION RE-RUN:**
+- ✅ Stale doc fix: Prisma migrate deploy + Railway env vars removed from PENDING across STATE.md + next-session-prompt.md (confirmed done S234)
+- ✅ **QA Live Audit (post-S233):** CONDITIONAL GO — BUG-01 (messages), BUG-15 (dark mode), AvatarDropdown confirmed fixed. NEW blockers: `/settings` 404, `/wishlist` 404, Manage Plan broken redirect. Report: `claude_docs/audits/qa-audit-S236-live.md`
+- ✅ **UX Audit (post-S233):** P1 issues: /settings 404, /wishlist 404, pricing nav link broken, pricing text contrast WCAG fail. Medium: organizer profile shows shopper content (Hunter badge). Report: `claude_docs/ux-spotchecks/ux-audit-S236.md`
+- ✅ **Innovation Re-Run (broader secondary sales framing):** Major verdict shifts. New P1 recommendations: Etsy API dual-listing (Q3) + Sale-type-aware discovery (Q3). Flipped to REJECT: Facebook Marketplace syndication (no API), Amazon SP-API syndication, Gaming account marketplace, Crypto marketplace. Print Kit TAM expanded 3-4x. Report: `claude_docs/research/INNOVATION_HANDOFF_S236.md`
+- ✅ **Power User Workflow Audit:** Workflow changes from S230-S235 working well. 3 minor doc clarifications identified: findasale-dev skill stale ref, CLAUDE.md §10 VM temp files, CLAUDE.md §5 push ban wording. Report: `claude_docs/improvement-memos/power-user-S236.md`
+- ✅ **Dev dispatch — 6 live bugs fixed:**
+  - /settings 404 → NEW `pages/settings.tsx` (role-based redirect to organizer/shopper settings)
+  - /wishlist 404 → NEW `pages/wishlist.tsx` (redirect to /shopper/favorites) + AvatarDropdown link fixed
+  - Manage Plan → verified already working (backend portal endpoint exists, frontend wired correctly)
+  - Pricing contrast → TierComparisonTable updated (WCAG AA compliant, dark mode support)
+  - Organizer profile identity → role-based conditional rendering (hides Hunt Pass, Badges, Bids, Referrals for organizers)
+  - Pricing nav → verified already working
+- ✅ 3 doc clarifications applied: CLAUDE.md §5 push ban absolute, §10 VM temp files permitted, findasale-dev skill stale ref fixed
+- ✅ **Advisory Board:** Print Kit → deferred (templates-only approach, no Printful needed). Etsy → deferred (no revenue model). Reputation + Condition Tags + Confidence Badge → approved P0 pre-beta
+- ✅ **Ship-Ready Committee:** Demo-readiness plan created. 10-min demo script. Estimated 1-2 sessions to demo-ready after push.
+- ✅ **New CLAUDE.md §10 rule:** Post-fix live verification mandatory — Claude must smoke-test live site after bug fix sessions before starting new work
+- ⚠️ PENDING: Push all S236 changes (5 frontend files + doc files + research files)
+- ⚠️ PENDING: Live QA verification after push (per new mandatory rule)
+- ⚠️ PENDING: Patrick review of innovation verdict changes (Etsy deferred, Print Kit → templates, sale-type-aware discovery approved)
+- Last Updated: 2026-03-22
+
+**Completed Sessions (carry forward knowledge):**
+
 **Session 235 COMPLETE (2026-03-22) — CONTEXT DOCS UPDATE + RESEARCH + SKILLS AUDIT + PROJECT HYGIENE:**
 - ✅ Innovation research dispatched on 4 topics (Amazon integrations/POD, BizBuySell deep dive, Joybird UX, digital estate assets) — research memos saved to `claude_docs/research/` and consolidated in `INNOVATION_HANDOFF_2026-03-22.md`
 - ✅ Confirmed Organizer Reputation Score (Feature #71) already fully built and Chrome-verified. Print Kit (Printful/POD) is new feature idea from innovation research — does NOT exist yet
-- ✅ Skills scope audit: 9 of 24 skills had estate-sale-only framing. 7 updated .skill packages produced and presented to Patrick: findasale-innovation, findasale-ux, findasale-marketing (fee fixed: 5%/7% → 10% flat), findasale-qa, cowork-power-user, findasale-advisory-board, findasale-hacker
+- ✅ Skills scope audit: 8 of 24 skills had estate-sale-only framing. All 8 updated .skill packages produced and installed by Patrick: findasale-innovation, findasale-ux, findasale-marketing (fee fixed: 5%/7% → 10% flat), findasale-qa, cowork-power-user, findasale-advisory-board, findasale-hacker, findasale-records
 - ✅ Project folder hygiene: 19 temp files deleted, 26 files archived, session-log rotated from 264→112 lines. Full audit report: `claude_docs/audits/records-audit-2026-03-22.md`
 - ✅ file-creation-schema.md updated: architecture/, audits/, feature-decisions/, ux-spotchecks/ now in locked folder map
 - ✅ CLAUDE.md §10 updated: hard subagent file hygiene rule (no project root drops, no unauthorized dirs, scratch→VM working dir)
-- **Pending Patrick Actions:**
-  - Install 7 updated .skill files from `updated-skills/` folder
-  - Delete `updated-skills/` folder after install
-  - Push session changes (CLAUDE.md, file-creation-schema.md, research/audit files)
-- **Still pending from S234:**
-  - Prisma migrate deploy + prisma generate (blocking #73/#74/#75 runtime)
-  - Railway env vars: AI_COST_CEILING_USD=5.00, MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831
+- ✅ All S235 changes pushed to GitHub (commit 6c0af66)
+- ✅ Session wrap complete: STATE.md, next-session-prompt.md, session-log.md, patrick-dashboard.md all updated
+- ✅ Prisma migrate deploy + prisma generate against Neon — CONFIRMED DONE (completed S234, verified resolved as of S236)
+- ✅ Railway env vars AI_COST_CEILING_USD + MAILERLITE_SHOPPERS_GROUP_ID — CONFIRMED SET (completed S234, verified resolved as of S236)
 - Last Updated: 2026-03-22
 
 **Session 234 COMPLETE (2026-03-22) — BUILD FIXES + PASSKEY SECURITY + FEATURES #106-#109 PRE-BETA SAFETY:**

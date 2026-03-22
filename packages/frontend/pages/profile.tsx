@@ -102,6 +102,9 @@ const ProfilePage = () => {
     );
   }
 
+  // Check if user is organizer-only (no USER role)
+  const isOrganizerOnly = user.roles?.includes('ORGANIZER') && !user.roles?.includes('USER');
+
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
@@ -124,24 +127,28 @@ const ProfilePage = () => {
               </h2>
               <p className="text-warm-600 dark:text-warm-400">{user.email}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="bg-amber-100 text-amber-800 text-sm font-medium px-2.5 py-0.5 rounded">
-                  🏆 {pointsData?.points ?? 0} pts
-                </span>
-                {pointsData?.tier && (
-                  <span className="bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-medium px-2.5 py-0.5 rounded">
-                    {pointsData.tier}
-                  </span>
+                {!isOrganizerOnly && (
+                  <>
+                    <span className="bg-amber-100 text-amber-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                      🏆 {pointsData?.points ?? 0} pts
+                    </span>
+                    {pointsData?.tier && (
+                      <span className="bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-medium px-2.5 py-0.5 rounded">
+                        {pointsData.tier}
+                      </span>
+                    )}
+                  </>
                 )}
                 <span className="bg-green-100 text-green-800 dark:text-green-200 text-sm font-medium px-2.5 py-0.5 rounded">
-                  {user.roles?.includes('USER') && !user.roles?.includes('ORGANIZER') ? 'Shopper' : user.role}
+                  {isOrganizerOnly ? 'Organizer' : user.roles?.includes('USER') && !user.roles?.includes('ORGANIZER') ? 'Shopper' : user.role}
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Phase 19: Points & Tier Card */}
-        {pointsData && (
+        {/* Phase 19: Points & Tier Card — only for shoppers */}
+        {!isOrganizerOnly && pointsData && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold mb-1">Hunt Pass</h2>
             <p className="text-warm-500 dark:text-warm-400 text-sm mb-4">
@@ -164,15 +171,15 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {pointsError && (
+        {!isOrganizerOnly && pointsError && (
           <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6 mb-8">
             <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load Hunt Pass.</p>
             <button onClick={() => refetchPoints()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
           </div>
         )}
 
-        {/* Badges Section */}
-        {badgesData?.badges && badgesData.badges.length > 0 && (
+        {/* Badges Section — only for shoppers */}
+        {!isOrganizerOnly && badgesData?.badges && badgesData.badges.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold mb-4">Badges</h2>
             <div className="flex flex-wrap gap-4">
@@ -193,125 +200,129 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {badgesError && (
+        {!isOrganizerOnly && badgesError && (
           <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6 mb-8">
             <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load badges.</p>
             <button onClick={() => refetchBadges()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
           </div>
         )}
 
-        {/* My Bids Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4">My Bids</h2>
-          
-          {bidsError ? (
-            <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6">
-              <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load your bids.</p>
-              <button onClick={() => refetchBids()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
-            </div>
-          ) : bids.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-warm-600 dark:text-warm-400 mb-4">You haven't placed any bids yet.</p>
-              <Link 
-                href="/" 
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-              >
-                Browse Auctions
-              </Link>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-warm-200">
-                <thead className="bg-warm-50 dark:bg-gray-900">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
-                      Item
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
-                      Your Bid
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-warm-200">
-                  {bids.map((bid) => (
-                    <tr key={bid.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {bid.item.photoUrls && bid.item.photoUrls.length > 0 ? (
-                            <img 
-                              src={bid.item.photoUrls[0]} 
-                              alt={bid.item.title} 
-                              className="h-10 w-10 rounded-md object-cover"
-                             loading="lazy"/>
-                          ) : (
-                            <div className="bg-warm-200 border-2 border-dashed rounded-xl w-10 h-10" />
-                          )}
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-warm-900 dark:text-warm-100">{bid.item.title}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-warm-900 dark:text-warm-100">
-                        ${bid.amount.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          bid.status === 'WINNING' ? 'bg-green-100 text-green-800' :
-                          bid.status === 'WON' ? 'bg-amber-100 text-amber-800' :
-                          bid.status === 'LOST' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {bid.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <Link href={`/items/${bid.itemId}`} className="text-amber-600 hover:text-amber-800">
-                          View Item
-                        </Link>
-                      </td>
+        {/* My Bids Section — only for shoppers */}
+        {!isOrganizerOnly && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-2xl font-bold mb-4">My Bids</h2>
+
+            {bidsError ? (
+              <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6">
+                <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load your bids.</p>
+                <button onClick={() => refetchBids()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+              </div>
+            ) : bids.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-warm-600 dark:text-warm-400 mb-4">You haven't placed any bids yet.</p>
+                <Link
+                  href="/"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                >
+                  Browse Auctions
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-warm-200">
+                  <thead className="bg-warm-50 dark:bg-gray-900">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
+                        Item
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
+                        Your Bid
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-warm-200">
+                    {bids.map((bid) => (
+                      <tr key={bid.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            {bid.item.photoUrls && bid.item.photoUrls.length > 0 ? (
+                              <img
+                                src={bid.item.photoUrls[0]}
+                                alt={bid.item.title}
+                                className="h-10 w-10 rounded-md object-cover"
+                               loading="lazy"/>
+                            ) : (
+                              <div className="bg-warm-200 border-2 border-dashed rounded-xl w-10 h-10" />
+                            )}
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-warm-900 dark:text-warm-100">{bid.item.title}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-warm-900 dark:text-warm-100">
+                          ${bid.amount.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            bid.status === 'WINNING' ? 'bg-green-100 text-green-800' :
+                            bid.status === 'WON' ? 'bg-amber-100 text-amber-800' :
+                            bid.status === 'LOST' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {bid.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <Link href={`/items/${bid.itemId}`} className="text-amber-600 hover:text-amber-800">
+                            View Item
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Referrals Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4">My Referrals</h2>
-          {referralsError ? (
-            <div className="min-h-32 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6">
-              <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load referrals.</p>
-              <button onClick={() => refetchReferrals()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
-            </div>
-          ) : referrals.length === 0 ? (
-            <p className="text-warm-600 dark:text-warm-400">No referrals yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {referrals.map((ref) => (
-                <div key={ref.id} className="flex justify-between items-center border rounded p-3">
-                  <div>
-                    <p className="font-medium text-warm-900 dark:text-warm-100">{ref.referredUser.name || ref.referredUser.email}</p>
-                    <p className="text-sm text-warm-500 dark:text-warm-400">{ref.referredUser.email}</p>
+        {/* Referrals Section — only for shoppers */}
+        {!isOrganizerOnly && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-2xl font-bold mb-4">My Referrals</h2>
+            {referralsError ? (
+              <div className="min-h-32 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6">
+                <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load referrals.</p>
+                <button onClick={() => refetchReferrals()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+              </div>
+            ) : referrals.length === 0 ? (
+              <p className="text-warm-600 dark:text-warm-400">No referrals yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {referrals.map((ref) => (
+                  <div key={ref.id} className="flex justify-between items-center border rounded p-3">
+                    <div>
+                      <p className="font-medium text-warm-900 dark:text-warm-100">{ref.referredUser.name || ref.referredUser.email}</p>
+                      <p className="text-sm text-warm-500 dark:text-warm-400">{ref.referredUser.email}</p>
+                    </div>
+                    <span className="text-xs text-warm-400">
+                      {new Date(ref.createdAt).toLocaleDateString()}
+                    </span>
                   </div>
-                  <span className="text-xs text-warm-400">
-                    {new Date(ref.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Task #7: Referral Rewards Widget */}
-        <ReferralWidget />
+        {/* Task #7: Referral Rewards Widget — only for shoppers */}
+        {!isOrganizerOnly && <ReferralWidget />}
 
         {/* Sale Interests Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">

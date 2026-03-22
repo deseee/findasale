@@ -12,7 +12,7 @@ export default function AchievementsPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/auth/login');
+      router.push('/login');
     }
   }, [user, authLoading, router]);
 
