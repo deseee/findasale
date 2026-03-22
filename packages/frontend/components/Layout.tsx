@@ -9,6 +9,7 @@ import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
 import OfflineIndicator from './OfflineIndicator'; // Feature #69: Local-First Offline Mode
+import AvatarDropdown from './AvatarDropdown';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -209,7 +210,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
-              {/* Show Feed/Map/Inspiration for authenticated users */}
+              {/* Show Browse/Map/Inspiration for all users */}
               {isClient && user && (user.roles?.includes('USER') || user.roles?.includes('ADMIN') || user.roles?.includes('ORGANIZER')) && (
                 <>
                   <Link href="/feed" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Feed</Link>
@@ -243,14 +244,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                     </svg>
                   </Link>
                   <div className="border-l border-warm-300 dark:border-gray-700 pl-4 flex items-center gap-2">
-                    <span className="text-warm-900 dark:text-warm-100 text-sm">Hi, {user.name || user.email}</span>
                     <NotificationBell />
                     {isLowBandwidth && (
                       <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Low-Bandwidth Mode enabled — photos optimized for slow connections">
                         Low BW
                       </span>
                     )}
-                    <button onClick={handleLogout} className="text-warm-900 dark:text-warm-300 hover:text-amber-600">Logout</button>
+                    <AvatarDropdown />
                   </div>
                 </>
               ) : (
