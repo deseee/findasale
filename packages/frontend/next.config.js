@@ -150,6 +150,9 @@ const nextConfig = {
       { source: '/create-sale', destination: '/organizer/create-sale', permanent: true },
       { source: '/manage-sales', destination: '/organizer/sales', permanent: true },
       { source: '/organizer/manage-sales', destination: '/organizer/sales', permanent: true },
+      // S237: /auth/* used to be valid routes — redirect to /login to prevent 404s from old bookmarks/emails
+      { source: '/auth/login', destination: '/login', permanent: true },
+      { source: '/auth/:path*', destination: '/login', permanent: true },
     ];
   },
 
