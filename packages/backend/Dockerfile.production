@@ -1,4 +1,4 @@
-# S234 — cache bust 2026-03-22 rateLimiter-validate-false
+# S239 — cache bust 2026-03-22 auth-ratelimit-fix
 FROM node:18-slim
 
 WORKDIR /app

@@ -186,7 +186,7 @@ export default function WorkspacePage() {
                     <button
                       type="button"
                       onClick={() => setShowCreateForm(false)}
-                      className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-900 font-bold py-2 px-4 rounded-md"
+                      className="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-bold py-2 px-4 rounded-md"
                     >
                       Cancel
                     </button>
@@ -246,7 +246,7 @@ export default function WorkspacePage() {
                       <button
                         type="button"
                         onClick={() => setShowInviteForm(false)}
-                        className="bg-gray-300 hover:bg-gray-400 text-gray-900 font-bold py-2 px-4 rounded-md"
+                        className="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-bold py-2 px-4 rounded-md"
                       >
                         Cancel
                       </button>

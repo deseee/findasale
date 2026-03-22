@@ -379,21 +379,21 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
         </Head>
       )}
 
-      <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Link href={`/sales/${item.sale.id}`}>
-            <a className="text-blue-600 hover:text-blue-800 mb-4 inline-block">
+            <a className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mb-4 inline-block">
               ← Back to {item.sale.title}
             </a>
           </Link>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-lg shadow-lg p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             {/* Photo Section */}
             <div className="flex flex-col gap-4">
               {/* Main Photo */}
               <div
                 onClick={() => setIsLightboxOpen(true)}
-                className="relative w-full bg-gray-200 rounded-lg overflow-hidden cursor-pointer group"
+                className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer group"
               >
                 <img
                   src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
@@ -417,7 +417,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                     alt={`Photo ${index + 1}`}
                     onClick={() => setSelectedPhotoIndex(index)}
                     className={`w-16 h-16 object-cover rounded cursor-pointer border-2 transition ${
-                      selectedPhotoIndex === index ? 'border-blue-600' : 'border-gray-300'
+                      selectedPhotoIndex === index ? 'border-blue-600' : 'border-gray-300 dark:border-gray-600'
                     }`}
                   />
                 ))}
@@ -431,9 +431,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 <div className="flex items-center gap-3 mb-2">
                   {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
                   {item.listingType === 'REVERSE_AUCTION' && <ReverseAuctionBadge item={item} />}
-                  <h1 className="text-3xl font-bold text-gray-900">{item.title}</h1>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{item.title}</h1>
                 </div>
-                <div className="text-sm text-gray-500 mb-2">
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                   <span>{item.cartCount} in cart</span> • <span>{item.views} views</span> •
                   Sale by {item.sale.organizer?.name ?? 'Organizer'}
                 </div>
@@ -447,29 +447,29 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               )}
 
               {/* Price Section */}
-              <div className="border-t border-b py-4">
-                <div className="text-sm text-gray-500 mb-1">
+              <div className="border-t border-b border-gray-200 dark:border-gray-700 py-4">
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                   {isAuction ? 'Current Bid' : 'Price'}
                 </div>
-                <div className="text-4xl font-bold text-gray-900 mb-2">
+                <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                   ${currentPrice.toFixed(2)}
                 </div>
                 {!isAuction && (
-                  <div className="text-xs text-gray-500 mb-2">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     <div>+ ${(currentPrice * 0.05).toFixed(2)} platform fee</div>
-                    <div className="text-sm font-semibold text-gray-900 mt-1">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1">
                       ${(currentPrice + currentPrice * 0.05).toFixed(2)} total
                     </div>
                   </div>
                 )}
                 {isAuction && (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
                     Starting Price: ${item.auctionStartPrice.toFixed(2)}
                   </div>
                 )}
                 {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
                 {item.listingType === 'REVERSE_AUCTION' && item.reverseFloorPrice && (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
                     Floor Price: ${item.reverseFloorPrice.toFixed(2)}
                   </div>
                 )}
@@ -481,17 +481,17 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               {/* Condition & Category */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">Condition:</span>
-                  <p className="font-semibold text-gray-900">{item.condition}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Condition:</span>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{item.condition}</p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Category:</span>
-                  <p className="font-semibold text-gray-900">{item.category}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Category:</span>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{item.category}</p>
                 </div>
               </div>
 
               {/* Description */}
-              <div className="text-gray-700 text-sm leading-relaxed">
+              <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
                 <p>{item.description}</p>
               </div>
 
@@ -501,7 +501,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   {item.tags.map((tag, index) => (
                     <span
                       key={index}
-                      className="bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-xs"
+                      className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-xs"
                     >
                       {tag}
                     </span>
@@ -516,8 +516,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   disabled={updateLikesMutation.isPending}
                   className={`flex-1 py-2 px-4 rounded-lg font-semibold transition ${
                     isUserLiked
-                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                   } disabled:opacity-50`}
                 >
                   {isUserLiked ? '❤️ Liked' : '🧡 Like'}
@@ -532,7 +532,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
               {/* Bid/Cart Section */}
               {!isSold && (
-                <div className="border-t pt-4">
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   {isAuction ? (
                     <div className="space-y-3">
                       <input
@@ -543,7 +543,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                           setBidAmount(e.target.value ? parseFloat(e.target.value) : null);
                           setBidError('');
                         }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100"
                       />
                       {bidError && <p className="text-red-600 text-sm">{bidError}</p>}
                       <button
@@ -557,7 +557,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                       </button>
                       <button
                         onClick={() => setShowBidHistory(!showBidHistory)}
-                        className="w-full text-blue-600 hover:text-blue-800 py-2 px-4 text-sm font-semibold"
+                        className="w-full text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 py-2 px-4 text-sm font-semibold"
                       >
                         {showBidHistory ? 'Hide' : 'View'} Bid History
                       </button>
@@ -576,9 +576,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
               {/* Auction End Time */}
               {isAuction && !isSold && (
-                <div className="text-sm text-gray-600 border-t pt-4">
+                <div className="text-sm text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-4">
                   <span>Auction ends:</span>
-                  <p className="font-semibold text-gray-900">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">
                     {formatDistanceToNow(parseISO(item.auctionEndTime), {
                       addSuffix: true,
                     })}
@@ -590,16 +590,16 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
           {/* Bid History */}
           {showBidHistory && bids.length > 0 && (
-            <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-2xl font-bold mb-4">Bid History</h2>
+            <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Bid History</h2>
               <div className="space-y-2">
                 {bids.map((bid) => (
-                  <div key={bid.id} className="flex justify-between items-center py-2 border-b">
+                  <div key={bid.id} className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
                     <div>
-                      <p className="font-semibold text-gray-900">${bid.bidAmount.toFixed(2)}</p>
-                      <p className="text-sm text-gray-500">{bid.bidder.name}</p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">${bid.bidAmount.toFixed(2)}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{bid.bidder.name}</p>
                     </div>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {formatDistanceToNow(parseISO(bid.timestamp), {
                         addSuffix: true,
                       })}

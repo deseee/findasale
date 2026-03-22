@@ -44,12 +44,12 @@ export default function HubsPage() {
         <meta name="description" content="Discover nearby sale hubs and group estate sales" />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Header */}
           <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-sage-900 mb-4">Discover Sale Hubs</h1>
-            <p className="text-lg text-sage-600 max-w-2xl mx-auto">
+            <h1 className="text-4xl font-bold text-sage-900 dark:text-white mb-4">Discover Sale Hubs</h1>
+            <p className="text-lg text-sage-600 dark:text-gray-300 max-w-2xl mx-auto">
               Find coordinated groups of estate sales happening near you. Perfect for sale-hopping and planning your shopping route.
             </p>
           </div>
@@ -97,12 +97,12 @@ export default function HubsPage() {
               ))}
             </div>
           ) : error ? (
-            <div className="text-center text-red-600 py-12">
+            <div className="text-center text-red-600 dark:text-red-400 py-12">
               <p>Error loading hubs: {error instanceof Error ? error.message : 'Unknown error'}</p>
             </div>
           ) : !data?.hubs.length ? (
             <div className="text-center py-12">
-              <p className="text-3xl mb-3">🏘️</p>
+              <p className="text-3xl mb-3">🏨</p>
               <p className="text-gray-700 dark:text-gray-300 font-semibold mb-2">No organizer hubs near you yet</p>
               <p className="text-gray-600 dark:text-gray-400 text-sm">Try increasing your search radius or browse individual sales in your area.</p>
             </div>
@@ -118,7 +118,7 @@ export default function HubsPage() {
                     <div className="p-6">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h3 className="text-lg font-semibold text-sage-900 group-hover:text-sage-700 transition-colors">
+                          <h3 className="text-lg font-semibold text-sage-900 dark:text-white group-hover:text-sage-700 dark:group-hover:text-sage-300 transition-colors">
                             {hub.name}
                           </h3>
                           {hub.organizerName && (
@@ -143,7 +143,7 @@ export default function HubsPage() {
                       </div>
 
                       {/* Call to Action */}
-                      <div className="text-sm text-sage-600 group-hover:text-sage-700 font-medium">
+                      <div className="text-sm text-sage-600 dark:text-sage-400 group-hover:text-sage-700 dark:group-hover:text-sage-300 font-medium">
                         View Hub →
                       </div>
                     </div>
