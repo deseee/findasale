@@ -603,13 +603,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
               .catch(err => console.warn('[coupon] Failed to mark coupon used:', err));
           }
 
-          createNotification(
-            purchase.userId,
-            'purchase',
-            'Purchase confirmed',
-            `Your purchase of "${purchase.item?.title || 'item'}" is confirmed!`,
-            '/shopper/purchases'
-          ).catch(err => console.error('[notification] Failed to create purchase notification:', err));
+          createNotification({
+            userId: purchase.userId,
+            type: 'purchase',
+            title: 'Purchase confirmed',
+            body: `Your purchase of "${purchase.item?.title || 'item'}" is confirmed!`,
+            link: '/shopper/purchases'
+          }).catch(err => console.error('[notification] Failed to create purchase notification:', err));
         }
 
         if (!isPOS && purchase.user) {
@@ -688,25 +688,25 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'customer.subscription.deleted': {
       // Feature #75: Tier Lapse State Logic — Subscription cancelled
       const subscription = event.data.object;
+      const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 
       const organizer = await prisma.organizer.findUnique({
-        where: { stripeCustomerId: subscription.customer },
+        where: { stripeCustomerId: customerId },
         include: { user: { select: { email: true, name: true } } }
       });
 
       if (!organizer) {
-        console.warn(`[webhook] Subscription deleted for unknown customer ${subscription.customer}`);
+        console.warn(`[webhook] Subscription deleted for unknown customer ${customerId}`);
         break;
       }
 
-      // Downgrade to SIMPLE, record lapse time
+      // Downgrade to SIMPLE
       await prisma.organizer.update({
         where: { id: organizer.id },
         data: {
           subscriptionTier: 'SIMPLE',
           subscriptionStatus: 'canceled',
           stripeSubscriptionId: null,
-          tierLapsedAt: new Date(),
           tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWT tier claims
         }
       });
@@ -730,14 +730,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'invoice.payment_failed': {
       // Feature #75: Tier Lapse State Logic — Payment failure, grace period begins
       const invoice = event.data.object;
+      const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer.id;
 
       const organizer = await prisma.organizer.findUnique({
-        where: { stripeCustomerId: invoice.customer },
+        where: { stripeCustomerId: customerId },
         include: { user: { select: { email: true, name: true } } }
       });
 
       if (!organizer) {
-        console.warn(`[webhook] Payment failed for unknown customer ${invoice.customer}`);
+        console.warn(`[webhook] Payment failed for unknown customer ${customerId}`);
         break;
       }
 
@@ -769,18 +770,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'customer.subscription.updated': {
       // Feature #75: Tier Lapse State Logic — Resume or upgrade after lapse/payment recovery
       const subscription = event.data.object;
+      const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 
       const organizer = await prisma.organizer.findUnique({
-        where: { stripeCustomerId: subscription.customer }
+        where: { stripeCustomerId: customerId }
       });
 
       if (!organizer) {
-        console.warn(`[webhook] Subscription updated for unknown customer ${subscription.customer}`);
+        console.warn(`[webhook] Subscription updated for unknown customer ${customerId}`);
         break;
       }
 
-      // If resuming from lapse or past_due, clear lapse flags and update tier
-      if (organizer.tierLapsedAt || organizer.subscriptionStatus === 'past_due') {
+      // If resuming from past_due, update tier
+      if (organizer.subscriptionStatus === 'past_due') {
         // Map Stripe price ID to tier
         let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
         if (subscription.items?.data?.[0]?.price?.id) {
@@ -794,8 +796,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
           data: {
             subscriptionTier: newTier,
             subscriptionStatus: subscription.status,
-            tierLapsedAt: null, // Clear lapse flag
-            tierLapseWarning: null, // Clear warning flag
             tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWTs
           }
         });

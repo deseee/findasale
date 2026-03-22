@@ -48,7 +48,7 @@ export async function checkItemOverPhotoLimit(
   limit: number;
   message?: string;
 }> {
-  const photoCount = await prisma.itemPhoto.count({
+  const photoCount = await prisma.photo.count({
     where: { itemId }
   });
 

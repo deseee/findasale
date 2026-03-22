@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiClient } from '../services/apiClient';
+import { api } from '../lib/api';
 
 export interface Notification {
   id: string;
@@ -27,7 +27,7 @@ export const useNotifications = (): UseNotificationsReturn => {
 
   const fetchNotifications = async () => {
     try {
-      const response = await apiClient.get('/notifications/inbox');
+      const response = await api.get('/notifications/inbox');
       setNotifications(response.data.notifications || []);
       setUnreadCount(response.data.unreadCount || 0);
       setLoading(false);
@@ -39,7 +39,7 @@ export const useNotifications = (): UseNotificationsReturn => {
 
   const markRead = async (id: string) => {
     try {
-      await apiClient.patch(`/notifications/inbox/${id}/read`);
+      await api.patch(`/notifications/inbox/${id}/read`);
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n))
       );
@@ -51,7 +51,7 @@ export const useNotifications = (): UseNotificationsReturn => {
 
   const markAllRead = async () => {
     try {
-      await apiClient.patch('/notifications/inbox/read-all');
+      await api.patch('/notifications/inbox/read-all');
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch (error) {
