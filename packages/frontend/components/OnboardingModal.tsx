@@ -51,6 +51,15 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
     setStep((s) => s + 1);
   };
 
+  const handleSkip = () => {
+    // Persist skip flag IMMEDIATELY before calling onComplete
+    // This prevents race condition where navigation triggers before flag is written
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('findasale_onboarded', '1');
+    }
+    onComplete();
+  };
+
   const current = STEPS[step];
 
   return (
@@ -83,7 +92,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
           {current.cta}
         </button>
         <button
-          onClick={onComplete}
+          onClick={handleSkip}
           className="w-full text-warm-400 dark:text-gray-400 hover:text-warm-600 dark:hover:text-gray-300 text-sm py-2 transition-colors"
         >
           {current.secondary}
