@@ -1,54 +1,99 @@
-# Next Session Prompt — S228
+# Next Session Prompt — S229
 
-## First: Verify Railway + Stripe Checkout
+**Date:** 2026-03-21
+**Status:** S228 COMPLETE — Awaiting Patrick push + Prisma actions
 
-Railway cache-bust was pushed at the end of S227 (commit 57fabb05, ~22:44 UTC). Check Railway build status:
-1. Open Railway dashboard and confirm new deployment from that commit is LIVE
-2. Test `/api/stripe/checkout-session` endpoint — should return 200, not 404
-3. Test the Upgrade flow on /pricing as an authenticated SIMPLE-tier organizer
+---
 
-If still 404 after Railway shows READY: dispatch findasale-ops to investigate the backend route mounting.
+## Immediate Actions
 
-## Primary Work: Fix /pricing WARN Findings
+### 1. Verify S228 Rebuild (Railway + Vercel)
+Patrick must push S228 commit first (11 files). After push:
+- Check Railway backend build logs — should show successful rebuild
+- Check Vercel frontend build logs — should show successful rebuild
+- Test `/api/sales` endpoint (200 OK expected)
+- Test Stripe checkout flow (`/pricing` → select tier → Stripe modal)
+- Confirm pricing.tsx double `/api/` path is fixed (commit af096e0 already pushed)
 
-QA audit from S227 found 2 issues on /pricing. Dispatch **findasale-dev** for both:
-
-### WARN 1: Unauthenticated button text
-- **Issue:** PRO and TEAMS tier cards show "Upgrade to PRO" / "Upgrade to TEAMS" for unauthenticated users — should be "Sign up for PRO" / "Sign up for TEAMS"
-- **File:** likely `packages/frontend/pages/pricing.tsx` — check auth state and conditionally render button label
-- **Acceptance:** Unauthenticated visitors see "Sign up for X"; authenticated SIMPLE users see "Upgrade to X"
-
-### WARN 2: No post-Stripe return feedback
-- **Issue:** After Stripe checkout redirects back to dashboard, there's no parsing of `?upgrade=success` or `?upgrade=cancelled` query params — user sees no confirmation
-- **Files:** Stripe checkout session likely sets `success_url` and `cancel_url` with `?upgrade=success` / `?upgrade=cancelled`. Dashboard needs to read these params and show a toast or banner.
-- **Acceptance:** Dashboard shows success toast on `?upgrade=success`; shows neutral message on `?upgrade=cancelled`; clears params from URL after reading
-
-## Secondary: Verify Archived Skill Installs
-
-In S227 we packaged and presented:
-- `context-maintenance.skill` — archived redirect to findasale-records
-- `findasale-push-coordinator.skill` — archived redirect to CLAUDE.md §5+§11
-
-If Patrick hasn't clicked "Copy to your skills" for both, prompt him to do so. You can confirm by asking Patrick or by checking which skill descriptions appear in the session's available skills list.
-
-## Patrick: Local Sync
-
-Multiple MCP pushes happened in S227. Run this to sync your local repo before any commits:
-
-```
-git pull
+### 2. Patrick Manual Actions (Blocking #73/#74/#75 Features)
+**CRITICAL: Must be completed before any feature can be tested:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+npx prisma migrate deploy   # applies new migrations to Neon (RoleConsent, tierLapsedAt, etc)
+npx prisma generate         # regenerates TypeScript client with new fields
 ```
 
-or just run `.\push.ps1` — it self-heals with fetch+merge.
+Without these, the following will FAIL at runtime:
+- Feature #73 notifications won't compile (missing fields in Prisma client)
+- Feature #74 RoleConsent records won't save (table doesn't exist in runtime)
+- Feature #75 tierLapsedAt timestamp won't work (field doesn't exist in runtime)
 
-## Roadmap: What's Next
+---
 
-Once the /pricing fixes are dispatched, pick from:
-- **#73** Two-Channel Notification System (gated by #72 ✅ now unblocked)
-- **#74** Role-Aware Registration Consent Flow (gated by #72 ✅)
-- **#75** Tier Lapse State Logic (gated by #72 ✅)
-- **Pre-beta safety #106–#109:** Organizer Reputation Scoring, Chargeback+Collusion Tracking, Winning Bid Velocity Check, Off-Platform Transaction Detection
-- **Railway env vars still needed:** `AI_COST_CEILING_USD` (set to monthly budget), `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
+## Next Features: #106–#109 Pre-Beta Safety Batch
+
+Work queue for S229+:
+
+| # | Feature | Scope | Estimate | Notes |
+|---|---------|-------|----------|-------|
+| #106 | Rate limit burst capacity | Redis, 429 fallback | M | Detect spike patterns, allow temporary overages with backoff |
+| #107 | Database connection pooling | Railway, Neon | M | Prevent connection exhaustion under heavy load |
+| #108 | API timeout guards | Backend, all routes | S | 30s timeout on all external calls (Stripe, Resend, AI) |
+| #109 | Graceful degradation on outages | Notification, email, AI | M | Queue fallback when external services timeout |
+
+All 4 are pre-beta safety features. Estimate: 2 sessions if back-to-back.
+
+---
+
+## Outstanding Configuration
+
+**Railway Environment Variables (Still Missing):**
+- `AI_COST_CEILING_USD` — Daily spend limit for Claude API calls (used in Feature #104, already implemented). Default recommended: `5.00`
+- `MAILERLITE_SHOPPERS_GROUP_ID` — MailerLite segment ID for onboarded shoppers (for feature #105 email campaigns). Value: `182012431062533831`
+
+Both needed for:
+- Feature #104 (AI cost tracking) to enforce ceiling
+- Feature #105 (Cloudinary bandwidth tracking) to trigger alerts
+
+**Set these in Railway Variables tab, then redeploy backend:**
+```
+AI_COST_CEILING_USD=5.00
+MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831
+```
+
+---
+
+## S228 Summary
+
+Three major features completed (code ready, awaiting Prisma actions):
+- **#73 (Two-Channel Notifications)** — In-app DB + Resend email, fail-open pattern
+- **#74 (Role-Aware Consent)** — Inline checkboxes on registration, role-conditional
+- **#75 (Tier Lapse Logic)** — Subscription.deleted/payment_failed webhooks, 403 guard on item create, lapse banner on dashboard
+
+Plus P1 pricing.tsx fix (double `/api/` path) — already pushed (commit af096e0).
+
+---
+
+## Files Changed (S228)
+
+11 files pending Patrick push (see session-log.md S228 entry for git commands).
+
+---
+
+## Decision Log (Locked — S228)
+
+- **#75 Tier Lapse:** When subscription ends or payment fails, itemController 403s attempts to create items beyond tier limit. Dashboard shows lapse banner. No soft-delete — data stays intact, user can re-upgrade.
+- **#74 Consent:** Role-based inline checkboxes. Shopper always free, no consent needed. ORGANIZER/ADMIN email consent unchecked by default. All roles must agree to `/terms`.
+- **#73 Notifications:** Dual-channel (DB + Resend). Fail-open: if Resend times out, DB write succeeds anyway. In-app visible at `/messages`, email asynchronous.
+
+---
+
+## Blockers
+
+None. Code is ready. Waiting on Patrick for push + Prisma actions.
+
+---
 
 ## Reference
 
@@ -57,5 +102,9 @@ Once the /pricing fixes are dispatched, pick from:
   - Shopper: user11@example.com / password123
   - Organizer PRO: user2@example.com / password123
   - Admin/SIMPLE: user1@example.com / password123
-- CLAUDE.md v5.0 is the single authority. CORE.md is retired.
+- CLAUDE.md v5.0 is the single authority
 - Scheduled tasks: 11 active (see findasale-records SKILL.md for full list)
+
+---
+
+**Next Session Lead:** findasale-records (rebuild verification) / findasale-dev (feature #106–#109 dispatch if ready)

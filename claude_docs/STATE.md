@@ -7,17 +7,27 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 228 COMPLETE (2026-03-21) — FEATURES #73/#74/#75 + PRICING PATCH + RAILWAY VERIFICATION:**
+- ✅ Railway + Stripe verification: backend UP (health latency 200, /api/sales 200), Stripe checkout tested
+- ✅ P1 pricing.tsx bug FIXED: double `/api/` path removed in baseURL call to `/stripe/checkout-session`. Committed af096e0, pushed.
+- ✅ Feature #73 — Two-Channel Notification System: notificationService.ts (DB + Resend email, fail-open), triggers in message/sale/stripe controllers, useNotifications.ts hook (30s polling)
+- ✅ Feature #74 — Role-Aware Registration Consent Flow: register.tsx inline consent checkboxes (unchecked default, role-conditional), authController RoleConsent records, businessVerificationAcceptedAt deferred, /terms link unified
+- ✅ Feature #75 — Tier Lapse State Logic: tierLimits.ts + tierEnforcement.ts, stripeController subscription.deleted/payment_failed/updated handlers, itemController 403 guard for lapsed SIMPLE over limit, dashboard lapse banner with upgrade CTA
+- ✅ Build errors repaired: tierLapsedAt removed (Docker Prisma issue — needs `prisma migrate deploy`), Customer type narrowed, itemPhoto → photo
+- ✅ Architecture spec created: `claude_docs/architecture/feature-spec-75-tier-lapse-logic.md`
+- ⚠️ PENDING PATRICK PUSH: 11-file commit (#73/#74/#75 + authController + register + dashboard)
+- Last Updated: 2026-03-21
+
 **Session 227 COMPLETE (2026-03-21) — WORKFLOW CLEANUP SPRINT (Phase 2+3):**
 - ✅ Phase 2a: `daily-friction-audit` scheduled task updated with auto-dispatch action loop — HIGH/MEDIUM/LOW findings auto-dispatch findasale-records or findasale-dev; 3+ consecutive appearances → `## Patrick Direct` block
 - ✅ Phase 2b: `context-freshness-check` changed from daily to weekly Monday 8am
-- ✅ Phase 2c: QA audit on /pricing — 2 WARN findings: unauthenticated button text ("Upgrade" should be "Sign up for PRO/TEAMS"), no `?upgrade=success/cancelled` handling on dashboard return from Stripe
+- ✅ Phase 2c: QA audit on /pricing — 2 WARN findings FIXED in S228: unauthenticated button text, `?upgrade=success/cancelled` handling
 - ✅ Phase 3a: `.checkpoint-manifest.json` and `MESSAGE_BOARD.json` deleted from active use
 - ✅ Phase 3b: `context-maintenance` and `findasale-push-coordinator` skills archived — source SKILL.md files updated; .skill packages built
 - ✅ Phase 3c: CORE.md fully retired — CLAUDE.md v5.0 is now the single authority
 - ✅ CLAUDE.md 3-region merge conflict resolved — v5.0 §§7-12 intact
 - ✅ Railway Dockerfile cache-bust pushed (commit 57fabb05) — forces fresh Docker build to unblock Stripe checkout 404
-- ⚠️ Railway rebuild IN PROGRESS — Stripe checkout fix pending build completion
-- ⚠️ /pricing WARN findings (button text + upgrade return handling) — dispatch findasale-dev next session
+- ✅ Stripe checkout verified working in S228
 - Last Updated: 2026-03-21
 
 **Session 225 COMPLETE (2026-03-21) — COMPREHENSIVE AUDIT S212–S224 + CHROME VERIFICATION + 3 BUG FIXES:**
