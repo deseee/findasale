@@ -15,8 +15,10 @@ const SettingsPage = () => {
   const { user, isLoading } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && user) {
-      if (user.roles?.includes('ORGANIZER')) {
+    if (!isLoading) {
+      if (!user) {
+        router.replace('/login?redirect=/settings');
+      } else if (user.roles?.includes('ORGANIZER')) {
         router.push('/organizer/settings');
       } else {
         router.push('/shopper/settings');

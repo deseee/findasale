@@ -35,7 +35,7 @@ const ShopperDashboard = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups'>('overview');
 
   if (!isLoading && !user) {
-    router.push('/login');
+    router.push('/login?redirect=/shopper/dashboard');
     return null;
   }
 

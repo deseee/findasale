@@ -62,7 +62,7 @@ const CategoriesIndexPage = () => {
 
         <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Browse by Category</h1>
         <p className="text-warm-500 dark:text-warm-400 mb-8">
-          Find what you're looking for across all active estate sales.
+          Find what you're looking for across all active sales.
         </p>
 
         {isLoading ? (

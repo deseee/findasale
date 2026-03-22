@@ -99,7 +99,7 @@ const SurpriseMePage = () => {
           <p className="text-5xl mb-3">🎲</p>
           <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Surprise Me</h1>
           <p className="text-warm-500 dark:text-warm-400 max-w-md mx-auto">
-            Discover random treasures from active estate sales. You never know what you'll find.
+            Discover random treasures from active sales near you. You never know what you'll find.
           </p>
         </div>
 

@@ -14,7 +14,7 @@ interface FAQItem {
 
 const shopperFAQs: FAQItem[] = [
   {
-    question: 'How do I find estate sales near me?',
+    question: 'How do I find sales near me?',
     answer: (
       <>
         Open the FindA.Sale app and use the map or search feature. Sales are sorted by proximity to

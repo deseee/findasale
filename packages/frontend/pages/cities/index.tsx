@@ -56,7 +56,7 @@ const CitiesPage = () => {
           {/* Header */}
           <div className="mb-8 text-center">
             <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-3">
-              Estate Sales by City
+              Sales by City
             </h1>
             <p className="text-warm-600 dark:text-warm-400 text-lg">
               Browse sales in your area

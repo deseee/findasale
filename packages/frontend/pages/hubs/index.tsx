@@ -50,7 +50,7 @@ export default function HubsPage() {
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-sage-900 dark:text-white mb-4">Discover Sale Hubs</h1>
             <p className="text-lg text-sage-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Find coordinated groups of estate sales happening near you. Perfect for sale-hopping and planning your shopping route.
+              Find coordinated groups of sales happening near you. Perfect for sale-hopping and planning your shopping route.
             </p>
           </div>
 
@@ -104,7 +104,10 @@ export default function HubsPage() {
             <div className="text-center py-12">
               <p className="text-3xl mb-3">🏨</p>
               <p className="text-gray-700 dark:text-gray-300 font-semibold mb-2">No organizer hubs near you yet</p>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">Try increasing your search radius or browse individual sales in your area.</p>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">Try increasing your search radius or browse individual sales in your area.</p>
+              <a href="/" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                Browse All Sales →
+              </a>
             </div>
           ) : (
             <>

@@ -49,10 +49,10 @@ const NeighborhoodsPage = () => {
           {/* Header */}
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">
-              Estate Sales by Neighborhood
+              Sales by Neighborhood
             </h1>
             <p className="text-warm-500 dark:text-warm-400 text-sm">
-              Browse sales close to home
+              Browse sales events close to home
             </p>
           </div>
 

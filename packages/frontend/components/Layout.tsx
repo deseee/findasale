@@ -418,13 +418,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           Mobile: pt accounts for fixed header (48px) + fixed search bar (~44px) = 92px
           Desktop: pt-16 for fixed header (64px)
       */}
-      <main
+      <div
         id="main-content"
         className="flex-grow pt-[92px] md:pt-16 pb-15 md:pb-0"
         tabIndex={-1}
       >
         {children}
-      </main>
+      </div>
 
       {/* Bottom tab navigation — mobile only */}
       <BottomTabNav />
@@ -436,7 +436,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <div>
               <h3 className="text-lg font-bold mb-4">FindA.Sale</h3>
               <p className="text-warm-400 mb-4">
-                Helping you find the best local estate sales and auctions near you.
+                Helping you find the best local sales events, estate sales, garage sales, and auctions near you.
               </p>
               <div className="bg-warm-700 rounded-lg p-4">
                 <p className="text-xs text-warm-300 font-semibold mb-2">Need Help?</p>

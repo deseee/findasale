@@ -122,7 +122,7 @@ const CalendarPage = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl md:text-5xl font-bold text-amber-600 mb-2">Sale Calendar</h1>
-          <p className="text-lg text-warm-700 dark:text-gray-400">Browse upcoming estate sales month by month</p>
+          <p className="text-lg text-warm-700 dark:text-gray-400">Browse upcoming sales events month by month</p>
         </div>
 
         {/* Month Navigation */}

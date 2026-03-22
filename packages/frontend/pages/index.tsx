@@ -215,7 +215,7 @@ const HomePage = () => {
         <section className="mb-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-amber-600 dark:text-amber-400 mb-4">Discover Amazing Deals</h1>
           <p className="text-xl text-warm-700 dark:text-gray-300 max-w-2xl mx-auto">
-            Find estate sales, garage sales, and auctions near you with FindA.Sale
+            Find estate sales, garage sales, yard sales, auctions, flea markets, and more near you with FindA.Sale
           </p>
         </section>
 

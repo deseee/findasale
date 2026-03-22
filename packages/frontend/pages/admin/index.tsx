@@ -30,12 +30,14 @@ const AdminDashboard = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!user) {
-        router.push('/login?redirect=/admin');
-      } else if (!user.roles?.includes('ADMIN')) {
-        router.push('/access-denied');
-      }
+    if (!isLoading && !user) {
+      router.push('/login?redirect=/admin');
+    }
+  }, [user, isLoading, router]);
+
+  useEffect(() => {
+    if (!isLoading && user && !user.roles?.includes('ADMIN')) {
+      router.push('/access-denied');
     }
   }, [user, isLoading, router]);
 

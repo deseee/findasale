@@ -260,8 +260,9 @@ export const getItemById = async (req: Request, res: Response) => {
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
     const isOwner = authReq.user?.id === item.sale.organizer.userId;
 
-    // For everyone else, enforce public visibility rules: must be PUBLISHED + active + in published sale
-    if (!isOwner && (!item.isActive || item.sale.status !== 'PUBLISHED' || item.draftStatus !== 'PUBLISHED')) {
+    // For everyone else, enforce public visibility rules: must be active + published
+    // Note: sale.status check removed (getSale endpoint doesn't enforce it either)
+    if (!isOwner && (!item.isActive || item.draftStatus !== 'PUBLISHED')) {
       return res.status(404).json({ message: 'Item not found' });
     }
 

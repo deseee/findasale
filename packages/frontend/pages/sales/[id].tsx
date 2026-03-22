@@ -633,7 +633,7 @@ const SaleDetailPage = () => {
                       : 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
                   }`}
                 >
-                  All ({sale.items.length})
+                  Show: All
                 </button>
                 {Array.from(new Set(sale.items.map((item) => item.category).filter(Boolean))).map(
                   (category) => {
