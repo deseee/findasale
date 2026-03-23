@@ -1,4 +1,4 @@
-# S239 — cache bust 2026-03-22 auth-ratelimit-fix
+# S241 — cache bust 2026-03-22 D-007-schema-restore
 FROM node:18-slim
 
 WORKDIR /app
