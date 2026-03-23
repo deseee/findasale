@@ -7,6 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 257 COMPLETE (2026-03-23) — RATE LIMIT WHITELIST + S256 SMOKE TEST:**
+- ✅ Rate limit whitelist implemented — `RATE_LIMIT_WHITELIST_IPS` env var added to `packages/backend/src/index.ts`. All 4 rate limiters (globalLimiter, viewerLimiter, authLimiter, contactLimiter) now skip whitelisted IPs. Commit `ea77e26`.
+- ✅ S256 smoke test COMPLETE — All 12 S256 items verified live via Chrome MCP. No P0/P1/P2 issues.
+- ⚠️ 2 P3 findings: shopper/dashboard H1 still says "My Dashboard" (should be "Shopper Dashboard"), /profile H1 still says "My Profile" — cosmetic only, no user task blocked
+- ⚠️ SD7 (EmptyState nudge) not visually confirmed — user11 has activity so empty state doesn't render. Not a failure.
+- 📋 **S258 PRIORITY 1:** Tier 2+ UX batches from `claude_docs/ux-spotchecks/S256-UX-SPECS-41-items-onboarding.md`
+- 📋 **S258 PRIORITY 2:** Organizer onboarding flow implementation (spec in S256-UX-SPECS)
+- 📋 **S258 PRIORITY 3:** 17 strategic S248 items → advisory board + innovation agents
+- 📋 **S258 OPTIONAL P3:** H1 copy fixes — shopper/dashboard "My Dashboard"→"Shopper Dashboard", /profile "My Profile"→consistent label
+- Last Updated: 2026-03-23
+
 **Session 256 COMPLETE (2026-03-23) — UX POLISH BATCH + SD4 FIX:**
 - ✅ SD4 FIXED — `/api/streaks/profile` now returns `streakPoints`, `visitStreak`, `huntPassActive`, `huntPassExpiry` from User model (was only returning UserStreaks table data). Commit `b7b05c3`.
 - ✅ OD1/OD2 — Nav labels updated: "My Dashboard"→"Shopper Dashboard", "My Profile"→"Organizer Profile", "My Dashboard"→"Organizer Dashboard". Commit `6dafd59`.

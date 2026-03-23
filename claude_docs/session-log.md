@@ -2,6 +2,22 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
+## Recent Sessions (S253–S257)
+
+### 2026-03-23 · Session 257
+
+**RATE LIMIT WHITELIST + S256 SMOKE TEST**
+
+✅ **Rate limit whitelist shipped** (commit `ea77e26`): `RATE_LIMIT_WHITELIST_IPS` env var added to `packages/backend/src/index.ts`. All 4 rate limiters now skip whitelisted IPs via `isWhitelistedIP()` helper. Patrick added his IP to Railway env. Fix verified live — Railway deployed GREEN.
+
+✅ **S256 smoke test COMPLETE** — All 12 S256 items verified live via Chrome MCP on finda.sale as user2 (PRO organizer), user3 (TEAMS organizer), user11 (shopper). ODB1, H5, OD2, OD1, OV3, OV2, WH1, SD5, SD4, S3, PR2, CP2 all PASS.
+
+⚠️ **2 P3 findings logged:** shopper/dashboard H1 = "My Dashboard" (nav says "Shopper Dashboard"), /profile H1 = "My Profile" — cosmetic inconsistency, no blocker. Queued for S258 optional cleanup.
+
+⚠️ **SD7 not visually confirmed** — user11 has activity so empty state doesn't render. Not a regression.
+
+📋 **S258 queued:** Optional P3 H1 fixes → Tier 2+ UX batches → organizer onboarding implementation → 17 strategic items to advisory/innovation.
+
 ## Recent Sessions (S252–S256)
 
 ### 2026-03-23 · Session 256
@@ -60,16 +76,3 @@
 
 ✅ **S252 priorities identified:** Dev dispatch for wishlist consolidation, pricing copy, page removals (premium, upgrade, alerts, favorites), settings/profile split. QA dispatch for double footers and missing routes (TR1/OP1/OS3).
 
----
-
-### 2026-03-23 · Session 250
-
-**SEED DATA OVERHAUL**
-
-✅ **S249 Vercel fix confirmed** — item-library.tsx `organizerProfileId` → `id` fix (commit d12fb1b) deployed GREEN.
-
-✅ **seed.ts rewritten (828 lines):** All 14 DATA items from S248 walkthrough now seeded. Key fix: replaced `$transaction([...deleteMany()])` chain with `TRUNCATE TABLE "User","Badge","FeeStructure","Achievement" CASCADE` — PostgreSQL handles all FK chains automatically. Prior approach failed on `PushSubscription_userId_fkey`.
-
-✅ **Seed ran clean on Neon:** 100 users, 10 organizers (SIMPLE/PRO/TEAMS tiers), 25 sales, 308 items (3 auction), 54 purchases, 9 bids, 8 badge types, wishlists/alerts, follows, notifications, TreasureTrail, ShopperStamps, CollectorPassport, Referrals, Bounties, UserStreaks, OrganizerReputations, PointsTransactions, Conversations, FraudSignals. PRO + TEAMS organizers have Stripe connect IDs.
-
----
