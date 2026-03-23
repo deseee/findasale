@@ -118,59 +118,12 @@ async function main() {
   console.log('🌱 Starting database seed...');
   const defaultPassword = await bcrypt.hash('password123', 10);
 
-  // ── Clear all tables in FK-safe order (leaf → root) ──────────────────────
+  // ── Clear all tables via PostgreSQL TRUNCATE CASCADE ─────────────────────
+  // CASCADE handles all FK chains automatically — no need to enumerate every table.
   console.log('🗑️  Clearing existing data...');
-  await prisma.$transaction([
-    // Messaging
-    prisma.message.deleteMany(),
-    prisma.conversation.deleteMany(),
-    // Trail
-    prisma.trailHighlight.deleteMany(),
-    prisma.treasureTrail.deleteMany(),
-    // Fraud / command center
-    prisma.fraudSignal.deleteMany(),
-    // Notifications
-    prisma.notification.deleteMany(),
-    // Wishlists
-    prisma.wishlistAlert.deleteMany(),
-    prisma.wishlistItem.deleteMany(),
-    prisma.wishlist.deleteMany(),
-    // Follows
-    prisma.smartFollow.deleteMany(),
-    prisma.follow.deleteMany(),
-    // Bounties
-    prisma.missingListingBounty.deleteMany(),
-    // Gamification / passport
-    prisma.collectorPassport.deleteMany(),
-    prisma.shopperStamp.deleteMany(),
-    prisma.stampMilestone.deleteMany(),
-    prisma.userStreak.deleteMany(),
-    prisma.organizerReputation.deleteMany(),
-    prisma.saleRSVP.deleteMany(),
-    prisma.challengeProgress.deleteMany(),
-    prisma.challengeBadge.deleteMany(),
-    prisma.userAchievement.deleteMany(),
-    prisma.userRoleSubscription.deleteMany(),
-    prisma.pointsTransaction.deleteMany(),
-    // Core transactional
-    prisma.bid.deleteMany(),
-    prisma.lineEntry.deleteMany(),
-    prisma.affiliateLink.deleteMany(),
-    prisma.review.deleteMany(),
-    prisma.saleSubscriber.deleteMany(),
-    prisma.purchase.deleteMany(),
-    prisma.favorite.deleteMany(),
-    prisma.userBadge.deleteMany(),
-    prisma.referral.deleteMany(),
-    prisma.encyclopediaEntry.deleteMany(),
-    // Items → sales → organizers → users
-    prisma.item.deleteMany(),
-    prisma.sale.deleteMany(),
-    prisma.badge.deleteMany(),
-    prisma.organizer.deleteMany(),
-    prisma.user.deleteMany(),
-    prisma.feeStructure.deleteMany(),
-  ]);
+  await prisma.$executeRawUnsafe(
+    `TRUNCATE TABLE "User", "Badge", "FeeStructure", "Achievement" CASCADE`
+  );
   console.log('✅ Cleared existing data');
 
   // ── Badges ────────────────────────────────────────────────────────────────
