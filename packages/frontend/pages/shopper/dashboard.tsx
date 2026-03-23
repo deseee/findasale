@@ -181,20 +181,23 @@ const ShopperDashboard = () => {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Hunt Pass Info Card */}
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">👑</span>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass</h3>
+                    <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to new listings, earn 2x points on every action, and receive priority discovery. $4.99/month.</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Streak widget — always visible when logged in */}
               <StreakWidget />
 
               <ActivitySummary />
 
-              <SalesNearYou />
-
-              <RecentlyViewed />
-
-              <FlashDealsBanner />
-
-              <YourWishlists />
-
-              {/* Welcome nudge only shown when no purchases yet */}
+              {/* Welcome nudge only shown when no purchases yet — positioned after stats for discoverability */}
               {purchases && purchases.length === 0 && (
                 <EmptyState
                   icon="🎉"
@@ -203,6 +206,14 @@ const ShopperDashboard = () => {
                   cta={{ label: 'Browse Upcoming Sales', href: '/' }}
                 />
               )}
+
+              <SalesNearYou />
+
+              <RecentlyViewed />
+
+              <FlashDealsBanner />
+
+              <YourWishlists />
             </div>
           )}
 

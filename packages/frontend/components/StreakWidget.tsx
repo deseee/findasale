@@ -72,12 +72,15 @@ const StreakWidget: React.FC = () => {
           </div>
         </div>
       ) : (
-        <button
-          onClick={() => setIsHuntPassModalOpen(true)}
-          className="border-l border-orange-300 pl-3 py-1 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded transition"
-        >
-          Upgrade
-        </button>
+        <div className="border-l border-orange-300 pl-3">
+          <button
+            onClick={() => setIsHuntPassModalOpen(true)}
+            className="py-1 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded transition"
+            title="Get early access, 2x points, and priority discovery"
+          >
+            Upgrade
+          </button>
+        </div>
       )}
     </div>
 

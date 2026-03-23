@@ -161,6 +161,9 @@ function CollectorPassportPage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Specialties
               </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                The categories and styles you collect most. Auto-detected from your activity and used to find matching items.
+              </p>
               <div className="flex gap-2 mb-3">
                 <input
                   type="text"
@@ -225,6 +228,9 @@ function CollectorPassportPage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Keywords
               </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Search terms we use to alert you to matching items. E.g., designer names, material, style, brand, or era (eames, pyrex, walnut, art deco).
+              </p>
               <div className="flex gap-2 mb-3">
                 <input
                   type="text"

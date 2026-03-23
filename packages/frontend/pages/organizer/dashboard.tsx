@@ -403,6 +403,12 @@ const OrganizerDashboard = () => {
                 >
                   📋 Manage Sales
                 </button>
+                <Link
+                  href="/organizer/pos"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                >
+                  💳 POS
+                </Link>
               </div>
             </div>
 
@@ -419,12 +425,6 @@ const OrganizerDashboard = () => {
                   className="bg-purple-100 hover:bg-purple-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-purple-900 dark:text-purple-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
                   🖨️ Print Inventory
-                </Link>
-                <Link
-                  href="/organizer/pos"
-                  className="bg-emerald-100 hover:bg-emerald-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-emerald-900 dark:text-emerald-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  💳 POS
                 </Link>
                 <Link
                   href="/organizer/message-templates"
@@ -761,18 +761,6 @@ const OrganizerDashboard = () => {
                   </Link>
                 </div>
               )}
-
-              {/* Feature #71: Reputation Score card */}
-              <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">Reputation Score</h3>
-                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Track your reputation metrics and community standing.</p>
-                <Link
-                  href="/organizer/reputation"
-                  className="inline-block px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  View Reputation →
-                </Link>
-              </div>
             </>
           )}
 
