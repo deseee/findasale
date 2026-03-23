@@ -215,6 +215,9 @@ const ProfilePage = () => {
         {!isOrganizerOnly && pointsData && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">Hunt Pass</h2>
+            <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
+              Earn points by visiting sales, saving items, and making purchases. Climb the tiers to unlock exclusive benefits.
+            </p>
             <p className="text-warm-500 dark:text-warm-400 text-sm mb-4">
               {pointsData.tier === 'Scout' && 'Earn 100 pts to reach Hunter tier.'}
               {pointsData.tier === 'Hunter' && `${500 - pointsData.points} pts to reach Estate Pro.`}

@@ -179,6 +179,14 @@ const OrganizerWebhooksPage = () => {
           {showForm ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-4">
               <h2 className="text-sm font-semibold text-gray-800">New webhook</h2>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-xs text-gray-700 dark:text-gray-300 space-y-1">
+                <p><strong>Testing webhooks?</strong> Use a temporary endpoint like:</p>
+                <ul className="list-disc list-inside space-y-0.5 ml-1">
+                  <li><a href="https://requestbin.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">RequestBin</a> (simple webhook testing)</li>
+                  <li><a href="https://ngrok.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">ngrok</a> (expose local server to internet)</li>
+                  <li>Zapier or Make (route webhooks directly to your workflow)</li>
+                </ul>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Endpoint URL</label>
