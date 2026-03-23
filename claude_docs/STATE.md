@@ -7,16 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 242 COMPLETE (2026-03-22) — BRAND SWEEP VERIFIED + D-007 CONFIRMED + INFRA FIXES:**
-- ✅ **D-007 CONFIRMED LIVE:** Workspace creation works (user3@example.com), member counter shows "0 / 12 members". Cap enforcement code confirmed correct in workspaceController.ts. Full 12→13 stress test deferred (requires 12 seeded organizer accounts). Commit: b07f162
-- ✅ **Brand sweep complete — 3 pages clean, 2 bugs found and fixed:**
-  - /hubs ✅ — "Discover Sale Hubs", no estate-sale-only language, "Browse All Sales →" empty state live
-  - /categories ✅ — "Find what you're looking for across all active sales." — clean
-  - /calendar ✅ — "Browse upcoming sales events month by month" — clean, 16 sales showing
-  - /cities ⚠️→✅ FIXED: title was "Estate Sales by City", Layout duplication — both fixed, pushed
-  - /neighborhoods ⚠️→✅ FIXED: title was "Estate Sales by Neighborhood", Layout duplication — both fixed, pushed
-- ✅ **Auth rate limit raised 20→50:** Prevents Claude automation lockout during testing. Pushed in same commit.
-- ⚠️ **CARRY-FORWARD:** L-002 (mobile real-device test) — still pending Patrick on real iPhone SE
+**Session 242 COMPLETE (2026-03-22) — BRAND SWEEP + D-007 + 13 UX BUG FIXES + QA SKILL REWRITE:**
+- ✅ **D-007 CONFIRMED LIVE:** Workspace creation works (user3@example.com), member counter shows "0 / 12 members". Cap enforcement code confirmed correct. Commit: b07f162
+- ✅ **Brand sweep complete — 5 pages verified:** /hubs, /categories, /calendar clean. /cities and /neighborhoods had stale title tags + Layout duplication — fixed. Commit: b07f162
+- ✅ **Auth rate limit raised 20→50:** Prevents automation lockout. Commit: b07f162
+- ✅ **13 UX bugs fixed (Patrick clickthrough):** 3 parallel dev agents, 9 code files changed across 3 commits:
+  - Shopper dashboard #favorites hash routing — useEffect reads URL hash, sets active tab (32c3ae8)
+  - Item likes rewired from non-existent `/items/{id}/like` to `/favorites/item/{itemId}`, button text "Like"→"Save" (32c3ae8)
+  - Pricing page CTA hidden for signed-in users (32c3ae8)
+  - About page blank space — removed duplicate closing tags below contact section (d9eb70d)
+  - /organizer/premium synced tier descriptions to match pricing.tsx, added Enterprise CTA per D-007 (d9eb70d)
+  - /plan broadened 6 instances of "estate sale" to include all sale types per D-001 (d9eb70d)
+  - Map page — added prominent "Plan Your Route" button in header, scrolls to RouteBuilder section (dd9443b)
+  - Organizer settings — tooltips added across all tabs (payments, verification, notifications, profile, appearance) (dd9443b)
+  - InspirationGrid — graceful image error fallback with icon + "Image unavailable" text (dd9443b)
+- ✅ **QA skill rewritten (findasale-qa v2):** Chrome MCP clickthrough-first methodology. User-journey testing mandatory before code checks. P0-P3 severity system. Installed before 10pm Sunday audit.
+- ✅ **QA methodology gap memory saved:** Claude QA was auditing code but not testing product. Patrick found 13 bugs in 10 min that 2 days of code QA missed.
+- ⚠️ **CARRY-FORWARD:** L-002 (mobile test) — Patrick doesn't have iPhone. Use Chrome DevTools 375px or close.
+- ⚠️ **CARRY-FORWARD:** Live Chrome clickthrough verification of all 13 fixes — deferred to S243 (context heavy)
+- ⚠️ **MINOR:** /cities and /neighborhoods meta descriptions still say "estate sales" — low priority
 - Last Updated: 2026-03-22
 
 **Session 241 COMPLETE (2026-03-22) — LIVE VERIFICATION + D-007 FULLY DEPLOYED:**

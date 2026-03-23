@@ -6,20 +6,21 @@
 
 ### 2026-03-22 · Session 242
 
-**BRAND SWEEP VERIFIED + D-007 CONFIRMED + INFRA FIXES**
+**BRAND SWEEP + D-007 + 13 UX BUG FIXES + QA SKILL REWRITE**
 
-✅ D-007 confirmed live: workspace creation works (user3@example.com TEAMS), member counter shows "0 / 12 members" live on page. Cap code verified correct in workspaceController.ts. Full 12→13 stress test deferred (needs 12 seeded organizer accounts).
+✅ D-007 confirmed live: workspace creation works (user3@example.com TEAMS), member counter shows "0 / 12 members". Commit: b07f162.
 
-✅ Brand sweep complete (5 pages):
-- /hubs, /categories, /calendar — all clean, no estate-sale-only language
-- /cities — title tag "Estate Sales by City" → "Sales by City", Layout duplication removed
-- /neighborhoods — title tag "Estate Sales by Neighborhood" → "Sales by Neighborhood", Layout duplication removed
+✅ Brand sweep (5 pages): /hubs, /categories, /calendar clean. /cities and /neighborhoods title tags + Layout duplication fixed. Commit: b07f162.
 
-✅ Auth rate limit raised 20→50 failed attempts / 15 min — prevents Claude automation lockout.
+✅ Auth rate limit raised 20→50. Commit: b07f162.
 
-**Commit:** b07f162 (3 files: cities/index.tsx, neighborhoods/index.tsx, backend/index.ts)
+✅ **13 UX bugs fixed from Patrick's 10-minute clickthrough.** 3 parallel dev agents dispatched. 9 code files changed across 3 commits (32c3ae8, d9eb70d, dd9443b): favorites hash routing, item likes rewired, pricing CTA for signed-in, about blank space, /organizer/premium sync, /plan brand broadening, map "Plan Your Route" button, organizer settings tooltips, InspirationGrid image fallback.
 
-**Carry-forward:** L-002 mobile real-device test still pending Patrick.
+✅ **QA skill rewritten (findasale-qa v2):** Chrome MCP clickthrough-first methodology replaces code-audit-first approach. Installed before 10pm Sunday audit.
+
+✅ **Critical feedback memory saved:** QA methodology gap — Claude tested code correctness but not product usability. Patrick found 13 bugs in 10 min that 2 days of code QA missed.
+
+**Carry-forward:** Live Chrome verification of all 13 fixes (S243 first task). L-002 mobile — Patrick has no iPhone, use DevTools or close. /cities + /neighborhoods meta descriptions still say "estate sales."
 
 ---
 
