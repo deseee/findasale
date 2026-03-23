@@ -111,7 +111,7 @@ const MessagesPage = () => {
                 <Link
                   key={conv.id}
                   href={`/messages/${conv.id}`}
-                  className="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-xl p-4 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition-colors border border-warm-100"
+                  className="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-xl p-4 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors border border-warm-100 dark:border-gray-700"
                 >
                   {/* Avatar */}
                   <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 text-amber-700 dark:text-amber-300 font-bold text-sm">
@@ -129,7 +129,7 @@ const MessagesPage = () => {
                       <p className="text-xs text-amber-600 truncate">{conv.sale.title}</p>
                     )}
                     {preview && (
-                      <p className={`text-xs truncate mt-0.5 ${unread > 0 ? 'text-warm-900 dark:text-warm-100 font-medium' : 'text-warm-500'}`}>
+                      <p className={`text-xs truncate mt-0.5 ${unread > 0 ? 'text-warm-900 dark:text-warm-100 font-medium' : 'text-warm-500 dark:text-warm-400'}`}>
                         {preview.senderId === user.id ? 'You: ' : ''}{preview.body}
                       </p>
                     )}

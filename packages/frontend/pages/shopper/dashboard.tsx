@@ -64,7 +64,9 @@ const ShopperDashboard = () => {
     queryFn: async () => {
       const response = await api.get('/favorites');
       // API returns { favorites: [], categories: [], total: N } — extract array
-      return response.data.favorites ?? response.data;
+      const favoritesArray = response.data.favorites ?? [];
+      // Ensure we always return an array, never an object
+      return Array.isArray(favoritesArray) ? favoritesArray : [];
     },
     enabled: !!user?.id,
   });
