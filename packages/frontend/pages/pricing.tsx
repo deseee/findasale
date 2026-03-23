@@ -385,18 +385,20 @@ const PricingPage = () => {
             </div>
           </div>
 
-          {/* Bottom CTA */}
-          <div className="mt-12 text-center">
-            <p className="text-warm-600 dark:text-warm-300 mb-4">
-              Not ready to commit? Start with SIMPLE today.
-            </p>
-            <Link
-              href="/register"
-              className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200"
-            >
-              Create Free Account
-            </Link>
-          </div>
+          {/* Bottom CTA — only show for logged-out users */}
+          {!user && (
+            <div className="mt-12 text-center">
+              <p className="text-warm-600 dark:text-warm-300 mb-4">
+                Not ready to commit? Start with SIMPLE today.
+              </p>
+              <Link
+                href="/register"
+                className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200"
+              >
+                Create Free Account
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </>

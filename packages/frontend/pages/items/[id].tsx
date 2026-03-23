@@ -151,11 +151,12 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     enabled: !!id,
   });
 
-  const { data: likes = [], refetch: refetchLikes } = useQuery<any[]>({
-    queryKey: ['likes', id],
-    enabled: !!id,
+  // Favorite status query
+  const { data: favoriteStatus, refetch: refetchFavoriteStatus } = useQuery({
+    queryKey: ['favorite', id],
+    enabled: !!id && !!user,
     queryFn: async () => {
-      const response = await api.get(`/items/${id}/likes`);
+      const response = await api.get(`/favorites/item/${id}`);
       return response.data;
     },
   });
@@ -182,13 +183,14 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     },
   });
 
-  const updateLikesMutation = useMutation({
+  const updateFavoriteMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.post(`/items/${id}/like`);
+      const response = await api.post(`/favorites/item/${id}`, {});
       return response.data;
     },
     onSuccess: () => {
-      refetchLikes();
+      refetchFavoriteStatus();
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     },
   });
@@ -289,13 +291,13 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
   const handleLike = () => {
     if (!user) {
-      showToast('Please log in to like items', 'warning');
+      showToast('Please log in to save items', 'warning');
       router.push('/login');
       return;
     }
 
     triggerHeartAnimation();
-    updateLikesMutation.mutate();
+    updateFavoriteMutation.mutate();
   };
 
   const handleShare = () => {
@@ -356,7 +358,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const isAuction = item.status === 'auction';
   const isSold = item.status === 'sold';
   const currentPrice = isAuction ? item.currentBid : item.price;
-  const isUserLiked = user && likes.some((l) => l.id === user.id);
+  const isUserLiked = user && favoriteStatus?.isFavorited === true;
 
   return (
     <>
@@ -513,14 +515,14 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               <div className="flex gap-3">
                 <button
                   onClick={handleLike}
-                  disabled={updateLikesMutation.isPending}
+                  disabled={updateFavoriteMutation.isPending}
                   className={`flex-1 py-2 px-4 rounded-lg font-semibold transition ${
                     isUserLiked
                       ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                   } disabled:opacity-50`}
                 >
-                  {isUserLiked ? '❤️ Liked' : '🧡 Like'}
+                  {isUserLiked ? '❤️ Saved' : '🧡 Save'}
                 </button>
                 <ItemShareButton
                   itemId={item.id}

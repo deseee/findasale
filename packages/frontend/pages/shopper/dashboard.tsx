@@ -11,7 +11,7 @@
  * - Purchase history, favorites, subscriptions, and pickups in tabs
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -33,6 +33,16 @@ const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups'>('overview');
+
+  // Handle hash-based tab navigation on mount
+  useEffect(() => {
+    if (router.isReady && router.asPath.includes('#')) {
+      const hash = router.asPath.split('#')[1];
+      if (['overview', 'purchases', 'favorites', 'subscribed', 'pickups'].includes(hash)) {
+        setActiveTab(hash as any);
+      }
+    }
+  }, [router.isReady]);
 
   if (!isLoading && !user) {
     router.push('/login?redirect=/shopper/dashboard');
