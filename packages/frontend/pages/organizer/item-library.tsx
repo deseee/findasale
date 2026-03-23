@@ -40,7 +40,7 @@ const ItemLibraryPage: React.FC = () => {
   const [sales, setSales] = useState<Array<{ id: string; title: string }>>([]);
 
   const { libraryItems, loading, isRemovingFromLibrary, isPullingFromLibrary, removeFromLibrary, pullFromLibrary, getPriceHistory } =
-    useItemLibrary(user?.role === 'ORGANIZER' ? user?.organizerProfileId : undefined);
+    useItemLibrary(user?.role === 'ORGANIZER' ? user?.id : undefined);
 
   // Filter items
   const filteredItems = useMemo(() => {
