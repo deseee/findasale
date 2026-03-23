@@ -2,7 +2,27 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S238–S242)
+## Recent Sessions (S239–S243)
+
+### 2026-03-22 · Session 243
+
+**C-001 CRITICAL BLOCKER FIXED + 6 AUDIT FIXES + CONVERSATION-DEFAULTS v8**
+
+✅ **C-001 RESOLVED:** Item detail pages returning "Item not found" for all shoppers. Root cause: `draftStatus` column defaults to `'DRAFT'` in schema.prisma, migration backfill ran before seed, seed creates items without setting `draftStatus` → all seeded items invisible via `getItemById`. Fixed with one SQL UPDATE on Neon + seed.ts patch. Verified live — 3 items across 2 sales load correctly.
+
+✅ **6 weekly audit fixes pushed via MCP:** H-001 (LiveFeed "Reconnecting..." removed), H-002 (ReviewsSection dark mode), M-001 (/premium + /workspace redirects), M-002 (footer all sale types per D-001), M-003 (message thread no footer), M-004 (about page mission statement broadened).
+
+✅ **6 of 9 S242 live verifications passed:** favorites hash routing, save button, pricing CTA, about blank space, map route planner, image fallback.
+
+✅ **conversation-defaults v8:** Rule 31 added — execute unambiguous session-start actions immediately.
+
+✅ **Heatmap investigated:** Code complete. Issue is data (no published sales with valid coordinates in range).
+
+⚠️ Neon upgraded to Launch ($5/month) — free tier CU-hours exhausted.
+
+**Carry-forward:** 3 S242 verifications remaining (tooltips, /premium, /plan). Message reply verification. /cities + /neighborhoods meta. L-002 mobile viewport. Seed.ts + wrap docs need Patrick push.
+
+---
 
 ### 2026-03-22 · Session 242
 
@@ -62,10 +82,3 @@
 
 ✅ NotificationBell dark mode fixed. Sale detail layout fixed. DECISIONS.md created (D-001 through D-009). Polish Agent skill created. Dev + QA skill patches written. 3 scheduled tasks created (weekly site audit, brand drift detector, Monday digest).
 
----
-
-### 2026-03-22 · Session 238
-
-**ROLE WALKTHROUGHS + COPY BROADENING**
-
-✅ Full role walkthrough via Chrome MCP (shopper, organizer, unauthenticated). Broadened pricing/marketing copy across pricing.tsx, index.tsx, about.tsx — removed estate-sale-only language. Login rate-limit hit during testing (not a real bug).

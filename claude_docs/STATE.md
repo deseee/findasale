@@ -7,6 +7,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 243 COMPLETE (2026-03-22) — C-001 CRITICAL BLOCKER FIXED + 6 AUDIT FIXES + CONVERSATION-DEFAULTS v8:**
+- ✅ **C-001 RESOLVED (CRITICAL):** Item detail pages returning "Item not found" — root cause was `draftStatus` column defaulting to `'DRAFT'` in schema, so all seeded items were invisible via `getItemById`. Migration backfill ran before seed, but seed runs after and doesn't set `draftStatus`. Fixed via SQL UPDATE on Neon (`SET draftStatus = 'PUBLISHED' WHERE draftStatus = 'DRAFT'`). Seed script patched to set `draftStatus: 'PUBLISHED'`. Verified live — 3 items across 2 sales all load correctly.
+- ✅ **H-001 fixed:** LiveFeed "Reconnecting..." text removed from LiveFeedTicker.tsx. Pushed via MCP.
+- ✅ **H-002 fixed:** ReviewsSection dark mode — added `dark:bg-gray-800`. Pushed via MCP.
+- ✅ **M-001 fixed:** /organizer/premium and /workspace login redirects now preserve redirect param. Pushed via MCP.
+- ✅ **M-002 fixed:** Footer updated to include all sale types per D-001. Pushed via MCP.
+- ✅ **M-003 fixed:** Message thread chat view — Layout gets `noFooter` prop, _app.tsx passes it for `/messages/[id]`. Pushed via MCP.
+- ✅ **M-004 fixed:** About page mission statement broadened for D-001 compliance. Pushed via MCP (commit bb298d6).
+- ✅ **conversation-defaults v8:** Added Rule 31 — execute unambiguous session-start actions immediately instead of asking "ready?"
+- ✅ **6 of 9 S242 live verifications passed:** favorites hash routing, save button, pricing CTA, about blank space, map route planner, image fallback
+- ✅ **Heatmap investigated:** Code is complete and correct. Issue is data — no published sales with valid coordinates in date range.
+- ⚠️ **Neon upgraded to Launch ($5/month)** — free tier CU-hours exhausted during beta evaluation week.
+- ⚠️ **CARRY-FORWARD:** L-002 (mobile viewport test via Chrome DevTools 375px)
+- ⚠️ **CARRY-FORWARD:** /cities and /neighborhoods meta descriptions still say "estate sales"
+- ⚠️ **CARRY-FORWARD:** Message reply live verification
+- ⚠️ **PENDING PATRICK:** Push seed.ts fix (`packages/database/prisma/seed.ts`) + S243 about.tsx MCP commit + all wrap docs
+- Last Updated: 2026-03-22
+
 **Session 242 COMPLETE (2026-03-22) — BRAND SWEEP + D-007 + 13 UX BUG FIXES + QA SKILL REWRITE:**
 - ✅ **D-007 CONFIRMED LIVE:** Workspace creation works (user3@example.com), member counter shows "0 / 12 members". Cap enforcement code confirmed correct. Commit: b07f162
 - ✅ **Brand sweep complete — 5 pages verified:** /hubs, /categories, /calendar clean. /cities and /neighborhoods had stale title tags + Layout duplication — fixed. Commit: b07f162

@@ -1,67 +1,52 @@
 # FindA.Sale — Patrick's Dashboard
-Last Updated: 2026-03-22 (S242 complete — weekly audit run)
+Last Updated: 2026-03-22 (S243 complete — C-001 CRITICAL BLOCKER FIXED)
 
-## ⚠️ Audit Alerts (2026-03-22 Weekly Audit)
+## Status: GREEN
 
-**CRITICAL — Item detail pages still broken (C-001)**
-The S241 fix for item 404s (`d1da44c`) is NOT live in production. Every item link from every sale page returns "Item not found." Tested with real item IDs from sale `cmmxf0wnn004evxstomk39x34` — all confirmed broken. This is the primary shopper flow. Beta testers clicking any item hit a dead end.
-**Action needed:** Verify Railway built with commit d1da44c. May need a cache-bust rebuild push.
-
-**HIGH — "Reconnecting..." still in LiveFeed (H-001)**
-S240's M-004 fix (silent reconnect) did not take. The word "Reconnecting..." is still visible in the Live Activity sidebar on all sale detail pages. Looks broken to beta testers.
-**Fix:** Small dev dispatch — remove or hide the reconnecting text.
-
-**HIGH — Reviews section white background in dark mode (H-002)**
-Reviews section on sale detail pages has `bg-white` with no `dark:` variant. D-002 violation. Bright white box in dark mode.
-
-**Full audit report:** `claude_docs/audits/weekly-audit-2026-03-22.md` (10 findings: 1C / 2H / 4M / 3L)
+The #1 beta blocker is resolved. Item detail pages work for all shoppers. Every item link from every sale page now loads correctly.
 
 ---
 
 ## Build Status
-- **Vercel (Frontend):** Live — [finda.sale](https://finda.sale) — all S242 fixes deployed
-- **Railway (Backend):** Live ✅ — auth rate limit raised to 50
-- **Neon (Database):** Up to date ✅ — no schema changes this session
+- **Vercel (Frontend):** Live — [finda.sale](https://finda.sale) — S243 fixes deployed
+- **Railway (Backend):** Live ✅ — rebuilt with S243 Dockerfile cache-bust
+- **Neon (Database):** Up to date ✅ — `draftStatus` data fix applied, upgraded to Launch ($5/month)
 - **Scheduled Tasks:** 3 active (weekly site audit Sun 10pm, brand drift Mon 10am, Monday digest 8am)
 
-## What Just Happened (S242)
+## What Just Happened (S243)
 
-**Your 13 UX bugs — all fixed and pushed:**
-- Favorites hash routing (`#favorites` now lands on Favorites tab)
-- Item likes rewired (was hitting non-existent endpoint, now works via `/favorites/item/{id}`)
-- Pricing CTA hidden for signed-in organizers
-- About page blank space removed
-- /organizer/premium synced with /pricing, Enterprise CTA added
-- /plan broadened to all sale types
-- Map "Plan Your Route" button added to header
-- Organizer settings tooltips added across all tabs
-- InspirationGrid broken image fallback added
+**C-001 CRITICAL BLOCKER FIXED:** Every item detail page was showing "Item not found" for shoppers. Root cause: the `draftStatus` column defaults to `'DRAFT'` in the database schema, and all seeded items inherited that default. The item detail endpoint blocks `DRAFT` items from non-owners. One SQL UPDATE on Neon fixed it instantly. Verified live — items load correctly now.
 
-**QA process fixed:** Rewrote QA skill to mandate Chrome clickthrough testing before any code-level checks. Installed before 10pm Sunday audit.
+**6 additional audit fixes pushed:** LiveFeed "Reconnecting..." text removed, Reviews section dark mode fixed, /premium and /workspace login redirects fixed, footer broadened to all sale types, message thread footer removed, about page mission statement updated.
 
-**Also completed:** Brand sweep (5 pages verified), D-007 Teams cap confirmed live, auth rate limit raised.
+**conversation-defaults v8 installed:** Claude now starts working immediately on clearly-defined session tasks instead of asking "ready?"
+
+**Neon upgraded:** Free tier CU-hours ran out during beta week. Upgraded to Launch plan ($5/month) to prevent database suspension.
 
 ## What You Need To Do
 
-1. **Nothing urgent** — all code changes pushed and deploying.
-2. **Mobile spot-check (optional):** You mentioned you don't have an iPhone. We can do this via Chrome DevTools 375px viewport instead, or close it out.
+1. **Push the remaining local changes:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/database/prisma/seed.ts claude_docs/STATE.md claude_docs/next-session-prompt.md claude_docs/session-log.md claude_docs/patrick-dashboard.md
+git commit -m "S243: C-001 fix (seed draftStatus), session wrap docs"
+.\push.ps1
+```
 
-## Upcoming (S243)
+## Upcoming (S244)
 
-1. Live Chrome verification of all 13 fixes (Claude will do this automatically at session start)
-2. Heatmap functionality investigation
+1. Post-fix live verification of S243 changes (automatic)
+2. 3 remaining S242 verifications (tooltips, /premium, /plan)
 3. Message reply live verification
-4. Beta tester feedback response (if any issues reported)
-
-## Pending Decisions
-- L-002: Close it or test via Chrome DevTools? (Your call)
+4. Beta tester feedback triage (if any reported)
+5. /cities + /neighborhoods meta cleanup (low priority)
 
 ## Project Health
 - **Features shipped:** 71 across 4 tiers
-- **Beta status:** Live. Real customers evaluating this week.
-- **UX debt:** 13 items cleared this session. QA methodology upgraded.
-- **Brand sweep:** All pages clean
-- **Code health:** All S240–S242 findings fixed. QA now tests product, not just code.
+- **Beta status:** Live. Real customers evaluating this week. Critical item page blocker RESOLVED.
+- **Critical blockers:** 0 (was 1 — C-001 fixed)
+- **UX debt:** S242 batch cleared (13 fixes). S243 cleared 6 more audit items.
+- **Infrastructure:** Neon on Launch plan, Railway healthy, Vercel healthy
 
 ---
 

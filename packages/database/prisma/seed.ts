@@ -435,6 +435,7 @@ Begin with pieces you love rather than pure investment value. Join collecting cl
                 itemPhotoPool[itemCount % itemPhotoPool.length],
               ],
           embedding: [],
+          draftStatus: 'PUBLISHED', // Seeded items are real data — must be visible to shoppers
         },
       });
       items.push(item);
