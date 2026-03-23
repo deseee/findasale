@@ -63,7 +63,8 @@ const ShopperDashboard = () => {
     queryKey: ['shopper-favorites'],
     queryFn: async () => {
       const response = await api.get('/favorites');
-      return response.data;
+      // API returns { favorites: [], categories: [], total: N } — extract array
+      return response.data.favorites ?? response.data;
     },
     enabled: !!user?.id,
   });
