@@ -148,10 +148,10 @@ const OrganizerSettingsPage = () => {
             <div className="card p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Payment Settings</h2>
-                <Tooltip content="Connect Stripe to receive payouts. FindA.Sale charges a 10% platform fee per sale. Payouts are deposited on a weekly schedule." />
+                <Tooltip content="Connect Stripe to receive payouts. Your tier determines the platform fee: SIMPLE 10%, PRO/TEAMS 8%. Payouts are deposited on a weekly schedule." position="right" />
               </div>
               <p className="text-warm-600 dark:text-gray-400 mb-6">
-                Connect your Stripe account to receive payouts from your sales.
+                Connect your Stripe account to receive payouts from your sales. You'll need a valid bank account in the US.
               </p>
               <button
                 onClick={handleStripeConnect}
@@ -209,8 +209,11 @@ const OrganizerSettingsPage = () => {
                   <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Verified Organizer Badge</h2>
                   <VerifiedBadge status={verStatus?.status} size="md" />
                 </div>
-                <p className="text-warm-600 dark:text-gray-400 mb-6">
-                  A verified badge builds trust with shoppers. Only PRO organizers can request verification.
+                <p className="text-warm-600 dark:text-gray-400 mb-2">
+                  A verified badge builds trust with shoppers and appears on your profile and all your sales. It signals that you're a professional, reliable organizer.
+                </p>
+                <p className="text-sm text-warm-500 dark:text-gray-400 mb-6">
+                  Only PRO and TEAMS organizers can request verification. Our team reviews your profile and approves badges for active, legitimate organizers.
                 </p>
 
                 {verStatus?.status === 'NONE' && (
@@ -304,14 +307,19 @@ const OrganizerSettingsPage = () => {
           {activeTab === 'notifications' && (
             <div className="card p-6">
               <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Notification Preferences</h2>
+              <p className="text-sm text-warm-600 dark:text-gray-400 mb-6">
+                Choose how you'd like to stay updated on your sales and activity.
+              </p>
               <div className="space-y-4">
-                <label className="flex items-center">
+                <label className="flex items-center gap-2">
                   <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
-                  <span className="ml-2 text-warm-700 dark:text-gray-300">Email me when someone bids on my items</span>
+                  <span className="ml-1 text-warm-700 dark:text-gray-300">Email me when someone bids on my items</span>
+                  <Tooltip content="Receive real-time alerts when shoppers show interest in your items." position="right" />
                 </label>
-                <label className="flex items-center">
+                <label className="flex items-center gap-2">
                   <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
-                  <span className="ml-2 text-warm-700 dark:text-gray-300">Email me when my sale starts</span>
+                  <span className="ml-1 text-warm-700 dark:text-gray-300">Email me when my sale starts</span>
+                  <Tooltip content="Get a reminder email on the first day of your scheduled sale." position="right" />
                 </label>
                 <div className="border-t border-warm-100 dark:border-gray-700 pt-4 mt-2">
                   <p className="text-sm font-medium text-warm-800 dark:text-gray-200 mb-3">Push Notifications</p>
@@ -382,14 +390,21 @@ const OrganizerSettingsPage = () => {
               <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Business Profile</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Business Name</label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Business Name</label>
+                    <Tooltip content="This is how your business appears to shoppers on item listings and sale pages. Use your official business name or brand." position="right" />
+                  </div>
                   <input
                     type="text"
                     value={businessName}
                     onChange={(e) => setBusinessName(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="e.g., Midwest Estate Sales LLC"
                   />
                 </div>
+                <p className="text-xs text-warm-500 dark:text-gray-400">
+                  Your profile helps build trust with shoppers. Keep your information accurate and up-to-date.
+                </p>
                 <button
                   onClick={handleSaveProfile}
                   disabled={isSaving}
@@ -406,7 +421,10 @@ const OrganizerSettingsPage = () => {
             <div className="space-y-6">
               {/* Simple Mode Section */}
               <div className="card p-6">
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Mode</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Mode</h2>
+                  <Tooltip content="Toggle between full-featured and streamlined interfaces. Useful if you're new to FindA.Sale and want a cleaner view." position="right" />
+                </div>
                 <div className="space-y-4">
                   <label className="flex items-center">
                     <input
@@ -422,7 +440,7 @@ const OrganizerSettingsPage = () => {
                     />
                     <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">Simple Mode</span>
                   </label>
-                  <p className="text-sm text-warm-600 dark:text-gray-400">Show only essential tools. Great for getting started.</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">Show only essential tools. Great for getting started. You can switch back anytime.</p>
                 </div>
               </div>
 
@@ -436,7 +454,10 @@ const OrganizerSettingsPage = () => {
 
               {/* Text Size Section */}
               <div className="card p-6">
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Text Size</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Text Size</h2>
+                  <Tooltip content="Make text larger for easier reading. Changes apply immediately across the entire app." position="right" />
+                </div>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
@@ -459,13 +480,16 @@ const OrganizerSettingsPage = () => {
                       className="w-full h-2 bg-warm-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
                     />
                   </div>
-                  <p className="text-xs text-warm-600 dark:text-gray-400">Adjust text size for better readability</p>
+                  <p className="text-xs text-warm-600 dark:text-gray-400">Drag to adjust. Settings are saved to your browser automatically.</p>
                 </div>
               </div>
 
               {/* High Contrast Section */}
               <div className="card p-6">
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Accessibility</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Accessibility</h2>
+                  <Tooltip content="Increases text-to-background contrast for visibility in bright sunlight or for visual accessibility needs." position="right" />
+                </div>
                 <div className="space-y-4">
                   <label className="flex items-center">
                     <input
@@ -476,20 +500,23 @@ const OrganizerSettingsPage = () => {
                     />
                     <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">High Contrast (Outdoor Mode)</span>
                   </label>
-                  <p className="text-sm text-warm-600 dark:text-gray-400">Boosts contrast for bright outdoor conditions</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">Useful when using FindA.Sale on-site at your sale in bright outdoor conditions</p>
                 </div>
               </div>
 
               {/* Low-Bandwidth Mode Section */}
               <div className="card p-6">
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Low-Bandwidth Mode</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Low-Bandwidth Mode</h2>
+                  <Tooltip content="Reduces image quality and disables animations to use less data. Helpful on slow cellular connections or metered plans." position="right" />
+                </div>
                 <div className="space-y-4">
                   <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                     <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
                       <strong>Detected network:</strong> {networkType || 'unknown'}
                     </p>
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      {isLowBandwidth ? 'Low-bandwidth connection detected. Photos are optimized for faster loading.' : 'You have a good network connection. Full-quality photos are displayed.'}
+                      {isLowBandwidth ? 'Low-bandwidth mode is ON. Photos are optimized for faster loading.' : 'You have a good network connection. Full-quality photos are displayed.'}
                     </p>
                   </div>
                   <label className="flex items-center">
@@ -501,7 +528,7 @@ const OrganizerSettingsPage = () => {
                     />
                     <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">Enable Low-Bandwidth Mode</span>
                   </label>
-                  <p className="text-sm text-warm-600 dark:text-gray-400">Manually override automatic detection. When enabled, photo quality is reduced to improve load times on slow connections.</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">Manually override automatic detection. Use this if you're on a slow connection or want to save mobile data.</p>
                 </div>
               </div>
             </div>
