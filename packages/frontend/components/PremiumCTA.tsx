@@ -27,7 +27,7 @@ const PremiumCTA: React.FC<PremiumCTAProps> = ({
     'Priority support',
   ],
   ctaText = 'Upgrade to PRO',
-  ctaHref = '/organizer/upgrade',
+  ctaHref = '/pricing',
   compact = false,
 }) => {
   if (tier !== 'SIMPLE') {

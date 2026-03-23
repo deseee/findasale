@@ -40,7 +40,7 @@ const TIERS: PricingTier[] = [
       '5 photos per item',
       '100 AI tags per month',
       'Basic sale dashboard',
-      'Email support',
+      'FAQ + Organizer Guide',
     ],
   },
   {
@@ -61,7 +61,7 @@ const TIERS: PricingTier[] = [
       'Advanced analytics dashboard',
       'Brand kit customization',
       'CSV exports',
-      'Priority email support',
+      'Email support, 48-hour SLA',
     ],
   },
   {
@@ -82,8 +82,8 @@ const TIERS: PricingTier[] = [
       'API & webhooks',
       'White-label options',
       'Advanced fraud detection',
+      'Email support, 24-hour SLA + 1 onboarding call',
       'Dedicated account manager',
-      'Priority phone support',
     ],
   },
 ];

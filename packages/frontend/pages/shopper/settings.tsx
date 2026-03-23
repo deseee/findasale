@@ -10,9 +10,16 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
+import api from '@/lib/api';
 import { useLowBandwidth } from '@/contexts/LowBandwidthContext';
 import { useAuth } from '@/components/AuthContext';
+
+const SALE_CATEGORIES = [
+  'furniture', 'decor', 'vintage', 'textiles', 'collectibles', 'art',
+  'antiques', 'jewelry', 'books', 'tools', 'electronics', 'clothing', 'home', 'other'
+];
 
 function SettingsPage() {
   const router = useRouter();
@@ -20,11 +27,35 @@ function SettingsPage() {
   const { isLowBandwidth, setIsManualOverride, isManualOverride } = useLowBandwidth();
   const [mounted, setMounted] = useState(false);
   const [lowBandwidthEnabled, setLowBandwidthEnabled] = useState(false);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [successMessage, setSuccessMessage] = useState<string>('');
 
   useEffect(() => {
     setMounted(true);
     setLowBandwidthEnabled(isLowBandwidth);
   }, [isLowBandwidth]);
+
+  useEffect(() => {
+    if (user?.categoryInterests) {
+      setSelectedInterests(user.categoryInterests);
+    }
+  }, [user?.categoryInterests]);
+
+  // Mutation for updating category interests
+  const updateInterestsMutation = useMutation({
+    mutationFn: async (interests: string[]) => {
+      const response = await api.patch('/users/me/interests', { categoryInterests: interests });
+      return response.data;
+    },
+    onSuccess: () => {
+      setSuccessMessage('Followed organizers saved!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    },
+    onError: () => {
+      setSuccessMessage('Failed to save interests');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    }
+  });
 
   // Redirect if not authenticated
   if (mounted && !authLoading && !user) {
@@ -189,6 +220,50 @@ function SettingsPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Followed Organizers Section */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Followed Organizers</h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">Select the item categories you're interested in. We'll notify you when new sales matching your interests go live.</p>
+
+            {successMessage && (
+              <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${
+                successMessage.includes('saved')
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                  : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+              }`}>
+                {successMessage}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+              {SALE_CATEGORIES.map((category) => (
+                <label key={category} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedInterests.includes(category)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedInterests([...selectedInterests, category]);
+                      } else {
+                        setSelectedInterests(selectedInterests.filter((c) => c !== category));
+                      }
+                    }}
+                    className="w-4 h-4 text-amber-600 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300 capitalize">{category}</span>
+                </label>
+              ))}
+            </div>
+
+            <button
+              onClick={() => updateInterestsMutation.mutate(selectedInterests)}
+              disabled={updateInterestsMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
+            >
+              {updateInterestsMutation.isPending ? 'Saving...' : 'Save Interests'}
+            </button>
           </div>
 
           {/* Account Section */}

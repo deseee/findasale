@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import api from '../lib/api';
 
 interface TrailStop {
   saleId: string;
@@ -32,7 +32,7 @@ export const useMyTrails = (page = 1, limit = 20) => {
   return useQuery({
     queryKey: ['trails', 'my', page, limit],
     queryFn: async () => {
-      const { data } = await axios.get(`/api/trails?page=${page}&limit=${limit}`);
+      const { data } = await api.get(`/api/trails`, { params: { page, limit } });
       return data;
     },
   });
@@ -50,7 +50,7 @@ export const useCreateTrail = () => {
       description?: string;
       stops: TrailStop[];
     }) => {
-      const { data } = await axios.post('/api/trails', payload);
+      const { data } = await api.post('/api/trails', payload);
       return data;
     },
     onSuccess: () => {
@@ -76,7 +76,7 @@ export const useUpdateTrail = () => {
       stops?: TrailStop[];
       isPublic?: boolean;
     }) => {
-      const { data } = await axios.put(`/api/trails/${trailId}`, payload);
+      const { data } = await api.put(`/api/trails/${trailId}`, payload);
       return data;
     },
     onSuccess: (_, { trailId }) => {
@@ -94,7 +94,7 @@ export const useDeleteTrail = () => {
 
   return useMutation({
     mutationFn: async (trailId: string) => {
-      const { data } = await axios.delete(`/api/trails/${trailId}`);
+      const { data } = await api.delete(`/api/trails/${trailId}`);
       return data;
     },
     onSuccess: () => {
@@ -110,7 +110,7 @@ export const usePublicTrail = (shareToken: string | null) => {
   return useQuery({
     queryKey: ['trail', 'public', shareToken],
     queryFn: async () => {
-      const { data } = await axios.get(`/api/trails/public/${shareToken}`);
+      const { data } = await api.get(`/api/trails/public/${shareToken}`);
       return data;
     },
     enabled: !!shareToken,
@@ -125,7 +125,7 @@ export const useCompleteTrail = () => {
 
   return useMutation({
     mutationFn: async (trailId: string) => {
-      const { data } = await axios.post(`/api/trails/${trailId}/complete`);
+      const { data } = await api.post(`/api/trails/${trailId}/complete`);
       return data;
     },
     onSuccess: (_, trailId) => {

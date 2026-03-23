@@ -38,7 +38,7 @@ export default function ValuationWidget({
           <strong>Pricing Suggestions:</strong> Upgrade to PRO to see comparable sales estimates.
         </p>
         <a
-          href="/organizer/upgrade"
+          href="/pricing"
           className="text-xs text-amber-600 dark:text-amber-300 hover:underline mt-2 block"
         >
           View Plans →

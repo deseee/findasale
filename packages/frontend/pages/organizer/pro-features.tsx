@@ -88,7 +88,7 @@ export default function ProFeaturesPage() {
           {/* CTA */}
           <div className="text-center">
             <Link
-              href="/organizer/upgrade"
+              href="/pricing"
               className="inline-block bg-sage-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-sage-700 transition"
             >
               Upgrade to PRO

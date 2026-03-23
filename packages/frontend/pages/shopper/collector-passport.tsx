@@ -11,7 +11,6 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import Layout from '@/components/Layout';
 import { useMyPassport, useUpdatePassport, useMyMatches, CollectorPassport } from '@/hooks/useCollectorPassport';
 import { useAuth } from '@/components/AuthContext';
 
@@ -64,11 +63,9 @@ function CollectorPassportPage() {
 
   if (authLoading || passportLoading) {
     return (
-      <Layout>
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </Layout>
+      <div className="text-center py-12">
+        <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+      </div>
     );
   }
 
@@ -123,8 +120,7 @@ function CollectorPassportPage() {
         <title>My Collector Passport - FindA.Sale</title>
       </Head>
 
-      <Layout>
-        <div className="max-w-5xl mx-auto py-8 px-4">
+      <div className="max-w-5xl mx-auto py-8 px-4">
           {/* Header */}
           <div className="mb-10">
             <div className="flex items-center justify-between">
@@ -373,7 +369,6 @@ function CollectorPassportPage() {
             </div>
           </div>
         </div>
-      </Layout>
     </>
   );
 }

@@ -216,7 +216,7 @@ const NotificationBell = () => {
 
           {notifications.length > 0 && (
             <Link
-              href="/notifications"
+              href="/shopper/notifications"
               onClick={() => setIsOpen(false)}
               className="block w-full text-center border-t border-warm-200 dark:border-gray-700 px-4 py-3 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 font-medium"
             >

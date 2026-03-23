@@ -6,7 +6,6 @@ import { useMyTrails } from '../../hooks/useTrails';
 import { useAuth } from '../../components/AuthContext';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
-import Layout from '../../components/Layout';
 
 export default function MyTrailsPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -22,7 +21,7 @@ export default function MyTrailsPage() {
 
   if (authLoading || isLoading) {
     return (
-      <Layout>
+      <>
         <Head>
           <title>My Treasure Trails | FindA.Sale</title>
         </Head>
@@ -34,7 +33,7 @@ export default function MyTrailsPage() {
             ))}
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
@@ -42,7 +41,7 @@ export default function MyTrailsPage() {
   const totalCount = data?.total || 0;
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>My Treasure Trails | FindA.Sale</title>
         <meta name="description" content="Your custom estate sale routes and favorites" />
@@ -127,6 +126,6 @@ export default function MyTrailsPage() {
           {totalCount} trail{totalCount !== 1 ? 's' : ''} total
         </p>
       </div>
-    </Layout>
+    </>
   );
 }

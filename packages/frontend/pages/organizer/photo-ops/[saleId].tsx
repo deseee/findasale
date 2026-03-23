@@ -106,7 +106,7 @@ const PhotoOpsPage: React.FC = () => {
               Photo Op Stations is a PRO-tier feature.
             </p>
             <a
-              href="/organizer/upgrade"
+              href="/pricing"
               className="inline-block px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700"
             >
               View Plans

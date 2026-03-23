@@ -575,7 +575,7 @@ const OrganizerDashboard = () => {
                       Save time. Understand what sells. Build a brand that brings shoppers back.
                     </p>
                     <Link
-                      href="/organizer/premium?source=dashboard"
+                      href="/pricing?source=dashboard"
                       className="inline-block mt-3 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
                     >
                       Upgrade to PRO

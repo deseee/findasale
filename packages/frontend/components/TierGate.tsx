@@ -94,7 +94,7 @@ export default function TierGate({
 
           {/* Upgrade CTA */}
           <Link
-            href="/organizer/upgrade"
+            href="/pricing"
             className="inline-block w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center"
           >
             Upgrade to {requiredTier} →

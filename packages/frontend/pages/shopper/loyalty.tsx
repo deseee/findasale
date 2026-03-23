@@ -12,7 +12,6 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import Layout from '@/components/Layout';
 import { useLoyaltyPassport } from '@/hooks/useLoyaltyPassport';
 import { useAuth } from '@/components/AuthContext';
 
@@ -34,39 +33,33 @@ function LoyaltyPage() {
 
   if (authLoading || passportLoading || !mounted) {
     return (
-      <Layout>
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">Loading your loyalty passport...</p>
-        </div>
-      </Layout>
+      <div className="text-center py-12">
+        <p className="text-gray-600 dark:text-gray-400">Loading your loyalty passport...</p>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Layout>
-        <div className="max-w-5xl mx-auto py-8 px-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center dark:bg-red-900 dark:border-red-700">
-            <p className="text-red-700 dark:text-red-300">Unable to load your loyalty passport. Please try again.</p>
-            <button
-              onClick={() => refetch()}
-              className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg dark:bg-amber-700 dark:hover:bg-amber-800"
-            >
-              Retry
-            </button>
-          </div>
+      <div className="max-w-5xl mx-auto py-8 px-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center dark:bg-red-900 dark:border-red-700">
+          <p className="text-red-700 dark:text-red-300">Unable to load your loyalty passport. Please try again.</p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg dark:bg-amber-700 dark:hover:bg-amber-800"
+          >
+            Retry
+          </button>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   if (!passport) {
     return (
-      <Layout>
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">No loyalty data available.</p>
-        </div>
-      </Layout>
+      <div className="text-center py-12">
+        <p className="text-gray-600 dark:text-gray-400">No loyalty data available.</p>
+      </div>
     );
   }
 
@@ -87,8 +80,7 @@ function LoyaltyPage() {
         <title>Loyalty Passport - FindA.Sale</title>
       </Head>
 
-      <Layout>
-        <div className="max-w-5xl mx-auto py-8 px-4">
+      <div className="max-w-5xl mx-auto py-8 px-4">
           {/* Header */}
           <div className="mb-10">
             <h1 className="text-4xl font-bold text-gray-900 dark:text-warm-100 mb-2">Loyalty Passport ✨</h1>
@@ -262,7 +254,6 @@ function LoyaltyPage() {
             </Link>
           </div>
         </div>
-      </Layout>
     </>
   );
 }

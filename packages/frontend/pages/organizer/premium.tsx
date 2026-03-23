@@ -211,7 +211,7 @@ const OrganizerPremiumPage = () => {
                 </Link>
               ) : (
                 <Link
-                  href="/organizer/upgrade"
+                  href="/pricing"
                   className="block w-full text-center bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-sage-700 transition"
                 >
                   Upgrade to PRO
@@ -344,7 +344,7 @@ const OrganizerPremiumPage = () => {
             <div className="flex flex-wrap justify-center gap-4">
               {tier === 'SIMPLE' && (
                 <Link
-                  href="/organizer/upgrade"
+                  href="/pricing"
                   className="inline-block bg-sage-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-sage-700 transition"
                 >
                   Upgrade Now

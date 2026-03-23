@@ -1,7 +1,7 @@
 /**
  * Wishlist Redirect Page
  *
- * Redirects /wishlist to /shopper/favorites for consistency
+ * Redirects /wishlist to /shopper/wishlist for consistency
  */
 
 import { useEffect } from 'react';
@@ -11,7 +11,7 @@ const WishlistPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    router.push('/shopper/favorites');
+    router.push('/shopper/wishlist');
   }, [router]);
 
   return (

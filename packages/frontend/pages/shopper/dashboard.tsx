@@ -35,7 +35,7 @@ const ShopperDashboard = () => {
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups'>('overview');
 
-  // Handle hash-based tab navigation on mount
+  // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
     if (router.isReady && router.asPath.includes('#')) {
       const hash = router.asPath.split('#')[1];
@@ -43,7 +43,7 @@ const ShopperDashboard = () => {
         setActiveTab(hash as any);
       }
     }
-  }, [router.isReady]);
+  }, [router.isReady, router.asPath]);
 
   if (!isLoading && !user) {
     router.push('/login?redirect=/shopper/dashboard');
@@ -123,11 +123,11 @@ const ShopperDashboard = () => {
               <p className="text-xs font-semibold text-amber-900 dark:text-amber-300">Loyalty</p>
             </Link>
             <Link
-              href="/shopper/alerts"
+              href="/shopper/wishlist"
               className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
             >
-              <div className="text-2xl mb-2">🔔</div>
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-300">Alerts</p>
+              <div className="text-2xl mb-2">💕</div>
+              <p className="text-xs font-semibold text-blue-900 dark:text-blue-300">Wishlist</p>
             </Link>
             <Link
               href="/shopper/trails"
@@ -163,7 +163,10 @@ const ShopperDashboard = () => {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  router.push(`#${tab.id}`);
+                }}
                 className={`pb-2 font-medium whitespace-nowrap transition-colors ${
                   activeTab === tab.id
                     ? 'border-b-2 border-amber-600 text-amber-600'

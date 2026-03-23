@@ -81,7 +81,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/plan" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Plan a Sale
             </Link>
-            <Link href="/organizer/premium" className="block px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+            <Link href="/organizer/subscription" className="block px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
             </Link>
             <TierGatedNavLink href="/organizer/insights" label="Insights" requiredTier="PRO" />
@@ -120,8 +120,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/inspiration" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Inspiration Gallery
             </Link>
-            <Link href="/wishlists" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              My Wishlists
+            <Link href="/shopper/wishlist" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              My Wishlist
             </Link>
             <Link href="/referral-dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Referrals
@@ -130,9 +130,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">My Collection</span>
             <Link href="/shopper/collector-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Collection
-            </Link>
-            <Link href="/shopper/alerts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Wishlist Alerts
             </Link>
             <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Treasure Trails
@@ -376,7 +373,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link href="/plan" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Plan a Sale
                 </Link>
-                <Link href="/organizer/premium" className="block px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                <Link href="/organizer/subscription" className="block px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
                 </Link>
                 {canAccess('PRO') && (

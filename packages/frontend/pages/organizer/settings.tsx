@@ -182,7 +182,7 @@ const OrganizerSettingsPage = () => {
                       Unlock powerful features to grow your business.
                     </p>
                     <Link
-                      href="/organizer/upgrade"
+                      href="/pricing"
                       className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
                     >
                       Upgrade to PRO
@@ -224,7 +224,7 @@ const OrganizerSettingsPage = () => {
                           Upgrade to PRO to request verification.
                         </p>
                         <Link
-                          href="/organizer/upgrade"
+                          href="/pricing"
                           className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
                         >
                           Upgrade to PRO

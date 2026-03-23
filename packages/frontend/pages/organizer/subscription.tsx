@@ -133,7 +133,7 @@ export default function SubscriptionPage() {
                 <p className="text-blue-800 mb-4">
                   Upgrade to PRO to unlock batch operations, analytics, exports, and more.
                 </p>
-                <Link href="/organizer/upgrade" className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition">
+                <Link href="/pricing" className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition">
                   Upgrade to PRO
                 </Link>
               </div>
@@ -211,7 +211,7 @@ export default function SubscriptionPage() {
 
                   <div className="flex gap-4">
                     <Link
-                      href="/organizer/upgrade"
+                      href="/pricing"
                       className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition"
                     >
                       Compare All Plans
@@ -252,7 +252,7 @@ export default function SubscriptionPage() {
               <p className="text-blue-800 mb-4">
                 Upgrade to PRO to unlock batch operations, analytics, exports, and more.
               </p>
-              <Link href="/organizer/upgrade" className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition">
+              <Link href="/pricing" className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition">
                 Upgrade to PRO
               </Link>
             </div>
@@ -388,7 +388,7 @@ export default function SubscriptionPage() {
                   </button>
 
                   <Link
-                    href="/organizer/upgrade"
+                    href="/pricing"
                     className="block w-full text-center bg-gray-200 text-gray-900 py-3 px-4 rounded-lg font-semibold hover:bg-gray-300 transition dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
                   >
                     Change Plan

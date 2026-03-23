@@ -27,8 +27,8 @@ const RecentlyViewed: React.FC = () => {
     <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-warm-900">Recently Viewed</h3>
-        <Link href="/shopper/favorites" className="text-sm text-amber-600 hover:text-amber-700">
-          View all
+        <Link href="/shopper/wishlist" className="text-sm text-amber-600 hover:text-amber-700">
+          View wishlist
         </Link>
       </div>
       <div className="flex gap-4 overflow-x-auto pb-2">

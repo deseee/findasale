@@ -52,8 +52,18 @@ export const getMyLootLog = async (req: Request, res: Response) => {
 
     const totalPages = Math.ceil(total / limit);
 
+    // Transform photoUrls array to imageUrl string (first photo)
+    const transformedPurchases = purchases.map((p) => ({
+      ...p,
+      item: {
+        ...p.item,
+        imageUrl: p.item.photoUrls?.[0] || null,
+        photoUrls: undefined,
+      },
+    }));
+
     res.json({
-      purchases,
+      purchases: transformedPurchases,
       total,
       page,
       totalPages,
@@ -223,11 +233,13 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
       }),
     ]);
 
-    // Remove price from items for public view
+    // Transform photoUrls array to imageUrl string (first photo)
     const publicPurchases = purchases.map((p) => ({
       ...p,
       item: {
         ...p.item,
+        imageUrl: p.item.photoUrls?.[0] || null,
+        photoUrls: undefined,
       },
     }));
 
