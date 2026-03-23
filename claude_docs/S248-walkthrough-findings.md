@@ -386,3 +386,201 @@
 **Following session:** Comprehensive seed data overhaul (unblocks testing of everything)
 **Dedicated strategic session:** Gamification spec, feature overlap consolidation, support tier definitions
 **Ongoing:** UX improvements as strategic decisions get made
+
+
+In addition to the audit here are some things i noticed during the limit cooldown. some you'll want to add in the audit and some are more general questions we should address about the project as a scheduled session
+Homepage:
+Can't close treasure hunt, first thing on main page, displays to everyone?
+Sales near you is pretty basic looking, should it have more in the card? is this the right place for it?
+should ux redesign the entire homepage?
+search doesn't find items or organizer names, what are keywords anyway only searches sale name and about from what i can tell
+no dark / light mode toggle in nav
+should we redesign the test data to include various states for all the feature?  organizers don't have stripe enabled by default so can't test sales etc maybe only 1 or 2 shouldnt have that flagged as yes.
+most seller acocunts should have some likes and purchases and history and purchases and things in the wishlist and faves and trails and loot log and all the other related stuff so we don't have to fix it on the fly later and burn tokens
+organizer specific pages are only accessible from the frontpage? and not darkmode enabled either
+
+Map:
+seems ok but plain, no animations or interactivity besides clicking on the sales themselves and getting the little card and 
+the plan your route feature which needs a starting point (user location?) and potentially an ending point (same as starting point toggle?)  this could maybe include promoted listings or advertisements from thrift stores, gas stations restaruants similar to waze and maps
+plan your route is white in dark mode
+
+Inspiration:
+gallery photos are broken pretty often another reason to alter the test data maybe?
+has 2 footers
+can like but can't wishlist
+
+Trending:
+again broken thumbnails pretty often
+can like but can't wishlist
+
+Pricing:
+user11@example.com is a shopper but current plan says free organizer tier is already chosen, yet no organzier features displayed, no organizer onboarding that i saw for this user
+for support how do we automate it? 
+what are email support, priority email support, dedicated account manager, priority phone support?  You can't honestly expect patrick to handle all this
+Need unlimited team members? block needs a space after the box before the mini FAQ
+how can we best position the platform so that free tier users especially are incentivised to use the POS and get us paid for items that don't get photographed in our system?
+Should selling be free or should there be a nominal fee to list a single sale ala carte?
+trying to go to organizer/dashboard with this user was access denied
+
+About:
+just needs updated to better represent what the product has become since it was originally made
+
+Leaderboard:  
+no shoppers have badges, another reason to change the db test data?
+we only have this for any sort of why people are earning points etc. "
+The leaderboard updates daily based on activity. Complete sales, earn badges, and climb the ranks!"
+what are they earning by completing sales?  
+what do badges represent and why do they want to earn them beyond collecting? 
+what does climbing the ranks get them? do they win something?  what? is it seasonal?  should it be tied to the huntpass or future premium tier?
+We have gamification but we don't have a real plan for what we've built besides the mechanics.  
+clicking on an organizer doesn't take you to their page it says organizer not found
+
+contact:
+can be shortened to "We're here to help! Reach out with any questions or feedback.
+send a message doesn't seem to do anything when you click send?
+
+shopper dashboard:
+while the buttons look great the collection, loyalty etc.. should display like the overview, purhcases, etc.. within the same page
+Overview still has white elements in dark mode
+overview tries to load sales near you in white and then fails and says 
+streak and points show nothing,
+upgrade button seems to link to huntpass checkout correctly but nothing to say why they should upgrade
+buttons for purchases, watchlist, saved items, points don't click anywhere just display numbers
+and then browse upcoming sales for some reason?
+pickups white card in dark mode, 
+subscribed has no test data and didn't work when i followed a seller from the front page
+
+shopper/collector-passport:
+no data again so can't really test well
+what are specialties and keywords and why are they using them? no text to explain what they are
+2 footers
+
+shopper/loyalty
+what is this in relation to leaderboard points and huntpass etc..? again we have gaming mechanics but no game
+what are stamps
+what are milestones and badges are they the same as leaderboard badges?
+when and what benefits do they get? how and why and where?
+2 footers
+
+shopper/alerts
+is this the same as wishlist? should we rename it?
+white text on white element in dark mode
+again we have keywords and we have tags but no distinction or explanation of what they are or do.
+can't search for matching items right from the alert card only edit or delete
+2 footers
+
+shopper/trails:
+completely broken, can't create a new trail, no data exists to test with
+2 footers
+
+loot-log and receipts
+again no sales data exists so can't test easily
+
+
+shopper/favorites:
+again lots of overlap with alerts/wishlist
+my wishlists in pulldown menu but goes to page called favorites
+
+Profile:
+this whole page may need redesign.
+hunt pass is prominent but what is huntpass in this context? again show's points but what are these points and what are they good for vs all the other gamified pages?
+bids, referalls again no test data
+referral points are these different from the other points again?
+Sale interests what are these and how do they differ from wishlist alerts?
+push notification enabled on this page or on the settings page?
+
+Settings:
+what notifications of these are the ones that actually matter?
+what's the differnece between settings and profile?  should they be combined, further seperated?
+2 footers
+
+notification bell
+can't check no data in the system
+
+FAQ:
+has \u25BC displaying on each question block
+Still have questions? Contact our support team \u2192
+Looking for the full walkthrough? Read the Organizer Guide \u2192
+isn't referenecedenough from the rest of site copy
+
+
+as user3@example.com: drop down menu:
+organizer Dashboard and shopper My dashboard ambiguity
+organizer My Profile and shopper My Profile ambiguity
+settings very different from shopper version and way more complete
+
+organizer/dashboard:
+POS should be more prominent
+
+
+organizer/print-inventory:
+print button takes forever to load and tries to print the whole page with multiple white pages because of the formatting.
+can't select individual sales?
+
+/organizer/typology:
+broken and bad black text on dark background
+
+organizer/command-center:
+again no data so can't test
+
+fraud signals no data
+
+offline mode? how do they use it and when?  does it work for the POS and Cards?  how are they alerted they have stuff to sync?
+
+Appraisal requests:
+sent one out but how do others receive them?  do they have to come back to the appraisal page when ther request is no longer pending?  what do they get from providing estimates in the community feed?
+
+https://finda.sale/organizer/item-library:
+broken
+how do we add items to the library?  what is the library item vs a regular item and how are they distinguished?  
+
+flip reports:
+Error Unable to load flip report. Please try again.
+
+webhooks:
+i don't even know how to begin testing these
+
+bounties:
+no data
+
+reputation: why hidden in community?  no data, does it need to tie in with points tiers at all?
+neighborhoods: why is this an organizer feature? shouldn't it be for shoppers or am i mistaken?
+
+performance: 
+just another link to insights?
+
+Overview tab:
+gamified with now direction again
+2 links to reputation score
+organizer/payouts only available from the overview tab in organizer dashboard?
+
+organizer/payouts:
+dark text for item name and price on dark background
+
+Sales tab:
+ shows white cards for live sale status
+
+Organizer Guide:
+needs cleanup and to align with brand and marketing.  mentions referral program and webhooks
+isn't referenced enough from the rest of site copy
+
+/Plan:
+Plan a sale is only displayed to organizers? should that be public facing and start by asking what type of sale they are planning?
+
+Profile:
+Start verificaton 404'sale
+your sales just links to dashboard why there?
+quick links and sale interests again what for o r what do they do differntly than other things in settings?
+
+
+Settings:
+Very different from shopper version, seems like shopper should have many of these features as well, suggest full comparison
+
+workspace doesn't seem to load when i go to it and links to findasale.com for some reason 
+when i do go to https://finda.sale/workspace/s242-test-workspace it 404'sale
+
+premium page the checkmarks arent aligned to the columns. maybe need to be centered?
+organizer/premium
+organizer/subscription
+organizer/upgrade
+all 3 pages doing basically the same thing as pricing page?  why do we have so many? and why are they all so different?
