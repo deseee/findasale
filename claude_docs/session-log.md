@@ -20,7 +20,7 @@
 
 ⚠️ Neon upgraded to Launch ($5/month) — free tier CU-hours exhausted.
 
-**Carry-forward:** 3 S242 verifications remaining (tooltips, /premium, /plan). Message reply verification. /cities + /neighborhoods meta. L-002 mobile viewport. Seed.ts + wrap docs need Patrick push.
+**Carry-forward:** 3 S242 verifications remaining (tooltips, /premium, /plan). Message reply verification. /cities + /neighborhoods meta. L-002 mobile viewport.
 
 ---
 
@@ -81,4 +81,3 @@
 **BUG FIXES + WORKFLOW AUTOMATION PLATEAU**
 
 ✅ NotificationBell dark mode fixed. Sale detail layout fixed. DECISIONS.md created (D-001 through D-009). Polish Agent skill created. Dev + QA skill patches written. 3 scheduled tasks created (weekly site audit, brand drift detector, Monday digest).
-

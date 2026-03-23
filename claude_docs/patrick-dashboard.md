@@ -25,13 +25,7 @@ The #1 beta blocker is resolved. Item detail pages work for all shoppers. Every 
 
 ## What You Need To Do
 
-1. **Push the remaining local changes:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/seed.ts claude_docs/STATE.md claude_docs/next-session-prompt.md claude_docs/session-log.md claude_docs/patrick-dashboard.md
-git commit -m "S243: C-001 fix (seed draftStatus), session wrap docs"
-.\push.ps1
-```
+1. **Pull latest** — all changes pushed via MCP. Run `git pull` from PowerShell to sync local.
 
 ## Upcoming (S244)
 
