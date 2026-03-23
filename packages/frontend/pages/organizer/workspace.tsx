@@ -140,7 +140,14 @@ export default function WorkspacePage() {
               <div>
                 <span className="font-semibold">Workspace URL:</span>
                 <br />
-                finda.sale/workspace/{workspace.slug}
+                <a
+                  href={`https://finda.sale/workspace/${workspace.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 font-medium underline"
+                >
+                  finda.sale/workspace/{workspace.slug}
+                </a>
               </div>
               <div>
                 <span className="font-semibold">Created:</span>

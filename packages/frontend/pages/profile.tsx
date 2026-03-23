@@ -192,7 +192,7 @@ const ProfilePage = () => {
                       <p className="text-warm-600 dark:text-warm-400 text-sm">
                         {verificationStatus === 'REJECTED' ? 'Verification was not approved' : 'Not yet verified'}
                       </p>
-                      <Link href="/organizer/verification" className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium text-sm">
+                      <Link href="/organizer/settings?tab=verification" className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium text-sm">
                         Start Verification
                       </Link>
                     </div>

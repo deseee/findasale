@@ -5,6 +5,46 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-03-23 (S251) — Gamification Core Loop (Points + Badges + Hunt Pass)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Shopper engagement mechanic: earn points ($1 = 1pt, referral = 50pts), redeem for Hunt Pass (500pts) or $10 off (1000pts). Badges cosmetic only, auto-awarded at 25/100/250 purchases, reset yearly. Leaderboard paused for beta (code ships, reactivates post-beta). Collector Passport single hub for all gamification. Organizer reputation entirely separate, ratings-based, zero cross-pollination. Referral points awarded only on referred shopper's first purchase.
+
+---
+
+## 2026-03-23 (S251) — Feature Overlap Consolidation (Favorites + Wishlists + Alerts → Single Wishlist)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Three separate features (Favorites heart-saves, Wishlists named collections, Alerts item notifications) consolidated into single `/shopper/wishlist` page. One nav label. Items have per-item notification toggle. Remove `/shopper/alerts` and `/shopper/favorites` pages. Audit Sale Interests on organizer profile (if live: rename to "Follow Organizers" in shopper settings; if dead code: remove).
+
+---
+
+## 2026-03-23 (S251) — Support Tier Definitions (SIMPLE/PRO/TEAMS/ENTERPRISE)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** SIMPLE (Free): FAQ + Organizer Guide only. PRO ($29/mo): email support 48h SLA (Intercom/Crisp). TEAMS ($79/mo): 24h SLA + 1 onboarding call. ENTERPRISE: named contact, 4h SLA. Automation stack: Intercom or Crisp free tier + FAQ deflects 80% volume. Patrick handles escalations only.
+
+---
+
+## 2026-03-23 (S251) — Page Consolidation (Premium/Subscription/Upgrade/Settings/Profile)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Keep `/pricing` (public) + `/organizer/subscription` (active management only). Remove `/organizer/premium` and `/organizer/upgrade` (duplicate pricing). All upgrade CTAs → `/pricing`. Plan management → `/organizer/subscription`. Performance → redirect to Insights. Profile = identity (name, photo, bio, public). Settings = controls (email, password, notifications, privacy, payments). Keep separate pages per role.
+
+---
+
+## 2026-03-23 (S251) — Shopper/Organizer Settings Parity
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Organizer settings stay comprehensive. Shopper settings intentionally minimal — different roles, different needs. Do NOT import organizer-specific features (API keys, webhooks, team management) into shopper settings. Three shopper additions post-beta: (1) saved payment methods, (2) expanded notification preferences, (3) privacy controls (profile visibility, leaderboard opt-out).
+
+---
+
 ## 2026-03-22 (S237) — Transactional Email Provider (Resend → Brevo or Postmark)
 
 **Status:** DEFERRED

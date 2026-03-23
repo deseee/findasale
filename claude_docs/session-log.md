@@ -2,7 +2,21 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S246–S250)
+## Recent Sessions (S247–S251)
+
+### 2026-03-23 · Session 251
+
+**STRATEGIC DECISIONS RECORDED**
+
+✅ **6 decisions locked and documented:** Gamification spec (D-011), feature consolidation (D-012), support tiers (D-013), page consolidation (D-014), profile/settings split (D-015), shopper/organizer parity (D-016).
+
+✅ **All docs updated:** decisions-log.md (6 new entries), STATE.md (S251 complete), session-log.md (this entry), next-session-prompt.md (dispatch prep), patrick-dashboard.md (project status).
+
+✅ **S252 priorities identified:** Dev dispatch for wishlist consolidation, pricing copy, page removals (premium, upgrade, alerts, favorites), settings/profile split. QA dispatch for double footers and missing routes (TR1/OP1/OS3).
+
+⚠️ **Next:** Main session to push all 5 docs to GitHub. Then dispatch wishlist consolidation to findasale-dev.
+
+---
 
 ### 2026-03-23 · Session 250
 

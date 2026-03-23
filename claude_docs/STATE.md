@@ -7,6 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 251 COMPLETE (2026-03-23) — STRATEGIC DECISIONS RECORDED:**
+- ✅ **D-011: Gamification Core Loop** — Points ($1 = 1pt, referral 50pts), redeem for Hunt Pass (500pts) or $10 off (1000pts), badges cosmetic + yearly reset, Collector Passport hub, leaderboard paused for beta, organizer reputation separate
+- ✅ **D-012: Feature Overlap Consolidation** — Favorites + Wishlists + Alerts → `/shopper/wishlist`, remove redundant pages, audit Sale Interests (rename or remove)
+- ✅ **D-013: Support Tier Definitions** — SIMPLE (FAQ), PRO (48h email), TEAMS (24h + onboarding), ENTERPRISE (named contact, 4h), Intercom/Crisp automation stack
+- ✅ **D-014: Page Consolidation** — Keep `/pricing` + `/organizer/subscription`, remove `/premium` + `/upgrade`, all CTAs to `/pricing`, Performance → Insights redirect
+- ✅ **D-015: Profile vs Settings Split** — Profile (identity, public), Settings (controls, write-heavy), separate per role, push notifications in Settings only
+- ✅ **D-016: Shopper/Organizer Settings Parity** — Organizer comprehensive, shopper minimal (different roles), no cross-import of org features, 3 shopper additions post-beta
+- ⚠️ **S252 PRIORITY 1 — Dev dispatch:** Wishlist consolidation (FV1, AL1, PR5), pricing page copy update (P3), page removals (/premium, /upgrade, /alerts, /favorites), D-014 consolidation, D-015 split
+- ⚠️ **S252 PRIORITY 2 — QA dispatch:** Double footers (I2, CP3, LY11, AL5, TR2, S3), TR1/OP1/OS3 missing routes, remaining walkthrough items
+- Last Updated: 2026-03-23
+
 **Session 250 COMPLETE (2026-03-23) — SEED DATA OVERHAUL:**
 - ✅ **S249 item-library.tsx Vercel fix** — `user?.organizerProfileId` → `user?.id` (commit d12fb1b). Vercel confirmed GREEN.
 - ✅ **Seed data overhaul COMPLETE** — All 14 DATA items from S248 walkthrough now covered. seed.ts rewritten (828 lines). Seed ran clean on Neon with zero errors.
@@ -16,7 +27,6 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
   - Referral chain (user12→user11→user13), 3 MissingListingBounties, UserStreaks, OrganizerReputations
   - PointsTransactions, Conversations + Messages, 3 FraudSignals (admin command center)
   - Stripe-enabled: user2 (PRO) + user3 (TEAMS) have stripeConnectId + stripeCustomerId
-- ⚠️ **S251 PRIORITY 1 — Strategic session:** Gamification spec, feature overlap consolidation, support tier definitions, page consolidation, F7 profile/settings split, shopper/organizer parity, TR1/OP1/OS3 original intent + fix decisions, double footer browser QA fix. Full topic list in S248-walkthrough-findings.md cross-cutting questions.
 - Last Updated: 2026-03-23
 
 **Session 249 COMPLETE (2026-03-23) — WALKTHROUGH BUG + DARK MODE FIX BATCH:**
