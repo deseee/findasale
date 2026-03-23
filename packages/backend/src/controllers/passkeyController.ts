@@ -357,6 +357,9 @@ export const authenticateComplete = async (req: Request, res: Response) => {
       }
 
       // Generate JWT — match the format used in login() and register()
+      const jwtSecret = process.env.JWT_SECRET;
+      if (!jwtSecret) throw new Error('JWT_SECRET is not set');
+
       const token = jwt.sign(
         {
           id: user.id,
@@ -370,7 +373,7 @@ export const authenticateComplete = async (req: Request, res: Response) => {
           organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
           onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         },
-        process.env.JWT_SECRET || 'your_secret_key',
+        jwtSecret,
         { expiresIn: '7d' }
       );
 

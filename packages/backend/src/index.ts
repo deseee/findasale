@@ -373,7 +373,9 @@ app.use('/api/planner', plannerRoutes); // Planning assistant chatbot
 app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
 app.use('/api/admin', adminRoutes); // Admin panel
-app.use('/api/dev', devRoutes); // Dev utilities
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/dev', devRoutes); // Dev utilities
+}
 app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
 app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"
 app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling

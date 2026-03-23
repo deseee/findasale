@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, AuthRequest, requireAdmin } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
 import {
   requestVerification,
@@ -19,9 +19,9 @@ router.post('/request', authenticate, requireTier('PRO'), requestVerification);
 router.get('/status', authenticate, getVerificationStatus);
 
 // POST /api/verification/admin/:organizerId/approve — admin approves verification
-router.post('/admin/:organizerId/approve', adminApproveVerification);
+router.post('/admin/:organizerId/approve', authenticate, requireAdmin, adminApproveVerification);
 
 // POST /api/verification/admin/:organizerId/reject — admin rejects verification
-router.post('/admin/:organizerId/reject', adminRejectVerification);
+router.post('/admin/:organizerId/reject', authenticate, requireAdmin, adminRejectVerification);
 
 export default router;

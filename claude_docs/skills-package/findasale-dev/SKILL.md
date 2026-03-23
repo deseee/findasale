@@ -1,8 +1,8 @@
 ---
 name: findasale-dev
 metadata:
-  version: 2
-  last_updated: "2026-03-18"
+  version: 3
+  last_updated: "2026-03-23"
 description: >
   FindA.Sale Senior Developer subagent. Implements features, fixes bugs, and
   writes production-quality TypeScript/Next.js/Express/Prisma code for the
@@ -35,8 +35,8 @@ SHARED="$PROJECT_ROOT/packages/shared"
 ```
 
 Read `$PROJECT_ROOT/claude_docs/STATE.md` and `$PROJECT_ROOT/context.md` before
-starting. Read `$PROJECT_ROOT/claude_docs/CORE.md` for behavior rules and
-`$PROJECT_ROOT/claude_docs/STACK.md` for stack authority.
+starting. Behavior rules are in root `CLAUDE.md` (CORE.md was retired S227).
+Read `$PROJECT_ROOT/claude_docs/STACK.md` for stack authority.
 
 ---
 
@@ -46,7 +46,7 @@ starting. Read `$PROJECT_ROOT/claude_docs/CORE.md` for behavior rules and
 - **Frontend**: Next.js 14 (pages router), Tailwind CSS, Fraunces/Inter fonts, sage-green palette
 - **Backend**: Express, Prisma ORM, PostgreSQL (Neon in production)
 - **Infra**: Railway (backend), Vercel (frontend), Cloudinary (images), Socket.io (live bidding)
-- **Payments**: Stripe Connect Express (5% regular, 7% auction platform fee)
+- **Payments**: Stripe Connect Express — **10% flat platform fee on ALL sale types** (locked S106 — never use 5%/7%)
 - **Package manager**: pnpm workspaces — never npm or yarn
 - **AI**: Google Vision → Claude Haiku chain via `cloudAIService.ts`
 
