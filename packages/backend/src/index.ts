@@ -258,6 +258,19 @@ const createRateLimitStore = () => {
   return undefined; // Falls back to default in-memory store
 };
 
+// IP whitelist — comma-separated IPs in RATE_LIMIT_WHITELIST_IPS env var bypass all rate limits
+// Usage: set RATE_LIMIT_WHITELIST_IPS=203.0.113.1,203.0.113.2 in Railway environment variables
+const RATE_LIMIT_WHITELIST = (process.env.RATE_LIMIT_WHITELIST_IPS || '')
+  .split(',')
+  .map((ip) => ip.trim())
+  .filter(Boolean);
+
+const isWhitelistedIP = (req: express.Request): boolean => {
+  if (RATE_LIMIT_WHITELIST.length === 0) return false;
+  const clientIP = req.ip || req.socket?.remoteAddress || '';
+  return RATE_LIMIT_WHITELIST.some((allowed) => clientIP === allowed || clientIP.endsWith(allowed));
+};
+
 // Global rate limit — 500 req / 15 min per IP (prevents brute force and scraping)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -265,7 +278,7 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  skip: (req) => req.path.startsWith('/api/viewers') || req.path === '/api/health/latency',  // viewer and health endpoints have their own limiter
+  skip: (req) => req.path.startsWith('/api/viewers') || req.path === '/api/health/latency' || isWhitelistedIP(req),
   store: createRateLimitStore(),
 });
 app.use(globalLimiter);
@@ -276,7 +289,7 @@ const viewerLimiter = rateLimit({
   max: 120,                       // 120 req/min per IP (covers ~4 active sale tabs with 30s ping + 15s poll each)
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => false,
+  skip: (req) => isWhitelistedIP(req),
   message: { error: 'Too many viewer requests.' },
 });
 
@@ -288,6 +301,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
+  skip: (req) => isWhitelistedIP(req),
   store: createRateLimitStore(),
 });
 
@@ -297,6 +311,7 @@ const contactLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => isWhitelistedIP(req),
   message: { error: 'Too many messages sent. Please wait before trying again.' },
 });
 
