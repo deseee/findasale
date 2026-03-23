@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 
 interface Message {
   id: string;
@@ -29,6 +30,7 @@ const MessageThreadPage = () => {
   const { id } = router.query;
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [body, setBody] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -48,9 +50,14 @@ const MessageThreadPage = () => {
     },
     onSuccess: () => {
       setBody('');
+      showToast('Message sent!', 'success');
       queryClient.invalidateQueries({ queryKey: ['messages', 'thread', id] });
       queryClient.invalidateQueries({ queryKey: ['messages', 'conversations'] });
       queryClient.invalidateQueries({ queryKey: ['messages', 'unread-count'] });
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.message || 'Failed to send message. Please try again.';
+      showToast(errorMsg, 'error');
     },
   });
 
@@ -179,7 +186,7 @@ const MessageThreadPage = () => {
         <button
           type="submit"
           disabled={!body.trim() || sendMutation.isPending}
-          className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center disabled:opacity-50 hover:bg-amber-700 transition-colors flex-shrink-0"
+          className="w-10 h-10 rounded-full bg-amber-600 dark:bg-amber-700 text-white flex items-center justify-center disabled:opacity-50 hover:bg-amber-700 dark:hover:bg-amber-600 transition-colors flex-shrink-0"
           aria-label="Send message"
         >
           {sendMutation.isPending ? (
