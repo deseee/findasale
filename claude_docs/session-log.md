@@ -2,7 +2,27 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S243–S247)
+## Recent Sessions (S245–S248)
+
+### 2026-03-23 · Session 248
+
+**REMOVAL GATE IMPLEMENTATION + 114-ITEM FULL-SITE WALKTHROUGH**
+
+✅ **Vercel verified GREEN** — all S247 commits deployed.
+
+✅ **Security triage:** Health scout C1/H1/H2 findings already fixed in codebase. No code changes needed.
+
+✅ **Removal Gate (CLAUDE.md §7):** Added three new blocks — (1) subagents must return "DECISION NEEDED" instead of executing removals, (2) tightened dead-code exemption ("not wired into nav" ≠ dead, "no callers found" ≠ dead), (3) orchestrator triage layer (FIX/REDIRECT/REPLACE dispatched silently, only REMOVE goes to Patrick).
+
+✅ **D-010 added to DECISIONS.md:** "No Autonomous Removal of User-Facing Content" — permanent standing decision.
+
+✅ **findasale-dev + findasale-qa skills updated:** Removal gate language packaged as .skill files for Patrick to install.
+
+✅ **114-item walkthrough documented:** Patrick did a full-site walkthrough during rate limit cooldown. Found 29 bugs, 8 dark mode violations, 41 UX issues, 14 test data gaps, 17 strategic questions, 5 duplicate/consolidation items. Organized into `claude_docs/S248-walkthrough-findings.md` as the work queue for upcoming sessions.
+
+⚠️ **QA methodology lesson:** Patrick found more real issues in one manual walkthrough than hundreds of sessions of automated QA. Full-product walkthroughs as each user role are now the QA standard (saved to feedback memory).
+
+---
 
 ### 2026-03-23 · Session 247
 

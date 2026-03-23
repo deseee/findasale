@@ -1,81 +1,78 @@
-# Next Session Prompt — S248
+# Next Session Prompt — S249
 
-**Date:** 2026-03-23 (S247 wrap complete)
-**Status:** Role-based nav and organizer profile fixed. Destructive removal pattern identified — needs permanent fix.
-
----
-
-## FIRST TASK — Verify S247 Vercel build
-
-S247 pushed 4 commits. Confirm Vercel deployment is GREEN before any new work:
-- Commit 1aa1082: role-based nav + organizer profile sections
-- Commit c4b40fa: restore "My Wishlists" link
-- Commit fcfa835: verificationStatus type fix (was breaking Vercel build)
-
-If Vercel is erroring, fix the build first.
+**Date:** 2026-03-23 (S248 wrap complete)
+**Status:** Removal gate fully implemented. 114-item walkthrough documented. Ready to start fixing.
 
 ---
 
-## S248 Priority 1 — Full Feature/Nav Audit Against Roadmap
+## FIRST TASK — Verify S248 push landed
 
-Patrick wants a comprehensive audit of all features vs. what's in the nav. The goal: every feature that exists should be reachable by every role that needs it, and nothing should be ambiguously labeled.
-
-**Scope:**
-1. Inventory every page/route in `packages/frontend/pages/` (organized by role: shopper, organizer, admin, public)
-2. Cross-reference against every nav link in: AvatarDropdown.tsx, Layout.tsx mobile drawer, Layout.tsx desktop header, BottomTabNav.tsx, footer
-3. Flag: pages with no nav link, nav links pointing to 404s, features accessible by the wrong role, ambiguous labels
-4. **Specific known issue:** "My Wishlists" in AvatarDropdown → `/shopper/favorites` (favorites page, not wishlists). Mobile drawer "My Wishlists" → `/wishlists` (actual wishlists). These are two different features — favorites (flat heart-saves) vs wishlists (named shareable collections). Patrick needs a recommendation on labels, routes, and whether to unify.
-
-**Output:** A table mapping every route to its nav entry (or "MISSING"), role access, and recommended action. Patrick will review before any changes are made.
+Confirm CLAUDE.md, DECISIONS.md, and S248-walkthrough-findings.md are on GitHub main. Check Vercel is still GREEN.
 
 ---
 
-## S248 Priority 2 — Permanent Fix for Destructive Removal Pattern
+## S249 Priority 1 — Fix BUGs from Walkthrough (29 items)
 
-This is the #1 recurring problem across sessions. Pattern: something gets flagged in an audit → subagent "fixes" it by removing the thing → nobody asks Patrick whether removal was the right call.
+Work from `claude_docs/S248-walkthrough-findings.md`. Fix all items tagged BUG — these are broken functionality that needs no strategic decision:
 
-**Examples:**
-- S237: Audit said "organizers shouldn't see shopper content" → subagent hid everything instead of building replacement content
-- S247: "My Wishlists" flagged as 404 → subagent removed the link instead of asking Patrick whether to fix the route, redirect, or remove
-- Multiple prior sessions: nav links, features, and UI elements removed as "fixes" without surfacing the decision
+**High-impact bugs (fix first):**
+- H4: Search doesn't find items or organizer names
+- L8: Clicking organizer on leaderboard → "organizer not found"
+- C2: Contact form send button does nothing
+- SD3: Overview tries to load "sales near you" then fails
+- SD6: Dashboard buttons (purchases, watchlist, saved, points) don't click anywhere
+- SD9: Following a seller doesn't work
+- TR1: Trails completely broken
+- OP1: Start Verification 404s
+- OS2/OS3: Workspace doesn't load, links to findasale.com, 404s
+- IL1: Item library broken
+- FR1: Flip reports error
+- PI1: Print inventory tries to print whole page
 
-**What needs to change (Patrick and Claude to decide together):**
-1. **CLAUDE.md §7 (Subagent Implementation Gate):** Add a "Removal Gate" — any subagent action that removes a feature, nav link, UI element, route, or user-facing content must be flagged to the main session with options (remove / fix / redirect / replace), not executed autonomously.
-2. **findasale-dev SKILL.md:** Add a pre-edit check — before any deletion of JSX, routes, or links, dev agent must list what's being removed and why, and return it as a decision point rather than shipping it.
-3. **findasale-qa SKILL.md:** QA findings that recommend removal should explicitly say "DECISION NEEDED: remove vs fix vs redirect" — not "remove this."
-4. **Possibly a new DECISIONS.md entry** locking the pattern as a permanent rule.
-
-**Process:** Claude drafts the changes → Patrick reviews → changes get applied to CLAUDE.md (git push) and skills (skill-creator + install).
+**Quick fixes (batch together):**
+- I2, CP3, LY11, AL5, TR2, S3: 2 footers on 6 pages
+- F1, F2, F3: Special characters displaying literally on FAQ
+- P1: Shopper showing "Free organizer tier already chosen"
+- P7: Access denied with no helpful message when shopper hits organizer/dashboard
 
 ---
 
-## Carry-Forward QA Items
+## S249 Priority 2 — Dark Mode Fixes (8 items)
 
-These are lower priority than P1 and P2 above:
+All items tagged DARK in the walkthrough doc. Mechanical fixes — add `dark:` variants:
+- SD2, SD8, M4, AL2, TY1, PY1, ST1, H13
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Message reply E2E (D1) | ❌ UNVERIFIED | Conversation links didn't navigate in Chrome MCP |
-| /profile edit buttons (C1) | ⚠️ NEEDS DECISION | Patrick hasn't answered: should profile have edit buttons? |
-| Purchases tab (B3) | ⚠️ PARTIAL | Tab present, content not tested |
-| Pickups tab (B4) | ⚠️ PARTIAL | Tab present, content not tested |
-| Dark mode full pass | ⏸ DEFERRED | Not run in S246 or S247 |
-| Mobile 375px (L-002) | ⏸ DEFERRED | Carry-forward from S244 |
+---
+
+## Carry-Forward: Seed Data Overhaul (14 DATA items)
+
+After bugs and dark mode are fixed, the next blocker is test data. Nearly every feature is untestable because seed data lacks realistic state. This needs an architect + dev session to redesign the seed script.
+
+---
+
+## STRATEGIC SESSION (schedule when Patrick is ready)
+
+These 17+ items require Patrick decisions — not code fixes:
+1. **Gamification spec** (L2-L7, LY1-LY2, OV1, RE3, PR4): What do points, badges, stamps, milestones, leaderboard actually mean? Tied to Hunt Pass?
+2. **Feature overlap** (AL1, FV1, PR5): Favorites vs wishlists vs alerts vs sale interests — consolidate?
+3. **Support tier reality** (P3): What does "priority email support" or "dedicated account manager" mean for solo founder?
+4. **Page consolidation** (PSU1-PSU4, S2, PF1): premium/subscription/upgrade/pricing overlap, settings vs profile overlap
+5. **Shopper/organizer parity** (OD3, OS1): Settings features comparison
+6. **Homepage redesign** (H2, H3): UX review needed
+7. **Plan a Sale visibility** (PL1): Public-facing or organizer-only?
+
+---
+
+## Patrick Action Items (from S248)
+
+- [ ] Run push block (CLAUDE.md + DECISIONS.md + walkthrough doc)
+- [ ] Install findasale-dev.skill via Cowork UI (adds §17 Removal Gate)
+- [ ] Install findasale-qa.skill via Cowork UI (adds Decision Point Protocol)
 
 ---
 
 ## Context Loading
 
-- Read `claude_docs/brand/DECISIONS.md` at session start
+- Read `claude_docs/S248-walkthrough-findings.md` — the work queue
+- Read `claude_docs/brand/DECISIONS.md` — includes D-010 (removal gate)
 - Test accounts: Shopper `user11@example.com`, PRO Organizer `user2@example.com`, SIMPLE+ADMIN `user1@example.com`, TEAMS `user3@example.com` (all `password123`)
-- Auth rate limit is 50 failed attempts per 15 min
-- S247 files changed: AvatarDropdown.tsx, Layout.tsx, profile.tsx, AuthContext.tsx
-
----
-
-## S247 Files Changed (for Patrick git tracking)
-
-- `packages/frontend/components/AvatarDropdown.tsx` — admin detection, shopper "My Dashboard", organizer "My Profile", "My Wishlists" preserved
-- `packages/frontend/components/Layout.tsx` — mobile drawer: shopper dashboard relabeled, profile links added for both roles
-- `packages/frontend/pages/profile.tsx` — 3 organizer sections (Verification Status, Your Sales, Quick Links) + verificationStatus fetched from API
-- `packages/frontend/components/AuthContext.tsx` — added verificationStatus to User interface

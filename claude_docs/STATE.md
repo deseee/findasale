@@ -7,18 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 248 COMPLETE (2026-03-23) — REMOVAL GATE + 114-ITEM WALKTHROUGH AUDIT:**
+- ✅ **Vercel deployment verified GREEN** — all S247 commits deployed successfully
+- ✅ **Security triage:** C1 (admin verification routes), H1 (JWT fallback), H2 (/api/dev) — all already fixed in codebase. Health report from 03-22 was pre-fix.
+- ✅ **CLAUDE.md §7 Removal Gate added:** Subagents must return "DECISION NEEDED" blocks instead of executing removals. Orchestrator triages FIX/REDIRECT/REPLACE silently; only REMOVE goes to Patrick.
+- ✅ **D-010 added to DECISIONS.md:** "No Autonomous Removal of User-Facing Content" — standing decision with tightened dead-code exemption ("not wired into nav" ≠ dead).
+- ✅ **findasale-dev skill updated:** §17 Removal Gate added. Packaged as .skill for install.
+- ✅ **findasale-qa skill updated:** Decision Point Protocol added. Packaged as .skill for install.
+- ✅ **114-item walkthrough findings documented:** Patrick's full-site walkthrough organized into S248-walkthrough-findings.md. Categories: 29 BUG, 8 DARK, 41 UX, 14 DATA, 17 STRATEGIC, 5 DUP.
+- ⚠️ **Patrick action needed:** Install findasale-dev.skill and findasale-qa.skill via Cowork UI
+- ⚠️ **Patrick action needed:** Push block provided (CLAUDE.md + DECISIONS.md + walkthrough doc)
+- ⚠️ **S249 PRIORITY 1:** Start fixing BUG + DARK items from walkthrough (29 bugs, 8 dark mode — mechanical fixes, no decisions needed)
+- ⚠️ **S249 PRIORITY 2:** Seed data overhaul — 14 items untestable without realistic test data
+- ⚠️ **STRATEGIC SESSION NEEDED:** Gamification spec, feature overlap consolidation (favorites/wishlists/alerts/sale interests), support tier definitions, page consolidation (premium/subscription/upgrade)
+- Last Updated: 2026-03-23
+
 **Session 247 COMPLETE (2026-03-23) — ROLE-BASED NAV FIX + ORGANIZER PROFILE + DESTRUCTIVE REMOVAL PATTERN:**
-- ✅ **Root cause found:** Organizer profile showing only "Sale Interests + Push Notifications" since S237. The `isOrganizerOnly` gate was added to hide shopper content but no organizer replacement content was ever built. Not a S246 regression.
-- ✅ **AvatarDropdown.tsx:** Added admin detection (`isAdmin`), "Admin Panel" link for admins, "My Profile" link for organizers (was missing), "My Dashboard" link for shoppers (was missing). "My Wishlists" preserved — pointed out it targets `/shopper/favorites` which may 404, but NOT removed (surfaced to Patrick instead).
-- ✅ **Layout.tsx mobile drawer:** Shopper section relabeled "My Profile" → "My Dashboard" for `/shopper/dashboard`. Added separate "My Profile" → `/profile` for both shoppers and organizers.
-- ✅ **profile.tsx:** Added 3 organizer sections inside `isOrganizerOnly` gate: Verification Status card (reads `verificationStatus` from `/users/me` API, not JWT), Your Sales card with link to organizer dashboard, Quick Links grid (Plan a Sale, Settings, Subscription, Workspace if TEAMS).
-- ✅ **AuthContext.tsx:** Added `verificationStatus?: string` to User interface. Profile page fetches from `/users/me` since JWT doesn't include this field.
-- ✅ **HOTFIX — Vercel build error:** `user.verificationStatus` → local `verificationStatus` variable sourced from API query. Commit fcfa835.
-- ⚠️ **IDENTIFIED (not fixed — surfaced to Patrick):** "My Wishlists" in AvatarDropdown points to `/shopper/favorites` but mobile drawer "My Wishlists" points to `/wishlists`. Favorites = flat heart-saves, Wishlists = named shareable collections. Separate features, confusing nav. Patrick deciding next steps.
-- ⚠️ **CRITICAL PATTERN — Destructive removal:** Subagent removed "My Wishlists" link without Patrick approval despite feedback memory prohibiting this. Caught and restored immediately. Patrick wants permanent fix via CLAUDE.md and/or skill changes in S248.
-- ⚠️ **S248 PRIORITY 1:** Full feature/nav audit against roadmap — every feature should be reachable by every role that needs it
-- ⚠️ **S248 PRIORITY 2:** Permanent fix for destructive removal pattern — CLAUDE.md §7 subagent gate changes + skill execution path changes
-- ⚠️ **CARRY-FORWARD:** D1 message reply E2E, B3/B4 (Purchases/Pickups), dark mode pass, L-002 mobile, M2 TODO/FIXME, /profile edit buttons (Patrick never answered)
+- ✅ Root cause found and fixed for organizer profile blank since S237
+- ✅ AvatarDropdown, Layout.tsx, profile.tsx, AuthContext.tsx all updated
+- ✅ Vercel build fix pushed (fcfa835)
 - Last Updated: 2026-03-23
 
 **Session 246 COMPLETE (2026-03-23) — SHOPPER QA SCAN + CRITICAL BUILD HOTFIXES:**
@@ -26,20 +33,6 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - ✅ B1 Favorites fix pushed (Array.isArray guard)
 - ✅ HOTFIX: profile.tsx stray `>` + auth.ts `requireAdmin`
 - Last Updated: 2026-03-23
-
-**Session 245 COMPLETE (2026-03-23) — SHOPPER DASHBOARD FIXES + QA BEHAVIORAL CORRECTION:**
-- ✅ S244 post-fix verification confirmed live
-- ✅ 4 shopper dashboard fixes pushed
-- ✅ QA behavioral correction (Chrome MCP-first methodology)
-- Last Updated: 2026-03-23
-
-**Session 244 COMPLETE (2026-03-22) — HEALTH SCOUT FIX + DARK MODE AUDIT + META CLEANUP**
-**Session 242 COMPLETE (2026-03-22) — BRAND SWEEP + D-007 + 13 UX BUG FIXES + QA SKILL REWRITE**
-**Session 241 COMPLETE (2026-03-22) — LIVE VERIFICATION + D-007 FULLY DEPLOYED**
-**Session 240 COMPLETE (2026-03-22) — FULL AUDIT FIX + D-007 LOCKED**
-**Session 239 COMPLETE (2026-03-22) — BUG FIXES + WORKFLOW AUTOMATION PLATEAU**
-**Session 238 COMPLETE (2026-03-22) — ROLE WALKTHROUGHS + COPY BROADENING**
-**Session 236 COMPLETE (2026-03-22) — BETA TESTER READINESS: BUG BLITZ + ROUTE AUDIT + INNOVATION RE-RUN**
 
 ---
 
