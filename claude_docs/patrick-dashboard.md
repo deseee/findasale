@@ -1,50 +1,48 @@
-# Patrick's Dashboard — Session 254 Wrap (March 23, 2026)
+# Patrick's Dashboard — Session 255 Complete (March 23, 2026)
 
 ## Build Status
 
-✅ **Vercel GREEN** — S252 changes confirmed live and working. Live smoke test found 2 P1 bugs. Ready to fix before beta week usage.
+✅ **Vercel & Railway GREEN** — S255 changes deployed. All 5 bug fixes verified working live via Chrome MCP. Beta week is go.
 
 ---
 
 ## What Happened This Session
 
-Ran comprehensive live smoke test of all 30 S252 changes via Chrome MCP. All dashboard tabs, page redirects, wishlist consolidation, and double footer fixes verified working. Identified 2 P1 bugs blocking user features.
+Fixed 5 P1 bugs from S253 backlog + resolved 2 route decisions. All fixes QA-verified live.
 
-**Verified working (all S252 changes):**
-- Dashboard tabs: Overview, Purchases, Favorites, Subscribed, Pickups — all switch correctly ✅
-- Shopper page double footers: Loyalty, Collector Passport, Bids, Alerts, Trails — all show single footer (S252 fix working) ✅
-- Wishlist consolidation: `/shopper/wishlist` with 3 working tabs (Saved Items, Collections, Watching) ✅
-- CTA redirects: `/shopper/favorites` → `/shopper/wishlist`, `/shopper/alerts` → `/shopper/wishlist`, `/organizer/upgrade` → `/pricing` all working ✅
-- Pricing page: All 4 tiers displaying with correct copy ✅
-- Notifications page: Loads with user11's 4 notifications ✅
-- Bids page: Loads with user11's 9 active bids ✅
+**5 Fixes Shipped & Verified:**
+1. `/organizer/profile` 404 → **redirect to `/organizer/settings`** ✅ (profile page retired, user directed to settings where profile data is editable)
+2. `/organizer/inventory` 404 → **"Coming Soon" stub** ✅ (Persistent Inventory feature deferred post-beta)
+3. `/organizer/premium` legacy page → **redirect to `/organizer/subscription`** ✅ (D-confirmed, matching D-012 CTA consolidation)
+4. **Organizer dashboard double modal** → **single modal on fresh load** ✅ (welcome wizard + profile setup no longer stack)
+5. **Bids page item photos missing** → **photo placeholder** ✅ (fallback shown when `photoUrls` empty; allows visual feedback while data loads)
 
-**2 P1 Bugs Found (blocking users):**
+**S248 Walkthrough Backlog Status:**
+- ✅ All 29 bugs from S248 walkthrough are closed
+- ✅ All 8 dark mode violations from S248 are fixed
+- ⚠️ Remaining: SD4 (streak/points data shows empty) + P2 (organizer onboarding flow needs end-to-end design)
 
-1. **BUG-1: Saved Items tab always empty** — API response shape mismatch
-   - Root cause: Backend `/favorites` endpoint returns flat array. Frontend expects shaped response object `{ favorites: [...], categories: [...], total: N }`
-   - `favoritesData?.favorites` is always `undefined` → empty state
-   - Secondary: Backend query missing `item` relation for item-level favorites
-   - Tertiary: Seed only creates sale-level favorites, not item-level favorites for user11
-   - Fix: Update userController.ts `/favorites` endpoint to return shaped response with `item` relation. Add item-level favorites to seed.
-
-2. **BUG-2: /organizer/premium not redirecting** — CTA consolidation incomplete
-   - Expected per D-016: `/organizer/premium` → `/organizer/subscription`
-   - Actual: Full page loads with "Premium Plans" title
-   - Fix: Add `useEffect(() => { router.replace('/organizer/subscription'); }, [])` to premium.tsx
-
-**Not user-facing bugs (no nav links point to these):**
-- `/organizer/profile` 404 — no nav links
-- `/shopper/profile` 404 — no nav links
-- `/organizer/inventory` 404 — item library is at `/organizer/item-library`
+**Commits:**
+- `29e7418` — profile/premium/inventory redirects, dashboard modal, coming-soon stub
+- `cecc437` — bids page photo placeholder
 
 ---
 
-## Next Actions (S255)
+## S256 Work Queue
 
-1. Dispatch findasale-dev to fix BUG-1: Update backend `/favorites` endpoint shape + add `item` relation + add item-level favorites to seed
-2. Dispatch findasale-dev to fix BUG-2: Add redirect to premium.tsx
-3. Re-verify Saved Items tab after fixes via Chrome MCP
+**PRIORITY 1:** 41 UX items from S248 walkthrough → dispatch `findasale-ux` for spec grouping → parallel dev batches
+
+**PRIORITY 2:** Organizer onboarding flow — currently two modals fixed to show one at a time, but end-to-end onboarding (signup → first sale) has never been fully designed. Dispatch `findasale-ux` to map flow + spec improvements.
+
+**PRIORITY 3:** SD4 quick fix — streak/points showing empty on shopper dashboard even though seed data exists. Dispatch `findasale-dev` to find the layer where data is missing (DB, API, or frontend).
+
+**PRIORITY 4:** 17 strategic items from S248 → route to advisory board + innovation teams (not dev).
+
+---
+
+## No Patrick Actions Required
+
+All S255 code changes are live. Roadmap updated. S256 is ready to dispatch.
 
 ---
 

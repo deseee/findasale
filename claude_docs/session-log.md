@@ -2,7 +2,21 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S249–S253)
+## Recent Sessions (S251–S255)
+
+### 2026-03-23 · Session 255
+
+**BUG FIX BATCH + DECISIONS**
+
+✅ **5 fixes shipped** (commits `29e7418`, `cecc437`): `/organizer/profile` → redirect to `/organizer/settings`, `/organizer/inventory` → "Coming Soon" stub (Persistent Inventory deferred), `/organizer/premium` → redirect to `/organizer/subscription`, organizer dashboard double modal fixed (single modal on fresh load), bids page photo placeholder added (fallback when photoUrls empty).
+
+✅ **All 5 QA checks PASS:** Redirects work, inventory stub loads, modals show once, photos render. Verified live via Chrome MCP.
+
+✅ **S248 full backlog resolved:** All 29 bugs + 8 dark mode items confirmed closed. Only SD4 (streak/points) + P2 (onboarding flow) remain from original 39 S248 findings.
+
+✅ **Persistent Inventory added to roadmap deferred section** — post-beta feature.
+
+📋 **S256 queued:** 41 UX items → findasale-ux spec → dev batches. Organizer onboarding flow spec. SD4 streak/points quick fix. 17 strategic items to advisory/innovation.
 
 ### 2026-03-23 · Session 253
 

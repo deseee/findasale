@@ -7,6 +7,22 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 255 COMPLETE (2026-03-23) — BUG FIX BATCH + DECISIONS:**
+- ✅ `/organizer/profile` → redirect to `/organizer/settings` (profile page retired, D-confirmed)
+- ✅ `/organizer/inventory` → "Coming Soon" Persistent Inventory stub (deferred post-beta)
+- ✅ `/organizer/premium` → redirect to `/organizer/subscription`
+- ✅ Organizer dashboard double modal fixed (single modal on fresh load)
+- ✅ Bids page photo placeholder (fallback shown when photoUrls empty)
+- ✅ All 5 QA checks PASS — verified live via Chrome MCP
+- ✅ Persistent Inventory added to roadmap.md deferred section
+- ✅ Confirmed: all 29 S248 bugs + 8 dark mode violations resolved
+- ⚠️ Remaining S248: SD4 (streak/points data) + P2 (organizer onboarding flow)
+- **S256 PRIORITY 1:** 41 UX items from S248 → findasale-ux spec → parallel dev batches
+- **S256 PRIORITY 2:** Organizer onboarding flow — findasale-ux spec first, then findasale-dev
+- **S256 PRIORITY 3:** SD4 streak/points data fix
+- **S256 PRIORITY 4:** 17 strategic S248 items → advisory board / innovation
+- Last Updated: 2026-03-23
+
 **Session 253 COMPLETE (2026-03-23) — S252 SMOKE TEST CONTINUATION + 3 BUG FIXES:**
 - ✅ **3 dev fixes pushed** (commit 011d18b): `/api/bids` route created (GET, auth, Prisma nested select, computed status active/winning/outbid/closed), `/organizer/upgrade` → `/pricing` redirect (D-012), `authLimiter` max raised 50→100
 - ✅ **Rate limiter fix deployed** — confirmed live (Railway/Vercel "A new version is available" banner appeared mid-session)
