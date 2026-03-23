@@ -1,19 +1,45 @@
 import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { recordVisit, getStreak } from '../services/streakService';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 
 /**
  * GET /api/streaks/profile
- * Returns the authenticated user's streak profile: current streaks, longest streaks.
+ * Returns the authenticated user's streak profile: current streaks, longest streaks, points, hunt pass status.
  */
 router.get('/profile', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const streak = await getStreak(req.user.id);
-    res.json(streak);
+    // Fetch user data including streakPoints and hunt pass info
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        name: true,
+        streakPoints: true,
+        visitStreak: true,
+        huntPassActive: true,
+        huntPassExpiry: true,
+      },
+    });
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Get streak data (visit, save, buy)
+    const streakData = await getStreak(req.user.id);
+
+    res.json({
+      userId: user.id,
+      name: user.name,
+      streakPoints: user.streakPoints,
+      visitStreak: user.visitStreak || streakData.currentStreak,
+      huntPassActive: user.huntPassActive,
+      huntPassExpiry: user.huntPassExpiry ? user.huntPassExpiry.toISOString() : null,
+      streaks: streakData,
+    });
   } catch (err) {
     console.error('GET /api/streaks/profile error:', err);
     res.status(500).json({ message: 'Server error' });
