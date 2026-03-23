@@ -32,8 +32,6 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
   - `directUrl = env("DIRECT_URL")` corrected in schema.prisma datasource (was `DATABASE_URL_UNPOOLED`)
 - ✅ **schema.prisma env var fix**: `DIRECT_URL` is the correct Neon non-pooled env var for migrations (not `DATABASE_URL_UNPOOLED`)
 - ⚠️ **CARRY-FORWARD:** L-002 (mobile real-device test) — still pending Patrick on real iPhone SE
-- ⚠️ **PARTIALLY DONE:** Live verification of remaining S240 fixes (/hubs /categories /calendar /cities /neighborhoods text) — D-007 took priority. S242 must complete.
-- ⚠️ **S242 FIRST:** Verify D-007 cap enforcement live — add 13th member to user3@example.com TEAMS org, should fail with enterprise upgrade CTA
 - Last Updated: 2026-03-22
 
 **Session 240 COMPLETE (2026-03-22) — FULL AUDIT FIX + D-007 LOCKED:**
