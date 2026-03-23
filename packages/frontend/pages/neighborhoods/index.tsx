@@ -8,7 +8,6 @@
 import React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import Layout from '../../components/Layout';
 
 export const GRAND_RAPIDS_NEIGHBORHOODS: Array<{
   slug: string;
@@ -33,9 +32,9 @@ export const GRAND_RAPIDS_NEIGHBORHOODS: Array<{
 
 const NeighborhoodsPage = () => {
   return (
-    <Layout>
+    <>
       <Head>
-        <title>Estate Sales by Neighborhood | FindA.Sale</title>
+        <title>Sales by Neighborhood | FindA.Sale</title>
         <meta
           name="description"
           content="Browse upcoming estate sales by neighborhood. Find estate sales near you on FindA.Sale."
@@ -77,7 +76,7 @@ const NeighborhoodsPage = () => {
 
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 
