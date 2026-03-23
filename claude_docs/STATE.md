@@ -7,15 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 251 COMPLETE (2026-03-23) — STRATEGIC DECISIONS RECORDED:**
-- ✅ **D-011: Gamification Core Loop** — Points ($1 = 1pt, referral 50pts), redeem for Hunt Pass (500pts) or $10 off (1000pts), badges cosmetic + yearly reset, Collector Passport hub, leaderboard paused for beta, organizer reputation separate
-- ✅ **D-012: Feature Overlap Consolidation** — Favorites + Wishlists + Alerts → `/shopper/wishlist`, remove redundant pages, audit Sale Interests (rename or remove)
-- ✅ **D-013: Support Tier Definitions** — SIMPLE (FAQ), PRO (48h email), TEAMS (24h + onboarding), ENTERPRISE (named contact, 4h), Intercom/Crisp automation stack
-- ✅ **D-014: Page Consolidation** — Keep `/pricing` + `/organizer/subscription`, remove `/premium` + `/upgrade`, all CTAs to `/pricing`, Performance → Insights redirect
-- ✅ **D-015: Profile vs Settings Split** — Profile (identity, public), Settings (controls, write-heavy), separate per role, push notifications in Settings only
-- ✅ **D-016: Shopper/Organizer Settings Parity** — Organizer comprehensive, shopper minimal (different roles), no cross-import of org features, 3 shopper additions post-beta
-- ⚠️ **S252 PRIORITY 1 — Dev dispatch:** Wishlist consolidation (FV1, AL1, PR5), pricing page copy update (P3), page removals (/premium, /upgrade, /alerts, /favorites), D-014 consolidation, D-015 split
-- ⚠️ **S252 PRIORITY 2 — QA dispatch:** Double footers (I2, CP3, LY11, AL5, TR2, S3), TR1/OP1/OS3 missing routes, remaining walkthrough items
+**Session 252 COMPLETE (2026-03-23) — LIVE SMOKE TEST + DECISIONS EXECUTED:**
+- ✅ **Smoke test COMPLETE** — Verified login, homepage, dashboard, loyalty passport, collector passport, leaderboard all passing live
+- ✅ **5 bugs fixed in live test:** Loot Log blank (API response transform), Dashboard tabs (router.push + hash), /shopper/notifications 404 (NotificationBell nav), /shopper/bids 404 (created page), TreasureTrail auth bug (useTrails hook axios call)
+- ✅ **All D-012 through D-016 decisions executed:** Pricing copy updated, CTAs consolidated, Profile/Settings split verified, Shopper settings scoped correctly
+- ✅ **Wishlist consolidation LIVE** — `/shopper/wishlist` unified page (3 tabs: Saved Items, Collections, Watching), nav updated, `/shopper/favorites` + `/shopper/alerts` now redirect to wishlist
+- ✅ **Sale Interests moved to shopper settings** (D-012 final step) — moved from organizer profile to `/shopper/settings` as "Followed Organizers" (Patrick authorized)
+- ✅ **Double footer root cause found + fixed** — shopper pages had individual Layout wrappers causing duplication with _app.tsx Layout. Fixed: loyalty, collector-passport, alerts, trails, bids (5 files). Need verification: organizer pages (I2, S3)
+- ✅ **TR1/OP1/OS3 confirmed NOT bugs** — TR1 (Create Trail 404) = route works, OP1 (Verification) = correctly routes to settings?tab=verification, OS3 (Workspace URL) = /workspace/[slug] works
+- ⚠️ **S253 PRIORITY 1:** Live smoke test of all 30 changed files before beta week concludes
+- ⚠️ **S253 PRIORITY 2:** Verify organizer double footers fixed (I2 = /organizer/inventory, S3 = /organizer/sales)
+- ⚠️ **S253 PRIORITY 3:** Verify dashboard tabs still responsive after fix
 - Last Updated: 2026-03-23
 
 **Session 250 COMPLETE (2026-03-23) — SEED DATA OVERHAUL:**

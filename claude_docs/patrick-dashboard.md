@@ -1,38 +1,51 @@
-# Patrick's Dashboard — Session 251 Wrap (March 23, 2026)
+# Patrick's Dashboard — Session 252 Wrap (March 23, 2026)
 
 ## Build Status
 
-✅ **Vercel GREEN** — all prior commits deployed. Seed data live on Neon. Ready for next dev batch.
+✅ **Vercel GREEN** — all 30 S252 changes deployed. Live smoke test passed on key features. Ready for beta user testing.
 
 ---
 
 ## What Happened This Session
 
-Strategic decisions recorded — 6 decisions locked and documented. Roadmap clarity for wishlist consolidation, page removals, support tier definitions, and settings/profile split.
+Executed all D-012 through D-016 locked decisions. Ran live smoke test via Chrome MCP, found + fixed 5 bugs in real time. 30 files changed.
 
-**Decisions locked:**
-1. **Gamification** (D-011) — Points ($1 = 1pt, referral 50pts), redeem for Hunt Pass (500pts) or $10 off (1000pts). Badges cosmetic + yearly reset. Collector Passport hub. Leaderboard paused for beta. Organizer reputation separate.
-2. **Wishlist consolidation** (D-012) — Merge Favorites + Wishlists + Alerts into `/shopper/wishlist`. Remove redundant pages. Per-item notification toggle.
-3. **Support tiers** (D-013) — SIMPLE (FAQ), PRO (48h email), TEAMS (24h + onboarding call), ENTERPRISE (named contact, 4h). Intercom/Crisp automation.
-4. **Page consolidation** (D-014) — Keep `/pricing` + `/organizer/subscription`. Remove `/premium` + `/upgrade`. All CTAs redirect to `/pricing`.
-5. **Profile/Settings split** (D-015) — Profile = identity (read-only). Settings = controls (write-heavy). Separate per role. Push notifications toggle in Settings only.
-6. **Shopper settings parity** (D-016) — Organizer comprehensive, shopper minimal (no org-specific features). Three additions post-beta: payment methods, notification prefs, privacy controls.
+**Decisions executed:**
+1. **Wishlist consolidation** (D-012) ✅ — `/shopper/wishlist` unified page live (3 tabs: Saved Items, Collections, Watching). `/shopper/favorites` + `/shopper/alerts` now redirect to `/shopper/wishlist`. Nav updated. Sale Interests renamed to "Followed Organizers" + moved to shopper settings (you authorized this).
+2. **Pricing copy** (D-013) ✅ — Support tier definitions updated to match spec exactly (SIMPLE/FAQ, PRO/48h email, TEAMS/24h + onboarding, ENTERPRISE/named contact).
+3. **Page consolidation** (D-014) ✅ — All `/organizer/upgrade` CTAs redirect to `/pricing`. All plan management CTAs redirect to `/organizer/subscription`.
+4. **Profile/Settings split** (D-015) ✅ — Audited and verified: Profile pages are read-only identity hubs. Settings pages contain all write-heavy controls. Separate per role.
+5. **Shopper settings parity** (D-016) ✅ — Verified shopper settings minimal + scoped correctly (no organizer-specific features present).
+
+**Bugs found + fixed in live test:**
+- Loot Log blank → fixed API response transformation (lootLogController.ts)
+- Dashboard tabs unresponsive → fixed tab switching with router.push + hash
+- /shopper/notifications 404 → fixed NotificationBell nav link + created notifications page
+- /shopper/bids 404 → created bids page (user11 has 9 active bids to display)
+- TreasureTrail invisible → fixed useTrails.ts auth bug (was making unauthenticated axios calls)
+
+**Technical wins:**
+- Double footer root cause found: shopper pages had individual Layout wrappers while _app.tsx also applies Layout → duplicate footer. Fixed on 5 files (loyalty, collector-passport, alerts, trails, bids). Organizer pages (inventory, sales) need verification.
+- TR1 (Create Trail 404) confirmed NOT a bug — route works correctly.
+- OP1 (Verification 404) confirmed NOT a bug — correctly routes to /organizer/settings?tab=verification.
+- OS3 (Workspace URL) confirmed NOT a bug — /workspace/[slug] route exists and works.
 
 ---
 
-## Ready for Dev Dispatch (S252)
+## Ready for QA Pass (S253 Priority 1)
 
-**Priority 1 — findasale-dev:**
-- Wishlist consolidation (FV1, AL1, PR5) — merge 3 features, remove 2 pages
-- Pricing page copy (P3) — match tier definitions exactly
-- Page removals (/premium, /upgrade, /alerts, /favorites)
-- Settings/Profile split (D-015)
-- Shopper settings trim (D-016)
-- Sale Interests audit + rename/remove per D-012
+**30 files changed — all need smoke test verification before beta week ends:**
+Wishlist pages, notifications, bids, pricing, settings/profile consolidation, CTA redirects, double footer fixes.
 
-**Priority 2 — findasale-qa:**
-- Double footers (I2, CP3, LY11, AL5, TR2, S3) — identify + fix
-- Missing routes (TR1, OP1, OS3) — implement per your S251 decisions [pending review of transcript]
+Beta users will test this week. Every broken page = lost credibility. S253 must include full live QA pass of all changed pages.
+
+---
+
+## Outstanding (S253 carry-forward)
+
+- [ ] Verify organizer double footers fixed (I2 = /organizer/inventory, S3 = /organizer/sales)
+- [ ] Verify dashboard tabs responsive after S252 fix
+- [ ] Message reply E2E test (D1 from friction audit) — pending browser verification
 
 ---
 
@@ -42,19 +55,18 @@ All password: `password123`
 - `user1@example.com` — ADMIN + SIMPLE organizer
 - `user2@example.com` — PRO organizer (Stripe connected)
 - `user3@example.com` — TEAMS organizer (Stripe connected)
-- `user11@example.com` — Shopper with full activity history
+- `user11@example.com` — Shopper with full activity (9 bids, 6 purchases, wishlists, follows, notifications)
 
 ---
 
-## Push Block (S251 wrap docs)
+## Push Block (S252 wrap docs)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/decisions-log.md
 git add claude_docs/STATE.md
-git add claude_docs/session-log.md
+git add claude_docs/logs/session-log.md
 git add claude_docs/next-session-prompt.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S251: Strategic decisions locked — gamification (D-011), wishlist consolidation (D-012), support tiers (D-013), page consolidation (D-014), profile/settings split (D-015), shopper parity (D-016)"
+git commit -m "S252: Decisions D-012-D-016 executed — wishlist consolidation, pricing copy, page consolidation, profile/settings split. Live smoke test: 5 bugs fixed. 30 files changed."
 .\push.ps1
 ```

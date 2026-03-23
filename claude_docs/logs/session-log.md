@@ -16,6 +16,23 @@ Keep only the 5 most recent sessions. Delete older entries — git history and S
 
 ## Recent Sessions
 
+### Session 252 — 2026-03-23 — Live Smoke Test + D-012-D-016 Execution + Bug Fixes
+**Worked on:** (1) Smoke test via Chrome MCP: Login, Homepage, Dashboard, Loyalty Passport, Collector Passport, Leaderboard all passing. (2) Found 5 bugs in live test: Loot Log blank → fixed API response transformation (lootLogController.ts), Dashboard tabs unresponsive → fixed router.push + hash (dashboard.tsx), /shopper/notifications 404 → fixed NotificationBell nav + created notifications page, /shopper/bids 404 → created bids page, TreasureTrail invisible → fixed useTrails.ts auth bug. (3) Executed D-012 through D-016: Pricing copy updated to match support tiers, all CTAs redirected (/organizer/upgrade → /pricing), Profile/Settings split audited and verified correct, Shopper settings scoped properly (no org features). (4) D-012 Wishlist consolidation: `/shopper/wishlist` unified page live with 3 tabs (Saved Items, Collections, Watching), nav updated, /favorites and /alerts now redirect to /wishlist. (5) D-012 Sale Interests moved from organizer profile to shopper settings as "Followed Organizers" (Patrick authorized). (6) Double footer root cause found: shopper pages had individual Layout wrappers while _app.tsx also applies Layout → fixed on 5 files (loyalty, collector-passport, alerts, trails, bids). Organizer pages (I2, S3) need verification.
+
+**Decisions:** Loot Log fix validates API response shape before render. Wishlist consolidation reduces nav clutter + unifies similar features. Sale Interests → Followed Organizers makes product model clearer (organizers don't follow organizers). Double footer fix removes duplicate footer elements from shopper pages.
+
+**Token efficiency:** High. Live QA + 5 parallel bug fixes + 30 file feature batch. Zero wasted turns.
+
+**Token burn:** ~140k tokens (est.), 0 compressions.
+
+**Next up:** S253 smoke test of all 30 changed files. Verify organizer double footers fixed. Verify dashboard tabs responsive. Review all beta-critical changes before user testing week concludes.
+
+**Blockers:** None. All pushed and live.
+
+**Files changed:** 30 files total — `lootLogController.ts`, `ActivitySummary.tsx`, `AvatarDropdown.tsx`, `Layout.tsx`, `NotificationBell.tsx`, `PremiumCTA.tsx`, `RecentlyViewed.tsx`, `TierComparisonTable.tsx`, `TierGate.tsx`, `ValuationWidget.tsx`, `useTrails.ts`, `organizer/dashboard.tsx`, `photo-ops/[saleId].tsx`, `organizer/premium.tsx`, `organizer/pro-features.tsx`, `organizer/settings.tsx`, `organizer/subscription.tsx`, `pricing.tsx`, `profile.tsx`, `shopper/alerts.tsx`, `shopper/collector-passport.tsx`, `shopper/dashboard.tsx`, `shopper/favorites.tsx`, `shopper/loyalty.tsx`, `shopper/settings.tsx`, `shopper/trails.tsx`, `shopper/wishlist.tsx` (new), `shopper/bids.tsx` (new), `shopper/notifications.tsx` (new) | Compressions: 0 | Subagents: findasale-dev (feature batch) + Chrome MCP QA | Push method: Session coordination
+
+---
+
 ### Session 249 — 2026-03-23 — Walkthrough Bug + Dark Mode Fix Batch
 **Worked on:** (1) Verified S248 push on GitHub main (CLAUDE.md §7, S248-walkthrough-findings.md). (2) Dispatched 4 parallel dev agents — Group A (quick fixes), Group B (shopper bugs), Group C (organizer bugs), Group D (dark mode). (3) Fixed 18 bugs: FAQ character rendering (F1-F3), shopper tier pricing message (P1), access denied redirect (P7), search expanded to items+organizers (H4), leaderboard organizer links (L8), contact form submit (C2), sales-near-you error state (SD3), dashboard stat buttons navigation (SD6), follow seller end-to-end (SD9), workspace domain findasale.com→finda.sale (OS2), flip report graceful empty state (FR1), item library authorization ID fix (IL1), print inventory verified working (PI1). (4) Fixed 8 dark mode violations: ActivitySummary (SD2), MyPickupAppointments (SD8), RouteBuilder/Map (M4), alerts page (AL2), typology page (TY1), payouts page (PY1), sales tab (ST1), organizer pages pass (H13). (5) Noted F7 (profile edit buttons) deferred to strategic session per Patrick.
 
