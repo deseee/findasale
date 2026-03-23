@@ -278,7 +278,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <QueryClientProvider client={queryClient}>
               <ThemeInitializer />
               <ErrorBoundary key={router.asPath}>
-                <Layout>
+                <Layout noFooter={router.pathname === '/messages/[id]'}>
                   <Component {...pageProps} />
                 </Layout>
               </ErrorBoundary>

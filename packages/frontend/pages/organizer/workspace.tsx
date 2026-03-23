@@ -54,7 +54,7 @@ export default function WorkspacePage() {
   }
 
   if (!user) {
-    router.push('/login');
+    router.push('/login?redirect=/organizer/workspace');
     return null;
   }
 

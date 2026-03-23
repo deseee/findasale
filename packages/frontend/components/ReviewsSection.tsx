@@ -96,7 +96,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mt-8">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-8">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-warm-900">
           {mode === 'sale' ? 'Reviews' : 'Customer Reviews'}
