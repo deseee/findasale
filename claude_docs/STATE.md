@@ -22,7 +22,6 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - ⚠️ **CARRY-FORWARD:** L-002 (mobile viewport test via Chrome DevTools 375px)
 - ⚠️ **CARRY-FORWARD:** /cities and /neighborhoods meta descriptions still say "estate sales"
 - ⚠️ **CARRY-FORWARD:** Message reply live verification
-- ⚠️ **PENDING PATRICK:** Push seed.ts fix (`packages/database/prisma/seed.ts`) + S243 about.tsx MCP commit + all wrap docs
 - Last Updated: 2026-03-22
 
 **Session 242 COMPLETE (2026-03-22) — BRAND SWEEP + D-007 + 13 UX BUG FIXES + QA SKILL REWRITE:**

@@ -32,20 +32,6 @@ Beta testers evaluating this week. Prioritize reported issues over new feature w
 
 ---
 
-## Patrick Actions Before S244
-
-1. **Push all changes** — run from PowerShell:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/seed.ts claude_docs/STATE.md claude_docs/next-session-prompt.md claude_docs/session-log.md claude_docs/patrick-dashboard.md
-git commit -m "S243: C-001 fix (seed draftStatus), session wrap docs"
-.\push.ps1
-```
-
-Note: about.tsx was already pushed via MCP (commit bb298d6). H-001, H-002, M-001, M-002, M-003 fixes were also pushed via MCP during session. The seed.ts fix and wrap docs are the only local-only changes.
-
----
-
 ## Context Loading
 
 - Read `claude_docs/brand/DECISIONS.md` at session start (mandatory)
@@ -62,4 +48,4 @@ Note: about.tsx was already pushed via MCP (commit bb298d6). H-001, H-002, M-001
 - MCP pushes: LiveFeedTicker.tsx, ReviewsSection.tsx, premium.tsx, workspace.tsx, Layout.tsx, _app.tsx, about.tsx
 - bb298d6: About page mission statement broadened
 - Neon SQL: `UPDATE "Item" SET "draftStatus" = 'PUBLISHED' WHERE "draftStatus" = 'DRAFT'` (data fix, no code deploy needed)
-- Local only: seed.ts `draftStatus: 'PUBLISHED'` fix + wrap docs
+- MCP push: seed.ts `draftStatus: 'PUBLISHED'` fix + wrap docs
