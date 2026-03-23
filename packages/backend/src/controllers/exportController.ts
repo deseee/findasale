@@ -399,6 +399,7 @@ export const exportOrganizer = async (
     // Fetch all organizer's sales
     const sales = await prisma.sale.findMany({
       where: { organizerId: organizer.id },
+      take: 5000,
       select: {
         id: true,
         title: true,
@@ -418,6 +419,7 @@ export const exportOrganizer = async (
       where: {
         sale: { organizerId: organizer.id },
       },
+      take: 5000,
       select: {
         id: true,
         saleId: true,
@@ -438,6 +440,7 @@ export const exportOrganizer = async (
       where: {
         item: { sale: { organizerId: organizer.id } },
       },
+      take: 5000,
       select: {
         id: true,
         itemId: true,

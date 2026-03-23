@@ -130,7 +130,7 @@ const ProfilePage = () => {
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {!isOrganizerOnly && (
                   <>
-                    <span className="bg-amber-100 text-amber-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                    <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-medium px-2.5 py-0.5 rounded">
                       🏆 {pointsData?.points ?? 0} pts
                     </span>
                     {pointsData?.tier && (
@@ -140,7 +140,7 @@ const ProfilePage = () => {
                     )}
                   </>
                 )}
-                <span className="bg-green-100 text-green-800 dark:text-green-200 text-sm font-medium px-2.5 py-0.5 rounded">
+                <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 text-sm font-medium px-2.5 py-0.5 rounded">
                   {isOrganizerOnly ? 'Organizer' : user.role === 'USER' ? 'Shopper' : user.role}
                 </span>
               </div>
@@ -271,10 +271,10 @@ const ProfilePage = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            bid.status === 'WINNING' ? 'bg-green-100 text-green-800' :
-                            bid.status === 'WON' ? 'bg-amber-100 text-amber-800' :
-                            bid.status === 'LOST' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
+                            bid.status === 'WINNING' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                            bid.status === 'WON' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' :
+                            bid.status === 'LOST' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
+                            'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
                           }`}>
                             {bid.status}
                           </span>
@@ -333,8 +333,8 @@ const ProfilePage = () => {
           {successMessage && (
             <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${
               successMessage.includes('saved')
-                ? 'bg-green-100 text-green-800'
-                : 'bg-red-100 text-red-800'
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
             }`}>
               {successMessage}
             </div>

@@ -114,7 +114,7 @@ const MessagesPage = () => {
                   className="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-xl p-4 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition-colors border border-warm-100"
                 >
                   {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700 font-bold text-sm">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 text-amber-700 dark:text-amber-300 font-bold text-sm">
                     {otherName.charAt(0).toUpperCase()}
                   </div>
                   {/* Info */}

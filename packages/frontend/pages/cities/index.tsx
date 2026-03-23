@@ -37,13 +37,13 @@ const CitiesPage = () => {
         <title>Sales by City | FindA.Sale</title>
         <meta
           name="description"
-          content="Browse upcoming estate sales by city near you. Find furniture, antiques, and collectibles in your area on FindA.Sale."
+          content="Browse upcoming sales by city near you. Find furniture, antiques, and collectibles at estate sales, yard sales, garage sales, and more on FindA.Sale."
         />
         <link rel="canonical" href="https://finda.sale/cities" />
         <meta property="og:title" content="Sales by City | FindA.Sale" />
         <meta
           property="og:description"
-          content="Find local estate sales near you. Browse by city and discover furniture, antiques, and more."
+          content="Find local sales near you. Browse by city and discover furniture, antiques, and more at estate sales, yard sales, and garage sales."
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://finda.sale/cities" />

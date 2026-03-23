@@ -37,7 +37,7 @@ const NeighborhoodsPage = () => {
         <title>Sales by Neighborhood | FindA.Sale</title>
         <meta
           name="description"
-          content="Browse upcoming estate sales by neighborhood. Find estate sales near you on FindA.Sale."
+          content="Browse upcoming sales by neighborhood. Find estate sales, yard sales, garage sales, and more near you on FindA.Sale."
         />
         <link rel="canonical" href="https://finda.sale/neighborhoods" />
       </Head>
