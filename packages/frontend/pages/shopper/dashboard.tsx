@@ -28,6 +28,7 @@ import MyPickupAppointments from '../../components/MyPickupAppointments';
 import EmptyState from '../../components/EmptyState';
 import StreakWidget from '../../components/StreakWidget'; // CD2 Phase 2: Streak Challenges
 import Skeleton from '../../components/Skeleton';
+import { useFollows } from '../../hooks/useFollows';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -75,6 +76,8 @@ const ShopperDashboard = () => {
     },
     enabled: !!user?.id,
   });
+
+  const { data: follows, isLoading: followsLoading } = useFollows();
 
   if (isLoading) {
     return (
@@ -266,18 +269,52 @@ const ShopperDashboard = () => {
 
           {/* Subscribed Tab */}
           {activeTab === 'subscribed' && (
-            <div className="text-center py-16">
-              <p className="text-5xl mb-4">🔔</p>
-              <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No subscriptions yet</h3>
-              <p className="text-warm-600 dark:text-warm-400 mb-6">
-                Subscribe to a sale to get notified about updates and new items.
-              </p>
-              <Link
-                href="/"
-                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                Browse Sales
-              </Link>
+            <div>
+              {followsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}
+                </div>
+              ) : follows && follows.length > 0 ? (
+                <div className="space-y-3">
+                  {follows.map((follow) => (
+                    <div key={follow.id} className="card p-4 flex items-center gap-4">
+                      {follow.organizer.profilePhoto ? (
+                        <img
+                          src={follow.organizer.profilePhoto}
+                          alt={follow.organizer.businessName}
+                          className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-700 dark:text-amber-300 font-bold text-lg flex-shrink-0">
+                          {follow.organizer.businessName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">
+                          {follow.organizer.businessName}
+                        </p>
+                        <p className="text-xs text-warm-500 dark:text-warm-400">
+                          Following since {new Date(follow.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <p className="text-5xl mb-4">🔔</p>
+                  <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No organizers followed yet</h3>
+                  <p className="text-warm-600 dark:text-warm-400 mb-6">
+                    Follow an organizer from any sale page to see their upcoming sales here.
+                  </p>
+                  <Link
+                    href="/"
+                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                  >
+                    Browse Sales
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
