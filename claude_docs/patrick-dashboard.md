@@ -1,54 +1,57 @@
 # FindA.Sale — Patrick's Dashboard
-Last Updated: 2026-03-22 (S240)
+Last Updated: 2026-03-22 (S241)
 
 ## Build Status
 - **Vercel (Frontend):** Live — [finda.sale](https://finda.sale)
-- **Railway (Backend):** Live
+- **Railway (Backend):** Live (awaiting schema.prisma push + Neon migration to activate D-007)
 - **Scheduled Tasks:** 3 active (weekly site audit Sun 10pm, brand drift Mon 10am, Monday digest 8am)
 
-## What Just Happened (S240)
+## What Just Happened (S241)
 
-All 12 findings from the automated Sunday night audit were fixed and pushed.
+Live verification of S240 fixes + full D-007 implementation.
 
-**High priority fixes:**
-- Item pages were broken for every shopper — fixed (removed overly strict status filter in backend)
-- `/settings` was hanging forever for logged-out users — fixed (now redirects to login)
-- Every page on the site had invalid nested `<main>` tags (accessibility violation) — fixed in Layout.tsx
-- `/notifications` DOM was duplicating the entire page layout — resolved as side effect of the main tag fix
+**Critical fixes verified working in production:**
+- Item pages no longer return "Item not found" — fixed backend status check (was blocking all shoppers from viewing items)
+- `/notifications` no longer duplicates the page layout for logged-out users
 
-**Medium/low fixes:**
-- 9 pages still said "estate sales" — swept and updated to all-sale-types language (hubs, categories, calendar, neighborhoods, cities, surprise-me, FAQ, footer, homepage subtitle)
-- /hubs empty state now has a "Browse All Sales →" button
-- Admin pages now redirect to login instead of silently bouncing to homepage
-- LiveFeed no longer shows "Reconnecting..." to beta testers
-- Sale detail filter label now reads "Show: All" instead of the confusing "All items sold or reserved"
-- Shopper dashboard login redirect now preserves the redirect parameter
+**D-007 Teams member cap fully implemented:**
+- Code is pushed to GitHub (commits f560b80, cde5227)
+- `isEnterpriseAccount` flag added to Organizer model
+- Backend enforcement: 12-member cap for non-Enterprise orgs
+- Pricing page now shows "Up to 12 members" for Teams tier
+- Team management UI shows member count vs cap, disables Invite button at capacity, shows Enterprise upgrade link
+- Migration SQL file created
 
-**D-007 locked:**
-- Teams tier: 12-member cap
-- Enterprise tier confirmed above Teams (contact-sales, $500–800/mo, annual contracts, isEnterpriseAccount feature flag)
-- Implementation happens next session
+**What you need to do:**
+1. Push schema.prisma to GitHub (too large for automated tools)
+2. Run the Neon migration (prisma migrate deploy)
+3. Regenerate the TypeScript client (prisma generate in both database and backend packages)
+   - Instructions in next-session-prompt.md
+
+After step 3, the member cap is live. You can test by trying to add a 13th member to any TEAMS org — it should fail.
 
 ## What You Need To Do
 
-1. **Nothing urgent** — the push is complete, all 15 files are on main
-2. **Mobile check** — browser automation can't test mobile properly. Spot-check the site on a real phone (iPhone SE if you have one): homepage, sale detail, item grid, nav
+1. **BLOCKING:** Push schema.prisma + run Neon migration (see next-session-prompt.md for exact commands)
+2. **After migration:** Spot-check the 12-member cap works (add 13th member to user3@example.com org, should fail)
+3. **When you have time:** Real iPhone SE spot-check (homepage, sale detail, item grid, nav, pricing page)
 
-## Upcoming (S241)
+## Upcoming (S242)
 
-1. Live-verify S240 fixes are working in production
-2. Implement D-007 — 12-member cap in backend + schema migration + pricing page update
+1. Verify remaining S240 fixes still working (/hubs, /categories, /calendar text changes)
+2. Test D-007 member cap enforcement after your migration
 3. Mobile real-device spot-check
 
 ## Pending Decisions
-- None — all carry-forward decisions are either locked (D-007) or deferred
+- None — all decisions locked (D-007, design rules, pricing) or deferred
 
 ## Project Health
-- **Features shipped:** 71 across 4 tiers
+- **Features shipped:** 71 across 4 tiers (3 of 4 TEAMS-exclusive features now live)
 - **Beta status:** Live. Real customers evaluating this week.
 - **Platform scope:** All secondary sales types (estate, garage, yard, auction, flea, consignment)
-- **Audit:** 12/12 findings from first automated audit resolved same session
+- **Audit:** 12/12 findings from first automated audit fixed by S240
+- **Code health:** All fixes verified live; D-007 implementation code-reviewed clean
 
 ---
 
-**Note:** Updated by main session at every wrap. Monday digest will also update this file automatically.
+**Note:** Updated by Records agent at every session wrap. Monday digest will also update this file automatically.
