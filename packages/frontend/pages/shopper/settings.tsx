@@ -11,7 +11,6 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import { useLowBandwidth } from '@/contexts/LowBandwidthContext';
 import { useAuth } from '@/components/AuthContext';
@@ -65,11 +64,9 @@ function SettingsPage() {
 
   if (authLoading || !mounted) {
     return (
-      <Layout>
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
-        </div>
-      </Layout>
+      <div className="text-center py-12">
+        <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
+      </div>
     );
   }
 
@@ -91,8 +88,7 @@ function SettingsPage() {
         <title>Settings - FindA.Sale</title>
       </Head>
 
-      <Layout>
-        <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="max-w-4xl mx-auto py-8 px-4">
           {/* Header */}
           <div className="mb-10">
             <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
@@ -317,7 +313,6 @@ function SettingsPage() {
             </div>
           </div>
         </div>
-      </Layout>
     </>
   );
 }
