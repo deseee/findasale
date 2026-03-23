@@ -44,6 +44,17 @@ const ProfilePage = () => {
     }
   }, [user?.categoryInterests]);
 
+  // Fetch full user profile (includes verificationStatus not in JWT)
+  const { data: profileData } = useQuery({
+    queryKey: ['user-profile'],
+    queryFn: async () => {
+      const response = await api.get('/users/me');
+      return response.data as { verificationStatus?: string };
+    },
+  });
+
+  const verificationStatus = profileData?.verificationStatus || 'NONE';
+
   // Fetch user's bids
   const { data: bids = [], isError: bidsError, refetch: refetchBids } = useQuery({
     queryKey: ['user-bids'],
@@ -158,7 +169,7 @@ const ProfilePage = () => {
               <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Verification Status</h2>
               <div className="flex items-center justify-between">
                 <div>
-                  {user.verificationStatus === 'VERIFIED' && (
+                  {verificationStatus === 'VERIFIED' && (
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-sm font-medium">
                         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
@@ -168,7 +179,7 @@ const ProfilePage = () => {
                       </span>
                     </div>
                   )}
-                  {user.verificationStatus === 'PENDING' && (
+                  {verificationStatus === 'PENDING' && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 text-sm font-medium">
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
@@ -176,10 +187,10 @@ const ProfilePage = () => {
                       Verification Pending
                     </span>
                   )}
-                  {(user.verificationStatus === 'NONE' || user.verificationStatus === 'REJECTED') && (
+                  {(verificationStatus === 'NONE' || verificationStatus === 'REJECTED') && (
                     <div className="flex items-center justify-between">
                       <p className="text-warm-600 dark:text-warm-400 text-sm">
-                        {user.verificationStatus === 'REJECTED' ? 'Verification was not approved' : 'Not yet verified'}
+                        {verificationStatus === 'REJECTED' ? 'Verification was not approved' : 'Not yet verified'}
                       </p>
                       <Link href="/organizer/verification" className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium text-sm">
                         Start Verification
