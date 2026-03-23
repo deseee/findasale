@@ -87,7 +87,7 @@ const OrganizerWebhooksPage = () => {
     );
   };
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
+  if (authLoading) return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">Loading…</div>;
 
   return (
     <TierGate requiredTier="TEAMS" featureName="Webhooks" description="Send real-time event notifications to Zapier, Make, or custom endpoints. Available on TEAMS and above.">

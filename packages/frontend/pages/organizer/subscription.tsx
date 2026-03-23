@@ -240,7 +240,7 @@ export default function SubscriptionPage() {
         <meta name="description" content="Manage your FindA.Sale subscription" />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-br from-sage-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gradient-to-br from-sage-50 to-white dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <h1 className="font-fraunces text-3xl font-bold text-gray-900 dark:text-gray-100 mb-8">Subscription Settings</h1>

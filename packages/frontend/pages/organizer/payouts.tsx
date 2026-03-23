@@ -181,7 +181,7 @@ const OrganizerPayoutsPage = () => {
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
+  if (authLoading) return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">Loading…</div>;
 
   const currentInterval = selectedInterval ?? schedule?.interval ?? 'daily';
   const scheduleChanged = schedule && selectedInterval !== null && selectedInterval !== schedule.interval;
