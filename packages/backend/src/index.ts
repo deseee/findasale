@@ -149,6 +149,7 @@ import shopperReferralRoutes from './routes/shopperReferral';   // Feature #7: S
 import earningsPdfRoutes from './routes/earningsPdf';           // Payout PDF Export
 import abTestRoutes from './routes/abTest';                     // A/B Testing Infrastructure
 import feedbackRoutes from './routes/feedback';                 // User Feedback
+import bidsRoutes from './routes/bids';                         // Shopper bids page
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -279,10 +280,10 @@ const viewerLimiter = rateLimit({
   message: { error: 'Too many viewer requests.' },
 });
 
-// Stricter limit on auth routes — 50 failed req / 15 min per IP (successful logins don't count)
+// Stricter limit on auth routes — 100 failed req / 15 min per IP (successful logins don't count)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: 100,
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
@@ -433,6 +434,7 @@ app.use('/api/shopper-referral', shopperReferralRoutes);               // Featur
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
 app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure
 app.use('/api/feedback', feedbackRoutes);                              // User Feedback
+app.use('/api/bids', bidsRoutes);                                      // Shopper bids page
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
