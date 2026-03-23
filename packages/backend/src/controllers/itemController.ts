@@ -260,9 +260,11 @@ export const getItemById = async (req: Request, res: Response) => {
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
     const isOwner = authReq.user?.id === item.sale.organizer.userId;
 
-    // For everyone else, enforce public visibility rules: must be active + published
+    // For everyone else, enforce public visibility rules: must be active.
+    // Allow NULL draftStatus (legacy/seeded items pre-Rapidfire) and PUBLISHED items.
+    // Only explicitly DRAFT items are blocked (Rapidfire items being AI-analyzed by organizer).
     // Note: sale.status check removed (getSale endpoint doesn't enforce it either)
-    if (!isOwner && (!item.isActive || item.draftStatus !== 'PUBLISHED')) {
+    if (!isOwner && (!item.isActive || item.draftStatus === 'DRAFT')) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
