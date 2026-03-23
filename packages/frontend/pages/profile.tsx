@@ -151,18 +151,18 @@ const ProfilePage = () => {
         {/* Phase 19: Points & Tier Card — only for shoppers */}
         {!isOrganizerOnly && pointsData && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-1">Hunt Pass</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">Hunt Pass</h2>
             <p className="text-warm-500 dark:text-warm-400 text-sm mb-4">
               {pointsData.tier === 'Scout' && 'Earn 100 pts to reach Hunter tier.'}
               {pointsData.tier === 'Hunter' && `${500 - pointsData.points} pts to reach Estate Pro.`}
               {pointsData.tier === 'Estate Pro' && 'You\'ve reached the top tier!'}
             </p>
             {pointsData.points > 0 ? (
-              <ul className="divide-y divide-warm-100">
+              <ul className="divide-y divide-warm-100 dark:divide-gray-700">
                 {pointsData.transactions.map((tx) => (
                   <li key={tx.id} className="flex justify-between items-center py-2 text-sm">
                     <span className="text-warm-700 dark:text-warm-300">{tx.description ?? tx.type}</span>
-                    <span className="font-semibold text-amber-700">+{tx.points} pts</span>
+                    <span className="font-semibold text-amber-700 dark:text-amber-400">+{tx.points} pts</span>
                   </li>
                 ))}
               </ul>
@@ -182,17 +182,17 @@ const ProfilePage = () => {
         {/* Badges Section — only for shoppers */}
         {!isOrganizerOnly && badgesData?.badges && badgesData.badges.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4">Badges</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Badges</h2>
             <div className="flex flex-wrap gap-4">
               {badgesData.badges.map((badge: any) => (
-                <div key={badge.id} className="flex items-center bg-warm-50 dark:bg-gray-900 rounded-lg p-3">
+                <div key={badge.id} className="flex items-center bg-warm-50 dark:bg-gray-700 rounded-lg p-3">
                   {badge.iconUrl ? (
                     <img src={badge.iconUrl} alt={badge.name} className="w-10 h-10 mr-3"  loading="lazy"/>
                   ) : (
-                    <div className="bg-warm-200 border-2 border-dashed rounded-xl w-10 h-10 mr-3" />
+                    <div className="bg-warm-200 dark:bg-warm-900/30 border-2 border-dashed rounded-xl w-10 h-10 mr-3" />
                   )}
                   <div>
-                    <h3 className="font-semibold">{badge.name}</h3>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100">{badge.name}</h3>
                     <p className="text-sm text-warm-600 dark:text-warm-400">{badge.description}</p>
                   </div>
                 </div>
@@ -211,7 +211,7 @@ const ProfilePage = () => {
         {/* My Bids Section — only for shoppers */}
         {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4">My Bids</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">My Bids</h2>
 
             {bidsError ? (
               <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6">
@@ -230,8 +230,8 @@ const ProfilePage = () => {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-warm-200">
-                  <thead className="bg-warm-50 dark:bg-gray-900">
+                <table className="min-w-full divide-y divide-warm-200 dark:divide-gray-700">
+                  <thead className="bg-warm-50 dark:bg-gray-700">
                     <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wider">
                         Item
@@ -247,7 +247,7 @@ const ProfilePage = () => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-warm-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-warm-200 dark:divide-gray-700">
                     {bids.map((bid) => (
                       <tr key={bid.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -265,6 +265,7 @@ const ProfilePage = () => {
                               <div className="text-sm font-medium text-warm-900 dark:text-warm-100">{bid.item.title}</div>
                             </div>
                           </div>
+>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-warm-900 dark:text-warm-100">
                           ${bid.amount.toFixed(2)}
@@ -296,7 +297,7 @@ const ProfilePage = () => {
         {/* Referrals Section — only for shoppers */}
         {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4">My Referrals</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">My Referrals</h2>
             {referralsError ? (
               <div className="min-h-32 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6">
                 <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load referrals.</p>
@@ -307,12 +308,12 @@ const ProfilePage = () => {
             ) : (
               <div className="space-y-3">
                 {referrals.map((ref) => (
-                  <div key={ref.id} className="flex justify-between items-center border rounded p-3">
+                  <div key={ref.id} className="flex justify-between items-center border border-warm-200 dark:border-gray-700 rounded p-3 bg-warm-50 dark:bg-gray-700">
                     <div>
                       <p className="font-medium text-warm-900 dark:text-warm-100">{ref.referredUser.name || ref.referredUser.email}</p>
                       <p className="text-sm text-warm-500 dark:text-warm-400">{ref.referredUser.email}</p>
                     </div>
-                    <span className="text-xs text-warm-400">
+                    <span className="text-xs text-warm-500 dark:text-warm-400">
                       {new Date(ref.createdAt).toLocaleDateString()}
                     </span>
                   </div>
@@ -327,7 +328,7 @@ const ProfilePage = () => {
 
         {/* Sale Interests Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-2">Sale Interests</h2>
+          <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">Sale Interests</h2>
           <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">Select the item categories you're interested in. We'll notify you when new sales matching your interests go live.</p>
 
           {successMessage && (
