@@ -197,6 +197,8 @@ model Organizer {
   // Feature #13: TEAMS Multi-User Workspace relations
   workspace       OrganizerWorkspace?  @relation("WorkspaceOwner")
   workspaceMemberships WorkspaceMember[] @relation("OrganizerWorkspaces")
+  // D-007: Enterprise account flag (unlimited team members, annual contracts)
+  isEnterpriseAccount Boolean @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
