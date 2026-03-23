@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import ReferralWidget from '../components/ReferralWidget';
 
 interface Bid {
@@ -33,6 +34,7 @@ const SALE_CATEGORIES = [
 
 const ProfilePage = () => {
   const { user } = useAuth();
+  const { canAccess } = useOrganizerTier();
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
 
@@ -131,7 +133,7 @@ const ProfilePage = () => {
                 {!isOrganizerOnly && (
                   <>
                     <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-medium px-2.5 py-0.5 rounded">
-                      🏆 {pointsData?.points ?? 0} pts
+                      \uD83C\uDFC6 {pointsData?.points ?? 0} pts
                     </span>
                     {pointsData?.tier && (
                       <span className="bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-medium px-2.5 py-0.5 rounded">
@@ -147,6 +149,85 @@ const ProfilePage = () => {
             </div>
           </div>
         </div>
+
+        {/* ORGANIZER SECTIONS */}
+        {isOrganizerOnly && (
+          <>
+            {/* Verification Status Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Verification Status</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  {user.verificationStatus === 'VERIFIED' && (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-sm font-medium">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Verified Organizer
+                      </span>
+                    </div>
+                  )}
+                  {user.verificationStatus === 'PENDING' && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 text-sm font-medium">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      Verification Pending
+                    </span>
+                  )}
+                  {(user.verificationStatus === 'NONE' || user.verificationStatus === 'REJECTED') && (
+                    <div className="flex items-center justify-between">
+                      <p className="text-warm-600 dark:text-warm-400 text-sm">
+                        {user.verificationStatus === 'REJECTED' ? 'Verification was not approved' : 'Not yet verified'}
+                      </p>
+                      <Link href="/organizer/verification" className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium text-sm">
+                        Start Verification
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* My Sales Summary Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Your Sales</h2>
+              <p className="text-warm-600 dark:text-warm-400 mb-4">Manage and track all your sales in one place.</p>
+              <Link href="/organizer/dashboard" className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                Go to Dashboard
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+
+            {/* Quick Links Grid */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Quick Links</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Link href="/plan" className="block p-4 rounded-lg border border-warm-200 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-1">Plan a Sale</h3>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">Create and manage your next sale</p>
+                </Link>
+                <Link href="/organizer/settings" className="block p-4 rounded-lg border border-warm-200 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-1">Settings</h3>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">Manage your account</p>
+                </Link>
+                <Link href="/organizer/premium" className="block p-4 rounded-lg border border-warm-200 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-1">Subscription</h3>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">Upgrade your tier</p>
+                </Link>
+                {canAccess('TEAMS') && (
+                  <Link href="/organizer/workspace" className="block p-4 rounded-lg border border-warm-200 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
+                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-1">Workspace</h3>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Manage your team</p>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Phase 19: Points & Tier Card — only for shoppers */}
         {!isOrganizerOnly && pointsData && (

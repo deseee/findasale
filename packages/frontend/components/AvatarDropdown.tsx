@@ -61,6 +61,7 @@ const AvatarDropdown: React.FC = () => {
 
   const isOrganizer = user.roles?.includes('ORGANIZER');
   const isUser = user.roles?.includes('USER');
+  const isAdmin = user.roles?.includes('ADMIN');
 
   return (
     <div className="relative">
@@ -121,6 +122,20 @@ const AvatarDropdown: React.FC = () => {
             </p>
           </div>
 
+          {/* ADMIN Menu Items */}
+          {isAdmin && (
+            <>
+              <Link
+                href="/admin"
+                className="block px-4 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Admin Panel
+              </Link>
+              <hr className="my-2 border-warm-200 dark:border-gray-700" />
+            </>
+          )}
+
           {/* ORGANIZER Menu Items */}
           {isOrganizer && (
             <>
@@ -130,6 +145,13 @@ const AvatarDropdown: React.FC = () => {
                 onClick={() => setIsOpen(false)}
               >
                 Dashboard
+              </Link>
+              <Link
+                href="/profile"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                My Profile
               </Link>
               <Link
                 href="/plan"
@@ -179,18 +201,18 @@ const AvatarDropdown: React.FC = () => {
           {isUser && (
             <>
               <Link
+                href="/shopper/dashboard"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                My Dashboard
+              </Link>
+              <Link
                 href="/profile"
                 className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 My Profile
-              </Link>
-              <Link
-                href="/shopper/favorites"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                My Wishlists
               </Link>
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
