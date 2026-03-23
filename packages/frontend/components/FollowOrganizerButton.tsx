@@ -35,7 +35,7 @@ const FollowOrganizerButton: React.FC<Props> = ({ organizerId, organizerName, si
     onSuccess: () => {
       setIsFollowing(!isFollowing);
       queryClient.invalidateQueries({ queryKey: ['follow-status', organizerId] });
-      queryClient.invalidateQueries({ queryKey: ['followed-organizers'] });
+      queryClient.invalidateQueries({ queryKey: ['my-follows'] });  // Must match useFollows() cache key
     },
   });
 

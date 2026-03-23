@@ -210,11 +210,11 @@ const PricingPage = () => {
           )}
 
           {/* Pricing Tiers */}
-          {/* BUG-14: Hide "Your Plan" section for shoppers (users with role USER) */}
-          {user?.role === 'USER' ? (
+          {/* Show "Your Plan" section only for organizers (role ORGANIZER) or if user is logged in with organizer tier */}
+          {user?.role === 'ORGANIZER' ? null : user?.role === 'USER' ? (
             <div className="mb-12 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-center">
               <p className="text-blue-900 dark:text-blue-200 text-lg">
-                💙 You have free access to browse all sales! Create an account as an organizer to start managing your sales.
+                💙 You have free access to browse all sales! Create an organizer account to start managing your sales.
               </p>
             </div>
           ) : null}

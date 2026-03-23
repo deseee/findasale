@@ -11,13 +11,15 @@ const ContactPage = () => {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      await api.post('/contact/submit', { name, email, message });
+      await api.post('/contact', { name, email, message });
       setSubmitted(true);
       setName('');
       setEmail('');
@@ -25,6 +27,7 @@ const ContactPage = () => {
       setTimeout(() => setSubmitted(false), 5000);
     } catch (error) {
       console.error('Failed to submit contact form:', error);
+      setError('Failed to send message. Please try again or email support@finda.sale directly.');
     } finally {
       setIsSubmitting(false);
     }
@@ -72,6 +75,12 @@ const ContactPage = () => {
           {submitted && (
             <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-800 dark:text-green-200 font-medium">
               ✓ Thanks for reaching out! We'll get back to you within 4 hours.
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200 font-medium">
+              ✗ {error}
             </div>
           )}
 

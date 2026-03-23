@@ -140,7 +140,7 @@ export default function WorkspacePage() {
               <div>
                 <span className="font-semibold">Workspace URL:</span>
                 <br />
-                findasale.com/workspace/{workspace.slug}
+                finda.sale/workspace/{workspace.slug}
               </div>
               <div>
                 <span className="font-semibold">Created:</span>

@@ -90,7 +90,7 @@ export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
         ]);
 
         return {
-          organizerId: org.id.slice(0, 4), // Mask for privacy
+          organizerId: org.id, // Return full ID for frontend navigation
           organizerName: org.businessName,
           completedSales: completedSalesCount,
           totalItemsSold: totalItems,

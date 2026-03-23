@@ -124,13 +124,13 @@ function AlertsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{alert.name}</h3>
-                      <div className="mt-3 text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                        {alert.query.q && <p><span className="font-medium">Keywords:</span> {alert.query.q}</p>}
-                        {alert.query.category && <p><span className="font-medium">Category:</span> {alert.query.category}</p>}
+                      <div className="mt-3 text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                        {alert.query.q && <p><span className="font-medium text-gray-700 dark:text-gray-200">Keywords:</span> {alert.query.q}</p>}
+                        {alert.query.category && <p><span className="font-medium text-gray-700 dark:text-gray-200">Category:</span> {alert.query.category}</p>}
                         {(alert.query.minPrice !== undefined || alert.query.maxPrice !== undefined) && (
-                          <p><span className="font-medium">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '\u221e'}</p>
+                          <p><span className="font-medium text-gray-700 dark:text-gray-200">Price:</span> ${alert.query.minPrice || '0'} - ${alert.query.maxPrice || '\u221e'}</p>
                         )}
-                        {alert.query.radiusMiles && <p><span className="font-medium">Radius:</span> {alert.query.radiusMiles} miles</p>}
+                        {alert.query.radiusMiles && <p><span className="font-medium text-gray-700 dark:text-gray-200">Radius:</span> {alert.query.radiusMiles} miles</p>}
                       </div>
                       {alert.query.tags && alert.query.tags.length > 0 && (
                         <div className="mt-4 flex flex-wrap gap-2">

@@ -71,18 +71,18 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
   if (salesWithCoords.length < MIN_SELECTIONS) return null;
 
   return (
-    <div className="bg-white border-t border-warm-200">
+    <div className="bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700">
       {/* Toggle header */}
       <button
         onClick={() => setIsOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-warm-50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
-          <span className="font-semibold text-warm-900 text-sm">Plan Your Route</span>
+          <span className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Plan Your Route</span>
           {selected.size >= MIN_SELECTIONS && !isOpen && (
             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
               {selected.size} selected
@@ -90,7 +90,7 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
           )}
         </div>
         <svg
-          className={`w-4 h-4 text-warm-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-warm-500 dark:text-warm-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -100,8 +100,8 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
       </button>
 
       {isOpen && (
-        <div className="px-4 pb-4 space-y-4">
-          <p className="text-xs text-warm-500">
+        <div className="px-4 pb-4 space-y-4 dark:bg-gray-800">
+          <p className="text-xs text-warm-500 dark:text-warm-400">
             Select {MIN_SELECTIONS}–{MAX_SELECTIONS} sales to get drive times and distances.
           </p>
 
@@ -115,10 +115,10 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
                   key={sale.id}
                   className={`flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
                     checked
-                      ? 'bg-amber-50 border border-amber-200'
+                      ? 'bg-amber-50 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-700'
                       : disabled
                       ? 'opacity-40 cursor-not-allowed'
-                      : 'hover:bg-warm-50 border border-transparent'
+                      : 'hover:bg-warm-50 dark:hover:bg-gray-700 border border-transparent'
                   }`}
                 >
                   <input
@@ -129,8 +129,8 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
                     className="mt-0.5 accent-amber-600 flex-shrink-0"
                   />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-warm-900 truncate">{sale.title}</p>
-                    <p className="text-xs text-warm-500 truncate">
+                    <p className="text-sm font-medium text-warm-900 dark:text-warm-100 truncate">{sale.title}</p>
+                    <p className="text-xs text-warm-500 dark:text-warm-400 truncate">
                       {sale.address}, {sale.city}
                     </p>
                   </div>
@@ -176,14 +176,14 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
 
           {/* Error state */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
               <p>{error}</p>
               {fallbackUrl && (
                 <a
                   href={fallbackUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 inline-block text-red-700 underline font-medium"
+                  className="mt-2 inline-block text-red-700 dark:text-red-300 underline font-medium"
                 >
                   Open in Google Maps instead →
                 </a>
@@ -195,12 +195,12 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
           {result && (
             <div className="space-y-3">
               {/* Summary bar */}
-              <div className="flex items-center gap-4 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
-                <span className="font-semibold text-amber-800">
+              <div className="flex items-center gap-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2 text-sm">
+                <span className="font-semibold text-amber-800 dark:text-amber-300">
                   {result.summary.totalDistanceMi} mi
                 </span>
-                <span className="text-warm-400">·</span>
-                <span className="text-amber-700">~{result.summary.totalDurationMin} min drive</span>
+                <span className="text-warm-400 dark:text-warm-500">·</span>
+                <span className="text-amber-700 dark:text-amber-300">~{result.summary.totalDurationMin} min drive</span>
               </div>
 
               {/* Ordered stops */}
@@ -211,8 +211,8 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
                       {wp.order}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-warm-900 truncate">{wp.title}</p>
-                      <p className="text-xs text-warm-500 truncate">{wp.address}</p>
+                      <p className="text-sm font-medium text-warm-900 dark:text-warm-100 truncate">{wp.title}</p>
+                      <p className="text-xs text-warm-500 dark:text-warm-400 truncate">{wp.address}</p>
                     </div>
                   </li>
                 ))}
@@ -223,7 +223,7 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
                 href={result.googleMapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full border border-amber-600 text-amber-700 hover:bg-amber-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 w-full border border-amber-600 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/20 text-sm font-medium py-2 px-4 rounded-lg transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />

@@ -49,7 +49,11 @@ export default function FlipReportPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
-          <p className="text-gray-600 dark:text-gray-400">No data available</p>
+          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No flip report data available yet.</h2>
+          <p className="text-gray-600 dark:text-gray-400">This sale may not have been completed, or data is still being processed.</p>
         </div>
       </div>
     );

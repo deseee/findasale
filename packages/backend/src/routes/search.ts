@@ -89,7 +89,7 @@ router.get('/', async (req: Request, res: Response) => {
       itemOrderBy = { 'sale.endDate': 'asc' };
     }
 
-    const [salesResult, itemsResult, itemSearchResult] = await Promise.all([
+    const [salesResult, itemsResult, itemSearchResult, organizerSearchResult] = await Promise.all([
       type !== 'items'
         ? prisma.sale.findMany({
             where: { ...textWhere, status: 'PUBLISHED' },
@@ -143,36 +143,69 @@ router.get('/', async (req: Request, res: Response) => {
       type !== 'items' && q
         ? searchItems({ q, limit: 100, offset: 0 })
         : Promise.resolve(null),
+      // Search organizers by business name
+      type !== 'items' && q
+        ? prisma.organizer.findMany({
+            where: {
+              businessName: { contains: q, mode: 'insensitive' },
+              user: { role: 'ORGANIZER' },
+            },
+            select: {
+              id: true,
+            },
+            take: 100,
+          })
+        : Promise.resolve([]),
     ]);
 
-    // If searching sales, merge in sale IDs from items that match the query
+    // If searching sales, merge in sales from items that match and from organizers that match
     let finalSalesResult = salesResult;
-    if (type !== 'items' && itemSearchResult && q.length >= 2) {
-      // Get unique sale IDs from items
-      const saleIdsFromItems = new Set(itemSearchResult.data.map((item) => item.saleId));
-      // Get those sales
-      const salesFromItems = await prisma.sale.findMany({
-        where: {
-          id: { in: Array.from(saleIdsFromItems) },
-          status: 'PUBLISHED',
-        },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          city: true,
-          state: true,
-          startDate: true,
-          endDate: true,
-          photoUrls: true,
-          isAuctionSale: true,
-          organizer: { select: { id: true, businessName: true, reputationTier: true } },
-        },
-      });
-      // Merge: deduplicate by ID, keep the original sale results and add any new ones from items
-      const saleIdSet = new Set(finalSalesResult.map((s: any) => s.id));
-      const newSales = salesFromItems.filter((s: any) => !saleIdSet.has(s.id));
-      finalSalesResult = [...finalSalesResult, ...newSales].slice(0, limit);
+    if (type !== 'items' && q.length >= 2) {
+      const saleIdsToFetch = new Set<string>();
+
+      // Get sale IDs from items that match the query
+      if (itemSearchResult) {
+        itemSearchResult.data.forEach((item) => saleIdsToFetch.add(item.saleId));
+      }
+
+      // Get sale IDs from organizers whose names match the query
+      if (organizerSearchResult && organizerSearchResult.length > 0) {
+        const organizerIds = organizerSearchResult.map((org) => org.id);
+        const salesByOrganizer = await prisma.sale.findMany({
+          where: {
+            organizerId: { in: organizerIds },
+            status: 'PUBLISHED',
+          },
+          select: { id: true },
+        });
+        salesByOrganizer.forEach((sale) => saleIdsToFetch.add(sale.id));
+      }
+
+      // Fetch all matching sales (from items and organizers)
+      if (saleIdsToFetch.size > 0) {
+        const salesFromMatches = await prisma.sale.findMany({
+          where: {
+            id: { in: Array.from(saleIdsToFetch) },
+            status: 'PUBLISHED',
+          },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            city: true,
+            state: true,
+            startDate: true,
+            endDate: true,
+            photoUrls: true,
+            isAuctionSale: true,
+            organizer: { select: { id: true, businessName: true, reputationTier: true } },
+          },
+        });
+        // Merge: deduplicate by ID, keep the original sale results and add any new ones
+        const saleIdSet = new Set(finalSalesResult.map((s: any) => s.id));
+        const newSales = salesFromMatches.filter((s: any) => !saleIdSet.has(s.id));
+        finalSalesResult = [...finalSalesResult, ...newSales].slice(0, limit);
+      }
     }
 
     res.json({

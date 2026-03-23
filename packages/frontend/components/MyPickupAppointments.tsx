@@ -59,12 +59,12 @@ const MyPickupAppointments: React.FC = () => {
 
   if (!bookings || bookings.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-8 text-center">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
         <p className="text-5xl mb-4">📅</p>
-        <h3 className="text-xl font-semibold text-warm-900 mb-2">
+        <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">
           No pickup appointments yet
         </h3>
-        <p className="text-warm-600 mb-6">
+        <p className="text-warm-600 dark:text-warm-400 mb-6">
           Book a pickup appointment at a sale to pick up your items.
         </p>
         <Link
@@ -79,7 +79,7 @@ const MyPickupAppointments: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-warm-900">Pickup Appointments</h2>
+      <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Pickup Appointments</h2>
 
       {bookings.map((booking) => {
         const startTime = parseISO(booking.slot.startsAt);
@@ -88,21 +88,21 @@ const MyPickupAppointments: React.FC = () => {
         return (
           <div
             key={booking.id}
-            className="bg-white rounded-lg shadow-md p-6 border-l-4 border-amber-600"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border-l-4 border-amber-600"
           >
             <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
               <div className="flex-1">
-                <h3 className="text-lg font-bold text-warm-900 mb-2">
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
                   {sale.title}
                 </h3>
-                <p className="text-warm-700 mb-3">
+                <p className="text-warm-700 dark:text-warm-300 mb-3">
                   📍 {sale.address}, {sale.city}, {sale.state} {sale.zip}
                 </p>
                 <div className="flex flex-col gap-2">
-                  <p className="font-medium text-warm-900">
+                  <p className="font-medium text-warm-900 dark:text-warm-100">
                     🕐 {format(startTime, 'EEE, MMM d, yyyy')}
                   </p>
-                  <p className="text-warm-700">
+                  <p className="text-warm-700 dark:text-warm-300">
                     {format(startTime, 'h:mm a')} —{' '}
                     {format(parseISO(booking.slot.endsAt), 'h:mm a')}
                   </p>

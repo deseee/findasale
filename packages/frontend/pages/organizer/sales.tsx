@@ -137,7 +137,7 @@ const OrganizerSalesPage = () => {
               {sales.map((sale: Sale) => (
                 <div
                   key={sale.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-md p-6 hover:shadow-lg dark:hover:shadow-lg transition-shadow border border-warm-100 dark:border-gray-700"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 flex-1">

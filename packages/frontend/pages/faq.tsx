@@ -80,7 +80,7 @@ const shopperFAQs: FAQItem[] = [
       <>
         Hunt Pass is our loyalty rewards program. Every purchase earns points based on your spending.
         Accumulate points to unlock discounts on future purchases. View your balance and redemption
-        options in <strong>Account \u2192 Hunt Pass</strong>.
+        options in <strong>Account → Hunt Pass</strong>.
       </>
     ),
   },
@@ -218,7 +218,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'Can I connect FindA.Sale to Zapier or other apps?',
     answer: (
       <>
-        Yes. Go to <strong>Settings \u2192 Integrations \u2192 Webhooks</strong> and add your Zapier webhook URL.
+        Yes. Go to <strong>Settings → Integrations → Webhooks</strong> and add your Zapier webhook URL.
         Select which events should trigger your Zap (purchase completed, sale published, auction won, etc.).
         Use Zapier to log sales to Google Sheets, send emails, post to Facebook, and more. See the full
         guide on your{' '}
@@ -275,7 +275,7 @@ const FAQAccordion = ({ faqs }: FAQAccordionProps) => {
               }`}
               aria-hidden
             >
-              \u25BC
+              ▼
             </span>
           </button>
           {expandedIndex === index && (
@@ -297,7 +297,7 @@ const FAQPage = () => {
   return (
     <>
       <Head>
-        <title>FAQ \u2013 FindA.Sale</title>
+        <title>FAQ – FindA.Sale</title>
         <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the estate sale marketplace." />
       </Head>
 
@@ -341,12 +341,12 @@ const FAQPage = () => {
             {tab === 'organizer' ? (
               <>
                 Looking for the full walkthrough?{' '}
-                <Link href="/guide" className="text-amber-600 hover:underline font-medium">Read the Organizer Guide \u2192</Link>
+                <Link href="/guide" className="text-amber-600 hover:underline font-medium">Read the Organizer Guide →</Link>
               </>
             ) : (
               <>
                 Still have questions?{' '}
-                <Link href="/contact" className="text-amber-600 hover:underline font-medium">Contact our support team \u2192</Link>
+                <Link href="/contact" className="text-amber-600 hover:underline font-medium">Contact our support team →</Link>
               </>
             )}
           </div>

@@ -19,7 +19,7 @@ interface Sale {
 }
 
 const SalesNearYou: React.FC = () => {
-  const { data: sales, isLoading } = useQuery({
+  const { data: sales, isLoading, isError } = useQuery({
     queryKey: ['sales-near-you'],
     queryFn: async () => {
       const res = await api.get('/sales', {
@@ -41,6 +41,17 @@ const SalesNearYou: React.FC = () => {
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex-shrink-0 w-64 h-20 bg-warm-100 rounded-lg animate-pulse" />
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Sales Near You</h3>
+        <div className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-4 text-center">
+          <p className="text-warm-600 dark:text-warm-400">Unable to load nearby sales. Please try again later.</p>
         </div>
       </div>
     );
