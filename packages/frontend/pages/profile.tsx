@@ -187,7 +187,7 @@ const ProfilePage = () => {
               {badgesData.badges.map((badge: any) => (
                 <div key={badge.id} className="flex items-center bg-warm-50 dark:bg-gray-700 rounded-lg p-3">
                   {badge.iconUrl ? (
-                    <img src={badge.iconUrl} alt={badge.name} className="w-10 h-10 mr-3"  loading="lazy"/>
+                    <img src={badge.iconUrl} alt={badge.name} className="w-10 h-10 mr-3" loading="lazy"/>
                   ) : (
                     <div className="bg-warm-200 dark:bg-warm-900/30 border-2 border-dashed rounded-xl w-10 h-10 mr-3" />
                   )}
@@ -257,7 +257,7 @@ const ProfilePage = () => {
                                 src={bid.item.photoUrls[0]}
                                 alt={bid.item.title}
                                 className="h-10 w-10 rounded-md object-cover"
-                               loading="lazy"/>
+                                loading="lazy"/>
                             ) : (
                               <div className="bg-warm-200 border-2 border-dashed rounded-xl w-10 h-10" />
                             )}
@@ -265,7 +265,6 @@ const ProfilePage = () => {
                               <div className="text-sm font-medium text-warm-900 dark:text-warm-100">{bid.item.title}</div>
                             </div>
                           </div>
->
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-warm-900 dark:text-warm-100">
                           ${bid.amount.toFixed(2)}
