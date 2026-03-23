@@ -144,7 +144,7 @@ const ProfilePage = () => {
                 {!isOrganizerOnly && (
                   <>
                     <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-medium px-2.5 py-0.5 rounded">
-                      🏆 {pointsData?.points ?? 0} pts
+                      \uD83C\uDFC6 {pointsData?.points ?? 0} pts
                     </span>
                     {pointsData?.tier && (
                       <span className="bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-medium px-2.5 py-0.5 rounded">
