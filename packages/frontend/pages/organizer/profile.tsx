@@ -1,19 +1,19 @@
 import type { GetServerSideProps } from 'next';
 
 /**
- * /organizer/premium — redirects to /organizer/subscription
- * D-012: All subscription management consolidated to /organizer/subscription.
+ * /organizer/profile — redirects to /organizer/settings
+ * D-012: Profile management consolidated to Settings page.
  * This page is preserved (not deleted) so existing links continue to work.
  */
 export const getServerSideProps: GetServerSideProps = async () => {
   return {
     redirect: {
-      destination: '/organizer/subscription',
+      destination: '/organizer/settings',
       permanent: false,
     },
   };
 };
 
-export default function OrganizerPremium() {
+export default function OrganizerProfile() {
   return null;
 }

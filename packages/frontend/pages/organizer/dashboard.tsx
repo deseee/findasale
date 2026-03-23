@@ -648,7 +648,7 @@ const OrganizerDashboard = () => {
               )}
 
               {/* H1: How It Works card */}
-              {orgProfile && !orgProfile.onboardingComplete && (
+              {orgProfile && !orgProfile.onboardingComplete && !showWizard && (
                 <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-6">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">How It Works</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
