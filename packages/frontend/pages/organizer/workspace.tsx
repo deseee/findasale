@@ -202,16 +202,34 @@ export default function WorkspacePage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Team Members ({members.length})
-                </h2>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    Team Members
+                  </h2>
+                  {/* D-007: Show member count vs cap */}
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {members.length} / 12 members
+                  </p>
+                </div>
                 {isOwner && !showInviteForm && (
-                  <button
-                    onClick={() => setShowInviteForm(true)}
-                    className="bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-4 rounded-md text-sm"
-                  >
-                    Invite Member
-                  </button>
+                  <div className="flex flex-col items-end">
+                    <button
+                      onClick={() => setShowInviteForm(true)}
+                      disabled={members.length >= 12}
+                      className={`font-bold py-2 px-4 rounded-md text-sm transition-all ${
+                        members.length >= 12
+                          ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
+                          : 'bg-sage-600 hover:bg-sage-700 text-white'
+                      }`}
+                    >
+                      Invite Member
+                    </button>
+                    {members.length >= 12 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-right">
+                        Team is at capacity. <Link href="/pricing" className="font-semibold hover:underline">Upgrade to Enterprise</Link>
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 

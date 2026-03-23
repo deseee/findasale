@@ -78,7 +78,7 @@ const TIERS: PricingTier[] = [
       '15 photos per item',
       'Unlimited AI tags',
       'Unlimited concurrent sales',
-      'Multi-user team access',
+      'Up to 12 team members',
       'API & webhooks',
       'White-label options',
       'Advanced fraud detection',
@@ -311,6 +311,27 @@ const PricingPage = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* D-007: Enterprise CTA Section */}
+          <div className="mt-12 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8 text-center">
+            <div className="max-w-2xl mx-auto">
+              <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
+                Need Unlimited Team Members?
+              </h2>
+              <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
+                Upgrade to <strong>Enterprise</strong> for unlimited team members, unlimited items per sale, priority support, and annual contract flexibility.
+              </p>
+              <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg inline-block">
+                <p className="text-warm-600 dark:text-warm-300 text-sm">Pricing starts at <span className="text-2xl font-bold text-warm-900 dark:text-warm-100">$500/mo</span> (annual contracts)</p>
+              </div>
+              <Link
+                href="/contact"
+                className="inline-block bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200"
+              >
+                Contact Sales
+              </Link>
+            </div>
           </div>
 
           {/* FAQ / Additional info */}
