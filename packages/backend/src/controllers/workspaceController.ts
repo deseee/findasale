@@ -211,6 +211,28 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Already a member' });
     }
 
+    // D-007: Check member cap for non-Enterprise accounts
+    const ownerOrganizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { isEnterpriseAccount: true },
+    });
+
+    if (!ownerOrganizer?.isEnterpriseAccount) {
+      const memberCount = await prisma.workspaceMember.count({
+        where: { workspaceId: workspace.id },
+      });
+
+      // Count includes pending + accepted members. Add 1 for owner + the new invite.
+      if (memberCount + 1 >= 12) {
+        return res.status(403).json({
+          message: 'Team member limit (12) reached. Upgrade to Enterprise for unlimited members.',
+          code: 'MEMBER_CAP_EXCEEDED',
+          limit: 12,
+          current: memberCount + 1,
+        });
+      }
+    }
+
     // Create membership (pending acceptance)
     const member = await prisma.workspaceMember.create({
       data: {

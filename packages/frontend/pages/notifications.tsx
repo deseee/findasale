@@ -3,7 +3,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../components/AuthContext';
-import Layout from '../components/Layout';
 import EmptyState from '../components/EmptyState';
 import api from '../lib/api';
 
@@ -91,20 +90,20 @@ const NotificationsPage = () => {
     fetchNotifications();
   }, [user]);
 
+  // H-003: _app.tsx wraps all pages in <Layout> — do NOT add another <Layout> here.
+  // Returning bare JSX; the global layout handles header/footer.
   if (!user) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-16">
-          <p className="text-center text-warm-500 dark:text-warm-400">
-            Please log in to view your notifications.
-          </p>
-          <div className="text-center mt-4">
-            <Link href="/login" className="text-amber-600 hover:text-amber-700 font-medium">
-              Go to login
-            </Link>
-          </div>
+      <div className="container mx-auto px-4 py-16">
+        <p className="text-center text-warm-500 dark:text-warm-400">
+          Please log in to view your notifications.
+        </p>
+        <div className="text-center mt-4">
+          <Link href="/login" className="text-amber-600 hover:text-amber-700 font-medium">
+            Go to login
+          </Link>
         </div>
-      </Layout>
+      </div>
     );
   }
 
@@ -198,7 +197,7 @@ const NotificationsPage = () => {
   );
 
   return (
-    <Layout>
+    <>
       <Head><title>Notifications – FindA.Sale</title></Head>
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
@@ -328,7 +327,7 @@ const NotificationsPage = () => {
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 
