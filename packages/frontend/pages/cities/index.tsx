@@ -10,7 +10,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
-import Layout from '../../components/Layout';
 
 interface CityStats {
   city: string;
@@ -33,15 +32,15 @@ const CitiesPage = () => {
   const sortedCities = cities.sort((a, b) => b.activeSales - a.activeSales);
 
   return (
-    <Layout>
+    <>
       <Head>
-        <title>Estate Sales by City | FindA.Sale</title>
+        <title>Sales by City | FindA.Sale</title>
         <meta
           name="description"
           content="Browse upcoming estate sales by city near you. Find furniture, antiques, and collectibles in your area on FindA.Sale."
         />
         <link rel="canonical" href="https://finda.sale/cities" />
-        <meta property="og:title" content="Estate Sales by City | FindA.Sale" />
+        <meta property="og:title" content="Sales by City | FindA.Sale" />
         <meta
           property="og:description"
           content="Find local estate sales near you. Browse by city and discover furniture, antiques, and more."
@@ -132,7 +131,7 @@ const CitiesPage = () => {
 
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 
