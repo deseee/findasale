@@ -19,6 +19,7 @@ interface User {
   notificationPrefs?: Record<string, boolean>;
   onboardingComplete?: boolean;
   createdAt?: string;
+  verificationStatus?: string;
 }
 
 interface AuthContextType {
