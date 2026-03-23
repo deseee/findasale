@@ -30,7 +30,7 @@ const OrganizerPremiumPage = () => {
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
+    router.push('/login?redirect=/organizer/premium');
     return null;
   }
 

@@ -11,7 +11,7 @@ import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
 import OfflineIndicator from './OfflineIndicator'; // Feature #69: Local-First Offline Mode
 import AvatarDropdown from './AvatarDropdown';
 
-const Layout = ({ children }: { children: React.ReactNode }) => {
+const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: boolean }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
 
   const router = useRouter();
@@ -429,14 +429,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       {/* Bottom tab navigation — mobile only */}
       <BottomTabNav />
 
-      {/* Footer */}
+      {/* Footer — hidden if noFooter prop is true (e.g., for chat pages) */}
+      {!noFooter && (
       <footer className="bg-warm-800 dark:bg-gray-950 text-white py-8">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <h3 className="text-lg font-bold mb-4">FindA.Sale</h3>
               <p className="text-warm-400 mb-4">
-                Helping you find the best local sales events, estate sales, garage sales, and auctions near you.
+                Helping you find the best estate sales, garage sales, yard sales, flea markets, auctions, and more near you.
               </p>
               <div className="bg-warm-700 rounded-lg p-4">
                 <p className="text-xs text-warm-300 font-semibold mb-2">Need Help?</p>
@@ -479,6 +480,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </div>
       </footer>
+      )}
     </div>
   );
 };

@@ -95,12 +95,7 @@ export const LiveFeedTicker: React.FC<LiveFeedTickerProps> = ({ saleId }) => {
         </p>
       )}
 
-      {/* Connection status indicator */}
-      {!connected && events.length > 0 && (
-        <p className="text-xs text-warm-400 dark:text-gray-500 mt-2">
-          Reconnecting...
-        </p>
-      )}
+      {/* Connection status indicator — hidden per H-001 */}
     </div>
   );
 };
