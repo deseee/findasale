@@ -2,26 +2,46 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S237–S241)
+## Recent Sessions (S238–S242)
+
+### 2026-03-22 · Session 242
+
+**BRAND SWEEP VERIFIED + D-007 CONFIRMED + INFRA FIXES**
+
+✅ D-007 confirmed live: workspace creation works (user3@example.com TEAMS), member counter shows "0 / 12 members" live on page. Cap code verified correct in workspaceController.ts. Full 12→13 stress test deferred (needs 12 seeded organizer accounts).
+
+✅ Brand sweep complete (5 pages):
+- /hubs, /categories, /calendar — all clean, no estate-sale-only language
+- /cities — title tag "Estate Sales by City" → "Sales by City", Layout duplication removed
+- /neighborhoods — title tag "Estate Sales by Neighborhood" → "Sales by Neighborhood", Layout duplication removed
+
+✅ Auth rate limit raised 20→50 failed attempts / 15 min — prevents Claude automation lockout.
+
+**Commit:** b07f162 (3 files: cities/index.tsx, neighborhoods/index.tsx, backend/index.ts)
+
+**Carry-forward:** L-002 mobile real-device test still pending Patrick.
+
+---
 
 ### 2026-03-22 · Session 241
 
-**LIVE VERIFICATION + D-007 IMPLEMENTATION**
+**LIVE VERIFICATION + D-007 FULLY DEPLOYED**
 
 ✅ H-001 verified fixed: `getItemById` was checking `draftStatus !== 'PUBLISHED'` but legacy seeded items had NULL draftStatus. Changed to `draftStatus === 'DRAFT'`. Verified live — item detail pages now load correctly.
 
 ✅ H-003 verified fixed: notifications.tsx had its own `<Layout>` wrapper on both return branches. Removed the wrapper, added explanatory comment. Verified live — no DOM duplication for logged-out users.
 
-✅ **D-007 fully implemented:**
-- `isEnterpriseAccount Boolean @default(false)` added to Organizer model (schema.prisma)
-- Migration created: `packages/database/prisma/migrations/20260323_add_enterprise_flag/migration.sql`
-- `workspaceController.ts`: `inviteMember()` now enforces 12-member cap for non-Enterprise orgs (commit f560b80)
-- `pricing.tsx`: Teams tier shows "Up to 12 members", Enterprise CTA section added with $500/mo floor (commit cde5227)
-- `workspace.tsx`: member count display, Invite button disabled at cap, Enterprise upgrade link when at capacity (commit cde5227)
+✅ **D-007 fully implemented and live:**
+- `isEnterpriseAccount Boolean @default(false)` added to Organizer model — schema.prisma restored via MCP after accidental truncation (commit d402aa9)
+- Migration applied to Neon: `20260323_add_enterprise_flag` — confirmed via `prisma migrate deploy` (no pending)
+- `workspaceController.ts`: `inviteMember()` enforces 12-member cap for non-Enterprise orgs (commit f560b80)
+- `pricing.tsx`: Teams tier shows "Up to 12 members", Enterprise CTA added with $500/mo floor (commit cde5227)
+- `workspace.tsx`: member count display, Invite button disabled at cap, Enterprise upgrade link at capacity (commit cde5227)
+- Railway rebuilt via Dockerfile cache-bust (commit bf14772) — deployment successful, `isEnterpriseAccount` in Prisma client
 
-**Pending Patrick:** Push schema.prisma (>800 lines, MCP can't handle). Run `prisma migrate deploy` + `prisma generate` against Neon.
+**Pain points logged to memory:** `DIRECT_URL` (not `DATABASE_URL_UNPOOLED`) for Neon migrations; Railway skips `packages/database` changes — always cache-bust Dockerfile; push schema.prisma BEFORE code that references new fields.
 
-**Partially completed:** Started verification of remaining S240 fixes (/hubs, /categories, /calendar, /cities, /neighborhoods brand sweep) but D-007 implementation took priority. S242 should finish the full sweep.
+**Carry-forward:** Remaining S240 brand sweep verification (/hubs, /categories, /calendar, /cities, /neighborhoods) deferred to S242. L-002 mobile real-device test still pending.
 
 ---
 

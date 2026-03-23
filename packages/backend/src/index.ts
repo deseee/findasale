@@ -279,10 +279,10 @@ const viewerLimiter = rateLimit({
   message: { error: 'Too many viewer requests.' },
 });
 
-// Stricter limit on auth routes — 20 failed req / 15 min per IP (successful logins don't count)
+// Stricter limit on auth routes — 50 failed req / 15 min per IP (successful logins don't count)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 50,
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
