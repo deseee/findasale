@@ -8,9 +8,13 @@ import {
   acceptInvite,
   removeMember,
   listMembers,
+  getPublicWorkspace,
 } from '../controllers/workspaceController';
 
 const router = Router();
+
+// Unauthenticated public endpoint (must come before other routes to avoid param conflicts)
+router.get('/public/:slug', getPublicWorkspace);
 
 // All workspace routes require TEAMS tier (except possibly getMyWorkspace which requires auth)
 router.post('/', authenticate, requireTier('TEAMS'), createWorkspace);
