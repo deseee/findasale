@@ -55,11 +55,11 @@ export const getMyLootLog = async (req: Request, res: Response) => {
     // Transform photoUrls array to imageUrl string (first photo)
     const transformedPurchases = purchases.map((p) => ({
       ...p,
-      item: {
+      item: p.item ? {
         ...p.item,
         imageUrl: p.item.photoUrls?.[0] || null,
         photoUrls: undefined,
-      },
+      } : null,
     }));
 
     res.json({
@@ -236,11 +236,11 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
     // Transform photoUrls array to imageUrl string (first photo)
     const publicPurchases = purchases.map((p) => ({
       ...p,
-      item: {
+      item: p.item ? {
         ...p.item,
         imageUrl: p.item.photoUrls?.[0] || null,
         photoUrls: undefined,
-      },
+      } : null,
     }));
 
     const totalPages = Math.ceil(total / limit);
