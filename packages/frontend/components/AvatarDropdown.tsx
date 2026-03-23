@@ -144,14 +144,14 @@ const AvatarDropdown: React.FC = () => {
                 className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                Dashboard
+                Organizer Dashboard
               </Link>
               <Link
                 href="/profile"
                 className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                My Profile
+                Organizer Profile
               </Link>
               <Link
                 href="/plan"
@@ -159,6 +159,13 @@ const AvatarDropdown: React.FC = () => {
                 onClick={() => setIsOpen(false)}
               >
                 Plan a Sale
+              </Link>
+              <Link
+                href="/organizer/payouts"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Payouts
               </Link>
 
               {canAccess('PRO') && (
@@ -205,7 +212,7 @@ const AvatarDropdown: React.FC = () => {
                 className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                My Dashboard
+                Shopper Dashboard
               </Link>
               <Link
                 href="/profile"
