@@ -420,3 +420,55 @@ export const listMembers = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: 'Failed to list members' });
   }
 };
+
+/**
+ * Get public workspace info by slug (unauthenticated)
+ * GET /api/workspace/public/:slug
+ * Returns: { id, name, slug, createdAt, memberCount, ownerName }
+ */
+export const getPublicWorkspace = async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+
+    if (!slug || typeof slug !== 'string') {
+      return res.status(400).json({ error: 'Slug is required' });
+    }
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { slug },
+      include: {
+        owner: {
+          select: {
+            user: {
+              select: { name: true, email: true },
+            },
+          },
+        },
+        members: true,
+      },
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Count members: accepted members + owner
+    const memberCount = workspace.members.filter(m => m.acceptedAt !== null).length + 1;
+
+    // Get owner name from Organizer's User relation
+    const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
+
+    return res.json({
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      createdAt: workspace.createdAt,
+      memberCount,
+      ownerName,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching public workspace:', error);
+    return res.status(500).json({ error: 'Failed to fetch workspace' });
+  }
+};
