@@ -51,6 +51,17 @@ export const requireOrganizer = (req: AuthRequest, res: Response, next: NextFunc
   next();
 };
 
+// S244: requireAdmin — restricts route to ADMIN role only
+export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
+  const isAdmin =
+    req.user?.roles?.includes('ADMIN') ||
+    req.user?.role === 'ADMIN';
+  if (!req.user || !isAdmin) {
+    return res.status(403).json({ message: 'Admin access required.' });
+  }
+  next();
+};
+
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
