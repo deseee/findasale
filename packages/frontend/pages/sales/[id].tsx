@@ -365,14 +365,14 @@ const SaleDetailPage = () => {
                 {user ? (
                   <button
                     onClick={() => setMessageModalOpen(true)}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded font-medium transition-colors"
                   >
                     Message Organizer
                   </button>
                 ) : (
                   <Link
                     href="/login"
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-center"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded font-medium text-center transition-colors"
                   >
                     Sign in to Message
                   </Link>
@@ -387,20 +387,20 @@ const SaleDetailPage = () => {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => router.push(`/organizer/edit-sale/${sale.id}`)}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium"
+                  className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded font-medium transition-colors"
                 >
                   Edit Sale
                 </button>
                 <button
                   onClick={() => setIsImportModalOpen(true)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium"
+                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded font-medium transition-colors"
                 >
                   Import Items
                 </button>
                 <button
                   onClick={handleDownloadMarketingKit}
                   disabled={downloadingKit}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium disabled:opacity-50"
+                  className="px-4 py-2 bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-600 text-white rounded font-medium disabled:opacity-50 transition-colors"
                 >
                   {downloadingKit ? 'Generating...' : 'Download Kit'}
                 </button>
