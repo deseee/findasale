@@ -28,9 +28,9 @@ const PlanPage = () => {
   }, [messages]);
 
   const starterPrompts = [
-    'Where do I start with an estate sale?',
-    'How do I price antiques and furniture?',
-    `What are ${defaultState} estate sale laws?`,
+    'Where do I start planning a sale?',
+    'How do I price items for my sale?',
+    `What are ${defaultState} sale laws and regulations?`,
     'How do I handle unsold items after the sale?',
   ];
 
@@ -90,10 +90,10 @@ const PlanPage = () => {
   return (
     <>
       <Head>
-        <title>Estate Sale Planning Assistant | FindA.Sale</title>
+        <title>Sale Planning Assistant | FindA.Sale</title>
         <meta
           name="description"
-          content={`Get free guidance from an AI assistant about planning your estate sale in ${defaultState}`}
+          content={`Get free guidance from an AI assistant about planning your sale in ${defaultState}`}
         />
       </Head>
 
@@ -101,9 +101,9 @@ const PlanPage = () => {
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 py-8">
           <div className="max-w-2xl mx-auto px-4">
-            <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Estate Sale Planning Assistant</h1>
+            <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Sale Planning Assistant</h1>
             <p className="text-warm-600 dark:text-warm-400 text-lg">
-              Free guidance for families and executors
+              Free guidance for organizing any type of sale
             </p>
           </div>
         </div>
@@ -115,7 +115,7 @@ const PlanPage = () => {
             {messages.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-warm-600 dark:text-warm-400 mb-6 text-lg">
-                  Ask anything about planning your estate sale. We're here to help!
+                  Ask anything about planning your sale. We're here to help!
                 </p>
 
                 {/* Starter prompts */}
@@ -196,7 +196,7 @@ const PlanPage = () => {
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={isLoading}
-                placeholder="Ask about your estate sale..."
+                placeholder="Ask about your sale..."
                 className="flex-grow px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 disabled:bg-warm-50 text-sm"
               />
               <button
