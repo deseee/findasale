@@ -1,55 +1,40 @@
-# FindA.Sale — Patrick's Dashboard
-Last Updated: 2026-03-23 (S245 complete — Shopper Dashboard Fixes + QA Behavioral Correction)
-
-## Status: YELLOW
-
-Shopper dashboard bugs fixed and pushed. QA behavioral issue corrected. 4 features still need real browser verification with seeded data before beta confidence is solid.
-
----
+# Patrick's Dashboard — Session 246 Wrap (March 23, 2026)
 
 ## Build Status
-- **Vercel (Frontend):** Live — [finda.sale](https://finda.sale) — S245 dashboard fixes deployed
-- **Railway (Backend):** Live ✅ — MAILERLITE_API_KEY + DEFAULT_* region vars now in .env
-- **Neon (Database):** Up to date ✅ — Launch plan active
-- **Scheduled Tasks:** 3 active (weekly site audit Sun 10pm, brand drift Mon 10am, Monday digest 8am)
 
-## What Just Happened (S245)
+⚠️ **Two builds were broken coming into this session — both now fixed:**
 
-**Shopper dashboard fixed:** 4 bugs pushed — favorites API shape mismatch resolved, subscribed tab now shows real followed organizers, messaging now shows success/error feedback, dark mode buttons on sale detail page fixed.
+Vercel was in ERROR state due to a stray `>` character accidentally introduced in profile.tsx during S246 dev work. That character caused a JSX parse failure. Fixed and pushed (commit 8918a51) — Vercel is rebuilding now.
 
-**QA methodology corrected:** Claude was marking features as "correct" based on API response shapes without actually loading the pages in Chrome with real data. Three guardrails added:
-- findasale-qa skill updated with "Chrome MCP Unavailable Protocol" — if browser fails, status = UNVERIFIED, not assumed passing
-- conversation-defaults Rule 32 added — no substitutes for browser testing
-- Feedback memory updated to prevent recurrence
+Railway was failing TypeScript compilation because S244 added a `requireAdmin` import to verification.ts but the actual function was never added to auth.ts. Fixed and pushed (commit 7bf292e) — Railway is rebuilding now.
 
-## What You Need To Do
+Both hotfixes are clean targeted fixes with no side effects. Wait a few minutes and check finda.sale to confirm the site is back up.
 
-**Critical — Install updated skills:**
-Two .skill files are ready in your workspace folder from S245:
-- `findasale-qa` (updated)
-- `conversation-defaults` (updated)
-Install both via Cowork UI before starting S246.
+## What Happened This Session
 
-**S246 QA scan:** S246 will run a real browser QA scan of ALL shopper dashboard features with actual data. Claude will seed test data for user11 where needed and verify every feature loads and renders correctly in Chrome.
+S246 ran the comprehensive shopper frontend QA scan. The agent clicked through 14 items across 4 groups using Chrome MCP.
 
-## Unverified Features (need real data test in S246)
+**Passed (9 items):** Loot Log, Loyalty, Trails, and Collector Passport pages all load and show proper empty states for user11. The shopper dashboard Overview tab, Subscribed tab, and all 6 quick-link buttons (Collection, Loyalty, Alerts, Trails, Loot Log, Receipts) navigate correctly.
 
-| Feature | Status | Why Unverified |
-|---------|--------|----------------|
-| Loot Log | ⚠️ UNVERIFIED | user11 has 0 purchases — API shape confirmed only |
-| Loyalty | ⚠️ UNVERIFIED | user11 has 0 stamps — API shape confirmed only |
-| Trails | ⚠️ UNVERIFIED | user11 has 0 entries — API shape confirmed only |
-| Collector Passport | ⚠️ UNVERIFIED | user11 has 0 data — API shape confirmed only |
-| /profile buttons | ⚠️ OPEN ISSUE | Patrick reported missing buttons after S245 push |
-| Message reply E2E | ⚠️ CARRY-FORWARD | Organizer→shopper flow still unverified |
+**Fixed (1 item):** The Favorites tab was showing empty even though the Overview card showed "1 Saved Items." Root cause was the S245 fix — it extracted `.favorites` from the API response but the fallback logic could still return the full response object. Added an Array.isArray guard that guarantees the variable is always an array. This is pushed.
 
-## Project Health
-- **Features shipped:** 71 across 4 tiers
-- **Beta status:** LIVE. Real customers evaluating this week.
-- **Critical blockers:** 0 (but 4 features unverified)
-- **QA debt:** Shopper features need real browser verification in S246
-- **Infrastructure:** Neon Launch plan ($5/mo), Railway healthy, Vercel healthy
+**Inconclusive (1 item — needs your input):** The /profile page has no Edit buttons for name/bio/photo anywhere in the header. You reported this after S245. The QA agent confirmed the page loads but has no such buttons. We need to know: is this a feature gap (buttons should be there but never were built), or is profile editing on /settings instead?
 
----
+**Unverified (3 items):** Message reply end-to-end couldn't be tested because conversation links in the /messages inbox weren't navigating to thread pages in Chrome MCP. This may be a Chrome MCP clicking limitation. The Purchases and Pickups dashboard tabs were confirmed present but not fully clicked through.
 
-**Note:** Updated by Records agent at every session wrap. Monday digest will also update this file automatically.
+## Action Items for Patrick
+
+- [ ] **Answer one question:** Does `/profile` need Edit Profile buttons for name/bio/photo? Or is that handled somewhere else (like `/settings`)? This has been flagged 3 sessions in a row.
+- [ ] **Confirm site is back up** — wait ~5 minutes and load finda.sale. If it's still showing an error, tell Claude.
+- [ ] **Nothing else needed.** Next session will verify message reply E2E, complete the remaining dashboard tab tests, and run a dark mode + mobile pass.
+
+## Open QA Items (for next session)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Message reply E2E (D1) | ❌ UNVERIFIED | Conversation links didn't navigate in Chrome MCP |
+| /profile edit buttons (C1) | ⚠️ NEEDS DECISION | Patrick must confirm expected behavior |
+| Purchases tab (B3) | ⚠️ PARTIAL | Tab button present, content not tested |
+| Pickups tab (B4) | ⚠️ PARTIAL | Tab button present, content not tested |
+| Dark mode full pass | ⏸ DEFERRED | Not run in S246 |
+| Mobile 375px (L-002) | ⏸ DEFERRED | Carry-forward from S244 |

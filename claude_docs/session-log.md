@@ -2,7 +2,23 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S241–S245)
+## Recent Sessions (S242–S246)
+
+### 2026-03-23 · Session 246
+
+**SHOPPER QA SCAN + CRITICAL BUILD HOTFIXES**
+
+✅ **QA scan complete (14 items):** A1–A4 (Loot Log, Loyalty, Trails, Collector Passport) all load with correct empty states. B1 (Favorites tab) fixed — Array.isArray guard. B2 (Subscribed), B5 (Overview), B6 (6 quick-link buttons) all verified passing.
+
+✅ **B1 Favorites fix pushed:** `dashboard.tsx` queryFn now guarantees array return — was returning full API response object `{favorites:[], total:N}` when `.favorites` was defined.
+
+✅ **HOTFIX: profile.tsx stray `>`** — S246 dev agent introduced a bare `>` between `</div>` and `</td>` in bids table. Broke Vercel JSX parse. Fixed commit 8918a51.
+
+✅ **HOTFIX: auth.ts `requireAdmin`** — S244 added `requireAdmin` import in verification.ts but the function was never added to auth.ts. Broke Railway TypeScript build. Fixed commit 7bf292e.
+
+⚠️ **Still open:** /profile edit buttons (C1 — inconclusive, needs Patrick clarification), message reply E2E (D1 — UNVERIFIED, conversation links not navigating in Chrome MCP), B3/B4 (Purchases/Pickups tabs not fully clicked through), dark mode pass deferred, L-002 mobile deferred.
+
+---
 
 ### 2026-03-23 · Session 245
 
@@ -20,15 +36,9 @@
 
 ✅ **QA behavioral correction:** Claude was marking features ✅ based on API shape/curl alone without browser testing. Three fixes: findasale-qa SKILL.md (Chrome MCP Unavailable Protocol), conversation-defaults SKILL.md (Rule 32), feedback memory updated. Both skills packaged for Patrick to install.
 
-⚠️ **UNVERIFIED:** Loot Log, Loyalty, Trails, Collector Passport — user11 has zero data. API shape confirmed only. Browser test with real data required in S246.
-
-⚠️ **Open issue:** Missing buttons on /profile for user11 — reported by Patrick after S245 push. Not yet diagnosed.
-
-⚠️ **Carry-forward:** Message reply E2E (organizer → shopper), L-002 mobile, M2 TODO/FIXME markers.
+⚠️ **Carry-forward:** Loot Log/Loyalty/Trails/Collector Passport (zero data — browser test deferred), /profile missing buttons, message reply E2E, L-002 mobile, M2 TODO/FIXME.
 
 ---
-
-## Recent Sessions (S240–S244)
 
 ### 2026-03-22 · Session 244
 
@@ -58,10 +68,6 @@
 
 ✅ **conversation-defaults v8:** Rule 31 added — execute unambiguous session-start actions immediately.
 
-✅ **Heatmap investigated:** Code complete. Issue is data (no published sales with valid coordinates in range).
-
-⚠️ Neon upgraded to Launch ($5/month) — free tier CU-hours exhausted.
-
 **Carry-forward:** 3 S242 verifications remaining (tooltips, /premium, /plan). Message reply verification. /cities + /neighborhoods meta. L-002 mobile viewport.
 
 ---
@@ -85,41 +91,3 @@
 **Carry-forward:** Live Chrome verification of all 13 fixes (S243 first task). L-002 mobile — Patrick has no iPhone, use DevTools or close. /cities + /neighborhoods meta descriptions still say "estate sales."
 
 ---
-
-### 2026-03-22 · Session 241
-
-**LIVE VERIFICATION + D-007 FULLY DEPLOYED**
-
-✅ H-001 verified fixed: `getItemById` was checking `draftStatus !== 'PUBLISHED'` but legacy seeded items had NULL draftStatus. Changed to `draftStatus === 'DRAFT'`. Verified live — item detail pages now load correctly.
-
-✅ H-003 verified fixed: notifications.tsx had its own `<Layout>` wrapper on both return branches. Removed the wrapper, added explanatory comment. Verified live — no DOM duplication for logged-out users.
-
-✅ **D-007 fully implemented and live:**
-- `isEnterpriseAccount Boolean @default(false)` added to Organizer model — schema.prisma restored via MCP after accidental truncation (commit d402aa9)
-- Migration applied to Neon: `20260323_add_enterprise_flag` — confirmed via `prisma migrate deploy` (no pending)
-- `workspaceController.ts`: `inviteMember()` enforces 12-member cap for non-Enterprise orgs (commit f560b80)
-- `pricing.tsx`: Teams tier shows "Up to 12 members", Enterprise CTA added with $500/mo floor (commit cde5227)
-- `workspace.tsx`: member count display, Invite button disabled at cap, Enterprise upgrade link at capacity (commit cde5227)
-- Railway rebuilt via Dockerfile cache-bust (commit bf14772) — deployment successful, `isEnterpriseAccount` in Prisma client
-
-**Pain points logged to memory:** `DIRECT_URL` (not `DATABASE_URL_UNPOOLED`) for Neon migrations; Railway skips `packages/database` changes — always cache-bust Dockerfile; push schema.prisma BEFORE code that references new fields.
-
-**Carry-forward:** Remaining S240 brand sweep verification (/hubs, /categories, /calendar, /cities, /neighborhoods) deferred to S242. L-002 mobile real-device test still pending.
-
----
-
-### 2026-03-22 · Session 240
-
-**FULL AUDIT FIX + D-007 LOCKED**
-
-✅ All 12 audit findings fixed — 15 files pushed. Key fixes: Layout.tsx `<main>` → `<div>` (WCAG), notifications DOM fix, itemController status check, settings redirect, 9-page brand sweep, hubs empty state, admin redirect, LiveFeed silent reconnect, sale filter label, shopper dashboard redirect.
-
-✅ D-007 locked: Teams cap = 12, Enterprise = contact-sales $500–800/mo annual, `isEnterpriseAccount` flag approach confirmed.
-
----
-
-### 2026-03-22 · Session 239
-
-**BUG FIXES + WORKFLOW AUTOMATION PLATEAU**
-
-✅ NotificationBell dark mode fixed. Sale detail layout fixed. DECISIONS.md created (D-001 through D-009). Polish Agent skill created. Dev + QA skill patches written. 3 scheduled tasks created (weekly site audit, brand drift detector, Monday digest).

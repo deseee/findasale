@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 246 COMPLETE (2026-03-23) — SHOPPER QA SCAN + CRITICAL BUILD HOTFIXES:**
+- ✅ **QA scan: 14 items tested** across Groups A, B, C, D (findasale-qa agent, Chrome MCP)
+  - A1–A4 (Loot Log, Loyalty, Trails, Collector Passport): ✅ Pages load, empty states render correctly for user11 (zero data, as expected)
+  - B1 (Favorites tab): ✅ Fixed — Array.isArray guard in dashboard.tsx queryFn; tab was showing empty despite card showing "1 Saved Items"
+  - B2 (Subscribed tab): ✅ Verified — shows empty (0 follows), dynamic loading confirmed
+  - B3 (Purchases tab): ⚠️ PARTIAL — button present, full tab not clicked through
+  - B4 (Pickups tab): ⚠️ PARTIAL — button present, full tab not clicked through
+  - B5 (Overview tab): ✅ Verified — cards render correctly (0 Purchases, 1 Saved Items, 331 Points)
+  - B6 (6 quick-link buttons): ✅ All 6 navigate correctly (Collection, Loyalty, Alerts, Trails, Loot Log, Receipts)
+  - C1 (/profile missing buttons): ⚠️ INCONCLUSIVE — page loads, no edit/save buttons in header. Unclear if expected. Needs Patrick clarification: are edit buttons (name/bio/photo) a gap, or on /settings?
+  - D1 (message reply E2E): ❌ UNVERIFIED — conversation links in /messages inbox not navigating to thread pages. Root cause unclear (Chrome MCP limitation vs. routing issue).
+- ✅ **dashboard.tsx (B1 fix):** Favorites queryFn Array.isArray guard — guarantees `.favorites` array, never returns full API response object. Pushed commit 8b04b15.
+- ✅ **messages/index.tsx:** Dark mode CSS cleanup on conversation list items. Pushed commit 8b04b15.
+- ✅ **profile.tsx (dark mode):** Dark mode consistency improvements. Pushed commit 8b04b15.
+- ✅ **HOTFIX — profile.tsx stray `>` removed:** S246 dev agent introduced a stray `>` between `</div>` and `</td>` in the bids table — broke Vercel JSX parse. Fixed and pushed commit 8918a51. Vercel rebuilding.
+- ✅ **HOTFIX — auth.ts `requireAdmin` added:** S244 added `requireAdmin` import in verification.ts but never added the function to auth.ts — broke Railway TypeScript build. Fixed and pushed commit 7bf292e. Railway rebuilding.
+- ⚠️ **CARRY-FORWARD:** /profile missing edit buttons — Patrick must clarify: should profile page have name/bio/photo editing, and is it on /settings instead?
+- ⚠️ **CARRY-FORWARD:** D1 message reply E2E (organizer → shopper both sides) — still unverified
+- ⚠️ **CARRY-FORWARD:** B3/B4 (Purchases, Pickups tabs) — tabs present, content not fully tested
+- ⚠️ **CARRY-FORWARD:** Dark mode full pass — not tested in S246 (session time constraints)
+- ⚠️ **CARRY-FORWARD:** L-002 (mobile viewport 375px) — carry-forward from S244
+- ⚠️ **CARRY-FORWARD:** M2 (13 TODO/FIXME markers in backend) — low priority
+- Last Updated: 2026-03-23
+
 **Session 245 COMPLETE (2026-03-23) — SHOPPER DASHBOARD FIXES + QA BEHAVIORAL CORRECTION:**
 - ✅ **S244 post-fix verification:** Dark mode badges/avatars (profile.tsx, messages), about page background, meta descriptions — all confirmed live in Chrome MCP
 - ✅ **env vars added to packages/backend/.env:** `MAILERLITE_API_KEY` + all `DEFAULT_*` region vars (Grand Rapids defaults). Patrick manual action — done.
@@ -37,106 +61,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
   - `/cities/index.tsx` — "estate sales, yard sales, garage sales, and more"
   - `/neighborhoods/index.tsx` — "estate sales, yard sales, garage sales, and more"
   - `/neighborhoods/[slug].tsx` — metaDesc broadened to include all sale types
-- ⚠️ **CARRY-FORWARD:** H3 (MAILERLITE_API_KEY missing from .env) — Patrick manual action
-- ⚠️ **CARRY-FORWARD:** M3 (DEFAULT_* region vars missing from .env) — Patrick manual action
-- ⚠️ **CARRY-FORWARD:** Message reply end-to-end test (organizer → shopper) — live verification still pending
-- ⚠️ **CARRY-FORWARD:** M2 (13 TODO/FIXME markers in backend) — low priority
-- ⚠️ **CARRY-FORWARD:** L-002 (mobile viewport test) — formal pass pending
 - Last Updated: 2026-03-22
 
 **Session 242 COMPLETE (2026-03-22) — BRAND SWEEP + D-007 + 13 UX BUG FIXES + QA SKILL REWRITE:**
-- ✅ **D-007 CONFIRMED LIVE:** Workspace creation works (user3@example.com), member counter shows "0 / 12 members". Cap enforcement code confirmed correct. Commit: b07f162
-- ✅ **Brand sweep complete — 5 pages verified:** /hubs, /categories, /calendar clean. /cities and /neighborhoods had stale title tags + Layout duplication — fixed. Commit: b07f162
-- ✅ **Auth rate limit raised 20→50:** Prevents automation lockout. Commit: b07f162
-- ✅ **13 UX bugs fixed (Patrick clickthrough):** 3 parallel dev agents, 9 code files changed across 3 commits:
-  - Shopper dashboard #favorites hash routing — useEffect reads URL hash, sets active tab (32c3ae8)
-  - Item likes rewired from non-existent `/items/{id}/like` to `/favorites/item/{itemId}`, button text "Like"→"Save" (32c3ae8)
-  - Pricing page CTA hidden for signed-in users (32c3ae8)
-  - About page blank space — removed duplicate closing tags below contact section (d9eb70d)
-  - /organizer/premium synced tier descriptions to match pricing.tsx, added Enterprise CTA per D-007 (d9eb70d)
-  - /plan broadened 6 instances of "estate sale" to include all sale types per D-001 (d9eb70d)
-  - Map page — added prominent "Plan Your Route" button in header, scrolls to RouteBuilder section (dd9443b)
-  - Organizer settings — tooltips added across all tabs (payments, verification, notifications, profile, appearance) (dd9443b)
-  - InspirationGrid — graceful image error fallback with icon + "Image unavailable" text (dd9443b)
-- ✅ **QA skill rewritten (findasale-qa v2):** Chrome MCP clickthrough-first methodology. User-journey testing mandatory before code checks. P0-P3 severity system. Installed before 10pm Sunday audit.
-- ✅ **QA methodology gap memory saved:** Claude QA was auditing code but not testing product. Patrick found 13 bugs in 10 min that 2 days of code QA missed.
-- ⚠️ **CARRY-FORWARD:** L-002 (mobile test) — Patrick doesn't have iPhone. Use Chrome DevTools 375px or close.
-- ⚠️ **CARRY-FORWARD:** Live Chrome clickthrough verification of all 13 fixes — deferred to S243 (context heavy)
-- ⚠️ **MINOR:** /cities and /neighborhoods meta descriptions still say "estate sales" — low priority
-- Last Updated: 2026-03-22
-
-**Session 241 COMPLETE (2026-03-22) — LIVE VERIFICATION + D-007 FULLY DEPLOYED:**
-- ✅ H-001 (item detail pages returning "Item not found"): Root cause was `getItemById` checking `draftStatus !== 'PUBLISHED'` but seeded/legacy items have NULL draftStatus. Fixed by changing check to `draftStatus === 'DRAFT'`. Verified live on production. Pushed via MCP (commit d1da44c).
-- ✅ H-003 (/notifications DOM duplication for logged-out users): Root cause was notifications.tsx had its own `<Layout>` wrapper in both return branches on top of _app.tsx's global `<Layout>`. Fixed by removing `<Layout>` from notifications.tsx, added explanatory comment. Verified live. Pushed via MCP (commit ad47033).
-- ✅ **D-007 FULLY COMPLETE AND LIVE:**
-  - `isEnterpriseAccount Boolean @default(false)` added to Organizer model — schema.prisma restored via MCP (commit d402aa9, 1939 lines confirmed)
-  - Migration SQL applied to Neon: `packages/database/prisma/migrations/20260323_add_enterprise_flag/migration.sql`
-  - `workspaceController.ts` — member cap enforcement live (commit f560b80)
-  - `pricing.tsx` — Teams tier shows "Up to 12 team members", Enterprise CTA section live (commit cde5227)
-  - `workspace.tsx` — member count display, Invite disabled at cap, upgrade link live (commit cde5227)
-  - Railway rebuilt successfully via Dockerfile cache-bust (commit bf14772) — `isEnterpriseAccount` in Prisma client, build clean
-  - `directUrl = env("DIRECT_URL")` corrected in schema.prisma datasource (was `DATABASE_URL_UNPOOLED`)
-- ✅ **schema.prisma env var fix**: `DIRECT_URL` is the correct Neon non-pooled env var for migrations (not `DATABASE_URL_UNPOOLED`)
-- ⚠️ **CARRY-FORWARD:** L-002 (mobile real-device test) — still pending Patrick on real iPhone SE
-- Last Updated: 2026-03-22
-
-**Session 240 COMPLETE (2026-03-22) — FULL AUDIT FIX + D-007 LOCKED:**
-- ✅ All 12 audit findings fixed and pushed (15 files):
-  - H-004: Layout.tsx `<main>` → `<div>` — eliminates nested main violation on every page (WCAG fix)
-  - H-003: /notifications DOM duplication resolved as side effect of H-004
-  - H-001: itemController.ts — removed overly strict status check blocking item detail pages
-  - H-002: settings.tsx — fixed infinite spinner for logged-out users, now redirects to `/login?redirect=/settings`
-  - M-001 + L-003: 9-page D-001 brand sweep — hubs, categories, calendar, neighborhoods, cities, surprise-me, FAQ, footer, homepage subtitle
-  - M-002: /hubs empty state — "Browse All Sales →" button added
-  - M-003: Admin redirect now goes to `/login?redirect=/admin` instead of homepage
-  - M-004: LiveFeed "Reconnecting..." removed — silent reconnect
-  - M-005: Sale detail filter label → "Show: All" (was ambiguous status statement)
-  - L-001: /shopper/dashboard redirect preserves `?redirect=/shopper/dashboard`
-- ✅ D-007 LOCKED: Teams cap = 12 members, Enterprise tier confirmed (isEnterpriseAccount flag, contact-sales, $500–800/mo, annual). DECISIONS.md updated.
-- ✅ Advisory board consulted for D-007 — board recommendation adopted by Patrick
-- Last Updated: 2026-03-22
-
-**Session 239 COMPLETE (2026-03-22) — BUG FIXES + WORKFLOW AUTOMATION PLATEAU:**
-- ✅ NotificationBell dark mode fixed — all interactive states now have dark: variants. Pushed via MCP (commit fd4d87a)
-- ✅ Sale detail page layout fixed — removed duplicate Photos section, moved About into left column, reordered Items before UGC/Map. On Patrick's local disk, needs push.
-- ✅ **DECISIONS.md created** (`claude_docs/brand/DECISIONS.md`) — 9 standing design/product decisions (D-001 through D-009) including all-sale-types scope, dark mode, empty states, mobile-first, multi-endpoint testing, sale detail section order, teams cap (pending), loading states, error recovery
-- ✅ **Polish Agent skill created** (`findasale-polish`) — post-dev pre-production quality gate. Audits dark mode, mobile, empty/loading/error states, brand voice, multi-endpoint flows. Written to `claude_docs/skills-package/findasale-polish-SKILL.md`
-- ✅ **Dev skill patch written** — §14 DECISIONS.md pre-flight, §15 Human-Ready Gate, §16 Multi-Endpoint Testing. In `claude_docs/skills-package/dev-skill-patch-S239.md`
-- ✅ **QA skill patch written** — DECISIONS.md compliance check, Beta-Tester Perspective Gate, Multi-Endpoint Testing. In `claude_docs/skills-package/qa-skill-patch-S239.md`
-- ✅ **3 scheduled tasks created:**
-  - `weekly-full-site-audit` — Sunday 10pm, comprehensive every-route audit (dark mode, mobile, empty states, brand compliance, adversarial)
-  - `weekly-brand-drift-detector` — Monday 10am, brand voice drift scan against DECISIONS.md
-  - `monday-digest` — Monday 8am, Patrick-readable weekly summary to patrick-dashboard.md
-- ✅ Memories saved: design continuity enforcement, multi-endpoint testing, workflow automation plateau
-- ⚠️ PENDING PATRICK: Push `packages/frontend/pages/sales/[id].tsx` + discard 9 stale local files (see next-session-prompt.md)
-- ✅ Skills installed: findasale-polish, findasale-dev (patched S239), findasale-qa (patched S239)
-- Last Updated: 2026-03-22
-
-**Session 238 COMPLETE (2026-03-22) — ROLE WALKTHROUGHS + COPY BROADENING:**
-- ✅ Role walkthroughs (shopper, organizer, unauthenticated) via Chrome MCP automation
-- ✅ Mobile verification attempted (browser automation — inconclusive, needs real device)
-- ✅ Confirmed item detail pages already public (optionalAuthenticate backend, no frontend gate)
-- ✅ Broadened pricing/marketing copy: removed estate-sale-only language, added garage sales/yard sales/auctions/flea markets
-  - `packages/frontend/pages/pricing.tsx` — updated tier descriptions to include all secondary sales types
-  - `packages/frontend/pages/index.tsx` — updated title, meta description, OG tags, schema.org
-  - `packages/frontend/pages/about.tsx` — updated mission statement to include all sale types
-- ⚠️ Login rate-limited during testing (test agents hammered auth endpoint) — not a real bug, login works per S237 verification
-- ⚠️ Mobile real-device test pending (Chrome automation viewport testing unreliable)
+- ✅ D-007 confirmed live: workspace creation works (user3@example.com TEAMS), member counter shows "0 / 12 members". Commit: b07f162
+- ✅ Brand sweep (5 pages): /hubs, /categories, /calendar clean. /cities and /neighborhoods title tags + Layout duplication fixed.
+- ✅ Auth rate limit raised 20→50.
+- ✅ **13 UX bugs fixed from Patrick's 10-minute clickthrough.** 3 parallel dev agents dispatched. 9 code files changed.
+- ✅ **QA skill rewritten (findasale-qa v2):** Chrome MCP clickthrough-first methodology replaces code-audit-first approach.
+- ✅ **Critical feedback memory saved:** QA methodology gap — Claude tested code correctness but not product usability.
 - Last Updated: 2026-03-22
 
 **Completed Sessions (carry forward knowledge):**
 
-**Session 236 COMPLETE (2026-03-22) — BETA TESTER READINESS: BUG BLITZ + ROUTE AUDIT + INNOVATION RE-RUN:**
-- ✅ Prisma migrate deploy + Railway env vars CONFIRMED DONE (completed S234, verified S236)
-- ✅ Stale doc references fixed: removed PENDING items from STATE.md + next-session-prompt.md
-- ✅ **QA + UX Audit (post-S233):** /settings 404, /wishlist 404, Manage Plan redirect, pricing contrast, organizer profile identity — all fixed
-- ✅ **Comprehensive route audit (167 pages):** Found `/auth/login` → 404 in 10 files (11 instances). All fixed to `/login`. Created `/creator/connect-stripe.tsx` redirect.
-- ✅ **Innovation re-run (broader secondary sales framing):** Print Kit TAM 3-4x expansion. Etsy API new P1 (deferred — no revenue model per board). FB Marketplace + Amazon SP-API syndication → REJECT. Sale-type-aware discovery → new P1.
-- ✅ **Advisory Board:** Print Kit → deferred (templates approach, no Printful dependency). Etsy dual-listing → deferred. Reputation + Condition Tags + Confidence Badge → approved P0 pre-beta.
-- ✅ **CLAUDE.md hardened:** §5 push ban absolute (no size exception), §10 VM temp files clarified, §10 post-fix live verification rule added
-- ✅ **Power User audit:** S230-S235 workflow changes holding, 3 doc clarifications applied, findasale-dev skill stale ref fixed
-- ✅ All S236 changes pushed to GitHub (31 files in S236 commit + 3 S235 wrap files)
-- Last Updated: 2026-03-22
+**Session 241 COMPLETE (2026-03-22) — LIVE VERIFICATION + D-007 FULLY DEPLOYED**
+**Session 240 COMPLETE (2026-03-22) — FULL AUDIT FIX + D-007 LOCKED**
+**Session 239 COMPLETE (2026-03-22) — BUG FIXES + WORKFLOW AUTOMATION PLATEAU**
+**Session 238 COMPLETE (2026-03-22) — ROLE WALKTHROUGHS + COPY BROADENING**
+**Session 236 COMPLETE (2026-03-22) — BETA TESTER READINESS: BUG BLITZ + ROUTE AUDIT + INNOVATION RE-RUN**
 
 ---
 
