@@ -223,13 +223,15 @@ const ShopperDashboard = () => {
               {purchases && purchases.length > 0 ? (
                 <div className="space-y-4">
                   {purchases.map((purchase: any) => (
-                    <div key={purchase.id} className="card p-4 flex justify-between items-center">
-                      <div>
-                        <h3 className="font-semibold text-warm-900 dark:text-warm-100">{purchase.itemTitle}</h3>
-                        <p className="text-sm text-warm-600 dark:text-warm-400">Purchased on {purchase.purchasedAt}</p>
+                    <Link key={purchase.id} href={purchase.itemId ? `/items/${purchase.itemId}` : `/sales/${purchase.saleId}`}>
+                      <div className="card p-4 flex justify-between items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer">
+                        <div>
+                          <h3 className="font-semibold text-warm-900 dark:text-warm-100">{purchase.itemTitle}</h3>
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Purchased on {purchase.purchasedAt}</p>
+                        </div>
+                        <span className="font-bold text-warm-900 dark:text-warm-100">${purchase.amount}</span>
                       </div>
-                      <span className="font-bold text-warm-900 dark:text-warm-100">${purchase.amount}</span>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
