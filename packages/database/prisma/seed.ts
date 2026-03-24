@@ -154,7 +154,7 @@ async function main() {
   // ── Users (100 total) ─────────────────────────────────────────────────────
   console.log('👥 Creating 100 users...');
   const users: any[] = [];
-  const pointsOptions = [0, 50, 150, 320, 750, 1200];
+
 
   for (let i = 0; i < 100; i++) {
     const firstName = firstNames[i % firstNames.length];
@@ -170,7 +170,7 @@ async function main() {
         password: defaultPassword,
         name: `${firstName} ${lastName}`,
         role:  isAdmin ? 'ADMIN' : (isOrg ? 'ORGANIZER' : 'USER'),
-        points: i === 10 ? 340 : pointsOptions[i % pointsOptions.length],
+
         phone: `616-555-${String(i).padStart(4, '0')}`,
         referralCode: `REF-${uuidv4().substring(0, 8).toUpperCase()}`,
         huntPassActive: i === 10, // user11 has Hunt Pass
@@ -648,6 +648,89 @@ async function main() {
   }
   console.log('✅ Created conversations and messages');
 
+  // ── OS-03: Workspace record for user2 (PRO organizer) ─────────────────────
+  console.log('🏢 Creating workspace for user2...');
+  const user2 = users[1]; // user2@example.com — PRO organizer
+  const workspace = await (prisma as any).organizerWorkspace.create({
+    data: {
+      name: 'FindA.Sale Premium Workspace',
+      slug: 'pro-workspace-user2',
+      ownerId: org2.id,
+    },
+  });
+  console.log('✅ Created workspace');
+
+  // ── FR-01: Completed PRO-tier sale with purchase transactions ──────────────
+  console.log('💳 Creating completed sale with purchases for user2...');
+  const completedSaleStartDate = new Date(now);
+  completedSaleStartDate.setMonth(completedSaleStartDate.getMonth() - 2);
+  const completedSaleEndDate = new Date(completedSaleStartDate);
+  completedSaleEndDate.setDate(completedSaleEndDate.getDate() + 1);
+
+  const completedSale = await prisma.sale.create({
+    data: {
+      organizerId: org2.id,
+      title: 'Premium Estate Clearance - Completed Sale',
+      description: 'High-value estate sale featuring curated antiques and collectibles. All items sold.',
+      startDate: completedSaleStartDate,
+      endDate: completedSaleEndDate,
+      address: '2847 Wealthy St',
+      city: SEED_CONFIG.city,
+      state: SEED_CONFIG.state,
+      zip: SEED_CONFIG.zips[1],
+      lat: SEED_CONFIG.centerLat + 0.02,
+      lng: SEED_CONFIG.centerLng - 0.02,
+      status: 'ENDED',
+      photoUrls: [salePhotoUrls[0]],
+      tags: ['antiques', 'collectibles', 'vintage'],
+    },
+  });
+
+  // Create items for the completed sale
+  const completedSaleItems = [];
+  const completedItemSpecs = [
+    { title: 'Victorian Mahogany Secretary Desk', price: 450.00, category: 'furniture', condition: 'excellent' },
+    { title: 'Signed Oil Painting - Landscape', price: 800.00, category: 'art', condition: 'excellent' },
+  ];
+
+  for (const spec of completedItemSpecs) {
+    const item = await prisma.item.create({
+      data: {
+        saleId: completedSale.id,
+        title: spec.title,
+        description: `Premium ${spec.category} item in ${spec.condition} condition. Authenticated and appraised.`,
+        price: spec.price,
+        status: 'SOLD',
+        category: spec.category,
+        condition: spec.condition,
+        photoUrls: [itemPhotoPool[completedSaleItems.length]],
+        embedding: [],
+      },
+    });
+    completedSaleItems.push(item);
+  }
+
+  // Create completed purchases with PAID status
+  for (let i = 0; i < completedSaleItems.length; i++) {
+    const item = completedSaleItems[i];
+    const buyerIndex = 20 + i; // Different shoppers
+    const buyer = users[buyerIndex];
+
+    await prisma.purchase.create({
+      data: {
+        userId: buyer.id,
+        itemId: item.id,
+        saleId: completedSale.id,
+        amount: item.price ?? 100.00,
+        platformFeeAmount: (item.price ?? 100.00) * 0.10,
+        status: 'PAID',
+        source: 'ONLINE',
+        stripePaymentIntentId: `pi_test_completed_${uuidv4().substring(0, 16)}`,
+      },
+    });
+  }
+
+  console.log('✅ Created completed sale with 2 items and 2 PAID purchases');
 
   // ── Summary ───────────────────────────────────────────────────────────────
   const totalPurchases = purchasesCreated.length + 6;

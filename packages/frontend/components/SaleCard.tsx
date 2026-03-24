@@ -87,9 +87,9 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const badge = getStatusBadge();
 
   return (
-    <div className="card bg-white dark:bg-gray-800 overflow-hidden hover:shadow-card-hover dark:hover:shadow-lg transition-shadow flex flex-col border border-gray-200 dark:border-gray-700">
-      {/* ── Image area (60% visual weight) — 1:1 square ── */}
-      <Link href={`/sales/${sale.id}`} className="block relative aspect-square bg-warm-200 dark:bg-gray-700 overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 overflow-hidden hover:shadow-card-hover dark:hover:shadow-lg transition-all duration-300 hover:scale-105 flex flex-col h-full rounded-lg border border-warm-200 dark:border-gray-700">
+      {/* ── Image area: 4:3 landscape aspect ratio ── */}
+      <Link href={`/sales/${sale.id}`} className="block relative aspect-video bg-warm-200 dark:bg-gray-700 overflow-hidden flex-shrink-0">
         {/* Tier 1: LQIP blurred background (loads instantly) */}
         {lqipUrl && !imgError && (
           <div
@@ -142,43 +142,45 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
         )}
       </Link>
 
-      {/* ── Content area (40% visual weight) ── */}
-      <div className="flex flex-col flex-1 p-3 bg-white dark:bg-gray-800">
-        <Link href={`/sales/${sale.id}`} className="flex-1 block">
-          <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-1">
+      {/* ── Content area with footer redesign ── */}
+      <div className="flex flex-col flex-1 p-4 bg-white dark:bg-gray-800">
+        <Link href={`/sales/${sale.id}`} className="flex-1 block mb-3">
+          <h3 className="font-heading font-bold text-base text-warm-900 dark:text-gray-100 leading-snug line-clamp-2 mb-2">
             {sale.title}
           </h3>
-          <p className="text-xs text-warm-500 dark:text-gray-400">
+          <p className="text-xs text-warm-600 dark:text-gray-400">
             {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
           </p>
         </Link>
-        <div className="flex items-center justify-between mt-2 text-gray-700 dark:text-gray-300">
-          <div className="flex items-center gap-1 min-w-0 flex-wrap">
-            <Link
-              href={`/organizers/${sale.organizer.id}`}
-              className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline line-clamp-1"
-            >
+
+        {/* ── Footer section with organizer and stats ── */}
+        <div className="pt-3 border-t border-warm-200 dark:border-gray-700 flex flex-col gap-2">
+          <Link href={`/organizers/${sale.organizer.id}`} className="flex items-center gap-2 min-w-0">
+            <span className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline line-clamp-1 flex-1">
               {sale.organizer.businessName}
-            </Link>
+            </span>
             <VerifiedBadge status={sale.organizer.verificationStatus} size="sm" />
-            {sale.organizer.reputationTier && (
-              <TierBadge tier={sale.organizer.reputationTier} />
-            )}
-            {typeof sale.organizer.reputationScore === 'number' && (
-              <div className="text-xs">
+          </Link>
+
+          <div className="flex items-center gap-2 justify-between">
+            <div className="flex items-center gap-1">
+              {sale.organizer.reputationTier && (
+                <TierBadge tier={sale.organizer.reputationTier} />
+              )}
+              {typeof sale.organizer.reputationScore === 'number' && (
                 <ReputationBadge
                   score={sale.organizer.reputationScore}
                   isNew={sale.organizer.reputationIsNew}
                   size="small"
                 />
-              </div>
+              )}
+            </div>
+            {typeof sale.favoriteCount === 'number' && sale.favoriteCount > 0 && (
+              <span className="text-xs text-warm-500 dark:text-gray-400 flex-shrink-0">
+                ♥ {sale.favoriteCount}
+              </span>
             )}
           </div>
-          {typeof sale.favoriteCount === 'number' && sale.favoriteCount > 0 && (
-            <span className="text-xs text-warm-400 dark:text-gray-400 flex-shrink-0 ml-1">
-              ♥ {sale.favoriteCount}
-            </span>
-          )}
         </div>
       </div>
     </div>

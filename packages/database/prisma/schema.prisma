@@ -16,7 +16,6 @@ model User {
   name          String
   role          String     @default("USER") // USER, ORGANIZER, ADMIN (deprecated — use roles array in Phase 3)
   roles         String[]   @default(["USER"]) // ["USER"], ["USER", "ORGANIZER"], ["USER", "ORGANIZER", "ADMIN"]
-  points        Int        @default(0)
   phone         String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt

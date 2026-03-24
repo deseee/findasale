@@ -9,7 +9,6 @@
 
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
-import { awardPoints } from './pointsService';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -165,10 +164,6 @@ export async function markFound(userId: string, huntId: number, itemId: string):
     },
   });
 
-  // Award points (fire-and-forget)
-  awardPoints(userId, 'TREASURE_HUNT_FIND', hunt.pointReward, undefined, itemId, `Found treasure hunt item`).catch((err) => {
-    console.error('Error awarding treasure hunt points:', err);
-  });
-
+  // Note: Treasure hunt XP rewards handled by xpService in new explorer guild system
   return find;
 }

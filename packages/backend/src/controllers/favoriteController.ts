@@ -1,7 +1,6 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
-import { awardPoints } from '../services/pointsService';
 
 export const toggleItemFavorite = async (req: AuthRequest, res: Response) => {
   try {
@@ -38,10 +37,6 @@ export const toggleItemFavorite = async (req: AuthRequest, res: Response) => {
           itemId: itemId,
         },
       });
-
-      // Phase 19: Award 2 points for favoriting an item
-      awardPoints(req.user.id, 'FAVORITE', 2, undefined, itemId, 'Favorited an item')
-        .catch(err => console.warn('[points] Failed to award favorite points:', err));
 
       res.json({ message: 'Item added to favorites', isFavorited: true });
     }

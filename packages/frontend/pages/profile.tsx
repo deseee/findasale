@@ -69,15 +69,6 @@ const ProfilePage = () => {
     },
   });
 
-  // Phase 19: Fetch points, tier, and recent transactions
-  const { data: pointsData, isError: pointsError, refetch: refetchPoints } = useQuery({
-    queryKey: ['points'],
-    queryFn: async () => {
-      const response = await api.get('/points');
-      return response.data as { points: number; tier: string; transactions: Array<{ id: string; type: string; points: number; description: string | null; createdAt: string }> };
-    },
-  });
-
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -112,18 +103,6 @@ const ProfilePage = () => {
               </h2>
               <p className="text-warm-600 dark:text-warm-400">{user.email}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                {!isOrganizerOnly && (
-                  <>
-                    <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-medium px-2.5 py-0.5 rounded">
-                      \uD83C\uDFC6 {pointsData?.points ?? 0} pts
-                    </span>
-                    {pointsData?.tier && (
-                      <span className="bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-medium px-2.5 py-0.5 rounded">
-                        {pointsData.tier}
-                      </span>
-                    )}
-                  </>
-                )}
                 <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 text-sm font-medium px-2.5 py-0.5 rounded">
                   {isOrganizerOnly ? 'Organizer' : user.role === 'USER' ? 'Shopper' : user.role}
                 </span>
@@ -211,37 +190,19 @@ const ProfilePage = () => {
           </>
         )}
 
-        {/* Phase 19: Points & Tier Card — only for shoppers */}
-        {!isOrganizerOnly && pointsData && (
+        {/* Explorer Rank Card — only for shoppers */}
+        {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">Hunt Pass</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">🏆 Explorer Rank</h2>
             <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
-              Earn points by visiting sales, saving items, and making purchases. Climb the tiers to unlock exclusive benefits.
+              Track your XP, rank up, and earn rewards.
             </p>
-            <p className="text-warm-500 dark:text-warm-400 text-sm mb-4">
-              {pointsData.tier === 'Scout' && 'Earn 100 pts to reach Hunter tier.'}
-              {pointsData.tier === 'Hunter' && `${500 - pointsData.points} pts to reach Estate Pro.`}
-              {pointsData.tier === 'Estate Pro' && 'You\'ve reached the top tier!'}
-            </p>
-            {pointsData.points > 0 ? (
-              <ul className="divide-y divide-warm-100 dark:divide-gray-700">
-                {pointsData.transactions.map((tx) => (
-                  <li key={tx.id} className="flex justify-between items-center py-2 text-sm">
-                    <span className="text-warm-700 dark:text-warm-300">{tx.description ?? tx.type}</span>
-                    <span className="font-semibold text-amber-700 dark:text-amber-400">+{tx.points} pts</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-warm-500 dark:text-warm-400 text-sm">No points earned yet — start browsing sales!</p>
-            )}
-          </div>
-        )}
-
-        {!isOrganizerOnly && pointsError && (
-          <div className="min-h-48 flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4 rounded-lg p-6 mb-8">
-            <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load Hunt Pass.</p>
-            <button onClick={() => refetchPoints()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
+            <Link href="/loyalty" className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+              View Your Rank
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
         )}
 

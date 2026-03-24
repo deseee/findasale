@@ -223,20 +223,9 @@ export const awardBadge = async (userId: string, badgeCriteriaType: string, coun
   }
 };
 
-// Call this function when a user makes a purchase
-export const handlePurchaseBadge = async (userId: string) => {
-  try {
-    // Count user's purchases
-    const purchaseCount = await prisma.purchase.count({
-      where: { userId }
-    });
-
-    // Award badge based on purchase count
-    await awardBadge(userId, 'purchases_made', purchaseCount);
-  } catch (error) {
-    console.error('Error handling purchase badge:', error);
-  }
-};
+// DELETED: handlePurchaseBadge — S268 gamification cleanup
+// Old purchase-count-based badges replaced by explorer rank system (guildXp)
+// Badge triggers are now rank-based: Initiate→Scout→Ranger→Sage→Grandmaster
 
 // Call this function when a user creates a favorite
 export const handleFavoriteBadge = async (userId: string) => {
@@ -268,15 +257,8 @@ export const handleReferralBadge = async (userId: string) => {
   }
 };
 
-// Call this function when points are updated
-export const handlePointsBadge = async (userId: string, points: number) => {
-  try {
-    // Award badge based on points
-    await awardBadge(userId, 'points_earned', points);
-  } catch (error) {
-    console.error('Error handling points badge:', error);
-  }
-};
+// DELETED: handlePointsBadge — S268 gamification cleanup
+// Old purchase-points-based badges removed (replaced by explorer rank system)
 
 // Call this function when a user checks in early
 export const handleEarlyBirdBadge = async (userId: string, checkInTime: Date) => {
@@ -408,7 +390,6 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
         createdAt: true,
         role: true,
         streakPoints: true,
-        points: true,
         userBadges: {
           include: {
             badge: {
@@ -448,7 +429,6 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
       createdAt: user.createdAt,
       role: user.role,
       streakPoints: user.streakPoints,
-      reputationScore: user.points,
       totalPurchases: user._count.purchases,
       totalFavorites: user._count.favorites,
       totalWishlists: user._count.wishlists,

@@ -15,15 +15,14 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
         id: true,
         name: true,
         streakPoints: true,
-        points: true,
       },
       take: 50,
     });
 
-    // Compute score for each user, then sort by score DESC with nulls last
+    // Compute score for each user using streakPoints (legacy points removed)
     const usersWithScore = users.map((user) => ({
       ...user,
-      score: (user.streakPoints ?? 0) > 0 ? user.streakPoints : user.points,
+      score: user.streakPoints ?? 0,
     }));
 
     const sorted = usersWithScore
