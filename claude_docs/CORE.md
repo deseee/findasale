@@ -23,9 +23,9 @@ equivalents. Custom skills have project context; generics don't.
 Every session, before any work:
 
 1. Check active MCP tools (GitHub, Stripe, MailerLite, Stripe, Vercel, etc.)
-2. Load STATE.md (latest 1–2 session entries + pending Patrick actions)
-3. Load next-session-prompt.md (what comes next)
-4. Skim session-log.md (validate state matches recent entries)
+2. Load STATE.md (including "## Recent Sessions" + "## Next Session" sections)
+3. Skip loading next-session-prompt.md — its content is now in STATE.md "## Next Session"
+4. Skip loading session-log.md — its content is now in STATE.md "## Recent Sessions"
 5. GitHub sync check: compare local STATE.md `Last Updated` vs remote.
    If different → tell Patrick to run `.\push.ps1` first. Block until synced.
 6. Announce estimated context budget: "~Xk tokens available this session."
@@ -60,7 +60,7 @@ Do not ask "shall I continue?" mid-batch.
 
 **Compression logging:** When context is compressed (auto or manual), log:
 `[COMPRESS] Session N turn M: kept [what], lost [what], ~Xk→Yk tokens`
-Include this in session-log.md at wrap. Preserve Operational Anchors
+Include this in STATE.md at wrap. Preserve Operational Anchors
 (package paths, script names, shell syntax) through compression.
 
 **§3.4: Post-Compression Mandatory Re-Read**
@@ -118,10 +118,12 @@ After any compression event, before pushing:
 
 Before ending any session:
 
-1. Update session-log.md (completed work, files changed, compression events)
-2. Update next-session-prompt.md (next task, blockers, pending Patrick actions).
-   NEVER include credentials — reference `.env` only.
-3. Write session scoreboard to session-log entry:
+1. Update STATE.md (both "## Recent Sessions" and "## Next Session" sections)
+   - Recent Sessions: add entry at top with completed work, files changed, compression events
+   - Next Session: update with next task, blockers, pending Patrick actions
+2. Update patrick-dashboard.md (Patrick-readable status summary)
+   - NEVER include credentials — reference `.env` only
+3. Write session scoreboard to STATE.md entry:
    `Files changed: N | Compressions: N | Subagents: [list] | Push method: MCP/PS1`
 4. Provide Patrick the `.\push.ps1` block — every changed file as explicit
    `git add [file]` lines. Never `git add -A`. Never omit files.
@@ -245,7 +247,8 @@ After any SKILL.md edit is committed to git, the skill MUST be repackaged as a .
 | Session safeguards (3-attempt limit) | `operations/session-safeguards.md` |
 | Patrick's shorthand meanings | `operations/patrick-language-map.md` |
 | Model routing (Sonnet/Haiku/Opus) | `operations/model-routing.md` |
-| Detailed wrap protocol | `WRAP_PROTOCOL_QUICK_REFERENCE.md` |
+| Wrap protocol (canonical) | `CLAUDE.md §12` |
+| Wrap protocol (reference) | `WRAP_PROTOCOL_QUICK_REFERENCE.md` |
 | Tech stack decisions | `STACK.md` |
 | Security rules | `SECURITY.md` |
 | Recovery procedures | `RECOVERY.md` |
@@ -267,7 +270,7 @@ These rules exist to prevent early auto-compaction. Violating them burns tokens 
 - Context ≥ 90%: evaluate remaining work; if 1–2 short tasks remain, continue; if major work remains, complete current subagent round then wrap
 Checkpoints are observability, not gates. Never stop productive work just because a checkpoint fires.
 
-**T4 — Session-log rotation:** session-log.md keeps the 3 most recent session entries. When adding a new entry pushes it to 4+, move the oldest entry to `claude_docs/session-log-archive.md` (create if missing, append at bottom).
+**T4 — Recent Sessions rotation:** STATE.md "## Recent Sessions" section keeps the 5 most recent session entries. When adding a new entry pushes it to 6+, move the oldest entry to `claude_docs/session-log-archive.md` (create if missing, append at bottom).
 
 **T5 — STATE.md size gate:** If STATE.md exceeds 250 lines, archive the oldest completed-features section to `claude_docs/STATE-archive.md` before adding new content.
 
@@ -277,4 +280,4 @@ Checkpoints are observability, not gates. Never stop productive work just becaus
 
 ---
 
-Status: Behavioral Authority (v4.3, Session 179 — skill packaging rule added)
+Status: Behavioral Authority (v4.4, Session 265 — wrap file consolidation, STATE.md now canonical)

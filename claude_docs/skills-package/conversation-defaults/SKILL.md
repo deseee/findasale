@@ -61,7 +61,7 @@ flow. This rule closes that gap.
 **Any first message** — short opener, status report, completion update, task assignment, or anything else — is a session start signal. ONE response pattern. No branching.
 
 **Single unified pattern (all first messages):**
-1. Load context silently: STATE.md, session-log (last 2 entries), next-session-prompt.md, `.checkpoint-manifest.json`, decisions-log.md. Do not narrate the loads.
+1. Load context silently: STATE.md (including "## Recent Sessions" and "## Next Session" sections), `.checkpoint-manifest.json`, decisions-log.md. Do not narrate the loads.
 2. Acknowledge in one sentence. If short opener, add warmth. If task/status, confirm receipt. Either way: one sentence.
 3. Announce: session number, token budget ("~200k context window. ~5k init overhead. ~195k available. Warn at 170k used."), last session summary, and priority queue.
 4. Begin Priority 1 immediately. If P1 is blocked (requires Patrick's external input), begin Priority 2 and name P1 as blocked. Never end init with a question.
@@ -112,7 +112,7 @@ or "Run `git merge --abort` and fix it yourself."
 **Exception:** Genuine repo corruption requiring `git init` — escalate with full diagnosis.
 
 Why this exists: Session 89 — Claude told Patrick to manually fix conflict markers
-in session-log.md. Patrick: "I shouldn't have to manually fix your mistakes."
+in a doc file. Patrick: "I shouldn't have to manually fix your mistakes."
 (Added 2026-03-07.)
 
 ---
@@ -189,12 +189,14 @@ and high-ROI (prevents 20% token loss from surprise compressions). (Added 2026-0
 
 - **At session init:** Read `.checkpoint-manifest.json`. Restore last session history. Write new `currentSession` entry (new sessionId, reset counters, set `startedAt`).
 - **At each checkpoint log:** Write the checkpoint to `checkpoints[]` in the manifest.
+- **After each subagent returns:** Log: `[AGENT] ~Xk tokens, Y files changed`
+- **After a parallel batch completes:** Log total: `[BATCH] ~Xk tokens total, Y agents, Z files changed`
 - **At context compression:** IMMEDIATELY write to `compressionEvents[]` before doing anything else.
 - **At session wrap:** Write final token burn to `sessionHistory[]`.
 
 If the manifest file is missing or corrupted: create a fresh one using the schema from CORE.md §3.
 
-Why this exists: Session 118 advisory board audit found that in-conversation checkpoints are erased by compressions. JSON file persists across both compressions and session transitions. (Added 2026-03-09, Session 118.)
+Why this exists: Session 118 advisory board audit found that in-conversation checkpoints are erased by compressions. JSON file persists across both compressions and session transitions. Per-agent logging enables accurate token accounting and helps identify cost outliers. (Updated 2026-03-24 with per-agent logging; originally added 2026-03-09, Session 118.)
 
 ---
 
@@ -202,11 +204,25 @@ Why this exists: Session 118 advisory board audit found that in-conversation che
 
 Before dispatching 3 or more agents in parallel:
 1. Write a checkpoint to `.checkpoint-manifest.json` `checkpoints[]`.
-2. Estimate the session token total after the dispatch (add 5k per agent baseline).
+2. Estimate the session token total after the dispatch using the agent cost table below.
 3. If estimated total will exceed 150k, warn Patrick: "Dispatching N agents will push session to ~Xk tokens (Yk% of budget). Proceed?"
 4. If estimated total will exceed 170k, require explicit Patrick confirmation before dispatching.
 
-Why this exists: Multi-agent batches are the largest single token spike in any session (5–15k per agent). Pre-dispatch checkpoint ensures state is saved before the spike, and budget check prevents surprises. (Added 2026-03-09, Session 118.)
+**Agent token estimates (realistic, measured from prior sessions):**
+
+| Agent type | Estimated tokens |
+|---|---|
+| Simple dev fix (1-2 files) | 8-12k |
+| Multi-file dev feature | 15-25k |
+| QA browser test | 15-25k |
+| UX spec/audit | 10-15k |
+| Advisory board | 25-35k |
+| Records/docs update | 5-8k |
+| Architect review | 12-18k |
+| Game design decision | 10-15k |
+| Innovation/research | 20-30k |
+
+Why this exists: Multi-agent batches are the largest single token spike in any session (5–15k per agent). Pre-dispatch checkpoint ensures state is saved before the spike, and budget check prevents surprises. Real estimates replace the outdated 5k baseline. (Updated 2026-03-24; originally added 2026-03-09, Session 118.)
 
 ---
 
@@ -294,7 +310,7 @@ Why this exists: Fleet redesign session 141 — decisions made in session N get 
 
 At session init (after Rule 3 step 3), estimate token budget for planned work:
 
-1. List planned work items from next-session-prompt.md or Patrick's request.
+1. List planned work items from STATE.md "## Next Session" section or Patrick's request.
 2. Estimate tokens per item: survey (5-10k), targeted edit (3-8k/file), subagent dispatch (5-15k/agent), file read batch (1-2k/100 lines), MCP push (2-5k/call).
 3. Sum estimates. Compare to available budget.
 4. If planned work exceeds 80% of available budget: flag to Patrick, propose cuts or deferrals.
@@ -382,6 +398,18 @@ Why this exists: Session 144 advisory board — archive vault established to kee
 
 ---
 
+## Rule 33: Maximize parallel dispatch (CRITICAL)
+
+When dispatching independent work items, always maximize parallelism. Up to 7 concurrent Agent dispatches are allowed in a single message. Sequential dispatch is only acceptable when Task B depends on Task A's output.
+
+After all parallel agents return, report in one line per agent: agent name, estimated tokens consumed, files changed. Then total tokens for the batch.
+
+**GATE: Before dispatching any agent sequentially, ask:** "Does this agent depend on output from another agent still running?" YES → wait. NO → dispatch in parallel with other pending items.
+
+Why this exists: Session 143+ data showed that sequential dispatch (one agent at a time) caused 40% session time waste vs. parallel batching. Maximizing parallelism reduces session overhead and enables completion of more work per token budget. (Added 2026-03-24.)
+
+---
+
 ## Summary
 
 | Rule | Status |
@@ -408,3 +436,4 @@ Why this exists: Session 144 advisory board — archive vault established to kee
 | Zero temp files in claude_docs | Active (added 2026-03-11, Session 144) |
 | Locked directory structure | Active (added 2026-03-11, Session 144) |
 | Archive vault access control | Active (added 2026-03-11, Session 144) |
+| Maximize parallel dispatch (Rule 33) | Active (added 2026-03-24) |

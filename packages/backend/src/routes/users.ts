@@ -110,18 +110,21 @@ router.get('/me/points', authenticate, async (req: AuthRequest, res: Response) =
 });
 
 // Create or update organizer profile
+// Allow any authenticated user (including SHOPPER) to register as organizer
+// This enables role transition from SHOPPER to ORGANIZER while preserving existing data
 router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    const jwt = require('jsonwebtoken');
     const { businessName, phone, address } = req.body;
 
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!hasOrganizerRole) {
-      return res.status(403).json({ message: 'Only organizers can set up an organizer profile' });
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
     }
 
     const existing = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
 
     if (existing) {
+      // User already has organizer profile — just update it
       const updated = await prisma.organizer.update({
         where: { userId: req.user.id },
         data: {
@@ -133,16 +136,44 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
       return res.json({ organizer: updated, created: false });
     }
 
-    const organizer = await prisma.organizer.create({
-      data: {
-        userId: req.user.id,
-        businessName: businessName || req.user.name,
-        phone: phone || '',
-        address: address || '',
-      }
-    });
+    // User doesn't have organizer profile yet
+    // Add ORGANIZER to their roles array (for role-based access control)
+    const currentRoles = req.user.roles || ['USER'];
+    const newRoles = [...new Set([...currentRoles, 'ORGANIZER'])]; // Avoid duplicates
 
-    res.status(201).json({ organizer, created: true });
+    // Create organizer profile and update user roles atomically
+    const [organizer, updatedUser] = await prisma.$transaction([
+      prisma.organizer.create({
+        data: {
+          userId: req.user.id,
+          businessName: businessName || req.user.name,
+          phone: phone || '',
+          address: address || '',
+        }
+      }),
+      prisma.user.update({
+        where: { id: req.user.id },
+        data: { roles: newRoles }
+      })
+    ]);
+
+    // Generate fresh JWT with updated roles
+    const token = jwt.sign(
+      {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        roles: updatedUser.roles,
+        points: updatedUser.points,
+        referralCode: updatedUser.referralCode,
+        tokenVersion: updatedUser.tokenVersion,
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({ organizer, created: true, token });
   } catch (error) {
     console.error('Error setting up organizer profile:', error);
     res.status(500).json({ message: 'Server error' });

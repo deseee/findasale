@@ -141,7 +141,7 @@ On completion: post a summary message listing all files changed and any items ro
 
 After completing a content batch (3+ pieces), check context weight. If heavy:
 1. Complete the current draft.
-2. Trigger `context-maintenance` to log marketing work in session-log.md.
+2. Trigger `findasale-records` to log marketing work in STATE.md's "## Recent Sessions" section.
 3. Save drafts to `$PROJECT_ROOT/claude_docs/` in an appropriate subfolder.
 
 ---

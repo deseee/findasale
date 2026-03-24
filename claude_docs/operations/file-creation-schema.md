@@ -22,7 +22,9 @@ Adding a new Tier 1 doc requires Patrick's explicit approval.
 
 Format: `kebab-case.md` or `kebab-case.json`
 Location: `claude_docs/` root
-Allowed: `session-log.md`, `decisions-log.md`, `escalation-log.md`, `next-session-prompt.md`, `.last-wrap`
+Allowed: `decisions-log.md`, `escalation-log.md`, `.last-wrap`
+
+**DEPRECATED (S264):** `session-log.md` and `next-session-prompt.md` are no longer separate files. Their content now lives in STATE.md under "## Recent Sessions" and "## Next Session" sections respectively. Agents must NOT create these files.
 
 These are high-frequency files loaded every session. They live at root for fast access.
 No other files may be added to this tier without Patrick's approval.
@@ -65,15 +67,17 @@ Include backlog ID prefix for traceability (e.g., `e2-`, `g5-`).
 claude_docs/
 ├── [ROOT]                  Tier 1 + Tier 1.5 ONLY. Nothing else.
 │   ├── CORE.md
-│   ├── STATE.md
+│   ├── STATE.md             (contains "## Recent Sessions" + "## Next Session" sections)
 │   ├── STACK.md
 │   ├── SECURITY.md
 │   ├── RECOVERY.md
-│   ├── session-log.md
+│   ├── patrick-dashboard.md
 │   ├── decisions-log.md
 │   ├── escalation-log.md
-│   ├── next-session-prompt.md
 │   └── .last-wrap
+│   │
+│   ├── [DEPRECATED] session-log.md (content moved to STATE.md § Recent Sessions)
+│   ├── [DEPRECATED] next-session-prompt.md (content moved to STATE.md § Next Session)
 │
 ├── archive/                RECORDS-ONLY. See Archive Vault below.
 │   └── archive-index.json  (manifest — all agents may READ, only Records may WRITE)

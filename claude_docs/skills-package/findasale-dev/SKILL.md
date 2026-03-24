@@ -105,8 +105,8 @@ beyond its original scope, or you've been running for many tool calls.
 When context is getting full:
 1. Finish your current atomic task (don't leave files half-edited).
 2. Write the handoff summary below.
-3. Trigger the `findasale-records` skill to update STATE.md and session-log.md
-   with what was completed.
+3. Trigger the `findasale-records` skill to update STATE.md (including its
+   "## Recent Sessions" section) with what was completed.
 4. Note in your handoff that a context checkpoint was performed.
 
 ---

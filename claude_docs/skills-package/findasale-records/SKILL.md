@@ -37,17 +37,15 @@ You are the single authority on what gets written to:
 - All scheduled tasks (creation, modification, enabling/disabling, deletion)
 
 **Tier 2 — Operational (announce before editing)**
-- `claude_docs/STATE.md`
+- `claude_docs/STATE.md` (includes "## Recent Sessions" and "## Next Session" sections)
 - `claude_docs/STACK.md`
 - `claude_docs/OPS.md`
 - `claude_docs/DEVELOPMENT.md`
 - `claude_docs/RECOVERY.md`
-- `claude_docs/session-log.md`
 - `claude_docs/roadmap.md`
 - `claude_docs/BETA_CHECKLIST.md`
 - `claude_docs/migration-runbook.md`
 - `claude_docs/pre-commit-check.md`
-- `claude_docs/next-session-prompt.md`
 - `context.md`
 
 **Tier 3 — Reference (update freely)**
@@ -135,17 +133,15 @@ Special notes:
 These files are updated regularly as the project evolves. No Patrick approval
 needed for routine updates, but always announce the edit and use targeted diffs.
 
-- `STATE.md` — update after every meaningful work batch
+- `STATE.md` — update after every meaningful work batch (contains "## Recent Sessions" and "## Next Session")
 - `STACK.md` — update when tech decisions change
 - `OPS.md` — update when operational procedures change
 - `DEVELOPMENT.md` — update when dev environment changes (e.g., after Docker removal)
 - `RECOVERY.md` — update when new recovery patterns are established
-- `session-log.md` — update every session wrap
 - `roadmap.md` — update when paths change or phases complete; confirm with Patrick first since it defines what gets built next
 - `BETA_CHECKLIST.md` — update as launch blockers resolve
 - `migration-runbook.md` — update after any migration procedure changes
 - `pre-commit-check.md` — update when commit workflow changes
-- `next-session-prompt.md` — written at session end; don't hand-edit mid-session
 - `context.md` — auto-generated; flag for regeneration, never hand-edit
 
 Announce: "Editing [file] — updating [section]". Targeted diffs only.
@@ -311,22 +307,15 @@ Log violations in the session wrap report. Delete temp files. Escalate directory
 At the end of any meaningful work session, run these steps in **this exact order**:
 
 **Doc Update Order (MANDATORY — do all or none):**
-1. **Update STATE.md** — source of truth for session state. Move completed items from "In Progress" to their appropriate section. Update "Last Updated" timestamp. Add any new Known Gotchas. Remove resolved ones.
-2. **Update next-session-prompt.md** — pending Patrick actions + what comes next. NEVER include credentials — reference `.env` only.
-3. **Update session-log.md** — prepend (top) new entry; keep only the 5 most recent entries, delete older ones. Format:
-   ```
-   ## Session [N] — [date]
-   ### Completed
-   - [bullet per completed item]
-   ### Files Changed
-   - [explicit list]
-   ### Notes
-   - [anything Patrick should know]
-   ```
-4. **Update patrick-dashboard.md** — Patrick-readable status summary with build status, pending actions, next decisions.
-5. **Provide Patrick the `.\push.ps1` block** — all four files above must be in it.
+1. **Update STATE.md** — source of truth for session state. This file now contains three sections:
+   - Current state of work ("In Progress", "Known Gotchas", etc.)
+   - "## Recent Sessions" section (5 most recent session summaries, replaces separate session-log.md)
+   - "## Next Session" section (pending Patrick actions + what comes next, replaces separate next-session-prompt.md)
+   Move completed items to appropriate sections. Update "Last Updated" timestamp. Add new Known Gotchas; remove resolved ones.
+2. **Update patrick-dashboard.md** — Patrick-readable status summary with build status, pending actions, next decisions.
+3. **Provide Patrick the `.\push.ps1` block** — both STATE.md and patrick-dashboard.md must be in it.
 
-**Critical rule:** Never update one without the others. Never push STATE.md without also updating next-session-prompt.md and patrick-dashboard.md. This ensures Patrick always has a current snapshot of project state.
+**Critical rule:** Never update one without the other. Never push STATE.md without also updating patrick-dashboard.md. This ensures Patrick always has a current snapshot of project state.
 
 **Additional wrap tasks (after doc update order):**
 
@@ -342,7 +331,7 @@ At the end of any meaningful work session, run these steps in **this exact order
    date -u +"%Y-%m-%dT%H:%M:%SZ" > "$PROJECT_ROOT/claude_docs/.last-wrap"
    ```
 
-9. **Wrap commit — include all changed files**: Always provide a complete copy-paste block with explicit `git add [file]` lines for all wrap-written files (STATE.md, session-log.md, next-session-prompt.md, patrick-dashboard.md, context.md, .last-wrap, and any other changed files). Never assume files were already staged. Always include `.\push.ps1`. Never use `git add -A`.
+9. **Wrap commit — include all changed files**: Always provide a complete copy-paste block with explicit `git add [file]` lines for all wrap-written files (STATE.md, patrick-dashboard.md, context.md, .last-wrap, and any other changed files). Never assume files were already staged. Always include `.\push.ps1`. Never use `git add -A`.
 
 ---
 
@@ -375,7 +364,7 @@ Scan `$PROJECT_ROOT/claude_docs/` directory listing. Check:
 - Are there orphaned files with no reference from any active doc?
 - Are there feature-notes for features that have since been completed or cancelled?
 - Are there duplicate or conflicting versions of the same information across files?
-- Is session-log.md within the 200-line limit? Archive if not.
+- Is STATE.md's "## Recent Sessions" section within the 250-line limit? Archive if not.
 - Are monthly-digests/ up to date?
 
 ### Audit Report Format
@@ -412,7 +401,7 @@ These rules exist because previous sessions caused problems when violated:
   been "in progress" for 3+ sessions without movement, flag it to Patrick.
 - Never add behavioral rules to CORE.md or CLAUDE.md in the heat of a session
   without a Tier 1 change record. Rules added impulsively compound over time.
-- Never let session-log.md grow beyond 200 lines without archiving older entries
+- Never let STATE.md's "## Recent Sessions" section grow beyond 250 lines without archiving older entries
   to `claude_docs/monthly-digests/`.
 - context.md is auto-generated — don't hand-edit it. Flag to Patrick if it's stale.
 

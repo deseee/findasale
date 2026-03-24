@@ -1,5 +1,7 @@
 # Session Wrap Protocol — Quick Reference Card
 
+⚠️ **PARTIALLY DEPRECATED — S264 (2026-03-24).** The canonical wrap protocol is now **CLAUDE.md §12**. This document remains as quick reference for git discipline, but wrap files are now: **STATE.md + patrick-dashboard.md only** (not session-log.md and next-session-prompt.md).
+
 **Quick guide:** Copy this → paste into session end checklist
 
 ---
@@ -59,9 +61,9 @@ https://github.com/deseee/findasale/commits/main
 ```
 **Expected:** Your commits visible in last 10.
 
-### Step 5: Update session-log.md
-**File:** `claude_docs/session-log.md`
-**Add at top:**
+### Step 5: Update STATE.md "## Recent Sessions" Section
+**File:** `claude_docs/STATE.md`
+**Add to "## Recent Sessions" section at top:**
 ```markdown
 ### 2026-03-06 (session XXX — [2-3 word summary])
 **Worked on:** [1–2 sentences what was accomplished]
@@ -70,6 +72,8 @@ https://github.com/deseee/findasale/commits/main
 **Next up:** [What's next]
 **Blockers:** [Any issues]
 ```
+
+Also update "## Next Session" section in STATE.md with pending Patrick actions and next objective.
 
 ### Step 6: Report Summary to Patrick
 ```
@@ -200,10 +204,10 @@ git commit -m "WIP: [what you were doing]"
 
 ## When to Reference Full Protocol
 
+- **Canonical protocol:** CLAUDE.md §12 (Session Wrap)
 - **General questions:** SESSION_WRAP_PROTOCOL.md §During-Session Discipline
 - **Edge cases:** SESSION_WRAP_PROTOCOL.md §Exceptions & Edge Cases
 - **Script details:** VERIFICATION_SCRIPT_SPEC.md
-- **What's being updated:** WRAP_PROTOCOL_INTEGRATION.md
 
 ---
 
@@ -214,8 +218,9 @@ Before closing, verify:
  ☐ git status --short is empty
  ☐ node scripts/verify-session-wrap.js passes
  ☐ All commits visible on GitHub
- ☐ session-log.md updated for today
- ☐ next-session-prompt.md updated (session number, last session summary, next objective)
+ ☐ STATE.md "## Recent Sessions" updated for today
+ ☐ STATE.md "## Next Session" updated (pending Patrick actions, next objective)
+ ☐ patrick-dashboard.md updated
  ☐ Summary message to Patrick is ready
 ```
 

@@ -89,17 +89,20 @@ Include this in session-log.md at wrap.
 
 ## 5. Push Rules
 
-**MCP GitHub limits:** Max 3 files per `push_files` call. Total file content ≤25,000 tokens combined per call. Read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
+**Pushblock-first strategy (new default):** Always provide Patrick a copy-paste pushblock as the default push method. MCP push is only used when: (a) Patrick explicitly says "push it now" and time-to-deploy matters, or (b) a single trivial edit under 50 lines to a file already in context. Rationale: MCP push costs ~12k tokens per file (mandatory read + full file content as parameter + verification). A pushblock costs ~300–500 tokens. Use the cheaper method first.
 
-**GitHub MCP (`mcp__github__*`):**
-Use `mcp__github__push_files` for **small targeted changes only** with two hard limits:
+**After successful MCP push:** Do NOT also generate a pushblock — the files are already on GitHub. One or the other, never both.
+
+**MCP GitHub limits (when MCP is used):** Max 3 files per `push_files` call. Total file content ≤25,000 tokens combined per call. Read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
+
+**GitHub MCP (`mcp__github__*`) — backup only:**
+Use `mcp__github__push_files` only when pushblock is inappropriate, with two hard limits:
 1. **≤3 files per push** (hard limit — stricter than any earlier 5-file guidance)
 2. **Total file content ≤ 25,000 tokens combined** — read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
 
-**Large file guidance:** If a single file exceeds ~500 lines, push it solo via `create_or_update_file`. If it exceeds ~800 lines, hand off to Patrick with PS1 block. Never batch a large file with other files.
+**Large file guidance:** If a single file exceeds ~500 lines and a pushblock is used, include it solo. If it exceeds ~800 lines, hand off to Patrick with PS1 block. Never batch a large file with other files in a pushblock.
 
-**MCP vs PowerShell:** Use MCP for 1–3 small files already in context.
-Tell Patrick `.\push.ps1` for 4+ files, large files, or session wrap.
+**Changeset size rule:** If changeset is >3 files, skip MCP entirely. Give one clean pushblock.
 
 **Pre-push verification:** Read function/type signatures before pushing
 TypeScript. Grep entire frontend for a pattern before pushing a build fix.
@@ -305,13 +308,21 @@ The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for smal
 Before ending any session:
 
 **Doc Update Order (mandatory at every session wrap — in this exact order):**
-1. Update STATE.md (source of truth for session state)
-2. Update next-session-prompt.md (pending Patrick actions + what comes next). NEVER include credentials.
-3. Update session-log.md (prepend new entry, keep 5 most recent)
-4. Update patrick-dashboard.md (Patrick-readable status summary)
-5. Provide Patrick the `.\push.ps1` block — all four files above must be in it
+1. Update STATE.md (source of truth for session state; now includes "## Recent Sessions" section with 5 most recent entries and "## Next Session" section)
+2. Update patrick-dashboard.md (Patrick-readable status summary)
+3. Provide Patrick the pushblock — both files above must be in it
 
-**Critical rule:** Never update one without the others. Never push STATE.md without also updating next-session-prompt.md and patrick-dashboard.md. This ensures Patrick always has a current snapshot of project state.
+**New STATE.md structure:**
+- Sessions start with "## Current Work" tracking in-flight tasks
+- "## Recent Sessions" section contains the 5 most recent session summaries (same format as prior session-log.md)
+- "## Next Session" section contains pending Patrick actions and what comes next (same format as prior next-session-prompt.md)
+
+**Deprecated files (consolidation):**
+- `session-log.md` content moves INTO STATE.md "## Recent Sessions" section
+- `next-session-prompt.md` content moves INTO STATE.md "## Next Session" section
+- Existing instances of these files remain for now but are no longer updated after this session
+
+**Critical rule:** Never update STATE.md without also updating patrick-dashboard.md. This ensures Patrick always has a current snapshot of project state.
 
 **Subagent files:**
 - Maintain running changed-files list from all subagent dispatches

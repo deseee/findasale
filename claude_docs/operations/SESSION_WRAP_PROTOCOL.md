@@ -1,8 +1,10 @@
 # Session Wrap Protocol — FindA.Sale
 
-**Version:** 1.0
-**Effective:** 2026-03-06
-**Owner:** findasale-workflow
+⚠️ **PARTIALLY DEPRECATED — S264 (2026-03-24).** The canonical wrap protocol is now **CLAUDE.md §12**. SESSION_WRAP_PROTOCOL.md remains as reference for git discipline and verification, but wrap file list is now: **STATE.md + patrick-dashboard.md only**. session-log.md and next-session-prompt.md are no longer separate files.
+
+**Version:** 1.1
+**Effective:** 2026-03-24
+**Owner:** findasale-workflow / findasale-records
 **Applies to:** All Claude sessions (main flow, subagents, background tasks)
 
 ---
@@ -27,8 +29,7 @@ This protocol ensures **100% of work is committed and pushed before the session 
 **Blocking:** Session cannot proceed if checks fail
 
 ### 1. Load All Context Files
-- [ ] `claude_docs/STATE.md` — current project state
-- [ ] `claude_docs/session-log.md` — recent session history
+- [ ] `claude_docs/STATE.md` — current project state, recent sessions, next steps
 - [ ] `claude_docs/CORE.md` — behavior rules
 - [ ] `CLAUDE.md` (project-level, at repo root)
 - [ ] Global `CLAUDE.md` (Patrick's settings, if accessible)
@@ -248,17 +249,21 @@ Action required:
   3. Re-run: node scripts/verify-session-wrap.js
 ```
 
-### Step 2: Update session-log.md
+### Step 2: Update STATE.md "## Recent Sessions" Section
 
-**File:** `claude_docs/session-log.md`
-**Format:** Add an entry for THIS session at the top (push down older entries)
+**File:** `claude_docs/STATE.md`
+**Location:** Update the "## Recent Sessions" section with an entry for THIS session at the top (push down older entries — keep 5 most recent)
 
 **Template:**
 ```markdown
+## Recent Sessions
+
 ### 2026-03-06 (session XXX — [2-3 word description of work])
 **Worked on:** [1–2 sentences: what was accomplished]
 
 **Decisions:** [Key decisions made, patterns established]
+
+**Token efficiency:** [tasks completed, subagent calls, qualitative burn assessment]
 
 **Next up:** [What should happen in the next session]
 
@@ -277,11 +282,35 @@ Action required:
 **Blockers:** QA critical findings may delay launch by 2–3 days if they require schema changes.
 ```
 
-**Verification:** Paste the session-log entry into your response so Patrick can see it before the session ends.
+**Verification:** Paste the STATE.md "## Recent Sessions" entry into your response so Patrick can see it before the session ends.
 
-**Roadmap check:** If any Path P items were completed or CD sprint features shipped this session, update `claude_docs/strategy/roadmap.md` in the same commit as session-log.md. The two files are always updated together — never one without the other after meaningful work.
+**Roadmap check:** If any Path P items were completed or CD sprint features shipped this session, update `claude_docs/strategy/roadmap.md` in the same commit as STATE.md. STATE.md and roadmap.md are always updated together — never one without the other after meaningful work.
 
-### Step 3: Report File Changes Explicitly
+### Step 2b: Update STATE.md "## Next Session" Section
+
+**Location:** Update the "## Next Session" section in STATE.md with pending Patrick actions and what comes next.
+
+**Template:**
+```markdown
+## Next Session
+
+**Pending Patrick actions:**
+- [Action 1 if any]
+- [Action 2 if any]
+
+**Next session objective:** [What to work on first]
+
+**Context:** [Any relevant state for next session]
+```
+
+### Step 3: Update patrick-dashboard.md
+
+**File:** `claude_docs/patrick-dashboard.md`
+**Format:** Single-page Patrick-readable status summary. Update to reflect this session's work.
+
+(See patrick-dashboard.md for template)
+
+### Step 4: Report File Changes Explicitly
 
 **Format:** For every commit made this session, list the files:
 
@@ -309,7 +338,7 @@ Action required:
 
 **Why:** Patrick sees exactly what changed without running `git log`. He can verify against his mental model.
 
-### Step 4: If MCP Pushes Were Used, Verify on GitHub
+### Step 5: If MCP Pushes Were Used, Verify on GitHub
 
 **For each MCP push this session:**
 1. Note the commit message
@@ -324,7 +353,7 @@ Action required:
 ✓ Commit "docs: support KB" — verified on GitHub
 ```
 
-### Step 5: Confirm No Secrets Leaked
+### Step 6: Confirm No Secrets Leaked
 
 **Check STATE.md:**
 ```bash
@@ -348,7 +377,7 @@ If found: Remove immediately, then re-commit.
 ✓ No plaintext secrets in self_healing_skills.md
 ```
 
-### Step 6: Final Status Check
+### Step 7: Final Status Check
 
 ```bash
 git log --oneline -5
@@ -381,15 +410,15 @@ nothing to commit, working tree clean
 
 | Failure Mode | Cause | How Protocol Prevents |
 |--------------|-------|----------------------|
-| Work vanishes between sessions | Commits made but never pushed | Step 4: verify all commits on GitHub before close |
-| CRLF normalization reverts work | Changes committed but not pushed when push.ps1 runs | Rule 2: always commit before mentioning push; Rule 4: verify on GitHub |
-| Stale docs obscure actual state | Documentation updated locally but never committed | Rule 3: never accumulate unstaged changes; Step 2: verify session-log updated |
+| Work vanishes between sessions | Commits made but never pushed | Step 5: verify all commits on GitHub before close |
+| CRLF normalization reverts work | Changes committed but not pushed when push.ps1 runs | Rule 2: always commit before mentioning push; Rule 5: verify on GitHub |
+| Stale docs obscure actual state | Documentation updated locally but never committed | Rule 3: never accumulate unstaged changes; Step 2: verify STATE.md updated |
 | Subagent work orphaned | Subagent finishes but doesn't commit before handing off | Rule 5: subagent prompt includes commit discipline |
-| Secrets leaked in docs | API keys / credentials in STATE.md, self_healing_skills.md | Step 5: grep for secrets before close |
+| Secrets leaked in docs | API keys / credentials in STATE.md, self_healing_skills.md | Step 6: grep for secrets before close |
 | Merge conflicts block next session | Unstaged changes from previous session left in tree | Step 1: verify clean tree at start |
 | "Phantom" CRLF changes block push | autocrlf creates modified files without actual changes | Step 1: pre-verify normalization; verify-session-wrap checks for this |
-| Patrick doesn't know what changed | Session ends with vague "work is done" message | Step 3: explicit file list for every commit |
-| Revert incidents unprevented | Previous commits unknown/unchecked | Step 3: report commit messages and link to GitHub |
+| Patrick doesn't know what changed | Session ends with vague "work is done" message | Step 4: explicit file list for every commit |
+| Revert incidents unprevented | Previous commits unknown/unchecked | Step 4: report commit messages and link to GitHub |
 | MCP push fails silently | Large batch pushed without checking size | Rule 4: estimate token count; defer to manual push if >25k |
 | Documentation regression | Batch push includes stale doc files | Rule 2: don't include docs in feature batches |
 
@@ -466,23 +495,23 @@ grep -E "(password|token|key|secret|DATABASE_URL|NEON|API_KEY)" claude_docs/self
 
 **Same format as Check 3.**
 
-#### Check 5: session-log.md Updated This Session
+#### Check 5: STATE.md "## Recent Sessions" Updated This Session
 ```
-# Read the first entry (most recent session)
+# Read the first entry under "## Recent Sessions" (most recent session)
 # Check if today's date appears in the header
 # e.g., "### 2026-03-06 (session XXX — ..."
 
-head -20 claude_docs/session-log.md | grep "$(date +%Y-%m-%d)"
+sed -n '/^## Recent Sessions/,/^## /p' claude_docs/STATE.md | head -20 | grep "$(date +%Y-%m-%d)"
 ```
 
-**Pass condition:** Today's date found in first entry
+**Pass condition:** Today's date found in first "## Recent Sessions" entry
 **Fail condition:** Today's date not found
-**Output if pass:** `✓ session-log.md updated (2026-03-06 16:45:12)`
+**Output if pass:** `✓ STATE.md "## Recent Sessions" updated (2026-03-06 16:45:12)`
 **Output if fail:**
 ```
-✗ session-log.md not updated for today (last entry: 2026-03-05)
+✗ STATE.md "## Recent Sessions" not updated for today (last entry: 2026-03-05)
 
-Action: Add a session-log entry for today before closing.
+Action: Add a session entry to STATE.md "## Recent Sessions" section before closing.
 ```
 
 #### Check 6: No Orphan Files
@@ -564,7 +593,7 @@ Script should output this on success:
 ✓ context.md current (updated 2h 15m ago)
 ✓ STATE.md has no secrets
 ✓ self_healing_skills.md has no secrets
-✓ session-log.md updated (2026-03-06)
+✓ STATE.md "## Recent Sessions" updated (2026-03-06)
 ✓ No orphan files found
 ✓ All line endings normalized
 
@@ -600,7 +629,9 @@ FAILED: 1 check failed
    → Run: node scripts/update-context.js
    → Then: git add claude_docs/context.md && git commit -m "chore: refresh context"
 
-2. Re-run script: node scripts/verify-session-wrap.js
+2. Update STATE.md with "## Recent Sessions" entry for today
+
+3. Re-run script: node scripts/verify-session-wrap.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -609,16 +640,15 @@ FAILED: 1 check failed
 
 ## Implementation Roadmap
 
-### Tier 1 Changes (Implement immediately)
-1. **Create `scripts/verify-session-wrap.js`** — Core verification script (above spec)
-2. **Add to CORE.md:** Session wrap is mandatory (reference this doc)
-3. **Add to CLAUDE.md projects section:** "Load SESSION_WRAP_PROTOCOL at every session start"
-4. **Update findasale-workflow skill:** Add "session wrap protocol" to the auditing section
+### Tier 1 Changes (Completed S264)
+1. ✓ **Create `scripts/verify-session-wrap.js`** — Core verification script (above spec)
+2. ✓ **Add to CORE.md:** Session wrap is mandatory (reference CLAUDE.md §12)
+3. ✓ **Update CLAUDE.md §12:** Canonical wrap protocol (STATE.md + patrick-dashboard.md)
+4. ✓ **Consolidate wrap files:** session-log.md and next-session-prompt.md eliminated; content moved to STATE.md sections
 
 ### Tier 2 Changes (Next session)
-1. **Create `scripts/session-wrap-checklist.md`** — Simpler markdown checklist for Patrick to copy-paste
-2. **Add to context.md:** Link to SESSION_WRAP_PROTOCOL (one line summary)
-3. **Add to State.md:** "Session wrap is mandatory before close" (one-line note)
+1. **Update context.md:** Link to CLAUDE.md §12 instead of SESSION_WRAP_PROTOCOL (one line summary)
+2. ✓ **Update STATE.md:** Add "## Recent Sessions" and "## Next Session" sections
 
 ### Tier 3 Changes (Polish, post-beta)
 1. **Automate script in CI/CD:** Trigger on PR creation (prevent bad pushes)
@@ -707,4 +737,4 @@ This protocol **transforms session wrap from optional best-effort to mandatory, 
 
 ---
 
-**Next steps:** Implement verification script, route to findasale-records for doc integration, then enforce in next session.
+**Status (S264):** All Tier 1 items complete. SESSION_WRAP_PROTOCOL.md serves as detailed reference; CLAUDE.md §12 is now canonical. Transition complete — next session uses STATE.md exclusively.

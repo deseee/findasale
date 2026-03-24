@@ -138,7 +138,7 @@ When auditing an existing screen or flow, check:
 
 After completing a full flow spec or UX audit, check context weight. If heavy:
 1. Save spec/findings to `$PROJECT_ROOT/claude_docs/ux-spotchecks/`.
-2. Trigger `context-maintenance` to log UX work in session-log.md.
+2. Trigger `findasale-records` to log UX work in STATE.md's "## Recent Sessions" section.
 
 ---
 

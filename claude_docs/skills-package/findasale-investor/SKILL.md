@@ -171,8 +171,8 @@ investment required, expected return, and recommended next step.
 ## Context Checkpoint
 
 After completing ROI analysis, note in handoff whether findings should be
-logged in session-log.md. Heavy analyses (multiple scenarios, sensitivity
-testing) should trigger context-maintenance.
+logged in STATE.md's "## Recent Sessions" section. Heavy analyses (multiple
+scenarios, sensitivity testing) should include a context checkpoint.
 
 ---
 

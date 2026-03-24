@@ -134,7 +134,7 @@ On completion: post summary listing all ideas generated, feasibility verdicts, a
 
 After completing heavy research (web searches, document reads), check context weight:
 1. Save findings to `$PROJECT_ROOT/claude_docs/research/[idea-name]-[date].md`
-2. Trigger `context-maintenance` to log completion in session-log.md
+2. If context heavy, trigger `findasale-records` to update STATE.md's "## Recent Sessions" section with completion
 3. Note context checkpoint in handoff
 
 ---

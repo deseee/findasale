@@ -39,16 +39,14 @@ SKILLS_DIR=$(ls -d /sessions/*/mnt/.skills/skills 2>/dev/null | head -1)
 ```
 
 Read before any improvement pass:
-- `$DOCS/STATE.md` — current project state and sprint queue
+- `$DOCS/STATE.md` — current project state and sprint queue (includes "## Recent Sessions" for pattern detection)
 - `$DOCS/strategy/roadmap.md` — master plan, feature pipeline, sync points
 - `$DOCS/research/` — all research docs (feature feasibility, competitor intel,
   pricing, growth channels, brainstorms). These are gold mines of actionable
   items that often don't make it into summaries. Read them all on first run,
   then focus on recently updated ones in subsequent runs.
-- `$DOCS/CORE.md` — behavior rules
 - `$PROJECT_ROOT/CLAUDE.md` — project execution contract
 - All skill SKILL.md files in `$SKILLS_DIR` (skim descriptions, deep-read as needed)
-- `$DOCS/logs/session-log.md` — last 3–5 entries for pattern detection
 - `$DOCS/feature-notes/` — ADRs and design specs with potential follow-up work
 
 ---
@@ -123,8 +121,9 @@ forward without Patrick having to think of it.
 
 - **Health gaps**: Trigger `health-scout` if it hasn't run recently. Review
   findings and route fixes to the right agent.
-- **Documentation staleness**: Check if STATE.md, context.md, or session-log.md
-  are stale. Trigger `context-maintenance` if needed.
+- **Documentation staleness**: Check if STATE.md (including "## Recent Sessions"
+  section) or context.md are stale. If STATE.md needs refresh, trigger
+  `findasale-records`.
 - **Scheduled task gaps**: Review existing scheduled tasks. Are there recurring
   activities that should be automated but aren't? Propose new scheduled tasks.
 - **Deferred items**: Review the roadmap's "Deprecated / Deferred" section

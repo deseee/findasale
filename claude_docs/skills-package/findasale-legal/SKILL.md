@@ -152,7 +152,7 @@ On completion: post a summary message listing all files changed and any items ro
 
 After completing a compliance review or policy update, check context weight. If heavy:
 1. Save findings to `$PROJECT_ROOT/claude_docs/feature-notes/` with a `legal-` prefix.
-2. Trigger `context-maintenance` to log compliance work in session-log.md.
+2. Trigger `findasale-records` to log compliance work in STATE.md's "## Recent Sessions" section.
 
 ---
 
