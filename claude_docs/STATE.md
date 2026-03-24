@@ -7,7 +7,21 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**S269 (next session):** Begin Parallel Batch A implementation. See Next Session below.
+**S270 (next session):** Continue Parallel Batch B + run migration on Railway + QA S269 changes live. See Next Session below.
+
+**Session 269 COMPLETE (2026-03-24) — PARALLEL BATCH A + GAMIFICATION LEGACY CLEANUP:**
+
+What shipped:
+- ✅ **#126 Gamification Legacy Cleanup** — Old points system fully deleted: `User.points` field removed from schema (migration created), `routes/points.ts` deleted, `services/pointsService.ts` deleted, `hooks/usePoints.ts` deleted. awardPoints() calls removed from stripeController, favoriteController, treasureHuntService. Purchase-count badge triggers removed from userController. leaderboardController updated to rank-only scoring. BottomTabNav cleaned. 0 TS errors.
+- ✅ **#129 Homepage Modernization** — `index.tsx` and `SaleCard.tsx` updated: sage gradient hero, 4:3 landscape cards, hover lift + shadows, Fraunces/Inter typography, sale type filter pills (All/Estate/Yard/Auction/Flea Market/Consignment), map toggle preserved. 0 TS errors.
+- ✅ **#134 Plan a Sale Dashboard Placement** — "Coming Soon" card added to organizer dashboard overview tab. 0 TS errors.
+- ✅ **profile.tsx Hunt Pass section replaced** — Broken `usePoints` hook removed; replaced with Explorer Rank card linking to /loyalty. 0 TS errors.
+- ✅ **QA: SP-01 PASS, TR-04 NOT FOUND** — Sale stats dark mode confirmed working. No mint textbox found on Trails page. Both items closed.
+- ✅ **Seed additions: OS-03 + FR-01** — OrganizerWorkspace record for user2 added. Completed ENDED sale with 2 SOLD items + 2 PAID purchases added for flip report testing.
+- ✅ **Seed cleanup** — `User.points` reference removed from seed.ts (was missed by #126 agent). `pointsOptions` array removed.
+- ✅ **sales/[id].tsx inline fix** — `reviewCount > 0` null check fixed (was `?? 0` optional chain). TypeScript build error resolved.
+- ⚠️ **Migration pending Patrick action** — `20260324_remove_legacy_points` must be deployed to Railway Postgres before Railway can build successfully.
+- Last Updated: 2026-03-24
 
 **Session 268 COMPLETE (2026-03-24) — STRATEGIC DECISIONS + BOARD REVIEW + ROADMAP REORG:**
 
@@ -173,32 +187,32 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Recent Sessions
 
-**S268 (2026-03-24):** Strategic decisions session — full advisory board convened on gamification, support, POS, homepage, and 10 remaining items. 11 decisions locked. SP-03 fixed (stray "0"). POS value unlock tiers designed (dual-gate: tx + dollars). Hunt Pass redesigned with Sage/Grandmaster exclusives. Homepage mockup approved. Roadmap reorganized into 5 parallel execution batches. 9 new backlog items (#126-#134). Decisions-log updated.
+**S269 (2026-03-24):** Parallel Batch A — #126 gamification legacy cleanup (points system deleted, 12 files, schema migration), #129 homepage modernization (sage gradient hero, 4:3 cards, filter pills), #134 plan-a-sale dashboard card. QA: SP-01 PASS, TR-04 NOT FOUND. Seed: OS-03 workspace + FR-01 completed sale added. Build error fixed (sales/[id].tsx reviewCount null check). 15 files modified + 3 deleted. Push block below.
 
-**S267 (2026-03-24):** Full audit dispatch (135 items across 3 waves). 29 code files modified + pushed. Double footer root cause fixed (_app.tsx Layout double-wrap). Trails fixed (double /api prefix). Payment/auction fixes (items/[id]). Dark mode pass across admin, organizer, shopper pages. Seed.ts fixed (prior agent hallucinated 8 models). Push block provided.
+**S268 (2026-03-24):** Strategic decisions session — full advisory board convened. 11 decisions locked. SP-03 fixed. Hunt Pass redesigned with Sage/Grandmaster exclusives. Homepage mockup approved. Roadmap reorganized into 5 parallel batches. 9 new items (#126-#134).
 
-**S266 (2026-03-24):** Stamp label fix (raw enums → human-readable on loyalty page). Smoke test passed. Phase 2 UX P2 polish dispatched to dev.
+**S267 (2026-03-24):** Full audit dispatch (135 items across 3 waves). 29 code files modified + pushed. Double footer fixed. Trails double /api prefix fixed. Dark mode pass. Seed.ts fixed.
 
-**S265 (2026-03-24):** XP system verified live on Railway. Shopper→Organizer conversion flow fully shipped with E2E QA. XP Sink UI complete. Brand drift Batches 3+4 QA confirmed.
+**S266 (2026-03-24):** Stamp label fix (raw enums → human-readable on loyalty page). Smoke test passed. Phase 2 UX P2 polish dispatched.
 
-**S264 (2026-03-24):** Neon→Railway Postgres migration complete. Seed applied. Registration bug fix. 9 skill packages rebuilt. Savings: ~$18.50/month.
+**S265 (2026-03-24):** XP system verified live on Railway. Shopper→Organizer conversion flow. XP Sink UI. Brand drift Batches 3+4 QA confirmed.
 
 ---
 
 ## Next Session
 
-**S269 PRIORITY 1 — Push S268 docs:** Run the push block from S268 (decisions-log, roadmap, STATE.md, patrick-dashboard.md, board minutes, POS strategy, homepage mockup, UX spec). No code changes this session — all doc files.
+**S270 PRIORITY 1 — Migration + push:** Run both pushblocks from S269 (S268 docs + code changes). Then run migration on Railway Postgres (see migration block below).
 
-**S269 PRIORITY 2 — Begin Parallel Batch A:** Dispatch up to 3 concurrent subagents from Batch A (roadmap). Recommended first picks (highest impact, zero dependencies):
-- **#126 Gamification Legacy Cleanup** — gates all gamification coherence. DB + API + UI. Biggest unblock.
-- **#129 Homepage Modernization** — approved mockup exists, frontend-only. High visual impact.
-- **#134 Plan a Sale Dashboard Placement** — tiny UX fix, quick win.
+**S270 PRIORITY 2 — Live QA on S269 changes:** Chrome MCP smoke test: homepage new design, sale card 4:3, organizer dashboard "Plan a Sale" card, profile Explorer Rank card, confirm no points references anywhere visible.
 
-**S269 PRIORITY 3 — Remaining QA browser items:** SP-01 (sale stats dark mode), TR-04 (mint textbox on trails). SP-03 now fixed. Need live browser pass.
+**S270 PRIORITY 3 — Parallel Batch B:** Begin dispatching Batch B items (#127 POS value unlock tiers, #128 automated support stack, #131 share templates, #132 à la carte fee) — 4 agents concurrently.
 
-**S269 PRIORITY 4 — Seed additions:** Workspace record (OS-03) + completed PRO-tier sale (FR-01) still needed for those tests to pass.
+**S270 PRIORITY 4 — Roadmap #122 Explorer's Guild Phase 1** — Collector→Explorer rebrand copy is in Batch C but depends on #126 (now shipped). Can now be dispatched.
 
-**Patrick manual action (still pending from S264):** Delete Neon project at console.neon.tech.
+**Patrick manual actions:**
+- Run BOTH pushblocks (S268 docs + S269 code — see below)
+- Run migration on Railway Postgres (migration block in handoff)
+- Delete Neon project at console.neon.tech (pending since S264)
 
 ---
 

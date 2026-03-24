@@ -1,40 +1,89 @@
-# Patrick's Dashboard — Session 268 Complete (March 24, 2026)
+# Patrick's Dashboard — Session 269 Complete (March 24, 2026)
 
 ---
 
-## ✅ Session 268 Complete — Strategic Decisions + Board Review + Roadmap Reorg
+## ✅ Session 269 Complete — Parallel Batch A + Gamification Legacy Cleanup
 
 **Delivered this session:**
-- SP-03 fixed (stray "0" under organizer badges on sale pages)
-- Full 12-seat advisory board review on gamification, support, POS, homepage, and 10 remaining items
-- 11 strategic decisions locked in decisions-log.md
-- POS value unlock tiers designed (dual-gate: transactions + dollar minimums to prevent gaming)
-- Hunt Pass redesigned with Sage/Grandmaster exclusives (not deleted)
-- Homepage modernization mockup approved
-- Roadmap reorganized into 5 parallel execution batches (A-E) for concurrent work
+- **#126** Old points system fully deleted — backend routes, services, frontend hook, schema field all removed. Migration created.
+- **#129** Homepage modernized — sage gradient hero, 4:3 sale cards, sale type filter pills, hover animations, Fraunces/Inter fonts
+- **#134** "Plan a Sale" Coming Soon card added to organizer dashboard
+- **profile.tsx** broken Hunt Pass section replaced with Explorer Rank card → /loyalty
+- **QA** SP-01 sale stats dark mode: PASS. TR-04 mint textbox: NOT FOUND (resolved)
+- **Seed** workspace record (OS-03) + completed PRO sale with purchases (FR-01) added
+- **Build fix** sales/[id].tsx null check on reviewCount
 
 ---
 
-## 🚨 Action Required — Patrick Must Do This Now
+## 🚨 Action Required — Patrick Must Do These In Order
 
-**Step 1: Push S268 doc changes** (see push block in session chat below)
+### Step 1: Push S268 docs (from last session — if not already done)
 
-**Step 2 (still pending from S264):** Delete Neon project at console.neon.tech
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/decisions-log.md
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/research/board-minutes-gamification-S268.md
+git add claude_docs/research/pos-value-proposition-S268.md
+git add claude_docs/research/homepage-mockup-S268.html
+git commit -m "docs: S268 strategic decisions, roadmap reorg, board minutes, POS spec, homepage mockup"
+.\push.ps1
+```
+
+### Step 2: Push S269 code changes
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git rm packages/backend/src/routes/points.ts
+git rm packages/backend/src/services/pointsService.ts
+git rm packages/frontend/hooks/usePoints.ts
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/20260324_remove_legacy_points/migration.sql"
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/userController.ts
+git add packages/backend/src/controllers/favoriteController.ts
+git add packages/backend/src/controllers/leaderboardController.ts
+git add packages/backend/src/services/treasureHuntService.ts
+git add packages/backend/src/index.ts
+git add packages/frontend/components/BottomTabNav.tsx
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/components/SaleCard.tsx
+git add "packages/frontend/pages/organizer/dashboard.tsx"
+git add "packages/frontend/pages/sales/[id].tsx"
+git add packages/frontend/pages/profile.tsx
+git add packages/database/prisma/seed.ts
+git commit -m "feat: Batch A — gamification legacy cleanup (#126), homepage modernization (#129), plan-a-sale dashboard card (#134), profile Explorer Rank, seed OS-03/FR-01, build fixes"
+.\push.ps1
+```
+
+### Step 3: Run migration on Railway Postgres (REQUIRED — Railway build will fail without this)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+> ⚠️ This removes the old `User.points` column from the live database. Railway auto-deploys won't work until this migration runs.
+
+
 
 ---
 
-## 📋 S269 Priorities
+## 📋 S270 Priorities
 
-1. **Push S268 docs** — decisions-log, roadmap, STATE, dashboard, board minutes, POS strategy, mockup, UX spec
-2. **Begin Parallel Batch A** — dispatch #126 (gamification legacy cleanup), #129 (homepage modernization), #134 (Plan a Sale dashboard placement) concurrently
-3. **QA browser pass** — SP-01 (sale stats dark mode), TR-04 (mint textbox on trails)
-4. **Seed additions** — workspace record (OS-03) + completed PRO-tier sale (FR-01)
+1. **Live QA** — Chrome smoke test: new homepage, sale cards 4:3, organizer dashboard "Plan a Sale" card, profile Explorer Rank card
+2. **Parallel Batch B** — #127 POS unlock tiers, #128 automated support, #131 share templates, #132 à la carte fee (4 agents concurrently)
+3. **Batch C unlock** — #122 Explorer's Guild rebrand now unblocked (depends on #126 which shipped this session)
 
 ---
 
 ## Build Status
 
-Previous: ✅ Railway GREEN. ✅ Vercel GREEN. No code changes in S268 — doc-only push.
+S269 changes committed locally. **Railway build blocked until migration runs** (Step 3 above). After migration + push, Railway + Vercel should both go green.
 
 ---
 
@@ -42,17 +91,30 @@ Previous: ✅ Railway GREEN. ✅ Vercel GREEN. No code changes in S268 — doc-o
 
 All password: `password123`
 - `user1@example.com` — ADMIN + SIMPLE organizer
-- `user2@example.com` — PRO organizer (Stripe connected)
-- `user3@example.com` — TEAMS organizer (Stripe connected)
+- `user2@example.com` — PRO organizer (has workspace + completed sale in seed)
+- `user3@example.com` — TEAMS organizer
 - `user11@example.com` — Shopper
 
-## Key S268 Decisions (Summary)
+## What Changed This Session (File Summary)
 
-- **Gamification:** 3-system model locked (guildXp + Hunt Pass $4.99/mo + Explorer Rank). Legacy points system to be deleted.
-- **POS:** Dual-gate unlock tiers (5 tx/$50, 20 tx/$300, 50 tx/$1,000). Tier 3 PRO-only. Abuse pipeline included.
-- **Support:** 5-layer zero-human stack (~$5/mo). Patrick reads weekly digest only.
-- **Homepage:** Sage gradient hero, 4:3 cards, modern typography — mockup approved.
-- **Brand Kit:** Business basics move to Settings/Profile. Brand-specific fields stay.
-- **Share:** Expand to full template toolkit (Option B).
-- **À la carte:** $9.99 single-sale fee for SIMPLE organizers.
-- **Hunt Pass:** Sage/Grandmaster exclusives added (6h Legendary access, 1.5x XP, Loot Legend, Collector's League).
+**Deleted:**
+- `packages/backend/src/routes/points.ts`
+- `packages/backend/src/services/pointsService.ts`
+- `packages/frontend/hooks/usePoints.ts`
+
+**Modified (15 files):**
+- `packages/database/prisma/schema.prisma` — User.points removed
+- `packages/database/prisma/migrations/20260324_remove_legacy_points/migration.sql` — NEW
+- `packages/backend/src/controllers/stripeController.ts`
+- `packages/backend/src/controllers/userController.ts`
+- `packages/backend/src/controllers/favoriteController.ts`
+- `packages/backend/src/controllers/leaderboardController.ts`
+- `packages/backend/src/services/treasureHuntService.ts`
+- `packages/backend/src/index.ts`
+- `packages/frontend/components/BottomTabNav.tsx`
+- `packages/frontend/pages/index.tsx` — Homepage modernization
+- `packages/frontend/components/SaleCard.tsx` — 4:3 cards + hover lift
+- `packages/frontend/pages/organizer/dashboard.tsx` — Plan a Sale card
+- `packages/frontend/pages/sales/[id].tsx` — reviewCount null fix
+- `packages/frontend/pages/profile.tsx` — Explorer Rank card
+- `packages/database/prisma/seed.ts` — OS-03, FR-01, points cleanup
