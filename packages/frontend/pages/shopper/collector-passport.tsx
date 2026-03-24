@@ -120,7 +120,7 @@ function CollectorPassportPage() {
         <title>My Collector Passport - FindA.Sale</title>
       </Head>
 
-      <div className="max-w-5xl mx-auto py-8 px-4">
+      <div className="max-w-5xl mx-auto py-8 px-4 dark:bg-gray-900 dark:text-warm-100">
           {/* Header */}
           <div className="mb-10">
             <div className="flex items-center justify-between">
