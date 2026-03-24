@@ -329,6 +329,7 @@ Production MVP launched Q1 2026.
 | 92 | City Weekend Landing Pages (Metro Explorer) | SHO | FREE | — | — | — | — | — | — | — | SEO-indexed per-metro pages (/grand-rapids-estate-sales). ISR + Schema.org markup. High SEO ROI. Patrick promoted from deferred. |
 | 122 | Explorer's Guild — Phase 1 (Rebrand + Copy) | SHO | FREE | — | — | — | — | — | — | — | Rename Collector's Guild → Explorer's Guild throughout. Update rank names (Initiate→Scout→Ranger→Sage→Grandmaster), OnboardingWizard copy, collector-passport labels, leaderboard copy, badge names. No schema changes. Spec: `claude_docs/research/gamification-rpg-spec-S260.md` |
 | 123 | Explorer's Guild — Phase 2 (XP Economy + Loot Legend) | SHO | FREE/PAID_ADDON | — | — | — | — | — | — | — | Full XP economy: rarity tiers (Common/Uncommon/Rare/Legendary), XP sinks (coupon-gen, rarity boost, Hunt Pass discount), Loot Legend item tracking, shareable moment cards, abuse prevention flags, referral loop. Requires 4–5 new schema tables + API endpoints. Spec: `claude_docs/research/gamification-rpg-spec-S260.md` |
+| 124 | Rarity Boost XP Sink | SHO | FREE/PAID_ADDON | — | ✅ | — | — | — | — | — | Frontend UI for POST /api/xp/sink/rarity-boost. Backend exists. Frontend shows 'Coming Soon' placeholder on loyalty page (shipped S265). Full implementation deferred. Tier: Explorer's Guild Phase 2 follow-up. |
 
 ---
 

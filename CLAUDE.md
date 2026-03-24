@@ -277,6 +277,8 @@ The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for smal
 
 **Context checkpoints (no-pause rule):** Agent handoff "Context Checkpoint: yes/no" is internal bookkeeping. Never pause work to discuss a checkpoint.
 
+**QA Management (§10c):** Before dispatching dev, write the post-deploy QA scenario list. After dev returns, provide the push block, then immediately write the QA dispatch — do not wait for Patrick to ask. Main session never accepts PARTIAL QA results — re-dispatch with corrected setup. QA results must report exact API values and exact UI values, not descriptions. Surface-level rendering checks are not sufficient — verify data integrity via API calls.
+
 **Escalation channel:** Any subagent may include a `## Patrick Direct` section when it believes the main session is ignoring a P0/P1 finding, dispatching work that contradicts a locked decision, operating on stale context, or burning tokens on a wrong path. Evidence required. One per agent per session. Main session surfaces verbatim — no filtering.
 
 **Red-flag veto gate:** Changes touching auth flows, payment processing, data deletion, or security config require sign-off from Architect or Hacker before Dev dispatch.

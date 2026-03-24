@@ -1,58 +1,69 @@
-# Patrick's Dashboard — Session 264 Complete (March 24, 2026)
+# Patrick's Dashboard — Session 265 In Progress (March 24, 2026)
 
 ---
 
-## ✅ Database Migration — Neon → Railway Postgres (DONE)
+## ✅ Batches 3+4 Brand Drift — VERIFIED LIVE
 
-Migrated from Neon ($19/month) to Railway Postgres (~$0.55/month). Saves ~$18.50/month.
+All 9 major pages tested live on finda.sale. All-sale-types language displays correctly across /trending, /inspiration, /search, /feed, /loot-log, /trails, /categories. P1 brand alignment PASS.
 
-114 migrations applied, full seed data populated, smoke test PASS. Homepage, login, shopper dashboard all working against Railway. Railway redeployed GREEN.
-
-**Patrick action:** Delete Neon project at console.neon.tech to stop billing. Update local `packages/database/.env` to Railway connection string.
+One residual: `/tags/[slug]` empty state still says "estate sales" (P3, dispatched findasale-dev).
 
 ---
 
-## ✅ Process Improvements (S264)
+## 🔨 XP System — BUILDING SPEND UI (IN PROGRESS S265)
 
-Pushblock-first strategy (saves ~12k tokens per push vs MCP). Wrap files consolidated from 4 to 2 (STATE.md + patrick-dashboard.md). Real dispatch token estimates + parallel dispatch up to 7 agents. 9 skill packages rebuilt and installed.
+**What's done:**
+- Backend XP endpoints live: POST /api/xp/sink/rarity-boost, POST /api/xp/sink/coupon
+- Frontend components render perfectly: RankBadge, RankProgressBar, Leaderboard (zero console errors, dark mode verified, accessibility verified)
+- user11 XP system tested end-to-end (0 console errors)
 
----
+**What's missing (P1 BLOCKER):**
+- **NO frontend UI** to call the spend endpoints. Users can earn XP but cannot spend it.
+- Gamification loop incomplete without spend mechanism.
 
-## ✅ Registration Bug Fix
-
-user11 (SHOPPER) can now register as organizer. Root cause: setup-organizer endpoint required ORGANIZER role before allowing creation (chicken-and-egg). Fixed with role-check removal + atomic role addition.
-
----
-
-## ✅ Brand Drift D-001 — FULLY RESOLVED
-
-All 30+ violations fixed across 4 batches. Batches 1+2 live (commit b06242d). Batches 3+4 pushed S263.
+**In dev now (findasale-dev):** Build XP Sink Options section on /shopper/loyalty + Boost buttons on sale detail pages. Est. 1–2 hours.
 
 ---
 
-## ✅ Explorer's Guild Phase 2 — ALL PHASES DEPLOYED
+## 🔨 Shopper→Organizer Flow — BUILDING UI (IN PROGRESS S265)
 
-Phase 2a (schema + backend), 2b (frontend UI), 2c (XP event wiring) — all deployed. XP bug fixed S263.
+**What's done:**
+- Backend route `/api/users/setup-organizer` works (atomically adds ORGANIZER role, returns fresh JWT)
+- UX spec completed (BecomeOrganizerModal, pricing page CTA, nav link, welcome state)
+
+**In dev now (findasale-dev):** Implement all UI components. BecomeOrganizerModal, "Host a Sale" nav link, pricing page CTA, organizer dashboard welcome state.
 
 ---
 
-## 🚨 What Needs Next Session
+## 📋 QA Process Formalization (IN PROGRESS S265)
 
-**S265 PRIORITY 1 (MANDATORY):** Verify Batches 3+4 brand drift live on Vercel — smoke test /trending, /inspiration, /search.
+Dispatched findasale-workflow to produce `claude_docs/operations/qa-delegation-protocol.md` — will formalize QA delegation and run patterns for future sessions.
 
-**S265 PRIORITY 2 (MANDATORY):** Shopper→Organizer UI flow — logged-in shoppers have no way to become organizers. Backend route works, frontend path missing. Needs "Host a Sale" / "Become an Organizer" CTA on pricing page, nav, and/or homepage.
+---
 
-**S265 PRIORITY 3 (MANDATORY):** Phase 2 UX review — RankBadge/ProgressBar visibility, XP sink clarity.
+## ✅ Previous Sessions (Reference)
 
-**S265 PRIORITY 4 (MANDATORY):** user11 end-to-end XP test — simulate purchase, verify XP earn + rank update.
+- **S264:** Neon→Railway migration, process improvements, registration bug fix
+- **S263:** QA smoke test, Batches 3+4 pushed
+- **S262:** Brand drift D-001 fully resolved, Explorer's Guild Phase 2a/2b/2c deployed
 
-**S265 PRIORITY 5:** Brand copy deep audit (P3) — page titles, meta descriptions, all 5 sale types.
+---
+
+## S266 Roadmap (After Dev Finishes)
+
+1. **Post-deploy QA** — XP spend flow (earn → reach rank → see sinks → spend)
+2. **Post-deploy QA** — Shopper→Organizer flow (access modal, role transition, JWT update)
+3. **Smoke test** — `/tags/furniture` empty state fix
+4. **Review** — QA delegation protocol doc
+5. **Optional** — Brand copy deep audit (P5, low priority)
 
 ---
 
 ## Build Status
 
 ✅ Railway GREEN (backend + Postgres). ✅ Vercel GREEN (frontend).
+
+**Expected this session:** 2 push blocks from findasale-dev (XP UI + Shopper→Organizer flow) + 1 from findasale-workflow (QA protocol doc).
 
 ---
 
