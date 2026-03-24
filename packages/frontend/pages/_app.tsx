@@ -13,7 +13,6 @@ import { usePushSubscription } from '../hooks/usePushSubscription';
 import { useTheme } from '../hooks/useTheme'; // #63: Dark Mode
 import { useSentryUserContext } from '../hooks/useSentryUserContext'; // Feature #21: User Impact Scoring
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
-import OrganizerOnboardingModal from '../components/OrganizerOnboardingModal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import NudgeBar from '../components/NudgeBar';
 import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
@@ -147,50 +146,6 @@ function OnboardingShower() {
 }
 
 /**
- * Show organizer onboarding modal for new ORGANIZER users on first login.
- * Completion flag is stored on backend (Organizer.onboardingComplete) and included in JWT.
- * CRITICAL: Do NOT show to ADMIN-only users. Show ONLY to users with ORGANIZER role.
- */
-function OrganizerOnboardingShower() {
-  const { user, login } = useAuth();
-  const router = useRouter();
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    // Show ONLY if user has ORGANIZER role (excludes ADMIN-only users)
-    if (!user.roles?.includes('ORGANIZER')) return;
-    // Don't show if already onboarded
-    if (user.onboardingComplete) return;
-    // Only show on organizer pages — not public pages like /inspiration, /trending
-    const orgPages = ['/organizer', '/dashboard', '/manage-sales', '/create-sale'];
-    if (!orgPages.some(p => router.pathname.startsWith(p))) return;
-    setShow(true);
-  }, [user, router.pathname]);
-
-  const handleClose = async () => {
-    try {
-      // Mark onboarded on backend and get fresh JWT
-      const res = await api.post('/organizers/me/onboarding-complete');
-      if (res.data.token) {
-        login(res.data.token); // Updates user context with onboarding: true
-      }
-    } catch (e) {
-      console.error('Failed to mark onboarding complete:', e);
-      // Fallback: don't show again this session
-    }
-    // Belt-and-suspenders: also set localStorage for extra safety
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('organizer_onboarded', 'true');
-    }
-    setShow(false);
-  };
-
-  if (!show) return null;
-  return <OrganizerOnboardingModal onClose={handleClose} />;
-}
-
-/**
  * Feature #20: Monitor server degradation and update global state
  */
 function DegradationMonitor() {
@@ -305,8 +260,6 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <OAuthBridge />
               {/* Phase 27: First-time shopper onboarding */}
               <OnboardingShower />
-              {/* Organizer post-registration onboarding */}
-              <OrganizerOnboardingShower />
               </QueryClientProvider>
             </LowBandwidthProvider>
           </DegradationProvider>
