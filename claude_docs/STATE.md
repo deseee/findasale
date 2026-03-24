@@ -160,27 +160,34 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Recent Sessions
 
+**S267 (2026-03-24):** Full audit dispatch (135 items across 3 waves). 29 code files modified + pushed. Double footer root cause fixed (_app.tsx Layout double-wrap). Trails fixed (double /api prefix). Payment/auction fixes (items/[id]). Dark mode pass across admin, organizer, shopper pages. Seed.ts fixed (prior agent hallucinated 8 models — removed, field names corrected, zero TS errors). Push block provided.
+
 **S266 (2026-03-24):** Stamp label fix (raw enums → human-readable on loyalty page). Smoke test passed. Phase 2 UX P2 polish dispatched to dev (leaderboard footer, ProgressBar MAX, header rename).
 
-**S265 (2026-03-24):** XP system verified live on Railway (/api/xp/profile, /api/xp/leaderboard). Shopper→Organizer conversion flow fully shipped with E2E QA (BecomeOrganizerModal, nav "Host a Sale", pricing CTA). XP Sink UI complete (coupon + Rarity Boost placeholder). Brand drift Batches 3+4 QA confirmed. Phase 2 UX audit P1 resolved. QA delegation protocol created. 2 files in pending push (OnboardingWizard dark mode, Layout nav button).
+**S265 (2026-03-24):** XP system verified live on Railway (/api/xp/profile, /api/xp/leaderboard). Shopper→Organizer conversion flow fully shipped with E2E QA. XP Sink UI complete. Brand drift Batches 3+4 QA confirmed. Phase 2 UX audit P1 resolved.
 
-**S264 (2026-03-24):** Neon→Railway Postgres migration complete. 114 migrations + full seed applied. Smoke test PASS. Process improvements: pushblock-first strategy, wrap file consolidation (4→2 files), real dispatch token estimates, parallel dispatch up to 7 agents. Registration bug fix (SHOPPER→ORGANIZER role transition). 9 skill packages rebuilt. Savings: ~$18.50/month on database costs.
+**S264 (2026-03-24):** Neon→Railway Postgres migration complete. Seed applied. Registration bug fix. 9 skill packages rebuilt. Savings: ~$18.50/month.
 
-**S263 (2026-03-24):** QA smoke test all S262 changes — ALL PASS. XP system bug fixed (TS2345 null guard + prisma singleton). Batches 3+4 brand drift pushed (22 files). XP endpoints confirmed live.
-
-**S262 (2026-03-24):** Brand drift D-001 fully resolved (30+ violations, 4 batches). Explorer's Guild Phase 2a/2b/2c all deployed. RPG spec locked.
+**S263 (2026-03-24):** QA smoke test all S262 — ALL PASS. XP system bug fixed. Batches 3+4 brand drift pushed (22 files).
 
 ---
 
 ## Next Session
 
-**S267 PRIORITY 1 (FIRST):** Push loyalty.tsx stamp label fix. Post-deploy smoke test on loyalty page — verify "Attend Sale" and "Make Purchase" labels render correctly.
+**S268 PRIORITY 1 (FIRST — Patrick must do before session starts):** Run the complete push block from S267 output (2 commits, 31 files total). Use `.\push.ps1` after both commits.
 
-**S267 PRIORITY 2:** Push Phase 2 UX P2 files from dev dispatch (leaderboard footer, ProgressBar MAX, header rename). Smoke test all three fixes.
+**S268 PRIORITY 2:** After push + Vercel/Railway deploy, re-run seed: `cd packages\database && npm run prisma:seed`
 
-**S267 PRIORITY 3:** Phase 2 UX P3 items if any remain.
+**S268 PRIORITY 3:** Post-deploy smoke test — verify:
+- Double footer gone (homepage, organizer dashboard, leaderboard)
+- Trails page loads (TR-01 fixed)
+- Payment flow on items/[id] (SP-06 — STRIPE_SECRET_KEY confirmed set)
 
-**Patrick manual action (pending from S264):** Delete Neon project at console.neon.tech (still pending).
+**S268 PRIORITY 4:** QA browser pass to locate: SP-01 (sale stats dark mode), SP-03 (stray 0 under badges), TR-04 (mint textbox on trails). These weren't found in static analysis — need live browser.
+
+**S268 PRIORITY 5:** Seed still needs workspace record (OS-03) + completed PRO-tier sale (FR-01) for those tests to pass.
+
+**Patrick manual action (pending from S264):** Delete Neon project at console.neon.tech.
 
 ---
 
