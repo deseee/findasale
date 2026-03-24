@@ -1,76 +1,72 @@
-# Patrick's Dashboard — Session 258 Complete (March 23, 2026)
+# Patrick's Dashboard — Session 259 Complete (March 23, 2026)
 
 ## Build Status
 
-✅ **Vercel & Railway GREEN** — S258 changes deployed. All UX batches, onboarding restructure, Q2/Q3 consolidations live.
+✅ **Vercel & Railway GREEN** — Commit `efe96ee` deployed: purchases tab clickable + YourWishlists dark mode fix.
 
 ---
 
 ## What Happened This Session
 
-Completed 3 major development batches (shopper UX fixes, functional fixes, organizer onboarding), two feature consolidations (My Saves, Premium pages), and strategic review with Advisory Board and Innovation Agent.
+**Bug Fixes Shipped:**
+- Shopper dashboard Purchases tab — items now wrapped in Links, clickable, navigate to item or sale
+- YourWishlists component — hardcoded `bg-white` fixed to `dark:bg-gray-800` with full dark mode coverage (found via live screenshot Patrick shared)
 
-**Dev Batch A (Shopper Pages):**
-- "My Wishlists"→"My Wishlist" label fix
-- Contact page copy shortened
-- Inspiration page double footer removed
-- Trending page: wishlist/favorite buttons added to item cards
-- Typology page: dark mode text fix
-- collector-passport.tsx: dark mode CSS class added
+**S258 Smoke Test:**
+- 9 of 10 pages verified PASS live on finda.sale
+- Organizer pages (/organizer/onboarding, /organizer/pricing) UNVERIFIED — user2 login failed during QA. Retry first thing S260.
 
-**Dev Batch B (Functional Fixes):**
-- TreasureHuntBanner: dismiss button + localStorage persistence (`onboarding_dismissed_at`)
-- ActivitySummary: skeleton dark mode fix
-- Contact form: subject field added, submission fixed
-- Domain fix: `findasale.com`→`finda.sale` across 4 files (admin/invites.tsx, tags/[slug].tsx, AddToCalendarButton.tsx, contact.tsx)
-- SD6/SD8/FR1: confirmed already correctly implemented — no changes needed
-
-**Dev Batch C (Organizer Onboarding Restructure):**
-- 5-step flow: Email Verification stub → Business Profile → Stripe → Create Sale → Success stub
-- Step progress indicator added ("Step X of 5")
-- localStorage dismissal tracking added
-- OrganizerOnboardingModal.tsx removed (legacy competing component)
-- _app.tsx: OrganizerOnboardingShower function removed
-
-**Q2 Feature Consolidation — My Saves:**
-- wishlist.tsx restructured: 3 tabs → 2 tabs (Items + Sellers)
-- Page renamed "My Saves" in navigation
-- Updated in AvatarDropdown.tsx, Layout.tsx, ActivitySummary.tsx
-
-**Q3 Feature Consolidation — Premium Page:**
-- /organizer/pricing.tsx created (new consolidated discovery page with all tiers, Stripe CTAs, current plan highlight)
-- /pricing.tsx converted to redirect → /organizer/pricing
-- /organizer/premium.tsx and /organizer/upgrade.tsx already redirecting from prior sessions
-
-**Strategic Review Results:**
-- **Advisory Board:** Reviewed gamification (Patrick rejected deletion—keep mechanics, find narrative), feature overlap Q2 (Approved), premium consolidation Q3 (Approved)
-- **Innovation Agent:** 3 gamification narrative concepts produced: (1) Treasure Map Collector's Guild, (2) Antiquarian's Collection Quest, (3) Estate Sale Seasonal Challenge Circuit. Recommendation: blend Concepts 1+3 with research before spec.
+**Explorer's Guild Gamification — Full Deep Dive:**
+A complete spec was produced across 6 research documents through 3 rounds of innovation research, brand/marketing review, game design research, and full 12-seat board review.
 
 ---
 
-## Important Feedback — Action Needed for S259
+## Explorer's Guild — Where Things Stand
 
-**1. Agent Prompt Bias:** Patrick flagged that Claude agent prompts keep injecting "estate sale" as the only sale type. Platform actually serves **5 secondary sale types:** estate sales, yard sales, auctions, flea markets, consignment. **S259 Action:** Update CLAUDE.md and all agent SKILL.md files to say "secondary sale organizers" instead of "estate sale operators."
+**LOCKED (Board-approved):**
+- Rebrand: "Collector's Guild" → **"Explorer's Guild"**
+- 5 shopper tiers: Initiate → Scout → Ranger → Sage → Grandmaster (permanent, cumulative)
+- Rank rewards: Scout 5% Hunt Pass discount, Ranger priority support + previews, Sage (TBD — presale off table), Grandmaster free Hunt Pass (uncapped)
+- 4 seasonal expeditions (Spring/Summer/Fall/Winter) + 8 micro-events at launch
+- Annual January soft reset (leaderboard resets, permanent rank preserved with tier floor)
+- Hunt Pass gives 2x XP multiplier while active
+- Organizer fee discounts: **REJECTED** — rewards are prestige + service credits + visibility only
+- XP: flat per-item (not dollar-tied)
 
-**2. Removal Gate Tone:** Feedback that agents are too quick to recommend deletion of features. Deletions need real justification beyond "we couldn't think of a narrative." **Note:** This is working as designed (via Removal Gate in CLAUDE.md §7), but agents should not suggest removal lightly.
+**STILL OPEN (S260 to resolve):**
+1. RPG economy research — loot tables, XP sinks, item rarity, gold-farming prevention
+2. Abuse prevention — XP farming, bid-spam for XP, referral fraud, fake reviews
+3. Loot Legend design — you want this for ALL users (not gated), earned items populate it
+4. Coupons + auction fees as reward/redemption currency — design needed
+5. Sage tier big payoff — presale off table, Loot Legend not gated, what's the replacement?
+6. Seasonal reset floors — Grandmaster drops to Sage floor? Sage drops to Ranger floor?
+7. Auction XP — flat per bid (risks farming) vs. wins only?
+8. Social share XP — honor system vs. verified?
+
+**Research docs (claude_docs/research/):**
+- `gamification-revised-spec-S259.md` — implementation-ready with XP thresholds
+- `gamification-xp-economy-S259.md` — full XP economy, game design research
+- `gamification-board-review-S259.md` — board positions + voting
+- `PATRICK_DECISION_SUMMARY-S259.md` — what's locked vs. open
+- `DEV_HANDOFF_CHECKLIST-S259.md` — dev sprint plan (use after spec is locked)
 
 ---
 
-## Your Action for S259 (Required)
+## Your Actions Before S260
 
-None blocking — session can proceed. But note the agent prompt bias finding above.
+None blocking. Optional reading: `PATRICK_DECISION_SUMMARY-S259.md` (5 min) to come in with decisions ready on the 8 open items.
 
 ---
 
-## S259 Work Queue
+## S260 Work Queue
 
-**MANDATORY FIRST:** Live smoke test of ALL S258 changes via Chrome MCP on finda.sale (per CLAUDE.md §10). Test all pages that changed, verify no 404s, dark mode rendering, domain strings, localStorage persistence, new buttons/fields. If any failures, flag immediately.
+**MANDATORY FIRST:** Verify organizer pages as user2 (login failed in S259)
 
-**PRIORITY 1:** Gamification narrative research — blend Concepts 1 (Guild rank progression) + 3 (Seasonal challenges) with competitive research (eBay, Depop, Vinted, Etsy, Catawiki, auction houses). Find narrative that works across ALL 5 sale types. Dispatch to findasale-innovation. Produce spec. Get your sign-off before dev work.
+**PRIORITY 1:** RPG economy + abuse prevention research → resolve 8 decisions → final spec lock → dev dispatch for Phase 1
 
-**PRIORITY 2:** Agent prompt bias fix — audit CLAUDE.md and agent SKILL.md files. Replace "estate sale operators" with "secondary sale organizers." Ensure all prompts understand platform serves 5 sale types.
+**PRIORITY 2:** Agent prompt bias fix — "secondary sale organizers" throughout all CLAUDE.md + SKILL.md files (dispatch findasale-records)
 
-**PRIORITY 3:** Guild narrative copy implementation — once gamification spec locked and you approve, dispatch findasale-dev to update OnboardingWizard, collector-passport, Hunt Pass copy to match new narrative.
+**PRIORITY 3:** Phase 1 copy implementation — once spec signed off, dispatch findasale-dev
 
 ---
 
@@ -78,13 +74,13 @@ None blocking — session can proceed. But note the agent prompt bias finding ab
 
 All password: `password123`
 - `user1@example.com` — ADMIN + SIMPLE organizer
-- `user2@example.com` — PRO organizer (Stripe connected)
+- `user2@example.com` — PRO organizer ⚠️ login failed S259 — test first
 - `user3@example.com` — TEAMS organizer (Stripe connected)
-- `user11@example.com` — Shopper with full activity (9 bids, 6 purchases, streaks, points)
+- `user11@example.com` — Shopper with full activity
 
 ---
 
-## Push Block (S258 wrap docs)
+## Push Block (S259 wrap)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -92,6 +88,13 @@ git add claude_docs/STATE.md
 git add claude_docs/session-log.md
 git add claude_docs/next-session-prompt.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S258 wrap: UX batches + onboarding restructure + Q2/Q3 consolidations + strategic review, S259 priorities queued"
+git add claude_docs/research/gamification-revised-spec-S259.md
+git add claude_docs/research/gamification-xp-economy-S259.md
+git add claude_docs/research/gamification-board-review-S259.md
+git add claude_docs/research/PATRICK_DECISION_SUMMARY-S259.md
+git add claude_docs/research/DEV_HANDOFF_CHECKLIST-S259.md
+git add claude_docs/research/GAMIFICATION_SPEC_INDEX-S259.md
+git add claude_docs/research/EXEC-SUMMARY-Gamification.md
+git commit -m "S259 wrap: Explorer's Guild spec complete, board Phase 1 approved, 8 decisions open for S260"
 .\push.ps1
 ```

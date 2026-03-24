@@ -2,7 +2,25 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S254–S258)
+## Recent Sessions (S255–S259)
+
+### 2026-03-23 · Session 259
+
+**SMOKE TEST + EXPLORER'S GUILD GAMIFICATION DEEP DIVE**
+
+✅ **S258 smoke test (9/10 PASS):** My Saves tabs, trending buttons, inspiration footer, collector-passport dark mode, contact form subject+domain, TreasureHuntBanner dismiss+persistence, ActivitySummary dark mode, /pricing redirect all confirmed live. User2 login failed → organizer pages UNVERIFIED (carry forward S260).
+
+✅ **2 bugs fixed (commit efe96ee):** Purchases tab wrapped in Link (clickable, hover styles, dark mode). YourWishlists.tsx dark mode fixed — hardcoded `bg-white` root cause found + all text/badge/card dark classes corrected.
+
+✅ **Explorer's Guild gamification spec complete** — 6 research docs in `claude_docs/research/`. Full board review completed. Phase 1 APPROVED with 3 modifications: (1) rebrand to "Explorer's Guild", (2) 8 micro-events at launch, (3) legal review on Sage presale ToS. Phase 2 NO-GO pending organizer reward redesign (fee discounts rejected).
+
+✅ **Game design research:** Soft reset (annual Jan) confirmed, weekly streaks, Loot Legend as Sage alternative, 25-source XP economy table, dollar-tied XP rejected (bargain-hunter audience).
+
+⚠️ **8 game designer decisions still open** — RPG economy, abuse prevention, Loot Legend for all users, coupons/auction fees as reward currency. S260 first priority.
+
+⚠️ **Agent prompt bias fix NOT done** — carry forward. All agent prompts need "secondary sale organizers" not "estate sale operators."
+
+📋 **S260 PRIORITY 1:** RPG economy research + abuse prevention + 8 decisions → final spec lock → dev dispatch. 📋 **PRIORITY 2:** Agent prompt bias fix (findasale-records). 📋 **PRIORITY 3:** Phase 1 copy implementation (post-approval).
 
 ### 2026-03-23 · Session 258
 
