@@ -132,7 +132,15 @@ model User {
   affiliateReferralsGiven AffiliateReferral[] @relation("AffiliateReferrals_Referrer")
   affiliateReferralsReceived AffiliateReferral[] @relation("AffiliateReferrals_Referred")
 
+  // Phase 2a: Explorer's Guild — XP Economy
+  guildXp         Int           @default(0)         // Phase 2a: Cumulative XP, never resets, used for rank calculation
+  explorerRank    ExplorerRank  @default(INITIATE)  // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
+  seasonalResetAt DateTime?                         // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
+  rarityBoosts    RarityBoost[]                     // Phase 2a: Active rarity boosts for upcoming sales
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
+  @@index([guildXp])
+  @@index([explorerRank])
 }
 
 model Organizer {
@@ -327,6 +335,8 @@ model Sale {
   ripples           SaleRipple[]
   // Feature #72: Affiliate Payouts linked to sales
   affiliatePayouts  AffiliatePayout[]
+  // Phase 2a: Explorer's Guild — Rarity boosts for this sale
+  rarityBoosts      RarityBoost[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
@@ -606,12 +616,20 @@ model PointsTransaction {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW"
+  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW", "COUPON_GENERATE", "RARITY_BOOST", "HUNT_PASS_DISCOUNT_REDEEM"
   points      Int
   saleId      String?
   itemId      String?
+  couponId    String?  // Phase 2a: For COUPON_GENERATE sink type
+  coupon      Coupon?  @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  boostType   String?  // Phase 2a: For RARITY_BOOST type (e.g., "SALE_SPECIFIC")
+  boostPct    Int?     // Phase 2a: Boost percentage (e.g., +2)
+  expiresAt   DateTime? // Phase 2a: For boost window expiration
   description String?
   createdAt   DateTime @default(now())
+
+  @@index([userId, type])
+  @@index([type])
 }
 
 // Phase 20: Shopper messaging — conversation thread per shopper+organizer+sale
@@ -1071,9 +1089,28 @@ model Coupon {
   usedAt             DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+  xpSpent            Int?      // Phase 2a: XP cost if this coupon was generated via XP sink (20 XP typical)
+  pointsTransactions PointsTransaction[] // Phase 2a: Reference from PointsTransaction via couponId
 
   @@index([userId, status])
   @@index([code])
+}
+
+// Phase 2a: Rarity Boost — shopper spends 15 XP to boost legendary find odds for a specific sale
+model RarityBoost {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("RarityBoosts", fields: [userId], references: [id], onDelete: Cascade)
+  saleId    String
+  sale      Sale     @relation("RarityBoosts", fields: [saleId], references: [id], onDelete: Cascade)
+  boostPct  Int      @default(2)  // Phase 2a: +2% rarity boost for this sale
+  expiresAt DateTime             // Phase 2a: Sale end time (boost expires when sale closes)
+  usedAt    DateTime?            // Phase 2a: When claimed (null = not yet claimed)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, saleId])
+  @@index([userId, expiresAt])
+  @@index([saleId])
 }
 
 // Batch 17: Sale Waitlist — notify shoppers when new items added to a sale
@@ -1170,8 +1207,16 @@ enum ItemRarity {
   COMMON
   UNCOMMON
   RARE
-  ULTRA_RARE
+  ULTRA_RARE    // Phase 2a: deprecated, use RARE instead for new items
   LEGENDARY
+}
+
+enum ExplorerRank {
+  INITIATE
+  SCOUT
+  RANGER
+  SAGE
+  GRANDMASTER
 }
 
 model DigitalReceipt {
