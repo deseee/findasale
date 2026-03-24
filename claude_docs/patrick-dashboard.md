@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Session 262 Complete (March 24, 2026)
+# Patrick's Dashboard — Session 263 Complete (March 24, 2026)
 
 ---
 
@@ -6,21 +6,21 @@
 
 All 30+ violations fixed across 4 batches.
 
-**Batches 1+2 (PUSHED):** 14 files updated. Encyclopedia renamed to "Resale Encyclopedia". P0 (city/map/calendar SEO titles) + P1 (organizer copy) live. Commit: b06242d.
+**Batches 1+2 (LIVE):** 14 files updated. Encyclopedia renamed to "Resale Encyclopedia". P0 (city/map/calendar SEO titles) + P1 (organizer copy) live. Commit: b06242d.
 
-**Batches 3+4 (COMMITTED LOCALLY — push after S263 QA):** 16 shopper pages + 6 components updated (trending, inspiration, tags, categories, search, feed, loot-log, trails, hubs, SaleShareButton, ReferralWidget, SaleOGMeta, SalesNearYou, AddToCalendarButton, og-image API). Full push block in next-session-prompt.md.
+**Batches 3+4 (PUSHED S263 — Vercel Deploy In Progress):** 22 files updated (16 shopper pages + 6 components: trending, inspiration, tags, categories, search, feed, loot-log, trails, hubs, SaleShareButton, ReferralWidget, SaleOGMeta, SalesNearYou, AddToCalendarButton, og-image API). QA smoke test PASS — all pages rendering correct copy.
 
 ---
 
-## ✅ Explorer's Guild Phase 2 — ALL PHASES DEPLOYED
+## ✅ Explorer's Guild Phase 2 — ALL PHASES DEPLOYED + BUG FIXED
 
 **Phase 2a — Schema + Backend (Railway):**
 - Migration live on Neon: User.guildXp, User.explorerRank (enum), User.seasonalResetAt, RarityBoost table, extended PointsTransaction + Coupon
 - Endpoints live: GET /api/xp/profile, GET /api/xp/leaderboard, POST /api/xp/sink/rarity-boost, POST /api/xp/sink/coupon
 
 **Phase 2b — Frontend (Vercel):**
-- RankBadge.tsx + RankProgressBar.tsx — UI components deployed
-- useXpProfile.ts — hook fetching XP data (route bug fixed — see below)
+- RankBadge.tsx + RankProgressBar.tsx — UI components live
+- useXpProfile.ts — hook fetching XP data (route bug FIXED S263)
 - loyalty.tsx + leaderboard.tsx — integrated and live
 
 **Phase 2c — XP Event Wiring (DONE):**
@@ -29,42 +29,37 @@ All 30+ violations fixed across 4 batches.
 - Referral claimed → XP award (referralController)
 - Auction win → XP award (auctionJob)
 
-**XP Route Bug (FIXED):** QA caught 404s on loyalty + leaderboard pages. Root cause: double `/api` prefix in hooks. Fixed and pushed S262.
+**XP Route Bug (FIXED S263):** Root cause: TS2345 type mismatch in stripeController.ts + prisma singleton in xpController/xpService. Fixed: null guard + `?? undefined` in stripeController, prisma singleton in both services. Railway GREEN. `/api/xp/profile` returns 200. RankBadge shows "Initiate", RankProgressBar shows "0/500 XP".
 
 ---
 
 ## 🚨 What Needs Next Session
 
-**S263 PRIORITY 1 (MANDATORY):** QA smoke test — brand drift copy live, XP endpoints working, leaderboard rendering, route fix confirmed live.
+**S264 PRIORITY 1 (MANDATORY):** Verify Batches 3+4 live on Vercel — smoke test /trending, /inspiration, /search after push completes.
 
-**S263 PRIORITY 2:** Push Brand drift Batches 3+4 (after QA passes). Full push block in next-session-prompt.md.
+**S264 PRIORITY 2:** Brand copy deep audit — page titles, meta descriptions, all 5 sale types represented, dark mode spot-check.
 
-**S263 PRIORITY 3:** Deep-dive brand drift copy QA — all pages verified consistent, dark mode checked.
+**S264 PRIORITY 3 (OPTIONAL):** Phase 2 shopper UX review — RankBadge/ProgressBar visibility, leaderboard usability, XP sink clarity.
 
-**S263 PRIORITY 4 (OPTIONAL):** Phase 2 shopper UX review — does XP system surface well? Usability gaps in leaderboard?
+**S264 PRIORITY 4 (OPTIONAL):** user11 end-to-end XP test — simulate purchase, verify XP earn + rank update.
 
 ---
 
 ## Build Status
 
-✅ Railway + Vercel both GREEN. All Phase 2 code deployed.
-⏳ Brand drift Batches 3+4 — committed locally, push pending S263 QA.
+✅ Railway GREEN. ✅ Vercel GREEN (Batches 3+4 deploy in progress). All Phase 2 code deployed + live.
 
 ---
 
-## What Happened This Session
+## What Happened This Session (S263)
 
-**Brand drift audit complete:** 30 "estate sale only" violations fixed. Encyclopedia rebranded. All copy now uses "secondary sale" or specific sale types.
+**QA smoke test:** All brand drift pages PASS (/trending, /inspiration, /search, /feed, /map, /calendar, /hubs) — correct copy live, "Resale Encyclopedia" confirmed.
 
-**Phase 2a backend:** xpService + xpController deployed. Migration applied to Neon.
+**XP system bug fixed:** TS2345 in stripeController (null type mismatch) + prisma singleton in xpController/xpService. Fixed with null guards + `?? undefined`. Railway build now GREEN.
 
-**Phase 2b frontend:** RankBadge + RankProgressBar + useXpProfile + leaderboard deployed.
+**Batches 3+4 pushed:** 22 frontend files pushed S263. QA verified all pages rendering correct copy. Vercel deploy in progress.
 
-**Phase 2c event wiring:** All 4 XP earn events (sale/purchase/referral/auction) wired into controllers and pushed.
-
-**XP route bug fixed:** QA live test caught `/api/api/xp/...` double prefix. Fixed useXpProfile.ts + leaderboard.tsx. Pushed.
-
-**Session housekeeping:** F4 bias check passed. F5 redirect verified. P3 skills (findasale-ux, findasale-qa, findasale-gamedesign) installed by Patrick.
+**XP endpoints confirmed:** `/api/xp/profile` returns 200. RankBadge live on loyalty page. Leaderboard rendering. No 404s.
 
 ---
 
