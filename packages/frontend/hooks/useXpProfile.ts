@@ -20,7 +20,7 @@ const useXpProfile = (enabled = true) => {
   return useQuery<XpProfileData>({
     queryKey: ['xpProfile'],
     queryFn: async () => {
-      const response = await api.get('/api/xp/profile');
+      const response = await api.get('/xp/profile');
       return response.data as XpProfileData;
     },
     enabled,
