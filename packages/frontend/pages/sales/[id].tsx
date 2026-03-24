@@ -242,7 +242,7 @@ const SaleDetailPage = () => {
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <main className="container mx-auto px-4 py-8">
           <Skeleton className="h-5 w-28 mb-6" />
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8"></div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8"></div>
           <Skeleton className="h-64 mb-8" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-2">
@@ -339,7 +339,9 @@ const SaleDetailPage = () => {
             <div className="flex-1">
               <h2 className="text-xl font-bold text-warm-900 dark:text-gray-50 mb-2">Organized by</h2>
               <div className="flex items-center gap-2 mb-2">
-                <p className="text-lg font-semibold text-warm-800 dark:text-gray-100">{sale.organizer.businessName}</p>
+                <Link href={`/organizers/${sale.organizer.id}`} className="text-lg font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline transition-colors">
+                  {sale.organizer.businessName}
+                </Link>
                 <VerifiedBadge status={sale.organizer.verificationStatus} size="md" />
                 {/* Phase 31: Show tier badge if SILVER or GOLD */}
                 {sale.organizer.tier && (sale.organizer.tier === 'SILVER' || sale.organizer.tier === 'GOLD') && (
@@ -355,7 +357,9 @@ const SaleDetailPage = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-sm font-medium text-warm-700 dark:text-gray-300">Rating:</span>
                   <span className="text-sm text-warm-600 dark:text-gray-400">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
-                  <span className="text-sm text-warm-500 dark:text-gray-400">({sale.organizer.reviewCount || 0} reviews)</span>
+                  {sale.organizer.reviewCount > 0 && (
+                    <span className="text-sm text-warm-500 dark:text-gray-400">({sale.organizer.reviewCount} reviews)</span>
+                  )}
                 </div>
               )}
               <BadgeDisplay badges={sale.organizer.badges || []} />

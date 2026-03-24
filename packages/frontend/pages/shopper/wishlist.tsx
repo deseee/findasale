@@ -287,7 +287,7 @@ const WishlistPage = () => {
                               {wishlist.items.length} item{wishlist.items.length !== 1 ? 's' : ''}
                             </p>
                           </div>
-                          <Link href={`/wishlists/${wishlist.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium flex-shrink-0">
+                          <Link href={`/wishlists/shared/${wishlist.shareSlug}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium flex-shrink-0">
                             View →
                           </Link>
                         </div>
@@ -333,10 +333,10 @@ const WishlistPage = () => {
 
               {/* Watching Section */}
               {watching.length > 0 && (
-                <div>
+                <div id="watching">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Watching</h2>
-                    <Link href="/shopper/alerts" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium">
+                    <Link href="/shopper/wishlist#watching" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium">
                       Manage →
                     </Link>
                   </div>

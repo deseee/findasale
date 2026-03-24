@@ -269,6 +269,13 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             isAuctionSale: true,
+            saleType: true,
+            title: true,
+            address: true,
+            city: true,
+            state: true,
+            startDate: true,
+            endDate: true,
             organizerId: true,
             organizer: {
               select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true }
@@ -318,6 +325,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
     }
 
+    // Buyer premium (5%) applies ONLY to auction items
+    let buyerPremiumAmount = 0;
+    if (isAuctionItem) {
+      buyerPremiumAmount = Math.round(price * 100 * 0.05);
+    }
+
     let shippingCost = 0;
     if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
       shippingCost = item.shippingPrice;
@@ -331,7 +344,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const feePercent = hasReferralDiscount ? 0 : baseFeePercent;
 
     const priceCents = Math.round((price + shippingCost) * 100);
-    const platformFeeAmount = Math.round(priceCents * feePercent);
+    const totalWithBuyerPremium = priceCents + buyerPremiumAmount;
+    const platformFeeAmount = Math.round(totalWithBuyerPremium * feePercent);
 
     let couponId: string | undefined;
     let discountAmount = 0;
@@ -351,7 +365,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       }
       couponId = coupon.id;
     }
-    const finalPriceCents = priceCents - discountAmount;
+    const finalPriceCents = totalWithBuyerPremium + platformFeeAmount - discountAmount;
 
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
     const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;
@@ -400,6 +414,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       update: {},
     }).catch(err => console.warn('[checkout-recovery] Failed to track checkout attempt:', err));
 
+    // Format sale dates for display
+    const saleStartDate = item.sale.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const saleEndDate = item.sale.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const saleDates = `${saleStartDate} - ${saleEndDate}`;
+
     res.json({
       clientSecret: paymentIntent.client_secret,
       purchaseId: purchase.id,
@@ -407,6 +426,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       totalAmount: finalPriceCents / 100,
       originalAmount: price,
       discountApplied: discountAmount / 100,
+      buyerPremium: buyerPremiumAmount / 100,
+      saleName: item.sale.title,
+      saleAddress: `${item.sale.address}, ${item.sale.city}, ${item.sale.state}`,
+      saleDates: saleDates,
       ...(couponCode ? { couponCode } : {}),
     });
   } catch (error: unknown) {

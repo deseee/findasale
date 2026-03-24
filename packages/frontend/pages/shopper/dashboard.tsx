@@ -34,6 +34,7 @@ const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups'>('overview');
+  const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
@@ -44,6 +45,19 @@ const ShopperDashboard = () => {
       }
     }
   }, [router.isReady, router.asPath]);
+
+  // Load Hunt Pass dismissal state from localStorage
+  useEffect(() => {
+    const dismissed = localStorage.getItem('huntpass_cta_dismissed');
+    if (dismissed) {
+      setIsHuntPassDismissed(true);
+    }
+  }, []);
+
+  const handleDismissHuntPass = () => {
+    localStorage.setItem('huntpass_cta_dismissed', 'true');
+    setIsHuntPassDismissed(true);
+  };
 
   if (!isLoading && !user) {
     router.push('/login?redirect=/shopper/dashboard');
@@ -182,15 +196,40 @@ const ShopperDashboard = () => {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Hunt Pass Info Card */}
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">👑</span>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass</h3>
-                    <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to new listings, earn 2x points on every action, and receive priority discovery. $4.99/month.</p>
+              {!isHuntPassDismissed && (
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">👑</span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass</h3>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to new listings, earn 2x points on every action, and receive priority discovery. $4.99/month.</p>
+                      <div className="flex gap-2 mt-3">
+                        <Link
+                          href="/shopper/hunt-pass"
+                          className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-200 underline"
+                        >
+                          Learn More
+                        </Link>
+                        <button
+                          onClick={handleDismissHuntPass}
+                          className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-200 underline"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleDismissHuntPass}
+                      className="flex-shrink-0 text-purple-400 dark:text-purple-500 hover:text-purple-600 dark:hover:text-purple-400"
+                      aria-label="Dismiss Hunt Pass banner"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Streak widget — always visible when logged in */}
               <StreakWidget />
@@ -296,7 +335,7 @@ const ShopperDashboard = () => {
               ) : follows && follows.length > 0 ? (
                 <div className="space-y-3">
                   {follows.map((follow) => (
-                    <div key={follow.id} className="card p-4 flex items-center gap-4">
+                    <div key={follow.id} className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow">
                       {follow.organizer.profilePhoto ? (
                         <img
                           src={follow.organizer.profilePhoto}
@@ -309,9 +348,11 @@ const ShopperDashboard = () => {
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">
-                          {follow.organizer.businessName}
-                        </p>
+                        <Link href={`/organizers/${follow.organizerId}`}>
+                          <p className="font-semibold text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 truncate cursor-pointer">
+                            {follow.organizer.businessName}
+                          </p>
+                        </Link>
                         <p className="text-xs text-warm-500 dark:text-warm-400">
                           Following since {new Date(follow.createdAt).toLocaleDateString()}
                         </p>

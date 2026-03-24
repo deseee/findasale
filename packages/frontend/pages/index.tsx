@@ -120,6 +120,7 @@ const HomePage = () => {
           s.title.toLowerCase().includes(q) ||
           (s.description || '').toLowerCase().includes(q) ||
           s.city.toLowerCase().includes(q) ||
+          s.organizer.businessName.toLowerCase().includes(q) ||
           (s.tags || []).some((t) => t.toLowerCase().includes(q))
       );
     }

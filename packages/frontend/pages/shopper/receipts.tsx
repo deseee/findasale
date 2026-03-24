@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
+import Layout from '../../components/Layout';
 import Skeleton from '../../components/Skeleton';
 import ReceiptCard from '../../components/ReceiptCard';
 
@@ -54,7 +55,7 @@ const ShopperReceiptsPage = () => {
   }
 
   return (
-    <>
+    <Layout>
       <Head>
         <title>My Receipts - FindA.Sale</title>
       </Head>
@@ -141,7 +142,7 @@ const ShopperReceiptsPage = () => {
           )}
         </div>
       </div>
-    </>
+    </Layout>
   );
 };
 

@@ -159,11 +159,11 @@ const ProfilePage = () => {
                     </span>
                   )}
                   {(verificationStatus === 'NONE' || verificationStatus === 'REJECTED') && (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <p className="text-warm-600 dark:text-warm-400 text-sm">
                         {verificationStatus === 'REJECTED' ? 'Verification was not approved' : 'Not yet verified'}
                       </p>
-                      <Link href="/organizer/settings?tab=verification" className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium text-sm">
+                      <Link href="/organizer/settings?verification=true" className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium text-sm whitespace-nowrap">
                         Start Verification
                       </Link>
                     </div>

@@ -48,6 +48,7 @@ const PrintInventoryPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [groupedData, setGroupedData] = useState<GroupedData>({});
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -105,7 +106,22 @@ const PrintInventoryPage = () => {
   }, [inventoryData]);
 
   const handlePrint = () => {
+    // Hide all sale sections except the selected one (if selected)
+    const saleElements = document.querySelectorAll('[data-sale-section]');
+    saleElements.forEach((el) => {
+      const el_ = el as HTMLElement;
+      if (selectedSaleId && el_.getAttribute('data-sale-id') !== selectedSaleId) {
+        el_.style.display = 'none';
+      }
+    });
+
     window.print();
+
+    // Restore visibility
+    saleElements.forEach((el) => {
+      const el_ = el as HTMLElement;
+      el_.style.display = '';
+    });
   };
 
   const handleBack = () => {
@@ -255,6 +271,25 @@ const PrintInventoryPage = () => {
                 </div>
               </div>
 
+              {/* Sale Selector - Hidden in print */}
+              <div className="no-print bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                  Filter by Sale (optional):
+                </label>
+                <select
+                  value={selectedSaleId || ''}
+                  onChange={(e) => setSelectedSaleId(e.target.value || null)}
+                  className="w-full md:w-64 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
+                >
+                  <option value="">All Sales</option>
+                  {Object.entries(groupedData).map(([saleId, saleData]) => (
+                    <option key={saleId} value={saleId}>
+                      {saleData.saleTitle}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Sales with grouped items */}
               {Object.entries(groupedData).map(([saleId, saleData]) => {
                 const categories = Object.keys(saleData.categories);
@@ -264,7 +299,7 @@ const PrintInventoryPage = () => {
                 );
 
                 return (
-                  <div key={saleId} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+                  <div key={saleId} data-sale-section data-sale-id={saleId} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                     {/* Sale title */}
                     <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-4">
                       <h2 className="text-xl font-bold text-amber-900 dark:text-amber-400">
@@ -283,16 +318,16 @@ const PrintInventoryPage = () => {
                             <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
                               Title
                             </th>
-                            <th className="text-left py-3 px-4 font-semibold text-warm-700">
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
                               Category
                             </th>
-                            <th className="text-left py-3 px-4 font-semibold text-warm-700">
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
                               Condition
                             </th>
-                            <th className="text-right py-3 px-4 font-semibold text-warm-700">
+                            <th className="text-right py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
                               Price
                             </th>
-                            <th className="text-left py-3 px-4 font-semibold text-warm-700">
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
                               Status
                             </th>
                           </tr>
@@ -332,12 +367,12 @@ const PrintInventoryPage = () => {
                                       <span
                                         className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                                           item.status === 'SOLD'
-                                            ? 'bg-green-100 text-green-700'
+                                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                                             : item.status === 'AVAILABLE'
-                                              ? 'bg-blue-100 text-blue-700'
+                                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                                               : item.status === 'ON_HOLD'
-                                                ? 'bg-yellow-100 text-yellow-700'
-                                                : 'bg-warm-100 text-warm-700'
+                                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                : 'bg-warm-100 dark:bg-warm-900/30 text-warm-700 dark:text-warm-300'
                                         }`}
                                       >
                                         {item.status === 'ON_HOLD'

@@ -233,9 +233,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <QueryClientProvider client={queryClient}>
               <ThemeInitializer />
               <ErrorBoundary key={router.asPath}>
-                <Layout noFooter={router.pathname === '/messages/[id]'}>
-                  <Component {...pageProps} />
-                </Layout>
+                <Component {...pageProps} />
               </ErrorBoundary>
               {/* PWA helpers */}
               <ServiceWorkerUpdateNotifier />

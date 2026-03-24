@@ -42,7 +42,23 @@ const NotificationBell = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch notifications on mount and when bell opens
+  // Fetch unread count on mount
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await api.get('/notifications/inbox');
+        setUnreadCount(res.data.unreadCount);
+      } catch (err) {
+        console.error('Failed to fetch unread count:', err);
+      }
+    };
+
+    fetchUnreadCount();
+  }, [user]);
+
+  // Fetch full notifications when bell opens
   useEffect(() => {
     if (!user || !isOpen) return;
 

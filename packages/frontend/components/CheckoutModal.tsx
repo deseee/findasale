@@ -154,11 +154,11 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         </div>
         <div className="flex justify-between items-center text-warm-600">
           <div className="flex items-center gap-1">
-            <span>Platform fee (5%)</span>
+            <span>Platform fee (10%)</span>
             <button
               type="button"
               className="text-xs text-warm-400 hover:text-warm-600 cursor-help"
-              title="FindA.Sale's 5% service fee helps us maintain the platform, provide customer support, and improve features for organizers and shoppers."
+              title="FindA.Sale's 10% service fee helps us maintain the platform, provide customer support, and improve features for organizers and shoppers."
             >
               ℹ️
             </button>

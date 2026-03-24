@@ -36,6 +36,7 @@ const OrganizerSettingsPage = () => {
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [fontSize, setFontSize] = useState(16);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
+  const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
   const { highContrast, setHighContrast } = useTheme();
   const queryClient = useQueryClient();
 
@@ -75,6 +76,10 @@ const OrganizerSettingsPage = () => {
     const simpleModeSaved = localStorage.getItem('findasale_simple_mode');
     if (simpleModeSaved === 'true') {
       setIsSimpleMode(true);
+    }
+    const aiAssistanceSaved = localStorage.getItem('findasale_ai_assistance_enabled');
+    if (aiAssistanceSaved === 'false') {
+      setAiAssistanceEnabled(false);
     }
   }, []);
 
@@ -373,12 +378,27 @@ const OrganizerSettingsPage = () => {
                   )}
                 </div>
 
-                {/* B2: AI Assistance description */}
+                {/* B2: AI Assistance toggle */}
                 <div className="border-t border-warm-100 dark:border-gray-700 pt-4 mt-2">
-                  <p className="text-sm font-medium text-warm-800 dark:text-gray-200 mb-1">AI Assistance</p>
-                  <p className="text-sm text-warm-600 dark:text-gray-400">
-                    Let our system auto-suggest tags and descriptions when you add items. We&apos;ll always flag what&apos;s auto-suggested so you can review and change it. You can turn this off anytime.
-                  </p>
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={aiAssistanceEnabled}
+                      onChange={(e) => {
+                        setAiAssistanceEnabled(e.target.checked);
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('findasale_ai_assistance_enabled', e.target.checked ? 'true' : 'false');
+                        }
+                      }}
+                      className="w-4 h-4 rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-warm-800 dark:text-gray-200">AI Assistance</p>
+                      <p className="text-sm text-warm-600 dark:text-gray-400">
+                        Let our system auto-suggest tags and descriptions when you add items. We&apos;ll always flag what&apos;s auto-suggested so you can review and change it.
+                      </p>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>

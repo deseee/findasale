@@ -161,6 +161,20 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     },
   });
 
+  // Purchase status query — check if user has purchased this item
+  const { data: purchaseStatus } = useQuery({
+    queryKey: ['purchase-status', id, user?.id],
+    enabled: !!id && !!user?.id,
+    queryFn: async () => {
+      try {
+        const response = await api.get(`/users/purchases/${id}`);
+        return response.data;
+      } catch (err) {
+        return null;
+      }
+    },
+  });
+
   // Mutations
   const placeBidMutation = useMutation({
     mutationFn: async (amount: number) => {
@@ -195,22 +209,6 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     },
   });
 
-  const addToCartMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.post(`/cart/add`, {
-        itemId: id,
-        quantity: 1,
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      showToast('Added to cart!', 'success');
-      setShowCheckoutModal(true);
-    },
-    onError: () => {
-      showToast('Failed to add to cart', 'error');
-    },
-  });
 
   // Animation hook
   const { triggerAnimation: triggerHeartAnimation } = useHeartAnimation();
@@ -282,11 +280,12 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
   const handleAddToCart = async () => {
     if (!user) {
-      showToast('Please log in to add items to cart', 'warning');
+      showToast('Please log in to purchase items', 'warning');
       router.push('/login');
       return;
     }
-    addToCartMutation.mutate();
+    // Open checkout directly (no cart endpoint needed)
+    setShowCheckoutModal(true);
   };
 
   const handleLike = () => {
@@ -355,8 +354,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     );
   }
 
-  const isAuction = item.status === 'auction';
-  const isSold = item.status === 'sold';
+  const isAuction = !!item.auctionStartPrice;
+  const isSold = item.status === 'SOLD';
   const currentPrice = isAuction ? item.currentBid : item.price;
   const isUserLiked = user && favoriteStatus?.isFavorited === true;
 
@@ -456,9 +455,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                   ${currentPrice.toFixed(2)}
                 </div>
-                {!isAuction && (
+                {isAuction && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    <div>+ ${(currentPrice * 0.05).toFixed(2)} platform fee</div>
+                    <div>+ ${(currentPrice * 0.05).toFixed(2)} buyer premium (5%)</div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1">
                       ${(currentPrice + currentPrice * 0.05).toFixed(2)} total
                     </div>
@@ -533,7 +532,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               </div>
 
               {/* Bid/Cart Section */}
-              {!isSold && (
+              {!isSold && !purchaseStatus?.hasPurchased && (
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   {isAuction ? (
                     <div className="space-y-3">
@@ -567,11 +566,22 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   ) : (
                     <button
                       onClick={handleAddToCart}
-                      disabled={addToCartMutation.isPending}
                       className="w-full bg-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                     >
-                      {addToCartMutation.isPending ? 'Adding to Cart...' : 'Add to Cart'}
+                      Buy It Now
                     </button>
+                  )}
+                </div>
+              )}
+
+              {/* Purchased State */}
+              {purchaseStatus?.hasPurchased && (
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                  <p className="text-green-700 dark:text-green-300 font-semibold text-center">✓ You own this item</p>
+                  {purchaseStatus?.purchasedAt && (
+                    <p className="text-sm text-green-600 dark:text-green-400 text-center">
+                      Purchased on {new Date(purchaseStatus.purchasedAt).toLocaleDateString()}
+                    </p>
                   )}
                 </div>
               )}

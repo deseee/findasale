@@ -238,7 +238,7 @@ const OrganizerPayoutsPage = () => {
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Available</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-gray-400">
+                  <p className="text-3xl font-bold text-gray-500 dark:text-gray-400">
                     ${(balance?.pending ?? 0).toFixed(2)}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Pending</p>
@@ -441,10 +441,10 @@ const OrganizerPayoutsPage = () => {
                 {/* Summary totals */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-5">
                   {[
-                    { label: 'Gross Revenue', value: earnings.totals.grossRevenue, color: 'text-gray-900' },
-                    { label: 'Platform Fees', value: -earnings.totals.totalPlatformFees, color: 'text-red-600' },
-                    { label: 'Est. Stripe Fees', value: -earnings.totals.totalStripeFees, color: 'text-orange-500' },
-                    { label: 'Est. Net Payout', value: earnings.totals.totalNetPayout, color: 'text-green-600' },
+                    { label: 'Gross Revenue', value: earnings.totals.grossRevenue, color: 'text-gray-900 dark:text-gray-100' },
+                    { label: 'Platform Fees', value: -earnings.totals.totalPlatformFees, color: 'text-red-600 dark:text-red-400' },
+                    { label: 'Est. Stripe Fees', value: -earnings.totals.totalStripeFees, color: 'text-orange-500 dark:text-orange-400' },
+                    { label: 'Est. Net Payout', value: earnings.totals.totalNetPayout, color: 'text-green-600 dark:text-green-400' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="rounded-lg border border-gray-100 bg-gray-50 dark:bg-gray-900 p-3 text-center">
                       <p className={`text-lg font-bold ${color}`}>

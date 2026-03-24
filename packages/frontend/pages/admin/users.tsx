@@ -166,9 +166,9 @@ const AdminUsers = () => {
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{u.email}</td>
                     <td className="px-6 py-4 text-sm">
                       <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${
-                        u.role === 'ADMIN' ? 'bg-red-100 text-red-700' :
-                        u.role === 'ORGANIZER' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 dark:bg-gray-700 text-gray-700'
+                        u.role === 'ADMIN' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                        u.role === 'ORGANIZER' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                        'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                       }`}>
                         {u.role}
                       </span>
@@ -210,8 +210,8 @@ const AdminUsers = () => {
                 onClick={() => fetchUsers(p)}
                 className={`px-3 py-1 rounded ${
                   p === page
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-warm-200 text-warm-900 dark:text-warm-100 hover:bg-warm-300'
+                    ? 'bg-amber-600 dark:bg-amber-700 text-white'
+                    : 'bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
                 }`}
               >
                 {p}

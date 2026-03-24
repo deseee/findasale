@@ -168,9 +168,9 @@ const AdminSales = () => {
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{sale.organizerName}</td>
                     <td className="px-6 py-4 text-sm text-center">
                       <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${
-                        sale.status === 'PUBLISHED' ? 'bg-green-100 text-green-700' :
-                        sale.status === 'ENDED' ? 'bg-gray-100 dark:bg-gray-700 text-gray-700' :
-                        'bg-yellow-100 text-yellow-700'
+                        sale.status === 'PUBLISHED' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                        sale.status === 'ENDED' ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' :
+                        'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
                       }`}>
                         {sale.status}
                       </span>
@@ -216,8 +216,8 @@ const AdminSales = () => {
                 onClick={() => fetchSales(p)}
                 className={`px-3 py-1 rounded ${
                   p === page
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-warm-200 text-warm-900 dark:text-warm-100 hover:bg-warm-300'
+                    ? 'bg-amber-600 dark:bg-amber-700 text-white'
+                    : 'bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
                 }`}
               >
                 {p}
