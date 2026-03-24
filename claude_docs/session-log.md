@@ -2,7 +2,23 @@
 
 **Note:** Older entries archived to `claude_docs/archive/session-logs/`. Keep 5 most recent sessions for quick reference.
 
-## Recent Sessions (S256–S260)
+## Recent Sessions (S257–S261)
+
+### 2026-03-24 · Session 261
+
+**PHASE 2 ARCHITECT SIGN-OFF + SKILL BIAS FIXED + GAME DESIGNER AGENT CREATED**
+
+✅ **Dashboard copy** — already correct from S260 ("Manage your sales and track earnings." line 301). No new change needed.
+
+✅ **Skill bias fixed** — findasale-ux + findasale-qa SKILL.md updated (partial list "etc." → all 5 sale types; "estate sale language correct" → explicit multi-type brand voice check). findasale-dev was already clean. Packaged as .skill files for install.
+
+✅ **Phase 2 architect sign-off complete** — all 7 proposed schema additions reviewed. Key findings: ItemRarity enum + FraudSignal table already exist (no new tables needed for those). Approved new additions: `User.guildXp` + `User.explorerRank` + `User.seasonalResetAt` on User model; new `RarityBoost` table; extended `PointsTransaction` + `Coupon`. Single migration file, all LOW risk. Full handoff: `claude_docs/feature-notes/explorer-guild-phase2-architect-S261.md`.
+
+✅ **7 game design decisions locked** — all resolved by new `findasale-gamedesign` agent without involving Patrick. Hunt Pass free-forever at Grandmaster (capped at 1k); flat +2% rarity boosts; no XP sink caps; Jan 1 UTC seasonal reset; optional Loot Legend photos; no organizer fee discounts; email-only referral verification; price-bracket rarity guide with auto-adjustment.
+
+✅ **findasale-gamedesign skill created** — reusable agent owns all future XP/rank/rarity design decisions. Packaged and ready to install.
+
+📋 **S262:** Phase 2 dev dispatch (migration first, then backend → frontend). Brand drift batch (14 files). Install 3 new .skill files.
 
 ### 2026-03-23 · Session 260
 
@@ -74,7 +90,7 @@
 
 📋 **S258 queued:** Optional P3 H1 fixes → Tier 2+ UX batches → organizer onboarding implementation → 17 strategic items to advisory/innovation.
 
-## Recent Sessions (S252–S256)
+## Archived (S252–S256 and earlier → claude_docs/archive/session-logs/)
 
 ### 2026-03-23 · Session 256
 

@@ -7,6 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
+**Session 261 COMPLETE (2026-03-24) — PHASE 2 ARCHITECT SIGN-OFF + SKILL BIAS FIXED + GAME DESIGNER AGENT:**
+- ✅ **Dashboard copy** — already correct from S260 ("Manage your sales and track earnings." line 301). No new change needed.
+- ✅ **Skill bias fixed** — findasale-ux + findasale-qa SKILL.md updated and repackaged. findasale-dev was already clean. Patrick needs to install findasale-ux.skill + findasale-qa.skill via Cowork UI.
+- ✅ **Phase 2 architect sign-off complete** — all 7 schema decisions approved/modified. Key finding: ItemRarity enum + FraudSignal table already exist — no new tables needed for those. New additions: `User.guildXp`, `User.explorerRank`, `User.seasonalResetAt`, `RarityBoost` table, extended `PointsTransaction` + `Coupon`. Single migration file, all LOW risk. Handoff: `claude_docs/feature-notes/explorer-guild-phase2-architect-S261.md`.
+- ✅ **7 game design decisions locked** — all resolved by new findasale-gamedesign agent (Patrick not asked). Hunt Pass free-forever at Grandmaster; flat +2% rarity boosts; no XP sink caps; Jan 1 UTC seasonal reset; optional Loot Legend photos; no organizer fee discounts; email-only referral verification; price-bracket rarity guide with auto-adjustment.
+- ✅ **findasale-gamedesign skill created** — reusable game designer agent for future XP/rarity/rank questions. Packaged and ready to install.
+- 📋 **Carry-forward:** Brand drift batch (P0 SEO + P1 copy, 14 files, approved but not dispatched). Phase 2 dev dispatch (fully unblocked — Patrick runs migration first).
+- Last Updated: 2026-03-24
+
 **Session 260 COMPLETE (2026-03-23) — RPG SPEC LOCK + EXPLORER'S GUILD PHASE 1 COPY:**
 - ✅ **RPG economy spec complete** — all 8 open decisions resolved. `claude_docs/research/gamification-rpg-spec-S260.md` created. Seasonal reset floors, streak XP formula, Sage payoffs (Sourcebook/Early Bird/Sage Coupon), wins-only auction XP, honor-system social share, 3 XP sinks, 4-tier rarity system (Common/Uncommon/Rare/Legendary) all locked.
 - ✅ **Agent prompt bias fixed** — global CLAUDE.md + project CLAUDE.md + findasale-innovation SKILL.md + findasale-advisory-board SKILL.md all updated to "secondary sale organizers (estate sales, yard sales, auctions, flea markets, consignment)."

@@ -1,54 +1,85 @@
-# Patrick's Dashboard — Session 260 Complete (March 23, 2026)
+# Patrick's Dashboard — Session 261 Complete (March 24, 2026)
+
+---
+
+## ⚠️ Brand Drift Alert — 2026-03-24 (Automated Weekly Scan)
+
+**D-001 (All Sale Types Scope) has significant active drift across 27+ files.** The homepage, about page, and pricing page are compliant — but many secondary pages still treat "estate sales" as the platform default.
+
+**Highest-impact violations:**
+- City pages (`/city/[city]`) — titled "Estate Sales in [City]" in Google search results
+- Neighborhood pages — same pattern
+- Map page — "Estate Sales Map"
+- Calendar page — "Browse upcoming estate sales"
+- Organizer sales page + create-sale page — organizer-facing copy still says "estate sale" throughout
+- Tags, categories, search empty states — shopper-facing copy
+
+**Full audit:** `claude_docs/audits/brand-drift-2026-03-24.md` (30 specific fixes, prioritized P0→P3)
+
+**Recommended next step:** Dispatch `findasale-dev` with the Batch 1 (P0 SEO) and Batch 2 (P1 organizer copy) fixes — roughly 14 single-line changes. One session clears the highest-priority drift.
+
+**One decision needed:** The "Estate Sale Encyclopedia" section rename has SEO implications — route to Patrick before dispatch.
+
+---
 
 ## Build Status
 
-⏳ **Push pending** — S260 changes not yet on GitHub. Use push block below.
+✅ **No new code changes** — dashboard.tsx was already correct from S260. Nothing to deploy.
 
 ---
 
 ## What Happened This Session
 
-**RPG Spec Locked:**
-All 8 open gamification decisions resolved. Full spec in `claude_docs/research/gamification-rpg-spec-S260.md`. Highlights: tiered seasonal reset floors (Grandmaster → Sage floor, etc.), streak-based visit XP, 3 new Sage payoffs (publish hunting guides / 48h early alerts / $3 coupon), wins-only auction XP, honor-system social sharing, 3 XP sinks, 4-tier Loot Legend rarity system.
+**Skill bias fixed:** findasale-ux + findasale-qa SKILL.md updated (all 5 sale types, no more "estate sale" shorthand). findasale-dev was already clean. 3 .skill files ready to install (see Your Actions below).
 
-**Agent Prompt Bias Fixed:**
-All agent prompts saying "estate sale operators" now say "secondary sale organizers (estate sales, yard sales, auctions, flea markets, consignment)." Fixed: global CLAUDE.md, project CLAUDE.md, innovation agent, advisory board agent.
+**Phase 2 fully unblocked:** Architect reviewed all 7 schema proposals. Key surprise — ItemRarity enum and FraudSignal table already exist, so Phase 2 needs fewer new tables than planned. One migration file covers everything. Full spec: `claude_docs/feature-notes/explorer-guild-phase2-architect-S261.md`.
 
-**Explorer's Guild Phase 1 Copy Shipped:**
-5 frontend files updated — Collector → Explorer rebrand across passport page, loyalty page, onboarding wizard, nav layout, and shopper dashboard quick link. TypeScript clean, dark mode verified.
-
-**Roadmap Updated:**
-#122 (Phase 1 copy, shipping now) and #123 (Phase 2 XP economy, future) added.
+**Game designer agent created:** All future XP/rank/rarity decisions go to `findasale-gamedesign` — Patrick won't be asked to design the loyalty system. All 7 open design decisions were locked this session without involving Patrick.
 
 ---
 
-## Explorer's Guild — Full Picture
+## Explorer's Guild — Full Status
 
-**Phase 1 (DONE — in this push):**
-- "My Collector Passport" → "My Explorer Passport" across nav + page
-- "Collector Bio" → "Explorer Bio", emojis updated (🏺 → 🗺️)
-- Loyalty page: "shop and explore", "Showcase your explorer status"
-- Onboarding wizard: estate-sale-specific copy removed
+**Phase 1 (DONE):** Collector → Explorer rebrand on 5 frontend files. RPG spec locked. Architect sign-off complete. All design decisions locked.
 
-**Phase 2 (NEXT — requires schema changes, multi-session):**
-- Full XP economy (earn events, XP sinks, seasonal resets)
-- Rarity tiers on Loot Legend items (Common/Uncommon/Rare/Legendary)
-- Sage payoffs (Sourcebook publishing, 48h Early Bird alerts, Sage Coupon)
-- Shareable moment cards, abuse prevention dashboard
+**Phase 2 (READY TO BUILD):** Requires Patrick to run migration (1 PowerShell block), then findasale-dev handles the rest across 2–3 sessions. Schema: `User.guildXp`, `User.explorerRank`, `User.seasonalResetAt`, `RarityBoost` table, extended `PointsTransaction` + `Coupon`.
+
+---
+
+## S262 Work Queue
+
+1. **Phase 2 dev dispatch** — run migration block below first, then say "start Phase 2"
+2. **Brand drift batch** — 14 copy fixes across city/map/calendar pages (one decision needed: "Estate Sale Encyclopedia" rename)
+3. **Install 3 .skill files** (see below)
 
 ---
 
 ## Your Actions
 
-**One action required: run the push block below.** That's it for this session.
+**Action 1 — Install 3 new .skill files via Cowork UI:**
+- `findasale-ux.skill` — bias fixed
+- `findasale-qa.skill` — bias fixed
+- `findasale-gamedesign.skill` — NEW game designer agent
 
----
+**Action 2 — Push wrap docs:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md
+git add claude_docs/session-log.md
+git add claude_docs/next-session-prompt.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/feature-notes/explorer-guild-phase2-architect-S261.md
+git commit -m "S261: Phase 2 architect sign-off + game design decisions locked + skill bias fixed"
+.\push.ps1
+```
 
-## S261 Work Queue
-
-1. **Dashboard copy fix** (1 line, quick) — "Manage your estate sales" → sale-type-neutral copy
-2. **Skill bias audit** — findasale-dev/ux/qa SKILL.md files need estate sale bias check (zip archives, needs skill-creator)
-3. **Phase 2 planning** — Architect sign-off on schema before dev dispatch
+**Action 3 — When ready to start Phase 2, run migration first:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+npx prisma migrate deploy
+npx prisma generate
+```
 
 ---
 
@@ -59,25 +90,3 @@ All password: `password123`
 - `user2@example.com` — PRO organizer (Stripe connected)
 - `user3@example.com` — TEAMS organizer (Stripe connected)
 - `user11@example.com` — Shopper with full activity
-
----
-
-## Push Block (S260 wrap)
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/shopper/collector-passport.tsx
-git add packages/frontend/pages/shopper/loyalty.tsx
-git add packages/frontend/components/OnboardingWizard.tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add CLAUDE.md
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/research/gamification-rpg-spec-S260.md
-git add claude_docs/STATE.md
-git add claude_docs/session-log.md
-git add claude_docs/next-session-prompt.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S260: Explorer's Guild Phase 1 copy rebrand + RPG spec locked + agent bias fixed"
-.\push.ps1
-```
