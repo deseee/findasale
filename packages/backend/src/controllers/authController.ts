@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
 import { randomUUID } from 'crypto';
-import { handleReferralBadge, handlePointsBadge } from './userController';
+import { handleReferralBadge } from './userController';
 import { addShopperSubscriber } from '../services/mailerliteService';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
@@ -81,7 +81,6 @@ export const register = async (req: Request, res: Response) => {
           role: effectiveRole,
           password: hashedPassword,
           referralCode: userReferralCode,
-          points: 0
         }
       });
 
@@ -148,28 +147,8 @@ export const register = async (req: Request, res: Response) => {
           }
         });
 
-        // Award points to referrer (e.g., 50 points)
-        const pointsToAdd = 50;
-        await prisma.user.update({
-          where: { id: referrer.id },
-          data: {
-            points: {
-              increment: pointsToAdd
-            }
-          }
-        });
-
         // Check for referral badge
         await handleReferralBadge(referrer.id);
-
-        // Check for points badge
-        const updatedReferrer = await prisma.user.findUnique({
-          where: { id: referrer.id }
-        });
-
-        if (updatedReferrer) {
-          await handlePointsBadge(referrer.id, updatedReferrer.points);
-        }
 
         // Feature #11: Organizer Referral Reciprocal
         // If both referrer and new user are organizers, grant 3-month fee discount to both
@@ -303,7 +282,6 @@ export const oauthLogin = async (req: Request, res: Response) => {
           oauthProvider: provider,
           oauthId: providerId,
           referralCode: userReferralCode,
-          points: 0,
         },
       });
 
@@ -329,7 +307,6 @@ export const oauthLogin = async (req: Request, res: Response) => {
         name:         user.name,
         role:         user.role,
         roles:        user.roles || [user.role], // Fallback to single-role array if roles is empty
-        points:       user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
@@ -455,7 +432,7 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
+    // Generate JWT — include referralCode so AuthContext can decode without a round-trip
     // Feature #72 Phase 2: Include roles array, keep role for backward compatibility
     const token = jwt.sign(
       {
@@ -464,7 +441,6 @@ export const login = async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         roles: user.roles || [user.role], // Fallback to single-role array if roles is empty
-        points: user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',

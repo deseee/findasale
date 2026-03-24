@@ -150,11 +150,6 @@ const BottomTabNav = () => {
               <span className="text-[10px] mt-0.5 font-medium leading-none" aria-hidden="true">
                 {tab.label}
               </span>
-              {pts > 0 && (
-                <span className="text-[8px] text-amber-500 leading-none mt-0.5" aria-hidden="true">
-                  {pts} pts
-                </span>
-              )}
             </Link>
           );
         })}

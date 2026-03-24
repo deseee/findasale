@@ -161,7 +161,6 @@ router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, re
         email: user!.email,
         name: user!.name,
         role: user!.role,
-        points: user!.points,
         referralCode: user!.referralCode,
         tokenVersion: user!.tokenVersion,
         subscriptionTier: updated.subscriptionTier ?? 'SIMPLE',
