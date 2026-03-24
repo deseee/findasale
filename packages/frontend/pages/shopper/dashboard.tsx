@@ -202,7 +202,7 @@ const ShopperDashboard = () => {
                 <EmptyState
                   icon="🎉"
                   heading="Welcome to FindA.Sale!"
-                  subtext="Explore nearby estate sales, add your favorite items, and discover unique treasures. Ready to get started?"
+                  subtext="Explore nearby sales, add your favorite items, and discover unique treasures. Ready to get started?"
                   cta={{ label: 'Browse Upcoming Sales', href: '/' }}
                 />
               )}

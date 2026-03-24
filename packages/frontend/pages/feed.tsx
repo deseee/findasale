@@ -71,7 +71,7 @@ const FeedPage = () => {
         <title>Your Feed – FindA.Sale</title>
         <meta name="description" content="Sales from organizers you follow on FindA.Sale" />
         <meta property="og:title" content="Your Sale Feed — FindA.Sale" />
-        <meta property="og:description" content="Your personalized estate sale feed — sales from organizers you follow and items matching your interests." />
+        <meta property="og:description" content="Your personalized sales feed — sales from organizers you follow and items matching your interests." />
         <meta property="og:url" content="https://finda.sale/feed" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />

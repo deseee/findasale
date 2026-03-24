@@ -61,7 +61,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
         <title>{formattedTag} for Sale | FindA.Sale</title>
         <meta
           name="description"
-          content={`Browse ${itemCount} ${tag} items available at estate sales near you. Updated weekly.`}
+          content={`Browse ${itemCount} ${tag} items available at upcoming sales near you. Updated weekly.`}
         />
 
         {/* OG / Social Sharing */}
@@ -69,7 +69,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
         <meta property="og:title" content={`${formattedTag} for Sale | FindA.Sale`} />
         <meta
           property="og:description"
-          content={`Browse ${itemCount} ${tag} items available at estate sales near you.`}
+          content={`Browse ${itemCount} ${tag} items available at upcoming sales near you.`}
         />
         {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
 
@@ -81,7 +81,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
               '@context': 'https://schema.org',
               '@type': 'ItemList',
               name: `${formattedTag} Items for Sale`,
-              description: `Browse ${tag} items at estate sales`,
+              description: `Browse ${tag} items at upcoming sales`,
               itemListElement: items.slice(0, 10).map((item, idx) => ({
                 '@type': 'ListItem',
                 position: idx + 1,
@@ -118,7 +118,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
 
             <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">{formattedTag}</h1>
             <p className="text-warm-600 dark:text-warm-400 text-lg">
-              {itemCount} item{itemCount !== 1 ? 's' : ''} available at estate sales near you
+              {itemCount} item{itemCount !== 1 ? 's' : ''} available at upcoming sales near you
             </p>
           </div>
         </div>

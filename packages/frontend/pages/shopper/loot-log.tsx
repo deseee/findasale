@@ -40,7 +40,7 @@ export default function LootLogPage() {
     <>
       <Head>
         <title>My Loot Log — FindA.Sale</title>
-        <meta name="description" content="Your personal purchase history from estate sales" />
+        <meta name="description" content="Your purchase history" />
       </Head>
 
       <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -90,7 +90,7 @@ export default function LootLogPage() {
             <div className="text-center py-24">
               <p className="text-4xl mb-4">🏺</p>
               <p className="text-2xl font-semibold text-slate-700 dark:text-gray-300 mb-2">Your loot log is empty</p>
-              <p className="text-slate-600 dark:text-gray-400 mb-8">Make your first purchase at an estate sale to start building your collection history.</p>
+              <p className="text-slate-600 dark:text-gray-400 mb-8">Make your first purchase at a sale to start building your collection history.</p>
               <Link
                 href="/"
                 className="px-6 py-3 bg-[#8FB897] text-white rounded-lg hover:bg-opacity-90 transition inline-block font-semibold"

@@ -8,7 +8,7 @@ export const config = {
 export default async function handler(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const title = searchParams.get('title') || 'Estate Sale';
+    const title = searchParams.get('title') || 'Sale';
     const date = searchParams.get('date') || '';
     const location = searchParams.get('location') || '';
     const itemCount = searchParams.get('itemCount') || '';
@@ -130,7 +130,7 @@ export default async function handler(req: NextRequest) {
                 color: '#6B5A42',
               }}
             >
-              Discover amazing items at estate sales
+              Discover amazing items at sales near you
             </div>
           </div>
         ),
@@ -264,7 +264,7 @@ export default async function handler(req: NextRequest) {
               color: '#6B5A42',
             }}
           >
-            Browse & bid on estate sale treasures
+            Browse & bid on treasures
           </div>
         </div>
       ),

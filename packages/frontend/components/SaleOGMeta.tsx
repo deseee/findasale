@@ -16,6 +16,7 @@ interface Sale {
   endDate?: string;
   city?: string;
   state?: string;
+  saleType?: string;
   photos?: Array<{ publicId?: string; url?: string }>;
   address?: string;
   organizer?: {
@@ -99,10 +100,11 @@ export default function SaleOGMeta({
   });
 
   // Default description
+  const saleTypeLabel = sale.saleType || 'Sale';
   const metaDescription =
     description ||
     sale.description ||
-    `Estate sale in ${location} with ${sale.items?.length || 0} items. ${dateRange}`.trim();
+    `${saleTypeLabel} in ${location} with ${sale.items?.length || 0} items. ${dateRange}`.trim();
 
   // Canonical URL
   const url =

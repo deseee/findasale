@@ -50,7 +50,7 @@ export default function HubDetailPage() {
     <>
       <Head>
         <title>{hub.name} - FindA.Sale</title>
-        <meta name="description" content={hub.description || `Browse ${hub.name} with ${hub.sales.length} estate sales`} />
+        <meta name="description" content={hub.description || `Browse ${hub.name} with ${hub.sales.length} upcoming sales`} />
       </Head>
 
       <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white dark:from-gray-900 dark:to-gray-800">

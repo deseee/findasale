@@ -447,7 +447,7 @@ const SearchPage = () => {
                         <EmptyState
                           icon="🔍"
                           heading={`We couldn't find "${q}"`}
-                          subtext="Try browsing by category or checking back soon — new estate sales are listed all the time."
+                          subtext="Try browsing by category or checking back soon — new sales are being listed all the time."
                         />
                         <div className="flex flex-wrap justify-center gap-2 mt-6">
                           {SUGGESTED_CATEGORIES.map((cat) => (

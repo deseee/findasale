@@ -113,7 +113,7 @@ const ReferralWidget: React.FC = () => {
                 try {
                   await navigator.share({
                     title: 'Join FindA.Sale',
-                    text: `Check out this estate sale on FindA.Sale! Use my referral code ${data?.referralCode} to get rewards.`,
+                    text: `Check out this sale on FindA.Sale! Use my referral code ${data?.referralCode} to get rewards.`,
                     url: data?.referralLink || '',
                   });
                 } catch (err) {

@@ -41,7 +41,7 @@ export default function HubsPage() {
     <>
       <Head>
         <title>Discover Sale Hubs - FindA.Sale</title>
-        <meta name="description" content="Discover nearby sale hubs and group estate sales" />
+        <meta name="description" content="Discover nearby sale hubs and group sales" />
       </Head>
 
       <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white dark:from-gray-900 dark:to-gray-800">

@@ -62,12 +62,12 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
         <title>Inspiration Gallery | FindA.Sale</title>
         <meta
           name="description"
-          content="Browse beautiful items from estate sales near you. Discover unique finds curated by AI."
+          content="Browse beautiful items from upcoming sales near you. Discover unique finds curated by AI."
         />
         <meta property="og:title" content="Inspiration Gallery | FindA.Sale" />
         <meta
           property="og:description"
-          content="Browse beautiful items from estate sales. Discover unique finds."
+          content="Browse beautiful items from upcoming sales. Discover unique finds."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -79,7 +79,7 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
             Inspiration Gallery
           </h1>
           <p className="text-warm-600 dark:text-warm-400">
-            Discover the best items from upcoming estate sales in your area
+            Discover the best items from upcoming sales in your area
           </p>
         </div>
 

@@ -64,7 +64,7 @@ export default function CreateTrailPage() {
     <Layout>
       <Head>
         <title>Create Trail | FindA.Sale</title>
-        <meta name="description" content="Create a new treasure trail through your favorite estate sales" />
+        <meta name="description" content="Create a new treasure trail through your favorite sales" />
       </Head>
 
       <div className="max-w-2xl mx-auto px-4 py-8">

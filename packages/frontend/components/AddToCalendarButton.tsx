@@ -46,7 +46,7 @@ const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
 
     const ics = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//FindA.Sale//Estate Sales//EN
+PRODID:-//FindA.Sale//Sales//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 BEGIN:VEVENT
