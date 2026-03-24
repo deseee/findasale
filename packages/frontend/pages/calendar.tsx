@@ -115,7 +115,7 @@ const CalendarPage = () => {
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>Sale Calendar - FindA.Sale</title>
-        <meta name="description" content="Browse upcoming estate sales on our interactive calendar" />
+        <meta name="description" content="Browse upcoming sales on our interactive calendar" />
       </Head>
 
       <main className="container mx-auto px-4 py-8">
@@ -154,8 +154,8 @@ const CalendarPage = () => {
           ) : isError || !sales || sales.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-3xl mb-3">📅</p>
-              <p className="text-warm-700 dark:text-gray-300 font-semibold mb-2">No estate sales scheduled for these dates</p>
-              <p className="text-warm-600 dark:text-gray-400 text-sm">Estate sales typically happen on weekends. Check back closer to the weekend or browse all sales by location.</p>
+              <p className="text-warm-700 dark:text-gray-300 font-semibold mb-2">No sales scheduled for these dates</p>
+              <p className="text-warm-600 dark:text-gray-400 text-sm">Sales typically happen on weekends. Check back closer to the weekend or browse all sales by location.</p>
             </div>
           ) : isMobile ? (
             // Mobile: Vertical list grouped by date
@@ -164,7 +164,7 @@ const CalendarPage = () => {
                 <div className="text-center py-6">
                   <p className="text-3xl mb-3">📅</p>
                   <p className="text-warm-700 dark:text-gray-300 font-semibold">No sales this month</p>
-                  <p className="text-warm-600 dark:text-gray-400 text-sm mt-1">Browse previous or upcoming months to find estate sales.</p>
+                  <p className="text-warm-600 dark:text-gray-400 text-sm mt-1">Browse previous or upcoming months to find sales.</p>
                 </div>
               ) : (
                 mobileListDays.map(({ date, sales: daySales }) => (

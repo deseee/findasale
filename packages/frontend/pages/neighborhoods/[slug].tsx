@@ -46,7 +46,7 @@ const isActive = (start: string, end: string) => {
 
 const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
   const canonicalUrl = `https://finda.sale/neighborhoods/${slug}`;
-  const pageTitle = `Estate Sales in ${name} | FindA.Sale`;
+  const pageTitle = `Sales in ${name} | FindA.Sale`;
   const metaDesc = `Browse ${total > 0 ? total : 'upcoming'} sale${total !== 1 ? 's' : ''} in ${name} — estate sales, yard sales, garage sales, and more. Find furniture, antiques, collectibles and more near you.`;
 
   return (
@@ -67,7 +67,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'ItemList',
-              name: `Estate Sales in ${name}`,
+              name: `Sales in ${name}`,
               description: metaDesc,
               url: canonicalUrl,
               numberOfItems: total,
@@ -97,7 +97,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">
-              Estate Sales in {name}
+              Sales in {name}
             </h1>
             <p className="text-warm-500 dark:text-warm-400 mt-1 text-sm">{description}</p>
             {total > 0 && (

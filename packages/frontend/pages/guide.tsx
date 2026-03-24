@@ -294,7 +294,7 @@ const GuidePage = () => {
     <>
       <Head>
         <title>Organizer Guide – FindA.Sale</title>
-        <meta name="description" content="Complete guide for estate sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid." />
+        <meta name="description" content="Complete guide for sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid." />
       </Head>
 
       <div className="min-h-screen bg-white dark:bg-gray-800">
@@ -302,7 +302,7 @@ const GuidePage = () => {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Organizer Guide</h1>
-            <p className="text-warm-500 dark:text-warm-400 text-lg">Everything you need to run a successful estate sale on FindA.Sale.</p>
+            <p className="text-warm-500 dark:text-warm-400 text-lg">Everything you need to run a successful sale on FindA.Sale.</p>
           </div>
 
           <div className="flex flex-col md:flex-row gap-8">

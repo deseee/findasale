@@ -169,7 +169,7 @@ const OrganizerStorefront = () => {
               <div>
                 <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-4">About This Organizer</h2>
                 <p className="text-warm-700 dark:text-gray-300 mb-6">
-                  {brandKit.bio || 'A professional estate sale organizer serving the Grand Rapids area.'}
+                  {brandKit.bio || 'A professional sale organizer serving the Grand Rapids area.'}
                 </p>
 
                 {/* Social Links */}

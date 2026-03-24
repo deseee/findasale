@@ -154,7 +154,7 @@ const CreateSalePage = () => {
           </Link>
 
           <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Create a New Sale</h1>
-          <p className="text-warm-600 dark:text-warm-400 mb-8">Get your estate sale online in minutes.</p>
+          <p className="text-warm-600 dark:text-warm-400 mb-8">Get your sale online in minutes.</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}

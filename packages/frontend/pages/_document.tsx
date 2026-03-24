@@ -30,9 +30,9 @@ export default function Document() {
         {/* Default SEO meta — pages should override these with next/head */}
         <meta
           name="description"
-          content="FindA.Sale — discover estate sales and auctions near you. Browse items, favorite sales, and buy online."
+          content="FindA.Sale — discover estate sales, garage sales, auctions, flea markets and more near you. Browse items, favorite sales, and buy online."
         />
-        <meta name="keywords" content="estate sales, auctions, antiques, thrift, local sales" />
+        <meta name="keywords" content="estate sales, garage sales, yard sales, auctions, flea markets, antiques, thrift, local sales" />
         <meta name="author" content="FindA.Sale" />
 
         {/* Open Graph structural defaults — page-level <Head> provides og:title, og:description, og:image */}

@@ -184,10 +184,10 @@ const MapPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
       <Head>
-        <title>Sales Near You - FindA.Sale</title>
-        <meta name="description" content="View estate sales on an interactive map near you" />
-        <meta property="og:title" content="Estate Sales Map — FindA.Sale" />
-        <meta property="og:description" content="See all upcoming estate sales on an interactive map. Filter by date and find sales near you." />
+        <title>FindA.Sale Map — Sales Near You</title>
+        <meta name="description" content="View sales on an interactive map near you" />
+        <meta property="og:title" content="FindA.Sale Map — Sales Near You" />
+        <meta property="og:description" content="See all upcoming sales on an interactive map. Filter by date and find sales near you." />
         <meta property="og:url" content="https://finda.sale/map" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
