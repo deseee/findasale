@@ -87,7 +87,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                 position: idx + 1,
                 name: item.title,
                 image: item.thumbnailUrl || undefined,
-                url: `https://findasale.com/items/${item.id}`,
+                url: `https://finda.sale/items/${item.id}`,
                 offers: {
                   '@type': 'Offer',
                   price: item.price ? item.price.toString() : '0',

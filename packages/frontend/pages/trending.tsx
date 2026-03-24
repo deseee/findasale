@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
+import FavoriteButton from '../components/FavoriteButton';
 
 interface TrendingItem {
   id: string;
@@ -147,6 +148,9 @@ export default function TrendingPage() {
                             🔥 Hot
                           </div>
                         )}
+                        <div className="absolute top-2 right-2">
+                          <FavoriteButton itemId={item.id} variant="icon" size="md" />
+                        </div>
                       </div>
                       <div className="p-3">
                         <p className="font-semibold text-warm-900 dark:text-gray-100 text-sm line-clamp-2">{item.title}</p>

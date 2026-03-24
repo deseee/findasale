@@ -8,6 +8,7 @@ const ContactPage = () => {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,10 +20,11 @@ const ContactPage = () => {
     setError(null);
 
     try {
-      await api.post('/contact', { name, email, message });
+      await api.post('/contact', { name, email, subject, message });
       setSubmitted(true);
       setName('');
       setEmail('');
+      setSubject('');
       setMessage('');
       setTimeout(() => setSubmitted(false), 5000);
     } catch (error) {
@@ -47,7 +49,7 @@ const ContactPage = () => {
         <div className="max-w-3xl mx-auto px-4 py-12">
           <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-4">Contact Support</h1>
           <p className="text-warm-600 dark:text-warm-400 mb-8 text-lg">
-            We're here to help organizers and shoppers. Reach out with any questions or feedback.
+            We're here to help! Reach out with any questions or feedback.
           </p>
 
           {/* Quick contact options */}
@@ -110,6 +112,20 @@ const ContactPage = () => {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="subject" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                Subject
+              </label>
+              <input
+                type="text"
+                id="subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
                 required
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               />

@@ -20,6 +20,20 @@ interface TodayHunt {
 
 const TreasureHuntBanner: React.FC = () => {
   const { user } = useAuth();
+  const [isDismissed, setIsDismissed] = useState(false);
+
+  // Check localStorage on mount
+  useEffect(() => {
+    const dismissed = typeof window !== 'undefined' && localStorage.getItem('treasureHuntBannerDismissed');
+    if (dismissed) {
+      setIsDismissed(true);
+    }
+  }, []);
+
+  const handleDismiss = () => {
+    setIsDismissed(true);
+    localStorage.setItem('treasureHuntBannerDismissed', 'true');
+  };
 
   const { data: hunt, isLoading, isError } = useQuery({
     queryKey: ['treasureHunt', 'today'],
@@ -31,15 +45,26 @@ const TreasureHuntBanner: React.FC = () => {
   });
 
   // Graceful degradation: if load fails or no hunt data, render nothing
-  if (isError || !hunt) return null;
+  if (isError || !hunt || isDismissed) return null;
 
   return (
     <div className="mb-8">
       <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-l-4 border-amber-600 dark:border-amber-500 rounded-lg p-6 shadow-sm dark:shadow-lg">
         {/* Header */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-2xl">🗺️</span>
-          <h2 className="text-xl font-bold text-amber-900 dark:text-amber-200">Today's Treasure Hunt</h2>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🗺️</span>
+            <h2 className="text-xl font-bold text-amber-900 dark:text-amber-200">Today's Treasure Hunt</h2>
+          </div>
+          <button
+            onClick={handleDismiss}
+            className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 p-1 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded transition-colors"
+            aria-label="Close treasure hunt banner"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Clue */}

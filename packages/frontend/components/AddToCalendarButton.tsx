@@ -40,7 +40,7 @@ const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
       return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
     };
 
-    const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://findasale.com';
+    const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale';
     const location = `${address}, ${city}, ${state}`;
     const eventDescription = description ? `${description}\n\nView at ${siteUrl}/sales/${saleId}` : `View at ${siteUrl}/sales/${saleId}`;
 
@@ -50,7 +50,7 @@ PRODID:-//FindA.Sale//Estate Sales//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 BEGIN:VEVENT
-UID:${saleId}@findasale.com
+UID:${saleId}@finda.sale
 DTSTAMP:${formatDate(new Date())}
 DTSTART:${formatDate(start)}
 DTEND:${formatDate(end)}

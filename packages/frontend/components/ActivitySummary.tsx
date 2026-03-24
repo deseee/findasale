@@ -38,7 +38,7 @@ const ActivitySummary: React.FC = () => {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="card p-4 h-24 bg-warm-50 animate-pulse" />
+          <div key={i} className="card p-4 h-24 bg-warm-50 dark:bg-gray-800 animate-pulse" />
         ))}
       </div>
     );

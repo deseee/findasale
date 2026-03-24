@@ -8,7 +8,6 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { GetStaticProps } from 'next';
 import InspirationGrid from '../components/InspirationGrid';
-import Layout from '../components/Layout';
 import api from '../lib/api';
 
 interface InspirationItem {
@@ -58,7 +57,7 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
   }, []);
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Inspiration Gallery | FindA.Sale</title>
         <meta
@@ -94,7 +93,7 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
         {/* Grid */}
         <InspirationGrid items={items} isLoading={isLoading} />
       </div>
-    </Layout>
+    </>
   );
 };
 

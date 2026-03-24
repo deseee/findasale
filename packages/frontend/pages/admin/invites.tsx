@@ -277,7 +277,7 @@ const AdminInvitesPage = () => {
               1. Copy the invite code above
             </p>
             <p className="text-blue-800 text-sm mb-3">
-              2. Share the code directly, or use the invite URL: <code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">findasale.com/register?invite=CODE</code>
+              2. Share the code directly, or use the invite URL: <code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">finda.sale/register?invite=CODE</code>
             </p>
             <p className="text-blue-800 text-sm">
               3. When a user registers with a valid code, they automatically get ORGANIZER role

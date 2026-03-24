@@ -274,7 +274,7 @@ const TypologyPage = () => {
           <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 font-fraunces">
             Treasure Typology Classifier
           </h1>
-          <p className="mt-1 text-warm-500 dark:text-warm-400 text-sm">
+          <p className="mt-1 text-warm-500 dark:text-warm-300 text-sm">
             AI-powered style classification for your items — Art Deco, Mid-Century Modern, Americana, and more.
           </p>
         </div>
@@ -283,7 +283,7 @@ const TypologyPage = () => {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-warm-200 dark:border-gray-700 p-4 mb-6">
           <div className="flex gap-3 flex-wrap items-end">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-200 mb-1">
                 Select a Sale
               </label>
               {salesLoading ? (
@@ -326,11 +326,11 @@ const TypologyPage = () => {
 
         {/* Items list */}
         {!selectedSaleId ? (
-          <div className="text-center py-16 text-warm-400 dark:text-warm-500">
+          <div className="text-center py-16 text-warm-400 dark:text-warm-400">
             <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
             </svg>
-            <p className="text-sm">Select a sale above to manage typology classifications</p>
+            <p className="text-sm text-warm-500 dark:text-warm-300">Select a sale above to manage typology classifications</p>
           </div>
         ) : itemsLoading ? (
           <div className="space-y-3">
@@ -341,8 +341,8 @@ const TypologyPage = () => {
         ) : items.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-3xl mb-3">📦</p>
-            <p className="text-warm-700 dark:text-warm-300 font-semibold mb-2">No items in this sale yet</p>
-            <p className="text-warm-500 dark:text-warm-400 text-sm">Add items to your inventory to start building this sale's catalog.</p>
+            <p className="text-warm-700 dark:text-warm-200 font-semibold mb-2">No items in this sale yet</p>
+            <p className="text-warm-500 dark:text-warm-300 text-sm">Add items to your inventory to start building this sale's catalog.</p>
           </div>
         ) : (
           <div className="space-y-3">
