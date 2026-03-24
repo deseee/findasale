@@ -136,7 +136,7 @@ model User {
   guildXp         Int           @default(0)         // Phase 2a: Cumulative XP, never resets, used for rank calculation
   explorerRank    ExplorerRank  @default(INITIATE)  // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
   seasonalResetAt DateTime?                         // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
-  rarityBoosts    RarityBoost[]                     // Phase 2a: Active rarity boosts for upcoming sales
+  rarityBoosts    RarityBoost[]  @relation("RarityBoosts")  // Phase 2a: Active rarity boosts for upcoming sales
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -336,7 +336,7 @@ model Sale {
   // Feature #72: Affiliate Payouts linked to sales
   affiliatePayouts  AffiliatePayout[]
   // Phase 2a: Explorer's Guild — Rarity boosts for this sale
-  rarityBoosts      RarityBoost[]
+  rarityBoosts      RarityBoost[]  @relation("RarityBoosts")
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
