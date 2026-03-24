@@ -13,12 +13,16 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useLoyaltyPassport } from '@/hooks/useLoyaltyPassport';
+import useXpProfile from '@/hooks/useXpProfile';
+import { RankBadge } from '@/components/RankBadge';
+import { RankProgressBar } from '@/components/RankProgressBar';
 import { useAuth } from '@/components/AuthContext';
 
 function LoyaltyPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { passport, isLoading: passportLoading, error, refetch } = useLoyaltyPassport();
+  const { data: xpProfile, isLoading: xpLoading } = useXpProfile(!!user);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -31,7 +35,7 @@ function LoyaltyPage() {
     return null;
   }
 
-  if (authLoading || passportLoading || !mounted) {
+  if (authLoading || passportLoading || xpLoading || !mounted) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-600 dark:text-gray-400">Loading your loyalty passport...</p>
@@ -88,6 +92,38 @@ function LoyaltyPage() {
               Earn stamps and unlock rewards as you shop and explore
             </p>
           </div>
+
+          {/* Guild XP & Rank Card */}
+          {xpProfile && (
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg shadow-md p-8 mb-8 border-2 border-indigo-200 dark:from-gray-800 dark:to-gray-700 dark:border-indigo-700">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Rank Display */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Explorer Rank</p>
+                  <div className="flex items-center gap-6">
+                    <RankBadge rank={xpProfile.explorerRank} size="lg" />
+                    <div>
+                      <p className="text-3xl font-bold text-indigo-700 dark:text-indigo-400">
+                        {xpProfile.guildXp.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Guild XP</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress to Next Rank */}
+                <div className="flex flex-col justify-center">
+                  <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Rank Progress</p>
+                  <RankProgressBar
+                    currentXp={xpProfile.rankProgress.currentXp}
+                    nextRankXp={xpProfile.rankProgress.nextRankXp}
+                    currentRank={xpProfile.explorerRank}
+                    nextRank={xpProfile.rankProgress.nextRank}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Current Tier Card */}
           <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg shadow-md p-8 mb-8 border-2 border-amber-200 dark:from-gray-800 dark:to-gray-700 dark:border-amber-700">
