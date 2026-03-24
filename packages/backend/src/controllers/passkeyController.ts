@@ -366,7 +366,6 @@ export const authenticateComplete = async (req: Request, res: Response) => {
           email: user.email,
           name: user.name,
           role: user.role,
-          points: user.points,
           referralCode: user.referralCode,
           tokenVersion: user.tokenVersion,
           subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',

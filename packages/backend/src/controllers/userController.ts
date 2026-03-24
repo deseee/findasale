@@ -140,13 +140,13 @@ export const getLeaderboard = async (req: Request, res: Response) => {
         role: 'USER'
       },
       orderBy: {
-        points: 'desc'
+        streakPoints: 'desc'
       },
       take: 10,
       select: {
         id: true,
         name: true,
-        points: true,
+        streakPoints: true,
         userBadges: {          // ✅ FIXED: use 'userBadges' not 'UserBadge'
           include: {
             badge: {

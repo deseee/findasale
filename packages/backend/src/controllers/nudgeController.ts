@@ -28,7 +28,6 @@ export const getNudges = async (req: AuthRequest, res: Response): Promise<void> 
       where: { id: userId },
       select: {
         id: true,
-        points: true,
         visitStreak: true,
         huntPassActive: true,
       },
@@ -47,7 +46,6 @@ export const getNudges = async (req: AuthRequest, res: Response): Promise<void> 
     // Build user state
     const state: UserState = {
       userId: user.id,
-      points: user.points,
       favoritesCount,
       visitStreak: user.visitStreak,
       huntPassActive: user.huntPassActive,

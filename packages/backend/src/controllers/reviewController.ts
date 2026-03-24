@@ -57,14 +57,6 @@ export const createReview = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Award 5 points for leaving a review (Phase 19: Hunt Pass)
-    await prisma.pointsTransaction.create({
-      data: { userId, type: 'REVIEW', points: 5, saleId, description: 'Left a review' },
-    });
-    await prisma.user.update({
-      where: { id: userId },
-      data: { points: { increment: 5 } },
-    });
 
     return res.status(201).json(review);
   } catch (error) {

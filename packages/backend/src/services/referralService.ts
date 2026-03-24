@@ -76,21 +76,15 @@ export const processReferral = async (
       return;
     }
 
-    // Create reward record and atomically update user points
-    await prisma.$transaction([
-      prisma.referralReward.create({
-        data: {
-          referrerId,
-          referredUserId,
-          rewardType: 'POINTS',
-          rewardValue: REWARD_POINTS_PER_REFERRAL,
-        },
-      }),
-      prisma.user.update({
-        where: { id: referrerId },
-        data: { points: { increment: REWARD_POINTS_PER_REFERRAL } },
-      }),
-    ]);
+    // Create reward record
+    await prisma.referralReward.create({
+      data: {
+        referrerId,
+        referredUserId,
+        rewardType: 'POINTS',
+        rewardValue: REWARD_POINTS_PER_REFERRAL,
+      },
+    });
   } catch (error) {
     console.error('Error processing referral:', error);
     throw error;

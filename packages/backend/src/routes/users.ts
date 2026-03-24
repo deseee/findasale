@@ -108,32 +108,6 @@ router.get('/me/referrals', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
-router.get('/me/points', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      include: {
-        userBadges: { 
-          include: { 
-            badge: true 
-          } 
-        }
-      }
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    res.json({
-      points: user.points,
-      badges: user.userBadges ? user.userBadges.map(ub => ub.badge) : []
-    });
-  } catch (error) {
-    console.error('Error fetching user points:', error);
-    res.status(500).json({ message: 'Server error while fetching points' });
-  }
-});
 
 // Create or update organizer profile
 // Allow any authenticated user (including SHOPPER) to register as organizer
@@ -191,7 +165,6 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
         name: updatedUser.name,
         role: updatedUser.role,
         roles: updatedUser.roles,
-        points: updatedUser.points,
         referralCode: updatedUser.referralCode,
         tokenVersion: updatedUser.tokenVersion,
       },
@@ -263,7 +236,6 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         id: true,
         email: true,
         name: true,
-        points: true,
         streakPoints: true,
         notificationPrefs: true,
       }
