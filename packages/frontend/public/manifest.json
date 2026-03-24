@@ -83,7 +83,7 @@
     {
       "name": "Organizer Dashboard",
       "short_name": "Dashboard",
-      "description": "Manage your estate sales",
+      "description": "Manage your sales: estate sales, yard sales, auctions &amp; more",
       "url": "/organizer/dashboard?source=pwa-shortcut",
       "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
     }

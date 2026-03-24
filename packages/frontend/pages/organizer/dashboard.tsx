@@ -298,7 +298,7 @@ const OrganizerDashboard = () => {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
-            <p className="text-warm-600 dark:text-warm-400">Manage your estate sales and track earnings.</p>
+            <p className="text-warm-600 dark:text-warm-400">Manage your sales and track earnings.</p>
           </div>
 
           {/* Feature #75: Tier Lapse Banner */}
