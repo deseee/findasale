@@ -66,7 +66,7 @@ function LeaderboardPage() {
   const { data: leaderboardData, isLoading, error } = useQuery<LeaderboardData>({
     queryKey: ['leaderboard'],
     queryFn: async () => {
-      const response = await api.get('/api/xp/leaderboard');
+      const response = await api.get('/xp/leaderboard');
       return response.data as LeaderboardData;
     },
     enabled: !!user && mounted,
