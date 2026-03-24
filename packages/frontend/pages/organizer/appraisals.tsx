@@ -3,7 +3,7 @@
  *
  * Feature #54: Organizer appraisal management (submit requests, view community feedback)
  * Route: /organizer/appraisals
- * Tier gating: PRO minimum (SIMPLE redirected to /organizer/upgrade)
+ * Tier gating: PRO minimum (SIMPLE redirected to /organizer/pricing)
  */
 
 import React, { useState } from 'react';

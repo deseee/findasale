@@ -3,7 +3,7 @@
  *
  * Multi-sale overview for PRO/TEAMS organizers.
  * Route: /organizer/command-center
- * Tier gating: PRO minimum (SIMPLE redirected to /organizer/upgrade)
+ * Tier gating: PRO minimum (SIMPLE redirected to /organizer/pricing)
  */
 
 import React, { useState } from 'react';
