@@ -7,33 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 265 IN PROGRESS (2026-03-24) — QA VERIFICATION + UX IMPLEMENTATION:**
+**Session 265 COMPLETE (2026-03-24) — XP SYSTEM VERIFIED + SHOPPER→ORG FLOW + QA PROCESS OVERHAUL:**
 
-**Batch 1 QA Results (Brand Drift Verification):**
-- ✅ **Batches 3+4 brand drift — VERIFIED LIVE.** Tested 9 pages on finda.sale: /trending, /inspiration, /search, /feed, /shopper/loot-log, /shopper/trails, /categories/antiques all show all-sale-types language correctly. P1 brand alignment PASS.
-- 📝 **Residual finding:** `/tags/[slug].tsx` empty state still uses "estate sales" (brand-biased, P3 priority). Dispatched findasale-dev for fix.
+What shipped:
+- ✅ Brand drift Batches 3+4 verified live across 9 pages — all-sale-types language confirmed
+- ✅ Shopper→Organizer conversion flow fully shipped and QA-verified: BecomeOrganizerModal.tsx (NEW), useOrganizerSetup.ts (NEW), pricing page CTA, desktop nav "Host a Sale" button, organizer dashboard welcome banner. Full E2E test passed — user11 converted, JWT updated to include ORGANIZER role
+- ✅ XP system confirmed live on Railway: /api/xp/profile (200) and /api/xp/leaderboard (200) both working. Loyalty page renders correctly — Initiate rank, 0/500 XP → Scout, no errors
+- ✅ XP Sink UI shipped: "Spend Your XP" section on loyalty page with coupon (20 XP, disabled at 0 guildXp showing "Need 20 more XP") + Rarity Boost "Coming Soon" placeholder
+- ✅ Phase 2 UX audit complete — P1 XP sink blocker resolved this session. P2 polish items deferred to S266
+- ✅ tags/[slug].tsx empty state: all-sale-types language fix (brand drift P3)
+- ✅ OnboardingWizard.tsx: dark mode inner card fix (bg-white dark:bg-gray-800) — in pending push
+- ✅ Layout.tsx: desktop "Host a Sale" nav button for shoppers without ORGANIZER role — in pending push
+- ✅ CLAUDE.md §10c added: QA management rule (pre-dispatch scenario list, no PARTIAL results accepted, exact values required)
+- ✅ Rarity Boost XP sink added to roadmap as coming-soon item
+- ✅ conversation-defaults Rule 8 (MESSAGE_BOARD.json) removed from skill — installed
+- ✅ QA delegation protocol created: claude_docs/operations/qa-delegation-protocol.md
+- ✅ Dockerfile.production cache-busted to S265 (Railway rebuild forced)
+- ✅ XP false-positive in state docs corrected: S262/S263 docs claimed "XP endpoints confirmed live" — was actually surface-level test error. Confirmed live this session via direct Railway URL
 
-**Batch 2 QA Results (XP System Testing):**
-- ✅ **XP components render correctly:** RankBadge (Initiate rank + emoji, full dark mode support) ✅, RankProgressBar (0/500 XP, animated fill, next rank label) ✅, Leaderboard (top 50 shoppers, rank medals, 0 console errors) ✅.
-- ⚠️ **Authentication blocker:** user11 seed account login failed to switch sessions (session persistence issue). Did not block broader XP component testing.
-- **Component health:** Zero broken states, zero console errors. All XP endpoints live and responding.
-
-**Phase 2 UX Audit Findings:**
-- 🔴 **P1 BLOCKER — XP Sink Visibility:** Backend endpoints exist (POST /api/xp/sink/rarity-boost 15 XP, POST /api/xp/sink/coupon 20 XP) but ZERO frontend UI exposes them. Users can earn XP but cannot spend it — gamification loop incomplete. **Dispatched findasale-dev:** Build XP Sink Options section on /shopper/loyalty + Boost buttons on sale detail pages. Est. 1-2 hours.
-- P2 polish (RankProgressBar MAX RANK visual, leaderboard position footer, header clarity) — can ship in v1.1 if timeline tight.
-- Full audit report: `claude_docs/ux-audits/explorer-guild-phase2-audit.md` (2,800+ lines).
-
-**Shopper→Organizer Flow (In Progress):**
-- ✅ Backend route `/api/users/setup-organizer` works (removes role gate, atomically adds ORGANIZER to roles, returns fresh JWT).
-- 📝 **UX spec completed this session.** Dispatched findasale-dev to implement: BecomeOrganizerModal, useOrganizerSetup hook, pricing page "Host a Sale" CTA, nav "Host a Sale" link, organizer dashboard welcome state.
-
-**QA Process Improvement (In Progress):**
-- Dispatched findasale-workflow to produce `claude_docs/operations/qa-delegation-protocol.md` (session S265).
-
-- Last Updated: 2026-03-24T18:30:00Z
-
-**Session 264 COMPLETE (2026-03-24) — NEON→RAILWAY DB MIGRATION + PROCESS IMPROVEMENTS:**
-[Archived below for reference]
+Last Updated: 2026-03-24T23:00:00Z
 
 **Session 262 COMPLETE (2026-03-24) — BRAND DRIFT ALL 4 BATCHES + PHASE 2A/2B/2C FULLY DEPLOYED:**
 
@@ -118,6 +110,8 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Recent Sessions
 
+**S265 (2026-03-24):** XP system verified live on Railway (/api/xp/profile, /api/xp/leaderboard). Shopper→Organizer conversion flow fully shipped with E2E QA (BecomeOrganizerModal, nav "Host a Sale", pricing CTA). XP Sink UI complete (coupon + Rarity Boost placeholder). Brand drift Batches 3+4 QA confirmed. Phase 2 UX audit P1 resolved. QA delegation protocol created. 2 files in pending push (OnboardingWizard dark mode, Layout nav button).
+
 **S264 (2026-03-24):** Neon→Railway Postgres migration complete. 114 migrations + full seed applied. Smoke test PASS. Process improvements: pushblock-first strategy, wrap file consolidation (4→2 files), real dispatch token estimates, parallel dispatch up to 7 agents. Registration bug fix (SHOPPER→ORGANIZER role transition). 9 skill packages rebuilt. Savings: ~$18.50/month on database costs.
 
 **S263 (2026-03-24):** QA smoke test all S262 changes — ALL PASS. XP system bug fixed (TS2345 null guard + prisma singleton). Batches 3+4 brand drift pushed (22 files). XP endpoints confirmed live.
@@ -126,23 +120,19 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 **S260 (2026-03-23):** RPG economy spec locked (8 decisions). Agent prompt bias fixed. Roadmap updated. Explorer's Guild Phase 1 copy complete.
 
-**S259 (2026-03-23):** S258 smoke test (9/10 PASS). 2 bugs fixed (Purchases tab, Wishlists dark mode). Explorer's Guild gamification spec complete. Board conditional approval.
-
 ---
 
 ## Next Session
 
-**S266 PRIORITY 1 (AFTER DEV RETURNS):** XP Sink UI push from findasale-dev — once XP Sink Options UI merges, dispatch post-deploy QA to verify spend-XP flow end-to-end (earn, reach rank threshold, discover sinks, spend successfully).
+**S266 PRIORITY 1 (FIRST):** Run push block for 2 pending files (OnboardingWizard dark mode fix + Layout desktop nav button). Post-deploy smoke test: verify dark mode card rendering and "Host a Sale" button visible to shoppers.
 
-**S266 PRIORITY 2 (AFTER DEV RETURNS):** Shopper→Organizer flow push — once BecomeOrganizerModal + nav "Host a Sale" link + pricing CTA merges, dispatch post-deploy QA to verify: logged-in shopper can access onboarding flow, user role transitions to ORGANIZER, JWT updates correctly.
+**S266 PRIORITY 2:** Stamp label display fix: loyalty page shows raw enum values (ATTEND_SALE, MAKE_PURCHASE) instead of human-readable text — P3 priority.
 
-**S266 PRIORITY 3 (IF TIME):** Post-deploy smoke test on `/tags/furniture` empty state fix (P3 findasale-dev dispatch).
+**S266 PRIORITY 3:** Phase 2 UX P2 polish items (leaderboard position footer, ProgressBar MAX state, header clarity) — can defer to v1.1 if timeline tight.
 
-**S266 PRIORITY 4 (IF TIME):** Review QA delegation protocol (findasale-workflow deliverable) — formalize for future sessions.
+**S266 PRIORITY 4 (IF TIME):** Brand copy deep audit — page titles, meta descriptions, all 5 sale types represented consistently (P5, low priority).
 
-**S266 PRIORITY 5 (P5 — LOW PRIORITY):** Brand copy deep audit — page titles, meta descriptions, all 5 sale types represented consistently.
-
-**Patrick action (before S266 starts):** Monitor Railway build after dev push. Expect 2 push blocks: (1) XP sink UI + Shopper→Organizer flow (findasale-dev), (2) QA protocol (findasale-workflow).
+**Patrick manual action (pending from S264):** Delete Neon project at console.neon.tech (still pending from S264).
 
 ---
 
