@@ -150,12 +150,12 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
                   Step 1: Name Your Workspace
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
-                  Create a workspace name for your team's estate sales operations.
+                  Create a workspace name for your team's sales operations.
                 </p>
               </div>
               <input
                 type="text"
-                placeholder="e.g., Grand Rapids Estate Sales Team"
+                placeholder="e.g., Grand Rapids Sales Team"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-sage-600"

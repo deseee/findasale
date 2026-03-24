@@ -91,7 +91,7 @@ const OrganizerSalesPage = () => {
     <>
       <Head>
         <title>Manage Sales | FindA.Sale</title>
-        <meta name="description" content="View and manage your estate sales" />
+        <meta name="description" content="View and manage your sales" />
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
@@ -102,7 +102,7 @@ const OrganizerSalesPage = () => {
               Manage Sales
             </h1>
             <p className="text-warm-600 dark:text-warm-400">
-              View all your estate sales and manage listings.
+              View all your sales and manage listings.
             </p>
           </div>
 
@@ -178,7 +178,7 @@ const OrganizerSalesPage = () => {
           ) : !salesError ? (
             <div className="text-center py-12">
               <p className="text-warm-600 dark:text-warm-400 mb-6">
-                No sales yet. Create your first estate sale to get started.
+                No sales yet. Create your first sale to get started.
               </p>
               <Link
                 href="/organizer/create-sale"

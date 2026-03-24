@@ -80,15 +80,15 @@ export default function CityPage({
     .split('-')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-  const pageTitle = `Estate Sales in ${cityDisplay}, ${state}`;
-  const metaDescription = `Find upcoming estate sales in ${cityDisplay}, ${state}. Browse ${saleCount} sales with verified organizers and updated inventory.`;
+  const pageTitle = `Sales Near ${cityDisplay}, ${state}`;
+  const metaDescription = `Find upcoming sales in ${cityDisplay}, ${state}. Browse ${saleCount} sales with verified organizers and updated inventory.`;
 
   return (
     <>
       <Head>
         <title>{pageTitle} | FindA.Sale</title>
         <meta name="description" content={metaDescription} />
-        <meta name="keywords" content={`estate sales ${cityDisplay}, ${state}, weekend sales, liquidation`} />
+        <meta name="keywords" content={`sales ${cityDisplay}, estate sales, garage sales, auctions, ${state}`} />
 
         {/* OG / Social Sharing */}
         <meta property="og:type" content="website" />
@@ -164,7 +164,7 @@ export default function CityPage({
             </nav>
 
             <h1 className="text-4xl md:text-5xl font-bold text-warm-900 dark:text-warm-100 mb-3">
-              Estate Sales in {cityDisplay}, {state}
+              Sales in {cityDisplay}, {state}
             </h1>
             <p className="text-lg text-warm-600 dark:text-warm-400">
               Browse {saleCount} upcoming sales with verified organizers and curated inventory
@@ -266,7 +266,7 @@ export default function CityPage({
           <section className="mb-16 bg-gradient-to-r from-amber-50 to-warm-50 dark:from-gray-800 dark:to-gray-900 rounded-lg p-8 border border-amber-200 dark:border-gray-700">
             <div className="max-w-2xl">
               <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-3">
-                Run estate sales in {cityDisplay}?
+                Run sales in {cityDisplay}?
               </h2>
               <p className="text-warm-600 dark:text-warm-400 mb-6">
                 Join FindA.Sale and list your next sale for free. Reach qualified buyers in your area.

@@ -81,7 +81,7 @@ export default function ProFeaturesPage() {
           {/* Social Proof */}
           <div className="bg-sage-50 rounded-lg border border-sage-200 p-8 mb-12">
             <p className="text-center text-gray-700 dark:text-gray-300 leading-relaxed">
-              <span className="font-semibold">Join estate sale organizers who trust FindA.Sale.</span> PRO features help you streamline operations, understand what sells, and build a professional brand.
+              <span className="font-semibold">Join estate sale, auction, and garage sale organizers who trust FindA.Sale.</span> PRO features help you streamline operations, understand what sells, and build a professional brand.
             </p>
           </div>
 

@@ -815,7 +815,7 @@ const OrganizerDashboard = () => {
                   ))}
                 </div>
               ) : (
-                <EmptyState icon="🏷️" heading="You haven't created any sales yet" subtext="Start by creating your first estate sale. Set up details, add inventory, and go live!" cta={{ label: 'Create Your First Sale', href: '/organizer/create-sale' }} />
+                <EmptyState icon="🏷️" heading="You haven't created any sales yet" subtext="Start by creating your first sale. Set up details, add inventory, and go live!" cta={{ label: 'Create Your First Sale', href: '/organizer/create-sale' }} />
               )}
             </>
           )}

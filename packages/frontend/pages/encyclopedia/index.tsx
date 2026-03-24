@@ -68,10 +68,10 @@ const EncyclopediaIndexPage = () => {
   return (
     <Layout>
       <Head>
-        <title>Estate Sale Encyclopedia | FindA.Sale</title>
+        <title>Resale Encyclopedia | FindA.Sale</title>
         <meta
           name="description"
-          content="Learn everything about estate sales, from how to value items to finding hidden treasures. Browse our comprehensive encyclopedia of antiques, collectibles, and vintage items."
+          content="Learn everything about resale events, from how to value items to finding hidden treasures. Browse our comprehensive encyclopedia of antiques, collectibles, and vintage items."
         />
       </Head>
 
@@ -80,10 +80,10 @@ const EncyclopediaIndexPage = () => {
         <div className="bg-gradient-to-r from-sage-green/20 to-sage-green/5 dark:from-gray-800 dark:to-gray-900 py-16 px-4">
           <div className="max-w-6xl mx-auto">
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              📚 Estate Sale Encyclopedia
+              📚 Resale Encyclopedia
             </h1>
             <p className="text-lg text-gray-700 dark:text-gray-300 max-w-2xl">
-              Learn about antiques, collectibles, and how to find treasures at estate sales. Explore guides,
+              Learn about antiques, collectibles, and how to find treasures at resale events. Explore guides,
               appraisals, and expert tips.
             </p>
           </div>
@@ -242,7 +242,7 @@ const EncyclopediaIndexPage = () => {
               Have knowledge to share?
             </h2>
             <p className="text-gray-700 dark:text-gray-300 mb-6">
-              Contribute to the encyclopedia and help other shoppers and organizers learn about estate sales and
+              Contribute to the encyclopedia and help other shoppers and organizers learn about resale events and
               antiques.
             </p>
             <Link

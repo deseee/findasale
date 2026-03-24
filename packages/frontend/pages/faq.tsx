@@ -298,7 +298,7 @@ const FAQPage = () => {
     <>
       <Head>
         <title>FAQ – FindA.Sale</title>
-        <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the estate sale marketplace." />
+        <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the community resale marketplace." />
       </Head>
 
       <div className="min-h-screen bg-white dark:bg-gray-800">
