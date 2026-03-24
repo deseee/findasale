@@ -72,7 +72,6 @@ import organizerRoutes from './routes/organizers';
 import contactRoutes from './routes/contact';
 import pushRoutes from './routes/push';
 import feedRoutes from './routes/feed'; // Phase 28: personalized activity feed
-import pointsRoutes from './routes/points'; // Phase 19: Hunt Pass shopper points
 import searchRoutes from './routes/search'; // Phase 29: Discovery + search
 import reviewRoutes from './routes/reviews'; // Phase 15: Review + rating system
 import messageRoutes from './routes/messages'; // Phase 20: Shopper messaging
@@ -372,7 +371,6 @@ app.use('/api/organizers', organizerRoutes);
 app.use('/api/contact', contactLimiter, contactRoutes); // M3: dedicated contact spam limiter
 app.use('/api/push', pushRoutes);
 app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed
-app.use('/api/points', pointsRoutes); // Phase 19: Hunt Pass shopper points
 app.use('/api/search', searchRoutes); // Phase 29: Discovery + search
 app.use('/api/reviews', reviewRoutes); // Phase 15: Review + rating system
 app.use('/api/messages', messageRoutes); // Phase 20: Shopper messaging

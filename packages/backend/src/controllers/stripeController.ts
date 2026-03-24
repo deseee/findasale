@@ -2,8 +2,6 @@ import { Request, Response } from 'express';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { Resend } from 'resend';
-import { handlePurchaseBadge } from './userController';
-import { awardPoints } from '../services/pointsService';
 import { createNotification as createNotificationEmail } from '../services/notificationService';
 import { createNotification } from '../lib/notificationService';
 import { prisma } from '../lib/prisma';
@@ -613,19 +611,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
         const isPOS = paymentIntent.metadata?.source === 'POS';
 
         if (!isPOS && purchase.userId) {
-          await handlePurchaseBadge(purchase.userId);
-
           checkAndAward(purchase.userId, 'PURCHASE_MADE')
             .catch(err => console.warn('[achievement] Failed to award purchase achievement:', err));
-
-          awardPoints(
-            purchase.userId,
-            'PURCHASE',
-            10,
-            purchase.saleId ?? undefined,
-            paymentIntent.metadata?.itemId,
-            'Purchased an item',
-          ).catch(err => console.warn('[points] Failed to award purchase points:', err));
 
           awardStamp(purchase.userId, 'MAKE_PURCHASE', purchase.saleId ?? undefined)
             .catch(err => console.warn('[loyalty] Failed to award purchase stamp:', err));

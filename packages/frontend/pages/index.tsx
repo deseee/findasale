@@ -31,14 +31,19 @@ interface Sale {
 }
 
 type DateFilter = 'all' | 'upcoming' | 'this-weekend' | 'this-month';
+type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'consignment';
 
 const SaleCardSkeleton = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden flex flex-col">
-    <Skeleton className="aspect-square w-full rounded-none" />
-    <div className="p-3 space-y-2 flex flex-col flex-1">
-      <Skeleton className="h-4 w-3/4" />
+  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card hover:shadow-card-hover transition-shadow duration-300 overflow-hidden flex flex-col h-full">
+    <Skeleton className="w-full h-48 rounded-none" />
+    <div className="p-4 space-y-2 flex flex-col flex-1">
+      <Skeleton className="h-5 w-3/4" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-3 w-2/3 mt-2" />
+    </div>
+    <div className="px-4 py-3 border-t border-warm-200 dark:border-gray-700 space-y-1">
+      <Skeleton className="h-3 w-2/3" />
       <Skeleton className="h-3 w-1/2" />
-      <Skeleton className="h-3 w-2/5 mt-1" />
     </div>
   </div>
 );
@@ -51,6 +56,7 @@ const HomePage = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
 
   // Initialize search from ?q= URL param (set by header search bar)
   useEffect(() => {
@@ -108,6 +114,17 @@ const HomePage = () => {
     }
   }, []);
 
+  // Helper function to determine sale type from tags
+  const getSaleType = (sale: Sale): string => {
+    const tagLower = (sale.tags || []).map(t => t.toLowerCase());
+    if (tagLower.some(t => t.includes('estate'))) return 'estate';
+    if (tagLower.some(t => t.includes('yard') || t.includes('garage'))) return 'yard';
+    if (tagLower.some(t => t.includes('auction'))) return 'auction';
+    if (tagLower.some(t => t.includes('flea') || t.includes('market'))) return 'flea-market';
+    if (tagLower.some(t => t.includes('consignment'))) return 'consignment';
+    return 'other';
+  };
+
   // Client-side filtering
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -158,8 +175,12 @@ const HomePage = () => {
       });
     }
 
+    if (saleTypeFilter !== 'all') {
+      result = result.filter((s) => getSaleType(s) === saleTypeFilter);
+    }
+
     return result;
-  }, [sales, searchQuery, dateFilter]);
+  }, [sales, searchQuery, dateFilter, saleTypeFilter]);
 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -212,148 +233,175 @@ const HomePage = () => {
         />
       </Head>
 
-      <main className="container mx-auto px-4 py-8">
-        <section className="mb-12 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-amber-600 dark:text-amber-400 mb-4">Discover Amazing Deals</h1>
-          <p className="text-xl text-warm-700 dark:text-gray-300 max-w-2xl mx-auto">
-            Find estate sales, garage sales, yard sales, auctions, flea markets, and more near you with FindA.Sale
-          </p>
-        </section>
-
-        {/* Phase 5: #49 City Heat Index Banner */}
-        <CityHeatBanner />
-
-        {/* CD2 Phase 2: Treasure Hunt Banner */}
-        <TreasureHuntBanner />
-
-        {/* Map Section */}
-        <section className="mb-12">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 relative overflow-hidden">
-            <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">Sales Near You</h2>
-            {isLoading ? (
-              <Skeleton className="h-96 w-full" />
-            ) : (
-              <SaleMap
-                pins={
-                  filteredSales
-                    .filter((s) => s.lat && s.lng)
-                    .map((s): SalePin => ({
-                      id: s.id,
-                      title: s.title,
-                      lat: s.lat,
-                      lng: s.lng,
-                      city: s.city,
-                      state: s.state,
-                      startDate: s.startDate,
-                      endDate: s.endDate,
-                      organizerName: s.organizer?.businessName ?? '',
-                      photoUrl: s.photoUrls?.[0],
-                    }))}
-                userLocation={userLocation}
-                height="300px"
-              />
-            )}
+      <main className="min-h-screen flex flex-col">
+        {/* Hero Section with Sage Gradient */}
+        <section className="bg-gradient-to-br from-sage-400 via-sage-500 to-sage-600 dark:from-sage-600 dark:via-sage-700 dark:to-sage-800 text-white py-16 md:py-24">
+          <div className="container mx-auto px-4">
+            <div className="max-w-3xl">
+              <h1 className="font-heading text-5xl md:text-6xl font-bold mb-4 leading-tight">Discover Amazing Deals</h1>
+              <p className="font-body text-lg md:text-xl text-white/90 mb-8 max-w-2xl">
+                Find estate sales, garage sales, yard sales, auctions, flea markets, and more near you with FindA.Sale.
+              </p>
+              {/* Search Bar */}
+              <div className="relative max-w-xl">
+                <svg
+                  className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/60"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search by title, city, or keyword…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 placeholder-warm-500 font-body"
+                />
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Search & Date Filter */}
-        <section className="mb-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-grow">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-warm-400 dark:text-gray-500"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search by title, city, or keyword…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-              />
+        <div className="flex-1 container mx-auto px-4 py-8">
+          {/* Phase 5: #49 City Heat Index Banner */}
+          <CityHeatBanner />
+
+          {/* CD2 Phase 2: Treasure Hunt Banner */}
+          <TreasureHuntBanner />
+
+          {/* Sale Type Filter Pills */}
+          <section className="mb-8 py-6 border-b border-warm-200 dark:border-gray-700">
+            <div className="flex items-center gap-3 overflow-x-auto pb-2 -mx-4 px-4">
+              <span className="text-sm font-medium text-warm-600 dark:text-gray-400 whitespace-nowrap">Sale Type:</span>
+              {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment'] as SaleTypeFilter[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setSaleTypeFilter(type)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+                    saleTypeFilter === type
+                      ? 'bg-sage-600 text-white shadow-md'
+                      : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-700 hover:border-sage-400 hover:text-sage-600 dark:hover:text-sage-400'
+                  }`}
+                >
+                  {type === 'all' ? 'All' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : 'Consignment'}
+                </button>
+              ))}
             </div>
-            <div className="flex gap-2 flex-wrap">
+          </section>
+
+          {/* Map Section */}
+          <section className="mb-12">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card p-6 relative overflow-hidden">
+              <h2 className="font-heading text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">Sales Near You</h2>
+              {isLoading ? (
+                <Skeleton className="h-96 w-full" />
+              ) : (
+                <SaleMap
+                  pins={
+                    filteredSales
+                      .filter((s) => s.lat && s.lng)
+                      .map((s): SalePin => ({
+                        id: s.id,
+                        title: s.title,
+                        lat: s.lat,
+                        lng: s.lng,
+                        city: s.city,
+                        state: s.state,
+                        startDate: s.startDate,
+                        endDate: s.endDate,
+                        organizerName: s.organizer?.businessName ?? '',
+                        photoUrl: s.photoUrls?.[0],
+                      }))}
+                  userLocation={userLocation}
+                  height="300px"
+                />
+              )}
+            </div>
+          </section>
+
+          {/* Date Filter Pills */}
+          <section className="mb-6">
+            <div className="flex items-center gap-3 overflow-x-auto pb-2 -mx-4 px-4">
+              <span className="text-sm font-medium text-warm-600 dark:text-gray-400 whitespace-nowrap">When:</span>
               {(['all', 'upcoming', 'this-weekend', 'this-month'] as DateFilter[]).map((f) => (
                 <button
                   key={f}
                   onClick={() => setDateFilter(f)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
                     dateFilter === f
-                      ? 'bg-amber-600 text-white border-amber-600'
-                      : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border-warm-300 dark:border-gray-700 hover:border-amber-400'
+                      ? 'bg-amber-600 text-white shadow-md'
+                      : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-700 hover:border-amber-400 hover:text-amber-600 dark:hover:text-amber-400'
                   }`}
                 >
                   {f === 'all' ? 'All' : f === 'upcoming' ? 'Upcoming' : f === 'this-weekend' ? 'This Weekend' : 'This Month'}
                 </button>
               ))}
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Featured Sales */}
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              {feedData?.personalized && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-full text-xs font-medium text-amber-700 dark:text-amber-400">
-                  ✨ Picked for you
+          {/* Featured Sales */}
+          <section>
+            <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
+                {feedData?.personalized && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-full text-xs font-medium text-amber-700 dark:text-amber-400">
+                    ✨ Picked for you
+                  </span>
+                )}
+                {!feedData?.personalized && sales && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-medium text-blue-700 dark:text-blue-400">
+                    📍 Sales Near You
+                  </span>
+                )}
+                <h2 className="font-heading text-3xl font-bold text-warm-900 dark:text-gray-100">Featured Sales</h2>
+              </div>
+              {!isLoading && sales && (
+                <span className="text-sm text-warm-500 dark:text-gray-400">
+                  {filteredSales.length} of {sales.length} sale{sales.length !== 1 ? 's' : ''}
                 </span>
               )}
-              {!feedData?.personalized && sales && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-medium text-blue-700 dark:text-blue-400">
-                  📍 Sales Near You
-                </span>
-              )}
-              <h2 className="text-3xl font-bold text-warm-900 dark:text-gray-100">Featured Sales</h2>
             </div>
-            {!isLoading && sales && (
-              <span className="text-sm text-warm-500 dark:text-gray-400">
-                {filteredSales.length} of {sales.length} sale{sales.length !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
 
-          {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
-            </div>
-          ) : isError ? (
-            <div className="text-center py-12">
-              <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h2>
-              <p className="text-warm-600 dark:text-gray-400 mb-4">There was a problem loading sales data.</p>
-              <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
-                Retry
-              </button>
-            </div>
-          ) : filteredSales.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredSales.map((sale) => (
-                <SaleCard key={sale.id} sale={sale} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-warm-600 dark:text-gray-400">
-                {searchQuery || dateFilter !== 'all'
-                  ? 'No sales match your search. Try adjusting your filters.'
-                  : 'No sales available at the moment. Check back later!'}
-              </p>
-              {(searchQuery || dateFilter !== 'all') && (
-                <button
-                  onClick={() => { setSearchQuery(''); setDateFilter('all'); }}
-                  className="mt-4 text-amber-600 hover:underline text-sm"
-                >
-                  Clear filters
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
+              </div>
+            ) : isError ? (
+              <div className="text-center py-12">
+                <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h2>
+                <p className="text-warm-600 dark:text-gray-400 mb-4">There was a problem loading sales data.</p>
+                <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
+                  Retry
                 </button>
-              )}
-            </div>
-          )}
-        </section>
+              </div>
+            ) : filteredSales.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredSales.map((sale) => (
+                  <SaleCard key={sale.id} sale={sale} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-warm-600 dark:text-gray-400">
+                  {searchQuery || dateFilter !== 'all' || saleTypeFilter !== 'all'
+                    ? 'No sales match your filters. Try adjusting your search.'
+                    : 'No sales available at the moment. Check back later!'}
+                </p>
+                {(searchQuery || dateFilter !== 'all' || saleTypeFilter !== 'all') && (
+                  <button
+                    onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter('all'); }}
+                    className="mt-4 text-amber-600 hover:underline text-sm font-medium"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
       </main>
     </div>
   );

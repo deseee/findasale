@@ -357,7 +357,7 @@ const SaleDetailPage = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-sm font-medium text-warm-700 dark:text-gray-300">Rating:</span>
                   <span className="text-sm text-warm-600 dark:text-gray-400">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
-                  {sale.organizer.reviewCount > 0 && (
+                  {(sale.organizer.reviewCount ?? 0) > 0 && (
                     <span className="text-sm text-warm-500 dark:text-gray-400">({sale.organizer.reviewCount} reviews)</span>
                   )}
                 </div>

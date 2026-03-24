@@ -799,6 +799,25 @@ const OrganizerDashboard = () => {
                   </Link>
                 </div>
               )}
+
+              {/* Plan a Sale Coming Soon Card */}
+              <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-6 border border-warm-100 dark:border-gray-700">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">📋</span>
+                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Plan a Sale</h3>
+                  </div>
+                  <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full px-3 py-1 text-xs font-semibold flex-shrink-0">
+                    Coming Soon
+                  </span>
+                </div>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                  Get organized before your sale. Plan a Sale will help you create checklists, build timelines, and organize all your prep tasks so nothing gets missed.
+                </p>
+                <p className="text-xs text-warm-500 dark:text-warm-500 italic">
+                  This feature is coming to all organizers soon.
+                </p>
+              </div>
             </>
           )}
 
