@@ -482,13 +482,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
           data: { status: 'PAID' },
         });
 
-        // Award XP to shopper for completing purchase
-        awardXp(purchase.userId, 'PURCHASE_COMPLETED', XP_AWARDS.PURCHASE, {
-          itemId: purchase.itemId,
-          saleId: purchase.saleId
-        }).catch(err =>
-          console.error('[XP] Failed to award XP for purchase completed:', err)
-        );
+        // Award XP to shopper for completing purchase (only if user exists — not for POS walk-ins)
+        if (purchase.userId) {
+          awardXp(purchase.userId, 'PURCHASE_COMPLETED', XP_AWARDS.PURCHASE, {
+            itemId: purchase.itemId,
+            saleId: purchase.saleId
+          }).catch(err =>
+            console.error('[XP] Failed to award XP for purchase completed:', err)
+          );
+        }
 
         // Notify organizer of payment received
         if (purchase.sale?.organizer?.userId) {

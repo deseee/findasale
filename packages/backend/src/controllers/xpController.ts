@@ -7,9 +7,7 @@ import {
   spendXp,
   XP_SINKS,
 } from '../services/xpService';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 const router = Router();
 
 /**

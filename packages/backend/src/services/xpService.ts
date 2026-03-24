@@ -1,6 +1,5 @@
-import { PrismaClient, ExplorerRank } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { ExplorerRank } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 /**
  * XP Service — Single source of truth for all Explorer's Guild XP logic
