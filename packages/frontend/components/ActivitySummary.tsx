@@ -54,7 +54,7 @@ const ActivitySummary: React.FC = () => {
       href: '/shopper/dashboard#purchases',
     },
     {
-      label: 'My Wishlist',
+      label: 'My Saves',
       value: stats.savedItems + stats.activeWatchlist,
       icon: '💕',
       color: 'bg-pink-50 border-pink-200 dark:bg-pink-900/30 dark:border-pink-700',
