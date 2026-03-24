@@ -15,6 +15,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
+import BecomeOrganizerModal from '../../components/BecomeOrganizerModal';
 import api from '../../lib/api';
 
 interface PricingTier {
@@ -97,6 +98,7 @@ const PricingPage = () => {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelledMessage, setCancelledMessage] = useState<string | null>(null);
+  const [showBecomeOrganizerModal, setShowBecomeOrganizerModal] = useState(false);
 
   // Handle cancelled checkout redirect
   useEffect(() => {
@@ -111,6 +113,12 @@ const PricingPage = () => {
     // Logged-out users go to register
     if (!user) {
       router.push('/register');
+      return;
+    }
+
+    // Shopper (not organizer yet): open conversion modal
+    if (user.role === 'USER' && !user.roles?.includes('ORGANIZER')) {
+      setShowBecomeOrganizerModal(true);
       return;
     }
 
@@ -166,7 +174,13 @@ const PricingPage = () => {
       return `Sign up for ${tier.name}`;
     }
 
-    // User logged in
+    // Shopper user (not organizer yet)
+    if (user.role === 'USER' && !user.roles?.includes('ORGANIZER')) {
+      if (tier.id === 'SIMPLE') return 'Start Free as Organizer';
+      return `Upgrade to ${tier.name}`;
+    }
+
+    // User logged in as organizer
     const isCurrentTier = user.organizerTier === tier.id;
     if (isCurrentTier) return 'Current Plan';
 
@@ -209,6 +223,24 @@ const PricingPage = () => {
           {cancelledMessage && (
             <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <p className="text-blue-800 dark:text-blue-200">{cancelledMessage}</p>
+            </div>
+          )}
+
+          {/* Banner for shopper-only users */}
+          {user?.role === 'USER' && !user?.roles?.includes('ORGANIZER') && (
+            <div className="mb-12 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6 text-center">
+              <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                Ready to host your first sale?
+              </h2>
+              <p className="text-warm-700 dark:text-warm-300 mb-4">
+                Become an Organizer and start selling today.
+              </p>
+              <button
+                onClick={() => setShowBecomeOrganizerModal(true)}
+                className="inline-block bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200"
+              >
+                Become an Organizer
+              </button>
             </div>
           )}
 
@@ -380,6 +412,12 @@ const PricingPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Become Organizer Modal */}
+      <BecomeOrganizerModal
+        isOpen={showBecomeOrganizerModal}
+        onClose={() => setShowBecomeOrganizerModal(false)}
+      />
     </>
   );
 };

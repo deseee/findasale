@@ -17,12 +17,23 @@ import useXpProfile from '@/hooks/useXpProfile';
 import { RankBadge } from '@/components/RankBadge';
 import { RankProgressBar } from '@/components/RankProgressBar';
 import { useAuth } from '@/components/AuthContext';
+import { useToast } from '@/components/ToastContext';
+import { useXpSink } from '@/hooks/useXpSink';
 
 function LoyaltyPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { passport, isLoading: passportLoading, error, refetch } = useLoyaltyPassport();
   const { data: xpProfile, isLoading: xpLoading } = useXpProfile(!!user);
+  const { showToast } = useToast();
+  const { spendXpCoupon, isLoading: sinkLoading, error: sinkError } = useXpSink({
+    onSuccess: (response) => {
+      showToast(response.message, 'success');
+    },
+    onError: (error) => {
+      showToast(error, 'error');
+    },
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -122,6 +133,79 @@ function LoyaltyPage() {
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Spend XP Section */}
+          {xpProfile && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8 border-l-4 border-indigo-500 dark:border-indigo-400">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Spend Your XP ✨</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Coupon Generation Sink */}
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-6 border border-blue-200 dark:from-gray-700 dark:to-gray-600 dark:border-blue-700">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">🎫</p>
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-warm-100 mt-2">Generate Coupon</h4>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Cost</p>
+                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">20 XP</p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Create a $1 off discount coupon to use on future purchases. Coupons expire in 30 days.
+                  </p>
+
+                  <button
+                    onClick={spendXpCoupon}
+                    disabled={sinkLoading || xpProfile.guildXp < 20}
+                    className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                      xpProfile.guildXp < 20
+                        ? 'bg-gray-300 text-gray-500 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-700 dark:hover:bg-blue-800'
+                    } ${sinkLoading ? 'opacity-70' : ''}`}
+                  >
+                    {sinkLoading ? 'Processing...' : 'Generate Coupon'}
+                  </button>
+
+                  {xpProfile.guildXp < 20 && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                      Need {(20 - xpProfile.guildXp).toLocaleString()} more XP
+                    </p>
+                  )}
+                </div>
+
+                {/* Coming Soon: Rarity Boost */}
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-6 border border-amber-200 dark:from-gray-700 dark:to-gray-600 dark:border-amber-700 opacity-60">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">🎯</p>
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-warm-100 mt-2">Rarity Boost</h4>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Cost</p>
+                      <p className="text-xl font-bold text-amber-700 dark:text-amber-400">15 XP</p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Boost your odds of finding legendary items at a specific sale for 24 hours. Choose a sale and activate!
+                  </p>
+
+                  <button disabled className="w-full py-3 rounded-lg font-semibold bg-gray-300 text-gray-500 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed">
+                    Coming Soon
+                  </button>
+                </div>
+              </div>
+
+              {sinkError && (
+                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded text-red-700 dark:text-red-300 text-sm">
+                  {sinkError}
+                </div>
+              )}
             </div>
           )}
 

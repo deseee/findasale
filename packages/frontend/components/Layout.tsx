@@ -10,6 +10,7 @@ import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
 import OfflineIndicator from './OfflineIndicator'; // Feature #69: Local-First Offline Mode
 import AvatarDropdown from './AvatarDropdown';
+import BecomeOrganizerModal from './BecomeOrganizerModal';
 
 const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: boolean }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -21,6 +22,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [isClient, setIsClient] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
+  const [showBecomeOrganizerModal, setShowBecomeOrganizerModal] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -126,6 +128,19 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/referral-dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Referrals
             </Link>
+            {/* Show "Host a Sale" for shoppers without organizer role */}
+            {!user?.roles?.includes('ORGANIZER') && (
+              <>
+                <hr className="my-2 border-warm-200 dark:border-gray-700" />
+                <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">Ready to Sell?</span>
+                <button
+                  onClick={() => setShowBecomeOrganizerModal(true)}
+                  className="block w-full text-left px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium"
+                >
+                  Host a Sale
+                </button>
+              </>
+            )}
             <hr className="my-2 border-warm-200 dark:border-gray-700" />
             <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">My Explorer Profile</span>
             <Link href="/shopper/collector-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -488,6 +503,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         </div>
       </footer>
       )}
+
+      {/* Become Organizer Modal */}
+      <BecomeOrganizerModal
+        isOpen={showBecomeOrganizerModal}
+        onClose={() => setShowBecomeOrganizerModal(false)}
+      />
     </div>
   );
 };
