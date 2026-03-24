@@ -1,77 +1,60 @@
-# Patrick's Dashboard — Session 263 Complete (March 24, 2026)
+# Patrick's Dashboard — Session 264 Complete (March 24, 2026)
+
+---
+
+## ✅ Database Migration — Neon → Railway Postgres (DONE)
+
+Migrated from Neon ($19/month) to Railway Postgres (~$0.55/month). Saves ~$18.50/month.
+
+114 migrations applied, full seed data populated, smoke test PASS. Homepage, login, shopper dashboard all working against Railway. Railway redeployed GREEN.
+
+**Patrick action:** Delete Neon project at console.neon.tech to stop billing. Update local `packages/database/.env` to Railway connection string.
+
+---
+
+## ✅ Process Improvements (S264)
+
+Pushblock-first strategy (saves ~12k tokens per push vs MCP). Wrap files consolidated from 4 to 2 (STATE.md + patrick-dashboard.md). Real dispatch token estimates + parallel dispatch up to 7 agents. 9 skill packages rebuilt and installed.
+
+---
+
+## ✅ Registration Bug Fix
+
+user11 (SHOPPER) can now register as organizer. Root cause: setup-organizer endpoint required ORGANIZER role before allowing creation (chicken-and-egg). Fixed with role-check removal + atomic role addition.
 
 ---
 
 ## ✅ Brand Drift D-001 — FULLY RESOLVED
 
-All 30+ violations fixed across 4 batches.
-
-**Batches 1+2 (LIVE):** 14 files updated. Encyclopedia renamed to "Resale Encyclopedia". P0 (city/map/calendar SEO titles) + P1 (organizer copy) live. Commit: b06242d.
-
-**Batches 3+4 (PUSHED S263 — Vercel Deploy In Progress):** 22 files updated (16 shopper pages + 6 components: trending, inspiration, tags, categories, search, feed, loot-log, trails, hubs, SaleShareButton, ReferralWidget, SaleOGMeta, SalesNearYou, AddToCalendarButton, og-image API). QA smoke test PASS — all pages rendering correct copy.
+All 30+ violations fixed across 4 batches. Batches 1+2 live (commit b06242d). Batches 3+4 pushed S263.
 
 ---
 
-## ✅ Explorer's Guild Phase 2 — ALL PHASES DEPLOYED + BUG FIXED
+## ✅ Explorer's Guild Phase 2 — ALL PHASES DEPLOYED
 
-**Phase 2a — Schema + Backend (Railway):**
-- Migration live on Neon: User.guildXp, User.explorerRank (enum), User.seasonalResetAt, RarityBoost table, extended PointsTransaction + Coupon
-- Endpoints live: GET /api/xp/profile, GET /api/xp/leaderboard, POST /api/xp/sink/rarity-boost, POST /api/xp/sink/coupon
-
-**Phase 2b — Frontend (Vercel):**
-- RankBadge.tsx + RankProgressBar.tsx — UI components live
-- useXpProfile.ts — hook fetching XP data (route bug FIXED S263)
-- loyalty.tsx + leaderboard.tsx — integrated and live
-
-**Phase 2c — XP Event Wiring (DONE):**
-- Sale published → XP award (saleController)
-- Purchase complete → XP award (stripeController)
-- Referral claimed → XP award (referralController)
-- Auction win → XP award (auctionJob)
-
-**XP Route Bug (FIXED S263):** Root cause: TS2345 type mismatch in stripeController.ts + prisma singleton in xpController/xpService. Fixed: null guard + `?? undefined` in stripeController, prisma singleton in both services. Railway GREEN. `/api/xp/profile` returns 200. RankBadge shows "Initiate", RankProgressBar shows "0/500 XP".
+Phase 2a (schema + backend), 2b (frontend UI), 2c (XP event wiring) — all deployed. XP bug fixed S263.
 
 ---
 
 ## 🚨 What Needs Next Session
 
-**S264 PRIORITY 1 (MANDATORY):** Verify Batches 3+4 live on Vercel — smoke test /trending, /inspiration, /search after push completes.
+**S265 PRIORITY 1 (MANDATORY):** Verify Batches 3+4 brand drift live on Vercel — smoke test /trending, /inspiration, /search.
 
-**S264 PRIORITY 2:** Brand copy deep audit — page titles, meta descriptions, all 5 sale types represented, dark mode spot-check.
+**S265 PRIORITY 2:** Brand copy deep audit (P3) — page titles, meta descriptions, all 5 sale types.
 
-**S264 PRIORITY 3 (OPTIONAL):** Phase 2 shopper UX review — RankBadge/ProgressBar visibility, leaderboard usability, XP sink clarity.
+**S265 PRIORITY 3 (OPTIONAL):** Phase 2 UX review — RankBadge/ProgressBar visibility, XP sink clarity.
 
-**S264 PRIORITY 4 (OPTIONAL):** user11 end-to-end XP test — simulate purchase, verify XP earn + rank update.
+**S265 PRIORITY 4 (OPTIONAL):** user11 end-to-end XP test — simulate purchase, verify XP earn + rank update.
 
 ---
 
 ## Build Status
 
-✅ Railway GREEN. ✅ Vercel GREEN (Batches 3+4 deploy in progress). All Phase 2 code deployed + live.
+✅ Railway GREEN (backend + Postgres). ✅ Vercel GREEN (frontend).
 
 ---
 
-## What Happened This Session (S263)
-
-**QA smoke test:** All brand drift pages PASS (/trending, /inspiration, /search, /feed, /map, /calendar, /hubs) — correct copy live, "Resale Encyclopedia" confirmed.
-
-**XP system bug fixed:** TS2345 in stripeController (null type mismatch) + prisma singleton in xpController/xpService. Fixed with null guards + `?? undefined`. Railway build now GREEN.
-
-**Batches 3+4 pushed:** 22 frontend files pushed S263. QA verified all pages rendering correct copy. Vercel deploy in progress.
-
-**XP endpoints confirmed:** `/api/xp/profile` returns 200. RankBadge live on loyalty page. Leaderboard rendering. No 404s.
-
----
-
-## Explorer's Guild — Full Status
-
-**Phase 1 (DONE):** Collector → Explorer rebrand. RPG spec locked. Architect sign-off. All design decisions locked.
-
-**Phase 2 (ALL DONE):** 2a backend + 2b frontend + 2c event wiring — all deployed to production.
-
----
-
-## Test Accounts (Live on Neon)
+## Test Accounts (Live on Railway Postgres)
 
 All password: `password123`
 - `user1@example.com` — ADMIN + SIMPLE organizer

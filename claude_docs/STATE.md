@@ -7,34 +7,27 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 263 COMPLETE (2026-03-24) — QA SMOKE TEST PASS + XP SYSTEM BUG FIX + BATCHES 3+4 READY:**
+**Session 264 COMPLETE (2026-03-24) — NEON→RAILWAY DB MIGRATION + PROCESS IMPROVEMENTS:**
 
-**QA Smoke Test — ALL PASS:**
-- ✅ Brand drift copy live on all tested pages (/trending, /inspiration, /search, /feed, /map, /calendar, /hubs) — all-sale-types language confirmed, "Resale Encyclopedia" live.
-- ✅ XP system endpoints responding: `/api/xp/profile` returns 200, RankBadge + RankProgressBar rendering on `/shopper/loyalty`. Leaderboard page loads without 404s.
-- ✅ No console errors. Phase 2c event wiring confirmed (user11 has 50+ XP from seed data activities).
+**Database Migration — Neon → Railway Postgres (COMPLETE):**
+- ✅ Railway Postgres provisioned (included in existing Railway project, ~$0.55/month vs Neon $19/month)
+- ✅ 114 Prisma migrations applied successfully against Railway Postgres
+- ✅ Full seed data populated: 100 users, 10 organizers, 25 sales, 303 items, 39 purchases, all test accounts
+- ✅ Patrick updated DATABASE_URL + DIRECT_URL env vars on Railway backend service
+- ✅ Railway redeployed GREEN
+- ✅ Smoke test PASS: homepage loads with map markers, login works (user11), shopper dashboard renders all data (Explorer, Loyalty, Wishlist, Trails, Loot Log, Receipts, 340 pts, Messages badge)
+- ⏳ Patrick to delete Neon project at console.neon.tech to stop billing
 
-**XP System Bug Fixed (Root Cause: Railway TS2345 + Prisma Singleton):**
-- **Root cause:** Railway build was failing TS2345 in `stripeController.ts` — `purchase.userId` (string | null) passed as string arg to `awardXp()`, plus `purchase.itemId`/`purchase.saleId` (string | null) assigned to string | undefined params.
-- **Secondary bug:** `xpController.ts` + `xpService.ts` had `new PrismaClient()` instead of shared singleton.
-- **Fixes pushed:** (1) `stripeController.ts` — null guard + `?? undefined` for all three fields. (2) `xpController.ts` — replaced `new PrismaClient()` with `import { prisma } from '../lib/prisma'`. (3) `xpService.ts` — same singleton fix.
-- **Result:** Railway build now GREEN. `/api/xp/profile` returns 200. RankBadge shows "Initiate" (rank 0), RankProgressBar shows "0/500 XP". Leaderboard renders top 50.
+**Process Improvements (S264 Planning Phase):**
+- ✅ CLAUDE.md §5 updated: pushblock-first strategy (300-500 tokens vs MCP push 12k tokens per file)
+- ✅ CLAUDE.md §12 updated: wrap reduced from 4 files to 2 (STATE.md + patrick-dashboard.md). session-log.md and next-session-prompt.md content consolidated into STATE.md sections.
+- ✅ conversation-defaults SKILL.md updated: real dispatch token estimates, parallel dispatch up to 7 agents, per-agent token logging
+- ✅ 9 skill packages rebuilt and installed (records, conversation-defaults, cowork-power-user, dev, innovation, investor, legal, marketing, ux)
 
-**Brand Drift Batches 3+4 — Committed Locally, Verified, Ready to Push:**
-- ✅ All 22 frontend files verified live-rendering with correct copy (no hardcoded "estate sale" language).
-- ✅ QA confirmed: trending, inspiration, tags, categories, search, feed, loot-log, trails, hubs pages all passing.
-- ✅ Components (SaleShareButton, ReferralWidget, SaleOGMeta, SalesNearYou, AddToCalendarButton, og-image API) verified.
-- ✅ Push block provided to Patrick. Awaiting push + Vercel deploy.
+**Registration Bug Fix (user11 SHOPPER → ORGANIZER):**
+- ✅ `packages/backend/src/routes/users.ts` — removed role check gate on `/api/users/setup-organizer` that blocked SHOPPER users. Now atomically adds 'ORGANIZER' to roles array + returns fresh JWT.
 
-**Files Pushed This Session:**
-- `packages/backend/src/controllers/stripeController.ts` — null guard fix
-- `packages/backend/src/controllers/xpController.ts` — prisma singleton
-- `packages/backend/src/services/xpService.ts` — prisma singleton
-
-**Files Locally Committed (Pending Patrick Push):**
-- 22 frontend files (Batches 3+4) — push block in next handoff
-
-- 📋 **Carry-forward (S264):** (1) Verify Batches 3+4 live on Vercel (smoke test /trending, /inspiration, /search). (2) Brand copy deep audit (P3 — page titles, meta descriptions, all 5 sale types). (3) Phase 2 UX review (RankBadge/ProgressBar visibility, XP sink clarity). (4) user11 end-to-end XP test (simulate purchase, verify XP earn + rank update).
+- 📋 **Carry-forward (S265):** (1) Verify Batches 3+4 brand drift live on Vercel. (2) Brand copy deep audit (P3). (3) Phase 2 UX review. (4) user11 end-to-end XP test. (5) Update packages/database/.env locally to Railway connection string.
 - Last Updated: 2026-03-24
 
 **Session 262 COMPLETE (2026-03-24) — BRAND DRIFT ALL 4 BATCHES + PHASE 2A/2B/2C FULLY DEPLOYED:**
@@ -110,7 +103,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Post-Beta:** Featured Placement $29.99/7d, AI Tagging Premium $4.99/mo (SIMPLE), Affiliate 2-3%, B2B Data Products (DEFERRED)
 - **Sources:** pricing-and-tiers-overview-2026-03-19.md (complete spec), BUSINESS_PLAN.md (updated), b2b-b2e-b2c-innovation-broad-2026-03-19.md (B2B/B2C strategy)
 
-**DB test accounts (Neon production - current):**
+**DB test accounts (Railway Postgres - current):**
 - `user1@example.com` / `password123` → ADMIN role, SIMPLE tier organizer
 - `user2@example.com` / `password123` → ORGANIZER, PRO tier ✅
 - `user3@example.com` / `password123` → ORGANIZER, TEAMS tier ✅
@@ -118,7 +111,38 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
+## Recent Sessions
+
+**S264 (2026-03-24):** Neon→Railway Postgres migration complete. 114 migrations + full seed applied. Smoke test PASS. Process improvements: pushblock-first strategy, wrap file consolidation (4→2 files), real dispatch token estimates, parallel dispatch up to 7 agents. Registration bug fix (SHOPPER→ORGANIZER role transition). 9 skill packages rebuilt. Savings: ~$18.50/month on database costs.
+
+**S263 (2026-03-24):** QA smoke test all S262 changes — ALL PASS. XP system bug fixed (TS2345 null guard + prisma singleton). Batches 3+4 brand drift pushed (22 files). XP endpoints confirmed live.
+
+**S262 (2026-03-24):** Brand drift D-001 fully resolved (30+ violations, 4 batches). Explorer's Guild Phase 2a/2b/2c all deployed. RPG spec locked.
+
+**S260 (2026-03-23):** RPG economy spec locked (8 decisions). Agent prompt bias fixed. Roadmap updated. Explorer's Guild Phase 1 copy complete.
+
+**S259 (2026-03-23):** S258 smoke test (9/10 PASS). 2 bugs fixed (Purchases tab, Wishlists dark mode). Explorer's Guild gamification spec complete. Board conditional approval.
+
+---
+
+## Next Session
+
+**S265 PRIORITY 1 (MANDATORY):** Verify Batches 3+4 brand drift live on Vercel — smoke test /trending, /inspiration, /search.
+
+**S265 PRIORITY 2:** Brand copy deep audit (P3) — page titles, meta descriptions, all 5 sale types represented.
+
+**S265 PRIORITY 3 (OPTIONAL):** Phase 2 UX review — RankBadge/ProgressBar visibility, leaderboard usability, XP sink clarity.
+
+**S265 PRIORITY 4 (OPTIONAL):** user11 end-to-end XP test — simulate purchase, verify XP earn + rank update.
+
+**Patrick action (before S265):** Delete Neon project at console.neon.tech to stop billing. Update local `packages/database/.env` to Railway connection string.
+
+---
+
 ## Active Infrastructure
+
+### Database
+- **Railway Postgres** — `maglev.proxy.rlwy.net:13949/railway` (~$0.55/month, migrated from Neon S264)
 
 ### Connectors
 - **Stripe MCP** - query payment data, manage customers, troubleshoot payment issues. Connected S172.
