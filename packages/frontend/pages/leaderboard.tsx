@@ -216,7 +216,7 @@ const Leaderboard = () => {
                         <div>
                           <Link
                             href={`/organizers/${org.organizerId}`}
-                            className="text-warm-900 dark:text-warm-100 font-semibold text-lg hover:text-amber-600 transition-colors"
+                            className="text-warm-900 dark:text-warm-100 font-semibold text-lg hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer"
                           >
                             {org.organizerName}
                           </Link>

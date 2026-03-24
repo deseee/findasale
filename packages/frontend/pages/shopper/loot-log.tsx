@@ -4,6 +4,7 @@ import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
+import Layout from '../../components/Layout';
 import { useLootLog, useLootLogStats } from '../../hooks/useLootLog';
 
 export default function LootLogPage() {
@@ -37,13 +38,13 @@ export default function LootLogPage() {
   const isEmpty = !logsLoading && lootLogData?.total === 0;
 
   return (
-    <>
+    <Layout>
       <Head>
         <title>My Loot Log — FindA.Sale</title>
         <meta name="description" content="Your purchase history" />
       </Head>
 
-      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-12">
           {/* Header */}
           <div className="flex justify-between items-center mb-12">
@@ -146,8 +147,8 @@ export default function LootLogPage() {
             </>
           )}
         </div>
-      </main>
-    </>
+      </div>
+    </Layout>
   );
 }
 

@@ -13,6 +13,32 @@ const router = Router();
 
 // Authenticated endpoints
 router.get('/purchases', authenticate, getPurchases);
+router.get('/purchases/:itemId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { itemId } = req.params;
+
+    const purchase = await prisma.purchase.findFirst({
+      where: {
+        userId: req.user.id,
+        itemId: itemId,
+        status: 'PAID' // Only count completed purchases
+      }
+    });
+
+    if (purchase) {
+      res.json({ hasPurchased: true, purchasedAt: purchase.createdAt });
+    } else {
+      res.json({ hasPurchased: false });
+    }
+  } catch (error) {
+    console.error('Error checking purchase status:', error);
+    res.status(500).json({ message: 'Server error while checking purchase status' });
+  }
+});
 router.get('/favorites', authenticate, getFavorites);
 router.get('/me', authenticate, getUserProfile);
 router.get('/leaderboard', getLeaderboard);

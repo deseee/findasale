@@ -71,6 +71,7 @@ const OrganizerDashboard = () => {
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [showTierTools, setShowTierTools] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading) {
@@ -177,6 +178,15 @@ const OrganizerDashboard = () => {
       }
     }
   }, [orgProfile]);
+
+  // Load upgrade CTA dismiss state from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const ctaDismissed = localStorage.getItem('organizer_upgrade_cta_dismissed');
+    if (ctaDismissed) {
+      setShowUpgradeCTA(false);
+    }
+  }, []);
 
   // Handle Stripe checkout success redirect
   useEffect(() => {
@@ -464,89 +474,83 @@ const OrganizerDashboard = () => {
                 Pro Features
               </summary>
               <div className="mt-3 ml-3 flex flex-wrap gap-4">
-                {canAccess('PRO') && (
-                  <>
-                    <TierGatedButton
-                      href="/organizer/insights"
-                      label="Insights"
-                      icon="📊"
-                      requiredTier="PRO"
-                      className="bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/command-center"
-                      label="Command Center"
-                      icon="⚙️"
-                      requiredTier="PRO"
-                      className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/typology"
-                      label="Typology Classifier"
-                      icon="🏷️"
-                      requiredTier="PRO"
-                      className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/fraud-signals"
-                      label="Fraud Signals"
-                      icon="⚠️"
-                      requiredTier="PRO"
-                      className="bg-red-100 hover:bg-red-200 dark:bg-red-900/30 text-red-900 dark:text-red-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/offline"
-                      label="Offline Mode"
-                      icon="📵"
-                      requiredTier="PRO"
-                      className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/appraisals"
-                      label="Appraisals"
-                      icon="💎"
-                      requiredTier="PRO"
-                      className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/brand-kit"
-                      label="Brand Kit"
-                      icon="🎨"
-                      requiredTier="PRO"
-                      className="bg-pink-100 hover:bg-pink-200 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/item-library"
-                      label="Item Library"
-                      icon="📚"
-                      requiredTier="PRO"
-                      className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100"
-                    />
-                    <TierGatedButton
-                      href="/organizer/flip-report"
-                      label="Flip Report"
-                      icon="📈"
-                      requiredTier="PRO"
-                      className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100"
-                    />
-                    <TierGatedButton
-                      href="/api/organizers/export"
-                      label="Export Data"
-                      icon="↓"
-                      requiredTier="PRO"
-                      className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
-                    />
-                  </>
-                )}
-                {canAccess('TEAMS') && (
-                  <TierGatedButton
-                    href="/organizer/webhooks"
-                    label="Webhooks"
-                    icon="🔗"
-                    requiredTier="TEAMS"
-                    className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
-                  />
-                )}
+                <TierGatedButton
+                  href="/organizer/insights"
+                  label="Insights"
+                  icon="📊"
+                  requiredTier="PRO"
+                  className="bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100"
+                />
+                <TierGatedButton
+                  href="/organizer/command-center"
+                  label="Command Center"
+                  icon="⚙️"
+                  requiredTier="PRO"
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
+                />
+                <TierGatedButton
+                  href="/organizer/typology"
+                  label="Typology Classifier"
+                  icon="🏷️"
+                  requiredTier="PRO"
+                  className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
+                />
+                <TierGatedButton
+                  href="/organizer/fraud-signals"
+                  label="Fraud Signals"
+                  icon="⚠️"
+                  requiredTier="PRO"
+                  className="bg-red-100 hover:bg-red-200 dark:bg-red-900/30 text-red-900 dark:text-red-100"
+                />
+                <TierGatedButton
+                  href="/organizer/offline"
+                  label="Offline Mode"
+                  icon="📵"
+                  requiredTier="PRO"
+                  className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100"
+                />
+                <TierGatedButton
+                  href="/organizer/appraisals"
+                  label="Appraisals"
+                  icon="💎"
+                  requiredTier="PRO"
+                  className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100"
+                />
+                <TierGatedButton
+                  href="/organizer/brand-kit"
+                  label="Brand Kit"
+                  icon="🎨"
+                  requiredTier="PRO"
+                  className="bg-pink-100 hover:bg-pink-200 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100"
+                />
+                <TierGatedButton
+                  href="/organizer/item-library"
+                  label="Item Library"
+                  icon="📚"
+                  requiredTier="PRO"
+                  className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100"
+                />
+                <TierGatedButton
+                  href="/organizer/flip-report"
+                  label="Flip Report"
+                  icon="📈"
+                  requiredTier="PRO"
+                  className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100"
+                />
+                <TierGatedButton
+                  href="/api/organizers/export"
+                  label="Export Data"
+                  icon="↓"
+                  requiredTier="PRO"
+                  className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
+                />
+                <TierGatedButton
+                  href="/organizer/webhooks"
+                  label="Webhooks"
+                  icon="🔗"
+                  requiredTier="TEAMS"
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
+                />
               </div>
             </details>
 
@@ -570,23 +574,26 @@ const OrganizerDashboard = () => {
                 >
                   ⭐ Reputation
                 </Link>
-                <Link
-                  href="/neighborhoods"
-                  className="bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  🏘️ Neighborhoods
-                </Link>
-                <Link
+                {canAccess('PRO') && (
+                  <Link
+                    href="/neighborhoods"
+                    className="bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100 font-bold py-2 px-6 rounded-lg transition-colors"
+                  >
+                    🏘️ Neighborhoods
+                  </Link>
+                )}
+                <TierGatedButton
                   href="/organizer/performance"
-                  className="bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  📈 Performance
-                </Link>
+                  label="Performance"
+                  icon="📈"
+                  requiredTier="PRO"
+                  className="bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100"
+                />
               </div>
             </details>
 
             {/* Section 5: Upgrade CTA for SIMPLE tier */}
-            {isSimple && (
+            {isSimple && showUpgradeCTA && (
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mt-4">
                 <div className="flex items-start gap-3">
                   <span className="text-2xl">🔒</span>
@@ -602,6 +609,16 @@ const OrganizerDashboard = () => {
                       Upgrade to PRO
                     </Link>
                   </div>
+                  <button
+                    onClick={() => {
+                      setShowUpgradeCTA(false);
+                      localStorage.setItem('organizer_upgrade_cta_dismissed', 'true');
+                    }}
+                    className="text-warm-400 hover:text-warm-600 dark:text-warm-500 dark:hover:text-warm-400 text-xl flex-shrink-0"
+                    title="Dismiss"
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
             )}

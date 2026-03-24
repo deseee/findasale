@@ -124,6 +124,7 @@ async function ftsSearch(params: {
   let idx = 1;
 
   // Base SELECT with FTS rank
+  // Search item title + description + organizer businessName
   sqlParts.push(`
     SELECT
       i.id,
@@ -143,7 +144,10 @@ async function ftsSearch(params: {
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
-      AND i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
+      AND (
+        i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
+        OR o."businessName" ILIKE '%' || $${idx} || '%'
+      )
   `);
   sqlParams.push(q, q);
   idx += 2;
@@ -213,6 +217,7 @@ async function ilikeSearch(params: {
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
         OR i.category ILIKE '%' || $${idx} || '%'
+        OR o."businessName" ILIKE '%' || $${idx} || '%'
       )
   `);
   sqlParams.push(q);
@@ -288,11 +293,15 @@ async function countFts(
     SELECT COUNT(*)::int AS count
     FROM "Item" i
     JOIN "Sale" s ON i."saleId" = s.id
+    JOIN "Organizer" o ON s."organizerId" = o.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
-      AND i."searchVector" @@ plainto_tsquery('english', $${idx})
+      AND (
+        i."searchVector" @@ plainto_tsquery('english', $${idx})
+        OR o."businessName" ILIKE '%' || $${idx} || '%'
+      )
   `);
   sqlParams.push(q);
   idx += 1;
@@ -314,6 +323,7 @@ async function countIlike(
     SELECT COUNT(*)::int AS count
     FROM "Item" i
     JOIN "Sale" s ON i."saleId" = s.id
+    JOIN "Organizer" o ON s."organizerId" = o.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
@@ -322,6 +332,7 @@ async function countIlike(
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
         OR i.category ILIKE '%' || $${idx} || '%'
+        OR o."businessName" ILIKE '%' || $${idx} || '%'
       )
   `);
   sqlParams.push(q);

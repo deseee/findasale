@@ -290,8 +290,11 @@ function CollectorPassportPage() {
               <p className="text-gray-600 dark:text-gray-400">Loading matches...</p>
             ) : totalMatches === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-600 dark:text-gray-400">
-                  No matching items found yet. Set your specialties above to discover matching items.
+                <p className="text-gray-600 dark:text-gray-400 mb-2">
+                  No matches yet
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 max-w-md mx-auto">
+                  Matches are sales featuring items that match your Explorer Profile interests. Complete your profile to start seeing recommendations.
                 </p>
               </div>
             ) : (
@@ -343,7 +346,7 @@ function CollectorPassportPage() {
                 <button
                   onClick={() => setNotifyEmail(!notifyEmail)}
                   className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                    notifyEmail ? 'bg-[#8fb897]' : 'bg-gray-300'
+                    notifyEmail ? 'bg-[#8fb897]' : 'bg-gray-300 dark:bg-gray-600'
                   }`}
                 >
                   <span
@@ -362,7 +365,7 @@ function CollectorPassportPage() {
                 <button
                   onClick={() => setNotifyPush(!notifyPush)}
                   className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                    notifyPush ? 'bg-[#8fb897]' : 'bg-gray-300'
+                    notifyPush ? 'bg-[#8fb897]' : 'bg-gray-300 dark:bg-gray-600'
                   }`}
                 >
                   <span

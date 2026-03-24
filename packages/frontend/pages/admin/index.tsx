@@ -192,9 +192,9 @@ const AdminDashboard = () => {
                           <p className="text-warm-600 dark:text-warm-400 text-xs">{newUser.email}</p>
                         </div>
                         <span className={`text-xs px-2 py-1 rounded ${
-                          newUser.role === 'ADMIN' ? 'bg-red-100 text-red-700' :
-                          newUser.role === 'ORGANIZER' ? 'bg-blue-100 text-blue-700' :
-                          'bg-gray-100 dark:bg-gray-700 text-gray-700'
+                          newUser.role === 'ADMIN' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                          newUser.role === 'ORGANIZER' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                          'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                         }`}>
                           {newUser.role}
                         </span>
@@ -229,9 +229,9 @@ const AdminDashboard = () => {
                           <td className="px-4 py-2 text-warm-600 dark:text-warm-400">{sale.organizer.businessName}</td>
                           <td className="px-4 py-2 text-center">
                             <span className={`text-xs px-2 py-1 rounded ${
-                              sale.status === 'PUBLISHED' ? 'bg-green-100 text-green-700' :
-                              sale.status === 'ENDED' ? 'bg-gray-100 dark:bg-gray-700 text-gray-700' :
-                              'bg-yellow-100 text-yellow-700'
+                              sale.status === 'PUBLISHED' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                              sale.status === 'ENDED' ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' :
+                              'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
                             }`}>
                               {sale.status}
                             </span>

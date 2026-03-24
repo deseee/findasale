@@ -96,23 +96,23 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-8">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mt-8">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-warm-900">
+        <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50">
           {mode === 'sale' ? 'Reviews' : 'Customer Reviews'}
         </h2>
         {(avgRating !== undefined && avgRating > 0) && (
           <div className="flex items-center gap-2">
             <StarRating value={avgRating} size="md" />
-            <span className="font-semibold text-warm-800">{avgRating.toFixed(1)}</span>
-            <span className="text-sm text-warm-500">({totalReviews ?? data?.total ?? 0})</span>
+            <span className="font-semibold text-warm-800 dark:text-gray-100">{avgRating.toFixed(1)}</span>
+            <span className="text-sm text-warm-500 dark:text-gray-400">({totalReviews ?? data?.total ?? 0})</span>
           </div>
         )}
       </div>
 
       {canReview && (
-        <form onSubmit={handleSubmit} className="mb-8 bg-warm-50 rounded-lg p-4 border border-warm-200">
-          <p className="font-semibold text-warm-800 mb-3">Leave a review</p>
+        <form onSubmit={handleSubmit} className="mb-8 bg-warm-50 dark:bg-gray-700 rounded-lg p-4 border border-warm-200 dark:border-gray-600">
+          <p className="font-semibold text-warm-800 dark:text-gray-100 mb-3">Leave a review</p>
           <div className="flex items-center gap-3 mb-3">
             <StarRating value={rating} interactive onChange={setRating} size="lg" />
             {rating > 0 && (
@@ -127,10 +127,10 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
             placeholder="Share your experience (optional)"
             rows={3}
             maxLength={500}
-            className="w-full border border-warm-300 rounded-md px-3 py-2 text-sm text-warm-900 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border border-warm-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm text-warm-900 dark:bg-gray-600 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
           <div className="flex justify-between items-center mt-2">
-            <span className="text-xs text-warm-400">{comment.length}/500</span>
+            <span className="text-xs text-warm-400 dark:text-gray-400">{comment.length}/500</span>
             <button
               type="submit"
               disabled={submitMutation.isPending || rating === 0}
@@ -149,27 +149,27 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
           ))}
         </div>
       ) : !data || data.reviews.length === 0 ? (
-        <p className="text-warm-500 text-sm py-4 text-center">
+        <p className="text-warm-500 dark:text-gray-400 text-sm py-4 text-center">
           No reviews yet. {canReview ? 'Be the first!' : ''}
         </p>
       ) : (
         <div className="space-y-4">
           {data.reviews.map((review) => (
-            <div key={review.id} className="border-b border-warm-100 pb-4 last:border-0">
+            <div key={review.id} className="border-b border-warm-100 dark:border-gray-700 pb-4 last:border-0">
               <div className="flex items-start justify-between mb-1">
                 <div>
-                  <span className="font-semibold text-sm text-warm-800">{review.user.name}</span>
+                  <span className="font-semibold text-sm text-warm-800 dark:text-gray-100">{review.user.name}</span>
                   {review.sale && (
-                    <span className="text-xs text-warm-400 ml-2">on {review.sale.title}</span>
+                    <span className="text-xs text-warm-400 dark:text-gray-500 ml-2">on {review.sale.title}</span>
                   )}
                 </div>
-                <span className="text-xs text-warm-400">
+                <span className="text-xs text-warm-400 dark:text-gray-500">
                   {format(new Date(review.createdAt), 'MMM d, yyyy')}
                 </span>
               </div>
               <StarRating value={review.rating} size="sm" className="mb-1" />
               {review.comment && (
-                <p className="text-sm text-warm-700 mt-1">{review.comment}</p>
+                <p className="text-sm text-warm-700 dark:text-gray-300 mt-1">{review.comment}</p>
               )}
             </div>
           ))}
@@ -179,15 +179,15 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="text-sm text-amber-600 hover:text-amber-800 disabled:opacity-40"
+                className="text-sm text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 disabled:opacity-40"
               >
                 ← Prev
               </button>
-              <span className="text-sm text-warm-500">{page} / {data.pages}</span>
+              <span className="text-sm text-warm-500 dark:text-gray-400">{page} / {data.pages}</span>
               <button
                 onClick={() => setPage(p => Math.min(data.pages, p + 1))}
                 disabled={page === data.pages}
-                className="text-sm text-amber-600 hover:text-amber-800 disabled:opacity-40"
+                className="text-sm text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 disabled:opacity-40"
               >
                 Next →
               </button>
