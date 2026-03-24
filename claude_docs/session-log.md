@@ -6,18 +6,22 @@
 
 ### 2026-03-24 · Session 262
 
-**BRAND DRIFT ALL 4 BATCHES COMPLETE + PHASE 2A BACKEND + PHASE 2B FRONTEND DEPLOYED**
+**BRAND DRIFT ALL 4 BATCHES + PHASE 2A/2B/2C FULLY DEPLOYED — XP ROUTE BUG FOUND + FIXED**
 
-✅ **Brand drift D-001 fully resolved** — 30+ "estate sale only" violations fixed across all batches. Encyclopedia renamed to "Resale Encyclopedia" (SEO-safe). Batches 1+2 pushed (commit b06242d). Batches 3+4 committed locally, ready for immediate push.
+✅ **Brand drift D-001 fully resolved** — 30+ "estate sale only" violations fixed across all batches. Encyclopedia renamed to "Resale Encyclopedia" (SEO-safe). Batches 1+2 pushed (commit b06242d). Batches 3+4 committed locally, pending S263 QA before push.
 
-✅ **Phase 2a backend deployed** — xpService.ts + xpController.ts (NEW). Endpoints: GET /api/xp/profile, GET /api/xp/leaderboard, POST /api/xp/sink/rarity-boost, POST /api/xp/sink/coupon. Schema migration applied to Neon. Railway deployment passed.
+✅ **Phase 2a backend deployed** — xpService.ts + xpController.ts (NEW). Endpoints: GET /api/xp/profile, GET /api/xp/leaderboard, POST /api/xp/sink/rarity-boost, POST /api/xp/sink/coupon. Schema migration applied to Neon. Railway PASSED. Commits: bd79e1b + 55a9c38 (schema relation fix).
 
-✅ **Phase 2b frontend deployed** — RankBadge.tsx + RankProgressBar.tsx (NEW), useXpProfile.ts (NEW), loyalty.tsx + leaderboard.tsx modified. All TypeScript clean. Committed locally.
+✅ **Phase 2b frontend deployed** — RankBadge.tsx + RankProgressBar.tsx (NEW), useXpProfile.ts (NEW), loyalty.tsx + leaderboard.tsx modified. TypeScript clean.
 
-✅ **Session housekeeping** — F4 (SKILL.md archives bias check) passed. F5 (profile edit redirect) verified still in place from S255. P3 (3 new skills) installed by Patrick.
+✅ **Phase 2c XP event wiring COMPLETE** — saleController (sale published), stripeController (purchase complete), referralController (referral claimed), auctionJob (auction win). All 4 events wired and pushed S262.
 
-📋 **S263 PRIORITY 1:** QA smoke test all S262 changes live (brand drift copy, XP endpoints, leaderboard rendering).
-📋 **S263 PRIORITY 2:** Verify Phase 2c XP event wiring is complete (purchase/sale/referral/auction controllers calling xpService.awardXp).
+✅ **XP route bug found + fixed** — QA live test caught 404s on `/shopper/loyalty` + `/shopper/leaderboard`. Root cause: useXpProfile.ts + leaderboard.tsx used `/api/xp/...` prefix causing double-prefix (`/api/api/xp/...`). Fixed to `/xp/profile` + `/xp/leaderboard`. Pushed.
+
+✅ **Session housekeeping** — F4 (SKILL.md bias check) passed. F5 (profile edit redirect) verified from S255. P3 (3 new skills) installed by Patrick.
+
+📋 **S263 PRIORITY 1:** QA smoke test all S262 changes live (brand drift, XP endpoints, route bug fix confirmed live).
+📋 **S263 PRIORITY 2:** Push Brand drift Batches 3+4 (after QA confirms no regressions). Full push block in next-session-prompt.md.
 📋 **S263 PRIORITY 3:** Deep dive brand drift QA (copy consistency, dark mode, all pages verified).
 📋 **S263 PRIORITY 4 (OPTIONAL):** Phase 2 shopper UX review.
 

@@ -7,29 +7,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**Session 262 COMPLETE (2026-03-24) — BRAND DRIFT ALL 4 BATCHES + PHASE 2A BACKEND + PHASE 2B FRONTEND:**
+**Session 262 COMPLETE (2026-03-24) — BRAND DRIFT ALL 4 BATCHES + PHASE 2A/2B/2C FULLY DEPLOYED:**
 
 **Brand Drift — D-001 FULLY RESOLVED (30+ violations fixed):**
 - ✅ **Batches 1+2 deployed (commit b06242d):** 14 files updated with all-sale-types copy. "Estate Sale Encyclopedia" renamed to "Resale Encyclopedia" (SEO-safe). P0 (city/map/calendar titles) + P1 (organizer pages copy) all live.
-- ✅ **Batches 3+4 committed locally, pending push:** 16 shopper pages + 6 components updated (trending, inspiration, tags, categories, search, feed, loot-log, trails, hubs, SaleShareButton, ReferralWidget, SaleOGMeta, SalesNearYou, AddToCalendarButton, og-image API). No staging issues. Ready for immediate push.
+- ✅ **Batches 3+4 committed locally, pending S263 QA before push:** 16 shopper pages + 6 components updated (trending, inspiration, tags, categories, search, feed, loot-log, trails, hubs, SaleShareButton, ReferralWidget, SaleOGMeta, SalesNearYou, AddToCalendarButton, og-image API). Ready for push once QA confirms no regressions.
 
 **Explorer's Guild Phase 2a — SCHEMA LIVE ON NEON + BACKEND DEPLOYED TO RAILWAY:**
 - ✅ **Schema migration applied to Neon:** User.guildXp (INT), User.explorerRank (ENUM: Initiate/Scout/Ranger/Sage/Grandmaster), User.seasonalResetAt (TIMESTAMP), RarityBoost table (userId, type, multiplier, expiresAt), extended PointsTransaction (xpChange, rarity, boostApplied), extended Coupon (xpSinkValue). Single migration, zero conflicts.
-- ✅ **Backend services created:** `packages/backend/src/services/xpService.ts` (NEW) — award XP, validate sinks, compute rank from guildXp. `packages/backend/src/controllers/xpController.ts` (NEW) — GET /api/xp/profile (user rank + XP), GET /api/xp/leaderboard (top 50 by guildXp), POST /api/xp/sink/rarity-boost (spend XP on boost), POST /api/xp/sink/coupon (spend XP on coupon).
-- ✅ **Committed & deployed:** Commits bd79e1b (Phase 2a services) + 55a9c38 (schema relation fix). Railway pipeline PASSED. Endpoints live.
+- ✅ **Backend services created:** `xpService.ts` (NEW) — award XP, validate sinks, compute rank. `xpController.ts` (NEW) — GET /api/xp/profile, GET /api/xp/leaderboard, POST /api/xp/sink/rarity-boost, POST /api/xp/sink/coupon.
+- ✅ **Deployed:** Commits bd79e1b + 55a9c38 (schema relation fix). Railway PASSED.
 
-**Explorer's Guild Phase 2b — FRONTEND UI + LEADERBOARD:**
-- ✅ **UI components created:** RankBadge.tsx (NEW) — emoji + tier name + color, dark mode, sm/md/lg sizes. RankProgressBar.tsx (NEW) — animated XP progress (current/nextRank threshold), dark mode.
-- ✅ **Hooks created:** useXpProfile.ts (NEW) — fetches /api/xp/profile, returns { rank, guildXp, nextLevelXp, loading }.
-- ✅ **Pages modified/created:** pages/shopper/loyalty.tsx (MODIFIED) — integrated RankBadge + RankProgressBar into Hero section, dark mode verified. pages/shopper/leaderboard.tsx (CREATED or MODIFIED) — top 50 explorers by guildXp, paginated, dark mode.
-- ✅ **Committed locally, ready to push:** All files compiled cleanly. TypeScript passed with zero errors.
+**Explorer's Guild Phase 2b — FRONTEND UI + LEADERBOARD DEPLOYED:**
+- ✅ **Components:** RankBadge.tsx (NEW), RankProgressBar.tsx (NEW). Hook: useXpProfile.ts (NEW). Pages: loyalty.tsx + leaderboard.tsx modified.
+- ✅ **Bug found + fixed by QA:** useXpProfile.ts + leaderboard.tsx had double `/api` prefix (`/api/xp/...` → 404). Fixed to `/xp/profile` + `/xp/leaderboard`. Pushed.
+
+**Explorer's Guild Phase 2c — XP EVENT WIRING COMPLETE:**
+- ✅ **All 4 XP earn events wired:** saleController (sale published → XP award), stripeController (purchase complete → XP award), referralController (referral claimed → XP award), auctionJob (auction win → XP award). Pushed S262.
 
 **Session Housekeeping:**
-- ✅ **F4 (SKILL.md bias in .skill archives) — FLAGGED:** 3 skills installed by Patrick this session. Archive bias check confirmed. No issues found.
-- ✅ **F5 (profile edit buttons) — VERIFIED RESOLVED:** S255 redirect to /organizer/settings confirmed still in place.
-- ✅ **P3 (new skills) — INSTALLED:** findasale-ux.skill, findasale-qa.skill, findasale-gamedesign.skill all deployed via Cowork UI by Patrick.
+- ✅ **F4 (SKILL.md bias check) — PASSED.** F5 (profile edit redirect) — verified still in place from S255. P3 (3 new skills) — installed by Patrick.
 
-- 📋 **Carry-forward (S263):** Phase 2c — wire XP earn events into purchase/sale/referral controllers. QA smoke test on all S262 changes (brand drift live? XP endpoints responding? leaderboard rendering?).
+- 📋 **Carry-forward (S263):** QA smoke test on ALL S262 changes live (brand drift copy, XP endpoints, leaderboard rendering, Phase 2c event wiring). Push Batches 3+4 after QA passes.
 - Last Updated: 2026-03-24
 
 **Session 260 COMPLETE (2026-03-23) — RPG SPEC LOCK + EXPLORER'S GUILD PHASE 1 COPY:**
