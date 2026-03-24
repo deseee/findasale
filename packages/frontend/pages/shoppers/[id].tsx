@@ -63,7 +63,7 @@ const ShopperProfilePage = () => {
     <div className="min-h-screen bg-warm-50">
       <Head>
         <title>{profile.name} – Shopper Profile – FindA.Sale</title>
-        <meta name="description" content={`${profile.name}'s estate sale shopper profile on FindA.Sale`} />
+        <meta name="description" content={`${profile.name}'s shopper profile on FindA.Sale`} />
       </Head>
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">

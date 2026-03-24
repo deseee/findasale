@@ -42,7 +42,7 @@ const CategoryPage = () => {
         <title>{label} — Browse by Category — FindA.Sale</title>
         <meta
           name="description"
-          content={`Browse ${label} items at estate sales near you on FindA.Sale`}
+          content={`Browse ${label} items from sales near you on FindA.Sale`}
         />
       </Head>
 

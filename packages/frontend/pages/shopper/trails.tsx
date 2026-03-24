@@ -44,7 +44,7 @@ export default function MyTrailsPage() {
     <>
       <Head>
         <title>My Treasure Trails | FindA.Sale</title>
-        <meta name="description" content="Your custom estate sale routes and favorites" />
+        <meta name="description" content="Your custom sale routes and favorites" />
       </Head>
 
       <div className="max-w-6xl mx-auto px-4 py-8">

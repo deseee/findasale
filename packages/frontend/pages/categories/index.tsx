@@ -46,7 +46,7 @@ const CategoriesIndexPage = () => {
         <title>Browse by Category — FindA.Sale</title>
         <meta
           name="description"
-          content="Browse estate sale items by category on FindA.Sale. Furniture, antiques, jewelry, tools, and more."
+          content="Browse items by category on FindA.Sale. Furniture, antiques, jewelry, tools, and more."
         />
       </Head>
 

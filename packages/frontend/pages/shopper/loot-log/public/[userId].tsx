@@ -43,7 +43,7 @@ export default function PublicLootLogPage() {
     <>
       <Head>
         <title>{userName}&apos;s Loot Log — FindA.Sale</title>
-        <meta name="description" content={`${userName}'s estate sale purchases`} />
+        <meta name="description" content={`${userName}'s purchase history on FindA.Sale`} />
       </Head>
 
       <main className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">

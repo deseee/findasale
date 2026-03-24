@@ -26,7 +26,7 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
   const handleShare = async () => {
     const shareData = {
       title: saleTitle,
-      text: `Check out this estate sale: ${saleTitle} on ${saleDate} at ${saleLocation}`,
+      text: `Check out this sale: ${saleTitle} on ${saleDate} at ${saleLocation}`,
       url: referralUrl,
     };
 

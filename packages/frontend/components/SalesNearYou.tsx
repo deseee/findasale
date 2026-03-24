@@ -8,6 +8,7 @@ interface Sale {
   id: string;
   title: string;
   startDate: string;
+  saleType?: string;
   organizerName?: string;
   organizer?: {
     businessName: string;
@@ -82,7 +83,7 @@ const SalesNearYou: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-warm-600 mb-2 line-clamp-1">
-                {sale.organizer?.businessName || sale.organizerName || 'Estate Sale'}
+                {sale.organizer?.businessName || sale.organizerName || sale.saleType || 'Sale'}
               </p>
               <p className="text-xs text-warm-500 mb-2">
                 Starts {formatDistanceToNow(parseISO(sale.startDate), { addSuffix: true })}

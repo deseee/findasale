@@ -49,9 +49,9 @@ export default function TrendingPage() {
     <>
       <Head>
         <title>Trending Now — FindA.Sale</title>
-        <meta name="description" content="The hottest estate sale items and upcoming sales this week near you." />
+        <meta name="description" content="The hottest items across all upcoming sales this week" />
         <meta property="og:title" content="Trending Items — FindA.Sale" />
-        <meta property="og:description" content="See what's trending at estate sales right now. Most-viewed and most-saved items across all active sales." />
+        <meta property="og:description" content="See what's trending at sales near you. Most-viewed and most-saved items across all active sales." />
         <meta property="og:url" content="https://finda.sale/trending" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />

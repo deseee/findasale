@@ -40,7 +40,7 @@ export default function PublicTrailPage() {
     <Layout>
       <Head>
         <title>{trail.name} | Treasure Trail | FindA.Sale</title>
-        <meta name="description" content={trail.description || 'A curated treasure trail of estate sales'} />
+        <meta name="description" content={trail.description || 'A curated treasure trail of sales'} />
       </Head>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
@@ -130,7 +130,7 @@ export default function PublicTrailPage() {
           {!user ? (
             <div className="p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg text-center">
               <p className="text-blue-900 dark:text-blue-100 mb-3">
-                Create your own treasure trails to plan your estate sale adventures!
+                Create your own treasure trails to plan your sale adventures!
               </p>
               <a
                 href="/login"

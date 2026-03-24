@@ -80,7 +80,7 @@ const SurpriseMePage = () => {
         <title>Surprise Me — FindA.Sale</title>
         <meta
           name="description"
-          content="Discover random treasures from active estate sales near you. Hit 'Surprise me' to see what turns up."
+          content="Discover random treasures from active sales near you. Hit 'Surprise me' to see what turns up."
         />
       </Head>
 
