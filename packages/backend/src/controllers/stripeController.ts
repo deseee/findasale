@@ -485,8 +485,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // Award XP to shopper for completing purchase (only if user exists — not for POS walk-ins)
         if (purchase.userId) {
           awardXp(purchase.userId, 'PURCHASE_COMPLETED', XP_AWARDS.PURCHASE, {
-            itemId: purchase.itemId,
-            saleId: purchase.saleId
+            itemId: purchase.itemId ?? undefined,
+            saleId: purchase.saleId ?? undefined
           }).catch(err =>
             console.error('[XP] Failed to award XP for purchase completed:', err)
           );
