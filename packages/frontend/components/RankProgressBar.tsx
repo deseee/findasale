@@ -53,12 +53,20 @@ export const RankProgressBar: React.FC<RankProgressBarProps> = ({
         />
       </div>
 
-      {/* Percentage display */}
-      <div className="mt-1 text-right">
-        <span className="text-xs text-gray-600 dark:text-gray-400">
-          {Math.round(progressPercent)}%
-        </span>
-      </div>
+      {/* Percentage display or max rank message */}
+      {isMaxRank ? (
+        <div className="mt-3 text-center">
+          <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center justify-center gap-2">
+            Maximum rank achieved! 🏆
+          </span>
+        </div>
+      ) : (
+        <div className="mt-1 text-right">
+          <span className="text-xs text-gray-600 dark:text-gray-400">
+            {Math.round(progressPercent)}%
+          </span>
+        </div>
+      )}
     </div>
   );
 };

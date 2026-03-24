@@ -98,7 +98,7 @@ function LoyaltyPage() {
       <div className="max-w-5xl mx-auto py-8 px-4">
           {/* Header */}
           <div className="mb-10">
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-warm-100 mb-2">Loyalty Passport ✨</h1>
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-warm-100 mb-2">Explorer's Guild Passport</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Earn stamps and unlock rewards as you shop and explore
             </p>
@@ -271,8 +271,8 @@ function LoyaltyPage() {
                     key={stamp.type}
                     className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-4 border border-amber-200 text-center dark:from-gray-700 dark:to-gray-600 dark:border-amber-700"
                   >
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 capitalize">
-                      {stamp.type}
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      {stamp.type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                     </p>
                     <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{stamp.count}</p>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Stamps</p>
