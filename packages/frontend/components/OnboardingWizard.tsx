@@ -119,7 +119,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-4">

@@ -239,6 +239,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               {staticNavLinks.map(({ href, label }) => (
                 <Link key={href} href={href} className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">{label}</Link>
               ))}
+              {/* "Host a Sale" CTA for logged-in shoppers without ORGANIZER role */}
+              {isClient && user && user.role === 'USER' && !user?.roles?.includes('ORGANIZER') && (
+                <button
+                  onClick={() => setShowBecomeOrganizerModal(true)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-md font-medium text-sm"
+                >
+                  Host a Sale
+                </button>
+              )}
             </nav>
 
             {/* Desktop right-side nav (Saved, Messages, Profile + Auth) */}
