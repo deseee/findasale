@@ -1,8 +1,8 @@
 /**
- * Feature #45: Collector Passport Page
+ * Feature #45: Explorer Passport Page
  *
  * Page: /shopper/collector-passport
- * - Display and edit collector identity (bio, specialties, categories, keywords)
+ * - Display and edit explorer identity (bio, specialties, categories, keywords)
  * - View items from recent sales matching the passport
  * - Notification settings toggle
  */
@@ -117,7 +117,7 @@ function CollectorPassportPage() {
   return (
     <>
       <Head>
-        <title>My Collector Passport - FindA.Sale</title>
+        <title>My Explorer Passport - FindA.Sale</title>
       </Head>
 
       <div className="max-w-5xl mx-auto py-8 px-4 dark:bg-gray-900 dark:text-warm-100">
@@ -125,7 +125,7 @@ function CollectorPassportPage() {
           <div className="mb-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">My Collector Passport 🏺</h1>
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">My Explorer Passport 🗺️</h1>
                 {passport && (
                   <div className="bg-[#8fb897] text-white rounded-full px-4 py-2 font-semibold">
                     {passport.totalFinds} finds
@@ -140,17 +140,17 @@ function CollectorPassportPage() {
 
           {/* Section 1: Identity Card */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your Collector Identity</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your Explorer Identity</h2>
 
             {/* Bio */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Collector Bio
+                Explorer Bio
               </label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                placeholder="What drives your collection? e.g., 'Passionate collector of mid-century modern furniture'"
+                placeholder="What drives your hunt? e.g., 'Passionate explorer of mid-century modern furniture'"
                 className="w-full h-24 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Optional — visible on your public profile</p>

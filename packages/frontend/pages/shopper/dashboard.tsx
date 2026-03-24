@@ -112,8 +112,8 @@ const ShopperDashboard = () => {
               href="/shopper/collector-passport"
               className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
             >
-              <div className="text-2xl mb-2">🏺</div>
-              <p className="text-xs font-semibold text-purple-900 dark:text-purple-300">Collection</p>
+              <div className="text-2xl mb-2">🗺️</div>
+              <p className="text-xs font-semibold text-purple-900 dark:text-purple-300">Explorer</p>
             </Link>
             <Link
               href="/shopper/loyalty"

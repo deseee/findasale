@@ -85,7 +85,7 @@ function LoyaltyPage() {
           <div className="mb-10">
             <h1 className="text-4xl font-bold text-gray-900 dark:text-warm-100 mb-2">Loyalty Passport ✨</h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Earn stamps and unlock rewards as you shop and collect
+              Earn stamps and unlock rewards as you shop and explore
             </p>
           </div>
 
@@ -237,7 +237,7 @@ function LoyaltyPage() {
                 <div className="flex-shrink-0 text-2xl">🌟</div>
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-warm-100">Badges & Recognition</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Showcase your collector status</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Showcase your explorer status</p>
                 </div>
               </div>
             </div>

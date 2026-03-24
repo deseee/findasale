@@ -315,7 +315,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                 <h3 className="font-semibold text-amber-900 dark:text-amber-200 mb-2">What goes in a sale?</h3>
                 <ul className="text-sm text-amber-800 dark:text-amber-300 space-y-1">
                   <li>✓ Sale date and location</li>
-                  <li>✓ Description of the estate/items</li>
+                  <li>✓ Description of your items</li>
                   <li>✓ Photos</li>
                   <li>✓ Individual items (furniture, decor, etc.)</li>
                 </ul>

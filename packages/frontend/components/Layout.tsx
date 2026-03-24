@@ -127,9 +127,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               Referrals
             </Link>
             <hr className="my-2 border-warm-200 dark:border-gray-700" />
-            <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">My Collection</span>
+            <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">My Explorer Profile</span>
             <Link href="/shopper/collector-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Collection
+              Explorer Passport
             </Link>
             <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Treasure Trails
