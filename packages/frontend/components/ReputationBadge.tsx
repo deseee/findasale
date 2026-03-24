@@ -76,7 +76,7 @@ const ReputationBadge: React.FC<ReputationBadgeProps> = ({
           {stars}
         </div>
         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-warm-100 dark:bg-warm-900 text-warm-700 dark:text-warm-200 whitespace-nowrap">
-          New Organizer
+          New Organizer ({saleCount} sale{saleCount !== 1 ? 's' : ''} so far)
         </span>
       </div>
     );
