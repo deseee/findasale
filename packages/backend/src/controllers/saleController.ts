@@ -18,6 +18,7 @@ import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
 import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
+import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -444,6 +445,11 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
             body: `Your sale "${updated.title}" is now live and visible to shoppers`,
             link: `/organizer/sales/${updated.id}`,
           }).catch(() => {});
+
+          // Award XP for publishing a sale
+          awardXp(org.userId, 'SALE_PUBLISHED', XP_AWARDS.REFERRAL_SIGNUP, { saleId: updated.id }).catch(err =>
+            console.error('[XP] Failed to award XP for sale published:', err)
+          );
         }
       }).catch(() => {});
 

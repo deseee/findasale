@@ -17,6 +17,7 @@ import { pushSaleStatus } from '../services/saleStatusService';
 import { sendItemSoldAlert } from '../services/saleAlertEmailService';
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
+import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -480,6 +481,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           where: { stripePaymentIntentId: paymentIntent.id },
           data: { status: 'PAID' },
         });
+
+        // Award XP to shopper for completing purchase
+        awardXp(purchase.userId, 'PURCHASE_COMPLETED', XP_AWARDS.PURCHASE, {
+          itemId: purchase.itemId,
+          saleId: purchase.saleId
+        }).catch(err =>
+          console.error('[XP] Failed to award XP for purchase completed:', err)
+        );
 
         // Notify organizer of payment received
         if (purchase.sale?.organizer?.userId) {

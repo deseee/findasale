@@ -5,6 +5,7 @@ import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import * as referralService from '../services/referralService';
+import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
 
 // GET /api/referrals/dashboard
 // Returns referral stats for the authenticated user
@@ -105,6 +106,11 @@ export const claimReward = async (req: AuthRequest, res: Response) => {
     }
 
     await referralService.claimReward(rewardId);
+
+    // Award XP for claiming referral reward
+    awardXp(req.user.id, 'REFERRAL_REWARD_CLAIMED', XP_AWARDS.REFERRAL_FIRST_PURCHASE, { couponId: rewardId }).catch(err =>
+      console.error('[XP] Failed to award XP for referral reward claimed:', err)
+    );
 
     res.json({ message: 'Reward claimed successfully', rewardId });
   } catch (error) {

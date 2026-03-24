@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { getStripe } from '../utils/stripe';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
 const stripe = () => getStripe();
 
 let _resend: any = null;
@@ -90,6 +91,16 @@ export const endAuctions = async () => {
             status: stripePaymentIntentId ? 'PENDING' : 'PAID',
           },
         });
+
+        // Award XP to shopper for winning auction (base + value bonus)
+        const valueBonus = Math.min(
+          Math.floor((price / 100) * XP_AWARDS.AUCTION_VALUE_BONUS_PER_100),
+          XP_AWARDS.AUCTION_MAX_BONUS
+        );
+        const totalXp = XP_AWARDS.AUCTION_WIN + valueBonus;
+        awardXp(highestBid.userId, 'AUCTION_WIN', totalXp, { itemId: item.id, saleId: item.sale.id }).catch(err =>
+          console.error('[XP] Failed to award XP for auction win:', err)
+        );
 
         // Email the winner with a payment link
         if (stripePaymentIntentId && highestBid.user?.email) {
