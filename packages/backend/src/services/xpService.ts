@@ -36,6 +36,7 @@ export const XP_AWARDS = {
   PURCHASE: 15, // Base for completed purchase
   REVIEW: 5, // For leaving a product review
   SHARE: 10, // For social share (honor system)
+  ITEM_SCANNED: 25, // Feature #85: Treasure Hunt QR scan
 
   // Auctions (per spec Decision 5, wins only)
   AUCTION_WIN: 15,

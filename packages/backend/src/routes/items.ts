@@ -16,6 +16,8 @@ import {
   getDraftItemsBySaleId,
   publishItem,
   getInspirationItems,
+  getQrCode,
+  recordQrScan,
 } from '../controllers/itemController';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
@@ -775,5 +777,12 @@ router.get('/:itemId/valuation', authenticate, requireTier('PRO'), getItemValuat
 
 // POST /api/items/:itemId/valuation/generate — Generate fresh valuation (PRO gated)
 router.post('/:itemId/valuation/generate', authenticate, requireTier('PRO'), generateItemValuation);
+
+// Feature #85: Treasure Hunt QR endpoints
+// GET /api/items/:itemId/qr — Generate QR code for item (increments qrScanCount)
+router.get('/:itemId/qr', getQrCode);
+
+// GET /api/items/:itemId/qr/scan — Record QR scan and award badge + XP (authenticated)
+router.get('/:itemId/qr/scan', authenticate, recordQrScan);
 
 export default router;

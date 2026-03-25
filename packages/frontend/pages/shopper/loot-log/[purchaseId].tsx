@@ -122,10 +122,18 @@ export default function PurchaseDetailPage() {
                 </div>
 
                 {/* Receipt Badge */}
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
                   <p className="text-sm font-semibold text-green-800 dark:text-green-200">✓ Purchase Complete</p>
                   <p className="text-xs text-green-700 mt-1">Transaction ID: {purchase?.id}</p>
                 </div>
+
+                {/* Share Your Find CTA */}
+                <Link
+                  href="/haul/coming-soon"
+                  className="w-full block text-center px-6 py-3 bg-gradient-to-r from-[#8FB897] to-[#7AA584] text-white font-semibold rounded-lg hover:from-[#7AA584] hover:to-[#6A9574] transition transform hover:scale-105"
+                >
+                  📸 Share Your Find!
+                </Link>
               </div>
             </div>
           </div>

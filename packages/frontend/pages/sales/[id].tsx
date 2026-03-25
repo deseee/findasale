@@ -33,6 +33,31 @@ import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
 import { RippleIndicator } from '../../components/RippleIndicator'; // Feature #51: Sale Ripples
 import { LiveFeedTicker } from '../../components/LiveFeedTicker'; // Feature #70: Live Activity Ticker
 import MessageComposeModal from '../../components/MessageComposeModal'; // Feature #29: Message Organizer
+import HuntSummary from '../../components/HuntSummary'; // Feature #85: Treasure Hunt QR
+
+// Feature #90: Sale Soundtrack — Spotify playlist mapping by sale type
+const SALE_TYPE_PLAYLISTS: Record<string, { name: string; url: string }> = {
+  ESTATE: {
+    name: 'Vintage Jazz & Blues',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX4o1sPP7cqVH',
+  },
+  YARD: {
+    name: 'Feel Good Summer',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX1s9tkWNPPpG',
+  },
+  AUCTION: {
+    name: 'Exciting Auction Energy',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DXcF1ycsuFScY',
+  },
+  FLEA_MARKET: {
+    name: 'Indie & Eclectic Mix',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX4UtSsGT1Sbe',
+  },
+  CONSIGNMENT: {
+    name: 'Sophisticated Shopping',
+    url: 'https://open.spotify.com/playlist/37i9dQZF1DX2L0iB23Enbj',
+  },
+};
 
 interface Sale {
   id: string;
@@ -48,6 +73,7 @@ interface Sale {
   lng: number;
   status?: string;
   photoUrls: string[];
+  saleType?: string; // Feature #90: Sale Soundtrack — ESTATE | YARD | AUCTION | FLEA_MARKET | CONSIGNMENT
   organizer: {
     id: string;
     userId: string;
@@ -518,6 +544,30 @@ const SaleDetailPage = () => {
               <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
             </div>
 
+            {/* Feature #90: Sale Soundtrack — Vibe Check */}
+            {sale.saleType && SALE_TYPE_PLAYLISTS[sale.saleType] && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+                <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <span>🎵</span>
+                  Vibe Check
+                </h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                  Set the mood for this {sale.saleType === 'FLEA_MARKET' ? 'flea market' : sale.saleType === 'CONSIGNMENT' ? 'consignment shop' : sale.saleType?.toLowerCase()}.
+                </p>
+                <a
+                  href={SALE_TYPE_PLAYLISTS[sale.saleType].url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 w-full justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0m5.521 17.34c-.24.315-.74.42-1.14.175-3.12-1.92-7.02-2.357-11.64-1.29-.42.12-.84-.12-.96-.51-.12-.41.12-.84.51-.96 5.04-1.137 9.46-.676 12.98 1.498.41.25.48.75.25 1.14m1.44-3.3c-.301.39-.921.54-1.44.42-3.3-.602-8.34-.755-12.33.298-.525.15-1.076-.165-1.227-.66-.15-.498.165-1.045.66-1.2 4.513-1.112 9.938-.935 13.61.644.529.277.667.94.385 1.456m.126-3.403c-3.96-.7-10.717-.777-15.02.298-.533.111-1.053-.26-1.16-.795-.105-.527.26-1.067.795-1.157 4.763-.981 12.022-.899 16.22.589.524.161.853.688.692 1.226-.161.537-.688.865-1.226.705z" />
+                  </svg>
+                  Listen on Spotify: {SALE_TYPE_PLAYLISTS[sale.saleType].name}
+                </a>
+              </div>
+            )}
+
             {/* Organizer Contact */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
               <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Contact Info</h2>
@@ -660,6 +710,9 @@ const SaleDetailPage = () => {
               </div>
             </div>
           )}
+
+          {/* Feature #85: Treasure Hunt QR Summary */}
+          {sale.items.length > 0 && <HuntSummary saleId={sale.id} />}
 
           {sale.items.length === 0 ? (
             <div className="text-center py-8">

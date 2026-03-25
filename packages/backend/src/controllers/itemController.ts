@@ -1152,3 +1152,134 @@ export const getInspirationItems = async (req: Request, res: Response): Promise<
     res.status(500).json({ message: 'Failed to fetch inspiration items.' });
   }
 };
+
+// Feature #85: Treasure Hunt QR — Generate QR code for item
+export const getQrCode = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { itemId } = req.params;
+    if (!itemId) {
+      res.status(400).json({ message: 'itemId is required.' });
+      return;
+    }
+
+    // Verify item exists
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      res.status(404).json({ message: 'Item not found.' });
+      return;
+    }
+
+    // Increment QR scan count
+    await prisma.item.update({
+      where: { id: itemId },
+      data: { qrScanCount: { increment: 1 } },
+    });
+
+    // Generate QR code pointing to item page
+    // Use domain-agnostic URL that works in both dev and prod
+    const qrContent = `https://finda.sale/item/${itemId}`;
+
+    // Use qrcode library to generate PNG
+    const QRCode = await import('qrcode');
+    const qrImageBuffer = await QRCode.toBuffer(qrContent, {
+      errorCorrectionLevel: 'H',
+      width: 300,
+      margin: 2,
+    });
+
+    res.set('Content-Type', 'image/png');
+    res.set('Content-Length', qrImageBuffer.length);
+    res.send(qrImageBuffer);
+  } catch (error) {
+    console.error('QR code generation error:', error);
+    res.status(500).json({ message: 'Failed to generate QR code.' });
+  }
+};
+
+// Feature #85: Treasure Hunt QR — Record QR scan and award badge + XP
+export const recordQrScan = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { itemId } = req.params;
+    const userId = req.user?.id;
+
+    if (!itemId || !userId) {
+      res.status(400).json({ message: 'itemId and authentication required.' });
+      return;
+    }
+
+    // Verify item exists
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      res.status(404).json({ message: 'Item not found.' });
+      return;
+    }
+
+    // Import awardXp here to avoid circular dependency
+    const { awardXp, XP_AWARDS } = await import('../services/xpService');
+
+    // Award 25 XP for scanning item
+    const xpResult = await awardXp(userId, 'ITEM_SCANNED', 25, { itemId });
+
+    // Find or create "Item Scout" badge
+    let badge = await prisma.badge.findUnique({
+      where: { name: 'Item Scout' },
+    });
+
+    if (!badge) {
+      // Create badge if it doesn't exist
+      badge = await prisma.badge.create({
+        data: {
+          name: 'Item Scout',
+          description: 'Scanned an item\'s QR code',
+          criteria: { type: 'qr_scan' },
+        },
+      });
+    }
+
+    // Award badge to user (upsert to avoid duplicates)
+    const existingBadge = await prisma.userBadge.findUnique({
+      where: {
+        userId_badgeId: { userId, badgeId: badge.id },
+      },
+    });
+
+    if (!existingBadge) {
+      await prisma.userBadge.create({
+        data: {
+          userId,
+          badgeId: badge.id,
+        },
+      });
+    }
+
+    // Fetch updated user profile
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        guildXp: true,
+        explorerRank: true,
+        userBadges: {
+          include: { badge: true },
+        },
+      },
+    });
+
+    res.json({
+      message: 'QR scan recorded successfully.',
+      xpAwarded: xpResult?.xpAwarded || 0,
+      newRank: updatedUser?.explorerRank,
+      totalXp: updatedUser?.guildXp,
+      badgeAwarded: !existingBadge ? badge.name : null,
+    });
+  } catch (error) {
+    console.error('QR scan recording error:', error);
+    res.status(500).json({ message: 'Failed to record QR scan.' });
+  }
+};

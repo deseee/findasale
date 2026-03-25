@@ -20,6 +20,7 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useHeartAnimation } from '../../hooks/useHeartAnimation';
 import Skeleton from '../../components/Skeleton';
 import ItemOGMeta from '../../components/ItemOGMeta';
+import QrCodeModal from '../../components/QrCodeModal'; // Feature #85: Treasure Hunt QR
 
 interface Item {
   id: string;
@@ -124,6 +125,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [showBidHistory, setShowBidHistory] = useState(false);
   const [estimatedTax, setEstimatedTax] = useState(0);
   const [buyersPremium, setBuyersPremium] = useState(0);
+  const [showQrModal, setShowQrModal] = useState(false); // Feature #85: Treasure Hunt QR
   const socketRef = useRef<Socket | null>(null);
 
   // Queries
@@ -529,6 +531,13 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   itemPrice={currentPrice}
                   userId={user?.id}
                 />
+                <button
+                  onClick={() => setShowQrModal(true)}
+                  title="Generate QR code for this item"
+                  className="flex items-center justify-center px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
+                >
+                  📱 QR
+                </button>
               </div>
 
               {/* Bid/Cart Section */}
@@ -647,6 +656,13 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           }}
         />
       )}
+
+      <QrCodeModal
+        itemId={item.id}
+        itemTitle={item.title}
+        isOpen={showQrModal}
+        onClose={() => setShowQrModal(false)}
+      />
 
       {isLightboxOpen && (
         <PhotoLightbox
