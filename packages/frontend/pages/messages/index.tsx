@@ -28,7 +28,7 @@ const MessagesPage = () => {
       return res.data;
     },
     enabled: !!user,
-    refetchInterval: 30_000,
+    refetchInterval: 10_000,
   });
 
   if (!user) {

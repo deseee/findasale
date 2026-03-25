@@ -41,7 +41,7 @@ const MessageThreadPage = () => {
       return res.data;
     },
     enabled: !!id && !!user,
-    refetchInterval: 15_000,
+    refetchInterval: 5_000,
   });
 
   const sendMutation = useMutation({
