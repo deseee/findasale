@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "fuse.js": "^7.0.0",
     "@hookform/resolvers": "^3.3.4",
     "@sentry/nextjs": "^8.0.0",
     "@simplewebauthn/browser": "^10.0.0",

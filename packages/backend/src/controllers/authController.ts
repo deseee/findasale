@@ -220,7 +220,6 @@ export const register = async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         roles: user.roles || [user.role], // Fallback to single-role array if roles is empty
-        points: user.points,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',

@@ -14,6 +14,7 @@ import { useToast } from '../../../components/ToastContext';
 import api from '../../../lib/api';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
+import SharePromoteModal from '../../../components/SharePromoteModal';
 
 interface Item {
   id: string;
@@ -113,6 +114,7 @@ export default function PromotePage(): JSX.Element {
   const [selectedPlatform, setSelectedPlatform] = useState<'instagram' | 'facebook'>('instagram');
   const [socialTemplate, setSocialTemplate] = useState<SocialTemplate | null>(null);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -332,10 +334,20 @@ export default function PromotePage(): JSX.Element {
           </Link>
 
           {/* Page header */}
-          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Share Your Sale</h1>
-          <p className="text-warm-700 dark:text-warm-300 text-lg mb-8">
-            Export your items to reach more buyers on platforms they already use
-          </p>
+          <div className="flex items-start justify-between mb-8">
+            <div className="flex-1">
+              <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Share Your Sale</h1>
+              <p className="text-warm-700 dark:text-warm-300 text-lg">
+                Export your items to reach more buyers on platforms they already use
+              </p>
+            </div>
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="ml-4 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition whitespace-nowrap"
+            >
+              📢 Share & Promote
+            </button>
+          </div>
 
           {/* Info card */}
           {itemCount > 0 && (
@@ -580,6 +592,26 @@ export default function PromotePage(): JSX.Element {
           </details>
         </div>
       </div>
+
+      {/* Share & Promote Modal */}
+      {sale && (
+        <SharePromoteModal
+          sale={{
+            id: sale.id,
+            title: sale.title,
+            description: sale.description,
+            address: sale.address,
+            city: sale.city,
+            state: sale.state,
+            zip: sale.zip,
+            startDate: sale.startDate,
+            endDate: sale.endDate,
+          }}
+          itemCount={itemCount}
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </>
   );
 }

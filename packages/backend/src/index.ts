@@ -150,6 +150,7 @@ import abTestRoutes from './routes/abTest';                     // A/B Testing I
 import feedbackRoutes from './routes/feedback';                 // User Feedback
 import bidsRoutes from './routes/bids';                         // Shopper bids page
 import xpController from './controllers/xpController';          // Phase 2a: Explorer's Guild XP system
+import supportRoutes from './routes/support';                  // #128: Automated Support Stack
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -450,6 +451,7 @@ app.use('/api/ab', abTestRoutes);                                      // A/B Te
 app.use('/api/feedback', feedbackRoutes);                              // User Feedback
 app.use('/api/bids', bidsRoutes);                                      // Shopper bids page
 app.use('/api/xp', xpController);                                      // Phase 2a: Explorer's Guild XP system
+app.use('/api/support', supportRoutes);                                 // #128: Automated Support Stack
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

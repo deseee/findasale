@@ -843,6 +843,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
       break;
     }
+    case 'checkout.session.completed': {
+      // #132: À La Carte Single-Sale Fee ($9.99)
+      const session = event.data.object;
+      if (session.metadata?.type === 'ALA_CARTE' && session.metadata?.saleId) {
+        await prisma.sale.update({
+          where: { id: session.metadata.saleId },
+          data: {
+            alaCarteFeePaid: true,
+            purchaseModel: 'ALA_CARTE',
+            alaCarte: true,
+          },
+        }).catch(err => console.error('[ala-carte] Failed to update sale after checkout:', err));
+      }
+      break;
+    }
     default:
       console.warn(`[stripe] Unhandled event type: ${event.type}`);
   }
@@ -1030,5 +1045,103 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
     }
 
     res.status(statusCode).json({ message });
+  }
+};
+
+// #132: À La Carte Single-Sale Fee Checkout ($9.99)
+export const createAlaCarteCheckout = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { id } = req.params;
+
+    // Verify organizer role
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    // Load organizer
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      include: { user: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // SIMPLE tier only
+    if (organizer.subscriptionTier !== 'SIMPLE') {
+      return res.status(403).json({
+        message: `À la carte pricing is only available for SIMPLE tier organizers. You are on ${organizer.subscriptionTier} tier.`,
+      });
+    }
+
+    // Load and verify sale belongs to organizer
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      select: { id: true, organizerId: true, title: true },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Access denied. This sale does not belong to you.' });
+    }
+
+    // Get or create Stripe customer
+    let customerId = organizer.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe().customers.create({
+        email: organizer.user.email,
+        metadata: { organizerId: organizer.id },
+      });
+      customerId = customer.id;
+
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: { stripeCustomerId: customerId },
+      });
+    }
+
+    // Create one-time checkout for $9.99
+    const session = await stripe().checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      customer: customerId,
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `À La Carte Sale Fee - ${sale.title}`,
+              description: 'One-time fee to publish this sale without a subscription',
+            },
+            unit_amount: 999, // $9.99 in cents
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/organizer/dashboard?ala-carte=success`,
+      cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/organizer/dashboard`,
+      metadata: {
+        saleId: id,
+        type: 'ALA_CARTE',
+      },
+    });
+
+    if (!session.url) {
+      return res.status(500).json({ message: 'Failed to create checkout session' });
+    }
+
+    res.json({ url: session.url });
+  } catch (error: unknown) {
+    console.error('À la carte checkout error:', error);
+    res.status(500).json({ message: 'Failed to create checkout session' });
   }
 };
