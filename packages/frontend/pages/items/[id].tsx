@@ -49,7 +49,8 @@ interface Item {
     endDate: string;
     zipCode: string;
     organizer?: {
-      name: string;
+      name?: string;
+      businessName?: string;
       rating?: number;
     } | null;
     location?: string;
@@ -438,7 +439,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                   <span>{item.cartCount} in cart</span> • <span>{item.views} views</span> •
-                  Sale by {item.sale.organizer?.name ?? 'Organizer'}
+                  Sale by {item.sale.organizer?.businessName ?? item.sale.organizer?.name ?? 'Organizer'}
                 </div>
               </div>
 

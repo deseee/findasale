@@ -374,7 +374,9 @@ const SaleDetailPage = () => {
                   <OrganizerTierBadge tier={sale.organizer.tier} />
                 )}
               </div>
-              <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">{sale.organizer.phone}</p>
+              {sale.organizer.phone && (
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">{sale.organizer.phone}</p>
+              )}
               {/* #71: Organizer Reputation Score */}
               <div className="mb-4">
                 <OrganizerReputation organizerId={sale.organizer.id} />
@@ -657,7 +659,7 @@ const SaleDetailPage = () => {
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-sm font-semibold px-3 py-1.5 rounded-full">
-                    \u2713 {availableCount} available
+                    ✓ {availableCount} available
                   </span>
                 )}
                 {soldCount > 0 && (
@@ -771,7 +773,7 @@ const SaleDetailPage = () => {
                         )}
                         {(item.status === 'SOLD' || item.status === 'PENDING') && (
                           <span className="inline-block bg-warm-700 dark:bg-gray-700 text-white dark:text-gray-200 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            \u2713 Sold
+                            ✓ Sold
                           </span>
                         )}
                         {item.auctionEndTime && (
@@ -880,13 +882,25 @@ const SaleDetailPage = () => {
                           Edit
                         </Link>
                       )}
-                      {!isOrganizer && user && !sale.isAuctionSale && item.status === 'AVAILABLE' && (
-                        <button
-                          onClick={() => handleBuyNow(item.id, item.title)}
-                          className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
-                        >
-                          Buy Now
-                        </button>
+                      {!isOrganizer && user && item.status === 'AVAILABLE' && (
+                        <>
+                          {!sale.isAuctionSale && (
+                            <button
+                              onClick={() => handleBuyNow(item.id, item.title)}
+                              className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
+                            >
+                              Buy Now
+                            </button>
+                          )}
+                          {sale.isAuctionSale && item.auctionEndTime && (
+                            <button
+                              onClick={() => setBiddingItemId(item.id)}
+                              className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
+                            >
+                              Place Bid
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

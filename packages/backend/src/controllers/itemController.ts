@@ -16,6 +16,7 @@ import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; 
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tier lapse enforcement
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
+import { createNotification } from '../services/notificationService'; // P0: Bid notifications
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -247,7 +248,7 @@ export const getItemById = async (req: Request, res: Response) => {
             organizerId: true,
             status: true,
             organizer: {
-              select: { userId: true }
+              select: { userId: true, businessName: true }
             }
           }
         }
@@ -706,7 +707,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Auction has ended' });
     }
 
-    // Create the bid
+    // Create the bid (store amount in dollars)
     const bid = await prisma.bid.create({
       data: {
         itemId,
@@ -727,7 +728,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       }).catch(err => console.warn('[placeBid] Failed to record bid IP:', err));
     }
 
-    // Update item's current bid
+    // Update item's current bid (in dollars)
     await prisma.item.update({
       where: { id: itemId },
       data: { currentBid: bidAmount }
@@ -738,7 +739,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     if (io) {
       io.to(`item-${itemId}`).emit('bidPlaced', {
         itemId,
-        bidAmount,
+        bidAmount: bidAmount,
         bidderId: req.user.id,
         bidTime: new Date(),
       });
@@ -748,21 +749,30 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     fireWebhooks(item.sale.organizer.userId, 'bid.placed', {
       itemId: item.id,
       saleId: item.saleId,
-      bidAmount,
+      bidAmount: bidAmount,
       bidderId: req.user.id,
     }).catch(err => console.error('Webhook fire error:', err));
 
-    // Notify organizer + previous highest bidder
-    if (
-      item.sale.organizer.userId &&
-      item.bids.length > 0
-    ) {
-      const previousHighestBidderId = item.bids[0].userId;
-      console.log(
-        `[placeBid] Item ${itemId}: Notifying organizer ${item.sale.organizer.userId} and prev bidder ${previousHighestBidderId}` +
-        ` of new bid $${bidAmount} by ${req.user.id}`
-      );
-    }
+    // Wire bid-placed notifications (P0 fix)
+    // Notify bidder: "Your bid of $[amount] was placed on [item name]"
+    createNotification(
+      req.user.id,
+      'BID_PLACED',
+      'Bid Placed',
+      `Your bid of $${bidAmount.toFixed(2)} was placed on ${item.title}`,
+      `/items/${itemId}`,
+      'OPERATIONAL'
+    ).catch(err => console.warn('[placeBid] Failed to create bidder notification:', err));
+
+    // Notify organizer: "New bid of $[amount] on [item name]"
+    createNotification(
+      item.sale.organizer.userId,
+      'NEW_BID',
+      'New Bid Received',
+      `New bid of $${bidAmount.toFixed(2)} on ${item.title}`,
+      `/items/${itemId}`,
+      'OPERATIONAL'
+    ).catch(err => console.warn('[placeBid] Failed to create organizer notification:', err));
 
     res.status(201).json(bid);
   } catch (error) {

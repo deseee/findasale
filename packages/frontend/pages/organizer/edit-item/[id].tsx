@@ -53,20 +53,35 @@ const EditItemPage = () => {
     if (item) {
       // Normalize category to Title Case (e.g. "tools" → "Tools") so the
       // select value matches the option values defined in the form.
-      const rawCat = item.category || '';
-      const normalizedCategory = rawCat
-        ? rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase()
-        : '';
-      // Normalize condition to UPPERCASE (e.g. "good" → "GOOD").
-      const normalizedCondition = item.condition ? item.condition.toUpperCase() : '';
+      let rawCat = (item.category || '').trim();
+      let normalizedCategory = '';
+      if (rawCat) {
+        // Handle various formats: "tools", "Tools", "TOOLS" → "Tools"
+        normalizedCategory = rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase();
+      }
+
+      // Normalize condition to UPPERCASE (e.g. "good" → "GOOD", "Excellent" → "EXCELLENT")
+      // Map common values to form options
+      let normalizedCondition = '';
+      if (item.condition) {
+        const condUpper = item.condition.toUpperCase().trim();
+        // Map to available options or use as-is if it matches
+        if (['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR', 'EXCELLENT'].includes(condUpper)) {
+          // Handle "EXCELLENT" as "LIKE_NEW" if not available
+          normalizedCondition = condUpper === 'EXCELLENT' ? 'LIKE_NEW' : condUpper;
+        } else {
+          normalizedCondition = condUpper;
+        }
+      }
+
       setFormData({
-        title: item.title,
-        description: item.description,
-        price: item.price || '',
+        title: item.title || '',
+        description: item.description || '',
+        price: item.price ? item.price.toString() : '',
         quantity: item.quantity ?? 1,
         category: normalizedCategory,
         condition: normalizedCondition,
-        status: item.status,
+        status: item.status || 'AVAILABLE',
       });
     }
   }, [item]);

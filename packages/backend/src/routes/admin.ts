@@ -15,6 +15,7 @@ import {
   getCloudinaryUsage,
   resetCloudinaryUsage,
   getBidReviewQueue,
+  adminBidAction,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -51,5 +52,6 @@ router.post('/cloudinary-usage/reset', resetCloudinaryUsage);
 
 // #94 Admin Bid Review Queue — fraud detection
 router.get('/bid-review', getBidReviewQueue);
+router.patch('/bids/:bidId/action', adminBidAction);
 
 export default router;

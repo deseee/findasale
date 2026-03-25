@@ -23,8 +23,8 @@ const NudgeBar: React.FC = () => {
     return null;
   }
 
-  // Nudges are shopper-only features — don't show to organizers
-  if (user?.role === 'ORGANIZER') {
+  // Nudges are shopper-only features — don't show to organizers or admins
+  if (user?.role === 'ORGANIZER' || user?.role === 'ADMIN' || user?.roles?.includes('ORGANIZER') || user?.roles?.includes('ADMIN')) {
     return null;
   }
 

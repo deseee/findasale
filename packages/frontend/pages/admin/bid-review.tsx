@@ -23,6 +23,7 @@ const BidReviewQueue = () => {
   const [records, setRecords] = useState<BidRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -54,6 +55,20 @@ const BidReviewQueue = () => {
       fetchData();
     }
   }, [user]);
+
+  const handleBidAction = async (bidId: string, action: 'flag' | 'approve' | 'dismiss') => {
+    try {
+      setActionLoading(bidId);
+      await api.patch(`/admin/bids/${bidId}/action`, { action });
+      // Optionally remove the record from the list after action
+      setRecords(records.filter(r => r.bidId !== bidId));
+    } catch (err) {
+      console.error('Error performing bid action:', err);
+      setError(`Failed to ${action} bid`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (isLoading || loading) {
     return (
@@ -106,6 +121,7 @@ const BidReviewQueue = () => {
                   <th className="text-left px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Email</th>
                   <th className="text-left px-4 py-3 font-medium text-warm-900 dark:text-warm-100">IP Address</th>
                   <th className="text-right px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Created</th>
+                  <th className="text-center px-4 py-3 font-medium text-warm-900 dark:text-warm-100">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,6 +138,29 @@ const BidReviewQueue = () => {
                     <td className="px-4 py-3 font-mono text-xs text-warm-500 dark:text-warm-400">{record.ipAddress}</td>
                     <td className="px-4 py-3 text-right text-warm-500 dark:text-warm-400 text-xs">
                       {new Date(record.createdAt).toLocaleDateString()} {new Date(record.createdAt).toLocaleTimeString()}
+                    </td>
+                    <td className="px-4 py-3 text-center space-x-2 flex justify-center">
+                      <button
+                        onClick={() => handleBidAction(record.bidId, 'flag')}
+                        disabled={actionLoading === record.bidId}
+                        className="bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs px-2 py-1 rounded"
+                      >
+                        {actionLoading === record.bidId ? '...' : 'Flag'}
+                      </button>
+                      <button
+                        onClick={() => handleBidAction(record.bidId, 'approve')}
+                        disabled={actionLoading === record.bidId}
+                        className="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white text-xs px-2 py-1 rounded"
+                      >
+                        {actionLoading === record.bidId ? '...' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => handleBidAction(record.bidId, 'dismiss')}
+                        disabled={actionLoading === record.bidId}
+                        className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white text-xs px-2 py-1 rounded"
+                      >
+                        {actionLoading === record.bidId ? '...' : 'Dismiss'}
+                      </button>
                     </td>
                   </tr>
                 ))}

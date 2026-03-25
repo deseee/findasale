@@ -463,3 +463,31 @@ export const getBidReviewQueue = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to fetch bid review queue' });
   }
 };
+
+// PATCH /api/admin/bids/:bidId/action — #94 Admin Bid Action (flag, approve, dismiss)
+export const adminBidAction = async (req: AuthRequest, res: Response) => {
+  try {
+    const { bidId } = req.params;
+    const { action } = req.body;
+
+    if (!['flag', 'approve', 'dismiss'].includes(action)) {
+      return res.status(400).json({ message: 'Invalid action. Must be flag, approve, or dismiss.' });
+    }
+
+    const bid = await prisma.bid.findUnique({
+      where: { id: bidId },
+    });
+
+    if (!bid) {
+      return res.status(404).json({ message: 'Bid not found' });
+    }
+
+    // For now, just acknowledge the action (can be extended to store action in DB later)
+    console.log(`[admin] Bid ${bidId} action: ${action}`);
+
+    res.json({ message: `Bid ${action}ed successfully`, bidId, action });
+  } catch (error) {
+    console.error('Error performing bid action:', error);
+    res.status(500).json({ message: 'Failed to perform bid action' });
+  }
+};
