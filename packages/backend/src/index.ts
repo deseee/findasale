@@ -301,6 +301,7 @@ const viewerLimiter = rateLimit({
 });
 
 // Stricter limit on auth routes — 100 failed req / 15 min per IP (successful logins don't count)
+// Test accounts (@example.com) bypass rate limiting for automated QA testing
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -308,7 +309,16 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
-  skip: (req) => isWhitelistedIP(req),
+  skip: (req) => {
+    // Bypass rate limit for whitelisted IPs
+    if (isWhitelistedIP(req)) return true;
+
+    // Bypass rate limit for test accounts (@example.com)
+    const email = req.body?.email?.toLowerCase();
+    if (email && email.endsWith('@example.com')) return true;
+
+    return false;
+  },
   store: createRateLimitStore(),
 });
 
