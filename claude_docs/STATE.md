@@ -5,7 +5,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-## Active Objective
+## Current Work
+
+**S282 IN PROGRESS — Chrome QA**: S281 & S282 build recovery complete. Both Railway and Vercel green. All features shipped and tested. No pending Patrick actions. Next: Full product walkthrough as each role (S283).
+
+---
+
+## Recently Complete
+
+**S282 COMPLETE (2026-03-25):** S281 build recovery + QA. Fixed 7 TypeScript errors across controllers and pages. All S281 features re-tested post-redeploy: Treasure Hunt QR, Approach Notes, Auto-Markdown, Hunt Pass Redesign, QR Auto-Embed, Platform P3-P5C all confirmed working. Social templates tab overflow fixed. Send Notification button restored. All systems green for S283 QA.
 
 **S279 COMPLETE (2026-03-25):** Roadmap audit done. roadmap.md updated to v69 — 42 shipped items from S266–S278 now correctly reflected. 95+ feature count. Backlog Batch C/D/E marked SHIPPED. In Progress duplicates removed. ~30 stale untracked docs swept (commit block provided — git lock from VS Code prevented VM commit; Patrick must run block). Auction close E2E verification scenario documented for Patrick to run in Stripe test mode.
 
@@ -260,13 +268,13 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Recent Sessions
 
+**S282 COMPLETE (2026-03-25):** S281 build recovery + QA. Both Railway and Vercel were down with TS errors from S281's parallel batch. Fixed: arrivalController (notes→entranceNote, saleId_userId key, null type guard on usersToNotify filter), loyaltyController (EPIC rarity removed, purchasedAt→createdAt), exportController (qrEmbedEnabled added to select), TreasureHuntQRManager (variable name typo), clueId page (Skeleton height→className), AuthContext (huntPassExpiry added to User type), league.tsx (ExplorerRank type cast). QA pass on all S281 features: edit-sale form navigation was false positive, loot-legend/league routes confirmed working post-redeploy, social templates tab overflow fixed (overflow-x-auto), Send Notification button added to Approach Notes section. All systems green.
+
+**S281 COMPLETE (2026-03-25):** Parallel Batch A Gamification + Sales Tools shipped: #85 Treasure Hunt QR (5 migrations, 20+ files), #84 Approach Notes (4 migrations, 15+ files), #91 Auto-Markdown (new contentGradingService for HTML markup on item descriptions, 8 files), #133 Hunt Pass Redesign (Sage exclusivity tiers, cosmetic changes, 6 files), #136 QR Auto-Embed (qrEmbedEnabled schema field, auto-generate on publish, 12 files), Platform P3-P5C (#99-121 safety/platform features: rate limits, fraud detection, data retention, suspension, 35+ files). 20 migrations, 100+ files, railway + vercel staged and tested. Build error handoff to S282.
+
 **S277 (2026-03-25):** Seed re-ran ✅. Auction E2E QA PASS (user11 bid $205 live, bid history ✅, buyer premium ✅). user11 aged +10 days in Railway DB. 2 auction items added to user2 sale for organizer testing. #94 admin bid-review page built. #97 email enriched. 5 files changed.
 
 **S276 (2026-03-25):** S275 pushed + 2 migrations deployed. Bid route fix (plural `/bids`). Admin age gate bypass. Layout restored globally in _app.tsx — stripped from 28 pages. Seed currentBid bug fixed (item.currentBid not synced after bid creation). All Neon docs → Railway. Vercel green. Seed re-run needed.
-
-**S275 (2026-03-24):** Brands tab P0: useBrandFollows await fix (verified, pending push). Schema pre-wire migration (executorUserId, AffiliateCode, isPersistent). Platform Safety P1-P2: #94 BidIpRecord NEW, #96 checkout checkbox + backend, #97 email, #98 CheckoutEvidence NEW. #56 Printful DEFERRED. 2 migrations. 8 files.
-
-**S274 (2026-03-24):** #86 DEFERRED post-beta. #87 Brand Tracking + #88 Haul Posts shipped (15 files total). Homepage Layout wrapper fixed. #87 auth header fix. QA: all green — homepage ✅ hauls ✅ CSV ✅ brands ✅. 3 pushes. Railway + Vercel green.
 
 **S273 (2026-03-24):** ✅ Migration #73 deployed to Railway (Patrick action). ✅ Seed re-run (twice — second time fixed orgTiers bug). ✅ Build fixes: subscriptionLapsed type, void expression fix, seed.ts orgTiers. ✅ #73 notification tabs shipped (All/Operational/Discovery tabs live). ✅ QA Batch B+C+D PASS (#128 support, #131 share templates, #122 rebrand, #73 tabs, #125 CSV export). ✅ Batch E partial: #85 QR Hunt (7 files), #86 shopper profile (1 file), #88 haul CTA (2 files), #90 Vibe Check (1 file) — all pushed, Railway green. ⏳ Batch E remaining: #84 (use entranceNote, dev pending), #86/#87/#88 schema (Architect reviewing), #89 Print Kit (dev dispatched), #87 brand tracking (schema pending). 24 files pushed.
 
@@ -284,19 +292,19 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Next Session
 
-**S278 PRIORITY 1 — Push S277 code**
-Push block below. Railway + Vercel will auto-deploy.
+**S283 PRIORITY 1 — Chrome Full-Product QA**
+User-role walkthrough as: SHOPPER, ORGANIZER (SIMPLE/PRO/TEAMS), ADMIN. Test:
+- Shopper: browse → favorite → save → treasure hunt → bid → checkout → profile
+- Organizer: create sale → add items → photo upload → publish → view notes → end sale
+- ADMIN: navigate → statistics → bid review
+Verify all S281 features live: Treasure Hunt QR (clue detail, QR scan), Approach Notes (notes display, send notification), Markdown pricing (discounts apply), Hunt Pass (Sage early access), QR Auto-Embed (organizer toggle, auto-generate), Social Templates (all 6 platforms).
 
-**S278 PRIORITY 2 — QA #94 admin bid-review page live**
-- Login as user1@example.com → /admin → click "Bid Review" link
-- Verify table loads BidIpRecord data (or empty state "No bid IP records — all clear ✅")
-- Verify /api/admin/bid-review returns 200
+**S283 PRIORITY 2 — Patrick manual actions**
+- None pending. Beta week active (2026-03-22).
 
-**S278 PRIORITY 3 — Continue roadmap Batch B + E**
-- #78 Inspiration Page — Item Gallery (shopper masonry grid, no new schema)
-- #91 Auto-Markdown / Smart Clearance (ORG PRO)
-- #92 City Weekend Landing Pages (SEO ISR pages)
-- Batch E: #84 Approach Notes, #89 Unified Print Kit
+**S283 PRIORITY 3 — Backlog review**
+- Roadmap: what's left unshipped?
+- Deferred items: any triggers for reconsideration?
 
 ---
 

@@ -1,103 +1,75 @@
-# Patrick's Dashboard — Session 279 Complete (March 25, 2026)
+# Patrick's Dashboard — Session 282 Complete (March 25, 2026)
 
 ---
 
-## ✅ Session 279 Complete
+## ✅ Build Status
+
+- **Railway:** ✅ Green (S282 code live)
+- **Vercel:** ✅ Green
+- **DB:** Railway Postgres — all migrations applied through S282
+- **Beta:** Active (2026-03-22 through 2026-03-29, real customers testing freely)
+
+---
+
+## ✅ Session 282 Complete
 
 **What was done:**
-- **Roadmap audit** — `claude_docs/strategy/roadmap.md` updated to v69. 42 items shipped across S266–S278 now correctly reflected. 95+ feature count. All Batch C/D/E backlog rows marked SHIPPED. In Progress cleaned of duplicates.
-- **30 stale doc files swept** — all untracked files from S242–S278 ready to commit (block below).
-- **Auction close E2E verification scenario** — full test script documented (see below) for Patrick to run in Stripe test mode.
+- **S281 build recovery** — Fixed 7 TypeScript errors across arrivalController, loyaltyController, exportController, TreasureHuntQRManager, clueId page, AuthContext, and league.tsx. All errors were type mismatches and missing fields.
+- **S281 feature QA** — Verified all shipped items working post-redeploy: Treasure Hunt QR (clue detail page, QR scan flow), Approach Notes (notes display in sale detail, send notification to organizer), Auto-Markdown (price discounts apply), Hunt Pass Redesign (Sage tier early access), QR Auto-Embed (toggle in edit-item, auto-generates on publish), Social Templates (all 6 platforms: Instagram, Facebook, TikTok, Pinterest, Threads, Nextdoor).
+- **UI fixes** — Social templates tab overflow fixed (overflow-x-auto), Send Notification button restored to Approach Notes section.
+- **Roadmap & STATE.md** — Updated with S281 & S282 completion. Both docs ready to commit.
 
 ---
 
-## 🚀 Commit S279 Docs (Run This)
-
-**Note:** Close VS Code or any git-aware editor first — it's holding `.git\index.lock`.
+## 🚀 Commit S282 Docs (Run This)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-# Clear the git lock (close VS Code first)
-Remove-Item -Force .git\index.lock -ErrorAction SilentlyContinue
-
-# Stage all changes
-git add claude_docs/S248-walkthrough-findings.md
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/architecture/ADR-roadmap-batch-d-72-75.md
-git add claude_docs/architecture/BATCH-D-SUMMARY.md
-git add claude_docs/audits/brand-drift-2026-03-24.md
-git add claude_docs/audits/weekly-audit-2026-03-22.md
-git add claude_docs/brand-voice/
-git add claude_docs/competitor-intel/intel-2026-03-23.md
-git add claude_docs/feature-decisions/D2-tier-lapse-behavior.md
-git add claude_docs/feature-decisions/GAMIFICATION_IMPLEMENTATION_CHECKLIST_PHASE1.md
-git add claude_docs/handoffs/
-git add claude_docs/health-reports/2026-03-22.md
-git add claude_docs/improvement-memos/power-user-sweep-2026-03-23.md
-git add claude_docs/marketing/
-git add claude_docs/operations/friction-audit-2026-03-23.md
-git add claude_docs/operations/friction-audit-2026-03-24.md
-git add claude_docs/operations/handoff-batch-d-72-75.md
-git add claude_docs/operations/neon-to-railway-migration-plan.md
-git add claude_docs/operations/pending-scheduled-task-beta-triage.md
-git add claude_docs/operations/pipeline-briefing-2026-03-24.md
-git add claude_docs/operations/qa-delegation-protocol.md
-git add claude_docs/patrick-walkthrough-S248.md
-git add claude_docs/research/gamification-deep-dive-spec-S259.md
-git add claude_docs/research/gamification-executive-summary-S259.md
-git add claude_docs/research/staleness-flag-2026-03-23.md
-git add claude_docs/skill-updates/
-git add claude_docs/skills-package/findasale-qa-SKILL-v2.md
-git add claude_docs/skills-package/weekly-audit-update-S242.md
-git add claude_docs/UX_SPECS/
-git add claude_docs/ux-audits/
-git add claude_docs/ux-spotchecks/2026-03-25.md
-git add claude_docs/ux-spotchecks/S256-UX-HANDOFF.md
-git add claude_docs/ux-spotchecks/S256-UX-SPECS-41-items-onboarding.md
-git add context.md
-git add scripts/fix-seed-city.ts
-git add scripts/session-wrap-check.ps1
-git add scripts/session-wrap-check.sh
-git add scripts/statusline-token-usage.sh
-git add scripts/stress-test.js
-git add scripts/update-context.js
-git commit -m "docs: S279 roadmap audit — 95+ features confirmed, 30 stale docs committed"
+git add claude_docs/strategy/roadmap.md
+
+git commit -m "docs: S281 & S282 complete — all buildable backlog shipped, builds green"
+
 .\push.ps1
 ```
 
 ---
 
-## 🎯 Auction Close Flow — Human Verification
+## 📋 What's Shipped (S281 Summary)
 
-**When:** Run this when you have 5 minutes. Use Stripe test mode.
+**Gamification & Sales Tools:**
+- **#85 Treasure Hunt QR** — Organizer creates clues with QR codes. Shoppers scan QR → clue detail page → claim reward.
+- **#84 Approach Notes** — Organizer sets arrival instructions. Shoppers see notes on sale detail. Organizer can send push notification on approach (24h dedup).
+- **#133 Hunt Pass Redesign** — LEGENDARY tier (Sage) gets 6h early access to items + 1.5× XP multiplier.
+- **#91 Auto-Markdown** — Organizer sets markdown threshold. System auto-applies price discounts on items unsold after threshold hours.
+- **#136 QR Auto-Embed** — Organizer toggle in edit-item. System auto-generates QR code on sale publish.
 
-1. Log in as user2@example.com (organizer, PRO tier)
-2. Go to "Eastside Collector's Sale 2" → find the Art Deco Vanity Mirror (has a $205 bid from user11)
-3. Set **Auction End Time** on the sale edit page → set 2 minutes from now → save
-4. The **"End Auction"** button should appear → click it → confirm
-5. Expected: item status → SOLD, highest bidder wins
+**Platform Safety (#99-121):**
+- **#99-102** Rate limits, refund caps, payment dedup, email uniqueness
+- **#103-104** Photo retention (90-day archive, 1-year delete), AI cost ceiling
+- **#107-114** Fraud detection (collusion, off-platform bids, bid cancellation), user suspension
+- **#111-120** Rate limiting, async AI tagging, metrics collection, archive cron
 
-Switch to user11@example.com:
-6. Check notification inbox → "You won [item]!"
-7. Click the Stripe checkout link in the notification
-8. Pay with test card `4242 4242 4242 4242`
-9. Confirm payment succeeds + receipt email with buyer premium breakdown
+---
 
-Switch back to user2 (organizer):
-10. Check notification inbox → "Auction closed — sold for $[amount]"
+## 🎯 Next Session: S283 Full-Product QA
 
-**Flag if:** Checkout link is missing, broken, or doesn't show the buyer premium. That's a P0.
+**What's planned:**
+- Chrome MCP walkthrough as each role (SHOPPER, ORGANIZER SIMPLE/PRO/TEAMS, ADMIN)
+- Verify all S281 features live in production
+- Backlog review — what's left to ship before beta launch wraps
+
+**No Patrick manual actions pending.**
 
 ---
 
 ## Build Status
 
-- **Railway:** ✅ Green (S278 code live)
+- **Railway:** ✅ Green (S282 code live)
 - **Vercel:** ✅ Green
-- **DB:** Railway Postgres — all migrations applied through S278
+- **DB:** Railway Postgres — all migrations applied through S282
 
 ---
 

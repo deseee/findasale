@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-25 (v70 — S281: #84 approach notes, #85 treasure hunt QR, #91 auto-markdown, #133 hunt pass redesign, #136 QR auto-embed, Platform P3-P5C (#99-121) all shipped. All remaining buildable backlog now built. Mass QA → S282.)
+**Last Updated:** 2026-03-25 (v71 — S281/S282: #84 approach notes, #85 treasure hunt QR, #91 auto-markdown, #133 hunt pass redesign, #136 QR auto-embed, Platform P3-P5C (#99-121) all shipped and QA'd in S282. All remaining buildable backlog now built.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
