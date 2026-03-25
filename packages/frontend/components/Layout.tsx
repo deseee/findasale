@@ -95,6 +95,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/brand-kit" label="Brand Kit" requiredTier="PRO" />
 
             <SectionHeader label="Organizer Tools" />
             <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -144,7 +145,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <hr className="my-2 border-warm-200 dark:border-gray-700" />
             <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">My Explorer Profile</span>
             <Link href="/shopper/collector-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              Collector Passport
+            </Link>
+            <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Loot Legend
+            </Link>
+            <Link href="/shopper/hauls" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              Hauls
             </Link>
             <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Treasure Trails
@@ -160,6 +167,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
             <Link href="/challenges" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Challenges
+            </Link>
+            <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              Achievements
             </Link>
             <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Live Sale Feed
@@ -488,6 +498,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <li><Link href="/about" className="text-warm-400 hover:text-white">About</Link></li>
                 <li><Link href="/leaderboard" className="text-warm-400 hover:text-white">Leaderboard</Link></li>
                 <li><Link href="/contact" className="text-warm-400 hover:text-white">Contact</Link></li>
+                <li><Link href="/support" className="text-warm-400 hover:text-white">Support</Link></li>
                 <li><Link href="/faq" className="text-warm-400 hover:text-white">FAQ</Link></li>
                 {isClient && user?.role === 'ORGANIZER' && (
                   <>
