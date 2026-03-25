@@ -4,7 +4,6 @@ import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
-import Layout from '../../components/Layout';
 import { useLootLog, useLootLogStats } from '../../hooks/useLootLog';
 
 export default function LootLogPage() {
@@ -38,7 +37,7 @@ export default function LootLogPage() {
   const isEmpty = !logsLoading && lootLogData?.total === 0;
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>My Loot Log — FindA.Sale</title>
         <meta name="description" content="Your purchase history" />
@@ -148,7 +147,7 @@ export default function LootLogPage() {
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 }
 

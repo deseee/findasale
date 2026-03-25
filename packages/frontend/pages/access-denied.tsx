@@ -1,7 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '../components/AuthContext';
-import Layout from '../components/Layout';
 
 const AccessDenied = () => {
   const { user } = useAuth();
@@ -31,8 +30,7 @@ const AccessDenied = () => {
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-20 flex flex-col items-center justify-center min-h-screen">
+    <div className="container mx-auto px-4 py-20 flex flex-col items-center justify-center min-h-screen">
         <div className="text-center max-w-md">
           {/* Icon / visual indicator */}
           <div className="mb-6">
@@ -81,7 +79,6 @@ const AccessDenied = () => {
           </div>
         </div>
       </div>
-    </Layout>
   );
 };
 

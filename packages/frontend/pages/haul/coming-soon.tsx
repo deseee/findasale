@@ -1,10 +1,9 @@
 import Head from 'next/head';
 import Link from 'next/link';
-import Layout from '../../components/Layout';
 
 export default function HaulComingSoonPage() {
   return (
-    <Layout>
+    <>
       <Head>
         <title>Share Your Finds — Coming Soon</title>
         <meta name="description" content="Coming soon: Share your haul photos and connect with the community" />
@@ -60,6 +59,6 @@ export default function HaulComingSoonPage() {
           </Link>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

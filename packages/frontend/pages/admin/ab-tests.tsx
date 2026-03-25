@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
-import Layout from '../../components/Layout';
 
 interface VariantResult {
   variant: string;
@@ -68,11 +67,9 @@ const ABTestsPage = () => {
 
   if (userLoading || (user?.role === 'ADMIN' && loading)) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-amber-600 border-t-white"></div>
-        </div>
-      </Layout>
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-amber-600 border-t-white"></div>
+      </div>
     );
   }
 
@@ -81,8 +78,7 @@ const ABTestsPage = () => {
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">A/B Tests</h1>
 
         {error && (
@@ -171,7 +167,6 @@ const ABTestsPage = () => {
           </div>
         )}
       </div>
-    </Layout>
   );
 };
 

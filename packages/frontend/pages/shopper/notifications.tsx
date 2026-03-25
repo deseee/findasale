@@ -3,7 +3,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
-import Layout from '../../components/Layout';
 import api from '../../lib/api';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
@@ -131,7 +130,7 @@ export default function NotificationsPage() {
 
   if (authLoading || isLoading) {
     return (
-      <Layout>
+      <>
         <Head>
           <title>Notifications — FindA.Sale</title>
         </Head>
@@ -143,12 +142,12 @@ export default function NotificationsPage() {
             ))}
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Notifications — FindA.Sale</title>
         <meta name="description" content="Your FindA.Sale notifications" />
@@ -254,6 +253,6 @@ export default function NotificationsPage() {
           </div>
         )}
       </div>
-    </Layout>
+    </>
   );
 }

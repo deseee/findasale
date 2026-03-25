@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
-import Layout from '../../components/Layout';
 
 interface User {
   id: string;
@@ -87,11 +86,9 @@ const AdminUsers = () => {
 
   if (isLoading || loading) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center text-warm-600 dark:text-warm-400">Loading users...</div>
-        </div>
-      </Layout>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-warm-600 dark:text-warm-400">Loading users...</div>
+      </div>
     );
   }
 
@@ -100,8 +97,7 @@ const AdminUsers = () => {
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Manage Users</h1>
           <p className="text-warm-600 dark:text-warm-400">Search, filter, and manage user roles</p>
@@ -246,7 +242,6 @@ const AdminUsers = () => {
           </div>
         )}
       </div>
-    </Layout>
   );
 };
 

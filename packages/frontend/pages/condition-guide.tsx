@@ -1,7 +1,6 @@
 import React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import Layout from '../components/Layout';
 import ConditionBadge, { CONDITION_COLORS } from '../components/ConditionBadge';
 
 const ConditionGuide: React.FC = () => {
@@ -79,7 +78,7 @@ const ConditionGuide: React.FC = () => {
   ];
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Item Condition Guide - FindA.Sale</title>
         <meta
@@ -200,7 +199,7 @@ const ConditionGuide: React.FC = () => {
           </div>
         </div>
       </main>
-    </Layout>
+    </>
   );
 };
 

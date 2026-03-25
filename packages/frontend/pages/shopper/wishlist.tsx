@@ -12,7 +12,6 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
-import Layout from '../../components/Layout';
 import { ItemCardSkeleton } from '../../components/SkeletonCards';
 import EmptyState from '../../components/EmptyState';
 import { useFollows } from '../../hooks/useFollows';
@@ -151,7 +150,7 @@ const WishlistPage = () => {
   const hasError = favoritesError || wishlistsError || alertsError;
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>My Saves – FindA.Sale</title>
       </Head>
@@ -443,7 +442,7 @@ const WishlistPage = () => {
 
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 

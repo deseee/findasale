@@ -3,7 +3,6 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import Layout from '../../components/Layout';
 import Skeleton from '../../components/Skeleton';
 
 interface WorkspacePublicData {
@@ -31,7 +30,7 @@ export default function PublicWorkspacePage() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <>
         <Head>
           <title>Workspace | FindA.Sale</title>
         </Head>
@@ -39,13 +38,13 @@ export default function PublicWorkspacePage() {
           <Skeleton className="h-8 mb-4 w-1/2" />
           <Skeleton className="h-64" />
         </div>
-      </Layout>
+      </>
     );
   }
 
   if (isError || !workspace) {
     return (
-      <Layout>
+      <>
         <Head>
           <title>Workspace Not Found | FindA.Sale</title>
         </Head>
@@ -65,7 +64,7 @@ export default function PublicWorkspacePage() {
             </a>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 

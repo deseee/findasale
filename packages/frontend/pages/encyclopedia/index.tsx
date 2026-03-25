@@ -10,7 +10,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEncyclopediaList } from '../../hooks/useEncyclopedia';
-import Layout from '../../components/Layout';
 import EncyclopediaCard from '../../components/EncyclopediaCard';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
@@ -66,7 +65,7 @@ const EncyclopediaIndexPage = () => {
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0;
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Resale Encyclopedia | FindA.Sale</title>
         <meta
@@ -254,7 +253,7 @@ const EncyclopediaIndexPage = () => {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 

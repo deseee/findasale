@@ -233,7 +233,9 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <QueryClientProvider client={queryClient}>
               <ThemeInitializer />
               <ErrorBoundary key={router.asPath}>
-                <Component {...pageProps} />
+                <Layout>
+                  <Component {...pageProps} />
+                </Layout>
               </ErrorBoundary>
               {/* PWA helpers */}
               <ServiceWorkerUpdateNotifier />

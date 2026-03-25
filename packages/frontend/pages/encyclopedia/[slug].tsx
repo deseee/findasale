@@ -10,7 +10,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEncyclopediaEntry } from '../../hooks/useEncyclopedia';
-import Layout from '../../components/Layout';
 import EncyclopediaCard from '../../components/EncyclopediaCard';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
@@ -167,7 +166,7 @@ const EncyclopediaEntryPage = () => {
 
   if (isLoading) {
     return (
-      <Layout>
+      <>
         <Head>
           <title>Encyclopedia | FindA.Sale</title>
         </Head>
@@ -178,13 +177,13 @@ const EncyclopediaEntryPage = () => {
             <Skeleton className="h-96" />
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   if (error || !entry) {
     return (
-      <Layout>
+      <>
         <Head>
           <title>Encyclopedia | FindA.Sale</title>
         </Head>
@@ -198,12 +197,12 @@ const EncyclopediaEntryPage = () => {
             }}
           />
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>{entry.title} | Estate Sale Encyclopedia</title>
         <meta name="description" content={entry.subtitle || entry.title} />
@@ -383,7 +382,7 @@ const EncyclopediaEntryPage = () => {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 

@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
-import Layout from '../../components/Layout';
 
 interface BetaInvite {
   id: string;
@@ -112,11 +111,9 @@ const AdminInvitesPage = () => {
 
   if (isLoading || loading) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center text-warm-600 dark:text-warm-400">Loading invites...</div>
-        </div>
-      </Layout>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-warm-600 dark:text-warm-400">Loading invites...</div>
+      </div>
     );
   }
 
@@ -125,7 +122,7 @@ const AdminInvitesPage = () => {
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Beta Invite Management - Admin</title>
         <meta name="description" content="Manage beta invites" />
@@ -285,7 +282,7 @@ const AdminInvitesPage = () => {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 

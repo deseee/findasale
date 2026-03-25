@@ -3,7 +3,6 @@ import Head from 'next/head';
 import { useActiveChallenges, useMyChallengeProgress, useLeaderboard } from '../hooks/useChallenges';
 import { useAuth } from '../components/AuthContext';
 import { ChallengeBadge } from '../components/ChallengeBadge';
-import Layout from '../components/Layout';
 
 interface Objective {
   objectiveId: string;
@@ -51,7 +50,7 @@ export default function ChallengesPage() {
   }, [myProgress]);
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Challenges | FindA.Sale</title>
       </Head>
@@ -240,6 +239,6 @@ export default function ChallengesPage() {
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

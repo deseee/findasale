@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
-import Layout from '../../components/Layout';
 
 interface Stats {
   totalUsers: number;
@@ -66,11 +65,9 @@ const AdminDashboard = () => {
 
   if (isLoading || loading) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center text-warm-600 dark:text-warm-400">Loading admin dashboard...</div>
-        </div>
-      </Layout>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-warm-600 dark:text-warm-400">Loading admin dashboard...</div>
+      </div>
     );
   }
 
@@ -80,19 +77,16 @@ const AdminDashboard = () => {
 
   if (error) {
     return (
-      <Layout>
-        <div className="container mx-auto px-4 py-8">
-          <div className="bg-red-100 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded">
-            {error}
-          </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-100 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded">
+          {error}
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Admin Dashboard</h1>
         <p className="text-warm-600 dark:text-warm-400 mb-8">Welcome, {user.name}. Manage your platform here.</p>
 
@@ -251,7 +245,6 @@ const AdminDashboard = () => {
           </div>
         )}
       </div>
-    </Layout>
   );
 };
 

@@ -3,7 +3,6 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { usePublicTrail } from '../../hooks/useTrails';
 import { useAuth } from '../../components/AuthContext';
-import Layout from '../../components/Layout';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
 
@@ -17,27 +16,28 @@ export default function PublicTrailPage() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <>
         <div className="max-w-2xl mx-auto px-4 py-8">
           <Skeleton className="h-12 mb-6" />
           <Skeleton className="h-32" />
         </div>
-      </Layout>
+      </>
+
     );
   }
 
   if (isError || !trail) {
     return (
-      <Layout>
+      <>
         <div className="max-w-2xl mx-auto px-4 py-8">
           <EmptyState heading="Trail Not Found" subtext="This treasure trail no longer exists or has been made private." />
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>{trail.name} | Treasure Trail | FindA.Sale</title>
         <meta name="description" content={trail.description || 'A curated treasure trail of sales'} />
@@ -149,6 +149,6 @@ export default function PublicTrailPage() {
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

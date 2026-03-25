@@ -9,7 +9,6 @@ import React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
-import Layout from '../../components/Layout';
 import { GRAND_RAPIDS_NEIGHBORHOODS } from './index';
 
 interface NeighborhoodSale {
@@ -50,7 +49,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
   const metaDesc = `Browse ${total > 0 ? total : 'upcoming'} sale${total !== 1 ? 's' : ''} in ${name} — estate sales, yard sales, garage sales, and more. Find furniture, antiques, collectibles and more near you.`;
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>{pageTitle}</title>
         <meta name="description" content={metaDesc} />
@@ -210,7 +209,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
 
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 
