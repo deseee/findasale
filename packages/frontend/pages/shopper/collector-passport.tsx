@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { useMyPassport, useUpdatePassport, useMyMatches, CollectorPassport } from '@/hooks/useCollectorPassport';
+import { useMyPassport, useUpdatePassport, useMyMatches, ExplorerPassport } from '@/hooks/useCollectorPassport';
 import { useAuth } from '@/components/AuthContext';
 
 const CATEGORIES = [
@@ -26,7 +26,7 @@ const CATEGORIES = [
   'Books',
 ];
 
-function CollectorPassportPage() {
+function ExplorerPassportPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { passport, isLoading: passportLoading, refetch: refetchPassport } = useMyPassport();
@@ -117,7 +117,7 @@ function CollectorPassportPage() {
   return (
     <>
       <Head>
-        <title>My Explorer Passport - FindA.Sale</title>
+        <title>My Loot Legend - FindA.Sale</title>
       </Head>
 
       <div className="max-w-5xl mx-auto py-8 px-4 dark:bg-gray-900 dark:text-warm-100">
@@ -125,7 +125,7 @@ function CollectorPassportPage() {
           <div className="mb-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">My Explorer Passport 🗺️</h1>
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">My Loot Legend 🗺️</h1>
                 {passport && (
                   <div className="bg-[#8fb897] text-white rounded-full px-4 py-2 font-semibold">
                     {passport.totalFinds} finds
@@ -134,7 +134,7 @@ function CollectorPassportPage() {
               </div>
             </div>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Define your collection identity and get notified when matching items appear
+              Define your explorer identity and get notified when matching items appear
             </p>
           </div>
 
@@ -162,7 +162,7 @@ function CollectorPassportPage() {
                 Specialties
               </label>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                The categories and styles you collect most. Auto-detected from your activity and used to find matching items.
+                The categories and styles you explore most. Auto-detected from your activity and used to find matching items.
               </p>
               <div className="flex gap-2 mb-3">
                 <input
@@ -341,7 +341,7 @@ function CollectorPassportPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-gray-100">Email Alerts</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Get notified via email when items match your collection</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Get notified via email when items match your explorer interests</p>
                 </div>
                 <button
                   onClick={() => setNotifyEmail(!notifyEmail)}
@@ -360,7 +360,7 @@ function CollectorPassportPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-gray-100">Push Notifications</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Get push notifications when items match your collection</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Get push notifications when items match your explorer interests</p>
                 </div>
                 <button
                   onClick={() => setNotifyPush(!notifyPush)}
@@ -382,4 +382,4 @@ function CollectorPassportPage() {
   );
 }
 
-export default CollectorPassportPage;
+export default ExplorerPassportPage;

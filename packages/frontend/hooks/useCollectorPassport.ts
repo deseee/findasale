@@ -1,7 +1,7 @@
 /**
- * Feature #45: Collector Passport Hooks
+ * Feature #45: Explorer Passport Hooks
  *
- * useMyPassport — fetch authenticated user's collector passport
+ * useMyPassport — fetch authenticated user's explorer passport
  * useUpdatePassport — update passport (bio, specialties, categories, keywords)
  * useMyMatches — fetch items from recent sales matching passport
  */
@@ -9,7 +9,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 
-export interface CollectorPassport {
+export interface ExplorerPassport {
   id: string;
   userId: string;
   bio: string | null;
@@ -24,7 +24,7 @@ export interface CollectorPassport {
   updatedAt: string;
 }
 
-export interface PublicCollectorPassport {
+export interface PublicExplorerPassport {
   id: string;
   bio: string | null;
   specialties: string[];
@@ -38,7 +38,7 @@ export interface PublicCollectorPassport {
   };
 }
 
-export interface CollectorItem {
+export interface ExplorerItem {
   id: string;
   title: string;
   category: string | null;
@@ -54,15 +54,15 @@ export interface CollectorItem {
 
 export interface MatchesResponse {
   totalMatches: number;
-  items: CollectorItem[];
+  items: ExplorerItem[];
 }
 
 /**
- * Fetch authenticated user's collector passport
+ * Fetch authenticated user's explorer passport
  * Automatically creates an empty passport if not found
  */
 export function useMyPassport() {
-  const { data, isLoading, error, refetch } = useQuery<CollectorPassport>({
+  const { data, isLoading, error, refetch } = useQuery<ExplorerPassport>({
     queryKey: ['collector-passport', 'my'],
     queryFn: async () => {
       const response = await api.get('/collector-passport/my');
@@ -80,13 +80,13 @@ export function useMyPassport() {
 }
 
 /**
- * Update authenticated user's collector passport
+ * Update authenticated user's explorer passport
  */
 export function useUpdatePassport() {
   const queryClient = useQueryClient();
 
   const { mutate, isPending, error } = useMutation({
-    mutationFn: async (updates: Partial<CollectorPassport>) => {
+    mutationFn: async (updates: Partial<ExplorerPassport>) => {
       const response = await api.patch('/collector-passport/my', updates);
       return response.data;
     },
@@ -129,11 +129,11 @@ export function useMyMatches() {
 }
 
 /**
- * Fetch public collector profile by user ID
+ * Fetch public explorer profile by user ID
  * Returns null if profile doesn't exist or is private
  */
 export function usePublicPassport(userId: string | null) {
-  const { data, isLoading, error } = useQuery<PublicCollectorPassport>({
+  const { data, isLoading, error } = useQuery<PublicExplorerPassport>({
     queryKey: ['collector-passport', 'public', userId],
     queryFn: async () => {
       if (!userId) throw new Error('User ID required');

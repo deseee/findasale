@@ -32,6 +32,9 @@ const OrganizerSettingsPage = () => {
   const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
   const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
+  const [phone, setPhone] = useState('');
+  const [bio, setBio] = useState('');
+  const [website, setWebsite] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [fontSize, setFontSize] = useState(16);
@@ -59,6 +62,27 @@ const OrganizerSettingsPage = () => {
       showToast(msg, 'error');
     }
   });
+
+  // Fetch full organizer profile data (phone, bio, website)
+  useEffect(() => {
+    const fetchOrganizerData = async () => {
+      if (!user?.id) return;
+      try {
+        const response = await api.get('/organizers/me');
+        if (response.data) {
+          setPhone(response.data.phone || '');
+          setBio(response.data.bio || '');
+          setWebsite(response.data.website || '');
+        }
+      } catch (error) {
+        console.error('Failed to fetch organizer data:', error);
+      }
+    };
+
+    if (user?.id) {
+      fetchOrganizerData();
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (user?.businessName) {
@@ -107,7 +131,12 @@ const OrganizerSettingsPage = () => {
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      await api.patch('/auth/profile', { businessName });
+      await api.patch('/organizers/me', {
+        businessName,
+        phone,
+        bio,
+        website,
+      });
       showToast('Profile updated', 'success');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to update profile', 'error');
@@ -411,7 +440,7 @@ const OrganizerSettingsPage = () => {
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Business Name</label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Business Name <span className="text-red-500">*</span></label>
                     <Tooltip content="This is how your business appears to shoppers on item listings and sale pages. Use your official business name or brand." position="right" />
                   </div>
                   <input
@@ -422,6 +451,43 @@ const OrganizerSettingsPage = () => {
                     placeholder="e.g., Midwest Estate Sales LLC"
                   />
                 </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Phone <span className="text-red-500">*</span></label>
+                    <Tooltip content="Your contact phone number for shoppers to reach you. This appears on your sale pages and organizer profile." position="right" />
+                  </div>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="e.g., (616) 555-0123"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bio</label>
+                  <textarea
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="Tell shoppers about your business and specialties..."
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Website URL</label>
+                  <input
+                    type="url"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://example.com"
+                  />
+                </div>
+
                 <p className="text-xs text-warm-500 dark:text-gray-400">
                   Your profile helps build trust with shoppers. Keep your information accurate and up-to-date.
                 </p>

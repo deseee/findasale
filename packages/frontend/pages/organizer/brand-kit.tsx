@@ -4,8 +4,9 @@
  * Allows organizers to manage their brand identity:
  * - Logo URL
  * - Primary and secondary brand colors
- * - Business name, website, and social links
- * - Bio
+ * - Social links (Facebook, Instagram, Etsy)
+ * - Custom storefront slug
+ * - PRO-tier customizations (fonts, banner, accent color)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -18,13 +19,9 @@ import Head from 'next/head';
 import Link from 'next/link';
 
 interface BrandData {
-  businessName: string;
-  bio: string | null;
-  website: string | null;
   facebook: string | null;
   instagram: string | null;
   etsy: string | null;
-  phone: string;
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSecondaryColor: string | null;
@@ -44,13 +41,9 @@ const BrandKitPage = () => {
   const [isLoading_, setIsLoading_] = useState(true);
 
   const [formData, setFormData] = useState<BrandData>({
-    businessName: '',
-    bio: '',
-    website: '',
     facebook: '',
     instagram: '',
     etsy: '',
-    phone: '',
     brandLogoUrl: '',
     brandPrimaryColor: '',
     brandSecondaryColor: '',
@@ -86,13 +79,9 @@ const BrandKitPage = () => {
         const orgData = orgResponse.data;
 
         setFormData({
-          businessName: orgData.businessName || '',
-          bio: orgData.bio || '',
-          website: orgData.website || '',
           facebook: orgData.facebook || '',
           instagram: orgData.instagram || '',
           etsy: orgData.etsy || '',
-          phone: orgData.phone || '',
           brandLogoUrl: orgData.brandLogoUrl || '',
           brandPrimaryColor: orgData.brandPrimaryColor || '',
           brandSecondaryColor: orgData.brandSecondaryColor || '',
@@ -147,13 +136,9 @@ const BrandKitPage = () => {
     setIsSaving(true);
     try {
       const payload: any = {
-        businessName: formData.businessName,
-        bio: formData.bio,
-        website: formData.website,
         facebook: formData.facebook,
         instagram: formData.instagram,
         etsy: formData.etsy,
-        phone: formData.phone,
         brandLogoUrl: formData.brandLogoUrl,
         brandPrimaryColor: formData.brandPrimaryColor,
         brandSecondaryColor: formData.brandSecondaryColor,
@@ -200,69 +185,11 @@ const BrandKitPage = () => {
 
           <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-2">Brand Kit</h1>
           <p className="text-warm-600 dark:text-gray-400 mb-8">
-            Customize your business branding and social presence. These details appear on your organizer profile and sale listings.
+            Customize your brand identity including logo, colors, and social links. For business basics like name and contact info, see <Link href="/organizer/settings?tab=profile" className="text-amber-600 hover:underline">Profile Settings</Link>.
           </p>
 
           <div className="card p-8">
             <div className="space-y-8">
-              {/* Business Information Section */}
-              <div>
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Business Information</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
-                      Business Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="businessName"
-                      value={formData.businessName}
-                      onChange={handleInputChange}
-                      placeholder="Enter your business name"
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
-                      Phone <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      placeholder="Enter your phone number"
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bio</label>
-                    <textarea
-                      name="bio"
-                      value={formData.bio || ''}
-                      onChange={handleInputChange}
-                      placeholder="Tell shoppers about your business and specialties..."
-                      rows={4}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Website URL</label>
-                    <input
-                      type="url"
-                      name="website"
-                      value={formData.website || ''}
-                      onChange={handleInputChange}
-                      placeholder="https://example.com"
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
-                  </div>
-                </div>
-              </div>
-
               {/* Social Links Section */}
               <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
                 <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Social & Marketplace Links</h2>

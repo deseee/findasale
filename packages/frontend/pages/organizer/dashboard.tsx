@@ -79,7 +79,9 @@ const OrganizerDashboard = () => {
       router.push('/login?redirect=/organizer/dashboard');
       return null;
     }
-    if (!user.roles?.includes('ORGANIZER')) {
+    // Check roles array first, then fall back to role field (defensive against stale tokens)
+    const isOrganizer = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER' || user.role === 'ADMIN';
+    if (!isOrganizer) {
       router.push('/access-denied');
       return null;
     }

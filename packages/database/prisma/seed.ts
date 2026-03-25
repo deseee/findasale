@@ -164,12 +164,23 @@ async function main() {
     const isOrg     = i < 10;
     const isShopper = i >= 10;
 
+    // Compute roles array based on user type
+    let rolesArray: string[];
+    if (isAdmin) {
+      rolesArray = ['USER', 'ORGANIZER', 'ADMIN'];
+    } else if (isOrg) {
+      rolesArray = ['USER', 'ORGANIZER'];
+    } else {
+      rolesArray = ['USER'];
+    }
+
     const user = await prisma.user.create({
       data: {
         email,
         password: defaultPassword,
         name: `${firstName} ${lastName}`,
         role:  isAdmin ? 'ADMIN' : (isOrg ? 'ORGANIZER' : 'USER'),
+        roles: rolesArray,
 
         phone: `616-555-${String(i).padStart(4, '0')}`,
         referralCode: `REF-${uuidv4().substring(0, 8).toUpperCase()}`,
