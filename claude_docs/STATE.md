@@ -7,9 +7,11 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**S276 (next session):** Push S275 code + run 2 migrations. QA Platform Safety + Brands fix live. Continue roadmap (schema pre-wire wiring, #97 email enrichment, #94 admin queue).
+**S277 (next session):** Re-run seed (currentBid fix). QA full auction E2E from all user perspectives. Then parallel subagents on roadmap.md.
 
-**S275 COMPLETE (2026-03-24):** Brands tab P0 fixed (useBrandFollows.ts missing await). Schema pre-wires: executorUserId (Organizer), AffiliateCode model, isPersistent (Item) → migration 20260325_schema_prewires. Platform Safety P1: #93+#95 already existed, #94 NEW (BidIpRecord + IP tracking in itemController). Platform Safety P2: #96 backend itemized response + frontend checkbox (CheckoutModal.tsx), #97 post-purchase email, #98 CheckoutEvidence model + auto-save → migration 20260325_platform_safety. #56 Printful DEFERRED post-beta (Architect verdict). 8 files changed, 2 migrations created. Patrick must push + run both migrations. Last Updated: 2026-03-24T23:59:00Z
+**S276 COMPLETE (2026-03-25):** S275 code pushed ✅, both migrations deployed ✅. QA found bid placement broken (404 — route was `/bid` singular, frontend calls `/bids` plural). Fixed: GET+POST `/:id/bids` routes, getBids controller added, placeBid param fixed (`req.params.id`). Admin age gate bypass added to accountAgeGate.ts (ADMIN role skips 7-day gate). Header missing on ~29 pages root-caused (S267 broke global Layout in _app.tsx without per-page fallbacks). Fixed: Layout restored in _app.tsx, stripped from 28 individual pages (6 passes of compiler errors). Seed currentBid bug fixed (bids created without updating item.currentBid — now syncs $280/$375/$3100). All Neon DB references updated to Railway across CLAUDE.md §6, STACK.md, dev-environment SKILL.md, auto-memory. Vercel ✅ green. Seed re-run needed for currentBid fix. Last Updated: 2026-03-25
+
+**S275 COMPLETE (2026-03-24):** Brands tab P0 fixed (useBrandFollows.ts missing await). Schema pre-wires: executorUserId (Organizer), AffiliateCode model, isPersistent (Item) → migration 20260325_schema_prewires. Platform Safety P1: #93+#95 already existed, #94 NEW (BidIpRecord + IP tracking in itemController). Platform Safety P2: #96 backend itemized response + frontend checkbox (CheckoutModal.tsx), #97 post-purchase email, #98 CheckoutEvidence model + auto-save → migration 20260325_platform_safety. #56 Printful DEFERRED post-beta (Architect verdict). 8 files changed, 2 migrations created. Last Updated: 2026-03-24T23:59:00Z
 
 **S274 COMPLETE (2026-03-24):** QA smoke S273 ✅. Architect: #86 DEFERRED post-beta, #87/#88 schemas LOCKED. #87 Brand Tracking shipped (BrandFollow model + routes + UI, 7 files). #88 Haul Posts shipped (UGCPhoto extended + UGCPhotoReaction + hauls page, 8 files). Homepage header fixed (index.tsx missing Layout wrapper). #87 auth fix (useBrandFollows missing Bearer token). QA final: homepage ✅, #88 hauls ✅, #125 CSV export ✅, Brands tab ✅ (post auth-fix). 3 pushes. Railway + Vercel green. Last Updated: 2026-03-24T23:59:00Z
 
@@ -229,6 +231,8 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Recent Sessions
 
+**S276 (2026-03-25):** S275 pushed + 2 migrations deployed. Bid route fix (plural `/bids`). Admin age gate bypass. Layout restored globally in _app.tsx — stripped from 28 pages. Seed currentBid bug fixed (item.currentBid not synced after bid creation). All Neon docs → Railway. Vercel green. Seed re-run needed.
+
 **S275 (2026-03-24):** Brands tab P0: useBrandFollows await fix (verified, pending push). Schema pre-wire migration (executorUserId, AffiliateCode, isPersistent). Platform Safety P1-P2: #94 BidIpRecord NEW, #96 checkout checkbox + backend, #97 email, #98 CheckoutEvidence NEW. #56 Printful DEFERRED. 2 migrations. 8 files.
 
 **S274 (2026-03-24):** #86 DEFERRED post-beta. #87 Brand Tracking + #88 Haul Posts shipped (15 files total). Homepage Layout wrapper fixed. #87 auth header fix. QA: all green — homepage ✅ hauls ✅ CSV ✅ brands ✅. 3 pushes. Railway + Vercel green.
@@ -249,30 +253,28 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Next Session
 
-**S276 PRIORITY 1 — Patrick must push + run migrations:**
-See push block below. After push:
+**S277 PRIORITY 1 — Re-run seed (currentBid fix)**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
+npx prisma db seed
 ```
-Applies both: 20260325_schema_prewires + 20260325_platform_safety
+This will set item.currentBid correctly ($280/$375/$3100) so auction pages show real prices.
 
-**S276 PRIORITY 2 — QA Platform Safety + Brands fix live** (after deploy)
-- Brands tab: add/remove brand works
-- #96: Buyer premium checkbox shows + disables pay button
-- #94: Bid IP logging in BidIpRecord table
-- #98: CheckoutEvidence record created on purchase
+**S277 PRIORITY 2 — QA auction E2E from all perspectives**
+- Organizer: auction item management, bid history view
+- Shopper: browse auction item, place bid, see current bid update, see bid history
+- Admin: bid IP log, flagged bid queue
+- Verify buyer premium checkbox on auction checkout
+- Verify POST /items/:id/bids returns 200 (not 404)
 
-**S276 PRIORITY 3 — Roadmap continuation**
-- #97 email enrichment (metadata from frontend → webhook → itemized email)
-- #94 admin queue UI (flagged bids visible to admin)
-- Continue next roadmap batch
+**S277 PRIORITY 3 — Parallel subagents on roadmap.md**
+- Check roadmap.md for next unshipped batch
+- Dispatch findasale-dev + findasale-architect in parallel per batch structure
+- #97 email enrichment and #94 admin queue UI still pending
 
 **Patrick manual actions:**
-- Push S275 code (8 files — pushblock below)
-- Run 2 migrations (commands above)
+- Re-run seed (command above) — needed for currentBid fix
 - Delete Neon project at console.neon.tech (outstanding since S264)
 - Attorney review: D3 consent copy (register.tsx)
 
