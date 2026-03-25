@@ -12,6 +12,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
+import api from '@/lib/api';
 
 interface LootItem {
   id: string;
@@ -48,20 +49,8 @@ function LootLegendPage() {
     const fetchLootLegend = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/loyalty/loot-legend', {
-          method: 'GET',
-          credentials: 'include',
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            router.push('/login');
-            return;
-          }
-          throw new Error('Failed to fetch loot legend');
-        }
-
-        const data = await response.json();
+        const response = await api.get('/loyalty/loot-legend');
+        const data = response.data;
         setItems(data);
         setError(null);
       } catch (err) {
