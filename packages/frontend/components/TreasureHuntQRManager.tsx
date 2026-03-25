@@ -61,7 +61,7 @@ const TreasureHuntQRManager: React.FC<TreasureHuntQRManagerProps> = ({
     },
   });
 
-  const deleteClueM utation = useMutation({
+  const deleteClueMutation = useMutation({
     mutationFn: async (clueId: string) => {
       await api.delete(`/sales/${saleId}/treasure-hunt-qr/${clueId}`);
     },
@@ -214,8 +214,8 @@ const TreasureHuntQRManager: React.FC<TreasureHuntQRManagerProps> = ({
                           </a>
                           <button
                             type="button"
-                            onClick={() => deleteClueM utation.mutate(clue.id)}
-                            disabled={deleteClueM utation.isPending}
+                            onClick={() => deleteClueMutation.mutate(clue.id)}
+                            disabled={deleteClueMutation.isPending}
                             className="text-xs bg-red-600 hover:bg-red-700 text-white py-1 px-2 rounded disabled:opacity-50"
                           >
                             Delete

@@ -23,7 +23,7 @@ export const getApproachNotes = async (req: AuthRequest, res: Response) => {
       where: { id: saleId },
       select: {
         id: true,
-        notes: true,
+        entranceNote: true,
         address: true,
         city: true,
         state: true,
@@ -42,9 +42,9 @@ export const getApproachNotes = async (req: AuthRequest, res: Response) => {
     if (req.user && req.user.id !== sale.organizerId) {
       const hasSaved = await prisma.saleSubscriber.findUnique({
         where: {
-          userId_saleId: {
-            userId: req.user.id,
+          saleId_userId: {
             saleId: saleId,
+            userId: req.user.id,
           },
         },
       });
@@ -56,7 +56,7 @@ export const getApproachNotes = async (req: AuthRequest, res: Response) => {
 
     res.json({
       saleId: sale.id,
-      notes: sale.notes,
+      entranceNote: sale.entranceNote,
       address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
       startDate: sale.startDate,
       endDate: sale.endDate,
@@ -98,10 +98,10 @@ export const updateApproachNotes = async (req: AuthRequest, res: Response) => {
 
     const updated = await prisma.sale.update({
       where: { id: saleId },
-      data: { notes: notes || null },
+      data: { entranceNote: notes || null },
       select: {
         id: true,
-        notes: true,
+        entranceNote: true,
         address: true,
         city: true,
         state: true,
@@ -113,7 +113,7 @@ export const updateApproachNotes = async (req: AuthRequest, res: Response) => {
     res.json({
       message: 'Approach notes updated',
       saleId: updated.id,
-      notes: updated.notes,
+      entranceNote: updated.entranceNote,
       address: `${updated.address}, ${updated.city}, ${updated.state}`,
       startDate: updated.startDate,
     });
@@ -145,7 +145,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
       select: {
         id: true,
         title: true,
-        notes: true,
+        entranceNote: true,
         address: true,
         city: true,
         state: true,
@@ -210,7 +210,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
             payload: {
               saleId: sale.id,
               saleTitle: sale.title,
-              notes: sale.notes,
+              entranceNote: sale.entranceNote,
               address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
               startDate: sale.startDate,
             },

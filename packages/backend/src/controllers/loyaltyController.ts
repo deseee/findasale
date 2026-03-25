@@ -38,14 +38,14 @@ export async function getLootLegend(req: Request, res: Response) {
         userId,
         item: {
           rarity: {
-            in: ['LEGENDARY', 'EPIC']
+            in: ['LEGENDARY']
           }
         }
       },
       select: {
         id: true,
         itemId: true,
-        purchasedAt: true,
+        createdAt: true,
         item: {
           select: {
             id: true,
@@ -62,7 +62,7 @@ export async function getLootLegend(req: Request, res: Response) {
         }
       },
       orderBy: {
-        purchasedAt: 'desc'
+        createdAt: 'desc'
       }
     });
 
