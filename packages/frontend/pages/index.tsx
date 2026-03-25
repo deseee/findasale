@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
+import Layout from '../components/Layout';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
@@ -183,8 +184,9 @@ const HomePage = () => {
   }, [sales, searchQuery, dateFilter, saleTypeFilter]);
 
   return (
-    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
-      <Head>
+    <Layout>
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+        <Head>
         <title>FindA.Sale - Find Sales Near You</title>
         <meta name="description" content="Find estate sales, garage sales, yard sales, and auctions near you" />
         <meta property="og:title" content="FindA.Sale — Find Sales Near You" />
@@ -403,7 +405,8 @@ const HomePage = () => {
           </section>
         </div>
       </main>
-    </div>
+        </div>
+    </Layout>
   );
 };
 
