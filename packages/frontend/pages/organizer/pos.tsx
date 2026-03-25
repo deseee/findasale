@@ -15,8 +15,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
+import PosTierGates from '../../components/PosTierGates';
+import { PosTierStatus } from '../../lib/types/posTiers';
 
 // ─── Types ────────────────────────────────────────────────────────────────────────────
 
@@ -94,6 +97,17 @@ export default function POSPage() {
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
   const sdkLoadedRef = useRef(false);
+
+  // POS Tiers data
+  const { data: posTierStatus, isLoading: posTierLoading } = useQuery<PosTierStatus>({
+    queryKey: ['organizer-pos-tiers'],
+    queryFn: async () => {
+      const res = await api.get<PosTierStatus>('/organizer/pos-tiers');
+      return res.data;
+    },
+    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
@@ -454,6 +468,16 @@ export default function POSPage() {
         <div className="w-full mb-6 py-3 rounded-xl bg-warm-200 text-warm-600 text-center text-sm animate-pulse">
           Searching for reader…
         </div>
+      )}
+
+      {/* POS Value Unlock Tiers */}
+      {!posTierLoading && posTierStatus && (
+        <PosTierGates
+          tier={posTierStatus.tier}
+          transactionCount={posTierStatus.transactionCount}
+          totalRevenue={posTierStatus.totalRevenue}
+          nextGate={posTierStatus.nextGate}
+        />
       )}
 
       {/* Sale selector */}

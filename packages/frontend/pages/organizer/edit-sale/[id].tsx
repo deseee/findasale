@@ -20,6 +20,7 @@ import PickupSlotManager from '../../../components/PickupSlotManager';
 import EntrancePinPicker from '../../../components/EntrancePinPicker'; // Feature 35: Front Door Locator
 import Skeleton from '../../../components/Skeleton';
 import PublishCelebration from '../../../components/PublishCelebration';
+import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // #132: À La Carte
 
 const EditSalePage = () => {
   const router = useRouter();
@@ -31,6 +32,7 @@ const EditSalePage = () => {
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [entrancePinTooFar, setEntrancePinTooFar] = useState(false);
   const [showPublishCelebration, setShowPublishCelebration] = useState(false);
+  const [showAlaCarteModal, setShowAlaCarteModal] = useState(false); // #132: À La Carte
 
   const [formData, setFormData] = useState({
     title: '',
@@ -157,6 +159,14 @@ const EditSalePage = () => {
     setIsTogglingStatus(true);
     try {
       const newStatus = sale.status === 'PUBLISHED' ? 'ENDED' : 'PUBLISHED';
+
+      // #132: À La Carte — Show modal if trying to publish and on SIMPLE tier
+      if (newStatus === 'PUBLISHED' && sale.status === 'DRAFT' && user?.organizerTier === 'SIMPLE') {
+        setShowAlaCarteModal(true);
+        setIsTogglingStatus(false);
+        return;
+      }
+
       const confirmMessage = sale.status === 'PUBLISHED'
         ? 'Hide this sale from shoppers? They won\'t be able to find it anymore.'
         : 'Make this sale visible to shoppers on the map?';
@@ -192,6 +202,18 @@ const EditSalePage = () => {
     }, 300);
   };
 
+  // #132: À La Carte — Update sale status after successful checkout
+  const handleAlaCarteSuccess = async () => {
+    if (!id || !sale) return;
+    try {
+      await api.patch(`/sales/${id}/status`, { status: 'PUBLISHED' });
+      setShowAlaCarteModal(false);
+      setShowPublishCelebration(true);
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to publish sale', 'error');
+    }
+  };
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
@@ -221,6 +243,15 @@ const EditSalePage = () => {
         saleId={String(id) || ''}
         salePhotoUrl={sale?.photoUrls?.[0] || null}
         onClose={handlePublishCelebrationClose}
+      />
+
+      {/* #132: À La Carte Publish Modal */}
+      <AlaCartePublishModal
+        isOpen={showAlaCarteModal}
+        saleId={String(id) || ''}
+        saleName={sale?.title || ''}
+        onClose={() => setShowAlaCarteModal(false)}
+        onPublishSuccess={handleAlaCarteSuccess}
       />
 
       <div className="min-h-screen bg-white dark:bg-gray-900">

@@ -336,6 +336,10 @@ model Sale {
   affiliatePayouts  AffiliatePayout[]
   // Phase 2a: Explorer's Guild — Rarity boosts for this sale
   rarityBoosts      RarityBoost[]  @relation("RarityBoosts")
+  // #132: À La Carte Single-Sale Fee ($9.99)
+  purchaseModel    String  @default("SUBSCRIPTION")  // "SUBSCRIPTION" | "ALA_CARTE"
+  alaCarte         Boolean @default(false)
+  alaCarteFeePaid  Boolean @default(false)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }

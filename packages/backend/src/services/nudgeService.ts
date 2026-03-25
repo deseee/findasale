@@ -20,7 +20,6 @@ export interface Nudge {
  */
 export interface UserState {
   userId: string;
-  points: number;
   favoritesCount: number;
   visitStreak: number;
   huntPassActive: boolean;
@@ -85,31 +84,6 @@ export const generateNudges = (state: UserState): Nudge[] => {
       } : undefined,
       priority: 7,
     });
-  }
-
-  // TIER_PROGRESS nudge
-  const tierThresholds = [
-    { name: 'Scout', threshold: 0 },
-    { name: 'Hunter', threshold: 100 },
-    { name: 'Estate Pro', threshold: 500 },
-  ];
-  const currentTier = tierThresholds.find(t => state.points >= t.threshold && (tierThresholds[tierThresholds.indexOf(t) + 1]?.threshold ?? Infinity) > state.points);
-  const nextTierIndex = currentTier ? tierThresholds.indexOf(currentTier) + 1 : 0;
-
-  if (nextTierIndex < tierThresholds.length) {
-    const nextTier = tierThresholds[nextTierIndex];
-    const pointsToNext = nextTier.threshold - state.points;
-    if (pointsToNext > 0 && pointsToNext <= 100) {
-      nudges.push({
-        type: 'TIER_PROGRESS',
-        message: `You're ${pointsToNext} points away from ${nextTier.name} status!`,
-        progress: {
-          current: state.points,
-          target: nextTier.threshold,
-        },
-        priority: 6,
-      });
-    }
   }
 
   // HUNT_PASS_TEASE nudge

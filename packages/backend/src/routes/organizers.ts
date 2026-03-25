@@ -4,6 +4,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
 import { exportOrganizer } from '../controllers/exportController';
+import { getPosTierStatus } from '../controllers/posTiersController';
 
 const router = Router();
 
@@ -652,5 +653,9 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// GET /organizers/pos-tiers — POS Value Unlock Tiers (Roadmap #127)
+// Returns organizer's current tier status based on transaction count + minimum revenue
+router.get('/pos-tiers', authenticate, getPosTierStatus);
 
 export default router;
