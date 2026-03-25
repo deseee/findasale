@@ -131,6 +131,8 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 75 | Tier Lapse State Logic | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | 8am warning + 11pm lapse cron. Dashboard banner. Suspends ORG features, retains SHO features |
 | 127 | POS Value Unlock Tiers | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Dual-gate (tx+revenue). 3 tiers at 5/20/50 tx. /api/organizer/pos-tiers + PosTierGates.tsx |
 | 131 | Share & Promote Templates | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | — | 📋 | SharePromoteModal: 4 templates (social post, flyer, email invite, neighborhood post) |
+| 135 | Social Templates Expansion | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | — | 📋 | SharePromoteModal extended: TikTok, Pinterest, Threads, Nextdoor tabs added. Shipped S280. |
+| 89 | Unified Print Kit | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/organizer/print-kit/[saleId]` — yard sign (QR + address + dates) + per-item price tags (6/page, photo + QR + price + condition). Print CSS included. Shipped S280. |
 | 132 | À La Carte Single-Sale Fee ($9.99) | ORG | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Sale.purchaseModel + alaCarte + alaCarteFeePaid. Stripe checkout. AlaCartePublishModal for SIMPLE tier |
 | 134 | Plan a Sale Dashboard Card | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | ✅ | 📋 | "Coming Soon" card on organizer dashboard overview tab |
 
@@ -204,6 +206,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | — | Neighborhood Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | — | 📋 | `/neighborhoods/[slug]` local discovery |
 | 92 | City Weekend Landing Pages (Metro Explorer) | SHO | FREE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/city/[city].tsx` ISR pages with Schema.org JSON-LD. Grand Rapids pre-generated. Confirmed live in code (S280). |
 | 78 | Inspiration Page — Item Gallery | SHO | FREE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/inspiration` masonry grid of items from active/upcoming sales. Confirmed live in code (S280). |
+| 90 | Sale Soundtrack (Ambient Vibes) | SHO | FREE | — | — | ✅ | ✅ | 📋 | — | 📋 | Spotify + Apple Music playlist suggestions per sale type on sale detail page. External links only. Shipped S280. |
 | — | Trending Items / Sales | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | — | 📋 | `/trending` page + API |
 | — | Activity Feed | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | — | 📋 | `/feed` page + API |
 | — | Route Planning (Multi-Sale) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/api/routes` OSRM-based |
@@ -339,12 +342,8 @@ _#126 shipped (S269). These can now run in parallel._
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 56 | Printful Merch Store | BOTH | FREE/PAID_ADDON | — | — | — | — | — | — | — | Drop-shipped branded merch via Printful API. Zero inventory risk. 1 sprint est. |
-| 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | — | — | — | — | — | — | — | Push notification at 500m with parking/entrance directions. Geolocation-dependent. Trigger met: Front Door Locator + Entrance Pin shipped. |
-| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | — | — | — | — | — | — | — | QR stickers on unique items → badge collection. Dwell time driver. Note: existing TreasureHunt is daily clue-based — this is a separate in-sale QR scavenger feature. |
-| 86 | Shopper Profile + Friend Network | SHO | FREE | — | — | — | — | — | — | — | Public mini-card, badges, finds, friend activity. Note: public profile page exists but Friend Network disabled pending schema changes. |
-| 89 | Unified Print Kit | ORG | SIMPLE | — | — | — | — | — | — | — | Combined PDF: yard sign QR + item barcode stickers. Attribution loop. Trigger met: QR Code Signs shipped. |
-| 90 | Sale Soundtrack (Ambient Vibes) | SHO | FREE | — | — | — | — | — | — | — | AI-suggested Spotify/Apple Music playlists by sale type. External links only — zero licensing risk. Low-effort fun differentiator. |
+| 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | — | — | — | — | — | — | — | Push notification at 500m with parking/entrance directions. Geolocation-dependent. Needs Architect review (push infra). |
+| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | — | — | — | — | — | — | — | Per-sale QR scavenger hunt. Distinct from daily clue TreasureHunt. Needs Architect review (new schema for in-sale QR codes + badge awards). |
 
 ### Legal & Business (Patrick Action Items)
 
@@ -441,6 +440,8 @@ _#126 shipped (S269). These can now run in parallel._
 
 | Feature | Role | Tier | Reason | Revisit Trigger |
 |---------|------|------|--------|-----------------|
+| #56 Printful Merch Store | BOTH | FREE | No demand signal pre-beta; external API adds complexity. | After beta proves shopper appetite for branded merch |
+| #86 Friend Network (social graph) | SHO | FREE | DEFERRED S274 (Patrick+Architect). Social graph infra entangles with notifications, tier logic, and abuse guardrails. Public Shopper Profiles already shipped. | After beta feedback on #87/#88 social features; returns as S2 item |
 | Affiliate Program | ORG | TEAMS | Backend 60% built. Referral badges (SIMPLE) + loyalty passport integration worth exploring first. Full payouts deferred. | After referral badges prove demand — **pre-wire: payout calculation engine + referral code table can be added to schema now; activation becomes a config flag** |
 | White-label MaaS | ORG | TEAMS | Business decision — beta validation first | After beta data |
 | Persistent Inventory (Cross-Sale Item Library) | ORG | PRO | Items that persist across multiple sales — organizer builds a master library, pulls items into each sale, unsold items carry over automatically. Designed for flea market vendors, antique booth operators, and recurring sale organizers. Requires new data model (items not bound to a single sale). `/organizer/inventory` is stubbed as "Coming Soon." | After beta data confirms demand from recurring-sale organizer segment — **pre-wire: add `persistentInventory` boolean + `masterItemLibraryId` FK to Item schema now; activation becomes a filter flag** |

@@ -33,7 +33,7 @@ interface SharePromoteModalProps {
   onClose: () => void;
 }
 
-type TemplateType = 'social' | 'flyer' | 'email' | 'neighborhood';
+type TemplateType = 'social' | 'flyer' | 'email' | 'neighborhood' | 'tiktok' | 'pinterest' | 'threads' | 'nextdoor';
 
 interface TemplateContent {
   title: string;
@@ -160,6 +160,54 @@ ${sale.tags && sale.tags.length > 0 ? `They specialize in ${sale.tags.join(', ')
 ` : ''}I'm planning to stop by and thought I'd share in case anyone else wants to go. Let me know if you end up going!
 
 See you there! 🛍️`,
+    },
+    tiktok: {
+      title: 'TikTok',
+      icon: '🎬',
+      description: 'Short, punchy caption with trending hashtags',
+      content: `Estate sale haul alert 🏷️ ${sale.title} in ${sale.city} — furniture, collectibles, vintage finds and more
+
+📍 ${address}
+🗓️ ${startDate} - ${endDate}
+🔗 Link in bio → finda.sale
+
+#estatesale #thrifting #vintagefinds #${sale.city}thrift #secondhand #estatefinds #thrifthaul`,
+    },
+    pinterest: {
+      title: 'Pinterest',
+      icon: '📌',
+      description: 'Keyword-rich discovery-oriented description',
+      content: `${sale.title} — Estate Sale in ${sale.city}
+
+Discover unique vintage furniture, antiques, collectibles, and one-of-a-kind finds at this ${sale.city} estate sale. Browse curated items from ${startDate} - ${endDate}. Shop in person or browse the full inventory online at FindA.Sale.
+
+📍 ${address}
+🗓️ ${startDate} - ${endDate}
+
+Find more estate sales near you → finda.sale`,
+    },
+    threads: {
+      title: 'Threads',
+      icon: '💬',
+      description: 'Conversational style, minimal hashtags',
+      content: `Running an estate sale this weekend in ${sale.city} — ${sale.title}
+
+Lots of ${sale.title} items: furniture, vintage pieces, collectibles, and more. Everything must go.
+
+📍 ${address} · ${startDate} - ${endDate}
+Browse the inventory at finda.sale`,
+    },
+    nextdoor: {
+      title: 'Nextdoor',
+      icon: '🏡',
+      description: 'Neighbor-to-neighbor tone with local focus',
+      content: `Neighbors — ${sale.title} this ${startDate} - ${endDate} at ${address}
+
+Estate sale open to the public. Items include furniture, household goods, collectibles, and more. Early arrival recommended.
+
+Full item list at finda.sale — search "${sale.city}"
+
+Hope to see some familiar faces!`,
     },
   };
 
