@@ -360,7 +360,7 @@ const OrganizerDashboard = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => localStorage.setItem('tier_lapse_banner_dismissed', 'true') || window.location.reload()}
+                  onClick={() => { localStorage.setItem('tier_lapse_banner_dismissed', 'true'); window.location.reload(); }}
                   className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
                   aria-label="Dismiss banner"
                 >
