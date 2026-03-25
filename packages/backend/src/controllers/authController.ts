@@ -211,7 +211,7 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // Generate JWT — include name, points, referralCode so AuthContext can decode without a round-trip
+    // Generate JWT — include name, referralCode so AuthContext can decode without a round-trip
     // Feature #72 Phase 2: Include roles array, keep role for backward compatibility
     const token = jwt.sign(
       {
