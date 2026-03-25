@@ -212,14 +212,16 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Generate JWT — include name, referralCode so AuthContext can decode without a round-trip
-    // Feature #72 Phase 2: Include roles array, keep role for backward compatibility
+    // Feature #72 Phase 2: Include roles array from user.roles (array field in User model)
+    // Fallback to single-role array if roles is empty, for backward compatibility
+    const userRoles = (user.roles && user.roles.length > 0) ? user.roles : [user.role];
     const token = jwt.sign(
       {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
-        roles: user.roles || [user.role], // Fallback to single-role array if roles is empty
+        roles: userRoles,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
@@ -299,13 +301,16 @@ export const oauthLogin = async (req: Request, res: Response) => {
       });
     }
 
+    // Feature #72 Phase 2: Include roles array from user.roles (array field in User model)
+    // Fallback to single-role array if roles is empty, for backward compatibility
+    const userRoles = (user.roles && user.roles.length > 0) ? user.roles : [user.role];
     const token = jwt.sign(
       {
         id:           user.id,
         email:        user.email,
         name:         user.name,
         role:         user.role,
-        roles:        user.roles || [user.role], // Fallback to single-role array if roles is empty
+        roles:        userRoles,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
@@ -432,14 +437,16 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Generate JWT — include referralCode so AuthContext can decode without a round-trip
-    // Feature #72 Phase 2: Include roles array, keep role for backward compatibility
+    // Feature #72 Phase 2: Include roles array from user.roles (array field in User model)
+    // Fallback to single-role array if roles is empty, for backward compatibility
+    const userRoles = (user.roles && user.roles.length > 0) ? user.roles : [user.role];
     const token = jwt.sign(
       {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
-        roles: user.roles || [user.role], // Fallback to single-role array if roles is empty
+        roles: userRoles,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',

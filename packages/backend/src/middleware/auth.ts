@@ -76,7 +76,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      include: { organizer: true }
+      include: { organizer: true, roleSubscriptions: true }
     });
 
     if (!user) {
