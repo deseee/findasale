@@ -7,7 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**S271 (next session):** Fix seed data bug (roles array), QA Batch B features live, dispatch Batch C (#122 Explorer's Guild Phase 1 rebrand). See Next Session below.
+**S272 (next session):** Re-run seed after `prisma generate`, QA Batch B live, dispatch Batch C + D. See Next Session below.
+
+**Session 271 COMPLETE (2026-03-24) — SEED ERROR DIAGNOSED:**
+
+What happened:
+- ✅ **Seed `points` error root cause found** — seed.ts user.create() is already clean (no `points` field). Root cause: local Prisma client is stale (generated before S269 removed `User.points`). Client still has `User.points @default(0)` and auto-inserts it. Fix: `npx prisma generate` on Patrick's machine.
+- ✅ **Fix block provided to Patrick:** `npx prisma generate` → regenerates client from current schema (no User.points) → re-run `npx ts-node prisma/seed.ts` with Railway DATABASE_URL override.
+- No code files modified this session.
+- Last Updated: 2026-03-24
 
 **Session 270 COMPLETE (2026-03-24) — BUILD FIXES + BATCH B + QA:**
 
@@ -201,9 +209,17 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Recent Sessions
 
+**S271 (2026-03-24):** Diagnosed seed `points` error — stale local Prisma client (not a seed.ts bug). Fix: `npx prisma generate` + re-run seed. No code files modified.
+
 **S270 (2026-03-24):** Build fixes (Railway green — 9 files with remaining points refs), migration block corrected to Railway URL, Batch B shipped (#127 POS tiers, #128 support stack, #131 share templates, #132 à la carte $9.99), S269 QA confirmed live, loyalty link fixed. Seed data bug found: roles[] wrong for all test accounts.
 
-**S269 (2026-03-24):** Parallel Batch A — #126 gamification legacy cleanup (points system deleted, 12 files, schema migration), #129 homepage modernization (sage gradient hero, 4:3 cards, filter pills), #134 plan-a-sale dashboard card. QA: SP-01 PASS, TR-04 NOT FOUND. Seed: OS-03 workspace + FR-01 completed sale added. Build error fixed (sales/[id].tsx reviewCount null check). 15 files modified + 3 deleted. Push block below.
+**S269 (2026-03-24):** Parallel Batch A — #126 gamification legacy cleanup (points system deleted, 12 files, schema migration), #129 homepage modernization (sage gradient hero, 4:3 cards, filter pills), #134 plan-a-sale dashboard card. QA: SP-01 PASS, TR-04 NOT FOUND. Seed: OS-03 workspace + FR-01 completed sale added. Build error fixed (sales/[id].tsx reviewCount null check). 15 files modified + 3 deleted.
+
+**S268 (2026-03-24):** Strategic decisions session — full advisory board convened. 11 decisions locked. SP-03 fixed. Hunt Pass redesigned with Sage/Grandmaster exclusives. Homepage mockup approved. Roadmap reorganized into 5 parallel batches. 9 new items (#126-#134).
+
+**S267 (2026-03-24):** Full audit dispatch (135 items across 3 waves). 29 code files modified + pushed. Double footer fixed. Trails double /api prefix fixed. Dark mode pass. Seed.ts fixed.
+
+**S266 (2026-03-24):** Stamp label fix (raw enums → human-readable on loyalty page). Smoke test passed. Phase 2 UX P2 polish dispatched.
 
 **S268 (2026-03-24):** Strategic decisions session — full advisory board convened. 11 decisions locked. SP-03 fixed. Hunt Pass redesigned with Sage/Grandmaster exclusives. Homepage mockup approved. Roadmap reorganized into 5 parallel batches. 9 new items (#126-#134).
 
@@ -217,17 +233,22 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Next Session
 
-**S271 PRIORITY 1 — Seed data fix:** Update seed.ts so user1/user2/user3 have correct `roles` arrays (`["USER","ORGANIZER"]` for organizers, `["USER","ADMIN"]` for admin). Re-run seed on Railway. Then verify organizer dashboard accessible.
+**S272 PRIORITY 1 — Confirm seed fixed:** Patrick should have run `npx prisma generate` + re-run seed. Verify user2 can access organizer dashboard (roles now `["USER","ORGANIZER"]`). If seed still fails, diagnose live.
 
-**S271 PRIORITY 2 — QA Batch B live:** After S270 push deploys, Chrome MCP smoke test: /support page FAQ + chat widget, POS tier gates on organizer dashboard, Share & Promote modal on a sale, à la carte modal on SIMPLE tier organizer publish flow.
+**S272 PRIORITY 2 — QA Batch B live:** Chrome MCP smoke test on deployed S270 features: /support page FAQ search + AI chat widget (PRO/TEAMS gate), POS tier gates on organizer dashboard, Share & Promote modal on a sale page, à la carte modal on SIMPLE-tier publish flow.
 
-**S271 PRIORITY 3 — Batch C dispatch:** #122 Explorer's Guild Phase 1 (Collector→Explorer rebrand copy, unblocked by #126). #130 Brand kit field migration. Can run in parallel.
+**S272 PRIORITY 3 — Batch C dispatch (parallel):**
+- #122 Explorer's Guild Phase 1 rebrand (copy/label updates, no schema — Collector→Explorer language in remaining files unblocked by #126)
+- #130 Brand kit field migration
 
-**S271 PRIORITY 4 — roles array systemic fix:** Consider whether to fix the organizer dashboard access check to also honor legacy `role` field as fallback, so seed data issues don't block testing.
+**S272 PRIORITY 4 — Batch D dispatch:**
+- #72 Dual-Role Account Schema — Architect ADR first (schema change required), then dev
+- #73/#74/#75 depend on #72 — queue after Architect clears it
+- #125 Inventory Syndication CSV Export — can run independently
 
 **Patrick manual actions:**
+- `npx prisma generate` + re-run seed (command in S271 output above)
 - Delete Neon project at console.neon.tech (pending since S264)
-- Run seed on Railway after seed.ts fix (S271 will provide command)
 
 ---
 
