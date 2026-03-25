@@ -6,6 +6,7 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  getBids,
   placeBid,
   importItemsFromCSV,
   analyzeItemTags,
@@ -710,7 +711,8 @@ router.get('/', getItemsBySaleId);
 router.post('/', authenticate, upload.array('images', 5), createItem);
 router.put('/:id', authenticate, updateItem);
 router.delete('/:id', authenticate, deleteItem);
-router.post('/:id/bid', authenticate, bidRateLimiter, accountAgeGate, placeBid);
+router.get('/:id/bids', optionalAuthenticate, getBids);
+router.post('/:id/bids', authenticate, bidRateLimiter, accountAgeGate, placeBid);
 router.post('/:id/analyze', authenticate, analyzeItemTags);
 
 // Phase 16: Photo management

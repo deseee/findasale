@@ -638,9 +638,29 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getBids = async (req: AuthRequest, res: Response) => {
+  try {
+    const itemId = req.params.id;
+    const bids = await prisma.bid.findMany({
+      where: { itemId },
+      orderBy: { createdAt: 'desc' },
+      include: { user: { select: { id: true, name: true } } },
+    });
+    res.json(bids.map(b => ({
+      id: b.id,
+      bidAmount: b.amount,
+      timestamp: b.createdAt,
+      bidder: { id: b.user.id, name: b.user.name },
+    })));
+  } catch (error) {
+    console.error('Error fetching bids:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
-    const { itemId } = req.params;
+    const itemId = req.params.itemId || req.params.id;
     const { bidAmount } = req.body;
 
     if (!req.user) {
