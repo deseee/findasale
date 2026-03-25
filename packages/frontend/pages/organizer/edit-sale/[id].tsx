@@ -34,6 +34,7 @@ const EditSalePage = () => {
   const [entrancePinTooFar, setEntrancePinTooFar] = useState(false);
   const [showPublishCelebration, setShowPublishCelebration] = useState(false);
   const [showAlaCarteModal, setShowAlaCarteModal] = useState(false); // #132: À La Carte
+  const [isSendingApproachNotification, setIsSendingApproachNotification] = useState(false); // Feature #84: Approach Notes notification
 
   const [formData, setFormData] = useState({
     title: '',
@@ -171,6 +172,23 @@ const EditSalePage = () => {
       showToast(error.response?.data?.message || 'Failed to save markdown settings', 'error');
     },
   });
+
+  // Feature #84: Send approach notification to shoppers who saved the sale
+  const handleSendApproachNotification = async () => {
+    if (!id || !formData.notes.trim()) {
+      showToast('Please add approach notes before sending', 'error');
+      return;
+    }
+    setIsSendingApproachNotification(true);
+    try {
+      await api.post(`/sales/${id}/send-approach-notification`);
+      showToast('Approach notes sent to shoppers!', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to send notification', 'error');
+    } finally {
+      setIsSendingApproachNotification(false);
+    }
+  };
 
   const handleGenerateDescription = async () => {
     if (!formData.title.trim()) return;
@@ -554,9 +572,21 @@ const EditSalePage = () => {
 
             {/* Feature #84: Approach Notes — day-of info for shoppers */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
-                Day-of Approach Notes <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
-              </label>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">
+                  Day-of Approach Notes <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
+                </label>
+                {sale?.status === 'PUBLISHED' && (
+                  <button
+                    type="button"
+                    onClick={handleSendApproachNotification}
+                    disabled={!formData.notes.trim() || isSendingApproachNotification}
+                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded disabled:opacity-40 transition-colors"
+                  >
+                    {isSendingApproachNotification ? 'Sending...' : '📢 Notify Shoppers'}
+                  </button>
+                )}
+              </div>
               <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
                 Share parking info, entrance location, hours reminders, or other day-of details with shoppers who have saved your sale.
               </p>
