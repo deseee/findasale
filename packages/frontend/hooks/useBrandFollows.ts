@@ -53,11 +53,15 @@ export const useBrandFollows = (userId: string | undefined) => {
 
   const removeBrandFollow = async (brandFollowId: string) => {
     if (!userId) return;
-    await fetch(`/api/users/${userId}/brand-follows/${brandFollowId}`, {
+    const res = await fetch(`/api/users/${userId}/brand-follows/${brandFollowId}`, {
       method: 'DELETE',
       credentials: 'include',
       headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` },
     });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.message || 'Failed to remove');
+    }
     await fetchFollows();
   };
 

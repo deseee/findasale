@@ -28,13 +28,14 @@ interface PaymentFormProps {
   saleName?: string;
   saleAddress?: string;
   saleDates?: string;
-  buyerPremium?: number;  // 5% buyer premium for auction items
+  buyerPremium?: number;  // buyer premium amount in dollars
+  buyerPremiumRate?: number; // buyer premium rate as decimal (e.g., 0.05 for 5%)
   isAuction?: boolean;    // true if item is an auction
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, isAuction = false, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, isAuction = false, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -173,7 +174,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         )}
         {buyerPremium > 0 && (
           <div className="flex justify-between text-warm-600">
-            <span>Buyer Premium (5%)</span>
+            <span>Buyer Premium ({(buyerPremiumRate * 100).toFixed(0)}%)</span>
             <span>${buyerPremium.toFixed(2)}</span>
           </div>
         )}
@@ -215,7 +216,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             aria-required="true"
           />
           <span className="text-xs text-warm-600 leading-relaxed">
-            I understand a 5% buyer premium applies to auction purchases.
+            I understand a buyer premium of {(buyerPremiumRate * 100).toFixed(0)}% (${buyerPremium.toFixed(2)}) will be added to my total.
           </span>
         </label>
       )}
@@ -285,6 +286,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
   const [platformFee, setPlatformFee] = useState(0);
   const [discountApplied, setDiscountApplied] = useState(0);
   const [buyerPremium, setBuyerPremium] = useState(0);
+  const [buyerPremiumRate, setBuyerPremiumRate] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [resolvedTitle, setResolvedTitle] = useState(itemTitle);
   const [saleName, setSaleName] = useState<string>('');
@@ -330,6 +332,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
         setItemPrice(data.totalAmount);
         setPlatformFee(data.platformFee);
         if (data.buyerPremium) setBuyerPremium(data.buyerPremium);
+        if (data.buyerPremiumRate) setBuyerPremiumRate(data.buyerPremiumRate);
         if (data.saleName) setSaleName(data.saleName);
         if (data.saleAddress) setSaleAddress(data.saleAddress);
         if (data.saleDates) setSaleDates(data.saleDates);
@@ -434,6 +437,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
                   platformFee={platformFee}
                   discountApplied={discountApplied}
                   buyerPremium={buyerPremium}
+                  buyerPremiumRate={buyerPremiumRate}
                   isAuction={listingType === 'AUCTION'}
                   saleName={saleName}
                   saleAddress={saleAddress}

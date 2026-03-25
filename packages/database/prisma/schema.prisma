@@ -123,6 +123,8 @@ model User {
   appraisalResponses   AppraisalResponse[] @relation("AppraisalResponses")
   appraisalAIRequests  AppraisalAIRequest[] @relation("AppraisalAIRequests")
   appraisalDisputes    AppraisalDispute[]  @relation("AppraisalDisputes")
+  // Platform Safety #94: Same-IP Bidder Detection
+  bidIpRecords         BidIpRecord[]       @relation("BidIpRecords")
   // Feature #51: Sale Ripples — social proof activity
   ripples              SaleRipple[]        @relation("SaleRipples")
   // Feature #60: TEAMS Onboarding Wizard completion flag
@@ -179,6 +181,8 @@ model Organizer {
   verificationStatus String   @default("NONE") // NONE | PENDING | VERIFIED | REJECTED
   verificationNotes  String?
   verifiedAt         DateTime?
+  // Feature #83: Estate Planning — executor account stub
+  executorUserId     String?
   // Onboarding wizard
   onboardingComplete Boolean @default(false)
   // Feature #11: Referral discount — fee waived for 3 months when referred by/referring another organizer
@@ -429,6 +433,8 @@ model Item {
   // Feature #70: Consignment — operator-consigned items with split payout
   consignorId      String?                       // Optional: consignor user ID (nullable for future Consignor table)
   consignmentSplitPct Decimal?                   // Optional: percentage split for consignor (e.g., 0.70 = 70%)
+  // Feature #81: Persistent Inventory — items that recur across sales
+  isPersistent     Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -475,6 +481,7 @@ model Bid {
   user      User     @relation(fields: [userId], references: [id])
   itemId    String
   item      Item     @relation(fields: [itemId], references: [id])
+  ipRecords BidIpRecord[] // Platform Safety #94: IP tracking for shill detection
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -497,6 +504,7 @@ model Purchase {
   buyerEmail            String?        // POS only: optional email for receipt delivery
   digitalReceipt        DigitalReceipt?
   returnRequests        ReturnRequest[]
+  checkoutEvidence      CheckoutEvidence? // Platform Safety #98: Chargeback defense documentation
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 }
@@ -587,6 +595,14 @@ model AffiliateLink {
   purchases   Purchase[]
 
   @@unique([userId, saleId])
+}
+
+// Feature #84: Affiliate Code — Referral code generation for organizers
+model AffiliateCode {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String   @unique
+  createdAt DateTime @default(now())
 }
 
 model PushSubscription {
@@ -2021,4 +2037,36 @@ model BrandFollow {
 
   @@unique([userId, brandName])
   @@index([userId])
+}
+
+// Platform Safety #94: Same-IP Bidder Detection
+// Tracks IP addresses used when placing bids to detect shill rings
+model BidIpRecord {
+  id        String   @id @default(cuid())
+  bidId     String
+  bid       Bid      @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("BidIpRecords", fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String
+  createdAt DateTime @default(now())
+
+  @@index([ipAddress])
+  @@index([userId])
+  @@index([bidId])
+}
+
+// Platform Safety #98: Chargeback Defense Documentation
+// Stores checkout evidence for dispute resolution (timestamps, IP, acknowledgment)
+model CheckoutEvidence {
+  id                    String   @id @default(cuid())
+  purchaseId            String   @unique
+  purchase              Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  checkoutTimestamp     DateTime // When checkout was initiated
+  emailSentAt           DateTime? // When confirmation email was sent
+  checkoutIp            String?  // Buyer's IP at checkout time
+  acknowledgmentText    String   // Buyer's confirmation text (e.g., "I understand the buyer premium...")
+  createdAt             DateTime @default(now())
+
+  @@index([purchaseId])
+  @@index([checkoutTimestamp])
 }

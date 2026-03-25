@@ -15,6 +15,7 @@ import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidf
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tier lapse enforcement
+import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -693,6 +694,18 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
         amount: bidAmount
       }
     });
+
+    // Platform Safety #94: Track IP for same-IP bidder detection
+    const clientIp = getClientIp(req);
+    if (clientIp !== 'unknown') {
+      prisma.bidIpRecord.create({
+        data: {
+          bidId: bid.id,
+          userId: req.user.id,
+          ipAddress: clientIp
+        }
+      }).catch(err => console.warn('[placeBid] Failed to record bid IP:', err));
+    }
 
     // Update item's current bid
     await prisma.item.update({

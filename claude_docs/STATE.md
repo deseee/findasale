@@ -7,7 +7,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**S275 (next session):** QA retest Brands tab live confirm. Schema pre-wire batch (Estate Planning, Affiliate, Persistent Inventory). Platform Safety P1-P2 dispatch. #56 Printful (Architect sign-off pending).
+**S276 (next session):** Push S275 code + run 2 migrations. QA Platform Safety + Brands fix live. Continue roadmap (schema pre-wire wiring, #97 email enrichment, #94 admin queue).
+
+**S275 COMPLETE (2026-03-24):** Brands tab P0 fixed (useBrandFollows.ts missing await). Schema pre-wires: executorUserId (Organizer), AffiliateCode model, isPersistent (Item) → migration 20260325_schema_prewires. Platform Safety P1: #93+#95 already existed, #94 NEW (BidIpRecord + IP tracking in itemController). Platform Safety P2: #96 backend itemized response + frontend checkbox (CheckoutModal.tsx), #97 post-purchase email, #98 CheckoutEvidence model + auto-save → migration 20260325_platform_safety. #56 Printful DEFERRED post-beta (Architect verdict). 8 files changed, 2 migrations created. Patrick must push + run both migrations. Last Updated: 2026-03-24T23:59:00Z
 
 **S274 COMPLETE (2026-03-24):** QA smoke S273 ✅. Architect: #86 DEFERRED post-beta, #87/#88 schemas LOCKED. #87 Brand Tracking shipped (BrandFollow model + routes + UI, 7 files). #88 Haul Posts shipped (UGCPhoto extended + UGCPhotoReaction + hauls page, 8 files). Homepage header fixed (index.tsx missing Layout wrapper). #87 auth fix (useBrandFollows missing Bearer token). QA final: homepage ✅, #88 hauls ✅, #125 CSV export ✅, Brands tab ✅ (post auth-fix). 3 pushes. Railway + Vercel green. Last Updated: 2026-03-24T23:59:00Z
 
@@ -227,6 +229,8 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Recent Sessions
 
+**S275 (2026-03-24):** Brands tab P0: useBrandFollows await fix (verified, pending push). Schema pre-wire migration (executorUserId, AffiliateCode, isPersistent). Platform Safety P1-P2: #94 BidIpRecord NEW, #96 checkout checkbox + backend, #97 email, #98 CheckoutEvidence NEW. #56 Printful DEFERRED. 2 migrations. 8 files.
+
 **S274 (2026-03-24):** #86 DEFERRED post-beta. #87 Brand Tracking + #88 Haul Posts shipped (15 files total). Homepage Layout wrapper fixed. #87 auth header fix. QA: all green — homepage ✅ hauls ✅ CSV ✅ brands ✅. 3 pushes. Railway + Vercel green.
 
 **S273 (2026-03-24):** ✅ Migration #73 deployed to Railway (Patrick action). ✅ Seed re-run (twice — second time fixed orgTiers bug). ✅ Build fixes: subscriptionLapsed type, void expression fix, seed.ts orgTiers. ✅ #73 notification tabs shipped (All/Operational/Discovery tabs live). ✅ QA Batch B+C+D PASS (#128 support, #131 share templates, #122 rebrand, #73 tabs, #125 CSV export). ✅ Batch E partial: #85 QR Hunt (7 files), #86 shopper profile (1 file), #88 haul CTA (2 files), #90 Vibe Check (1 file) — all pushed, Railway green. ⏳ Batch E remaining: #84 (use entranceNote, dev pending), #86/#87/#88 schema (Architect reviewing), #89 Print Kit (dev dispatched), #87 brand tracking (schema pending). 24 files pushed.
@@ -245,20 +249,32 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Next Session
 
-**S275 PRIORITY 1 — Schema pre-wire batch:**
-- Estate Planning: add `executorUserId` String? to Organizer model
-- Affiliate: add `AffiliateCode` table stub (userId, code, createdAt)
-- Persistent Inventory: add `isPersistent` Boolean @default(false) to Item model
-- Migration: `20260325_schema_prewires`
-- Then: `npx prisma migrate deploy` + `npx prisma generate` (Railway DATABASE_URL)
+**S276 PRIORITY 1 — Patrick must push + run migrations:**
+See push block below. After push:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+Applies both: 20260325_schema_prewires + 20260325_platform_safety
 
-**S275 PRIORITY 2 — Platform Safety P1-P2:**
-- P1 Bidding Integrity + P2 Buyer Transparency (see roadmap)
+**S276 PRIORITY 2 — QA Platform Safety + Brands fix live** (after deploy)
+- Brands tab: add/remove brand works
+- #96: Buyer premium checkbox shows + disables pay button
+- #94: Bid IP logging in BidIpRecord table
+- #98: CheckoutEvidence record created on purchase
 
-**S275 PRIORITY 3 — #56 Printful (Architect sign-off pending)**
+**S276 PRIORITY 3 — Roadmap continuation**
+- #97 email enrichment (metadata from frontend → webhook → itemized email)
+- #94 admin queue UI (flagged bids visible to admin)
+- Continue next roadmap batch
 
 **Patrick manual actions:**
-- None pending
+- Push S275 code (8 files — pushblock below)
+- Run 2 migrations (commands above)
+- Delete Neon project at console.neon.tech (outstanding since S264)
+- Attorney review: D3 consent copy (register.tsx)
 
 ---
 
