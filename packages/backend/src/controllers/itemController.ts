@@ -1172,17 +1172,9 @@ export const getQrCode = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Increment QR scan count
-    await prisma.item.update({
-      where: { id: itemId },
-      data: { qrScanCount: { increment: 1 } },
-    });
-
     // Generate QR code pointing to item page
-    // Use domain-agnostic URL that works in both dev and prod
-    const qrContent = `https://finda.sale/item/${itemId}`;
+    const qrContent = `https://finda.sale/items/${itemId}`;
 
-    // Use qrcode library to generate PNG
     const QRCode = await import('qrcode');
     const qrImageBuffer = await QRCode.toBuffer(qrContent, {
       errorCorrectionLevel: 'H',
@@ -1191,7 +1183,7 @@ export const getQrCode = async (req: Request, res: Response): Promise<void> => {
     });
 
     res.set('Content-Type', 'image/png');
-    res.set('Content-Length', qrImageBuffer.length);
+    res.set('Content-Length', String(qrImageBuffer.length));
     res.send(qrImageBuffer);
   } catch (error) {
     console.error('QR code generation error:', error);
