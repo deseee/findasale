@@ -17,7 +17,10 @@ export const useBrandFollows = (userId: string | undefined) => {
     if (!userId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/users/${userId}/brand-follows`, { credentials: 'include' });
+      const res = await fetch(`/api/users/${userId}/brand-follows`, {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` },
+      });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setBrandFollows(data);
@@ -35,7 +38,10 @@ export const useBrandFollows = (userId: string | undefined) => {
     const res = await fetch(`/api/users/${userId}/brand-follows`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`,
+      },
       body: JSON.stringify({ brandName }),
     });
     if (!res.ok) {
@@ -50,6 +56,7 @@ export const useBrandFollows = (userId: string | undefined) => {
     await fetch(`/api/users/${userId}/brand-follows/${brandFollowId}`, {
       method: 'DELETE',
       credentials: 'include',
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` },
     });
     await fetchFollows();
   };
