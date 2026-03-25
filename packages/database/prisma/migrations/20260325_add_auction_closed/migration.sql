@@ -1,3 +1,2 @@
--- Add auction end time and closed fields to Item model
-ALTER TABLE "Item" ADD COLUMN "auctionEndTime" TIMESTAMP(3);
+-- Add auctionClosed field to Item model (auctionEndTime already exists)
 ALTER TABLE "Item" ADD COLUMN "auctionClosed" BOOLEAN NOT NULL DEFAULT false;
