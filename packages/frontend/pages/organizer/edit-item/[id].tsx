@@ -205,6 +205,7 @@ const EditItemPage = () => {
                 <option value="Kitchenware">Kitchenware</option>
                 <option value="Tools">Tools</option>
                 <option value="Art">Art</option>
+                <option value="Decor">Decor</option>
                 <option value="Jewelry">Jewelry</option>
                 <option value="Toys">Toys</option>
                 <option value="Sports">Sports</option>
