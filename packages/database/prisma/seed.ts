@@ -202,9 +202,10 @@ async function main() {
     const number = 1000 + i * 123;
     const zip    = SEED_CONFIG.zips[i % SEED_CONFIG.zips.length];
 
-    // TD-01: user2 (i=1) and user3 (i=2) get explicit Stripe account IDs
+    // TD-01: user1 (i=0) and user2 (i=1) get real Stripe test account IDs
     let stripeConnectId: string | null = null;
-    if (i === 1) stripeConnectId = 'acct_test_user2';
+    if (i === 0) stripeConnectId = 'acct_1T6f2DLlmra0eowv';
+    else if (i === 1) stripeConnectId = 'acct_1TF0UsLTUdLTeyio';
     else if (i === 2) stripeConnectId = 'acct_test_user3';
     else if (i < 8) stripeConnectId = `acct_test_${uuidv4().substring(0, 16)}`;
 
