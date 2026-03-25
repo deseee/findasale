@@ -15,6 +15,8 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { useToast } from '../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -47,8 +49,12 @@ interface GroupedData {
 const PrintInventoryPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { tier } = useOrganizerTier();
+  const { showToast } = useToast();
   const [groupedData, setGroupedData] = useState<GroupedData>({});
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -128,6 +134,58 @@ const PrintInventoryPage = () => {
     router.push('/organizer/dashboard');
   };
 
+  const handleExport = async (format: 'ebay' | 'amazon' | 'facebook') => {
+    // Check if any sale is selected
+    if (!selectedSaleId) {
+      showToast('Please select a sale to export', 'error');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const response = await api.get('/organizers/export/csv', {
+        params: {
+          saleId: selectedSaleId,
+          format: format,
+        },
+        responseType: 'blob',
+      });
+
+      // Get filename from Content-Disposition header or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `export_${format}.csv`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast(`Exported ${format} CSV successfully`, 'success');
+      setShowExportDropdown(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast(
+        error instanceof Error && error.message === 'PRO tier required for advanced brand kit features (font, banner, accent color)'
+          ? 'CSV export requires PRO subscription'
+          : 'Failed to export CSV',
+        'error'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
@@ -196,7 +254,57 @@ const PrintInventoryPage = () => {
                 All items grouped by sale and category
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportDropdown(!showExportDropdown)}
+                  disabled={tier === 'SIMPLE' || isExporting}
+                  className={`${
+                    tier === 'SIMPLE'
+                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  } font-bold py-2 px-6 rounded-lg transition-colors`}
+                  title={tier === 'SIMPLE' ? 'PRO subscription required' : 'Export for marketplace platforms'}
+                >
+                  📤 Export {isExporting && '...'}
+                </button>
+                {showExportDropdown && tier !== 'SIMPLE' && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
+                    <button
+                      onClick={() => handleExport('ebay')}
+                      disabled={!selectedSaleId || isExporting}
+                      className="w-full text-left px-4 py-3 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="font-semibold text-warm-900 dark:text-gray-100">📤 Export for eBay</div>
+                      <div className="text-sm text-warm-600 dark:text-gray-400">CSV format for eBay bulk uploads</div>
+                    </button>
+                    <button
+                      onClick={() => handleExport('amazon')}
+                      disabled={!selectedSaleId || isExporting}
+                      className="w-full text-left px-4 py-3 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors border-t border-warm-100 dark:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="font-semibold text-warm-900 dark:text-gray-100">📤 Export for Amazon</div>
+                      <div className="text-sm text-warm-600 dark:text-gray-400">CSV format for Amazon seller central</div>
+                    </button>
+                    <button
+                      onClick={() => handleExport('facebook')}
+                      disabled={!selectedSaleId || isExporting}
+                      className="w-full text-left px-4 py-3 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors border-t border-warm-100 dark:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="font-semibold text-warm-900 dark:text-gray-100">📤 Export for Facebook</div>
+                      <div className="text-sm text-warm-600 dark:text-gray-400">CSV format for Marketplace</div>
+                    </button>
+                  </div>
+                )}
+                {tier === 'SIMPLE' && (
+                  <div className="absolute right-0 mt-2 w-48 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-lg z-10 p-3">
+                    <div className="text-sm text-amber-900 dark:text-amber-200">
+                      <div className="font-semibold mb-1">Upgrade to PRO</div>
+                      <p>CSV export is available for PRO subscribers</p>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handlePrint}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"

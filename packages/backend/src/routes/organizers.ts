@@ -4,6 +4,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
 import { exportOrganizer } from '../controllers/exportController';
+import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
 
 const router = Router();
@@ -657,5 +658,9 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
 // GET /organizers/pos-tiers — POS Value Unlock Tiers (Roadmap #127)
 // Returns organizer's current tier status based on transaction count + minimum revenue
 router.get('/pos-tiers', authenticate, getPosTierStatus);
+
+// GET /organizers/export/csv?saleId=X&format=ebay|amazon|facebook — CSV Export (Roadmap #125)
+// Export inventory items for a sale in platform-specific CSV formats (PRO tier required)
+router.get('/export/csv', authenticate, getCsvExportHandler);
 
 export default router;
