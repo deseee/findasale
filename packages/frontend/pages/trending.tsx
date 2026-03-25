@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import FavoriteButton from '../components/FavoriteButton';
+import { SkeletonCard, SkeletonSaleCard } from '../components/SkeletonCards';
 
 interface TrendingItem {
   id: string;
@@ -74,7 +75,7 @@ export default function TrendingPage() {
             {salesLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="bg-white dark:bg-gray-800 rounded-xl h-48 animate-pulse" />
+                  <SkeletonSaleCard key={i} />
                 ))}
               </div>
             ) : (
@@ -121,7 +122,7 @@ export default function TrendingPage() {
             {itemsLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {[...Array(8)].map((_, i) => (
-                  <div key={i} className="bg-white dark:bg-gray-800 rounded-xl h-64 animate-pulse" />
+                  <SkeletonCard key={i} />
                 ))}
               </div>
             ) : (

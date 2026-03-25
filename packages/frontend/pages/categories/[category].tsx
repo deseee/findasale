@@ -8,6 +8,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
+import { SkeletonCard } from '../../components/SkeletonCards';
 
 const CATEGORIES = [
   'furniture', 'clothing', 'electronics', 'books', 'antiques',
@@ -81,14 +82,7 @@ const CategoryPage = () => {
         {isLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden animate-pulse">
-                <div className="aspect-square bg-warm-200" />
-                <div className="p-3 space-y-2">
-                  <div className="h-4 bg-warm-200 rounded w-3/4" />
-                  <div className="h-3 bg-warm-200 rounded w-1/2" />
-                  <div className="h-3 bg-warm-200 rounded w-1/3" />
-                </div>
-              </div>
+              <SkeletonCard key={i} />
             ))}
           </div>
         ) : isError ? (

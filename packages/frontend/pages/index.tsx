@@ -8,6 +8,7 @@ import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
 import TreasureHuntBanner from '../components/TreasureHuntBanner';
 import CityHeatBanner from '../components/CityHeatBanner';
+import EmptyState from '../components/EmptyState';
 
 interface Sale {
   id: string;
@@ -385,19 +386,35 @@ const HomePage = () => {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <p className="text-warm-600 dark:text-gray-400">
-                  {searchQuery || dateFilter !== 'all' || saleTypeFilter !== 'all'
-                    ? 'No sales match your filters. Try adjusting your search.'
-                    : 'No sales available at the moment. Check back later!'}
-                </p>
-                {(searchQuery || dateFilter !== 'all' || saleTypeFilter !== 'all') && (
-                  <button
-                    onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter('all'); }}
-                    className="mt-4 text-amber-600 hover:underline text-sm font-medium"
-                  >
-                    Clear all filters
-                  </button>
+              <div>
+                {searchQuery ? (
+                  <EmptyState
+                    icon="🔍"
+                    heading={`Nothing matched "${searchQuery}"`}
+                    subtext="Try different keywords, or browse all nearby sales to discover great finds."
+                  />
+                ) : (dateFilter !== 'all' || saleTypeFilter !== 'all') ? (
+                  <div>
+                    <EmptyState
+                      icon="🏷️"
+                      heading="No sales found"
+                      subtext="No sales match your current filters. Try broadening your search or checking back later — new sales are added every day."
+                    />
+                    <div className="flex justify-center mt-6">
+                      <button
+                        onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter('all'); }}
+                        className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
+                      >
+                        Clear all filters
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon="📭"
+                    heading="No sales yet in your area"
+                    subtext="Great sales are coming soon! Check back daily or sign up to receive alerts when new sales open near you."
+                  />
                 )}
               </div>
             )}

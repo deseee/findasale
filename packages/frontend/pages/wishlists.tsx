@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/ToastContext';
+import EmptyState from '../components/EmptyState';
 import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface WishlistItem {
@@ -232,9 +233,12 @@ const WishlistsPage = () => {
         {isLoading ? (
           <div className="text-center py-12 text-warm-600 dark:text-warm-400">Loading wishlists...</div>
         ) : wishlists.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-warm-600 dark:text-warm-400 text-lg mb-4">No wishlists yet. Create one to get started!</p>
-          </div>
+          <EmptyState
+            icon="💌"
+            heading="No collections yet"
+            subtext="Create your first collection to organize items you love. Group gifts by occasion, collect ideas for your home, or save treasures to bid on."
+            cta={{ label: 'Create First Collection', href: '/wishlists' }}
+          />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Wishlist Cards */}

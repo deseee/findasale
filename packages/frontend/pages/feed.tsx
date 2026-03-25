@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import SaleCard from '../components/SaleCard';
 import { SaleCardSkeleton } from '../components/SkeletonCards';
+import EmptyState from '../components/EmptyState';
 import { useAuth } from '../components/AuthContext';
 
 interface FeedSale {
@@ -112,38 +113,22 @@ const FeedPage = () => {
 
         {/* Empty state — personalized but no new sales */}
         {!isLoading && !isError && data?.sales.length === 0 && data.personalized && (
-          <div className="text-center py-16">
-            <div className="text-5xl mb-4">🏡</div>
-            <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">All caught up</h2>
-            <p className="text-warm-600 dark:text-gray-400 mb-6">
-              The organizers you follow haven't published any sales yet.
-              We'll notify you when they do.
-            </p>
-            <Link
-              href="/"
-              className="inline-block px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 transition-colors"
-            >
-              Browse all sales
-            </Link>
-          </div>
+          <EmptyState
+            icon="🏡"
+            heading="All caught up"
+            subtext="The organizers you follow haven't published any sales yet. We'll notify you when they do."
+            cta={{ label: 'Browse All Sales', href: '/' }}
+          />
         )}
 
         {/* Empty state — not following anyone */}
         {!isLoading && !isError && data?.sales.length === 0 && !data?.personalized && (
-          <div className="text-center py-16">
-            <div className="text-5xl mb-4">🔍</div>
-            <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">Your feed is empty</h2>
-            <p className="text-warm-600 dark:text-gray-400 mb-6">
-              Follow organizers to see their new sales here first.
-              Browse sales and tap <strong>Follow</strong> on any organizer page.
-            </p>
-            <Link
-              href="/"
-              className="inline-block px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 transition-colors"
-            >
-              Discover sales
-            </Link>
-          </div>
+          <EmptyState
+            icon="🔍"
+            heading="Your feed is empty"
+            subtext="Follow your favorite organizers to see their new sales here first. Browse sales and tap Follow on any organizer page."
+            cta={{ label: 'Discover Sales', href: '/' }}
+          />
         )}
 
         {/* Sale cards */}

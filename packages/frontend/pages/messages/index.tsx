@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import EmptyState from '../../components/EmptyState';
 
 interface ConversationSummary {
   id: string;
@@ -82,18 +83,14 @@ const MessagesPage = () => {
 
         {/* Empty */}
         {!isLoading && !isError && conversations?.length === 0 && (
-          <div className="text-center py-16">
-            <div className="text-5xl mb-4">💬</div>
-            <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No messages yet</h2>
-            <p className="text-warm-600 dark:text-warm-400 mb-6">
-              {user.roles?.includes('ORGANIZER')
-                ? 'Shoppers can message you from a sale page.'
-                : 'Browse sales and tap "Message Organizer" to ask a question.'}
-            </p>
-            <Link href="/" className="inline-block px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 transition-colors">
-              Browse sales
-            </Link>
-          </div>
+          <EmptyState
+            icon="💬"
+            heading="No messages yet"
+            subtext={user.roles?.includes('ORGANIZER')
+              ? "When shoppers ask about your items or sales, messages will appear here. Check back soon!"
+              : "Questions about items? Message an organizer from any sale page to ask details or make an offer."}
+            cta={{ label: 'Browse Sales', href: '/' }}
+          />
         )}
 
         {/* Conversation list */}

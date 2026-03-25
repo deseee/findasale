@@ -15,6 +15,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import HoldTimer from '../../components/HoldTimer';
 import FraudBadge from '../../components/FraudBadge';
+import EmptyState from '../../components/EmptyState';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 interface HoldItem {
@@ -253,11 +254,11 @@ const OrganizerHoldsPage = () => {
           {holdsLoading ? (
             <p className="text-warm-600 dark:text-warm-400">Loading holds…</p>
           ) : holds.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
-              <p className="text-4xl mb-3">🤝</p>
-              <p className="text-warm-600 dark:text-warm-400 font-medium">No active holds right now.</p>
-              <p className="text-warm-400 dark:text-warm-500 text-sm mt-1">When shoppers place holds on your items, they'll appear here.</p>
-            </div>
+            <EmptyState
+              icon="🤝"
+              heading="No active holds"
+              subtext="When shoppers reserve items from your sales, their holds will appear here. You'll be able to approve, extend, or release them."
+            />
           ) : (
             <div className="space-y-4">
               {groupedByBuyer.map((group) => {

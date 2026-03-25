@@ -11,6 +11,7 @@ import { useAuth } from '../../components/AuthContext';
 import HaulPostCard from '../../components/HaulPostCard';
 import { useHaulPosts, HaulPost } from '../../hooks/useHaulPosts';
 import Skeleton from '../../components/Skeleton';
+import EmptyState from '../../components/EmptyState';
 
 const HaulsPage: React.FC = () => {
   const router = useRouter();
@@ -146,20 +147,12 @@ const HaulsPage: React.FC = () => {
               ))}
             </div>
           ) : hauls.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-warm-500 dark:text-warm-400 text-lg mb-4">No haul posts yet</p>
-              <p className="text-warm-600 dark:text-warm-500 text-sm">
-                {user ? 'Be the first to share your finds!' : 'Sign in to share your hauls'}
-              </p>
-              {!user && (
-                <button
-                  onClick={() => router.push('/login?redirect=/shopper/hauls')}
-                  className="mt-4 px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  Sign In
-                </button>
-              )}
-            </div>
+            <EmptyState
+              icon="📸"
+              heading="No hauls shared yet"
+              subtext={user ? "Be the first to share your finds! Post a photo and tell the story of your amazing sale discoveries." : "Create an account to share your hauls and show off what you found."}
+              cta={!user ? { label: 'Sign In to Share', href: '/login?redirect=/shopper/hauls' } : undefined}
+            />
           ) : (
             <div className="space-y-4">
               {hauls.map((haul) => (

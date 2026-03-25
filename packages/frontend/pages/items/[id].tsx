@@ -653,7 +653,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={() => {
             setShowCheckoutModal(false);
-            showToast('Purchase complete! Check your purchases page for details.', 'success');
+            // Redirect to confirmation page — will query most recent purchase
+            router.push('/shopper/checkout-success');
           }}
         />
       )}

@@ -27,6 +27,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
+import { AnimatedCounter } from '../../components/AnimatedCounter';
 
 // Phase 22: Creator Tier benefits (frontend-only display)
 const TIER_BENEFITS: Record<string, string[]> = {
@@ -666,7 +667,9 @@ const OrganizerDashboard = () => {
                 </div>
                 <div className="card p-6">
                   <p className="text-warm-600 dark:text-warm-300 text-sm">Total Revenue</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${animatedRevenue.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">
+                    <AnimatedCounter value={analyticsData?.totalRevenue || 0} prefix="$" duration={800} decimals={2} />
+                  </p>
                 </div>
               </div>
 

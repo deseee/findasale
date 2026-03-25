@@ -12,6 +12,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import HoldTimer from '../../components/HoldTimer';
+import EmptyState from '../../components/EmptyState';
 import { getThumbnailUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
@@ -110,15 +111,12 @@ const ShopperHoldsPage = () => {
               <p className="text-warm-600 dark:text-warm-400">Loading your holds…</p>
             </div>
           ) : activeHolds.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center border border-warm-200 dark:border-gray-700">
-              <p className="text-warm-700 dark:text-warm-300 text-lg mb-4">You don't have any active holds yet.</p>
-              <Link
-                href="/sales"
-                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-6 rounded-lg"
-              >
-                Browse Sales
-              </Link>
-            </div>
+            <EmptyState
+              icon="🤝"
+              heading="No active holds"
+              subtext="Place holds on items you're interested in to reserve them while you make your purchase decision."
+              cta={{ label: 'Browse Sales', href: '/' }}
+            />
           ) : (
             <div className="space-y-4">
               {activeHolds.map((hold) => (

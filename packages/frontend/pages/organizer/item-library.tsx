@@ -5,7 +5,9 @@ import LibraryItemCard from '../../components/LibraryItemCard';
 import useItemLibrary from '../../hooks/useItemLibrary';
 import { useAuth } from '../../components/AuthContext';
 import TierGate from '../../components/TierGate';
+import { SkeletonCard } from '../../components/SkeletonCards';
 import { Search, Filter } from 'lucide-react';
+import EmptyState from '../../components/EmptyState';
 
 interface PullModalState {
   isOpen: boolean;
@@ -178,9 +180,15 @@ const ItemLibraryPage: React.FC = () => {
               {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
             </div>
             {loading ? (
-              <div className="text-center py-12"><p className="text-gray-600 dark:text-gray-400">Loading library...</p></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => <SkeletonCard key={i} />)}
+              </div>
             ) : filteredItems.length === 0 ? (
-              <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-lg"><p className="text-gray-600 dark:text-gray-400">No items match your filters.</p></div>
+              <EmptyState
+                icon="📦"
+                heading="No items match your filters"
+                subtext="Try adjusting your search terms, category, or price range to find items in your library."
+              />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {filteredItems.map((item) => (

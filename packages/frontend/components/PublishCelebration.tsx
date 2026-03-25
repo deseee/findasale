@@ -86,24 +86,16 @@ const PublishCelebration: React.FC<PublishCelebrationProps> = ({
 
           {/* Subtext */}
           <p className="text-warm-600 dark:text-gray-300 mb-8 text-lg">
-            Your sale is now visible to shoppers on the map and in search results.
+            Your sale is published and ready for shoppers.
           </p>
 
-          {/* CTAs */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
-            <Link
-              href={`/organizer/edit-sale/${saleId}`}
-              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-            >
-              View Sale
-            </Link>
-            <button
-              onClick={onClose}
-              className="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-100 font-bold py-3 px-6 rounded-lg transition-colors"
-            >
-              Done
-            </button>
-          </div>
+          {/* CTA */}
+          <button
+            onClick={onClose}
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            Continue <span className="text-lg">→</span>
+          </button>
 
           {/* Hint: click to close */}
           <p className="text-xs text-warm-400 dark:text-gray-500 mt-6">

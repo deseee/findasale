@@ -97,6 +97,39 @@ export const TableSkeleton = ({ rows = 5 }: { rows?: number }) => (
   </div>
 );
 
+/** SkeletonCard — Animated skeleton for item cards with pulse animation */
+export const SkeletonCard = () => {
+  return (
+    <div className="rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm animate-pulse">
+      {/* Image placeholder */}
+      <div className="w-full aspect-square bg-gray-200 dark:bg-gray-700" />
+      {/* Content */}
+      <div className="p-3 space-y-2">
+        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
+      </div>
+    </div>
+  )
+};
+
+/** SkeletonSaleCard — Animated skeleton for sale cards (4:3 landscape aspect) */
+export const SkeletonSaleCard = () => {
+  return (
+    <div className="rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm animate-pulse">
+      {/* 4:3 image placeholder */}
+      <div className="w-full" style={{ paddingBottom: '75%', position: 'relative' }}>
+        <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700" />
+      </div>
+      <div className="p-4 space-y-2">
+        <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+      </div>
+    </div>
+  )
+};
+
 export default {
   SaleCardSkeleton,
   ItemCardSkeleton,
@@ -104,4 +137,6 @@ export default {
   TableRowSkeleton,
   SkeletonGrid,
   TableSkeleton,
+  SkeletonCard,
+  SkeletonSaleCard,
 };

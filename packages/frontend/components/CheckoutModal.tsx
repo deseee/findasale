@@ -69,6 +69,8 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
       setIsSubmitting(false);
     } else {
       setPaymentSucceeded(true);
+      // Optionally store the purchaseId from stripe intent if available
+      // For now, we'll redirect after modal closure with the callback
       setTimeout(() => {
         onSuccess();
       }, 2000);
