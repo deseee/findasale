@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useMyPassport, useUpdatePassport, useMyMatches, ExplorerPassport } from '@/hooks/useCollectorPassport';
 import { useAuth } from '@/components/AuthContext';
+import { RankBadge } from '@/components/RankBadge';
 
 const CATEGORIES = [
   'Furniture',
