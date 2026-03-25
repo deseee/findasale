@@ -217,6 +217,7 @@ async function main() {
         bio:             `Professional estate liquidation service with ${5 + i * 2} years of experience in West Michigan.`,
         website:         `https://organizer${i + 1}.example.com`,
         stripeConnectId: stripeConnectId,
+        subscriptionTier: (orgTiers[i] || 'SIMPLE') as any,
       },
     });
     organizers.push(organizer);
