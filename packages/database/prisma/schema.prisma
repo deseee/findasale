@@ -97,8 +97,9 @@ model User {
   // Feature #45: Collector Passport — identity-based collection tracking
   collectorPassport CollectorPassport?
   // Feature #47: UGC Photo Tags — user-generated content with tagging and likes
-  ugcPhotos      UGCPhoto[]
-  ugcPhotoLikes  UGCPhotoLike[]
+  ugcPhotos           UGCPhoto[]
+  ugcPhotoLikes       UGCPhotoLike[]
+  ugcPhotoReactions   UGCPhotoReaction[] @relation("UGCPhotoReactions") // Feature #88: Haul Posts
   // Features #58-59: Achievement Badges & Streak Rewards
   achievements   UserAchievement[] @relation("UserAchievements")
   streak         VisitStreak?      @relation("UserStreak")
@@ -109,6 +110,8 @@ model User {
   fraudReviewsGiven FraudSignal[]  @relation("FraudReviewsBy")
   // Feature #48: Treasure Trail Route Builder — user-created trails
   trails         TreasureTrail[]   @relation("UserTrails")
+  // Feature #87: Brand & Designer Tracking
+  brandFollows   BrandFollow[]
   // Feature #52: Estate Sale Encyclopedia
   encyclopediaEntries EncyclopediaEntry[] @relation("EncyclopediaAuthor")
   encyclopediaRevisions EncyclopediaRevision[] @relation("EncyclopediaRevisionAuthor")
@@ -1399,23 +1402,26 @@ model CollectorPassport {
 
 // Feature #47: UGC Photo Tags — user-generated content with tagging and moderation
 model UGCPhoto {
-  id         Int        @id @default(autoincrement())
-  userId     String
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  itemId     String?
-  item       Item?      @relation(fields: [itemId], references: [id], onDelete: SetNull)
-  saleId     String?
-  sale       Sale?      @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  photoUrl   String
-  caption    String?
-  tags       String[]   @default([])
-  status     String     @default("PENDING") // PENDING | APPROVED | REJECTED
-  reviewedAt DateTime?
-  reviewedBy String?
-  likesCount Int        @default(0)
-  likes      UGCPhotoLike[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id              Int        @id @default(autoincrement())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId          String?
+  item            Item?      @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  saleId          String?
+  sale            Sale?      @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  photoUrl        String
+  caption         String?
+  tags            String[]   @default([])
+  status          String     @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  likesCount      Int        @default(0)
+  likes           UGCPhotoLike[]
+  isHaulPost      Boolean    @default(false) // Feature #88: Haul Posts
+  linkedItemIds   String[]   @default([]) // Feature #88: Items tagged in haul
+  reactions       UGCPhotoReaction[] // Feature #88: Photo reactions (likes)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   @@index([userId])
   @@index([itemId])
@@ -1433,6 +1439,21 @@ model UGCPhotoLike {
   @@unique([userId, photoId])
   @@index([userId])
   @@index([photoId])
+}
+
+// Feature #88: Haul Posts — reactions and engagement on UGC photos
+model UGCPhotoReaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("UGCPhotoReactions", fields: [userId], references: [id], onDelete: Cascade)
+  photoId   Int
+  photo     UGCPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  type      String   @default("LIKE")
+  createdAt DateTime @default(now())
+
+  @@unique([userId, photoId, type])
+  @@index([photoId])
+  @@index([userId])
 }
 
 // Feature #39: Photo Op Stations — branded selfie spots for sales
@@ -1985,4 +2006,19 @@ model AffiliateReferral {
   @@index([referredUserId])
   @@index([referralCode])
   @@index([status])
+}
+
+// Feature #87: Brand & Designer Tracking
+model BrandFollow {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandName   String
+  notifyEmail Boolean   @default(true)
+  notifyPush  Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, brandName])
+  @@index([userId])
 }

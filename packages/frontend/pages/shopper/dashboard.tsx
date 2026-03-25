@@ -29,18 +29,19 @@ import EmptyState from '../../components/EmptyState';
 import StreakWidget from '../../components/StreakWidget'; // CD2 Phase 2: Streak Challenges
 import Skeleton from '../../components/Skeleton';
 import { useFollows } from '../../hooks/useFollows';
+import BrandFollowManager from '../../components/BrandFollowManager';
 
 const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
     if (router.isReady && router.asPath.includes('#')) {
       const hash = router.asPath.split('#')[1];
-      if (['overview', 'purchases', 'favorites', 'subscribed', 'pickups'].includes(hash)) {
+      if (['overview', 'purchases', 'favorites', 'subscribed', 'pickups', 'brands'].includes(hash)) {
         setActiveTab(hash as any);
       }
     }
@@ -164,6 +165,13 @@ const ShopperDashboard = () => {
               <div className="text-2xl mb-2">🧾</div>
               <p className="text-xs font-semibold text-rose-900 dark:text-rose-300">Receipts</p>
             </Link>
+            <Link
+              href="/shopper/hauls"
+              className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30 border border-orange-200 dark:border-orange-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+            >
+              <div className="text-2xl mb-2">📸</div>
+              <p className="text-xs font-semibold text-orange-900 dark:text-orange-300">Hauls</p>
+            </Link>
           </div>
 
           {/* Tabs */}
@@ -174,6 +182,7 @@ const ShopperDashboard = () => {
               { id: 'favorites', label: 'Favorites' },
               { id: 'subscribed', label: 'Subscribed' },
               { id: 'pickups', label: 'Pickups' },
+              { id: 'brands', label: 'Brands' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -381,6 +390,11 @@ const ShopperDashboard = () => {
           {/* Pickups Tab */}
           {activeTab === 'pickups' && (
             <MyPickupAppointments />
+          )}
+
+          {/* Brands Tab */}
+          {activeTab === 'brands' && (
+            <BrandFollowManager />
           )}
         </div>
       </div>

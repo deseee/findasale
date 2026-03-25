@@ -6,6 +6,7 @@ import {
   getLeaderboard,
   getPublicShopperProfile
 } from '../controllers/userController';
+import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
@@ -247,5 +248,10 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error while updating preferences' });
   }
 });
+
+// Brand Follow routes
+router.get('/:userId/brand-follows', authenticate, (req: AuthRequest, res: Response) => getBrandFollows(req, res));
+router.post('/:userId/brand-follows', authenticate, (req: AuthRequest, res: Response) => addBrandFollow(req, res));
+router.delete('/:userId/brand-follows/:brandFollowId', authenticate, (req: AuthRequest, res: Response) => removeBrandFollow(req, res));
 
 export default router;

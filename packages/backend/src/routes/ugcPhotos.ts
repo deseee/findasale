@@ -10,6 +10,13 @@ import {
   moderatePhoto,
   getPendingPhotosForOrganizer,
 } from '../controllers/ugcPhotoController';
+import {
+  listHaulPosts,
+  createHaulPost,
+  getSaleHaulPosts,
+  addReaction,
+  removeReaction,
+} from '../controllers/haulPostController';
 
 const router = Router();
 
@@ -26,5 +33,12 @@ router.delete('/:photoId/like', authenticate, unlikePhoto);
 // Organizer routes (authenticated)
 router.patch('/:photoId/moderate', authenticate, moderatePhoto);
 router.get('/moderation/pending', authenticate, getPendingPhotosForOrganizer);
+
+// Haul post routes (Feature #88)
+router.get('/haul-posts', listHaulPosts);  // public trending feed
+router.post('/haul-posts', authenticate, createHaulPost);  // auth required
+router.get('/sales/:saleId/haul-posts', getSaleHaulPosts);  // public
+router.post('/:photoId/reactions', authenticate, addReaction);  // auth required
+router.delete('/:photoId/reactions', authenticate, removeReaction);  // auth required
 
 export default router;
