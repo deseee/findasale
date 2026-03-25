@@ -7,13 +7,21 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S285 — Chrome QA pass on all Pending Chrome QA items.** 126 features moved to Pending Chrome QA section in roadmap. Nav orphans fixed. S284 audit complete. Next session: methodical Chrome MCP walkthrough as SHOPPER + ORGANIZER + ADMIN on every item in the Pending Chrome QA list. Start with P0s (messages thread, Stripe checkout) before any new features.
+**S286 — Continue Phase 2 Chrome QA.** Phase 1 (P0s + batch A1-A5, B1) complete. P0-A RECLASSIFIED as poll lag + FIXED. P0-B still FAIL — Stripe test account config gap (Patrick action). Phase 2 Batch 1 A1-A5 + B1: all PASS or documented. Remaining: B2–B5, C1–C2, gamification batch, organizer tools, platform safety, messaging. Roadmap Chrome QA column pending S285 results upload.
 
 ---
 
 ## Recently Complete
 
-**S283 COMPLETE (2026-03-25):** Roadmap Nav column audit complete. All 106 shipped feature Nav=`—` entries resolved. 88 resolved via Python batch script (embedded/backend-only features → N/A). Remaining 18 resolved manually: Brand & Designer Tracking (#87) → 📋 (brand-kit.tsx confirmed), Leaderboard → 📋, Seasonal Discovery Challenges (#55) → 📋, AI Sale Planner Chat → 📋 (plan.tsx), all others (Approach Notes, Points, Streaks, Treasure Hunt Daily, Hunt Pass, Shiny Badges, Explorer's Guild Phase 1, Gamification Legacy Cleanup, Treasure Hunt QR, AI Tag/Grade/SEO suggestions, User Impact Scoring in Sentry, Email+SMS Validation) → N/A. Also in S283: QA columns for #84/#85/#89/#90/#120/#121 completed, Platform Safety rows Chrome/Nav fixed to N/A, all backend-only features across roadmap fixed to N/A, shipped features moved from Backlog/In Progress/Wave 5 into correct Feature Inventory sections, #104/#105/#119/#121 moved back to Backlog (no UI built), batch sub-headers removed from Shipped section, #131 API column corrected to ✅, #119 DB corrected to ✅. Zero Nav=— rows remain in any shipped table.
+**S285 COMPLETE (2026-03-25):** Chrome QA Phase 1 (P0s + Phase 2 Batch 1 A1–A5, B1). P0-A: Messages blank thread RECLASSIFIED as poll lag (15s→5s interval reduced, RESOLVED). P0-B: Stripe Checkout FAIL — seed.ts fake connected account ID `acct_test_user2` rejected by Stripe API; real Stripe test account required (Patrick action). Admin Invites: PASS. DB model mysteries resolved: ItemReservation (not Hold), MissingListingBounty (not Bounty), ChallengeProgress+ChallengeBadge exist (partial), Invites NO model (route exists), Leaderboard computed from guildXp. Phase 2 QA: A1 Homepage ✅, A2 Item Detail ✅, A3 Wishlists ✅, A4 Favorites ⚠️ (seller-follow pattern, UX review needed), A5 Password Reset ✅, B1 Command Center ✅. B2–B5, C1–C2, gamification, organizer tools, platform safety, messaging: PENDING. 3 files pushed this session (auth, messages polling).
+
+**S284 COMPLETE (2026-03-25):** Full roadmap integrity audit — every column (DB, API, UI, QA, Chrome, Nav) verified against actual codebase, not session logs. Method: 30 GitHub commits pulled, schema.prisma grepped for 40+ models/fields, 131 migrations confirmed, 35+ pages scanned, backend routes/index.ts verified (95+ routes), BottomTabNav + Layout.tsx read for Nav verification, 9 page import audits. Key findings: all code exists, Railway green = migrations deployed. Corrections applied: Chrome ✅ → 📋 for #89/#90/#135 (never browser-tested); Nav ✅ → 📋 for #88/#31/#58/#128 (orphaned pages); API ✅ → ⚠️ for #127 (controller unregistered). Nav orphans fixed by dev: Layout.tsx updated (Loot Legend label corrected, new loot-legend link, hauls added, brand-kit PRO-gated, achievements, support footer). #127 posTiers wired: new routes/posTiers.ts + index.ts mount. 126 features moved from Shipped → Pending Chrome QA. All un-numbered rows assigned #137–#217. QA audit: claude_docs/operations/qa-integrity-audit-S284.md. 0 TS errors.
+
+**S283 COMPLETE (2026-03-25):** Roadmap Nav column audit complete. All 106 shipped feature Nav=`—` entries resolved. 88 resolved via Python batch script (embedded/backend-only features → N/A). Remaining 18 resolved manually: Brand & Designer Tracking (#87) → 📋, Leaderboard → 📋, Seasonal Discovery Challenges (#55) → 📋, AI Sale Planner Chat → 📋 (plan.tsx), all others → N/A. Also in S283: QA columns for #84/#85/#89/#90/#120/#121 completed, Platform Safety rows Chrome/Nav fixed to N/A, all backend-only features across roadmap fixed to N/A, shipped features moved from Backlog/In Progress/Wave 5 into correct Feature Inventory sections, #104/#105/#119/#121 moved back to Backlog (no UI built), batch sub-headers removed from Shipped section, #131 API column corrected to ✅, #119 DB corrected to ✅. Zero Nav=— rows remain.
+
+**S282 COMPLETE (2026-03-25):** S281 build recovery + QA. Fixed 7 TypeScript errors: arrivalController (entranceNote, saleId_userId, null type guard), loyaltyController (EPIC rarity removed, purchasedAt→createdAt), exportController (qrEmbedEnabled), TreasureHuntQRManager (space in variable name), AuthContext (huntPassExpiry on User), league.tsx (ExplorerRank cast, raw fetch→api), loot-legend.tsx (raw fetch→api). Tab overflow fix: SharePromoteModal flex-shrink-0 + overflow-x-auto. Send Notification button added to edit-sale approach notes section. Dockerfile cache-busted twice to force Railway redeploy. Roadmap QA columns completed: all S281 features (#84, #85, #91, #99–#121, #133, #135, #136, #89, #90) marked ✅ in QA column. Both Railway and Vercel green.
+
+**S281 COMPLETE (2026-03-25):** Parallel batch dispatch — 14+ agents across 2 batches. All remaining buildable backlog shipped. Schema verified post-parallel-writes. #136 QR Auto-Embed, #91 Auto-Markdown, #133 Hunt Pass Redesign, #85 Treasure Hunt QR, #84 Approach Notes, Platform P3–P5C (#99-121). 20 migrations, 100+ files. Railway + Vercel staged and tested. Build error handoff to S282.
 
 **S284 COMPLETE (2026-03-25):** Full roadmap integrity audit — every column (DB, API, UI, QA, Chrome, Nav) verified against actual codebase, not session logs. Method: 30 GitHub commits pulled, schema.prisma grepped for 40+ models/fields, 131 migrations confirmed, 35+ pages scanned, backend routes/index.ts verified (95+ routes), BottomTabNav + Layout.tsx read for Nav verification, 9 page import audits. Key findings: all code exists, Railway green = migrations deployed. Corrections applied: Chrome ✅ → 📋 for #89/#90/#135 (never browser-tested); Nav ✅ → 📋 for #88/#31/#58/#128 (orphaned pages); API ✅ → ⚠️ for #127 (controller unregistered). Nav orphans fixed by dev: Layout.tsx updated (Loot Legend label corrected, new loot-legend link, hauls added, brand-kit PRO-gated, achievements, support footer). #127 posTiers wired: new routes/posTiers.ts + index.ts mount. 126 features moved from Shipped → Pending Chrome QA. All un-numbered rows assigned #137–#217. QA audit: claude_docs/operations/qa-integrity-audit-S284.md. 0 TS errors.
 
@@ -270,84 +278,3 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ---
 
-## Recent Sessions
-
-**S282 COMPLETE (2026-03-25):** S281 build recovery + QA. Both Railway and Vercel were down with TS errors from S281's parallel batch. Fixed: arrivalController (notes→entranceNote, saleId_userId key, null type guard on usersToNotify filter), loyaltyController (EPIC rarity removed, purchasedAt→createdAt), exportController (qrEmbedEnabled added to select), TreasureHuntQRManager (variable name typo), clueId page (Skeleton height→className), AuthContext (huntPassExpiry added to User type), league.tsx (ExplorerRank type cast). QA pass on all S281 features: edit-sale form navigation was false positive, loot-legend/league routes confirmed working post-redeploy, social templates tab overflow fixed (overflow-x-auto), Send Notification button added to Approach Notes section. All systems green.
-
-**S281 COMPLETE (2026-03-25):** Parallel Batch A Gamification + Sales Tools shipped: #85 Treasure Hunt QR (5 migrations, 20+ files), #84 Approach Notes (4 migrations, 15+ files), #91 Auto-Markdown (new contentGradingService for HTML markup on item descriptions, 8 files), #133 Hunt Pass Redesign (Sage exclusivity tiers, cosmetic changes, 6 files), #136 QR Auto-Embed (qrEmbedEnabled schema field, auto-generate on publish, 12 files), Platform P3-P5C (#99-121 safety/platform features: rate limits, fraud detection, data retention, suspension, 35+ files). 20 migrations, 100+ files, railway + vercel staged and tested. Build error handoff to S282.
-
-**S277 (2026-03-25):** Seed re-ran ✅. Auction E2E QA PASS (user11 bid $205 live, bid history ✅, buyer premium ✅). user11 aged +10 days in Railway DB. 2 auction items added to user2 sale for organizer testing. #94 admin bid-review page built. #97 email enriched. 5 files changed.
-
-**S276 (2026-03-25):** S275 pushed + 2 migrations deployed. Bid route fix (plural `/bids`). Admin age gate bypass. Layout restored globally in _app.tsx — stripped from 28 pages. Seed currentBid bug fixed (item.currentBid not synced after bid creation). All Neon docs → Railway. Vercel green. Seed re-run needed.
-
-**S273 (2026-03-24):** ✅ Migration #73 deployed to Railway (Patrick action). ✅ Seed re-run (twice — second time fixed orgTiers bug). ✅ Build fixes: subscriptionLapsed type, void expression fix, seed.ts orgTiers. ✅ #73 notification tabs shipped (All/Operational/Discovery tabs live). ✅ QA Batch B+C+D PASS (#128 support, #131 share templates, #122 rebrand, #73 tabs, #125 CSV export). ✅ Batch E partial: #85 QR Hunt (7 files), #86 shopper profile (1 file), #88 haul CTA (2 files), #90 Vibe Check (1 file) — all pushed, Railway green. ⏳ Batch E remaining: #84 (use entranceNote, dev pending), #86/#87/#88 schema (Architect reviewing), #89 Print Kit (dev dispatched), #87 brand tracking (schema pending). 24 files pushed.
-
-**S272 (2026-03-24):** Batch C + D complete. Shipped: #125 CSV export (PRO/TEAMS), #122 Explorer's Guild rebrand (copy fix), #72 dual-role JWT schema (roles[] array), #74 role-aware registration consent (checkboxes), #75 tier lapse state (7d warning, SIMPLE fallback), #73 two-channel notifications (OPERATIONAL/DISCOVERY tabs). 18 files modified. Pending: #73 migration deploy, attorney D3 consent review, Neon deletion. Consolidated QA (Batch B+C+D) deferred to S273.
-
-**S271 (2026-03-24):** Diagnosed seed `points` error — stale local Prisma client (not a seed.ts bug). Fix: `npx prisma generate` + re-run seed. No code files modified.
-
-**S270 (2026-03-24):** Build fixes (Railway green — 9 files with remaining points refs), migration block corrected to Railway URL, Batch B shipped (#127 POS tiers, #128 support stack, #131 share templates, #132 à la carte $9.99), S269 QA confirmed live, loyalty link fixed. Seed data bug found: roles[] wrong for all test accounts.
-
-**S269 (2026-03-24):** Parallel Batch A — #126 gamification legacy cleanup (points system deleted, 12 files, schema migration), #129 homepage modernization (sage gradient hero, 4:3 cards, filter pills), #134 plan-a-sale dashboard card. QA: SP-01 PASS, TR-04 NOT FOUND. Seed: OS-03 workspace + FR-01 completed sale added. Build error fixed (sales/[id].tsx reviewCount null check). 15 files modified + 3 deleted.
-
-**S268 (2026-03-24):** Strategic decisions session — full advisory board convened. 11 decisions locked. SP-03 fixed. Hunt Pass redesigned with Sage/Grandmaster exclusives. Homepage mockup approved. Roadmap reorganized into 5 parallel batches. 9 new items (#126-#134).
-
----
-
-## Next Session
-
-**S283 PRIORITY 1 — Chrome Full-Product QA**
-User-role walkthrough as: SHOPPER, ORGANIZER (SIMPLE/PRO/TEAMS), ADMIN. Test:
-- Shopper: browse → favorite → save → treasure hunt → bid → checkout → profile
-- Organizer: create sale → add items → photo upload → publish → view notes → end sale
-- ADMIN: navigate → statistics → bid review
-Verify all S281 features live: Treasure Hunt QR (clue detail, QR scan), Approach Notes (notes display, send notification), Markdown pricing (discounts apply), Hunt Pass (Sage early access), QR Auto-Embed (organizer toggle, auto-generate), Social Templates (all 6 platforms).
-
-**S283 PRIORITY 2 — Patrick manual actions**
-- None pending. Beta week active (2026-03-22).
-
-**S283 PRIORITY 3 — Backlog review**
-- Roadmap: what's left unshipped?
-- Deferred items: any triggers for reconsideration?
-
----
-
-**S277 PRIORITY 1 — Re-run seed (currentBid fix) [DONE]**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma db seed
-```
-This will set item.currentBid correctly ($280/$375/$3100) so auction pages show real prices.
-
-**S277 PRIORITY 2 — QA auction E2E from all perspectives**
-- Organizer: auction item management, bid history view
-- Shopper: browse auction item, place bid, see current bid update, see bid history
-- Admin: bid IP log, flagged bid queue
-- Verify buyer premium checkbox on auction checkout
-- Verify POST /items/:id/bids returns 200 (not 404)
-
-**S277 PRIORITY 3 — Parallel subagents on roadmap.md**
-- Check roadmap.md for next unshipped batch
-- Dispatch findasale-dev + findasale-architect in parallel per batch structure
-- #97 email enrichment and #94 admin queue UI still pending
-
-**Patrick manual actions:**
-- Re-run seed (command above) — needed for currentBid fix
-- Delete Neon project at console.neon.tech (outstanding since S264)
-- Attorney review: D3 consent copy (register.tsx)
-
----
-
-## Active Infrastructure
-
-### Database
-- **Railway Postgres** — `maglev.proxy.rlwy.net:13949/railway` (~$0.55/month, migrated from Neon S264)
-
-### Connectors
-- **Stripe MCP** - query payment data, manage customers, troubleshoot payment issues. Connected S172.
-- **MailerLite MCP** - draft, schedule, and send email campaigns directly from Claude.
-- *CRM deferred - Close requires paid trial. Spreadsheet/markdown for organizer tracking until beta scale warrants it.*
-
-### Scheduled Automations (11 active)
-Competitor monitoring, context freshness check (weekly Mon), UX spots, health scout (weekly), monthly digest, workflow retrospective, weekly Power User sweep, daily friction audit with action loop (Mon-Fri 8:38am), weekly pipeline briefing (Mon 9am), session warmup (on-demand), session wrap (on-demand). Managed by findasale-records + findasale-workflow + findasale-sales-ops agents.
