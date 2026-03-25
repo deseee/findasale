@@ -369,25 +369,44 @@ _#126 must ship first. Then these can run in parallel._
 
 ## Platform Safety & Cost Control
 
-### Before Beta (P0)
+### Before Beta (P0) — Parallel Safety Batches
+
+#### Platform Batch P1 — Bidding Integrity
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
 | 93 | Bidder Account Age Gate (7-day) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Prevents throwaway shill accounts; blocks bids <7 days post-signup. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
 | 94 | Same-IP Bidder Detection | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags bids from accounts sharing organizer IP/device fingerprint; manual review queue. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
 | 95 | Bidding Velocity Limits | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Rate-limits 10+ bids in <1 minute per account. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+
+#### Platform Batch P2 — Buyer Transparency
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
 | 96 | Buyer Premium Disclosure (4-Point Visibility) | PLATFORM | ALL | — | ✅ | ✅ | — | — | — | N/A | Checkout UI shows premium as separate line item; checkbox confirmation required before payment. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
 | 97 | Post-Purchase Confirmation Email (Premium Breakdown) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Itemized email sent within 1 hour of auction win; evidence record for chargebacks. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
 | 98 | Chargeback Defense Documentation | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Auto-capture checkout evidence, email delivery, acknowledgment; submit to Stripe on dispute. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
+
+#### Platform Batch P3 — Account Controls
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
 | 99 | Export Rate Limiting (1/month) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | CSV/JSON exports limited to 1 per month per account; prevents data harvesting. See anti-abuse-system-design-2026-03-19.md §Vector 1 |
 | 100 | First-Month Refund Cap (50%) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Refunds capped at 50% if requested <30 days post-signup. See anti-abuse-system-design-2026-03-19.md §Vector 1 |
 | 101 | Email Verification (Unique per Organizer) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Hard gate: no multi-account signup with same email. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
 | 102 | Payment Method Deduplication | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Links organizer accounts sharing Stripe card/PayPal; suggests merge to Pro tier. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
+
+#### Platform Batch P4 — Cost Control
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
 | 103 | Photo Retention Policy (90-day archive, 1-year delete) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Auto-archive after 90 days, delete after 1 year; reduces Cloudinary costs indefinitely. See total-cost-of-ownership-2026-03-19.md §Section 3 |
 | 104 | AI Cost Ceiling + Ollama Fallback | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Auto-switch to Ollama if Claude API cost exceeds monthly threshold. See total-cost-of-ownership-2026-03-19.md §Section 5 |
 | 105 | Cloudinary Bandwidth Monitoring + Alerts | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Alert when bandwidth exceeds threshold; prevents surprise overage bills. See total-cost-of-ownership-2026-03-19.md §Risk #1 |
 
-### Before Growth (P1)
+### Before Growth (P1) — Parallel Safety Batches
+
+#### Platform Batch P5 — Growth Safety (Fraud Detection & Account Management)
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
@@ -396,13 +415,23 @@ _#126 must ship first. Then these can run in parallel._
 | 108 | Winning Bid Velocity Check (low vs. value) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags auctions with winning bid <10% of estimated value; holds payment 24h for review. See anti-abuse-system-design-2026-03-19.md §Vector 3 |
 | 109 | Off-Platform Transaction Detection (Post-Sale Monitoring) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | 30-day pattern detection: low-price sales with no activity flagged. See anti-abuse-system-design-2026-03-19.md §Vector 3 |
 | 110 | IP-Based Soft Linking (Multi-Account Detection) | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Suggests merge for accounts from same IP with >3 concurrent sales in <7 days. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
+| 114 | Bid Cancellation Audit Trail | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Tracks bid cancellations; pattern flagged after 5+ cancellations + 3+ chargebacks. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
+| 117 | Chargeback Response + Serial Buyer Account Suspension | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags buyers at 2+ chargebacks; suspends after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
+
+#### Platform Batch P5B — Review Integrity & Spam Prevention
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
+| 115 | Verified Purchase Badge on Reviews | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Only non-refunded past purchasers can leave reviews; prevents fake review spam. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
+| 116 | Review Timing Anomaly Detection | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags reviews <1 hour post-purchase or from same IP within 24 hours; manual moderation queue. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
+
+#### Platform Batch P5C — Advanced Fraud Monitoring & Data Governance
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
 | 111 | Bot/Scraper Rate Limiting on CDN | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Rate limits image endpoints; prevents bot harvesting via Cloudinary bandwidth spike. See total-cost-of-ownership-2026-03-19.md §Section 4 |
 | 112 | Database Record Archival Policy (Soft-Delete) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Quarterly soft-delete of old sales/items; reduces Neon compute bloat. See total-cost-of-ownership-2026-03-19.md §Section 3 |
 | 113 | Async AI Tagging Queue (Prevent Rate-Limit Spikes) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Background worker processes tags; prevents Claude API rate limiting during peak uploads. See total-cost-of-ownership-2026-03-19.md §Risk #4 |
-| 114 | Bid Cancellation Audit Trail | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Tracks bid cancellations; pattern flagged after 5+ cancellations + 3+ chargebacks. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
-| 115 | Verified Purchase Badge on Reviews | PLATFORM | ALL | ✅ | ✅ | ✅ | — | — | — | N/A | Only non-refunded past purchasers can leave reviews; prevents fake review spam. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
-| 116 | Review Timing Anomaly Detection | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags reviews <1 hour post-purchase or from same IP within 24 hours; manual moderation queue. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
-| 117 | Chargeback Response + Serial Buyer Account Suspension | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags buyers at 2+ chargebacks; suspends after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
 | 118 | Photo Compression at Upload (Reduce Storage Bloat) | PLATFORM | ALL | — | ✅ | ✅ | — | — | — | N/A | Auto-compress photos on-device; reject images <100×100px or >50MB. See anti-abuse-system-design-2026-03-19.md §Novel Vector C |
 | 119 | Aggregate Chargeback Monitoring (Stripe Health) | PLATFORM | ALL | — | ✅ | — | — | — | — | N/A | Tracks monthly chargeback rate; triggers pre-auth + payment hold if >0.8%, account escalation if >1%. See anti-abuse-system-design-2026-03-19.md §Novel Vector D |
 | 120 | Sale Cancellation Audit (Rapid Cancellation Detection) | PLATFORM | ALL | ✅ | ✅ | — | — | — | — | N/A | Flags sales cancelled <2h post-publication with >100 holds; requires organizer explanation. See anti-abuse-system-design-2026-03-19.md §Novel Vector A |

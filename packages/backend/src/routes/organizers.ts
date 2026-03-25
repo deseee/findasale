@@ -6,6 +6,7 @@ import { getPerformanceMetricsHandler } from '../controllers/performanceControll
 import { exportOrganizer } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
+import { getPrintKit } from '../controllers/printKitController';
 
 const router = Router();
 
@@ -341,6 +342,11 @@ router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, re
 // Download all organizer data as a ZIP with three CSVs (sales, items, purchases)
 // Must be registered BEFORE /:id to avoid Express matching 'export' as an id param
 router.get('/export', authenticate, exportOrganizer);
+
+// Feature #89: GET /api/organizer/sales/:saleId/print-kit
+// Download unified print kit PDF (QR code + item barcode stickers)
+// Must be registered BEFORE /:id wildcard
+router.get('/:saleId/print-kit', authenticate, getPrintKit);
 
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 router.get('/:id', async (req: Request, res: Response) => {

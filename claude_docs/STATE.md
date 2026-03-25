@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Active Objective
 
-**S273 (next session):** Run #73 migration, execute consolidated QA pass (Batch B + C + D), dispatch Batch E (parallel agents). See Next Session below.
+**S274 (next session):** Deploy schema migrations for #86/#87/#88 (once Architect decision returns), dispatch parallel dev for #86 follow network + #87 brand tracking + #88 haul posts. Monitor #56 Printful review. Dispatch Platform Safety batches P1–P5. See Next Session below.
 
 **Session 272 COMPLETE (2026-03-24) — BATCH C + D SHIPPED:**
 
@@ -225,6 +225,8 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Recent Sessions
 
+**S273 (2026-03-24):** ✅ Migration #73 deployed to Railway (Patrick action). ✅ Seed re-run (twice — second time fixed orgTiers bug). ✅ Build fixes: subscriptionLapsed type, void expression fix, seed.ts orgTiers. ✅ #73 notification tabs shipped (All/Operational/Discovery tabs live). ✅ QA Batch B+C+D PASS (#128 support, #131 share templates, #122 rebrand, #73 tabs, #125 CSV export). ✅ Batch E partial: #85 QR Hunt (7 files), #86 shopper profile (1 file), #88 haul CTA (2 files), #90 Vibe Check (1 file) — all pushed, Railway green. ⏳ Batch E remaining: #84 (use entranceNote, dev pending), #86/#87/#88 schema (Architect reviewing), #89 Print Kit (dev dispatched), #87 brand tracking (schema pending). 24 files pushed.
+
 **S272 (2026-03-24):** Batch C + D complete. Shipped: #125 CSV export (PRO/TEAMS), #122 Explorer's Guild rebrand (copy fix), #72 dual-role JWT schema (roles[] array), #74 role-aware registration consent (checkboxes), #75 tier lapse state (7d warning, SIMPLE fallback), #73 two-channel notifications (OPERATIONAL/DISCOVERY tabs). 18 files modified. Pending: #73 migration deploy, attorney D3 consent review, Neon deletion. Consolidated QA (Batch B+C+D) deferred to S273.
 
 **S271 (2026-03-24):** Diagnosed seed `points` error — stale local Prisma client (not a seed.ts bug). Fix: `npx prisma generate` + re-run seed. No code files modified.
@@ -239,7 +241,8 @@ Last Updated: 2026-03-24T23:00:00Z
 
 ## Next Session
 
-**S273 PRIORITY 1 — Deploy #73 migration (Patrick action):**
+**S274 PRIORITY 1 — Deploy schema migrations for #86/#87/#88 (once Architect review returns):**
+Once Architect confirms decision on #86 follow network, #87 brand tracking, #88 haul CTA schema changes:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -247,23 +250,28 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**S273 PRIORITY 2 — Consolidated QA pass (Chrome MCP, S265 §10c methodology):**
-- Batch B features (S270): /support page FAQ + AI chat (PRO/TEAMS), POS tier gates, Share & Promote modal, à la carte modal
-- Batch C features (S272): CSV export (PRO/TEAMS only), Explorer's Guild copy/labels
-- Batch D features (S272): Dual-role JWT + consent flow, tier lapse warnings + SIMPLE fallback, two-channel notifications (OPERATIONAL/DISCOVERY tabs)
-- Test all role×tier×operation combinations. Report exact API responses + exact UI values.
+**S274 PRIORITY 2 — Batch E remaining dispatch (parallel agents):**
+- **#86 follow network** — Shopper profile following system (dev) — after schema deployed
+- **#87 brand tracking** — Shopper brand tracking + saved brands list (dev) — after schema deployed
+- **#88 haul posts** — Shopper haul post UI + sharing (dev) — after schema deployed
+- **#84 entrance note reuse** — Small frontend task: use existing `entranceNote` field, no schema change needed (Patrick can dispatch as small dev task or do UI directly)
+- **#89 Print Kit** — Printable organizer materials (dev already dispatched)
 
-**S273 PRIORITY 3 — Batch E dispatch (parallel, no blockers):**
-- #56, #84, #85, #86, #87, #88, #89, #90 (full batch list in ROADMAP.md)
+**S274 PRIORITY 3 — Platform Safety & Cost Control batches (see reorganized roadmap):**
+- Review reorganized Platform batches P1–P5 in `roadmap.md`
+- Dispatch first 2 batches (P1 Bidding Integrity + P2 Buyer Transparency) to dev after Batch E core features land
 
-**S273 PRIORITY 4 — Monitor:**
-- stripeController.ts modified by BOTH #73 + #75 in parallel — watch Railway deploy for subscription webhook issues
-- `notificationChannel` column in DB is orphaned (harmless) — can clean up in future migration
+**S274 PRIORITY 4 — #56 Printful Merch Store (Architect review first):**
+- Await Architect decision on external API integration safety + cost model
+- Once approved: dispatch full dev phase
+
+**S274 PRIORITY 5 — Monitor:**
+- QA smoke test all S273 changes on live before moving to new work (CLAUDE.md §10 proactive QA ownership)
+- Check Railway deploy for any subscription webhook issues post-#73 migration
 
 **Patrick manual actions:**
-- Deploy #73 migration (above command)
-- Delete Neon project at console.neon.tech (pending since S264)
-- Attorney review: D3 consent copy in register.tsx (LEGAL_COPY_PLACEHOLDER_ORGANIZER / LEGAL_COPY_PLACEHOLDER_SHOPPER)
+- #84 UI implementation (optional — can defer to small dev dispatch if Patrick prefers)
+- Review + approve Platform Safety batch priorities after roadmap reorganization
 
 ---
 

@@ -55,6 +55,7 @@ const PrintInventoryPage = () => {
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [isPrintKitLoading, setIsPrintKitLoading] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -186,6 +187,47 @@ const PrintInventoryPage = () => {
     }
   };
 
+  const handleDownloadPrintKit = async () => {
+    if (!selectedSaleId) {
+      showToast('Please select a sale to download print kit', 'error');
+      return;
+    }
+
+    setIsPrintKitLoading(true);
+    try {
+      const response = await api.get(`/organizer/sales/${selectedSaleId}/print-kit`, {
+        responseType: 'blob',
+      });
+
+      // Get filename from Content-Disposition header or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `print-kit-${selectedSaleId}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('Print kit downloaded successfully', 'success');
+    } catch (error) {
+      console.error('Print kit download error:', error);
+      showToast('Failed to download print kit', 'error');
+    } finally {
+      setIsPrintKitLoading(false);
+    }
+  };
+
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
@@ -305,6 +347,18 @@ const PrintInventoryPage = () => {
                   </div>
                 )}
               </div>
+              <button
+                onClick={handleDownloadPrintKit}
+                disabled={!selectedSaleId || isPrintKitLoading}
+                className={`${
+                  !selectedSaleId || isPrintKitLoading
+                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                } font-bold py-2 px-6 rounded-lg transition-colors`}
+                title={!selectedSaleId ? 'Select a sale first' : 'Download QR code + item stickers'}
+              >
+                📦 Print Kit {isPrintKitLoading && '...'}
+              </button>
               <button
                 onClick={handlePrint}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
