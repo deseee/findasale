@@ -19,6 +19,7 @@ import {
   getInspirationItems,
   getQrCode,
   recordQrScan,
+  closeAuctionEndpoint,
 } from '../controllers/itemController';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
@@ -714,6 +715,7 @@ router.delete('/:id', authenticate, deleteItem);
 router.get('/:id/bids', optionalAuthenticate, getBids);
 router.post('/:id/bids', authenticate, bidRateLimiter, accountAgeGate, placeBid);
 router.post('/:id/analyze', authenticate, analyzeItemTags);
+router.post('/:itemId/close-auction', authenticate, closeAuctionEndpoint);
 
 // Phase 16: Photo management
 router.post('/:id/photos', authenticate, addItemPhoto);

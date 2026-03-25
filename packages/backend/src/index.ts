@@ -174,6 +174,7 @@ import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper dige
 import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily batch processing and warnings
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
+import { scheduleAuctionCloseCron } from './jobs/auctionCloseCron'; // Auction auto-close
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -492,6 +493,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Phase 2B: Register cleanup cron for stale DRAFT items
   scheduleCleanupCron();
+
+  // Auction auto-close cron
+  scheduleAuctionCloseCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();

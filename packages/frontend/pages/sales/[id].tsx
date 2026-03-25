@@ -875,12 +875,34 @@ const SaleDetailPage = () => {
                         {item.status.replace(/_/g, ' ')}
                       </span>
                       {isOrganizer && (
-                        <Link 
-                          href={`/organizer/edit-item/${item.id}`}
-                          className="text-amber-600 hover:text-amber-800 text-sm"
-                        >
-                          Edit
-                        </Link>
+                        <div className="flex gap-2">
+                          <Link 
+                            href={`/organizer/edit-item/${item.id}`}
+                            className="text-amber-600 hover:text-amber-800 text-sm"
+                          >
+                            Edit
+                          </Link>
+                          {item.listingType === 'AUCTION' && !item.auctionClosed && (
+                            <button
+                              onClick={() => {
+                                const confirmed = window.confirm(`End auction for "${item.title}"? The highest bidder will receive a payment link.`);
+                                if (confirmed) {
+                                  api.post(`/items/${item.id}/close-auction`)
+                                    .then(() => {
+                                      showToast('Auction closed successfully', 'success');
+                                      queryClient.invalidateQueries({ queryKey: ['sale', id] });
+                                    })
+                                    .catch((err: any) => {
+                                      showToast(err.response?.data?.message || 'Failed to close auction', 'error');
+                                    });
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-800 text-sm"
+                            >
+                              End Auction
+                            </button>
+                          )}
+                        </div>
                       )}
                       {!isOrganizer && user && item.status === 'AVAILABLE' && (
                         <>

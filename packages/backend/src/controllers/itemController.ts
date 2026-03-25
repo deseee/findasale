@@ -17,6 +17,7 @@ import { invalidateCommandCenterCache } from '../services/commandCenterService';
 import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tier lapse enforcement
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
+import { closeAuction } from '../services/auctionService'; // Auction close flow
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -1316,5 +1317,47 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
   } catch (error) {
     console.error('QR scan recording error:', error);
     res.status(500).json({ message: 'Failed to record QR scan.' });
+  }
+};
+
+// Organizer: Close an auction manually
+export const closeAuctionEndpoint = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { itemId } = req.params;
+
+    // Verify ownership
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    if (item.listingType !== 'AUCTION') {
+      return res.status(400).json({ message: 'Item is not an auction' });
+    }
+
+    if (item.auctionClosed) {
+      return res.status(400).json({ message: 'Auction already closed' });
+    }
+
+    // Call the shared close logic
+    await closeAuction(itemId);
+
+    res.json({ message: 'Auction closed successfully' });
+  } catch (error) {
+    console.error('Close auction error:', error);
+    res.status(500).json({ message: 'Failed to close auction' });
   }
 };

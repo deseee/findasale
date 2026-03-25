@@ -362,6 +362,7 @@ model Item {
   currentBid       Float?
   bidIncrement     Float?    @default(1)
   auctionEndTime   DateTime?
+  auctionClosed    Boolean   @default(false)
   status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, AUCTION_ENDED
   category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
   condition        String?   // mint, excellent, good, fair, poor
