@@ -415,6 +415,11 @@ async function main() {
   await prisma.bid.create({ data: { userId: user12.id, itemId: aItem3.id, amount: 2600, status: 'ACTIVE' } });
   await prisma.bid.create({ data: { userId: user13.id, itemId: aItem3.id, amount: 2850, status: 'ACTIVE' } });
   await prisma.bid.create({ data: { userId: user14.id, itemId: aItem3.id, amount: 3100, status: 'WINNING' } });
+
+  // Sync currentBid on auction items to reflect highest bid
+  await prisma.item.update({ where: { id: aItem1.id }, data: { currentBid: 280 } });
+  await prisma.item.update({ where: { id: aItem2.id }, data: { currentBid: 375 } });
+  await prisma.item.update({ where: { id: aItem3.id }, data: { currentBid: 3100 } });
   console.log('✅ Created bids');
 
   // ── Favorites / Likes (TD-02: at least 10 likes for user11) ─────────────────
