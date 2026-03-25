@@ -340,3 +340,32 @@ export async function getUserXpProfile(userId: string) {
     return null;
   }
 }
+
+/**
+ * Hunt Pass XP Multiplier Helper
+ * Applies 1.5x multiplier if user has active Hunt Pass
+ * Used by item purchase XP awards and other Hunt Pass benefits
+ */
+export async function applyHuntPassMultiplier(userId: string, baseXp: number): Promise<number> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        huntPassActive: true,
+        huntPassExpiry: true,
+      },
+    });
+
+    if (!user) return baseXp;
+
+    // Check if Hunt Pass is active and not expired
+    if (user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > new Date()) {
+      return Math.round(baseXp * 1.5);
+    }
+
+    return baseXp;
+  } catch (error) {
+    console.error(`[xpService] Failed to apply Hunt Pass multiplier for user ${userId}:`, error);
+    return baseXp;
+  }
+}

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import Anthropic from '@anthropic-ai/sdk';
+import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
 
 // In-memory rate limiting map: userId -> { count, resetTime }
 const chatRateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -85,6 +86,15 @@ export const postSupportChat = async (req: AuthRequest, res: Response) => {
     }
 
     const remaining = DAILY_LIMIT - (chatRateLimitMap.get(user.id)?.count || 0);
+
+    // Feature #104: Check AI cost ceiling before proceeding
+    if (isAICostCeilingExceeded()) {
+      console.warn('[support-chat] AI cost ceiling exceeded, returning fallback response');
+      return res.status(503).json({
+        message: 'Support chat is temporarily unavailable due to service maintenance. Please try again later.',
+        canChat: false,
+      });
+    }
 
     // Check if Anthropic API key is configured
     const apiKey = process.env.ANTHROPIC_API_KEY;

@@ -162,42 +162,56 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
 
     const useCloudAI = isCloudAIAvailable();
 
-    // Process each file: upload to Cloudinary + AI analysis in parallel per file
+    // #113: Async AI Tagging — upload immediately, process AI in background
+    // Process each file: upload to Cloudinary synchronously, defer AI analysis
     const results = await Promise.allSettled(
       files.map(async (file, index) => {
-        // Upload to Cloudinary (multi-res)
+        // Upload to Cloudinary (multi-res) — synchronous
         const imageUrls = await uploadToCloudinary(file.buffer);
 
-        // AI analysis (best-effort — don't fail the whole batch if AI is down)
-        let ai: Record<string, unknown> | null = null;
+        // #113: Defer AI analysis to background via setImmediate
+        // Return immediately without waiting for AI
         const mimeType = (file.mimetype as string) || 'image/jpeg';
 
-        if (useCloudAI) {
-          // ── Cloud AI path (CB1): Google Vision + Claude Haiku ──────────────
+        setImmediate(async () => {
           try {
-            ai = await analyzeItemImage(file.buffer, mimeType) as Record<string, unknown> | null;
-          } catch {
-            // Cloud AI failed — fall through to Ollama
-          }
-        }
+            let ai: Record<string, unknown> | null = null;
 
-        if (!ai) {
-          // ── Ollama fallback ────────────────────────────────────────────────
-          try {
-            const base64Image = file.buffer.toString('base64');
-            const aiResponse = await axios.post(
-              `${OLLAMA_URL}/api/generate`,
-              { model: OLLAMA_VISION_MODEL, prompt: ollamaPrompt, images: [base64Image], stream: false },
-              { timeout: 45000 }
-            );
-            const raw = aiResponse.data.response.replace(/```json\n?|\n?```/g, '').trim();
-            ai = JSON.parse(raw);
-          } catch {
-            // AI unavailable — organizer fills in manually
-          }
-        }
+            if (useCloudAI) {
+              // ── Cloud AI path (CB1): Google Vision + Claude Haiku ──────────────
+              try {
+                ai = await analyzeItemImage(file.buffer, mimeType) as Record<string, unknown> | null;
+              } catch {
+                // Cloud AI failed — fall through to Ollama
+              }
+            }
 
-        return { index, cloudinaryUrl: imageUrls.original, imageVariants: imageUrls, ai };
+            if (!ai) {
+              // ── Ollama fallback ────────────────────────────────────────────────
+              try {
+                const base64Image = file.buffer.toString('base64');
+                const aiResponse = await axios.post(
+                  `${OLLAMA_URL}/api/generate`,
+                  { model: OLLAMA_VISION_MODEL, prompt: ollamaPrompt, images: [base64Image], stream: false },
+                  { timeout: 45000 }
+                );
+                const raw = aiResponse.data.response.replace(/```json\n?|\n?```/g, '').trim();
+                ai = JSON.parse(raw);
+              } catch {
+                // AI unavailable — organizer fills in manually
+              }
+            }
+
+            // Best-effort: log if AI processing succeeded
+            if (ai) {
+              console.log(`[async-ai-tagging] Background AI analysis completed for image ${index}`);
+            }
+          } catch (error) {
+            console.error(`[async-ai-tagging] Background error for image ${index}:`, error);
+          }
+        });
+
+        return { index, cloudinaryUrl: imageUrls.original, imageVariants: imageUrls, ai: null };
       })
     );
 

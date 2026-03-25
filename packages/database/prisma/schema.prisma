@@ -110,6 +110,8 @@ model User {
   fraudReviewsGiven FraudSignal[]  @relation("FraudReviewsBy")
   // Feature #48: Treasure Trail Route Builder — user-created trails
   trails         TreasureTrail[]   @relation("UserTrails")
+  // Feature #85: Treasure Hunt QR — per-sale scavenger hunt scans
+  treasureHuntQRScans TreasureHuntQRScan[] @relation("TreasureHuntQRScans")
   // Feature #87: Brand & Designer Tracking
   brandFollows   BrandFollow[]
   // Feature #52: Estate Sale Encyclopedia
@@ -142,9 +144,25 @@ model User {
   seasonalResetAt DateTime?                         // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
   rarityBoosts    RarityBoost[]  @relation("RarityBoosts")  // Phase 2a: Active rarity boosts for upcoming sales
 
+  // Platform Safety #99: Export Rate Limiting (1 per month per account)
+  lastExportAt DateTime?
+
+  // Feature #84: Approach Notes — push notification tracking
+  pushNotificationLogs PushNotificationLog[]
+
+  // Platform Safety #102: Payment Method Deduplication
+  stripeCardFingerprint String?
+
+  // Platform Safety #107-#114: Organizer Reputation & Suspension Tracking
+  chargebackCount       Int      @default(0)      // Total chargebacks on user's organizer account
+  bidCancellationCount  Int      @default(0)      // Total bids cancelled by user (as buyer)
+  suspendedAt           DateTime?                  // Account suspension timestamp (null = active)
+  suspendReason         String?                    // Reason for suspension: SERIAL_CHARGEBACKS, BID_CANCEL_PATTERN, COLLUSION_SUSPECT
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
+  @@index([suspendedAt])
 }
 
 model Organizer {
@@ -339,6 +357,10 @@ model Sale {
   hubMemberships    SaleHubMembership[] @relation("SaleHubMemberships")
   // Feature #51: Sale Ripples — social proof activity feed
   ripples           SaleRipple[]
+  // Feature #85: Treasure Hunt QR — per-sale scavenger hunt with organizer-created clues
+  treasureHuntQRClues TreasureHuntQRClue[]
+  treasureHuntEnabled Boolean @default(true)
+  treasureHuntCompletionBadge Boolean @default(false)
   // Feature #72: Affiliate Payouts linked to sales
   affiliatePayouts  AffiliatePayout[]
   // Phase 2a: Explorer's Guild — Rarity boosts for this sale
@@ -347,8 +369,16 @@ model Sale {
   purchaseModel    String  @default("SUBSCRIPTION")  // "SUBSCRIPTION" | "ALA_CARTE"
   alaCarte         Boolean @default(false)
   alaCarteFeePaid  Boolean @default(false)
+  // #112 Soft-Delete Archival + #120 Sale Cancellation Audit
+  deletedAt        DateTime?
+  cancellationReason String?
+  // Feature #91: Auto-Markdown (Smart Clearance)
+  markdownEnabled  Boolean   @default(false)
+  markdownFloor    Float?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+
+  @@index([deletedAt])
 }
 
 model Item {
@@ -398,6 +428,7 @@ model Item {
   reservation      ItemReservation?
   bountyFulfillments MissingListingBounty[]
   treasureHuntFinds TreasureHuntFind[]
+  treasureHuntQRScans TreasureHuntQRScan[] @relation("TreasureHuntQRScans")
   flashDeals       FlashDeal[]
   wishlistItems    WishlistItem[]
   buyingPools      BuyingPool[]
@@ -436,6 +467,17 @@ model Item {
   consignmentSplitPct Decimal?                   // Optional: percentage split for consignor (e.g., 0.70 = 70%)
   // Feature #81: Persistent Inventory — items that recur across sales
   isPersistent     Boolean   @default(false)
+  // Feature #136: QR Code Auto-Embedding in Photo Exports
+  qrEmbedEnabled   Boolean   @default(true)    // Embed QR code linking to item in exported photos
+  // Feature #103: Photo Retention — archive old photos, delete very old ones
+  archivedAt       DateTime?                   // When photos were archived (90+ days after sale end)
+  deletedFromCloudinary Boolean @default(false) // Whether original photo was deleted from Cloudinary (365+ days)
+  // #112 Soft-Delete Archival + #121 Tiered Storage pre-wire
+  deletedAt        DateTime?
+  storageArchive   Boolean   @default(false)   // #121: Pre-wire for cold storage tier
+  // Feature #91: Auto-Markdown (Smart Clearance)
+  priceBeforeMarkdown Float?                   // Original price before markdown applied
+  markdownApplied  Boolean   @default(false)   // Whether auto-markdown has been applied
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -558,7 +600,13 @@ model Review {
   response  String?
   respondedAt DateTime?
   votes     ReviewVote[]
+  verifiedPurchase Boolean @default(false) // #115: Verified buyer badge
+  timingFlag String? // #116: 'RAPID' | 'BULK' — anomaly flags
+  reviewerIp String? // #116: IP address for bulk-review detection
+  moderationStatus String @default("APPROVED") // #116: 'PENDING' | 'APPROVED' | 'REJECTED'
   createdAt DateTime @default(now())
+
+  @@index([moderationStatus])
 }
 
 model ReviewVote {
@@ -744,6 +792,33 @@ model Webhook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// Feature #85: Treasure Hunt QR — Per-sale, organizer-created scavenger hunt
+model TreasureHuntQRClue {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  clueText  String
+  hintPhoto String?
+  category  String?
+  createdAt DateTime @default(now())
+  scans     TreasureHuntQRScan[]
+  @@index([saleId])
+}
+
+model TreasureHuntQRScan {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("TreasureHuntQRScans", fields: [userId], references: [id], onDelete: Cascade)
+  clueId    String
+  clue      TreasureHuntQRClue @relation(fields: [clueId], references: [id], onDelete: Cascade)
+  itemId    String?
+  item      Item?    @relation("TreasureHuntQRScans", fields: [itemId], references: [id], onDelete: SetNull)
+  scannedAt DateTime @default(now())
+  @@unique([userId, clueId])
+  @@index([clueId])
+}
+
 // CD2 Phase 2: Daily Treasure Hunt
 model TreasureHunt {
   id          Int      @id @default(autoincrement())
@@ -2070,4 +2145,28 @@ model CheckoutEvidence {
 
   @@index([purchaseId])
   @@index([checkoutTimestamp])
+}
+
+// Platform Safety #119: Chargeback Monitoring — Aggregate platform-level metrics
+model PlatformMetrics {
+  id              String   @id @default(cuid())
+  monthYear       String   @unique  // "2026-03" format
+  chargebackCount Int      @default(0)
+  transactionCount Int     @default(0)
+  updatedAt       DateTime @updatedAt
+
+  @@index([monthYear])
+}
+
+// Feature #84: Approach Notes — notification log for day-of sale alerts to shoppers
+model PushNotificationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // "APPROACH_NOTES", "SALE_STARTS", etc.
+  payload   Json     // Flexible payload: { saleId, title, notes, address, startDate, etc. }
+  sentAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([sentAt])
 }

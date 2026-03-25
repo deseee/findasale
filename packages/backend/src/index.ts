@@ -175,6 +175,9 @@ import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily b
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 import { scheduleAuctionCloseCron } from './jobs/auctionCloseCron'; // Auction auto-close
+import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
+import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
+import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -496,6 +499,15 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Auction auto-close cron
   scheduleAuctionCloseCron();
+
+  // Feature #103: Register photo retention cron
+  schedulePhotoRetentionCron();
+
+  // #112: Register quarterly archival cron
+  scheduleArchivalCron();
+
+  // Feature #91: Register auto-markdown cron
+  scheduleMarkdownCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();

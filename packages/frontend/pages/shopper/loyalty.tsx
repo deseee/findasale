@@ -322,6 +322,32 @@ function LoyaltyPage() {
             )}
           </div>
 
+          {/* Hunt Pass Section */}
+          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-lg shadow-md p-8 mb-8 border-2 border-yellow-300 dark:from-yellow-900 dark:to-amber-900 dark:border-yellow-600">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <h3 className="text-2xl font-bold text-yellow-900 dark:text-yellow-100 mb-2">🎯 Hunt Pass Exclusive</h3>
+                <p className="text-yellow-800 dark:text-yellow-200 mb-4">
+                  Upgrade to Hunt Pass for early access to legendary items and earn 1.5x XP rewards.
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  <Link
+                    href="/shopper/loot-legend"
+                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    View Loot Legend
+                  </Link>
+                  <Link
+                    href="/shopper/league"
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Collector's League
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Benefits & Rewards */}
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-md p-8 border border-green-200 dark:from-gray-800 dark:to-gray-700 dark:border-green-700">
             <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Your Benefits</h3>

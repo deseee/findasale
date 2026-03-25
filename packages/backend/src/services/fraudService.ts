@@ -116,7 +116,7 @@ export async function recordChargebackIncident(
 }
 
 /**
- * #107: Detect same-IP bidding pattern
+ * #107: Detect same-IP bidding pattern + chargeback collusion
  * Called when a bid is placed — checks if same IP has bid on organizer's other auctions
  */
 export async function checkSameIpBiddingPattern(
@@ -142,18 +142,108 @@ export async function checkSameIpBiddingPattern(
     const twentyFourHoursAgo = new Date();
     twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
-    // TODO: This check assumes Bid model has ipAddress field
-    // For now, we'll create a fraud signal if pattern is detected
-    console.log(
-      `[fraudService] Checked same-IP bidding: bidder=${bidderId}, organizer=${organizerId}`
-    );
+    // Query BidIpRecord for same IP bidding on organizer's sales
+    const sameIpBids = await prisma.bidIpRecord.findMany({
+      where: {
+        ipAddress: bidderIp,
+        createdAt: { gte: twentyFourHoursAgo },
+        bid: {
+          item: {
+            saleId: { in: saleIds },
+          },
+        },
+      },
+      include: { bid: { select: { userId: true } } },
+    });
 
-    // In production, query actual Bid records with IP metadata
-    // For MVP, return false (no pattern detected)
+    // Check if different users are bidding from same IP on same organizer's sales
+    const uniqueUserIds = new Set(sameIpBids.map((r) => r.bid.userId));
+    if (uniqueUserIds.size > 1) {
+      console.log(
+        `[fraudService] Same-IP bidding pattern detected: ip=${bidderIp}, organizer=${organizerId}, uniqueUsers=${uniqueUserIds.size}`
+      );
+      return true;
+    }
+
     return false;
   } catch (err) {
     console.error('[fraudService] checkSameIpBiddingPattern error:', err);
     return false;
+  }
+}
+
+/**
+ * #107: Check chargeback + collusion pattern
+ * If user has 3+ chargebacks AND is bidding on same organizer's sales from shared IPs with other users
+ */
+export async function checkChargebackCollusion(userId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { chargebackCount: true },
+    });
+
+    if (!user || user.chargebackCount < 3) {
+      return;
+    }
+
+    // Find sales where user has placed bids and get the bidder IPs
+    const userBids = await prisma.bidIpRecord.findMany({
+      where: { userId },
+      select: { ipAddress: true, bid: { select: { item: { select: { saleId: true } } } } },
+    });
+
+    if (userBids.length === 0) {
+      return;
+    }
+
+    const saleIds = userBids.map((r) => r.bid.item.saleId);
+
+    // For each IP the user has bid from, check if OTHER users also bid from same IP on SAME sales
+    for (const record of userBids) {
+      const sharedIpBids = await prisma.bidIpRecord.findMany({
+        where: {
+          ipAddress: record.ipAddress,
+          userId: { not: userId }, // Different user
+          bid: {
+            item: {
+              saleId: { in: saleIds },
+            },
+          },
+        },
+      });
+
+      if (sharedIpBids.length > 0) {
+        // Found collusion: multiple users bidding from same IP on same sales
+        const existingSignal = await prisma.fraudSignal.findFirst({
+          where: {
+            userId,
+            signalType: 'COLLUSION_SUSPECT',
+          },
+        });
+
+        if (!existingSignal && saleIds.length > 0) {
+          await prisma.fraudSignal.create({
+            data: {
+              userId,
+              saleId: saleIds[0],
+              signalType: 'COLLUSION_SUSPECT',
+              confidenceScore: 85,
+              detectedAt: new Date(),
+              notes: `User has ${user.chargebackCount} chargebacks and shares IP ${record.ipAddress} with other bidders on organizer's sales. Likely collusion ring.`,
+              reviewOutcome: 'PENDING',
+            },
+          });
+
+          console.log(
+            `[fraudService] Collusion pattern detected: user=${userId}, chargebacks=${user.chargebackCount}, sharedIp=${record.ipAddress}`
+          );
+        }
+        return;
+      }
+    }
+  } catch (err) {
+    console.error('[fraudService] checkChargebackCollusion error:', err);
   }
 }
 
@@ -300,6 +390,81 @@ export async function detectOffPlatformTransactions(): Promise<void> {
     }
   } catch (err) {
     console.error('[fraudService] detectOffPlatformTransactions error:', err);
+  }
+}
+
+/**
+ * #114: Bid Cancellation Audit — flag users with high cancellation + chargeback pattern
+ */
+export async function checkBidCancellationPattern(userId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { bidCancellationCount: true, chargebackCount: true },
+    });
+
+    if (!user) {
+      return;
+    }
+
+    // Flag if both counts are high: >5 cancellations AND >3 chargebacks
+    if (user.bidCancellationCount > 5 && user.chargebackCount > 3) {
+      const existingSignal = await prisma.fraudSignal.findFirst({
+        where: {
+          userId,
+          signalType: 'BID_CANCEL_PATTERN',
+        },
+      });
+
+      if (!existingSignal) {
+        // Get any recent sale to link to the signal
+        const recentBid = await prisma.bid.findFirst({
+          where: { userId },
+          include: { item: { select: { saleId: true } } },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (recentBid?.item?.saleId) {
+          await prisma.fraudSignal.create({
+            data: {
+              userId,
+              saleId: recentBid.item.saleId,
+              signalType: 'BID_CANCEL_PATTERN',
+              confidenceScore: 80,
+              detectedAt: new Date(),
+              notes: `User has ${user.bidCancellationCount} cancelled bids and ${user.chargebackCount} chargebacks. Pattern suggests systematic fraud/collusion.`,
+              reviewOutcome: 'PENDING',
+            },
+          });
+
+          console.log(
+            `[fraudService] Bid cancellation pattern detected: user=${userId}, cancellations=${user.bidCancellationCount}, chargebacks=${user.chargebackCount}`
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[fraudService] checkBidCancellationPattern error:', err);
+  }
+}
+
+/**
+ * #114: Increment bid cancellation count when buyer withdraws offer or purchase is refunded
+ * Call this when:
+ * - Buyer cancels a bid/offer before purchase
+ * - Purchase is refunded/returned by buyer
+ */
+export async function recordBidCancellation(userId: string): Promise<void> {
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { bidCancellationCount: { increment: 1 } },
+    });
+
+    // Check for bid cancellation pattern after incrementing
+    await checkBidCancellationPattern(userId);
+  } catch (err) {
+    console.error('[fraudService] recordBidCancellation error:', err);
   }
 }
 

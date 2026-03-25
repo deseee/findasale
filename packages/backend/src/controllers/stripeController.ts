@@ -18,6 +18,7 @@ import { checkAndAward } from '../services/achievementService'; // Features #58-
 import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
+import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -542,7 +543,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       const purchase = await prisma.purchase.findUnique({
         where: { stripePaymentIntentId: paymentIntent.id },
         include: {
-          user: { select: { email: true, name: true } },
+          user: { select: { id: true, email: true, name: true } },
           item: { select: { title: true, photoUrls: true } },
           sale: {
             select: {
@@ -554,6 +555,24 @@ export const webhookHandler = async (req: Request, res: Response) => {
           },
         },
       });
+
+      // Platform Safety #102: Capture and store payment method fingerprint
+      if (purchase?.user?.id && paymentIntent.payment_method) {
+        try {
+          const paymentMethod = await stripe().paymentMethods.retrieve(paymentIntent.payment_method as string);
+          if (paymentMethod.card?.fingerprint) {
+            // Check for duplicate payment methods across accounts
+            const { isDuplicate, otherUserIds } = await checkPaymentDuplicate(paymentMethod.card.fingerprint, purchase.user.id);
+            if (isDuplicate && otherUserIds.length > 0) {
+              logPaymentDuplicateWarning(purchase.user.id, paymentMethod.card.fingerprint, otherUserIds);
+            }
+            // Store fingerprint on user account
+            await storePaymentFingerprint(purchase.user.id, paymentMethod.card.fingerprint);
+          }
+        } catch (err) {
+          console.warn('[stripe] Failed to capture payment method fingerprint:', err);
+        }
+      }
 
       if (purchase) {
         const expectedConnectId = purchase.sale?.organizer?.stripeConnectId;
@@ -572,6 +591,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
         await prisma.purchase.update({
           where: { stripePaymentIntentId: paymentIntent.id },
           data: { status: 'PAID' },
+        });
+
+        // #119: Track successful transaction for chargeback rate monitoring
+        const monthYear = new Date().toISOString().slice(0, 7); // "2026-03"
+        await prisma.platformMetrics.upsert({
+          where: { monthYear },
+          create: { monthYear, chargebackCount: 0, transactionCount: 1 },
+          update: { transactionCount: { increment: 1 } }
         });
 
         // Award XP to shopper for completing purchase (only if user exists — not for POS walk-ins)
@@ -762,7 +789,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
         if (paymentIntentId) {
           const purchase = await prisma.purchase.findUnique({
             where: { stripePaymentIntentId: paymentIntentId },
-            include: { item: { include: { sale: true } } }
+            include: { item: { include: { sale: true } }, user: true }
           });
           if (purchase && purchase.item?.sale) {
             await prisma.purchase.update({
@@ -771,6 +798,34 @@ export const webhookHandler = async (req: Request, res: Response) => {
             });
             console.log(`[stripe] Purchase marked DISPUTED: purchase_id=${purchase.id}, dispute_id=${dispute.id}`);
 
+            // Feature #107: Increment chargebackCount on buyer's User record
+            if (purchase.user) {
+              await prisma.user.update({
+                where: { id: purchase.user.id },
+                data: { chargebackCount: { increment: 1 } },
+              });
+
+              // Fetch updated user to check suspension threshold
+              const updatedUser = await prisma.user.findUnique({
+                where: { id: purchase.user.id },
+                select: { chargebackCount: true, suspendedAt: true },
+              });
+
+              // Suspend after 3+ chargebacks
+              if (updatedUser && updatedUser.chargebackCount >= 3 && !updatedUser.suspendedAt) {
+                await prisma.user.update({
+                  where: { id: purchase.user.id },
+                  data: {
+                    suspendedAt: new Date(),
+                    suspendReason: 'SERIAL_CHARGEBACKS',
+                  },
+                });
+                console.warn(
+                  `[stripe] Buyer suspended after chargeback #${updatedUser.chargebackCount}: user=${purchase.user.id}`
+                );
+              }
+            }
+
             // Feature #107: Record chargeback incident in fraud tracking
             const { recordChargebackIncident } = await import('../services/fraudService');
             await recordChargebackIncident(
@@ -778,6 +833,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
               purchase.id,
               dispute.id
             );
+
+            // #119: Track chargeback in PlatformMetrics for monitoring
+            const monthYear = new Date().toISOString().slice(0, 7); // "2026-03"
+            const metrics = await prisma.platformMetrics.upsert({
+              where: { monthYear },
+              create: { monthYear, chargebackCount: 1, transactionCount: 1 },
+              update: { chargebackCount: { increment: 1 } }
+            });
+
+            // Alert if chargeback rate exceeds 0.8%
+            if (metrics.transactionCount > 0 && metrics.chargebackCount / metrics.transactionCount > 0.008) {
+              console.error(`[stripe] ALERT: Chargeback rate exceeded 0.8% for ${monthYear}:`, metrics);
+            }
           }
         }
       } catch (err) {

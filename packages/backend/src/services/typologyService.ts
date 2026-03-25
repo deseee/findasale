@@ -10,6 +10,7 @@
 
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
+import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -43,8 +44,19 @@ async function imageUrlToBase64(imageUrl: string): Promise<string> {
 
 /**
  * Call Claude Haiku vision API to classify item into a typology category
+ * Feature #104: Returns fallback classification if cost ceiling is exceeded.
  */
 async function callHaikuClassification(imageBase64: string): Promise<ClassificationResult> {
+  // Feature #104: Cost ceiling check
+  if (isAICostCeilingExceeded()) {
+    console.warn('[typology] AI cost ceiling exceeded, returning fallback classification');
+    return {
+      category: 'OTHER',
+      confidence: 0.5,
+      reasoning: 'Classification unavailable due to service limits',
+    };
+  }
+
   try {
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',

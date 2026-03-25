@@ -239,6 +239,7 @@ export const getItemById = async (req: Request, res: Response) => {
         reverseFloorPrice: true,
         reverseStartDate: true,
         draftStatus: true,
+        qrEmbedEnabled: true,
         createdAt: true,
         updatedAt: true,
         // embedding & tags intentionally excluded — see getItemsBySaleId comment
@@ -281,11 +282,28 @@ export const getItemById = async (req: Request, res: Response) => {
 export const getItemsBySaleId = async (req: Request, res: Response) => {
   try {
     const { saleId } = req.query;
+    // Try to get user from AuthRequest (optional — public endpoint)
+    const user = (req as any).user;
+
+    // Check if user has active Hunt Pass
+    const hasHuntPass = user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date();
+
+    // Hunt Pass Feature: Exclude LEGENDARY items with active early access for non-Hunt-Pass users
+    const filterWhere: any = {
+      saleId: saleId as string,
+      ...PUBLIC_ITEM_FILTER,
+    };
+
+    if (!hasHuntPass) {
+      // Non-Hunt-Pass users: exclude items that have earlyAccessUntil set and not yet passed
+      filterWhere.OR = [
+        { earlyAccessUntil: null },
+        { earlyAccessUntil: { lte: new Date() } },
+      ];
+    }
+
     const items = await prisma.item.findMany({
-      where: {
-        saleId: saleId as string,
-        ...PUBLIC_ITEM_FILTER,
-      },
+      where: filterWhere,
       select: {
         id: true,
         saleId: true,
@@ -485,7 +503,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -567,6 +585,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (reverseStartDate !== undefined) updateData.reverseStartDate = reverseStartDate ? new Date(reverseStartDate) : null;
     if (listingType !== undefined) updateData.listingType = listingType;
     if (isAiTagged !== undefined) updateData.isAiTagged = isAiTagged === true || isAiTagged === 'true';
+    if (qrEmbedEnabled !== undefined) updateData.qrEmbedEnabled = qrEmbedEnabled === true || qrEmbedEnabled === 'true';
 
     const updatedItem = await prisma.item.update({
       where: { id },
@@ -1032,6 +1051,19 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     if (price !== undefined) updateData.price = price !== null ? parseFloat(price) : null;
     if (category !== undefined) updateData.category = category;
     if (condition !== undefined) updateData.condition = condition;
+
+    // Hunt Pass Feature: Set 6-hour early access embargo for LEGENDARY items
+    // Fetch full item to check rarity
+    const fullItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { rarity: true, createdAt: true }
+    });
+
+    if (fullItem && fullItem.rarity === 'LEGENDARY') {
+      const now = new Date();
+      const sixHoursLater = new Date(now.getTime() + 6 * 60 * 60 * 1000); // 6 hours in ms
+      updateData.earlyAccessUntil = sixHoursLater;
+    }
 
     // Update item with new state
     const updatedItem = await prisma.item.update({

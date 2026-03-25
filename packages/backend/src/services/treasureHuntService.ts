@@ -9,6 +9,7 @@
 
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
+import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -35,10 +36,21 @@ interface GeneratedClue {
 /**
  * Generate a daily treasure hunt clue using Claude Haiku.
  * Requests a cryptic, fun clue that hints at one of the standard categories.
+ * Feature #104: Returns fallback clue if cost ceiling is exceeded.
  */
 export async function generateDailyClue(date: string): Promise<GeneratedClue> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY not configured');
+  }
+
+  // Feature #104: Cost ceiling check
+  if (isAICostCeilingExceeded()) {
+    console.warn('[treasure-hunt] AI cost ceiling exceeded, returning fallback clue');
+    return {
+      clue: 'Search for something colorful and decorative from a past era...',
+      category: 'art',
+      keywords: ['art', 'painting', 'decor', 'vintage', 'collectible'],
+    };
   }
 
   const prompt = `Generate a fun, cryptic clue for an estate sale treasure hunt.

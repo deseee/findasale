@@ -34,13 +34,13 @@ export const register = async (req: Request, res: Response) => {
     const email = rawEmail?.trim().toLowerCase();
     const name = rawName?.trim();
 
-    // Check if user already exists
+    // Check if user already exists (Platform Safety #101: Email Verification Uniqueness)
     const existingUser = await prisma.user.findUnique({
       where: { email }
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(409).json({ message: 'An account already exists with this email address.' });
     }
 
     // Validate invite code if provided (beta access gate)

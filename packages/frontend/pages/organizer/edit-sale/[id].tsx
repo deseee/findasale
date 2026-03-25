@@ -21,6 +21,7 @@ import EntrancePinPicker from '../../../components/EntrancePinPicker'; // Featur
 import Skeleton from '../../../components/Skeleton';
 import PublishCelebration from '../../../components/PublishCelebration';
 import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // #132: À La Carte
+import TreasureHuntQRManager from '../../../components/TreasureHuntQRManager'; // Feature #85
 
 const EditSalePage = () => {
   const router = useRouter();
@@ -48,6 +49,14 @@ const EditSalePage = () => {
     entranceLat: undefined as number | undefined,
     entranceLng: undefined as number | undefined,
     entranceNote: '' as string,
+    // Feature #84: Approach Notes
+    notes: '' as string,
+    // Feature #91: Auto-Markdown (Smart Clearance)
+    markdownEnabled: false,
+    markdownFloor: undefined as number | undefined,
+    // Feature #85: Treasure Hunt QR
+    treasureHuntEnabled: true,
+    treasureHuntCompletionBadge: false,
   });
 
   // Helper: Compute distance between two lat/lng points (degrees, approx)
@@ -97,13 +106,32 @@ const EditSalePage = () => {
         entranceLat: sale.entranceLat ?? undefined,
         entranceLng: sale.entranceLng ?? undefined,
         entranceNote: sale.entranceNote ?? '',
+        // Feature #84: Approach Notes
+        notes: sale.notes ?? '',
+        // Feature #91: Auto-Markdown (Smart Clearance)
+        markdownEnabled: sale.markdownEnabled ?? false,
+        markdownFloor: sale.markdownFloor ?? undefined,
+        // Feature #85: Treasure Hunt QR
+        treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
+        treasureHuntCompletionBadge: sale.treasureHuntCompletionBadge ?? false,
       });
     }
   }, [sale]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      return await api.patch(`/sales/${id}`, formData);
+      // Feature #91: Exclude markdown fields from main update (they go to separate endpoint)
+      // Feature #85: Include treasure hunt fields in main update
+      const { markdownEnabled, markdownFloor, ...saleData } = formData;
+
+      // First update the sale (includes treasure hunt fields)
+      await api.patch(`/sales/${id}`, saleData);
+
+      // Then update markdown config if markdown fields changed
+      await api.put(`/sales/${id}/markdown-config`, {
+        markdownEnabled,
+        markdownFloor,
+      });
     },
     onSuccess: () => {
       showToast('Sale updated', 'success');
@@ -118,6 +146,31 @@ const EditSalePage = () => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
+
+  // Feature #91: Auto-Markdown handler
+  const handleMarkdownToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, markdownEnabled: e.target.checked });
+  };
+
+  const handleMarkdownFloorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, markdownFloor: value ? parseFloat(value) : undefined });
+  };
+
+  const markdownConfigMutation = useMutation({
+    mutationFn: async () => {
+      return await api.put(`/sales/${id}/markdown-config`, {
+        markdownEnabled: formData.markdownEnabled,
+        markdownFloor: formData.markdownFloor,
+      });
+    },
+    onSuccess: () => {
+      showToast('Markdown settings saved', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.message || 'Failed to save markdown settings', 'error');
+    },
+  });
 
   const handleGenerateDescription = async () => {
     if (!formData.title.trim()) return;
@@ -498,6 +551,85 @@ const EditSalePage = () => {
                 </button>
               </div>
             )}
+
+            {/* Feature #84: Approach Notes — day-of info for shoppers */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
+                Day-of Approach Notes <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
+              </label>
+              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
+                Share parking info, entrance location, hours reminders, or other day-of details with shoppers who have saved your sale.
+              </p>
+              <textarea
+                name="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="e.g., Park in back lot. Enter through the red door. We open at 8 AM sharp."
+                rows={4}
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Feature #91: Auto-Markdown (Smart Clearance) */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Advanced Settings</h3>
+
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <input
+                    type="checkbox"
+                    id="markdownEnabled"
+                    name="markdownEnabled"
+                    checked={formData.markdownEnabled}
+                    onChange={handleMarkdownToggle}
+                    className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded cursor-pointer"
+                  />
+                  <label htmlFor="markdownEnabled" className="cursor-pointer flex flex-col">
+                    <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
+                      Enable Auto-Markdown for this sale
+                    </span>
+                    <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      Items will be automatically discounted 50% on Day 2, 75% on Day 3 of your sale
+                    </span>
+                  </label>
+                </div>
+
+                {formData.markdownEnabled && (
+                  <div className="ml-7">
+                    <label htmlFor="markdownFloor" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
+                      Price floor (minimum price, $)
+                    </label>
+                    <input
+                      type="number"
+                      id="markdownFloor"
+                      name="markdownFloor"
+                      min="0"
+                      step="0.01"
+                      value={formData.markdownFloor ?? ''}
+                      onChange={handleMarkdownFloorChange}
+                      placeholder="e.g., 5.00 (optional)"
+                      className="w-full max-w-xs px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                    />
+                    <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      Items will never be discounted below this price
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Feature #85: Treasure Hunt QR Manager */}
+            <TreasureHuntQRManager
+              saleId={id as string}
+              enabled={formData.treasureHuntEnabled}
+              completionBadge={formData.treasureHuntCompletionBadge}
+              onEnabledChange={(enabled) =>
+                setFormData({ ...formData, treasureHuntEnabled: enabled })
+              }
+              onCompletionBadgeChange={(badge) =>
+                setFormData({ ...formData, treasureHuntCompletionBadge: badge })
+              }
+            />
 
             <button
               type="submit"

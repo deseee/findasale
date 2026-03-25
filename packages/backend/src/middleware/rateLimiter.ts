@@ -45,3 +45,16 @@ export const shareLikeLimiter = rateLimit({
   standardHeaders: false,
   legacyHeaders: false,
 });
+
+/**
+ * Item endpoint limiter: 100 requests per minute per user/IP (#111: Bot rate limiting)
+ */
+export const itemEndpointLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many item requests from this IP, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});

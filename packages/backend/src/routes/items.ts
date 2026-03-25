@@ -25,6 +25,7 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
 import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account age gate
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
+import { itemEndpointLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
@@ -42,6 +43,9 @@ const CURATED_TAGS = [
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// #111: Apply item endpoint rate limiter to all GET operations
+router.use(itemEndpointLimiter);
 
 // Sprint 4a: FTS search endpoints — MUST be declared before /:id to avoid param capture
 router.get('/search', searchItemsHandler);           // GET /api/items/search?q=...

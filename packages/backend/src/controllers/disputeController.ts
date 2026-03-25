@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService';
 
 // POST /api/disputes — authenticated buyer creates dispute
 export const createDispute = async (req: AuthRequest, res: Response) => {
@@ -188,7 +189,7 @@ export const getSellerDisputes = async (req: AuthRequest, res: Response) => {
 export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { status, resolution } = req.body;
+    const { status, resolution, refundAmount } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -211,13 +212,46 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
+    // Fetch dispute to get buyer information for refund cap check
+    const existingDispute = await prisma.dispute.findUnique({
+      where: { id },
+      include: { buyer: { select: { id: true, createdAt: true } } }
+    });
+
+    if (!existingDispute) {
+      return res.status(404).json({ message: 'Dispute not found' });
+    }
+
+    let finalRefundAmount = refundAmount;
+    let refundCapApplied = false;
+
+    // Platform Safety #100: Apply first-month refund cap if resolving with refund
+    if (status === 'resolved' && refundAmount && refundAmount > 0) {
+      const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(existingDispute.buyer.id, refundAmount);
+      finalRefundAmount = cappedAmount;
+      refundCapApplied = wasCapped;
+
+      // Log refund processing
+      if (wasCapped) {
+        await logRefundProcessing(id, existingDispute.buyer.id, refundAmount, cappedAmount, true);
+      }
+    }
+
+    // Update dispute with optional refund cap note
+    const updateData: any = {
+      status,
+      ...(resolution && { resolution })
+    };
+
+    // Add refund cap note to resolution if applicable
+    if (refundCapApplied && finalRefundAmount !== refundAmount) {
+      updateData.resolution = `${resolution || ''} [REFUND CAPPED: Original $${refundAmount.toFixed(2)} → $${finalRefundAmount.toFixed(2)} (Platform Safety #100: First-month account)]`.trim();
+    }
+
     // Update dispute
     const dispute = await prisma.dispute.update({
       where: { id },
-      data: {
-        status,
-        ...(resolution && { resolution }),
-      },
+      data: updateData,
       include: {
         buyer: {
           select: { id: true, name: true, email: true },
@@ -231,6 +265,7 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     res.json({
       message: 'Dispute status updated',
       dispute,
+      ...(refundCapApplied && { refundCapApplied: true, originalAmount: refundAmount, cappedAmount: finalRefundAmount }),
     });
   } catch (error) {
     console.error('Error updating dispute status:', error);
