@@ -145,6 +145,6 @@ export default function CreateTrailPage() {
           </div>
         </form>
       </div>
-    </Layout>
+    </>
   );
 }
