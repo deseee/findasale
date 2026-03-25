@@ -459,9 +459,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 </div>
                 {isAuction && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    <div>+ ${((currentPrice * 0.05) ?? 0).toFixed(2)} buyer premium (5%)</div>
+                    <div>+ ${(currentPrice * 0.05).toFixed(2)} buyer premium (5%)</div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                      ${((currentPrice + (currentPrice * 0.05)) ?? 0).toFixed(2)} total
+                      ${(currentPrice + currentPrice * 0.05).toFixed(2)} total
                     </div>
                   </div>
                 )}
