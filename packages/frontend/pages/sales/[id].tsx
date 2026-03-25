@@ -104,6 +104,7 @@ interface Sale {
     category?: string;
     condition?: string;
     photoUrls: string[];
+    auctionClosed?: boolean;
   }[];
   isAuctionSale: boolean;
   // Feature 35: Front Door Locator
@@ -882,7 +883,7 @@ const SaleDetailPage = () => {
                           >
                             Edit
                           </Link>
-                          {item.listingType === 'AUCTION' && !item.auctionClosed && (
+                          {!!item.auctionEndTime && !item.auctionClosed && (
                             <button
                               onClick={() => {
                                 const confirmed = window.confirm(`End auction for "${item.title}"? The highest bidder will receive a payment link.`);
