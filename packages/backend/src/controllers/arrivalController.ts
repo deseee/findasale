@@ -56,7 +56,7 @@ export const getApproachNotes = async (req: AuthRequest, res: Response) => {
 
     res.json({
       saleId: sale.id,
-      entranceNote: sale.entranceNote,
+      entranceNote: sale.entranceNote ?? null,
       address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
       startDate: sale.startDate,
       endDate: sale.endDate,
@@ -113,7 +113,7 @@ export const updateApproachNotes = async (req: AuthRequest, res: Response) => {
     res.json({
       message: 'Approach notes updated',
       saleId: updated.id,
-      entranceNote: updated.entranceNote,
+      entranceNote: updated.entranceNote ?? null,
       address: `${updated.address}, ${updated.city}, ${updated.state}`,
       startDate: updated.startDate,
     });
@@ -210,7 +210,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
             payload: {
               saleId: sale.id,
               saleTitle: sale.title,
-              entranceNote: sale.entranceNote,
+              entranceNote: sale.entranceNote ?? undefined,
               address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
               startDate: sale.startDate,
             },
