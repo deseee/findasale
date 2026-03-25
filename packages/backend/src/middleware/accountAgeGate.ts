@@ -12,6 +12,11 @@ export const accountAgeGate = async (req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ message: 'Authentication required' });
     }
 
+    // Bypass for admin/seed accounts
+    if (req.user.roles?.includes('ADMIN') || req.user.role === 'ADMIN') {
+      return next();
+    }
+
     const createdAt = req.user.createdAt;
     if (!createdAt) {
       return res.status(500).json({ message: 'Account creation date not found' });
