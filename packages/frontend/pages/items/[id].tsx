@@ -358,7 +358,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
   const isAuction = !!item.auctionStartPrice;
   const isSold = item.status === 'SOLD';
-  const currentPrice = isAuction ? item.currentBid : item.price;
+  const currentPrice = isAuction ? item.currentBid ?? 0 : (item.price ?? 0);
   const isUserLiked = user && favoriteStatus?.isFavorited === true;
 
   return (
@@ -459,21 +459,21 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 </div>
                 {isAuction && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    <div>+ ${(currentPrice * 0.05).toFixed(2)} buyer premium (5%)</div>
+                    <div>+ ${((currentPrice * 0.05) ?? 0).toFixed(2)} buyer premium (5%)</div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                      ${(currentPrice + currentPrice * 0.05).toFixed(2)} total
+                      ${((currentPrice + (currentPrice * 0.05)) ?? 0).toFixed(2)} total
                     </div>
                   </div>
                 )}
-                {isAuction && (
+                {isAuction && item.auctionStartPrice && (
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     Starting Price: ${item.auctionStartPrice.toFixed(2)}
                   </div>
                 )}
                 {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
-                {item.listingType === 'REVERSE_AUCTION' && item.reverseFloorPrice && (
+                {item.listingType === 'REVERSE_AUCTION' && (item.reverseFloorPrice ?? 0) > 0 && (
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Floor Price: ${item.reverseFloorPrice.toFixed(2)}
+                    Floor Price: ${(item.reverseFloorPrice ?? 0).toFixed(2)}
                   </div>
                 )}
               </div>
@@ -617,7 +617,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 {bids.map((bid) => (
                   <div key={bid.id} className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
                     <div>
-                      <p className="font-semibold text-gray-900 dark:text-gray-100">${bid.bidAmount.toFixed(2)}</p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">${(bid.bidAmount ?? 0).toFixed(2)}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{bid.bidder.name}</p>
                     </div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
