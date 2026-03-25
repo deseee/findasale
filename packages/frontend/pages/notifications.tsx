@@ -70,16 +70,28 @@ const NotificationsPage = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [channel, setChannel] = useState<'ALL' | 'OPERATIONAL' | 'DISCOVERY'>('ALL');
+  const [channelUnreadCounts, setChannelUnreadCounts] = useState({
+    ALL: 0,
+    OPERATIONAL: 0,
+    DISCOVERY: 0,
+  });
 
   useEffect(() => {
     if (!user) return;
 
-    const fetchNotifications = async () => {
+    const fetchNotifications = async (selectedChannel: 'ALL' | 'OPERATIONAL' | 'DISCOVERY') => {
       setIsLoading(true);
       try {
-        const res = await api.get('/notifications/inbox');
+        const res = await api.get('/notifications/inbox', {
+          params: { channel: selectedChannel },
+        });
         setNotifications(res.data.notifications);
         setUnreadCount(res.data.unreadCount);
+        setChannelUnreadCounts((prev) => ({
+          ...prev,
+          [selectedChannel]: res.data.unreadCount,
+        }));
       } catch (err) {
         console.error('Failed to fetch notifications:', err);
       } finally {
@@ -87,8 +99,8 @@ const NotificationsPage = () => {
       }
     };
 
-    fetchNotifications();
-  }, [user]);
+    fetchNotifications(channel);
+  }, [user, channel]);
 
   // H-003: _app.tsx wraps all pages in <Layout> — do NOT add another <Layout> here.
   // Returning bare JSX; the global layout handles header/footer.
@@ -212,6 +224,40 @@ const NotificationsPage = () => {
                 Mark all as read
               </button>
             )}
+          </div>
+
+          {/* Channel Tabs */}
+          <div className="flex gap-1 mb-6 border-b border-warm-200 dark:border-gray-700">
+            <button
+              onClick={() => setChannel('ALL')}
+              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                channel === 'ALL'
+                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-300'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setChannel('OPERATIONAL')}
+              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                channel === 'OPERATIONAL'
+                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-300'
+              }`}
+            >
+              Operational {channelUnreadCounts.OPERATIONAL > 0 && `(${channelUnreadCounts.OPERATIONAL})`}
+            </button>
+            <button
+              onClick={() => setChannel('DISCOVERY')}
+              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                channel === 'DISCOVERY'
+                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-300'
+              }`}
+            >
+              Discovery {channelUnreadCounts.DISCOVERY > 0 && `(${channelUnreadCounts.DISCOVERY})`}
+            </button>
           </div>
 
           {/* Filters */}
