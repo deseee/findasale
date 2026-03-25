@@ -10,6 +10,8 @@ export interface AuthRequest extends Request {
       subscriptionTier?: string;
       [key: string]: any;
     };
+    effectiveTier?: 'SIMPLE' | 'PRO' | 'TEAMS'; // Feature #75: Effective tier after lapse fallback
+    subscriptionLapsed?: boolean; // Feature #75: Whether subscription is currently lapsed
   };
 }
 
@@ -62,6 +64,58 @@ export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction
   next();
 };
 
+// Feature #75: Check tier lapse state and set effective tier
+export const checkTierLapse = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      return next();
+    }
+
+    // Check if user is an organizer
+    const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!isOrganizer) {
+      // Non-organizers don't have tier lapse state
+      return next();
+    }
+
+    // Fetch UserRoleSubscription for ORGANIZER role
+    const roleSubscription = await prisma.userRoleSubscription.findFirst({
+      where: {
+        userId: req.user.id,
+        role: 'ORGANIZER',
+      },
+    });
+
+    if (!roleSubscription) {
+      // No subscription record found — use current tier from organizer profile
+      req.user.effectiveTier = req.user.organizerProfile?.subscriptionTier || 'SIMPLE';
+      req.user.subscriptionLapsed = false;
+      return next();
+    }
+
+    // Check if subscription is lapsed (tierLapsedAt set AND tierResumedAt null)
+    const isLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+
+    if (isLapsed) {
+      // Subscription is lapsed — effective tier is SIMPLE regardless of subscriptionTier
+      req.user.effectiveTier = 'SIMPLE';
+      req.user.subscriptionLapsed = true;
+    } else {
+      // Subscription is active — use the subscription tier
+      req.user.effectiveTier = roleSubscription.subscriptionTier;
+      req.user.subscriptionLapsed = false;
+    }
+
+    next();
+  } catch (error) {
+    console.error('[checkTierLapse] Error checking tier lapse:', error);
+    // On error, fall back to organizer profile tier and continue
+    req.user.effectiveTier = req.user?.organizerProfile?.subscriptionTier || 'SIMPLE';
+    req.user.subscriptionLapsed = false;
+    next();
+  }
+};
+
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -103,7 +157,9 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     if (user.organizer) {
       req.user.organizerProfile = user.organizer;
     }
-    next();
+
+    // Feature #75: Check tier lapse state for organizers
+    return checkTierLapse(req, res, next);
   } catch (error) {
     console.error('Authentication error:', error);
     return res.status(401).json({ message: 'Invalid token' });

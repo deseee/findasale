@@ -79,7 +79,8 @@ export const createFlashDeal = async (req: AuthRequest, res: Response) => {
             'flash_deal',
             '⚡ Flash Deal',
             `${validated.discountPct}% off ${item.title} — limited time!`,
-            `/sales/${item.saleId}`
+            `/sales/${item.saleId}`,
+            'OPERATIONAL'
           ).catch((err: unknown) => console.error('[notification] Failed to create flash deal notification:', err))
         );
 

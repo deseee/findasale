@@ -847,6 +847,7 @@ model Notification {
   link              String?  // optional deep link e.g. "/sales/abc123"
   read              Boolean  @default(false)
   notificationChannel String @default("IN_APP") // Feature #72 Phase 2: "IN_APP" | "EMAIL" | "PUSH"
+  channel           String   @default("OPERATIONAL") // Feature #73: "OPERATIONAL" | "DISCOVERY"
   createdAt         DateTime @default(now())
 
   @@index([userId, read])

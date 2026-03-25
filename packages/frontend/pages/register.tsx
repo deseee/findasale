@@ -287,9 +287,7 @@ const RegisterPage = () => {
                   className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
                 <span className="text-sm text-warm-700 dark:text-warm-300">
-                  Yes, send me sale management alerts by email
-                  <br />
-                  <span className="text-xs text-warm-500 dark:text-warm-400">(item sold, new reservations, payout updates)</span>
+                  [LEGAL_COPY_PLACEHOLDER_ORGANIZER]
                 </span>
               </label>
             )}
@@ -302,9 +300,7 @@ const RegisterPage = () => {
                   className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
                 <span className="text-sm text-warm-700 dark:text-warm-300">
-                  Yes, send me nearby sale alerts and special deals
-                  <br />
-                  <span className="text-xs text-warm-500 dark:text-warm-400">(emails about sales near you, new discoveries, flash deals)</span>
+                  [LEGAL_COPY_PLACEHOLDER_SHOPPER]
                 </span>
               </label>
             )}
@@ -318,9 +314,7 @@ const RegisterPage = () => {
                     className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                   />
                   <span className="text-sm text-warm-700 dark:text-warm-300">
-                    Yes, send me sale management alerts by email
-                    <br />
-                    <span className="text-xs text-warm-500 dark:text-warm-400">(item sold, new reservations, payout updates)</span>
+                    [LEGAL_COPY_PLACEHOLDER_ORGANIZER]
                   </span>
                 </label>
                 <label className="flex items-start gap-3">
@@ -331,9 +325,7 @@ const RegisterPage = () => {
                     className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                   />
                   <span className="text-sm text-warm-700 dark:text-warm-300">
-                    Yes, send me nearby sale alerts and special deals
-                    <br />
-                    <span className="text-xs text-warm-500 dark:text-warm-400">(emails about sales near you, new discoveries, flash deals)</span>
+                    [LEGAL_COPY_PLACEHOLDER_SHOPPER]
                   </span>
                 </label>
               </>

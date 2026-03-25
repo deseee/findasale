@@ -9,6 +9,7 @@ interface CreateNotificationInput {
   link?: string;
   sendEmail?: boolean;
   emailSubject?: string;
+  channel?: string;
 }
 
 let _resend: any = null;
@@ -28,7 +29,7 @@ const getResendClient = () => {
  * Fails open: email send errors don't block notification creation.
  */
 export const createNotification = async (input: CreateNotificationInput) => {
-  const { userId, type, title, body, link, sendEmail, emailSubject } = input;
+  const { userId, type, title, body, link, sendEmail, emailSubject, channel } = input;
 
   try {
     // Write to Notification table
@@ -39,6 +40,7 @@ export const createNotification = async (input: CreateNotificationInput) => {
         title,
         body,
         link: link ?? null,
+        channel: channel || 'OPERATIONAL',
       },
     });
 

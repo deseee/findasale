@@ -10,7 +10,8 @@ export async function createNotification(
   type: string,
   title: string,
   body: string,
-  link?: string
+  link?: string,
+  channel?: string
 ): Promise<void> {
   try {
     await prisma.notification.create({
@@ -20,6 +21,7 @@ export async function createNotification(
         title,
         body,
         link,
+        channel: channel || 'OPERATIONAL',
       },
     });
   } catch (err) {

@@ -183,6 +183,7 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
         title: 'Account Suspended',
         body: `Your organizer account has been suspended. Reason: ${reason}. Contact support for details.`,
         read: false,
+        channel: 'OPERATIONAL',
       },
     });
 
@@ -231,6 +232,7 @@ export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
         title: 'Account Restored',
         body: 'Your organizer account has been restored. You can now continue using all features.',
         read: false,
+        channel: 'OPERATIONAL',
       },
     });
 

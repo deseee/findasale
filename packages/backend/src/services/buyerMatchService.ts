@@ -351,7 +351,8 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
           'sale_alert',
           'New sale you might like',
           `${sale.title} is now live in ${sale.city}, ${sale.state}`,
-          `/sales/${sale.id}`
+          `/sales/${sale.id}`,
+          'DISCOVERY'
         ).catch(err => console.error('[notification] Failed to create sale alert notification:', err));
 
         sent++;

@@ -15,6 +15,7 @@ interface Notification {
   body: string;
   link?: string;
   read: boolean;
+  channel?: string;
   createdAt: string;
 }
 
@@ -55,6 +56,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [channel, setChannel] = useState<'ALL' | 'OPERATIONAL' | 'DISCOVERY'>('ALL');
 
   // Redirect if not logged in
   useEffect(() => {
@@ -70,7 +72,8 @@ export default function NotificationsPage() {
     const fetchNotifications = async () => {
       setIsLoading(true);
       try {
-        const res = await api.get('/notifications/inbox');
+        const params = channel !== 'ALL' ? `?channel=${channel}` : '';
+        const res = await api.get(`/notifications/inbox${params}`);
         setNotifications(res.data.notifications || []);
         setUnreadCount(res.data.unreadCount || 0);
       } catch (err) {
@@ -81,7 +84,7 @@ export default function NotificationsPage() {
     };
 
     fetchNotifications();
-  }, [user]);
+  }, [user, channel]);
 
   const handleNotificationClick = async (notification: Notification) => {
     try {
@@ -162,6 +165,25 @@ export default function NotificationsPage() {
               Mark all read
             </button>
           )}
+        </div>
+
+        {/* Channel Filter Tabs */}
+        <div className="flex gap-3 mb-8 border-b border-warm-200 dark:border-gray-700">
+          {(['ALL', 'OPERATIONAL', 'DISCOVERY'] as const).map((ch) => (
+            <button
+              key={ch}
+              onClick={() => setChannel(ch)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                channel === ch
+                  ? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-600 dark:border-amber-400'
+                  : 'text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
+              }`}
+            >
+              {ch === 'ALL' && 'All'}
+              {ch === 'OPERATIONAL' && 'Organizer Alerts'}
+              {ch === 'DISCOVERY' && 'Discoveries'}
+            </button>
+          ))}
         </div>
 
         {notifications.length === 0 ? (

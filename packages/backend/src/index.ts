@@ -171,6 +171,7 @@ import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest
 import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly email
 import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
 import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper digest — Sundays 6 PM
+import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily batch processing and warnings
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 

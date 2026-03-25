@@ -6,6 +6,8 @@ import { prisma } from '../lib/prisma';
  * GET /api/notifications/inbox
  * Returns last 50 notifications for the authenticated user, ordered by newest first.
  * Includes unread count.
+ * Query params:
+ *   - channel: "OPERATIONAL" | "DISCOVERY" | "ALL" (default: "ALL")
  */
 export const getNotifications = async (req: AuthRequest, res: Response) => {
   try {
@@ -14,15 +16,22 @@ export const getNotifications = async (req: AuthRequest, res: Response) => {
     }
 
     const userId = req.user.id;
+    const channel = (req.query.channel as string) || 'ALL';
+
+    // Build where clause with channel filter
+    const whereClause: any = { userId };
+    if (channel !== 'ALL' && ['OPERATIONAL', 'DISCOVERY'].includes(channel)) {
+      whereClause.channel = channel;
+    }
 
     const [notifications, unreadCount] = await Promise.all([
       prisma.notification.findMany({
-        where: { userId },
+        where: whereClause,
         orderBy: { createdAt: 'desc' },
         take: 50,
       }),
       prisma.notification.count({
-        where: { userId, read: false },
+        where: { ...whereClause, read: false },
       }),
     ]);
 

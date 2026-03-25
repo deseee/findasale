@@ -444,6 +444,7 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
             title: 'Sale is now live',
             body: `Your sale "${updated.title}" is now live and visible to shoppers`,
             link: `/organizer/sales/${updated.id}`,
+            channel: 'OPERATIONAL',
           }).catch(() => {});
 
           // Award XP for publishing a sale

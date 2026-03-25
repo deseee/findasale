@@ -247,6 +247,9 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     const discountExpiry = (organizer as any).referralDiscountExpiry as Date | null;
     const referralDiscountActive = discountExpiry != null && discountExpiry > new Date();
 
+    // Feature #75: Include subscription lapse status from middleware context
+    const subscriptionLapsed = (req.user as any).subscriptionLapsed ?? false;
+
     res.json({
       id: organizer.id,
       businessName: organizer.businessName,
@@ -259,6 +262,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       onboardingComplete: (organizer as any).onboardingComplete,
       referralDiscountActive,
       referralDiscountExpiry: discountExpiry ? discountExpiry.toISOString() : null,
+      subscriptionLapsed,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);

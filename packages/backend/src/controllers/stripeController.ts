@@ -16,6 +16,7 @@ import { sendItemSoldAlert } from '../services/saleAlertEmailService';
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
+import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -521,6 +522,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             title: 'Payment received',
             body: `Payment of $${(paymentIntent.amount_received / 100).toFixed(2)} received for "${purchase.item?.title || 'item'}"`,
             link: `/organizer/sales/${purchase.saleId}`,
+            channel: 'OPERATIONAL',
           }).catch(() => {});
         }
 
@@ -630,7 +632,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
             type: 'purchase',
             title: 'Purchase confirmed',
             body: `Your purchase of "${purchase.item?.title || 'item'}" is confirmed!`,
-            link: '/shopper/purchases'
+            link: '/shopper/purchases',
+            channel: 'OPERATIONAL'
           }).catch(err => console.error('[notification] Failed to create purchase notification:', err));
         }
 
@@ -714,7 +717,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
       const organizer = await prisma.organizer.findFirst({
         where: { stripeCustomerId: customerId },
-        include: { user: { select: { email: true, name: true } } }
+        include: { user: { select: { email: true, name: true, id: true } } }
       });
 
       if (!organizer) {
@@ -722,7 +725,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
         break;
       }
 
-      // Downgrade to SIMPLE
+      // Downgrade to SIMPLE in Organizer table
       await prisma.organizer.update({
         where: { id: organizer.id },
         data: {
@@ -732,6 +735,23 @@ export const webhookHandler = async (req: Request, res: Response) => {
           tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWT tier claims
         }
       });
+
+      // Also process tier lapse in UserRoleSubscription (Feature #75)
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: {
+          userId: organizer.user.id,
+          role: 'ORGANIZER',
+        },
+      });
+
+      if (roleSubscription) {
+        try {
+          await processTierLapse(roleSubscription.id);
+          console.log(`[tier-lapse] Tier lapsed for subscription ${roleSubscription.id}`);
+        } catch (err) {
+          console.error(`[tier-lapse] Failed to process tier lapse for ${roleSubscription.id}:`, err);
+        }
+      }
 
       // Fire async job: send "Tier Lapsed" email
       setImmediate(() => {
@@ -797,7 +817,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
       const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 
       const organizer = await prisma.organizer.findFirst({
-        where: { stripeCustomerId: customerId }
+        where: { stripeCustomerId: customerId },
+        include: { user: { select: { id: true } } }
       });
 
       if (!organizer) {
@@ -805,8 +826,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
         break;
       }
 
-      // If resuming from past_due, update tier
-      if (organizer.subscriptionStatus === 'past_due') {
+      // If resuming from past_due or canceled, update tier and record resumption
+      const wasPastDueOrCanceled = organizer.subscriptionStatus === 'past_due' || organizer.subscriptionStatus === 'canceled';
+      const isNowActive = subscription.status === 'active';
+
+      if (wasPastDueOrCanceled && isNowActive) {
         // Map Stripe price ID to tier
         let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
         if (subscription.items?.data?.[0]?.price?.id) {
@@ -823,6 +847,23 @@ export const webhookHandler = async (req: Request, res: Response) => {
             tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWTs
           }
         });
+
+        // Record tier resumption in UserRoleSubscription (Feature #75)
+        const roleSubscription = await prisma.userRoleSubscription.findFirst({
+          where: {
+            userId: organizer.user.id,
+            role: 'ORGANIZER',
+          },
+        });
+
+        if (roleSubscription) {
+          try {
+            await recordTierResumption(roleSubscription.id);
+            console.log(`[tier-lapse] Tier resumed for subscription ${roleSubscription.id}`);
+          } catch (err) {
+            console.error(`[tier-lapse] Failed to record tier resumption for ${roleSubscription.id}:`, err);
+          }
+        }
       } else if (subscription.status === 'active' || subscription.status === 'past_due') {
         // Normal update: sync subscription status and tier with Stripe
         let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
