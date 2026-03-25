@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
-import Layout from '../../../components/Layout';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import type { PhotoOpStation } from '../../../hooks/usePhotoOps';
 
@@ -94,7 +93,7 @@ const PhotoOpsPage: React.FC = () => {
   if (!saleId) return null;
 
   return (
-    <Layout>
+    <>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {!isPro ? (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg p-6">
@@ -265,7 +264,7 @@ const PhotoOpsPage: React.FC = () => {
           </div>
         )}
       </div>
-    </Layout>
+    </>
   );
 };
 

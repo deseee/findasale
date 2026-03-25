@@ -75,7 +75,7 @@ export default function PublicWorkspacePage() {
   });
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>{workspace.name} | FindA.Sale</title>
         <meta name="description" content={`Team workspace for ${workspace.name} on FindA.Sale`} />
@@ -145,6 +145,6 @@ export default function PublicWorkspacePage() {
           </div>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }

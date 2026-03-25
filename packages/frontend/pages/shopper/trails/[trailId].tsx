@@ -4,7 +4,6 @@ import { useRouter } from 'next/router';
 import axios from 'axios';
 import { useAuth } from '../../../components/AuthContext';
 import { useMyTrails, useUpdateTrail, useDeleteTrail } from '../../../hooks/useTrails';
-import Layout from '../../../components/Layout';
 import EmptyState from '../../../components/EmptyState';
 import Skeleton from '../../../components/Skeleton';
 
@@ -67,27 +66,27 @@ export default function TrailDetailPage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="max-w-2xl mx-auto px-4 py-8">
           <Skeleton className="h-12 mb-6" />
           <Skeleton className="h-32" />
         </div>
-      </Layout>
+      </>
     );
   }
 
   if (!trail) {
     return (
-      <Layout>
+      <>
         <div className="max-w-2xl mx-auto px-4 py-8">
           <EmptyState heading="Trail Not Found" />
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>{trail.name} | My Trails | FindA.Sale</title>
       </Head>

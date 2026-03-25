@@ -18,7 +18,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
-import Layout from '../../../components/Layout';
 
 interface LineEntry {
   id: string;
@@ -98,7 +97,7 @@ const LineQueuePage = () => {
   const active = entries.filter(e => e.status !== 'CANCELLED');
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Virtual Line Manager – FindA.Sale</title>
       </Head>
@@ -208,7 +207,7 @@ const LineQueuePage = () => {
 
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 

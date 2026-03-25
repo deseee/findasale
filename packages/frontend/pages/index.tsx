@@ -3,7 +3,6 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
-import Layout from '../components/Layout';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
@@ -184,7 +183,7 @@ const HomePage = () => {
   }, [sales, searchQuery, dateFilter, saleTypeFilter]);
 
   return (
-    <Layout>
+    <>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <Head>
         <title>FindA.Sale - Find Sales Near You</title>
@@ -406,7 +405,7 @@ const HomePage = () => {
         </div>
       </main>
         </div>
-    </Layout>
+    </>
   );
 };
 

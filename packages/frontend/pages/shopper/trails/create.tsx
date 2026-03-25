@@ -5,7 +5,6 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../components/AuthContext';
 import { useCreateTrail } from '../../../hooks/useTrails';
 import { useToast } from '../../../components/ToastContext';
-import Layout from '../../../components/Layout';
 
 export default function CreateTrailPage() {
   const router = useRouter();
@@ -46,7 +45,7 @@ export default function CreateTrailPage() {
 
   if (authLoading) {
     return (
-      <Layout>
+      <>
         <Head>
           <title>Create Trail | FindA.Sale</title>
         </Head>
@@ -56,12 +55,12 @@ export default function CreateTrailPage() {
             <div className="h-32 bg-warm-200 dark:bg-gray-700 rounded" />
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Create Trail | FindA.Sale</title>
         <meta name="description" content="Create a new treasure trail through your favorite sales" />
