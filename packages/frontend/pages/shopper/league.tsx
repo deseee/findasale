@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
 import { RankBadge, ExplorerRank } from '@/components/RankBadge';
+import api from '@/lib/api';
 
 interface LeaderboardUser {
   position: number;
@@ -43,20 +44,8 @@ function LeaguePage() {
     const fetchLeague = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/loyalty/collector-league', {
-          method: 'GET',
-          credentials: 'include',
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            router.push('/login');
-            return;
-          }
-          throw new Error('Failed to fetch leaderboard');
-        }
-
-        const data: LeaderboardUser[] = await response.json();
+        const response = await api.get('/loyalty/collector-league');
+        const data: LeaderboardUser[] = response.data;
         setLeaderboard(data);
 
         // Find current user's position
