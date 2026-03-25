@@ -596,7 +596,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               )}
 
               {/* Auction End Time */}
-              {isAuction && !isSold && (
+              {isAuction && !isSold && item.auctionEndTime && (
                 <div className="text-sm text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-4">
                   <span>Auction ends:</span>
                   <p className="font-semibold text-gray-900 dark:text-gray-100">
