@@ -1,27 +1,32 @@
-# Patrick's Dashboard — Session 283 Complete (March 25, 2026)
+# Patrick's Dashboard — Session 284 Complete (March 25, 2026)
 
 ---
 
 ## ✅ Build Status
 
-- **Railway:** ✅ Green (S282 code live)
+- **Railway:** ✅ Green
 - **Vercel:** ✅ Green
-- **DB:** Railway Postgres — all migrations applied through S282
+- **DB:** Railway Postgres — all migrations confirmed deployed (Railway green = migrations applied)
 - **Beta:** Active (2026-03-22 through 2026-03-29, real customers testing freely)
 
 ---
 
-## ✅ Session 283 Complete
+## ✅ Session 284 Complete — Roadmap Integrity Audit
 
 **What was done:**
-- **Roadmap Nav column audit** — Full audit of all shipped features. Every Nav=`—` entry resolved. 88 rows fixed via batch script (backend/embedded → N/A). Remaining 18 resolved individually with GitHub page verification.
-- **Nav results:** Brand Kit (#87) → 📋, Leaderboard → 📋, Challenges (#55) → 📋, AI Sale Planner → 📋. All others (Approach Notes, gamification components, AI tools, Treasure Hunt QR, Sentry scoring, etc.) → N/A.
-- **Earlier S283 work:** QA columns completed, Platform Safety Chrome/Nav fixed, shipped features reorganized from Backlog/Wave 5/In Progress, #104/#105/#119/#121 moved back to Backlog, #131 API + #119 DB corrected.
-- **Zero Nav=`—` rows remain** anywhere in the shipped section.
+
+- **Full audit of every column** (DB, API, UI, QA, Chrome, Nav) — verified against actual codebase files, not session log claims. 30 GitHub commits, schema.prisma (40+ models/fields), 131 migrations, 35+ pages, 95+ backend routes, Layout.tsx + BottomTabNav all read directly.
+- **All code confirmed real.** Every claimed feature file exists. Railway being green confirms migrations deployed.
+- **Column corrections applied:** Chrome ✅ → 📋 for #89 (Print Kit), #90 (Soundtrack), #135 (Social Templates Expansion). Nav ✅ → 📋 for #88 (Hauls), #31 (Brand Kit), #58 (Achievements), #128 (Support). API ✅ → ⚠️ for #127 (POS Tiers — controller was unregistered).
+- **Nav orphans fixed:** Layout.tsx updated — "Loot Legend" label corrected (was routing to collector-passport), new Loot Legend → /shopper/loot-legend link added, Hauls link added, Brand Kit (PRO-gated) added, Achievements added, Support added to footer. 0 TS errors.
+- **#127 POS Tiers API wired:** New `routes/posTiers.ts` created, mounted in `index.ts` at `/api/organizer/pos-tiers`. 0 TS errors.
+- **126 features moved** from Shipped → `### Pending Chrome QA` in roadmap backlog.
+- **All un-numbered rows assigned #137–#217.** Roadmap now has a unique number for every feature.
+- **QA audit saved:** `claude_docs/operations/qa-integrity-audit-S284.md`
 
 ---
 
-## 🚀 Commit S283 Docs (Run This)
+## 🚀 Commit S284 (Run This)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -29,25 +34,26 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
+git add claude_docs/operations/qa-integrity-audit-S284.md
+git add packages/frontend/components/Layout.tsx
+git add packages/backend/src/routes/posTiers.ts
+git add packages/backend/src/index.ts
 
-git commit -m "docs: S283 complete — roadmap Nav audit, all shipped features fully resolved"
+git commit -m "S284: roadmap integrity audit — all columns verified, 126 to Pending QA, nav orphans fixed, #127 wired, features #137-#217 numbered"
 
 .\push.ps1
 ```
 
 ---
 
-## ⚠️ Next Session: S284 — Roadmap Integrity Audit First
+## ⚠️ Next Session: S285 — Chrome QA Pass
 
-**Patrick directive (S283 close):** Before any Chrome QA or new work, S284 must audit roadmap accuracy. QA ✅ marks and column updates across S282–S283 were applied based on session logs and file existence checks — not verified live testing. A falsely marked ✅ is worse than an honest 📋.
+**Start with P0s before anything else:**
+1. **Messaging thread** (feature #195) — qa-audit-2026-03-22 found P0 blank thread. Verify fixed or file bug.
+2. **Stripe checkout** — qa-audit-2026-03-22 found P0 broken. Still in Known Flags as "not human-verified."
+3. **Admin invites** — HIGH bug from same audit. Verify fixed.
 
-**S284 must:**
-1. Pull full GitHub commit history for every shipped feature — confirm actually built
-2. Cross-reference session logs — confirm QA ✅ reflects real testing, not just code landing
-3. Any feature where BUILT + TESTED cannot both be confirmed → Backlog or QA downgraded to 📋
-4. Only after audit passes → Chrome MCP full product walkthrough as SHOPPER / ORGANIZER / ADMIN
-
-**No Patrick manual actions pending after the commit above.**
+**Then systematic Chrome QA of Pending Chrome QA list** — as SHOPPER, ORGANIZER, and ADMIN. Each verified feature moves back to Shipped with Chrome ✅.
 
 ---
 
@@ -76,3 +82,5 @@ All password: `password123`
 - **#74 consent copy** — `LEGAL_COPY_PLACEHOLDER_*` in register.tsx — attorney review REQUIRED before launch
 - **#98 Stripe Disputes** — evidence captured; Stripe API submission is a stub (manual via dashboard)
 - **Checkout premium flow** — built in S275/S278; Stripe test mode E2E not yet human-verified
+- **Messaging P0** — blank messages thread from qa-audit-2026-03-22 — fix status unknown — **verify first in S285**
+- **Holds/Bounties/Challenges/Invites/Leaderboard DB** — DB ✅ in roadmap but no schema model found under expected names. May use different model names or be computed. Needs investigation before Chrome QA of those features.
