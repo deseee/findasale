@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
+import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -60,6 +61,13 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     if (!ANTHROPIC_API_KEY) {
       console.error('ANTHROPIC_API_KEY not configured');
       res.status(503).json({ message: 'AI service unavailable. Please try again later.' });
+      return;
+    }
+
+    // Feature #104: Check AI cost ceiling
+    if (isAICostCeilingExceeded()) {
+      console.warn('[planner-chat] AI cost ceiling exceeded');
+      res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
       return;
     }
 

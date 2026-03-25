@@ -12,7 +12,7 @@
 
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
-import { trackAITokens, estimateTokensForRequest } from '../lib/aiCostTracker';
+import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded } from '../lib/aiCostTracker';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -376,6 +376,7 @@ If uncertain, suggest B. Return ONLY the single letter (S, A, B, C, or D), no ex
  *   4. Suggest condition grade via Haiku (non-blocking, #64).
  *
  * Returns null if cloud AI is not configured (caller should fall back to Ollama).
+ * Feature #104: Returns null if AI cost ceiling is exceeded (graceful degradation).
  * Throws on API errors so the caller can handle/log them.
  */
 export async function analyzeItemImage(
@@ -383,6 +384,12 @@ export async function analyzeItemImage(
   mimeType = 'image/jpeg'
 ): Promise<AITagResult | null> {
   if (!isCloudAIAvailable()) return null;
+
+  // Feature #104: Cost ceiling check — graceful degradation
+  if (isAICostCeilingExceeded()) {
+    console.warn('[cloudAI] AI cost ceiling exceeded, returning null for fallback');
+    return null;
+  }
 
   const imageBase64 = buffer.toString('base64');
 
@@ -429,9 +436,16 @@ export interface SaleDescriptionInput {
  * Generate a 2–3 sentence sale listing description using Claude Haiku.
  * Returns null if ANTHROPIC_API_KEY is not configured.
  * Feature #109: Returns null on API errors (graceful degradation).
+ * Feature #104: Returns null if AI cost ceiling is exceeded.
  */
 export async function generateSaleDescription(input: SaleDescriptionInput): Promise<string | null> {
   if (!ANTHROPIC_API_KEY) return null;
+
+  // Feature #104: Cost ceiling check
+  if (isAICostCeilingExceeded()) {
+    console.warn('[cloudAI] AI cost ceiling exceeded, returning null for sale description');
+    return null;
+  }
 
   try {
     const { title, tags = [], city = regionConfig.city, isAuctionSale = false, startDate, endDate } = input;
@@ -511,6 +525,7 @@ export interface ComparableSale {
  * Uses Claude Haiku with estate sale pricing expertise.
  * Optionally includes comparable sold prices from the platform to inform the suggestion.
  *
+ * Feature #104: Returns fallback price if cost ceiling is exceeded.
  * Returns a fallback price if parsing fails or API is unavailable.
  */
 export async function suggestPrice(
@@ -525,6 +540,17 @@ export async function suggestPrice(
       high: 50,
       suggested: 10,
       reasoning: 'Manual pricing recommended (AI service unavailable)',
+    };
+  }
+
+  // Feature #104: Cost ceiling check
+  if (isAICostCeilingExceeded()) {
+    console.warn('[cloudAI] AI cost ceiling exceeded, returning fallback price');
+    return {
+      low: 5,
+      high: 25,
+      suggested: 15,
+      reasoning: 'Manual pricing recommended (AI service temporarily unavailable)',
     };
   }
 

@@ -7,26 +7,25 @@ interface HuntSummaryProps {
   saleId: string;
 }
 
-interface ItemWithQr {
+interface TreasureHuntQRClue {
   id: string;
-  title: string;
-  qrScanCount: number;
-  photoUrls: string[];
+  category?: string;
+  createdAt: string;
 }
 
-interface HuntLeaderboardEntry {
-  userId: string;
-  userName: string;
-  scansCount: number;
+interface Sale {
+  id: string;
+  treasureHuntQRClues: TreasureHuntQRClue[];
+  treasureHuntEnabled: boolean;
 }
 
 export default function HuntSummary({ saleId }: HuntSummaryProps) {
-  // Fetch items for this sale with QR counts
+  // Fetch sale data with treasure hunt clues
   const { data: saleData, isLoading } = useQuery({
     queryKey: ['hunt-summary', saleId],
     queryFn: async () => {
       const response = await api.get(`/sales/${saleId}`);
-      return response.data;
+      return response.data as Sale;
     },
     staleTime: 60000,
   });
@@ -39,58 +38,72 @@ export default function HuntSummary({ saleId }: HuntSummaryProps) {
     );
   }
 
-  const items = saleData.items || [];
-  const itemsWithQr = items.filter((item: any) => item.qrScanCount > 0);
+  const clues = saleData.treasureHuntQRClues || [];
+  const treasureHuntEnabled = saleData.treasureHuntEnabled ?? true;
 
-  if (itemsWithQr.length === 0) {
-    return null; // Don't show section if no QR codes
+  // Only show if treasure hunt is enabled and there are clues
+  if (!treasureHuntEnabled || clues.length === 0) {
+    return null;
   }
 
-  const totalScans = itemsWithQr.reduce(
-    (sum: number, item: any) => sum + item.qrScanCount,
-    0
-  );
-  const totalItems = items.length;
+  // Group clues by category
+  const byCategory: Record<string, number> = {};
+  clues.forEach((clue) => {
+    const cat = clue.category || 'Uncategorized';
+    byCategory[cat] = (byCategory[cat] || 0) + 1;
+  });
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
+    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg p-6 border border-amber-200 dark:border-amber-800">
       <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        🎯 Treasure Hunt
+        🎯 Treasure Hunt QR
       </h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-            Items Hidden
+            Clues Hidden
           </p>
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {itemsWithQr.length}/{totalItems}
+          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+            {clues.length}
           </p>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-            Total Scans
+            Categories
           </p>
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {totalScans}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-            Avg Scans per Item
-          </p>
-          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {itemsWithQr.length > 0
-              ? (totalScans / itemsWithQr.length).toFixed(1)
-              : 0}
+          <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+            {Object.keys(byCategory).length}
           </p>
         </div>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-        📱 Scan QR codes on items to earn XP and badges!
+      {/* Category breakdown */}
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase">
+          Categories
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(byCategory).map(([cat, count]) => (
+            <span
+              key={cat}
+              className="bg-white dark:bg-gray-700 text-xs px-2 py-1 rounded-full text-gray-700 dark:text-gray-300"
+            >
+              {cat} ({count})
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <Link href={`/sales/${saleId}/treasure-hunt-qr/progress`}>
+        <a className="block w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg text-center transition-colors">
+          📱 Start Hunting
+        </a>
+      </Link>
+
+      <p className="text-xs text-gray-600 dark:text-gray-400 text-center mt-3">
+        Scan QR codes hidden around the sale to earn XP!
       </p>
     </div>
   );

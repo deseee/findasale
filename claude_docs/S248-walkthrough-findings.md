@@ -81,23 +81,23 @@ subscribed tab is broken now, says no organizers followed yet on account that is
 Followed Brands tab JSON.parse: unexpected character at line 1 column 1 of the JSON data
 
 shopper/collector-passport:
-+Explorer passport needs name seo change?
++Loot Legend? Explorer passport? needs name seo change?
 +no matches yet in my matches
 
-shopper/loyalty why do we call these passports?
-what is the user instructions, tooltips, etc.. in relation to leaderboard points and huntpass etc..? 
-what are guild xp, stamps, milestones and badges are they the same as leaderboard badges?
-when and what benefits do they get? how and why and where?
-this whole page needs reworking with the new gaming narrative
+shopper/loyalty:
+why do we call these all passports? only 1 thing should be passport
++Where are the user instructions, tooltips, etc.. in relation to XP leaderboard points and huntpass etc..? thought we consolidated most of this?
++what are guild xp, stamps, milestones and badges are they the same as leaderboard badges? (should have been decided previously)
++when and what benefits do they get? how and why and where?
++this whole page needs reworking with the new gaming narrative
 
 shopper/wishlist
-again we have keywords and we have tags but no distinction or explanation of what they are or do.
-what is the user instructions, tooltips, etc..? distinguish items, collections watching
+Collections should say wishlists
++where is the user instructions, tooltips, etc..? distinguish items, collections watching
 can't search for matching items right from the alert card only edit or delete
-2 footers
 this whole page needs reworking with the new gaming narrative
-view link 404's
-manage link broken redirect to same page
+view link 404's to shared/null, items work though?
+can't buy from card, should it be like the other item cards?
 
 shopper/trails:
 same map graphic as explorer on button

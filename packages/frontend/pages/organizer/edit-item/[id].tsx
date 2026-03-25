@@ -34,6 +34,7 @@ const EditItemPage = () => {
     condition: '',
     status: 'AVAILABLE',
     auctionEndTime: '',
+    qrEmbedEnabled: true,
   });
 
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -84,6 +85,7 @@ const EditItemPage = () => {
         condition: normalizedCondition,
         status: item.status || 'AVAILABLE',
         auctionEndTime: item.auctionEndTime ? new Date(item.auctionEndTime).toISOString().slice(0, 16) : '',
+        qrEmbedEnabled: item.qrEmbedEnabled !== false,
       });
     }
   }, [item]);
@@ -324,6 +326,23 @@ const EditItemPage = () => {
                 />
               </div>
             )}
+
+            {/* Feature #136: QR Code Auto-Embedding toggle */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="qrEmbedEnabled"
+                checked={formData.qrEmbedEnabled}
+                onChange={(e) => setFormData({ ...formData, qrEmbedEnabled: e.target.checked })}
+                className="w-4 h-4 text-amber-600 bg-white border-warm-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
+              />
+              <label htmlFor="qrEmbedEnabled" className="text-sm font-medium text-warm-700 dark:text-warm-300 cursor-pointer">
+                Embed QR code in exported photos
+              </label>
+              <p className="text-xs text-warm-500 dark:text-warm-400">
+                QR codes link to this item&apos;s page on FindA.Sale
+              </p>
+            </div>
 
             <button
               type="submit"

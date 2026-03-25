@@ -1,8 +1,9 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import archiver from 'archiver';
+import { checkExportRateLimit, formatNextExportDate } from '../services/exportRateLimitService';
 
 /**
  * Category mapping from FindA.Sale to EstateSales.NET format
@@ -84,6 +85,22 @@ export const exportEstatesalesCSV = async (
       return;
     }
 
+    // Platform Safety #99: Check export rate limit
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastExportAt: true }
+    });
+
+    if (user) {
+      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+      if (!allowed && nextExportDate) {
+        res.status(429).json({
+          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+        });
+        return;
+      }
+    }
+
     // Fetch sale with organizer and published items
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -144,7 +161,7 @@ export const exportEstatesalesCSV = async (
       escapeCSV(truncate(item.description, 500)),
       item.condition || '',
       item.photoUrls && item.photoUrls.length > 0
-        ? getWatermarkedUrl(item.photoUrls[0])
+        ? getWatermarkedUrlWithQR(item.photoUrls[0], item.id, item.qrEmbedEnabled)
         : '',
       item.shippingAvailable ? 'Yes' : 'No',
       item.shippingPrice ? item.shippingPrice.toFixed(2) : '',
@@ -159,6 +176,13 @@ export const exportEstatesalesCSV = async (
     // Set response headers
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="sale-${saleId}-estatesales.csv"`);
+
+    // Platform Safety #99: Update lastExportAt timestamp
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastExportAt: new Date() }
+    });
+
     res.status(200).send(csvContent);
   } catch (error) {
     console.error('exportEstatesalesCSV error:', error);
@@ -183,6 +207,22 @@ export const exportFacebookJSON = async (
       return;
     }
 
+    // Platform Safety #99: Check export rate limit
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastExportAt: true }
+    });
+
+    if (user) {
+      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+      if (!allowed && nextExportDate) {
+        res.status(429).json({
+          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+        });
+        return;
+      }
+    }
+
     // Fetch sale with organizer and published items
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -200,6 +240,7 @@ export const exportFacebookJSON = async (
             photoUrls: true,
             shippingAvailable: true,
             shippingPrice: true,
+            qrEmbedEnabled: true,
           },
         },
       },
@@ -240,7 +281,7 @@ export const exportFacebookJSON = async (
         category: item.category || '',
         condition: item.condition || '',
         images: (item.photoUrls || []).map((url, imgIndex) => ({
-          url: getWatermarkedUrl(url),
+          url: getWatermarkedUrlWithQR(url, item.id, item.qrEmbedEnabled),
           isPrimary: imgIndex === 0,
         })),
         shipping: {
@@ -249,6 +290,12 @@ export const exportFacebookJSON = async (
         },
       })),
     };
+
+    // Platform Safety #99: Update lastExportAt timestamp
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastExportAt: new Date() }
+    });
 
     res.status(200).json(facebookData);
   } catch (error) {
@@ -274,6 +321,22 @@ export const exportCraigslistText = async (
       return;
     }
 
+    // Platform Safety #99: Check export rate limit
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastExportAt: true }
+    });
+
+    if (user) {
+      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+      if (!allowed && nextExportDate) {
+        res.status(429).json({
+          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+        });
+        return;
+      }
+    }
+
     // Fetch sale with organizer and published items
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -290,6 +353,7 @@ export const exportCraigslistText = async (
             description: true,
             condition: true,
             photoUrls: true,
+            qrEmbedEnabled: true,
           },
         },
       },
@@ -339,7 +403,7 @@ export const exportCraigslistText = async (
         lines.push(item.description);
       }
       if (item.photoUrls && item.photoUrls.length > 0) {
-        lines.push(getWatermarkedUrl(item.photoUrls[0]));
+        lines.push(getWatermarkedUrlWithQR(item.photoUrls[0], item.id, item.qrEmbedEnabled));
       }
       lines.push('');
     });
@@ -356,6 +420,13 @@ export const exportCraigslistText = async (
     // Set response headers
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename="sale-${saleId}-craigslist.txt"`);
+
+    // Platform Safety #99: Update lastExportAt timestamp
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastExportAt: new Date() }
+    });
+
     res.status(200).send(textContent);
   } catch (error) {
     console.error('exportCraigslistText error:', error);
@@ -384,6 +455,22 @@ export const exportOrganizer = async (
     if (!userId) {
       res.status(401).json({ message: 'Authentication required' });
       return;
+    }
+
+    // Platform Safety #99: Check export rate limit
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastExportAt: true }
+    });
+
+    if (user) {
+      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+      if (!allowed && nextExportDate) {
+        res.status(429).json({
+          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+        });
+        return;
+      }
     }
 
     // Fetch organizer profile
@@ -560,6 +647,12 @@ export const exportOrganizer = async (
     archive.append(salesCSV, { name: 'sales.csv' });
     archive.append(itemsCSV, { name: 'items.csv' });
     archive.append(purchasesCSV, { name: 'purchases.csv' });
+
+    // Platform Safety #99: Update lastExportAt timestamp
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastExportAt: new Date() }
+    });
 
     // Finalize archive
     await archive.finalize();

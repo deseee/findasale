@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-25 (v69 — S271–S278: #72 dual-role schema, #73 two-channel notifications, #74 consent flow, #75 tier lapse, #87 brand tracking, #88 haul posts, #122 Explorer's Guild rebrand, #123 XP economy, #125 CSV export, #127 POS tiers, #128 support stack, #131 share templates, #132 à la carte fee, #134 plan-a-sale card, auction close flow, platform safety P1–P2 (#93–#98) all shipped. 42 items total confirmed deployed since S266. Roadmap reflects true shipped state as of S279 audit.)
+**Last Updated:** 2026-03-25 (v70 — S281: #84 approach notes, #85 treasure hunt QR, #91 auto-markdown, #133 hunt pass redesign, #136 QR auto-embed, Platform P3-P5C (#99-121) all shipped. All remaining buildable backlog now built. Mass QA → S282.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -78,6 +78,14 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 ### Human Verification (Patrick must run)
 - [ ] **Auction E2E — Stripe test mode:** Set auction end time on a test item → click End Auction button → confirm winner notification sent → open Stripe checkout link → complete checkout → confirm organizer close notification fires. (Documented S279; feature shipped S278.)
 
+### Legal & Business (Patrick Action Items)
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
+| 82 | Trademark — FindA.Sale | BIZ | LEGAL | — | — | — | — | — | — | 📋 | File USPTO trademark on "FindA.Sale" brand name if not already done. ~$250–400/class + attorney fees (~$1,500–2,500 total). First priority IP action. Attorney required. |
+| 83 | Trade Secret Housekeeping | BIZ | LEGAL | — | — | — | — | — | — | 📋 | Document proprietary algorithms (fraud scoring, Near-Miss Nudge logic, City Heat Index formula, Flip Report scoring, AI condition grading prompts) as trade secrets in internal docs. Ensure all contractors/contributors have signed NDAs or are covered by agreements. No filing required — zero cost. |
+
+
 ---
 
 ## Feature Inventory — Shipped
@@ -131,8 +139,13 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 75 | Tier Lapse State Logic | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | 8am warning + 11pm lapse cron. Dashboard banner. Suspends ORG features, retains SHO features |
 | 127 | POS Value Unlock Tiers | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Dual-gate (tx+revenue). 3 tiers at 5/20/50 tx. /api/organizer/pos-tiers + PosTierGates.tsx |
 | 131 | Share & Promote Templates | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | — | 📋 | SharePromoteModal: 4 templates (social post, flyer, email invite, neighborhood post) |
-| 135 | Social Templates Expansion | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | — | 📋 | SharePromoteModal extended: TikTok, Pinterest, Threads, Nextdoor tabs added. Shipped S280. |
-| 89 | Unified Print Kit | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/organizer/print-kit/[saleId]` — yard sign (QR + address + dates) + per-item price tags (6/page, photo + QR + price + condition). Print CSS included. Shipped S280. |
+| 135 | Social Templates Expansion | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | — | 📋 | SharePromoteModal + TikTok, Pinterest, Threads, Nextdoor. Shipped S280. |
+| 89 | Unified Print Kit | ORG | SIMPLE | — | ✅ | ✅ | ✅ | 📋 | — | 📋 | `/organizer/print-kit/[saleId]` — yard sign + item price tags (6/page). Print CSS. Shipped S280. |
+| 76 | Skeleton Loaders | BOTH | FREE | — | — | ✅ | ✅ | 📋 | — | N/A | Ghost card layouts on item/sale grids. SkeletonCards component. Shipped S280. |
+| 77 | Sale Published Celebration | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | — | 📋 | Full-screen confetti overlay on publish. Confetti.tsx + PublishCelebration.tsx. Shipped S280. |
+| 79 | Earnings Counter Animation | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | — | N/A | AnimatedCounter.tsx — rolls up to value on dashboard load. Shipped S280. |
+| 80 | Purchase Confirmation Redesign | SHO | FREE | — | — | ✅ | ✅ | 📋 | — | 📋 | /shopper/checkout-success — item photo hero, seller, pickup, CTAs. Shipped S280. |
+| 81 | Empty State Audit + Copy Pass | BOTH | FREE | — | — | ✅ | ✅ | 📋 | — | N/A | EmptyState component + human copy across 8 pages (index, feed, hauls, messages, item-library, holds ×2, wishlists). Shipped S280. |
 | 132 | À La Carte Single-Sale Fee ($9.99) | ORG | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | 📋 | — | 📋 | Sale.purchaseModel + alaCarte + alaCarteFeePaid. Stripe checkout. AlaCartePublishModal for SIMPLE tier |
 | 134 | Plan a Sale Dashboard Card | ORG | SIMPLE | — | — | ✅ | ✅ | 📋 | ✅ | 📋 | "Coming Soon" card on organizer dashboard overview tab |
 
@@ -308,33 +321,20 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 
 ## Backlog — Prioritized
 
-### Parallel Batch A — Quick Wins + Cleanup (No Dependencies Between Items)
-_All items can be dispatched simultaneously to separate subagents._
+### Parallel Batch B — New Features + Revenue
+_Batch A shipped S280. These are next._
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 76 | Skeleton Loaders — Item Grids | BOTH | FREE | — | — | — | — | — | — | — | Replace spinners with ghost card layouts across all item/sale grids. No schema changes — reads existing `Item.photoUrls[]`, `Item.title`, `Item.price`. UI-only. Highest perceived-performance ROI. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
-| 77 | Sale Published Celebration Screen | ORG | SIMPLE | — | — | — | — | — | — | — | Full-screen moment when organizer publishes a sale — sale name, cover photo, "You're live" + confetti. No schema changes — triggers on `Sale.status → PUBLISHED`. Replaces generic toast. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
-| 79 | Earnings Counter Animation | ORG | SIMPLE | — | — | — | — | — | — | — | Dashboard earnings number rolls up to current value (Revolut-style) on open/refresh. No schema changes — reads existing `Purchase` aggregates. Frontend-only. Pairs with #77 to make dashboard feel alive. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
-| 80 | Purchase Confirmation Redesign | SHO | FREE | — | — | — | — | — | — | — | Redesign shopper success screen after purchase — item photo hero, item title, seller name, pickup details, designed layout. No schema changes: reads `Purchase` + `Item.photoUrls[]`, `Item.title`, `Sale.title`, `Organizer.businessName`. Replaces generic confirmation text. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
-| 81 | Empty State Audit + Copy Pass | BOTH | FREE | — | — | — | — | — | — | — | Inventory all empty states across organizer and shopper flows. Write human-voice copy for each (no dead ends — every empty state gets a CTA and a human sentence). UX/copy-only, no schema or API changes. Spec: `claude_docs/ux-spotchecks/design-polish-vision-2026-03-19.md` |
-
-### Parallel Batch B — New Features + Revenue (Dispatch After Batch A Ships)
-_Items within this batch are also parallelizable — different layers, no conflicts._
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 135 | Multi-Platform Social Templates Expansion | ORG | SIMPLE | — | — | — | — | — | — | — | Add TikTok, Pinterest, Nextdoor, Threads to existing social share templates. Platform-native copy + dimensions for each. Low complexity. _(was #122 — renumbered to avoid conflict with Explorer's Guild)_ |
-| 136 | QR Code Auto-Embedding in Exports | ORG | SIMPLE | — | ✅ | ✅ | — | — | — | — | Cloudinary overlay: embed FindA.Sale QR code in every watermarked photo export. Organizer toggle to disable per-item. Very low complexity. _(was #123 — renumbered to avoid conflict with Explorer's Guild Phase 2)_ |
-| 137 | Nextdoor Standalone Export | ORG | SIMPLE | — | ✅ | ✅ | — | — | — | — | Dedicated one-click Nextdoor card export (distinct from the Neighborhood Post template already in SharePromoteModal). _(was #124)_ |
-| 91 | Auto-Markdown (Smart Clearance) | ORG | PRO | — | — | — | — | — | — | — | Auto-discount engine: 50% day 2, 75% day 3, configurable floor. Removes manual repricing. Patrick promoted from deferred. |
+| 136 | QR Code Auto-Embedding in Exports | ORG | SIMPLE | ✅ | ✅ | ✅ | 📋 | — | — | — | qrEmbedEnabled field, Cloudinary QR overlay via cloudinaryWatermark.ts, exportController wired, organizer toggle in edit-item. |
+| 91 | Auto-Markdown (Smart Clearance) | ORG | PRO | ✅ | ✅ | ✅ | 📋 | — | — | — | markdownEnabled/markdownFloor on Sale, markdownApplied/priceBeforeMarkdown on Item, markdownCron (every 5min), saleController config endpoints, edit-sale UI toggle + floor input. |
 
 ### Parallel Batch C — Gamification + Shopper Monetization
 _#126 shipped (S269). These can now run in parallel._
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 133 | Hunt Pass Subscription Redesign | SHO | PAID_ADDON | — | — | — | — | — | — | — | Sage/Grandmaster exclusives: 6h Legendary-first access, 1.5x XP multiplier, Loot Legend portfolio, Collector's League leaderboard. **NOT BUILT** — ranks defined in schema but none of the exclusive features are implemented. |
+| 133 | Hunt Pass Subscription Redesign | SHO | PAID_ADDON | ✅ | ✅ | ✅ | 📋 | — | — | — | LEGENDARY 6h early access gate in itemController, 1.5x XP multiplier (applyHuntPassMultiplier in xpService), getLootLegend() + getCollectorLeague() endpoints + routes, loot-legend.tsx + league.tsx pages, loyalty.tsx updated. |
 | 124 | Rarity Boost XP Sink | SHO | FREE/PAID_ADDON | — | ✅ | — | — | — | — | — | Frontend UI for POST /api/xp/sink/rarity-boost. Backend endpoint confirmed live. Frontend shows 'Coming Soon' placeholder only — full UI not built. |
 
 
@@ -342,15 +342,9 @@ _#126 shipped (S269). These can now run in parallel._
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | — | — | — | — | — | — | — | Push notification at 500m with parking/entrance directions. Geolocation-dependent. Needs Architect review (push infra). |
-| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | — | — | — | — | — | — | — | Per-sale QR scavenger hunt. Distinct from daily clue TreasureHunt. Needs Architect review (new schema for in-sale QR codes + badge awards). |
+| 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | ✅ | ✅ | ✅ | 📋 | — | — | — | PushNotificationLog model, arrivalController (get/update notes + send-approach-notification with 24h dedup), useArrivalAssistant hook, sale detail page section, edit-sale textarea. |
+| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | ✅ | ✅ | ✅ | 📋 | — | — | — | TreasureHuntQRClue + TreasureHuntQRScan schema models, treasureHuntQRController (6 CRUD endpoints), TreasureHuntQRManager.tsx (organizer clue management + QR download), shopper clue detail page (/sales/[id]/treasure-hunt-qr/[clueId]). |
 
-### Legal & Business (Patrick Action Items)
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 82 | Trademark — FindA.Sale | BIZ | LEGAL | — | — | — | — | — | — | 📋 | File USPTO trademark on "FindA.Sale" brand name if not already done. ~$250–400/class + attorney fees (~$1,500–2,500 total). First priority IP action. Attorney required. |
-| 83 | Trade Secret Housekeeping | BIZ | LEGAL | — | — | — | — | — | — | 📋 | Document proprietary algorithms (fraud scoring, Near-Miss Nudge logic, City Heat Index formula, Flip Report scoring, AI condition grading prompts) as trade secrets in internal docs. Ensure all contractors/contributors have signed NDAs or are covered by agreements. No filing required — zero cost. |
 
 ---
 
@@ -603,4 +597,4 @@ FindaSale\claude_docs\feature-notes.md - design decisions based on emotion and a
 ## Maintenance
 
 This document is the source of truth for product roadmap. Updated at every session wrap when a feature ships, beta status changes, or a deferred item is revisited. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               

@@ -18,14 +18,21 @@ import {
   generateSaleDescriptionHandler,
   getSaleStatus,
   getCities,
+  updateMarkdownConfig,
+  getMarkdownConfig,
+  cancelSale,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
 import { getHeatmapHandler } from '../controllers/heatmapController'; // Feature #28
 import rippleRoutes from './ripples'; // Feature #51: Sale Ripples
 import photoOpsRoutes from './photoOps'; // Feature #39: Photo Op Stations
+import treasureHuntQRRoutes from './treasureHuntQR'; // Feature #85: Treasure Hunt QR
 import { createAlaCarteCheckout } from '../controllers/stripeController'; // #132: À La Carte
+import { getApproachNotes, updateApproachNotes, sendApproachNotification } from '../controllers/arrivalController'; // Feature #84: Approach Notes
 import { authenticate } from '../middleware/auth';
+import { requireOrganizer } from '../middleware/auth';
+import { requireTier } from '../middleware/requireTier'; // Feature #91: PRO tier gate
 
 const router = Router();
 
@@ -46,6 +53,7 @@ router.get('/:id/status', getSaleStatus); // Feature #14: Real-time status (publ
 router.post('/', authenticate, createSale);
 router.put('/:id', authenticate, updateSale);
 router.patch('/:id/status', authenticate, updateSaleStatus);
+router.post('/:id/cancel', authenticate, cancelSale); // #120: Sale cancellation audit
 router.delete('/:id', authenticate, deleteSale);
 router.post('/:id/clone', authenticate, cloneSale);
 router.post('/:id/generate-qr', authenticate, generateQRCode);
@@ -56,10 +64,22 @@ router.post('/:id/track-scan', trackQrScan); // public, no auth needed
 router.get('/:id/calendar.ics', generateIcal); // public, no auth needed
 router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
 
+// Feature #91: Auto-Markdown (Smart Clearance) — PRO tier only
+router.put('/:id/markdown-config', authenticate, requireTier('PRO'), updateMarkdownConfig);
+router.get('/:id/markdown-config', authenticate, getMarkdownConfig);
+
+// Feature #84: Approach Notes — day-of notifications with parking/entrance info
+router.get('/:saleId/approach-notes', getApproachNotes); // Public read for saved sales, organizer only for unsaved
+router.post('/:saleId/approach-notes', authenticate, requireOrganizer, updateApproachNotes); // Organizer only
+router.post('/:saleId/send-approach-notification', authenticate, requireOrganizer, sendApproachNotification); // Organizer triggers notification
+
 // Feature #51: Sale Ripples — social proof activity tracking
 router.use('/:saleId/ripples', rippleRoutes);
 
 // Feature #39: Photo Op Stations — photo spot management
 router.use('/:saleId/photo-ops', photoOpsRoutes);
+
+// Feature #85: Treasure Hunt QR — per-sale scavenger hunt
+router.use('/:saleId/treasure-hunt-qr', treasureHuntQRRoutes);
 
 export default router;

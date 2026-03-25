@@ -137,6 +137,23 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(401).json({ message: 'Invalid token' });
     }
 
+    // Platform Safety #117: Check account suspension — block checkout/purchase endpoints
+    // Allow read-only endpoints like browsing/viewing to proceed (handled at route level)
+    if (user.suspendedAt) {
+      // Check if this is a checkout/purchase route
+      const route = req.path;
+      const checkoutPatterns = ['/checkout', '/purchase', '/payment', '/stripe'];
+      const isCheckoutRoute = checkoutPatterns.some((pattern) => route.includes(pattern));
+
+      if (isCheckoutRoute) {
+        return res.status(403).json({
+          message: 'Your account has been suspended',
+          reason: user.suspendReason,
+          details: 'Contact support@finda.sale for account review',
+        });
+      }
+    }
+
     // P0 Fix 4: Validate tokenVersion — if JWT has stale version, token is invalidated
     if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
       return res.status(401).json({ message: 'Token has been invalidated' });

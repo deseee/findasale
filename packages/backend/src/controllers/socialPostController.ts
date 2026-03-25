@@ -2,6 +2,7 @@ import { Response } from 'express';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
 
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -12,6 +13,11 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(503).json({ message: 'AI service unavailable' });
+    }
+
+    // Feature #104: Check AI cost ceiling
+    if (isAICostCeilingExceeded()) {
+      return res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
     }
 
     if (!saleId || !platform) {

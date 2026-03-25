@@ -919,3 +919,151 @@ export const getCities = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Feature #91: Auto-Markdown (Smart Clearance)
+export const updateMarkdownConfig = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id: saleId } = req.params;
+    const { markdownEnabled, markdownFloor } = req.body;
+
+    // Validate inputs
+    if (typeof markdownEnabled !== 'boolean') {
+      return res.status(400).json({ message: 'markdownEnabled must be a boolean' });
+    }
+    if (markdownFloor !== undefined && markdownFloor !== null && typeof markdownFloor !== 'number') {
+      return res.status(400).json({ message: 'markdownFloor must be a number' });
+    }
+    if (markdownFloor !== undefined && markdownFloor !== null && markdownFloor < 0) {
+      return res.status(400).json({ message: 'markdownFloor cannot be negative' });
+    }
+
+    const existingSale = await prisma.sale.findUnique({ where: { id: saleId } });
+    if (!existingSale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (!isAdmin) {
+      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+      if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
+        return res.status(403).json({ message: 'Access denied. You can only update your own sales.' });
+      }
+    }
+
+    const sale = await prisma.sale.update({
+      where: { id: saleId },
+      data: {
+        markdownEnabled,
+        markdownFloor: markdownFloor || null,
+      },
+    });
+
+    res.json(convertDecimalsToNumbers(sale));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error while updating markdown config' });
+  }
+};
+
+export const getMarkdownConfig = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: {
+        id: true,
+        markdownEnabled: true,
+        markdownFloor: true,
+      },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    res.json(convertDecimalsToNumbers(sale));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error while fetching markdown config' });
+  }
+};
+
+// #120: Sale Cancellation Audit
+export const cancelSale = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!req.user || (!hasOrganizerRole && !isAdmin)) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+    const { cancellationReason } = req.body;
+
+    const existingSale = await prisma.sale.findUnique({
+      where: { id },
+      include: {
+        organizer: { select: { userId: true } },
+        items: { select: { id: true, status: true } }
+      }
+    });
+
+    if (!existingSale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (!isAdmin) {
+      if (existingSale.organizer.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Access denied. You can only cancel your own sales.' });
+      }
+    }
+
+    // Only allow cancellation of DRAFT or PUBLISHED sales
+    if (!['DRAFT', 'PUBLISHED'].includes(existingSale.status)) {
+      return res.status(400).json({
+        message: `Cannot cancel sale with status ${existingSale.status}. Only DRAFT or PUBLISHED sales can be cancelled.`
+      });
+    }
+
+    // #120: Store cancellation reason and mark as cancelled
+    const reason = cancellationReason || 'NOT_PROVIDED';
+    const cancelled = await prisma.sale.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        cancellationReason: reason
+      }
+    });
+
+    // #120: Audit alert — if created < 2h ago and has 100+ items on hold
+    if (existingSale.status === 'PUBLISHED') {
+      const minutesSinceCreation = (new Date().getTime() - existingSale.createdAt.getTime()) / (1000 * 60);
+      const itemsOnHold = existingSale.items.filter((i: any) => i.status === 'RESERVED').length;
+
+      if (minutesSinceCreation < 120 && itemsOnHold >= 100) {
+        console.warn(`[audit] Sale cancelled shortly after publication: saleId=${id}, reason=${reason}, holds=${itemsOnHold}`);
+      }
+    }
+
+    // Notify organizer
+    createNotification({
+      userId: existingSale.organizer.userId,
+      type: 'sale_cancelled',
+      title: 'Sale cancelled',
+      body: `Your sale "${existingSale.title}" has been cancelled.`,
+      link: `/organizer/sales/${id}`,
+      channel: 'OPERATIONAL'
+    }).catch(() => {});
+
+    res.json(cancelled);
+  } catch (error) {
+    console.error('Cancel sale error:', error);
+    res.status(500).json({ message: 'Server error while cancelling sale' });
+  }
+};

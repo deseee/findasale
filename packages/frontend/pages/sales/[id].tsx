@@ -34,6 +34,7 @@ import { RippleIndicator } from '../../components/RippleIndicator'; // Feature #
 import { LiveFeedTicker } from '../../components/LiveFeedTicker'; // Feature #70: Live Activity Ticker
 import MessageComposeModal from '../../components/MessageComposeModal'; // Feature #29: Message Organizer
 import HuntSummary from '../../components/HuntSummary'; // Feature #85: Treasure Hunt QR
+import { useArrivalAssistant } from '../../hooks/useArrivalAssistant'; // Feature #84: Approach Notes
 
 // Feature #90: Sale Soundtrack — Spotify & Apple Music playlist mapping by sale type
 const SALE_TYPE_PLAYLISTS: Record<string, { label: string; spotify: string; appleMusic: string }> = {
@@ -197,6 +198,9 @@ const SaleDetailPage = () => {
 
   // Feature #47: Fetch UGC photos for this sale
   const { data: ugcPhotos = [], isLoading: ugcLoading } = useUGCPhotos(id as string);
+
+  // Feature #84: Fetch approach notes for this sale (if user has saved it)
+  const { data: approachNotes, isLoading: approachNotesLoading } = useArrivalAssistant(id as string);
 
   const handleBuyNow = (itemId: string, itemTitle: string) => {
     setCheckoutItem({ id: itemId, title: itemTitle });
@@ -997,6 +1001,32 @@ const SaleDetailPage = () => {
             {sale.address}, {sale.city}, {sale.state} {sale.zip}
           </p>
         </div>
+
+        {/* Feature #84: Approach Notes — day-of info for shoppers */}
+        {approachNotes && approachNotes.notes && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+            <h2 className="text-xl font-bold mb-4 text-blue-900 dark:text-blue-100 flex items-center gap-2">
+              <span>📍</span> Approach Notes
+            </h2>
+            <div className="bg-white dark:bg-gray-800 rounded p-4 mb-4">
+              <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap">
+                {approachNotes.notes}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="font-medium text-blue-900 dark:text-blue-100">Opens</p>
+                <p className="text-warm-600 dark:text-gray-400">
+                  {format(parseISO(approachNotes.startDate), 'MMM d, yyyy h:mm a')}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium text-blue-900 dark:text-blue-100">Address</p>
+                <p className="text-warm-600 dark:text-gray-400">{approachNotes.address}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Phase 15: Reviews section */}
         <ReviewsSection

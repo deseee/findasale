@@ -146,7 +146,7 @@ export const reviewSignalHandler = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/admin/organizers/:id/suspend
- * Suspend organizer account (Feature #107)
+ * Suspend organizer account (Feature #107, #117)
  * Admin only
  * Body: { reason: string }
  */
@@ -172,8 +172,14 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer not found' });
     }
 
-    // TODO: Add suspendedAt field to User schema (#73-phase3) — logging suspension for now
-    const suspended = await prisma.user.findUnique({ where: { id: organizer.userId } });
+    // Update User suspension fields
+    const suspended = await prisma.user.update({
+      where: { id: organizer.userId },
+      data: {
+        suspendedAt: new Date(),
+        suspendReason: reason,
+      },
+    });
 
     // Create notification
     await prisma.notification.create({
@@ -181,7 +187,7 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
         userId: organizer.userId,
         type: 'system',
         title: 'Account Suspended',
-        body: `Your organizer account has been suspended. Reason: ${reason}. Contact support for details.`,
+        body: `Your organizer account has been suspended. Reason: ${reason}. Contact support@finda.sale for details.`,
         read: false,
         channel: 'OPERATIONAL',
       },
@@ -191,7 +197,8 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
 
     res.json({
       message: 'Organizer suspended',
-      user: suspended,
+      suspendedAt: suspended.suspendedAt,
+      suspendReason: suspended.suspendReason,
     });
   } catch (error) {
     console.error('suspendOrganizer error:', error);
@@ -201,7 +208,7 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/admin/organizers/:id/unsuspend
- * Lift suspension from organizer account
+ * Lift suspension from organizer account (Feature #117)
  * Admin only
  */
 export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
@@ -221,8 +228,14 @@ export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer not found' });
     }
 
-    // TODO: Clear suspendedAt field in User schema (#73-phase3) — logging restoration for now
-    const unsuspended = await prisma.user.findUnique({ where: { id: organizer.userId } });
+    // Clear suspension fields to restore account
+    const unsuspended = await prisma.user.update({
+      where: { id: organizer.userId },
+      data: {
+        suspendedAt: null,
+        suspendReason: null,
+      },
+    });
 
     // Create notification
     await prisma.notification.create({
@@ -240,7 +253,7 @@ export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
 
     res.json({
       message: 'Organizer unsuspended',
-      user: unsuspended,
+      suspendedAt: unsuspended.suspendedAt,
     });
   } catch (error) {
     console.error('unsuspendOrganizer error:', error);
