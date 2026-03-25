@@ -12,7 +12,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
-import { RankBadge } from '@/components/RankBadge';
+import { RankBadge, ExplorerRank } from '@/components/RankBadge';
 
 interface LeaderboardUser {
   position: number;
@@ -138,7 +138,7 @@ function LeaguePage() {
                 <p className="text-amber-800 dark:text-amber-200">{userPosition.guildXp.toLocaleString()} XP</p>
               </div>
               <div className="text-right">
-                <RankBadge rank={userPosition.explorerRank} />
+                <RankBadge rank={userPosition.explorerRank as ExplorerRank} />
               </div>
             </div>
           </div>
@@ -187,7 +187,7 @@ function LeaguePage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <RankBadge rank={entry.explorerRank} />
+                        <RankBadge rank={entry.explorerRank as ExplorerRank} />
                       </td>
                       <td className="px-6 py-4 text-right font-semibold text-gray-900 dark:text-white">
                         {entry.guildXp.toLocaleString()}
