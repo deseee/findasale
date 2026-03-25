@@ -14,6 +14,7 @@ interface User {
   categoryInterests?: string[];
   streakPoints?: number;
   huntPassActive?: boolean;
+  huntPassExpiry?: string;
   organizerTier?: string;
   subscriptionStatus?: string | null;
   notificationPrefs?: Record<string, boolean>;
@@ -57,6 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
           points: payload.points || 0,
           referralCode: payload.referralCode || '',
+          huntPassActive: payload.huntPassActive,
+          huntPassExpiry: payload.huntPassExpiry,
           organizerTier: payload.subscriptionTier || 'SIMPLE',
           subscriptionStatus: payload.subscriptionStatus ?? null,
           onboardingComplete: payload.onboardingComplete ?? false,
@@ -86,6 +89,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
         points: payload.points || 0,
         referralCode: payload.referralCode || '',
+        huntPassActive: payload.huntPassActive,
+        huntPassExpiry: payload.huntPassExpiry,
         organizerTier: payload.subscriptionTier || 'SIMPLE',
         subscriptionStatus: payload.subscriptionStatus ?? null,
         onboardingComplete: payload.onboardingComplete ?? false,
