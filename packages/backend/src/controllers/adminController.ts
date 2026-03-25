@@ -427,3 +427,39 @@ export const resetCloudinaryUsage = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to reset Cloudinary usage' });
   }
 };
+
+// GET /api/admin/bid-review — #94 Admin Bid Review Queue (fraud detection)
+export const getBidReviewQueue = async (req: AuthRequest, res: Response) => {
+  try {
+    const records = await prisma.bidIpRecord.findMany({
+      take: 100,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        bid: {
+          include: {
+            item: { select: { id: true, title: true, currentBid: true } },
+            user: { select: { id: true, name: true, email: true } },
+          }
+        }
+      }
+    });
+
+    const formatted = records.map(record => ({
+      id: record.id,
+      bidId: record.bidId,
+      itemId: record.bid?.item?.id,
+      itemTitle: record.bid?.item?.title,
+      bidAmount: record.bid?.amount,
+      bidderId: record.bid?.user?.id,
+      bidderName: record.bid?.user?.name,
+      bidderEmail: record.bid?.user?.email,
+      ipAddress: record.ipAddress,
+      createdAt: record.createdAt,
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    console.error('Error fetching bid review queue:', error);
+    res.status(500).json({ message: 'Failed to fetch bid review queue' });
+  }
+};

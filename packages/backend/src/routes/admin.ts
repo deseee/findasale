@@ -14,6 +14,7 @@ import {
   resetAIUsage,
   getCloudinaryUsage,
   resetCloudinaryUsage,
+  getBidReviewQueue,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -47,5 +48,8 @@ router.post('/ai-usage/reset', resetAIUsage);
 // #105 Cloudinary Bandwidth Monitoring + Alerts
 router.get('/cloudinary-usage', getCloudinaryUsage);
 router.post('/cloudinary-usage/reset', resetCloudinaryUsage);
+
+// #94 Admin Bid Review Queue — fraud detection
+router.get('/bid-review', getBidReviewQueue);
 
 export default router;

@@ -33,8 +33,8 @@ const sendReceiptEmail = async (purchase: {
   id: string;
   amount: number;
   user: { email: string; name: string };
-  item: { title: string } | null;
-  sale: { title: string } | null;
+  item: { title: string; photoUrls?: string[] } | null;
+  sale: { title: string; startDate?: Date; endDate?: Date; organizer?: { businessName: string } } | null;
   itemPrice?: number;
   buyerPremiumAmount?: number;
   buyerPremiumRate?: number;
@@ -46,7 +46,12 @@ const sendReceiptEmail = async (purchase: {
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
   const historyUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
   try {
-    // Platform Safety #97: Post-Purchase Confirmation Email with Premium Breakdown
+    // Platform Safety #97: Post-Purchase Confirmation Email with Premium Breakdown & Enrichment
+    let itemPhotoHtml = '';
+    if (purchase.item?.photoUrls && purchase.item.photoUrls.length > 0) {
+      itemPhotoHtml = `<img src="${purchase.item.photoUrls[0]}" alt="${purchase.item.title}" style="max-width: 300px; height: auto; border-radius: 8px; margin: 16px 0;" />`;
+    }
+
     let breakdownHtml = '';
     if (purchase.itemPrice !== undefined) {
       const bp = purchase.buyerPremiumAmount ?? 0;
@@ -60,7 +65,7 @@ const sendReceiptEmail = async (purchase: {
             <td style="padding: 8px; text-align: right;"><strong>$${purchase.itemPrice.toFixed(2)}</strong></td>
           </tr>
           ${bp > 0 ? `<tr style="background-color: #f3f4f6;">
-            <td style="padding: 8px; text-align: left;">Buyer Premium (${(purchase.buyerPremiumRate ?? 0) * 100}%)</td>
+            <td style="padding: 8px; text-align: left;">Buyer Premium (5%)</td>
             <td style="padding: 8px; text-align: right;"><strong>$${bp.toFixed(2)}</strong></td>
           </tr>` : ''}
           ${pf > 0 ? `<tr>
@@ -79,10 +84,16 @@ const sendReceiptEmail = async (purchase: {
       `;
     }
 
+    const saleDate = purchase.sale?.startDate && purchase.sale?.endDate
+      ? ` (${new Date(purchase.sale.startDate).toLocaleDateString()} - ${new Date(purchase.sale.endDate).toLocaleDateString()})`
+      : '';
+
+    const organizerName = purchase.sale?.organizer?.businessName ? `<p style="margin-top: 12px; color: #6b7280; font-size: 14px;">Organized by: <strong>${purchase.sale.organizer.businessName}</strong></p>` : '';
+
     const html = buildEmail({
-      preheader: `Receipt for ${purchase.item?.title ?? 'your purchase'}`,
+      preheader: `Receipt for ${purchase.item?.title ?? 'your purchase'} - Transaction ID: ${purchase.id.slice(0, 8)}`,
       headline: 'Your purchase is confirmed! 🎉',
-      body: `<p>Hi ${purchase.user.name},</p><p>Your payment for <strong>${purchase.item?.title ?? 'an item'}</strong> from <em>${purchase.sale?.title ?? 'a sale'}</em> has been confirmed.</p>${breakdownHtml}<p>Thank you for your purchase! The organizer will be in touch about pickup.</p>`,
+      body: `<p>Hi ${purchase.user.name},</p><p>Your payment for <strong>${purchase.item?.title ?? 'an item'}</strong> from <em>${purchase.sale?.title ?? 'a sale'}${saleDate}</em> has been confirmed.</p>${itemPhotoHtml}${breakdownHtml}<p style="margin-top: 24px; font-size: 14px; color: #6b7280;"><strong>Transaction ID:</strong> ${purchase.id}</p>${organizerName}<p style="margin-top: 24px; font-size: 14px;">Thank you for your purchase! The organizer will be in touch about pickup.</p><p style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af;">This receipt serves as your purchase confirmation and acknowledgment of the buyer premium. For disputes, reference your transaction ID and contact support@finda.sale</p>`,
       ctaText: 'View Purchase History',
       ctaUrl: historyUrl,
       accentColor: '#10b981',
@@ -91,7 +102,7 @@ const sendReceiptEmail = async (purchase: {
     await resend.emails.send({
       from: fromEmail,
       to: purchase.user.email,
-      subject: `Receipt: ${purchase.item?.title ?? 'Your purchase'}`,
+      subject: `Receipt: ${purchase.item?.title ?? 'Your purchase'} - Transaction ID: ${purchase.id.slice(0, 8)}`,
       html,
     });
   } catch (err) {
@@ -532,11 +543,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
         where: { stripePaymentIntentId: paymentIntent.id },
         include: {
           user: { select: { email: true, name: true } },
-          item: { select: { title: true } },
+          item: { select: { title: true, photoUrls: true } },
           sale: {
             select: {
               title: true,
-              organizer: { select: { stripeConnectId: true, userId: true } },
+              startDate: true,
+              endDate: true,
+              organizer: { select: { stripeConnectId: true, userId: true, businessName: true } },
             },
           },
         },

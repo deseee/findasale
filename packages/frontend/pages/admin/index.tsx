@@ -120,7 +120,7 @@ const AdminDashboard = () => {
         )}
 
         {/* Quick Links */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
           <Link href="/admin/users" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Manage Users</h3>
             <p className="text-warm-600 dark:text-warm-400 text-sm">View and manage all users, update roles</p>
@@ -129,6 +129,11 @@ const AdminDashboard = () => {
           <Link href="/admin/sales" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Manage Sales</h3>
             <p className="text-warm-600 dark:text-warm-400 text-sm">View and delete sales, monitor activity</p>
+          </Link>
+
+          <Link href="/admin/bid-review" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-red-50 dark:bg-red-900/20 border border-red-100 transition">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Bid Review</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm">Monitor bid IP records for fraud</p>
           </Link>
 
           <Link href="/admin/invites" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-amber-50 dark:bg-amber-900/20 border border-amber-100 transition">
