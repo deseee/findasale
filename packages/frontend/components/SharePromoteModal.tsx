@@ -265,12 +265,12 @@ Hope to see some familiar faces!`,
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-800">
+        <div className="flex overflow-x-auto border-b border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-800">
           {(Object.keys(templates) as TemplateType[]).map((type) => (
             <button
               key={type}
               onClick={() => setActiveTab(type)}
-              className={`flex-1 px-4 py-3 font-medium text-sm transition ${
+              className={`flex-shrink-0 px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
                 activeTab === type
                   ? 'border-b-2 border-amber-600 text-amber-700 dark:text-amber-400 bg-white dark:bg-gray-900'
                   : 'text-warm-700 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-200'

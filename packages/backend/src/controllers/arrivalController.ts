@@ -196,9 +196,9 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
     const recentUserIds = new Set(recentNotifications.map(n => n.userId));
 
     // Filter out users who already received this notification in the last 24h
-    const usersToNotify = subscribers
+    const usersToNotify = (subscribers
       .map(s => s.userId)
-      .filter(userId => !recentUserIds.has(userId));
+      .filter((userId): userId is string => userId !== null && !recentUserIds.has(userId as string)));
 
     // Create notification logs for eligible users
     const notifications = await Promise.all(
