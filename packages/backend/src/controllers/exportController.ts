@@ -118,6 +118,7 @@ export const exportEstatesalesCSV = async (
             photoUrls: true,
             shippingAvailable: true,
             shippingPrice: true,
+            qrEmbedEnabled: true,
           },
         },
       },

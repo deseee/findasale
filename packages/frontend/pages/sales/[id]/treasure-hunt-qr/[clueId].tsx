@@ -106,8 +106,8 @@ const CluePage = () => {
             <div className="p-6 space-y-6">
               {isLoading ? (
                 <>
-                  <Skeleton height={100} />
-                  <Skeleton height={150} />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-36 w-full" />
                 </>
               ) : clue ? (
                 <>
