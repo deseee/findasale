@@ -122,6 +122,7 @@ const OrganizerDashboard = () => {
         followerCount: number;
         avgRating: number | null;
         onboardingComplete: boolean;
+        subscriptionLapsed: boolean;
       };
     },
     enabled: !!user?.id,
