@@ -339,9 +339,8 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
         if (data.saleAddress) setSaleAddress(data.saleAddress);
         if (data.saleDates) setSaleDates(data.saleDates);
       } catch (err: any) {
-        setLoadError(
-          err.response?.data?.message ?? 'Could not start checkout. Please try again.'
-        );
+        const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Could not start checkout. Please try again.';
+        setLoadError(errorMsg);
       }
     };
 
@@ -413,14 +412,21 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
           <>
             {loadError && (
               <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
-                {loadError}
+                <p className="mb-2">{loadError}</p>
+                {/* Allow user to retry — clears error and reloads payment intent */}
+                <button
+                  className="block text-xs underline text-red-600 hover:text-red-800 font-medium"
+                  onClick={() => { setLoadError(null); }}
+                >
+                  Try Again
+                </button>
                 {/* Allow user to retry without coupon if coupon was the issue */}
                 {couponInput && loadError.toLowerCase().includes('coupon') && (
                   <button
-                    className="block mt-2 text-xs underline text-red-600 hover:text-red-800"
+                    className="block mt-1 text-xs underline text-red-600 hover:text-red-800"
                     onClick={() => { setCouponInput(''); setLoadError(null); setStarted(false); }}
                   >
-                    Remove coupon and try again
+                    Remove coupon and restart
                   </button>
                 )}
               </div>
