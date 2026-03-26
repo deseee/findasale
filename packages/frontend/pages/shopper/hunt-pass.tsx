@@ -178,15 +178,14 @@ const HuntPassPage = () => {
       </div>
 
       {/* Hunt Pass Payment Modal */}
-      {showModal && (
-        <HuntPassModal
-          onClose={() => setShowModal(false)}
-          onSuccess={() => {
-            setShowModal(false);
-            router.push('/shopper/dashboard#overview');
-          }}
-        />
-      )}
+      <HuntPassModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSuccess={() => {
+          setShowModal(false);
+          router.push('/shopper/dashboard#overview');
+        }}
+      />
     </>
   );
 };
