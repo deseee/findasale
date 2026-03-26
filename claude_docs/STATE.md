@@ -7,24 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S290 COMPLETE (2026-03-26):** Orchestrator Chrome QA + roadmap v74 cleanup done.
+**S291 COMPLETE (2026-03-26):** Railway/Vercel build recovery + Stripe P0 root cause + partial fix deployed.
 
-**Pending Patrick actions before S291:**
-- 🚨 Push S290 files: packages/frontend/components/OnboardingWizard.tsx, packages/frontend/pages/index.tsx, packages/frontend/components/MessageComposeModal.tsx, claude_docs/STATE.md, claude_docs/patrick-dashboard.md, claude_docs/strategy/roadmap.md
+**Pending Patrick action — REQUIRED before S292:**
+- 🚨 Push stripeController.ts fix (see push block in patrick-dashboard.md):
+  ```
+  git add packages/backend/src/controllers/stripeController.ts
+  git add claude_docs/STATE.md
+  git add claude_docs/patrick-dashboard.md
+  git commit -m "fix(s291): Stripe Connect guard + session wrap docs"
+  .\push.ps1
+  ```
+- Note: Dockerfile.production, api.ts, useWorkspace.ts already on GitHub via MCP — do NOT re-add them
 
-**Resolved this session (no further action needed):**
-- ✅ Exports confirmed — Patrick uploaded CSVs (items 36 rows, sales 3 rows, purchases header-only)
-- ✅ Rarity seed — Patrick ran seed.ts against Railway
-
-**S291 priority:**
-- 🚨 Stripe P0: Architect review → fix "Continue to Pay" (fires no API call)
-- Chrome verify rarity badges (seed re-run S290, need visual confirm)
-- D6 Chrome QA: #13 TEAMS Workspace, #85 Treasure Hunt QR
-- #37 Remind Me button (feature gap — push notification not built)
+**S292 priorities (in order):**
+1. 🚨 Verify Stripe checkout works end-to-end (Railway rebuild with stripeController fix)
+2. Chrome verify rarity badges (seeded S290, visual confirm still needed)
+3. D6 Chrome QA: #13 TEAMS Workspace, #85 Treasure Hunt QR
+4. Continue D-series Chrome QA queue
 
 ---
 
 ## Recently Complete
+
+**S291 COMPLETE (2026-03-26):** Build recovery + Stripe P0 root cause diagnosed + partial fix deployed. Railway build: 6 TS errors in workspaceController.ts — `email` doesn't exist on `OrganizerSelect` (lives on `User` via relation). Fixed all 5 organizer selects to route through `user: { select: { email: true } }` (MCP push). Vercel build: workspace.tsx line 302 used wrong shape. Fixed `WorkspaceMember` interface in useWorkspace.ts (`organizer.user.email` shape) — MCP push. Both Railway and Vercel green. Stripe P0 investigation: "Continue to Pay" was wired correctly (onClick → setStarted(true) → useEffect → api.post). XHR fired to correct Railway URL but got status 0. Root cause: organizer's `stripeConnectId` in DB is `acct_test_1294c04e-20cd-4f` (fake seeded ID). Stripe rejects with `StripeInvalidRequestError: No such destination`. Backend sends 500 but CORS headers drop in error path → browser sees status 0. Fix 1: removed `ngrok-skip-browser-warning` from axios defaults in api.ts (dev-only header was causing unnecessary CORS preflights — deployed to Vercel). Fix 2: guarded `on_behalf_of`/`transfer_data`/`application_fee_amount` behind valid stripeConnectId check in stripeController.ts — skip Connect routing for null or `acct_test_*` IDs. stripeController.ts fix awaiting Patrick push (file too large for MCP, 1334 lines). Dockerfile.production had merge conflict markers locally AND was missing EXPOSE/HEALTHCHECK/CMD on GitHub — fixed and MCP pushed (S291b cache bust). Files changed: workspaceController.ts (MCP), useWorkspace.ts (MCP), Dockerfile.production (MCP), api.ts (MCP), stripeController.ts (Patrick push pending).
 
 **S290 COMPLETE (2026-03-26):** Orchestrator Chrome QA + roadmap v74 cleanup. Chrome findings: (1) Stripe P0 FLAGGED — "Continue to Pay" onClick fires no API call. (2) Messaging compose FIXED — CSS pointer-events blocked interaction; added pointerEvents:'auto' to backdrop + modal. (3) Onboarding stub text FIXED — replaced placeholder with real copy. (4) Save This Search FIXED — wired to POST /saved-searches + toast. (5) Rarity badges — API correct, Railway DB had rarity=null; Patrick re-ran seed. (6) Filter pills ✅. (7) Neighborhood pages ✅. Exports confirmed via Patrick CSV upload. Roadmap v74: moved #27/#66/#125 (exports) + #65 (tier gating) to Shipped (all Nav ✅). Stripped Chrome ⚠️→📋 on #60/#46/#63/#187/#52/#201/#57/#18 (8 features). #194 Saved Searches stays in backlog (Nav 📋). Files changed: packages/frontend/components/OnboardingWizard.tsx, packages/frontend/pages/index.tsx, packages/frontend/components/MessageComposeModal.tsx, claude_docs/strategy/roadmap.md.
 
