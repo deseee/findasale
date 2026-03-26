@@ -7,11 +7,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S288 — Continue Chrome QA.** ~80 features still at 📋 Chrome. Priority: re-test #27/#66/#125 export (dev fix shipped S286), verify #184 iCal button (added S286), #131 Share templates (needs published sale), #132 À La Carte (SIMPLE tier), #172 Stripe Connect (re-test with patched IDs), #65 tier gating (re-check with user4 SIMPLE). Missing/incomplete: #149 Email Reminders UI, #152 Digest Emails, #148 Sale Checklist (Coming Soon only), #158 Waitlist, #159 Flash Deals, #160 Reviews submission, #37 Sale Reminders, #6 Virtual Queue. Note: all customStorefrontSlug values NULL in DB — organizer profile URLs work by ID only.
+**S289 — Continue Chrome QA (remaining 📋 features) + verify S288 fixes live.**
+
+Push block below must be run first. After push, verify live:
+- Share popover (was: native OS dialog — now custom with X button)
+- Brand Kit shows upgrade wall for SIMPLE tier
+- Rarity badges visible on item detail pages
+
+Re-test needed (wrong URLs in S288):
+- #197 Bounties → `/organizer/bounties`
+- #6 Virtual Queue → `/organizer/line-queue/[saleId]`
+
+Still at 📋 Chrome (priority order):
+- #131 Share & Promote Templates (SharePromoteModal 4-template verification)
+- #84 Approach Notes (notification button needs published-sale state)
+- #59 Streak Rewards (section not visible on loyalty page — may need active streak data)
+- #37 Sale Reminders (Remind Me button TBD)
+- D6 batch: #13 TEAMS Workspace, #18 Post Performance Analytics, #27/#66/#125 Exports, #85 Treasure Hunt QR, many more
 
 ---
 
 ## Recently Complete
+
+**S288 COMPLETE (2026-03-25):** Chrome QA Rounds 1–4. P0 bugs fixed: filter pills `type="button"` (index.tsx + map.tsx — was routing to /api/auth/logout), organizer dashboard hydration redirect (create-sale.tsx + dashboard.tsx — `isClient` guard). P1 bugs fixed: Rarity Badges not visible (itemController.ts + items/[id].tsx — rarity field missing from API select + missing import), Share button native OS dialog (SaleShareButton.tsx — replaced `navigator.share()` with custom popover + X close button per Patrick), Brand Kit tier gating broken (brand-kit.tsx — TierGate wrapping added). /cities fix (saleController.ts getCities — PUBLISHED status added). Chrome ✅ confirmed: #212, #213, #206, #48, #214, #172, #184, #132, #57 ⚠️, #65 ⚠️, #177, #182, #189. QA audits: claude_docs/audits/qa-round[1-4]-S288-20260325.md. Roadmap v72 pushed.
 
 **S287 COMPLETE (2026-03-25):** Session recovery after S286 compression. Git index.lock crisis resolved: Patrick ran `git restore --staged .` to unstage 75+ files staged for deletion by a prior dev agent (git rm had been run). S286 dev fixes pushed: create-sale.tsx (#138: 4 missing sale types added), contact.tsx (#161: toast feedback on submit), settings.tsx (#153: tab nav preventDefault), organizers.ts (#154: two-step slug/ID lookup), dashboard.tsx (#27/#66/#125: authenticated export download), sales/[id].tsx (#184: iCal button added). roadmap.md Chrome QA S286 columns pushed. STATE.md + dashboard wrapped.
 

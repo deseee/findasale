@@ -15,6 +15,7 @@ import BuyingPoolCard from '../../components/BuyingPoolCard';
 import { useToast } from '../../components/ToastContext';
 import ItemShareButton from '../../components/ItemShareButton';
 import SocialProofMessage from '../../components/SocialProofMessage'; // Feature #54
+import RarityBadge from '../../components/RarityBadge'; // Feature #57
 import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useHeartAnimation } from '../../hooks/useHeartAnimation';
@@ -41,6 +42,7 @@ interface Item {
   reverseFloorPrice?: number; // CD2 Phase 4
   reverseStartDate?: string; // CD2 Phase 4
   isAiTagged?: boolean; // B2: AI tagging disclosure
+  rarity?: string; // Feature #57: Item rarity badge (COMMON | UNCOMMON | RARE | ULTRA_RARE | LEGENDARY)
   sale: {
     id: string;
     title: string;
@@ -493,6 +495,13 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   <p className="font-semibold text-gray-900 dark:text-gray-100">{item.category}</p>
                 </div>
               </div>
+
+              {/* Feature #57: Rarity Badge */}
+              {item.rarity && (
+                <div>
+                  <RarityBadge rarity={item.rarity} size="md" />
+                </div>
+              )}
 
               {/* Description */}
               <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">

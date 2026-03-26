@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-25 (v71 — S281/S282: #84 approach notes, #85 treasure hunt QR, #91 auto-markdown, #133 hunt pass redesign, #136 QR auto-embed, Platform P3-P5C (#99-121) all shipped and QA'd in S282. All remaining buildable backlog now built.)
+**Last Updated:** 2026-03-25 (v72 — S288 Chrome QA: #212 ✅, #213 ✅, #206 ✅, #48 ✅, #214 ✅, #172 ✅, #57 ⚠️ rarity badges P1. Earlier S288: #177 ✅, #182 ✅, #189 ✅, filter-pills P0 fixed, /cities fix dispatched.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -138,13 +138,13 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 176 | Browse Sales (Homepage + Map) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/map`, `/` |
-| 177 | Sale Detail Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/sales/[slug]` |
+| 176 | Browse Sales (Homepage + Map) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ filter-pills fix S288 | `/map`, `/` |
+| 177 | Sale Detail Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S288 | 📋 | `/sales/[slug]` |
 | 179 | Full-Text Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Advanced filters + location |
-| 182 | Surprise Me / Serendipity Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | `/surprise-me` random discovery |
-| 188 | Neighborhood Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/neighborhoods/[slug]` local discovery |
+| 182 | Surprise Me / Serendipity Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ S288 | `/surprise-me` random discovery |
+| 188 | Neighborhood Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ 404-not-built | 📋 | `/neighborhoods/[slug]` local discovery |
 | 90 | Sale Soundtrack (Ambient Vibes) | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | N/A | 📋 | Spotify + Apple Music playlist suggestions per sale type on sale detail page. External links only. Shipped S280. |
-| 189 | Trending Items / Sales | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | 📋 | 📋 | `/trending` page + API |
+| 189 | Trending Items / Sales | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | ✅ S288 | 📋 | `/trending` page + API |
 | 190 | Activity Feed | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | 📋 | 📋 | `/feed` page + API |
 | 49 | City Heat Index | SHO | FREE | ⚠️ | ✅ | ⚠️ | ✅ | ✅S194 | ✅ | 📋 | Weekly "hottest metro" ranking; aggregated sale data |
 
@@ -278,7 +278,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 163 | Payout Transparency / Earnings Dashboard | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Item-level fee breakdown + PDF — Needs Chrome QA |
 | 11 | Organizer Referral (Fee Bypass) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | referralDiscountExpiry — Needs Chrome QA |
 | 164 | Tiers Backend Infrastructure | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | N/A | `/api/tiers` — getMyTier, syncTier — Needs Chrome QA |
-| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI — Needs Chrome QA |
+| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | 📋 | Full infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI — Chrome ⚠️ S288: Brand Kit page missing TierGate, P1 fix shipped |
 | 165 | A/B Testing Infrastructure | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | N/A | Internal optimization tool — Needs Chrome QA |
 | 166 | Invites | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Invite-to-sale / invite-to-platform — Chrome PASS S285 (admin invite flow works; no dedicated DB model, route-based) |
 | 72 | Dual-Role Account Schema | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | JWT roles[] array, auth middleware updated. Enables organizer + shopper in same account — Needs Chrome QA |
@@ -292,7 +292,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 79 | Earnings Counter Animation | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | 📋 | N/A | N/A | AnimatedCounter.tsx — rolls up to value on dashboard load. Shipped S280. — Needs Chrome QA |
 | 80 | Purchase Confirmation Redesign | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | /shopper/checkout-success — item photo hero, seller, pickup, CTAs. Shipped S280. — Chrome ✅ S286 |
 | 81 | Empty State Audit + Copy Pass | BOTH | FREE | N/A | N/A | ✅ | ✅ | ✅ | N/A | N/A | EmptyState component + human copy across 8 pages (index, feed, hauls, messages, item-library, holds ×2, wishlists). Shipped S280. — Chrome ✅ S286 |
-| 132 | À La Carte Single-Sale Fee ($9.99) | ORG | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Sale.purchaseModel + alaCarte + alaCarteFeePaid. Stripe checkout. AlaCartePublishModal for SIMPLE tier — Needs Chrome QA |
+| 132 | À La Carte Single-Sale Fee ($9.99) | ORG | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Sale.purchaseModel + alaCarte + alaCarteFeePaid. Stripe checkout. AlaCartePublishModal for SIMPLE tier — Chrome ✅ S288 |
 | 134 | Plan a Sale Dashboard Card | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | "Coming Soon" card on organizer dashboard overview tab — Chrome ✅ S286 |
 | 60 | Premium Tier Bundle | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. — Needs Chrome QA |
 | 168 | Seller Performance Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Per-sale analytics + insights — Chrome ✅ S286 |
@@ -301,7 +301,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 27 | CSV / JSON / Text Listing Exports | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Multi-format output (Listing Factory) — Needs Chrome QA |
 | 66 | Open Data Export (ZIP) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Items/sales/purchases CSV — Needs Chrome QA |
 | 171 | Payout PDF Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Financial reporting for tax/accounting — Needs Chrome QA |
-| 172 | Stripe Connect Setup | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ⚠️ | N/A | 📋 | Payout bank account linking + verification — S285 FAIL: seed had fake stripeConnectId; real test IDs patched (Patrick SQL action pending). Re-test after Railway DB update. |
+| 172 | Stripe Connect Setup | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Payout bank account linking + verification — Chrome ✅ S288: settings page + Setup Stripe Connect button confirmed working |
 | 18 | Post Performance Analytics | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | UTM tracking on social template downloads — Needs Chrome QA |
 | 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | Multi-user workspace, role management — Needs Chrome QA |
 | 68 | Command Center Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Per-sale widget dashboard — Chrome PASS S285 |
@@ -327,10 +327,10 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 180 | Category Browsing | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/categories` index + `/categories/[slug]` — Chrome ✅ S286 |
 | 181 | Tag Browsing | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/tags/[slug]` ISR pages — Chrome ✅ S286 |
 | 183 | Sale Calendar (Upcoming) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/calendar` — Chrome ✅ S286 |
-| 184 | iCal / Calendar Export | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Download .ics file for sales + items — Needs Chrome QA |
+| 184 | iCal / Calendar Export | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Download .ics file for sales + items — Chrome ✅ S288 |
 | 185 | QR Code Signs (Yard + Item Labels) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Printable QR codes linking to sales/items — Needs Chrome QA |
 | 186 | QR Scan Analytics | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Tracking + insights on QR scans — Needs Chrome QA |
-| 187 | City Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ⚠️ | 📋 | 📋 | `/cities` + `/city/[slug]` city-level browsing — Needs Chrome QA |
+| 187 | City Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ⚠️ | 📋 | ⚠️ /cities fix dispatched S288; /city/[slug] ✅ S288 |
 | 92 | City Weekend Landing Pages (Metro Explorer) | SHO | FREE | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/city/[city].tsx` ISR pages with Schema.org JSON-LD. Grand Rapids pre-generated. Confirmed live in code (S280). — Chrome ✅ S286 |
 | 78 | Inspiration Page — Item Gallery | SHO | FREE | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/inspiration` masonry grid of items from active/upcoming sales. Confirmed live in code (S280). — Chrome ✅ S286 |
 | 191 | Route Planning (Multi-Sale) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | `/api/routes` OSRM-based — Needs Chrome QA |
@@ -351,7 +351,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 204 | Unsubscribe / Preferences | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/unsubscribe` + `/api/unsubscribe` — Chrome ✅ S286 |
 | 36 | Weekly Treasure Digest (Email) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | MailerLite Sunday 6pm — Needs Chrome QA |
 | 205 | Contact Organizer | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Via messaging system — Needs Chrome QA |
-| 206 | Condition Guide | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | `/condition-guide` educational page — Needs Chrome QA |
+| 206 | Condition Guide | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/condition-guide` educational page — Chrome ✅ S288 |
 | 207 | FAQ / Guide / Terms / Privacy | PUB | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Legal + help pages — Chrome ✅ S286 |
 | 208 | Pickup Booking (Schedule Pickup) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Shopper-side scheduling — Needs Chrome QA |
 | 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | PushNotificationLog model, arrivalController (get/update notes + send-approach-notification with 24h dedup), useArrivalAssistant hook, sale detail page section, edit-sale textarea + notify button. — Needs Chrome QA |
@@ -360,20 +360,20 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 209 | Points System | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | 1 pt/visit/day, tier-based — Needs Chrome QA |
 | 210 | Streaks (Visit / Save / Purchase) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Daily streak tracking — Needs Chrome QA |
 | 211 | Treasure Hunt (Daily) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Daily clue + category matching — Needs Chrome QA |
-| 212 | Leaderboard (Shoppers + Organizers) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Public rankings — Needs Chrome QA |
-| 213 | **Hunt Pass ($4.99/30 days)** | SHO | **PAID_ADDON** | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | **2× streak multiplier, recurring Stripe billing** — Needs Chrome QA |
+| 212 | Leaderboard (Shoppers + Organizers) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Public rankings — Chrome ✅ S288 |
+| 213 | **Hunt Pass ($4.99/30 days)** | SHO | **PAID_ADDON** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | **2× streak multiplier, recurring Stripe billing** — Chrome ✅ S288 |
 | 61 | Near-Miss Nudges | SHO | FREE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Variable-ratio casino psychology; 4 types — Needs Chrome QA |
 | 23 | Unsubscribe-to-Snooze (MailerLite) | SHO | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Intercept unsubscribe → 30-day snooze via MailerLite custom fields — Needs Chrome QA |
 | 59 | Streak Rewards | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Visit/save/purchase streaks wired to Layout — Needs Chrome QA |
 | 58 | Achievement Badges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/shopper/achievements` page — Chrome ✅ S286 |
-| 57 | Shiny / Rare Item Badges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | RarityBadge wired to item cards — Needs Chrome QA |
-| 48 | Treasure Trail Route Builder | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Trail pages + share token, multi-sale routing — Needs Chrome QA |
+| 57 | Shiny / Rare Item Badges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ⚠️ | N/A | 📋 | RarityBadge wired to item cards — Chrome ⚠️ S288: badge not visible on item detail pages, P1 fix dispatched |
+| 48 | Treasure Trail Route Builder | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Trail pages + share token, multi-sale routing — Chrome ✅ S288 |
 | 55 | Seasonal Discovery Challenges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Rotating challenges by season/category — Needs Chrome QA |
 | 122 | Explorer's Guild Phase 1 (Rebrand + Copy) | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | Collector→Explorer labels, collect→explore language throughout. Rank names updated. No schema changes — Chrome ✅ S286 |
 | 123 | Explorer's Guild Phase 2 (XP Economy + Loot Legend) | SHO | FREE/PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | User.guildXp + User.explorerRank + RarityBoost table. XP sinks (coupon-gen, rarity boost, Hunt Pass discount). Loot Legend portfolio. Full schema + endpoints — Chrome ✅ S286 |
 | 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | TreasureHuntQRClue + TreasureHuntQRScan schema models, treasureHuntQRController (6 CRUD endpoints), TreasureHuntQRManager.tsx (organizer clue management + QR download), shopper clue detail page (/sales/[id]/treasure-hunt-qr/[clueId]). — Needs Chrome QA |
 | 133 | Hunt Pass Subscription Redesign | SHO | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | LEGENDARY 6h early access gate in itemController, 1.5x XP multiplier (applyHuntPassMultiplier in xpService), getLootLegend() + getCollectorLeague() endpoints + routes, loot-legend.tsx + league.tsx pages, loyalty.tsx updated. — Chrome ✅ S286 |
-| 214 | AI Sale Planner Chat | PUB | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | `/plan` page, public rate-limited acquisition tool — Needs Chrome QA |
+| 214 | AI Sale Planner Chat | PUB | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/plan` page, public rate-limited acquisition tool — Chrome ✅ S288 |
 | 215 | AI Tag Suggestions (Haiku) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Part of Rapidfire, all tiers — Needs Chrome QA |
 | 216 | AI Condition Grade Suggestions | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | S/A/B/C/D from photo — Needs Chrome QA |
 | 217 | AI SEO Description Optimization | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | High-intent search term bias — Needs Chrome QA |
