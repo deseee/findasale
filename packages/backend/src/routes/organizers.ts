@@ -349,9 +349,11 @@ router.get('/export', authenticate, exportOrganizer);
 router.get('/:saleId/print-kit', authenticate, getPrintKit);
 
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
+// Supports lookup by ID (CUID) or by customStorefrontSlug (user-friendly slug)
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const organizer = await prisma.organizer.findUnique({
+    // Try lookup by ID first (internal CUID)
+    let organizer = await prisma.organizer.findUnique({
       where: { id: req.params.id },
       include: {
         user: {
@@ -383,6 +385,42 @@ router.get('/:id', async (req: Request, res: Response) => {
         _count: { select: { followers: true } },
       },
     });
+
+    // If not found by ID, try lookup by customStorefrontSlug (user-friendly slug)
+    if (!organizer) {
+      organizer = await prisma.organizer.findUnique({
+        where: { customStorefrontSlug: req.params.id },
+        include: {
+          user: {
+            include: {
+              userBadges: {
+                include: {
+                  badge: true,
+                },
+              },
+            },
+          },
+          sales: {
+            orderBy: { startDate: 'asc' },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              address: true,
+              city: true,
+              state: true,
+              zip: true,
+              startDate: true,
+              endDate: true,
+              photoUrls: true,
+              status: true,
+              isAuctionSale: true,
+            },
+          },
+          _count: { select: { followers: true } },
+        },
+      });
+    }
 
     if (!organizer) {
       return res.status(404).json({ message: 'Organizer not found' });

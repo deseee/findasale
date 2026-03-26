@@ -165,7 +165,11 @@ const OrganizerSettingsPage = () => {
             {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab as any)}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab(tab as any);
+                }}
                 className={`pb-2 font-medium capitalize whitespace-nowrap ${
                   activeTab === tab
                     ? 'border-b-2 border-amber-600 text-amber-600'

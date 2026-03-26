@@ -550,10 +550,25 @@ const OrganizerDashboard = () => {
                   className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100"
                 />
                 <TierGatedButton
-                  href="/api/organizers/export"
                   label="Export Data"
                   icon="↓"
                   requiredTier="PRO"
+                  onClick={() => {
+                    api.get('/organizers/export', { responseType: 'blob' })
+                      .then((res) => {
+                        const url = window.URL.createObjectURL(new Blob([res.data]));
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `organizer-export-${new Date().toISOString().split('T')[0]}.zip`);
+                        document.body.appendChild(link);
+                        link.click();
+                        link.parentNode?.removeChild(link);
+                        showToast('Export downloaded successfully', 'success');
+                      })
+                      .catch((err: any) => {
+                        showToast(err.response?.data?.message || 'Failed to export data', 'error');
+                      });
+                  }}
                   className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
                 />
                 <TierGatedButton

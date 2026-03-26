@@ -359,6 +359,9 @@ const CreateSalePage = () => {
                 <option value="YARD">Yard Sale</option>
                 <option value="AUCTION">Auction</option>
                 <option value="FLEA_MARKET">Flea Market</option>
+                <option value="CONSIGNMENT">Consignment</option>
+                <option value="CHARITY">Charity</option>
+                <option value="BUSINESS_CORPORATE">Business/Corporate Sale</option>
               </select>
             </div>
 
