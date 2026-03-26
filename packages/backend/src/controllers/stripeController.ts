@@ -463,8 +463,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           `[Stripe Connect fallback] Account ${stripeConnectId} not fully onboarded, proceeding without Connect routing`,
           { errorCode: stripeError.code }
         );
-        // Retry without Connect data
-        paymentIntent = await stripe().paymentIntents.create(basePaymentIntentData, { idempotencyKey });
+        // Retry without Connect data — use a different idempotency key (Stripe rejects same key with different params)
+        paymentIntent = await stripe().paymentIntents.create(basePaymentIntentData, { idempotencyKey: `${idempotencyKey}-fallback` });
       } else {
         throw stripeError;
       }
