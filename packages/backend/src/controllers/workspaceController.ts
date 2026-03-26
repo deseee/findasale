@@ -95,7 +95,7 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
         members: {
           include: {
             organizer: {
-              select: { id: true, businessName: true, profilePhoto: true, email: true },
+              select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } },
             },
           },
         },
@@ -112,7 +112,7 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
               members: {
                 include: {
                   organizer: {
-                    select: { id: true, businessName: true, profilePhoto: true, email: true },
+                    select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } },
                   },
                 },
               },
