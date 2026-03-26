@@ -200,7 +200,8 @@ function UTMCapture() {
     params.append('saleId', saleId);
     if (typeof utm_source === 'string') params.append('utm_source', utm_source);
     if (typeof utm_medium === 'string') params.append('utm_medium', utm_medium);
-    if (typeof utm_campaign === 'string') params.append('utm_content', utm_content);
+    if (typeof utm_campaign === 'string') params.append('utm_campaign', utm_campaign);
+    if (typeof utm_content === 'string') params.append('utm_content', utm_content);
 
     fetch(`/api/link-clicks/record?${params}`, { method: 'GET' }).catch(() => {}); // Silent fail
   }, [router.query]);
