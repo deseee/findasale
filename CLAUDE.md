@@ -258,6 +258,15 @@ Zero errors required before returning output to main session.
 
 A feature is ✅ only when a real user can complete the intended task end-to-end with correct real data. No exceptions.
 
+**Before writing ANY ✅, ask all 6 questions. Every answer must be a clear YES or it gets ⚠️/❌:**
+
+1. **Task completable?** Could a human sitting at a keyboard (or on their phone) right now complete this task end-to-end with real data?
+2. **Display correct?** No mint text on green backgrounds, no white cards in dark mode, no layout conflicts, no overflow/clipping — correct on both desktop and mobile viewports.
+3. **Makes sense in context?** Does the feature make sense to a non-technical user in the flow of the app, given where they came from and what they're trying to do?
+4. **Explainers needed?** Would a first-time user be confused without a tooltip, label, or explainer? If yes, mark ⚠️ and flag the gap.
+5. **Downstream effects work?** Does the action correctly trigger what should happen next — emails sent, state updates reflected, related records updated, UI refreshed?
+6. **Brand voice?** Does all text (labels, copy, error messages, empty states, confirmations) follow FindA.Sale tone and style?
+
 **These are NOT ✅:**
 - Page loads → NOT verified
 - Text renders on screen → NOT verified
@@ -267,7 +276,7 @@ A feature is ✅ only when a real user can complete the intended task end-to-end
 - "Looks right" → NOT verified
 
 **These ARE ✅:**
-- User clicked the button AND the expected outcome happened AND the data is real AND no error state appeared
+- User clicked the button AND the expected outcome happened AND the data is real AND no error state appeared AND all 6 questions above are YES
 - The full user task (open → interact → result) completed successfully with real data
 
 **Bug vs Decision:** If something doesn't work for a real user, it is a **bug**. It is not a "Patrick decision." It is not "worth noting." It gets a ❌ or ⚠️ and a dev dispatch. The only decisions that go to Patrick are product direction (build this feature or not). Broken implementations of already-decided features are bugs — fix them.
