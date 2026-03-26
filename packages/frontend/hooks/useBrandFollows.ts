@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import api from '../lib/api';
 
 interface BrandFollow {
   id: string;
@@ -17,13 +18,8 @@ export const useBrandFollows = (userId: string | undefined) => {
     if (!userId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/users/${userId}/brand-follows`, {
-        credentials: 'include',
-        headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` },
-      });
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
-      setBrandFollows(data);
+      const res = await api.get(`/users/${userId}/brand-follows`);
+      setBrandFollows(res.data);
     } catch (err) {
       setError('Failed to load brand follows');
     } finally {
@@ -35,34 +31,22 @@ export const useBrandFollows = (userId: string | undefined) => {
 
   const addBrandFollow = async (brandName: string) => {
     if (!userId) return;
-    const res = await fetch(`/api/users/${userId}/brand-follows`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`,
-      },
-      body: JSON.stringify({ brandName }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.message || 'Failed to add');
+    try {
+      await api.post(`/users/${userId}/brand-follows`, { brandName });
+      await fetchFollows();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || 'Failed to add');
     }
-    await fetchFollows();
   };
 
   const removeBrandFollow = async (brandFollowId: string) => {
     if (!userId) return;
-    const res = await fetch(`/api/users/${userId}/brand-follows/${brandFollowId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` },
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.message || 'Failed to remove');
+    try {
+      await api.delete(`/users/${userId}/brand-follows/${brandFollowId}`);
+      await fetchFollows();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || 'Failed to remove');
     }
-    await fetchFollows();
   };
 
   return { brandFollows, isLoading, error, addBrandFollow, removeBrandFollow, refetch: fetchFollows };
