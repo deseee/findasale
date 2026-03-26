@@ -9,7 +9,7 @@
  * - Initial settings (auction enabled, min bid increment, etc.)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
@@ -20,8 +20,9 @@ import Link from 'next/link';
 
 const CreateSalePage = () => {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const [isClient, setIsClient] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -42,7 +43,12 @@ const CreateSalePage = () => {
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
-  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Auth guard — after all hooks
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
   }

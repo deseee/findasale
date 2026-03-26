@@ -895,25 +895,28 @@ export const getCities = async (req: Request, res: Response) => {
     const now = new Date();
 
     // #105: SQL Injection hardening - use Prisma.sql for parameterized queries
-    const cityData = await prisma.$queryRaw<{ city: string; count: bigint }[]>(
+    const cityData = await prisma.$queryRaw<{ city: string; state: string; count: bigint; lastSaleDate: Date | null }[]>(
       Prisma.sql`
-        SELECT city, COUNT(*) as count
+        SELECT city, state, COUNT(*) as count, MAX("endDate") as "lastSaleDate"
         FROM "Sale"
-        WHERE status = 'PUBLISHED'
+        WHERE status IN ('PUBLISHED', 'ACTIVE')
           AND "endDate" >= ${now}
           AND city IS NOT NULL
           AND TRIM(city) != ''
-        GROUP BY city
+        GROUP BY city, state
         ORDER BY count DESC, city ASC
       `
     );
 
     const response = cityData.map(item => ({
       city: item.city,
-      count: Number(item.count),
+      state: item.state,
+      activeSales: Number(item.count),
+      totalSales: Number(item.count),
+      lastSaleDate: item.lastSaleDate ? item.lastSaleDate.toISOString() : undefined,
     }));
 
-    res.json(response);
+    res.json({ cities: response });
   } catch (error: any) {
     console.error('[cities] Error:', error);
     res.status(500).json({ message: 'Server error' });

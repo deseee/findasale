@@ -59,9 +59,10 @@ const TIER_DESCRIPTIONS: Record<string, string> = {
 
 const OrganizerDashboard = () => {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { isSimple, canAccess } = useOrganizerTier();
+  const [isClient, setIsClient] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'sales'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
@@ -74,19 +75,9 @@ const OrganizerDashboard = () => {
   const [isMobileView, setIsMobileView] = useState(false);
   const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
 
-  // Redirect if not authenticated or not an organizer
-  if (!isLoading) {
-    if (!user) {
-      router.push('/login?redirect=/organizer/dashboard');
-      return null;
-    }
-    // Check roles array first, then fall back to role field (defensive against stale tokens)
-    const isOrganizer = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER' || user.role === 'ADMIN';
-    if (!isOrganizer) {
-      router.push('/access-denied');
-      return null;
-    }
-  }
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Fetch organizer's sales
   const { data: salesData, isLoading: salesLoading } = useQuery({
@@ -95,7 +86,7 @@ const OrganizerDashboard = () => {
       const response = await api.get('/sales/mine');
       return response.data.sales;
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isClient,
   });
 
   // Fetch organizer analytics (total items, revenue)
@@ -105,7 +96,7 @@ const OrganizerDashboard = () => {
       const response = await api.get('/organizers/me/analytics');
       return response.data;
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isClient,
   });
 
   // Feature #79: Count-up animation for earnings total
@@ -126,7 +117,7 @@ const OrganizerDashboard = () => {
         subscriptionLapsed: boolean;
       };
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isClient,
   });
 
   // Fetch earnings to check for cash fee balance
@@ -139,7 +130,7 @@ const OrganizerDashboard = () => {
         cashFeeBalanceUpdatedAt?: string;
       };
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isClient,
     staleTime: 2 * 60_000,
   });
 
@@ -150,7 +141,7 @@ const OrganizerDashboard = () => {
       const response = await api.get('/reservations/organizer/count');
       return response.data as { count: number };
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isClient,
     staleTime: 60_000,
   });
 
@@ -240,8 +231,16 @@ const OrganizerDashboard = () => {
         };
       };
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isClient,
   });
+
+  // Auth guard — after all hooks
+  if (!authLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER' || user.role === 'ADMIN'))) {
+    router.push('/access-denied');
+    return null;
+  }
+
+  const isLoading = !isClient || authLoading || salesLoading;
 
   // Helper: Check if cash fee is stale (> 30 days)
   const isCashFeeStale = (): boolean => {

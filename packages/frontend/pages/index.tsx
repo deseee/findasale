@@ -281,6 +281,7 @@ const HomePage = () => {
               {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment'] as SaleTypeFilter[]).map((type) => (
                 <button
                   key={type}
+                  type="button"
                   onClick={() => setSaleTypeFilter(type)}
                   className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
                     saleTypeFilter === type
@@ -331,6 +332,7 @@ const HomePage = () => {
               {(['all', 'upcoming', 'this-weekend', 'this-month'] as DateFilter[]).map((f) => (
                 <button
                   key={f}
+                  type="button"
                   onClick={() => setDateFilter(f)}
                   className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
                     dateFilter === f
@@ -402,6 +404,7 @@ const HomePage = () => {
                     />
                     <div className="flex justify-center mt-6">
                       <button
+                        type="button"
                         onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter('all'); }}
                         className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
                       >

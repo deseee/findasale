@@ -262,6 +262,7 @@ const MapPage = () => {
             {(['all', 'today', 'this-weekend', 'this-week'] as DateFilter[]).map((f) => (
               <button
                 key={f}
+                type="button"
                 onClick={() => setDateFilter(f)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                   dateFilter === f
