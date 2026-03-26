@@ -433,11 +433,14 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
           ...(couponId ? { couponId } : {}),
         },
-        application_fee_amount: platformFeeAmount,
-        on_behalf_of: item.sale.organizer.stripeConnectId,
-        transfer_data: {
-          destination: item.sale.organizer.stripeConnectId,
-        },
+        // Only route to organizer Connect account if ID is valid (not null/test placeholder)
+        ...(item.sale.organizer.stripeConnectId && !item.sale.organizer.stripeConnectId.startsWith('acct_test_')
+          ? {
+              application_fee_amount: platformFeeAmount,
+              on_behalf_of: item.sale.organizer.stripeConnectId,
+              transfer_data: { destination: item.sale.organizer.stripeConnectId },
+            }
+          : {}),
       },
       { idempotencyKey }
     );
