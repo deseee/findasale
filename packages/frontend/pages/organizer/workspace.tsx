@@ -299,7 +299,7 @@ export default function WorkspacePage() {
                           {member.organizer.businessName}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {member.organizer.email}
+                          {member.organizer.user?.email}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sage-100 text-sage-700 dark:bg-sage-900 dark:text-sage-200">
