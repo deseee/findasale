@@ -1,4 +1,4 @@
-# S282b — cache bust 2026-03-25
+# S291 — cache bust 2026-03-26
 FROM node:18-slim
 
 WORKDIR /app
@@ -31,13 +31,3 @@ RUN cd packages/backend && npx tsc
 
 # Set production mode only at runtime — not during build (keeps devDeps available for prisma + tsc)
 ENV NODE_ENV=production
-
-# Expose port
-EXPOSE 3001
-
-# HEALTHCHECK
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "const http = require('http'); http.get('http://localhost:3001/', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
-
-# Start the compiled server
-CMD ["node", "packages/backend/dist/index.js"]
