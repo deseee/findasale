@@ -290,6 +290,7 @@ async function main() {
   console.log('📦 Creating items...');
   const items: any[] = [];
   let photoIdx = 0;
+  let globalItemIndex = 0;
 
   for (const sale of sales) {
     const itemsPerSale = Math.floor(Math.random() * 5) + 10;
@@ -301,6 +302,14 @@ async function main() {
       let itemStatus  = 'AVAILABLE';
       if (Math.random() < 0.10) itemStatus = 'SOLD';
       else if (Math.random() < 0.05) itemStatus = 'RESERVED';
+
+      // Assign rarity to specific items for visual verification
+      let rarity = null;
+      if (globalItemIndex === 2) rarity = 'COMMON';
+      else if (globalItemIndex === 7) rarity = 'UNCOMMON';
+      else if (globalItemIndex === 15) rarity = 'RARE';
+      else if (globalItemIndex === 25) rarity = 'ULTRA_RARE';
+      else if (globalItemIndex === 35) rarity = 'LEGENDARY';
 
       const item = await prisma.item.create({
         data: {
@@ -314,10 +323,12 @@ async function main() {
           photoUrls:   [itemPhotoPool[photoIdx % itemPhotoPool.length]],
           embedding:   [],
           draftStatus: 'PUBLISHED',
+          ...(rarity && { rarity }),
         },
       });
       items.push(item);
       photoIdx++;
+      globalItemIndex++;
     }
   }
   console.log(`✅ Created ${items.length} items`);
