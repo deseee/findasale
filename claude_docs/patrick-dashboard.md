@@ -7,16 +7,8 @@
 **🔑 STRIPE P0 — Needs Architect Before Dev Can Fix:**
 "Continue to Pay" button in the checkout flow fires no API call — onClick is `()=>q(!0)` (sets React state only, never calls backend). Shoppers cannot complete purchases. This touches payment processing → needs Architect sign-off per §10 red-flag veto gate. Next session starts with Architect dispatch.
 
-**🌱 Rarity badges still invisible — seed re-run needed (1 command):**
-Code is correct. Railway DB items all have `rarity=null`. Run this to fix:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx ts-node prisma/seed.ts
-```
-
-**📋 Exports — manually test as PRO user:**
-Chrome session was stuck on Karen (user11) all session — couldn't switch. Log into finda.sale as user2@example.com / password123, go to /organizer/dashboard, click Export Data. Should trigger a CSV download.
+~~🌱 Rarity seed~~ ✅ Done — Patrick ran seed.ts against Railway this session.
+~~📋 Exports test~~ ✅ Done — Confirmed via CSV uploads: items (36 rows), sales (3 rows), purchases (header only).
 
 ---
 
@@ -48,10 +40,14 @@ Personally ran every test in Chrome this session (no subagent delegation). Key r
 - Share button ✅ — confirmed custom popover (no OS dialog) in code
 - Brand Kit gating ✅ — TierGate wrapping confirmed in code
 
-**Blocked / Still Open:**
+**Roadmap v74 — Cleanup Done:**
+- Moved to Shipped: #27 CSV/JSON Exports, #66 Open Data Export, #125 Inventory Syndication CSV, #65 Tier Gating (all Nav ✅)
+- #194 Saved Searches stays in backlog (Nav 📋 — not yet in nav)
+- Stripped Chrome ⚠️ → 📋 on 8 features (#60/#46/#63/#187/#52/#201/#57/#18) — these need proper Chrome QA before they can move to Shipped
+
+**Still Open:**
 - **Stripe P0** — "Continue to Pay" fires no API (see Action Required above)
-- **Exports** — couldn't switch Chrome session from Karen to user2 PRO (test manually)
-- **Rarity badges** — code correct, seed re-run needed (see Action Required above)
+- **Rarity badges** — seed re-run done; next session verify colored badges render at finda.sale
 
 ---
 
@@ -65,12 +61,14 @@ git add packages/frontend/pages/index.tsx
 git add packages/frontend/components/MessageComposeModal.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
 
-git commit -m "fix(s290): onboarding stub text + save-search wiring + message modal CSS
+git commit -m "fix(s290): onboarding stub + save-search + message modal + roadmap v74
 
 - OnboardingWizard.tsx: replace stub email verification text with real copy
 - index.tsx: wire Save This Search button to API + toast
 - MessageComposeModal.tsx: add pointer-events:auto to fix non-interactive modal
+- roadmap.md v74: move #27/#66/#125/#65 to Shipped; strip 8x Chrome ⚠️→📋
 - STATE.md + patrick-dashboard.md: S290 wrap"
 
 .\push.ps1
@@ -125,4 +123,4 @@ All password: `password123`
 - **#59 Streak Rewards** — StreakWidget on dashboard, not on loyalty page (P2)
 - **#57 Rarity Badges** — code works, Railway DB items all rarity=null → seed re-run needed
 - **Stripe Checkout P0** — "Continue to Pay" no-op → Architect review queued for S291
-- **Exports** — needs manual PRO account test (user2@example.com)
+- **#27/#66/#125 Exports ✅** — confirmed S290: sales.csv (3 sales), items.csv (36 items), purchases.csv (empty — no real Stripe purchases yet, expected). Feature working.
