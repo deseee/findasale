@@ -146,7 +146,7 @@ const CreateSalePage = () => {
     }
   };
 
-  if (isLoading) return <div>Loading...</div>;
+  if (authLoading) return <div>Loading...</div>;
 
   return (
     <>
