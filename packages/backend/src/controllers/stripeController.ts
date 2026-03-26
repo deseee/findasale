@@ -351,7 +351,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'You cannot purchase items from your own sale' });
     }
 
-    const isAuctionItem = !!item.auctionStartPrice;
+    // Determine if auction based on listingType (preferred) or fallback to auctionStartPrice
+    const isAuctionItem = item.listingType === 'AUCTION' || !!item.auctionStartPrice;
     let price: number;
     if (isAuctionItem) {
       if (item.currentBid != null) {
@@ -395,8 +396,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const feePercent = hasReferralDiscount ? 0 : baseFeePercent;
 
     const priceCents = Math.round((price + shippingCost) * 100);
+    // For regular items: fee is taken from organizer payout (application_fee_amount only), buyer sees item price + shipping only
+    // For auction items: buyer pays winning bid + 5% premium; 5% is taken as application_fee_amount
     const totalWithBuyerPremium = priceCents + buyerPremiumAmount;
-    const platformFeeAmount = Math.round(totalWithBuyerPremium * feePercent);
+    const platformFeeAmount = isAuctionItem
+      ? buyerPremiumAmount  // Auction: 5% buyer premium = application_fee
+      : Math.round(priceCents * feePercent);  // Regular: 10% platform fee on item + shipping
 
     let couponId: string | undefined;
     let discountAmount = 0;

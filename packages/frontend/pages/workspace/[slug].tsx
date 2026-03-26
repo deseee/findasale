@@ -2,7 +2,7 @@ import React from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
+import api from '../../lib/api';
 import Skeleton from '../../components/Skeleton';
 
 interface WorkspacePublicData {
@@ -22,7 +22,7 @@ export default function PublicWorkspacePage() {
     queryKey: ['workspace-public', slug],
     queryFn: async () => {
       if (!slug) return null;
-      const { data } = await axios.get(`/api/workspace/public/${slug}`);
+      const { data } = await api.get(`/workspace/public/${slug}`);
       return data as WorkspacePublicData;
     },
     enabled: !!slug,

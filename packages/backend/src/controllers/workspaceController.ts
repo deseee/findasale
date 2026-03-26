@@ -92,6 +92,9 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
     let workspace = await prisma.organizerWorkspace.findUnique({
       where: { ownerId: organizerId },
       include: {
+        owner: {
+          select: { user: { select: { id: true } } }
+        },
         members: {
           include: {
             organizer: {
@@ -130,7 +133,13 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'No workspace found' });
     }
 
-    return res.json(workspace);
+    // Add ownerUserId to response for isOwner check in frontend
+    const response = {
+      ...workspace,
+      ownerUserId: workspace.owner?.user?.id || null,
+    };
+
+    return res.json(response);
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error fetching workspace:', error);
@@ -469,6 +478,4 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error fetching public workspace:', error);
-    return res.status(500).json({ error: 'Failed to fetch workspace' });
-  }
-};
+    return res

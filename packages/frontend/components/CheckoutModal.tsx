@@ -155,19 +155,22 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             )}
           </span>
         </div>
-        <div className="flex justify-between items-center text-warm-600">
-          <div className="flex items-center gap-1">
-            <span>Platform fee (10%)</span>
-            <button
-              type="button"
-              className="text-xs text-warm-400 hover:text-warm-600 cursor-help"
-              title="FindA.Sale's 10% service fee helps us maintain the platform, provide customer support, and improve features for organizers and shoppers."
-            >
-              ℹ️
-            </button>
+        {/* Platform fee only shown for regular items; for auctions it's hidden in the buyer's premium */}
+        {!isAuction && platformFee > 0 && (
+          <div className="flex justify-between items-center text-warm-600">
+            <div className="flex items-center gap-1">
+              <span>Platform fee (10%)</span>
+              <button
+                type="button"
+                className="text-xs text-warm-400 hover:text-warm-600 cursor-help"
+                title="FindA.Sale's 10% service fee helps us maintain the platform, provide customer support, and improve features for organizers and shoppers."
+              >
+                ℹ️
+              </button>
+            </div>
+            <span>${platformFee.toFixed(2)}</span>
           </div>
-          <span>${platformFee.toFixed(2)}</span>
-        </div>
+        )}
         {discountApplied > 0 && (
           <div className="flex justify-between text-green-600 font-medium">
             <span>🎟️ Coupon discount</span>

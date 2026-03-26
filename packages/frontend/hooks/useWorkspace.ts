@@ -21,6 +21,7 @@ export interface Workspace {
   name: string;
   slug: string;
   ownerId: string;
+  ownerUserId?: string | null;  // User ID of the workspace owner (added for frontend ownership check)
   createdAt: string;
   members?: WorkspaceMember[];
 }
