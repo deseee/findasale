@@ -377,6 +377,12 @@ const SaleDetailPage = () => {
               >
                 📅 Add to Calendar
               </a>
+              <button
+                onClick={() => showToast('Push reminders coming soon! Add to Calendar above to get notified.', 'info')}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-800/40 text-green-900 dark:text-green-100 text-sm font-medium transition-colors"
+              >
+                🔔 Remind Me
+              </button>
             </div>
           </div>
         </div>

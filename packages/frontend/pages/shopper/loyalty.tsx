@@ -19,6 +19,7 @@ import { RankProgressBar } from '@/components/RankProgressBar';
 import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
 import { useXpSink } from '@/hooks/useXpSink';
+import StreakWidget from '@/components/StreakWidget';
 
 function LoyaltyPage() {
   const router = useRouter();
@@ -135,6 +136,11 @@ function LoyaltyPage() {
               </div>
             </div>
           )}
+
+          {/* Streak Widget */}
+          <div className="mb-8">
+            <StreakWidget />
+          </div>
 
           {/* Spend XP Section */}
           {xpProfile && (

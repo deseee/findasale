@@ -9,6 +9,7 @@ import Skeleton from '../components/Skeleton';
 import TreasureHuntBanner from '../components/TreasureHuntBanner';
 import CityHeatBanner from '../components/CityHeatBanner';
 import EmptyState from '../components/EmptyState';
+import { useToast } from '../components/ToastContext';
 
 interface Sale {
   id: string;
@@ -54,6 +55,7 @@ const HomePage = () => {
   const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
 
   const router = useRouter();
+  const { showToast } = useToast();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -263,6 +265,14 @@ const HomePage = () => {
                   className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 placeholder-warm-500 font-body"
                 />
               </div>
+              {searchQuery && (
+                <button
+                  onClick={() => showToast('Saved searches coming soon!', 'info')}
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-colors"
+                >
+                  💾 Save This Search
+                </button>
+              )}
             </div>
           </div>
         </section>
