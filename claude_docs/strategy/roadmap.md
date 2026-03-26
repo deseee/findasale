@@ -148,8 +148,8 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 182 | Surprise Me / Serendipity Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ S288 | `/surprise-me` random discovery |
 | 188 | Neighborhood Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | `/neighborhoods/[slug]` + index page lists 6 GR neighborhoods. Page 404 per S290 audit — not implemented |
 | 90 | Sale Soundtrack (Ambient Vibes) | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | N/A | 📋 | Spotify + Apple Music playlist suggestions per sale type on sale detail page. External links only. Shipped S280. |
-| 189 | Trending Items / Sales | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | ✅ S288 | 📋 | `/trending` page + API |
-| 190 | Activity Feed | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S194 | 📋 | 📋 | `/feed` page + API |
+| 189 | Trending Items / Sales | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S288 | 📋 | `/trending` page + API |
+| 190 | Activity Feed | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S297 | 📋 | `/feed` page + API |
 | 49 | City Heat Index | SHO | FREE | ⚠️ | ✅ | ⚠️ | ✅ | ✅S194 | 📋 | 📋 | Weekly "hottest metro" ranking; aggregated sale data — orphaned, route not found in nav |
 
 ### Shopper — Engagement & Community [FREE]

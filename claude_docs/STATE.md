@@ -7,27 +7,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S297 START:** Push S296 block (8 files) → fix systemic auth bug in 3 controllers → re-test #85 Treasure Hunt → D-series QA Passes 1–4.
+**S298 START:** Push #173 fix (1 file) → D-series QA re-run Pass 1 (SIMPLE CORE) → D-series QA Pass 3 re-run (PRO features, user2) → D-series QA Pass 4 re-run (#29, #122, #87, user11).
 
-**⚠️ P1 SYSTEMIC BUG (NOT FIXED — fix in S297):**
-`sale.organizerId !== req.user.id` is wrong in 3 controllers — should be `req.user.organizerProfile?.id`:
-- `typologyController.ts` lines 91, 142, 187 (Typology Classifier broken for ALL organizers)
-- `arrivalController.ts` lines 95, 162 (Arrival tracking broken for ALL organizers)
-- `photoOpController.ts` lines 58, 144, 193 (Photo Op feature broken for ALL organizers)
-Dispatch findasale-dev with exact line numbers above. 2-line fix per instance.
+**Files pending push (S297):**
+- `packages/frontend/pages/organizer/message-templates.tsx` (#173 auth guard fix: stale `user.role !== 'ORGANIZER'` → `!(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER')`)
 
-**S297 Priorities:**
-1. Patrick pushes S296 block (8 files — see patrick-dashboard.md)
-2. Dispatch findasale-dev to fix systemic auth bug in typologyController + arrivalController + photoOpController
-3. #85 Treasure Hunt clue: re-test after auth fix deployed (Bob's sale cmn7eptmd0047xdmfryhj2m5d — Add Clue → verify clue count increases + persists)
-4. D-series QA Pass 1 — ORG SIMPLE CORE (#137, #141, #142, #143, #144, #139)
-5. D-series QA Pass 2 — ORG SIMPLE TOOLS (#162, #71, #19, #174, #154, #131, #135, #89)
-6. D-series QA Pass 3 — ORG PRO + BOTH (#65, #169, #25, #31, #173, #41, #17, #140, #151)
-7. D-series QA Pass 4 — SHOPPER (#177, #179, #180, #29, #122, #190, #189, #87)
+**S298 Priorities:**
+1. Patrick pushes S297 fix (1 file — see patrick-dashboard.md)
+2. D-series QA re-run — Pass 1 SIMPLE CORE (#137, #141, #142, #143, #144, #139): User user1, navigate via edit-sale links from dashboard Sales tab
+3. D-series QA re-run — Pass 3 PRO features (#65, #169, #25, #31, #41, #17): Log in as user2@example.com (PRO tier confirmed). Check feature pages are accessible.
+4. D-series QA re-run — Pass 4 Shopper auth features (#29 Loyalty Passport, #122 Explorer's Guild rebrand, #87 Brand Tracking): Log in as user11@example.com
+5. Clean up test clues on Alice's sale cmn7epuiu004pxdmfub457vb1 (2 test clues added during S297 Treasure Hunt testing)
+6. Update roadmap Chrome QA columns for confirmed ✅ features: #85, #89, #140, #151, #177, #179, #180, #189, #190, #173
 
 ---
 
 ## Recently Complete
+
+**S297 COMPLETE (2026-03-26):** S296 push done. Auth bug fixed in 3 controllers (typologyController/arrivalController/photoOpController — req.user.id → req.user.organizerProfile?.id, same fix as S296 treasureHuntQRController). #85 Treasure Hunt confirmed working via API (POST 201, clue persists). #173 Message Templates auth guard fixed (stale user.role check → roles array). D-series QA Passes 1–4 run: 10 features confirmed ✅ (#85 #89 #140 #151 #177 #179 #180 #189 #190 #173-fix). PRO + shopper auth features untested (agent login issues — accounts work, carry to S298). 1 file pending push (message-templates.tsx).
 
 **S296 COMPLETE (2026-03-26):** S295 smoke tests + P0/P1 bug fixes + systemic auth bug discovered. (1) Checkout double-fee confirmed fixed: stripeController.ts was adding platformFeeAmount to buyer finalPriceCents for non-auction items (buyer charged 20% over price). Already fixed from S295. (2) HuntPassModal.tsx: overflow scroll fix + success toast on activation. (3) shopper/dashboard.tsx: upsell condition fixed (was showing after Hunt Pass active) + Hunt Pass Active badge added. (4) StreakWidget.tsx: copy fix. (5) workspace/[slug].tsx: description templated, message link uses ownerId. (6) workspaceController.ts: ownerId added to public workspace API response. (7) messages/index.tsx: redirect param changed from ?to= to ?organizerId= (messages/new.tsx expects organizerId). (8) treasureHuntQRController.ts P0 AUTH BUG: req.user.id !== sale.organizerId was comparing User ID vs Organizer ID — always 403. Fixed to req.user.organizerProfile?.id (2 instances: createClue + deleteClue). SAME BUG found in typologyController, arrivalController, photoOpController — NOT YET FIXED, dispatch to S297. D-series QA Passes 1–4 NOT completed — carry to S297. 8 files changed, push block in patrick-dashboard.md.
 
