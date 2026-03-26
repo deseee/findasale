@@ -421,7 +421,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       }
       couponId = coupon.id;
     }
-    const finalPriceCents = totalWithBuyerPremium + platformFeeAmount - discountAmount;
+    const finalPriceCents = isAuctionItem
+      ? totalWithBuyerPremium + platformFeeAmount - discountAmount  // Auction: item + premium - discount, all charged to buyer
+      : totalWithBuyerPremium - discountAmount;                     // Regular: item + shipping - discount only (platform fee from organizer payout)
 
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
     const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;

@@ -21,6 +21,7 @@ interface WorkspacePublicData {
   memberCount: number;
   ownerName: string;
   ownerUserId: string | null;
+  ownerId: string | null;
   publishedSales: PublishedSale[];
 }
 
@@ -105,7 +106,7 @@ export default function PublicWorkspacePage() {
               {workspace.name}
             </h1>
             <p className="text-warm-600 dark:text-warm-400">
-              A team workspace for organizers collaborating on estate sales
+              This workspace organizes sales from the team at {workspace.name}.
             </p>
           </div>
 
@@ -180,7 +181,7 @@ export default function PublicWorkspacePage() {
               Questions about this workspace or its sales?
             </p>
             <a
-              href={workspace.ownerUserId ? `/messages?to=${workspace.ownerUserId}` : '/'}
+              href={workspace.ownerId ? `/messages?organizerId=${workspace.ownerId}` : '/'}
               className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition"
             >
               Message {workspace.ownerName}

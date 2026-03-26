@@ -205,13 +205,13 @@ const ShopperDashboard = () => {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Hunt Pass Info Card */}
-              {!isHuntPassDismissed && (
+              {!isHuntPassDismissed && userData && !userData.huntPassActive && (
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <span className="text-xl">👑</span>
                     <div className="flex-1">
                       <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to new listings, earn 2x points on every action, and receive priority discovery. $4.99/month.</p>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to flash deals, earn 2x points on every action, and receive an exclusive badge. $4.99/month.</p>
                       <div className="flex gap-2 mt-3">
                         <Link
                           href="/shopper/hunt-pass"
@@ -236,6 +236,19 @@ const ShopperDashboard = () => {
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Hunt Pass Active Badge */}
+              {userData && userData.huntPassActive && (
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">✅</span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass Active</h3>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 2x points on every action and get early access to flash deals!</p>
+                    </div>
                   </div>
                 </div>
               )}

@@ -7,6 +7,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
+import { useToast } from './ToastContext';
 
 // Lazy-initialize Stripe on client-side only to avoid SSR errors
 let stripePromise: Promise<Stripe | null> | null = null;
@@ -23,9 +24,10 @@ interface PaymentFormProps {
   price: number;
   onClose: () => void;
   onSuccess: () => void;
+  showToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
-const PaymentForm = ({ price, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ price, onClose, onSuccess, showToast }: PaymentFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,6 +58,7 @@ const PaymentForm = ({ price, onClose, onSuccess }: PaymentFormProps) => {
         await api.post('/streaks/confirm-huntpass', {
           paymentIntentId: paymentIntent.id,
         });
+        showToast?.('Hunt Pass activated! You\'re now earning 2x points.', 'success');
         onSuccess();
       } catch (err: any) {
         setErrorMessage(
@@ -164,6 +167,7 @@ const HuntPassModal = ({ isOpen, onClose, onSuccess }: HuntPassModalProps) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const price = 4.99;
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!isOpen) {
@@ -198,7 +202,7 @@ const HuntPassModal = ({ isOpen, onClose, onSuccess }: HuntPassModalProps) => {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-xl font-bold text-warm-900">Upgrade to Hunt Pass</h2>
           <button
@@ -226,6 +230,7 @@ const HuntPassModal = ({ isOpen, onClose, onSuccess }: HuntPassModalProps) => {
               price={price}
               onClose={onClose}
               onSuccess={handleSuccess}
+              showToast={showToast}
             />
           </Elements>
         )}

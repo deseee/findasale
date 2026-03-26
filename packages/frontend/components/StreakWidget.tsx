@@ -76,7 +76,7 @@ const StreakWidget: React.FC = () => {
           <button
             onClick={() => setIsHuntPassModalOpen(true)}
             className="py-1 px-3 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold rounded transition"
-            title="Get early access, 2x points, and priority discovery"
+            title="Get early access to flash deals, 2x points, and exclusive badge"
           >
             Upgrade
           </button>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -20,6 +20,18 @@ interface ConversationSummary {
 const MessagesPage = () => {
   const { user } = useAuth();
   const router = useRouter();
+
+  // Redirect to /messages/new if ?organizerId= param is present
+  useEffect(() => {
+    if (router.isReady && router.query.organizerId) {
+      const params = new URLSearchParams();
+      params.append('organizerId', router.query.organizerId as string);
+      if (router.query.saleId) {
+        params.append('saleId', router.query.saleId as string);
+      }
+      router.push(`/messages/new?${params.toString()}`);
+    }
+  }, [router.isReady, router.query.organizerId, router.query.saleId]);
 
   const { data: conversations, isLoading, isError } = useQuery<ConversationSummary[]>({
     queryKey: ['messages', 'conversations'],

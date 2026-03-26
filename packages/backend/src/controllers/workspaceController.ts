@@ -214,6 +214,7 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
       memberCount,
       ownerName,
       ownerUserId,
+      ownerId: workspace.ownerId,  // Organizer ID for messaging
       publishedSales
     });
   } catch (error) {

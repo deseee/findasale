@@ -36,7 +36,7 @@ export async function createClue(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    if (sale.organizerId !== req.user.id) {
+    if (sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Not authorized to manage this sale' });
     }
 
@@ -126,7 +126,7 @@ export async function deleteClue(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    if (sale.organizerId !== req.user.id) {
+    if (sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
