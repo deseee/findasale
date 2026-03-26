@@ -478,4 +478,6 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error fetching public workspace:', error);
-    return res
+    return res.status(500).json({ message: 'Failed to fetch public workspace' });
+  }
+};
