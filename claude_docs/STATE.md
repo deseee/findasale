@@ -7,23 +7,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S299 START:** Push #87 fix (1 backend file) → D-series QA re-run Pass 1 (SIMPLE CORE, user1) → Pass 3 remaining PRO (#65, #25, #31, #41, #17) → Pass 4 Shopper (#29, #122, #87 retest after fix) → Investigate test clue cleanup.
+**S300 START:** Diagnose Chrome MCP middleware timeouts blocking all QA → then resume D-series passes. See S299 summary below for what's still UNVERIFIED.
 
-**Files pending push (S298):**
-- `packages/backend/src/routes/users.ts` (#87 Brand Tracking P0 fix: arrow function wrappers removed from brand-follows routes — were causing unhandled async errors → HTML 500 instead of JSON)
+**S300 Priorities:**
+1. Diagnose Chrome MCP "Cannot access contents of the page" permission error on finda.sale — this blocked all S299 QA. Check extension host permissions in Chrome, try allowing on finda.sale manually, or use a different tab approach.
+2. Verify #87 Brand Tracking fix is actually live — first QA agent still saw HTML 500. Check Railway deploy logs. If not deployed, investigate why push.ps1 did not trigger redeploy.
+3. D-series QA Pass 1 SIMPLE CORE (#137, #141, #142, #143, #144, #139) — user1@example.com. Navigate via dashboard → Sales tab.
+4. D-series QA Pass 3 remaining PRO (#65, #25, #31, #41, #17) — user2@example.com.
+5. D-series QA Pass 4 Shopper (#29 Loyalty, #122 Explorer rebrand, #87 Brand Tracking retest) — user11@example.com. Do NOT clear cookies.
 
-**S299 Priorities:**
-1. Patrick pushes S298 fix (1 file — see patrick-dashboard.md)
-2. D-series QA Pass 1 SIMPLE CORE (#137, #141, #142, #143, #144, #139): user1@example.com — all UNVERIFIED from S298 (browser instability). Navigate via dashboard → Sales tab.
-3. D-series QA Pass 3 remaining PRO (#65, #25, #31, #41, #17): user2@example.com — UNVERIFIED from S298.
-4. D-series QA Pass 4 Shopper (#29 Loyalty, #122 Explorer rebrand, #87 Brand Tracking retest): user11@example.com. Do NOT clear cookies mid-session — use existing session or log in fresh and stay.
-5. Investigate test clue cleanup: sale cmn7epuiu004pxdmfub457vb1 not found in Railway DB. Check correct sale ID and account for Alice (user1 is Bob Smith in DB, not Alice).
+**KNOWN BUG — Chrome MCP timeouts:** Extension cannot access finda.sale contents ("manifest must request permission to access the respective host"). First agent in a session can sometimes get through; subsequent agents time out. Root cause unknown — diagnose in S300.
 
 **KNOWN BUG — Session instability:** After Cookie/localStorage clear in Chrome MCP, fresh login for shopper accounts (user11, user12) silently fails. Do NOT clear cookies — use signout route only, then log in.
 
 ---
 
 ## Recently Complete
+
+**S299 COMPLETE (2026-03-26):** S298 push confirmed (backend #87 fix). Two bugs found and fixed: (1) OnboardingModal P1 BUG FIXED — `_app.tsx` `startsWith('/')` matched ALL routes, causing shopper onboarding modal to appear on every page including /login, blocking QA agents and real users. Fixed to exact-match only. MCP pushed (27c77a31), Vercel redeploying. (2) Test clue cleanup RESOLVED — sale cmn7epuiu004pxdmfub457vb1 DOES exist in Railway DB (user1's "Downtown Downsizing Sale 21", ENDED), S298 "not found" was a bad query. 2 duplicate test QR clues on ENDED sale — no cleanup needed. D-series QA: ALL UNVERIFIED due to Chrome MCP permission/timeout errors. #87 retest: first agent reproduced original HTML 500 error (Railway deploy may still be in progress or fix insufficient — diagnose S300). 1 frontend file pushed to GitHub.
 
 **S298 COMPLETE (2026-03-26):** S297 push confirmed by Patrick (#173 auth guard fix). D-series QA Pass 1 (SIMPLE CORE): UNVERIFIED — browser session instability (access-denied redirects). Pass 3 PRO: #169 Insights ✅ PERSONALLY VERIFIED (real data, refresh confirmed); #25 Item Library NOT a P0 (page loads correctly for PRO user — S297 agent 403 was session artifact, empty state only); #65/#31/#41/#17 UNVERIFIED (session instability). Pass 4 Shopper: #87 Brand Tracking P0 FIXED (arrow fn wrappers on routes/users.ts caused async errors → HTML 500); #29/#122 UNVERIFIED (couldn't log in fresh as user11 after cookie clear — session instability bug documented). Test clue cleanup BLOCKED (sale cmn7epuiu004pxdmfub457vb1 not in Railway DB — needs investigation). Roadmap Chrome columns: no update needed (all S297 features already Chrome ✅). 1 backend file changed.
 
