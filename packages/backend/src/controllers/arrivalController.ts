@@ -92,7 +92,7 @@ export const updateApproachNotes = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    if (sale.organizerId !== req.user.id) {
+    if (sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'You do not own this sale' });
     }
 
@@ -159,7 +159,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    if (sale.organizerId !== req.user.id) {
+    if (sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'You do not own this sale' });
     }
 
