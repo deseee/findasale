@@ -141,9 +141,9 @@ const AdminDashboard = () => {
             <p className="text-warm-600 dark:text-warm-400 text-sm">Generate and manage organizer invite codes</p>
           </Link>
 
-          <Link href="/" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition">
-            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Back to App</h3>
-            <p className="text-warm-600 dark:text-warm-400 text-sm">Return to the main FindA.Sale interface</p>
+          <Link href="/creator/dashboard" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-purple-50 dark:bg-purple-900/20 border border-purple-100 transition">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Creator Program</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm">View creator/affiliate dashboard and analytics</p>
           </Link>
         </div>
 

@@ -96,6 +96,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/brand-kit" label="Brand Kit" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
 
             <SectionHeader label="Organizer Tools" />
             <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -447,6 +449,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
                 <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
                 <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
+                <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
               </>
             ) : (
               authLinks
