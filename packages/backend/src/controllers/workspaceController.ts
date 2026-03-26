@@ -242,7 +242,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
       },
       include: {
         organizer: {
-          select: { id: true, businessName: true, profilePhoto: true, email: true },
+          select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } },
         },
       },
     });
@@ -286,7 +286,7 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
       include: {
         workspace: true,
         organizer: {
-          select: { id: true, businessName: true, profilePhoto: true, email: true },
+          select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } },
         },
       },
     });
@@ -399,7 +399,7 @@ export const listMembers = async (req: AuthRequest, res: Response) => {
       where: { workspaceId: workspace.id },
       include: {
         organizer: {
-          select: { id: true, businessName: true, profilePhoto: true, email: true },
+          select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } },
         },
       },
       orderBy: { invitedAt: 'desc' },
