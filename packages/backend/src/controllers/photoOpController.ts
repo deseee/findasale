@@ -55,7 +55,7 @@ export const createStation = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    if (sale.organizerId !== req.user.id) {
+    if (sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'You do not own this sale' });
     }
 
@@ -141,7 +141,7 @@ export const updateStation = async (req: AuthRequest, res: Response) => {
       select: { organizerId: true },
     });
 
-    if (!sale || sale.organizerId !== req.user.id) {
+    if (!sale || sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'You cannot modify this station' });
     }
 
@@ -190,7 +190,7 @@ export const deleteStation = async (req: AuthRequest, res: Response) => {
       select: { organizerId: true },
     });
 
-    if (!sale || sale.organizerId !== req.user.id) {
+    if (!sale || sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'You cannot delete this station' });
     }
 

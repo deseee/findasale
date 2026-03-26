@@ -88,7 +88,7 @@ export const classifyItemEndpoint = async (req: AuthRequest, res: Response) => {
     }
 
     // Check authorization
-    if (item.sale.organizerId !== req.user.id) {
+    if (item.sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -139,7 +139,7 @@ export const batchClassifySale = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    if (sale.organizerId !== req.user.id) {
+    if (sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -184,7 +184,7 @@ export const updateItemTypology = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale.organizerId !== req.user.id) {
+    if (item.sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
