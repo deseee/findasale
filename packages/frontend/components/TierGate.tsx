@@ -102,7 +102,7 @@ export default function TierGate({
 
           {/* Learn more link */}
           <Link
-            href="/organizer/pro-features"
+            href="/pricing"
             className="block mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
             See all {requiredTier} features

@@ -101,7 +101,8 @@ const CreatorDashboard = () => {
   }
 
   const handleConnectStripe = () => {
-    router.push('/creator/connect-stripe');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    window.location.href = `${apiUrl}/stripe/create-connect-account`;
   };
 
   return (
