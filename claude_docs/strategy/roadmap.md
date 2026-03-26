@@ -286,7 +286,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 74 | Role-Aware Registration Consent | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Opt-in checkboxes at signup. Attorney review of consent copy required before launch — Needs Chrome QA |
 | 75 | Tier Lapse State Logic | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | 8am warning + 11pm lapse cron. Dashboard banner. Suspends ORG features, retains SHO features — Needs Chrome QA |
 | 127 | POS Value Unlock Tiers | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Dual-gate (tx+revenue). 3 tiers at 5/20/50 tx. /api/organizer/pos-tiers + PosTierGates.tsx — Chrome ✅ S286 |
-| 131 | Share & Promote Templates | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | SharePromoteModal: 4 templates (social post, flyer, email invite, neighborhood post) — Needs Chrome QA |
+| 131 | Share & Promote Templates | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | SharePromoteModal: 4 templates (social post, flyer, email invite, neighborhood post) — Needs Chrome QA |
 | 76 | Skeleton Loaders | BOTH | FREE | N/A | N/A | ✅ | ✅ | ✅ | N/A | N/A | Ghost card layouts on item/sale grids. SkeletonCards component. Shipped S280. — Chrome ✅ S286 |
 | 77 | Sale Published Celebration | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | 📋 | N/A | 📋 | Full-screen confetti overlay on publish. Confetti.tsx + PublishCelebration.tsx. Shipped S280. — Needs Chrome QA |
 | 79 | Earnings Counter Animation | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | 📋 | N/A | N/A | AnimatedCounter.tsx — rolls up to value on dashboard load. Shipped S280. — Needs Chrome QA |
@@ -302,8 +302,8 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 66 | Open Data Export (ZIP) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Items/sales/purchases CSV — Needs Chrome QA |
 | 171 | Payout PDF Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Financial reporting for tax/accounting — Needs Chrome QA |
 | 172 | Stripe Connect Setup | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Payout bank account linking + verification — Chrome ✅ S288: settings page + Setup Stripe Connect button confirmed working |
-| 18 | Post Performance Analytics | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | UTM tracking on social template downloads — Needs Chrome QA |
-| 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | 📋 | Multi-user workspace, role management — Needs Chrome QA |
+| 18 | Post Performance Analytics | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | UTM tracking on social template downloads — Needs Chrome QA |
+| 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Multi-user workspace, role management — Needs Chrome QA |
 | 68 | Command Center Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Per-sale widget dashboard — Chrome PASS S285 |
 | 125 | Inventory Syndication CSV Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | exportService.ts + csvExportController.ts. PRO/TEAMS gate. eBay/Amazon/Facebook pre-formatted — Needs Chrome QA |
 | 136 | QR Code Auto-Embedding in Exports | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | qrEmbedEnabled field, Cloudinary QR overlay via cloudinaryWatermark.ts, exportController wired, organizer toggle in edit-item. — Needs Chrome QA |
@@ -315,7 +315,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 34 | Hype Meter | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Real-time social proof — Needs Chrome QA |
 | 63 | Dark Mode + Accessibility | BOTH | FREE | N/A | ✅ | ✅ | ✅ | ⚠️ | N/A | 📋 | Tailwind dark variants, WCAG 2.1 AA, high-contrast outdoor mode — Needs Chrome QA |
 | 67 | Social Proof Notifications | BOTH | SIMPLE | N/A | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Engagement aggregation (favorites, bids, holds) — Chrome ✅ S286 |
-| 6 | Virtual Queue / Line Management | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Start/call next/join line + SMS; free for all — Needs Chrome QA |
+| 6 | Virtual Queue / Line Management | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Start/call next/join line + SMS; free for all — Needs Chrome QA |
 | 37 | Sale Reminders (Calendar + Remind Me) | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Sale alerts for shoppers — Needs Chrome QA |
 | 28 | Neighborhood Heatmap | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Density-based Leaflet overlay — Chrome ✅ S286 |
 | 39 | Photo Op Stations | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | PhotoOpMarker on map, rate-limited — Needs Chrome QA |
@@ -341,7 +341,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 194 | Saved Searches with notifyOnNew | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Auto-notify on new matches — Needs Chrome QA |
 | 195 | Shopper ↔ Organizer Messaging | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Threaded conversations — Chrome PASS S285 (P0-A blank thread reclassified as poll lag; polling reduced 15s→5s, RESOLVED) |
 | 196 | Buying Pools | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Group buying on items — Needs Chrome QA |
-| 197 | Bounties (Item Requests) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Shopper want-ads — Needs Chrome QA |
+| 197 | Bounties (Item Requests) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Shopper want-ads — Needs Chrome QA |
 | 198 | Reviews (Submit Sale / Organizer) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Via `/api/reviews` — Needs Chrome QA |
 | 199 | User Profile Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/profile` — Chrome ✅ S286 |
 | 200 | Shopper Public Profiles | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | `/shoppers/[slug]` collection showcase — Needs Chrome QA |
@@ -354,7 +354,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 206 | Condition Guide | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/condition-guide` educational page — Chrome ✅ S288 |
 | 207 | FAQ / Guide / Terms / Privacy | PUB | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Legal + help pages — Chrome ✅ S286 |
 | 208 | Pickup Booking (Schedule Pickup) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Shopper-side scheduling — Needs Chrome QA |
-| 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | PushNotificationLog model, arrivalController (get/update notes + send-approach-notification with 24h dedup), useArrivalAssistant hook, sale detail page section, edit-sale textarea + notify button. — Needs Chrome QA |
+| 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | PushNotificationLog model, arrivalController (get/update notes + send-approach-notification with 24h dedup), useArrivalAssistant hook, sale detail page section, edit-sale textarea + notify button. — Needs Chrome QA |
 | 47 | UGC Photo Tags | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Shopper-submitted item photos + moderation — Needs Chrome QA |
 | 7 | Shopper Referral Rewards | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Referral tracking + rewards distribution — Needs Chrome QA |
 | 209 | Points System | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | 1 pt/visit/day, tier-based — Needs Chrome QA |
@@ -371,7 +371,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 55 | Seasonal Discovery Challenges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Rotating challenges by season/category — Needs Chrome QA |
 | 122 | Explorer's Guild Phase 1 (Rebrand + Copy) | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | Collector→Explorer labels, collect→explore language throughout. Rank names updated. No schema changes — Chrome ✅ S286 |
 | 123 | Explorer's Guild Phase 2 (XP Economy + Loot Legend) | SHO | FREE/PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | User.guildXp + User.explorerRank + RarityBoost table. XP sinks (coupon-gen, rarity boost, Hunt Pass discount). Loot Legend portfolio. Full schema + endpoints — Chrome ✅ S286 |
-| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | TreasureHuntQRClue + TreasureHuntQRScan schema models, treasureHuntQRController (6 CRUD endpoints), TreasureHuntQRManager.tsx (organizer clue management + QR download), shopper clue detail page (/sales/[id]/treasure-hunt-qr/[clueId]). — Needs Chrome QA |
+| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | TreasureHuntQRClue + TreasureHuntQRScan schema models, treasureHuntQRController (6 CRUD endpoints), TreasureHuntQRManager.tsx (organizer clue management + QR download), shopper clue detail page (/sales/[id]/treasure-hunt-qr/[clueId]). — Needs Chrome QA |
 | 133 | Hunt Pass Subscription Redesign | SHO | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | LEGENDARY 6h early access gate in itemController, 1.5x XP multiplier (applyHuntPassMultiplier in xpService), getLootLegend() + getCollectorLeague() endpoints + routes, loot-legend.tsx + league.tsx pages, loyalty.tsx updated. — Chrome ✅ S286 |
 | 214 | AI Sale Planner Chat | PUB | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/plan` page, public rate-limited acquisition tool — Chrome ✅ S288 |
 | 215 | AI Tag Suggestions (Haiku) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Part of Rapidfire, all tiers — Needs Chrome QA |
