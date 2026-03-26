@@ -126,8 +126,8 @@ function OnboardingShower() {
 
     // Only show on first-time shopper pages (homepage, trending)
     // Do NOT show on secondary pages like /favorites, /messages, /inspiration
-    const shopperFirstPages = ['/', '/trending', '/index'];
-    const isFirstPage = shopperFirstPages.some(p => router.pathname === p || router.pathname.startsWith(p));
+    const shopperFirstPages = ['/', '/trending'];
+    const isFirstPage = shopperFirstPages.some(p => router.pathname === p);
     if (!isFirstPage) return;
 
     const done = localStorage.getItem('findasale_onboarded');
