@@ -1,43 +1,68 @@
-# S291b — cache bust 2026-03-26T14:00
-FROM node:18-slim
-
-WORKDIR /app
+# syntax=docker/dockerfile:1
+FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# Copy workspace root files
+# Enable pnpm
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+
+WORKDIR /app
+
+# --- deps stage ---
+FROM base AS deps
+
+# Copy workspace manifests first for caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/backend/package.json ./packages/backend/
+COPY packages/database/package.json ./packages/database/
+COPY packages/shared/package.json ./packages/shared/
 
-# Copy all package.json files for dependency resolution
-COPY packages/backend/package.json packages/backend/
-COPY packages/database/package.json packages/database/
-COPY packages/shared/package.json packages/shared/
+RUN pnpm install --frozen-lockfile
 
-# Install pnpm and dependencies (including devDeps for prisma generate + tsc)
-RUN npm install -g pnpm@9 && pnpm install --frozen-lockfile
+# --- builder stage ---
+FROM base AS builder
 
-# Copy source code
-COPY packages/backend packages/backend
-COPY packages/database packages/database
-COPY packages/shared packages/shared
+WORKDIR /app
 
-# Generate Prisma client
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/backend/node_modules ./packages/backend/node_modules
+COPY --from=deps /app/packages/database/node_modules ./packages/database/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+
+COPY . .
+
+# Generate Prisma client (output path set explicitly in schema.prisma -> packages/database/node_modules/.prisma/client)
 RUN cd packages/database && npx prisma generate
 
-# Build shared package first, then backend
-RUN cd packages/shared && npx tsc || true
+# S293 — cache bust 2026-03-26T17:30
 RUN cd packages/backend && npx tsc
 
-# Set production mode only at runtime — not during build (keeps devDeps available for prisma + tsc)
+# --- runner stage ---
+FROM node:20-slim AS runner
+
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/backend/node_modules ./packages/backend/node_modules
+COPY --from=builder /app/packages/database/node_modules ./packages/database/node_modules
+COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
+COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
+COPY --from=builder /app/packages/database/node_modules/.prisma ./packages/database/node_modules/.prisma
+COPY --from=builder /app/packages/backend/package.json ./packages/backend/
+COPY --from=builder /app/packages/database/package.json ./packages/database/
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+
 ENV NODE_ENV=production
 
-# Expose port
 EXPOSE 3001
 
-# HEALTHCHECK
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "const http = require('http'); http.get('http://localhost:3001/', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/health', r => r.statusCode === 200 ? process.exit(0) : process.exit(1)).on('error', () => process.exit(1))"
 
-# Start the compiled server
 CMD ["node", "packages/backend/dist/index.js"]
