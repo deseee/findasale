@@ -32,10 +32,10 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma client (output path set explicitly in schema.prisma -> packages/database/node_modules/.prisma/client)
 RUN cd packages/database && npx prisma generate
 
-# S293 — cache bust 2026-03-26T17:00
+# S293 — cache bust 2026-03-26T17:30
 RUN cd packages/backend && npx tsc
 
 # --- runner stage ---
@@ -52,7 +52,7 @@ COPY --from=builder /app/packages/database/node_modules ./packages/database/node
 COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/packages/database/node_modules/.prisma ./packages/database/node_modules/.prisma
 COPY --from=builder /app/packages/backend/package.json ./packages/backend/
 COPY --from=builder /app/packages/database/package.json ./packages/database/
 COPY --from=builder /app/package.json ./
