@@ -45,8 +45,9 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
   const [paymentSucceeded, setPaymentSucceeded] = useState(false);
 
   // itemPrice is already post-discount (server returns finalPriceCents/100)
-  // total = discounted item price + platform fee + buyer premium
-  const total = itemPrice + platformFee + buyerPremium;
+  // For non-auction items: total = discounted item price only (no platform fee charged to buyer)
+  // For auction items: total = item price + buyer premium
+  const total = itemPrice + (isAuction ? buyerPremium : 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
