@@ -170,7 +170,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
 
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-900 dark:text-blue-200">
-                  <strong>Email verification stub:</strong> This step will verify your email address. For now, you can skip this step to continue with your setup.
+                  We've sent a verification email to your address. Please check your inbox and click the link to verify your account.
                 </p>
               </div>
 

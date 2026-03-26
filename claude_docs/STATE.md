@@ -7,20 +7,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S290 — Continue Chrome QA D6 batch + seed rarity re-run + remaining features.**
+**S290 COMPLETE (2026-03-26):** Orchestrator Chrome QA done — personally ran in Chrome. See S290 entry below.
 
-S289 push block below must be run first.
+**Pending Patrick actions before S291:**
+- 🚨 Push S290 files (block in patrick-dashboard.md)
+- 🔑 Stripe P0: "Continue to Pay" fires no API call — Architect review required before Dev dispatch
+- 🌱 Re-seed rarity: `npx ts-node prisma/seed.ts` against Railway (patch already applied in S289 seed.ts)
+- 📋 Manually test Exports at /organizer/dashboard as user2 (PRO) — Chrome session blocked on Karen account
 
-Seed rarity patch ready — re-run seed against Railway to get rarity values on items for visual badge verification (#57).
-
-Still at 📋 Chrome (priority order):
-- D6 batch: #13 TEAMS Workspace, #18 Post Performance Analytics, #27/#66/#125 Exports, #85 Treasure Hunt QR, and more
-- #37 Sale Reminders — iCal ✅ but push "Remind Me" button not built (feature gap, not bug)
-- #59 Streak Rewards — widget works on /shopper/dashboard but NOT on /shopper/loyalty (P2 placement gap)
+**S291 priority:**
+- Architect review → Stripe checkout P0 fix
+- D6 Chrome QA: #13 TEAMS Workspace, #18 Post Performance Analytics, #85 Treasure Hunt QR
+- #37 Remind Me button (feature gap — push notification not built)
 
 ---
 
 ## Recently Complete
+
+**S290 COMPLETE (2026-03-26):** Orchestrator Chrome QA — personally verified in Chrome (no delegation). Key findings: (1) Stripe P0 FLAGGED — "Continue to Pay" onClick=`()=>q(!0)` fires no API call, sets React state only, needs Architect sign-off before Dev dispatch. (2) Messaging compose FIXED — MessageComposeModal exists and is wired correctly but CSS pointer-events blocked interaction; added `style={{pointerEvents:'auto'}}` to backdrop + modal box. (3) Onboarding stub text FIXED — "Email verification stub..." replaced with real copy in OnboardingWizard.tsx. (4) Save This Search FIXED — index.tsx wired to POST /saved-searches API + toast. (5) Rarity badges ROOT CAUSE CONFIRMED — API code correct (rarity:true in both itemController selects), but Railway DB items all have rarity=null; code does NOT need fixing, seed re-run needed. (6) Filter pills ✅ confirmed FIXED from S288 (Estate click stays on homepage, no logout redirect). (7) Neighborhood pages ✅ FIXED — /neighborhoods index lists 6 neighborhoods, /neighborhoods/eastown renders correctly (was 404). (8) City Heat Index ✅ Coming Soon placeholder renders at /city-heat-index. (9) Haul Gallery ✅ seeded post visible. (10) Loyalty page ✅ 350 XP + streak chip. (11) Share button + Brand Kit gating confirmed correct in code (already fixed S288). Exports BLOCKED — Chrome session stuck on Karen Anderson (user11), could not switch to user2 PRO. Files changed: packages/frontend/components/OnboardingWizard.tsx, packages/frontend/pages/index.tsx, packages/frontend/components/MessageComposeModal.tsx.
 
 **S289 COMPLETE (2026-03-25):** Chrome QA continuation — orchestrator-verified (main session in Chrome, not subagent). S288 fixes verified live: Share popover ✅ (custom popover with X close button works), Brand Kit tier gate ✅ (SIMPLE user sees upgrade wall), Bounties ✅ (/organizer/bounties loads, create bounty works), Virtual Queue ✅ (/organizer/line-queue/[saleId] loads). Rarity Badges ⚠️ (code correct but ALL items in DB have rarity=null — seed patch applied this session, needs re-run). New features Chrome-verified: #131 Share & Promote Templates ✅ (modal opens with 8 template tabs: Social Post, Flyer Copy, Email Invite, Neighborhood Post, TikTok, Pinterest, Threads, Nextdoor — all render real sale data, Copy to Clipboard + Close buttons work), #84 Approach Notes ✅ (Day-of Approach Notes section visible on edit-sale for LIVE sale, "Notify Shoppers" button present, textarea with placeholder), #59 Streak Rewards PASS WITH NOTES (StreakWidget renders on /shopper/dashboard showing streak count + points + Hunt Pass status, but NOT imported into /shopper/loyalty — P2 placement gap), #37 Sale Reminders UNVERIFIED (iCal "Add to Calendar" button present ✅, push "Remind Me" button not built — feature gap). Root cause QA accountability fix: new memory `feedback_qa_orchestrator_accountability.md` — main session must personally verify in Chrome, stop delegating to fabricating subagents. Seed patch: seed.ts updated with rarity values on 5 items (COMMON/UNCOMMON/RARE/ULTRA_RARE/LEGENDARY). Files changed: packages/database/prisma/seed.ts, claude_docs/STATE.md, claude_docs/patrick-dashboard.md.
 

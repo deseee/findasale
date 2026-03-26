@@ -60,6 +60,7 @@ const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
+  const [isSavingSearch, setIsSavingSearch] = useState(false);
 
   // Initialize search from ?q= URL param (set by header search bar)
   useEffect(() => {
@@ -185,6 +186,30 @@ const HomePage = () => {
     return result;
   }, [sales, searchQuery, dateFilter, saleTypeFilter]);
 
+  const handleSaveSearch = async () => {
+    if (!searchQuery.trim()) {
+      showToast('Please enter a search query', 'error');
+      return;
+    }
+
+    setIsSavingSearch(true);
+    try {
+      await api.post('/saved-searches', {
+        query: searchQuery.trim(),
+        filters: {
+          dateFilter,
+          saleTypeFilter,
+        },
+      });
+      showToast('Search saved!', 'success');
+    } catch (error: any) {
+      console.error('Error saving search:', error);
+      showToast('Failed to save search. Please try again.', 'error');
+    } finally {
+      setIsSavingSearch(false);
+    }
+  };
+
   return (
     <>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -267,10 +292,11 @@ const HomePage = () => {
               </div>
               {searchQuery && (
                 <button
-                  onClick={() => showToast('Saved searches coming soon!', 'info')}
-                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-colors"
+                  onClick={handleSaveSearch}
+                  disabled={isSavingSearch}
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
                 >
-                  💾 Save This Search
+                  💾 {isSavingSearch ? 'Saving...' : 'Save This Search'}
                 </button>
               )}
             </div>

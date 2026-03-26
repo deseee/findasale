@@ -62,8 +62,8 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
   const isBodyEmpty = !body.trim();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" style={{ pointerEvents: 'auto' }}>
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full" style={{ pointerEvents: 'auto' }}>
         {/* Header */}
         <div className="border-b border-gray-200 dark:border-gray-700 p-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
