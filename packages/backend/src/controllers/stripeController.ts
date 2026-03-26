@@ -421,29 +421,54 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
     const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;
 
-    const paymentIntent = await stripe().paymentIntents.create(
-      {
-        amount: finalPriceCents,
-        currency: 'usd',
-        metadata: {
-          itemId: item.id,
-          saleId: item.sale.id,
-          userId: req.user.id,
-          ...(affiliateLinkId ? { affiliateLinkId } : {}),
-          ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
-          ...(couponId ? { couponId } : {}),
-        },
-        // Only route to organizer Connect account if ID is valid (not null/test placeholder)
-        ...(item.sale.organizer.stripeConnectId && !item.sale.organizer.stripeConnectId.startsWith('acct_test_')
-          ? {
-              application_fee_amount: platformFeeAmount,
-              on_behalf_of: item.sale.organizer.stripeConnectId,
-              transfer_data: { destination: item.sale.organizer.stripeConnectId },
-            }
-          : {}),
+    let paymentIntent;
+    const stripeConnectId = item.sale.organizer.stripeConnectId;
+    const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
+
+    const basePaymentIntentData = {
+      amount: finalPriceCents,
+      currency: 'usd',
+      metadata: {
+        itemId: item.id,
+        saleId: item.sale.id,
+        userId: req.user.id,
+        ...(affiliateLinkId ? { affiliateLinkId } : {}),
+        ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
+        ...(couponId ? { couponId } : {}),
       },
-      { idempotencyKey }
-    );
+    };
+
+    try {
+      // First attempt: with Connect routing if organizer has valid account
+      paymentIntent = await stripe().paymentIntents.create(
+        shouldUseConnect
+          ? {
+              ...basePaymentIntentData,
+              application_fee_amount: platformFeeAmount,
+              on_behalf_of: stripeConnectId,
+              transfer_data: { destination: stripeConnectId },
+            }
+          : basePaymentIntentData,
+        { idempotencyKey }
+      );
+    } catch (stripeError: any) {
+      // Fallback: if Connect routing fails due to incomplete onboarding, retry without it
+      if (
+        shouldUseConnect &&
+        (stripeError.code === 'insufficient_capabilities_for_transfer' ||
+          (stripeError.type === 'StripeInvalidRequestError' &&
+            stripeError.message?.includes('insufficient_capabilities_for_transfer')))
+      ) {
+        console.warn(
+          `[Stripe Connect fallback] Account ${stripeConnectId} not fully onboarded, proceeding without Connect routing`,
+          { errorCode: stripeError.code }
+        );
+        // Retry without Connect data
+        paymentIntent = await stripe().paymentIntents.create(basePaymentIntentData, { idempotencyKey });
+      } else {
+        throw stripeError;
+      }
+    }
 
     const purchase = await prisma.purchase.create({
       data: {
@@ -505,7 +530,22 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: unknown) {
     console.error('Payment Intent creation error:', error);
-    res.status(500).json({ message: 'Failed to create payment intent' });
+    let statusCode = 500;
+    let message = 'Failed to create payment intent';
+
+    if (error instanceof Error) {
+      const stripeError = error as any;
+      // Catch any remaining Connect-related errors (should be rare after fallback)
+      if (stripeError.code === 'insufficient_capabilities_for_transfer') {
+        statusCode = 400;
+        message = 'Payment setup incomplete. The organizer needs to finish setting up payments.';
+      } else if (stripeError.type === 'StripeInvalidRequestError') {
+        statusCode = 400;
+        message = stripeError.message || 'Invalid payment request. Please try again.';
+      }
+    }
+
+    res.status(statusCode).json({ error: message });
   }
 };
 
