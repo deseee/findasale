@@ -187,12 +187,35 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
     if (!slug || typeof slug !== 'string') return res.status(400).json({ error: 'Slug is required' });
     const workspace = await prisma.organizerWorkspace.findUnique({
       where: { slug },
-      include: { owner: { select: { user: { select: { name: true, email: true } } } }, members: true },
+      include: {
+        owner: {
+          select: {
+            user: { select: { id: true, name: true, email: true } },
+            sales: {
+              where: { status: { in: ['PUBLISHED'] }, deletedAt: null },
+              select: { id: true, title: true, startDate: true, endDate: true, city: true },
+              orderBy: { startDate: 'asc' }
+            }
+          }
+        },
+        members: true
+      },
     });
     if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
     const memberCount = workspace.members.filter(m => m.acceptedAt !== null).length + 1;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
-    return res.json({ id: workspace.id, name: workspace.name, slug: workspace.slug, createdAt: workspace.createdAt, memberCount, ownerName });
+    const ownerUserId = workspace.owner?.user?.id || null;
+    const publishedSales = workspace.owner?.sales || [];
+    return res.json({
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      createdAt: workspace.createdAt,
+      memberCount,
+      ownerName,
+      ownerUserId,
+      publishedSales
+    });
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error fetching public workspace:', error);

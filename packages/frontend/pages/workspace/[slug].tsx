@@ -5,6 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import Skeleton from '../../components/Skeleton';
 
+interface PublishedSale {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  city: string;
+}
+
 interface WorkspacePublicData {
   id: string;
   name: string;
@@ -12,6 +20,8 @@ interface WorkspacePublicData {
   createdAt: string;
   memberCount: number;
   ownerName: string;
+  ownerUserId: string | null;
+  publishedSales: PublishedSale[];
 }
 
 export default function PublicWorkspacePage() {
@@ -123,24 +133,57 @@ export default function PublicWorkspacePage() {
             </div>
           </div>
 
-          {/* Info Box */}
-          <div className="bg-sage-50 dark:bg-sage-900/20 border border-sage-200 dark:border-sage-800 rounded-lg p-4">
-            <h3 className="font-semibold text-sage-900 dark:text-sage-100 mb-2">About This Workspace</h3>
-            <p className="text-sm text-sage-800 dark:text-sage-200">
-              This workspace is a collaboration hub where team members can manage sales, coordinate inventory, and share resources. Team members have secured access to contribute to the workspace.
-            </p>
+          {/* Published Sales Section */}
+          <div className="mt-8 pt-6 border-t border-warm-200 dark:border-gray-700">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+              Upcoming Sales
+            </h2>
+            {workspace.publishedSales && workspace.publishedSales.length > 0 ? (
+              <div className="space-y-3">
+                {workspace.publishedSales.map((sale) => {
+                  const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  });
+                  const endDate = new Date(sale.endDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  });
+                  return (
+                    <a
+                      key={sale.id}
+                      href={`/sales/${sale.id}`}
+                      className="block bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md hover:border-sage-300 dark:hover:border-sage-600 transition"
+                    >
+                      <p className="font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                        {sale.title}
+                      </p>
+                      <p className="text-sm text-warm-600 dark:text-warm-400">
+                        {startDate} — {endDate} • {sale.city}
+                      </p>
+                    </a>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-6 text-center">
+                <p className="text-warm-600 dark:text-warm-400">
+                  No upcoming sales — check back soon.
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* CTA Section */}
-          <div className="mt-8 pt-6 border-t border-warm-200 dark:border-gray-700">
-            <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
-              Looking to join this team? Contact the workspace lead to request an invitation.
+          {/* Contact Section */}
+          <div className="mt-8 pt-6 border-t border-warm-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-warm-600 dark:text-warm-400">
+              Questions about this workspace or its sales?
             </p>
             <a
-              href="/"
+              href={workspace.ownerUserId ? `/messages?to=${workspace.ownerUserId}` : '/'}
               className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition"
             >
-              Back to FindA.Sale
+              Message {workspace.ownerName}
             </a>
           </div>
         </div>
