@@ -24,7 +24,7 @@ export default function TemplatesPage() {
   const [editData, setEditData] = useState({ title: '', body: '', category: 'general' });
   const [isAdding, setIsAdding] = useState(false);
 
-  if (!isLoading && (!user || user.role !== 'ORGANIZER')) {
+  if (!isLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'))) {
     router.push('/login');
     return null;
   }
