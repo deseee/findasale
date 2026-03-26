@@ -250,8 +250,8 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // Brand Follow routes
-router.get('/:userId/brand-follows', authenticate, (req: AuthRequest, res: Response) => getBrandFollows(req, res));
-router.post('/:userId/brand-follows', authenticate, (req: AuthRequest, res: Response) => addBrandFollow(req, res));
-router.delete('/:userId/brand-follows/:brandFollowId', authenticate, (req: AuthRequest, res: Response) => removeBrandFollow(req, res));
+router.get('/:userId/brand-follows', authenticate, getBrandFollows);
+router.post('/:userId/brand-follows', authenticate, addBrandFollow);
+router.delete('/:userId/brand-follows/:brandFollowId', authenticate, removeBrandFollow);
 
 export default router;
