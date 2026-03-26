@@ -126,8 +126,8 @@ function OnboardingShower() {
 
     // Only show on first-time shopper pages (homepage, trending)
     // Do NOT show on secondary pages like /favorites, /messages, /inspiration
-    const shopperFirstPages = ['/', '/trending', '/index'];
-    const isFirstPage = shopperFirstPages.some(p => router.pathname === p || router.pathname.startsWith(p));
+    const shopperFirstPages = ['/', '/trending'];
+    const isFirstPage = shopperFirstPages.some(p => router.pathname === p);
     if (!isFirstPage) return;
 
     const done = localStorage.getItem('findasale_onboarded');
@@ -200,8 +200,7 @@ function UTMCapture() {
     params.append('saleId', saleId);
     if (typeof utm_source === 'string') params.append('utm_source', utm_source);
     if (typeof utm_medium === 'string') params.append('utm_medium', utm_medium);
-    if (typeof utm_campaign === 'string') params.append('utm_campaign', utm_campaign);
-    if (typeof utm_content === 'string') params.append('utm_content', utm_content);
+    if (typeof utm_campaign === 'string') params.append('utm_content', utm_content);
 
     fetch(`/api/link-clicks/record?${params}`, { method: 'GET' }).catch(() => {}); // Silent fail
   }, [router.query]);
