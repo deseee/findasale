@@ -15,6 +15,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import TierGate from '../../components/TierGate';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -173,12 +174,17 @@ const BrandKitPage = () => {
   }
 
   return (
-    <>
-      <Head>
-        <title>Brand Kit - FindA.Sale</title>
-      </Head>
-      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 py-8">
+    <TierGate
+      requiredTier="PRO"
+      featureName="Brand Kit"
+      description="Customize your brand identity with logos, colors, and social links."
+    >
+      <>
+        <Head>
+          <title>Brand Kit - FindA.Sale</title>
+        </Head>
+        <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+          <div className="max-w-4xl mx-auto px-4 py-8">
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
             Back to dashboard
           </Link>
@@ -462,7 +468,8 @@ const BrandKitPage = () => {
           </div>
         </div>
       </div>
-    </>
+      </>
+    </TierGate>
   );
 };
 

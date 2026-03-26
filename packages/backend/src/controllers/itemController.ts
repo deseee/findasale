@@ -240,6 +240,7 @@ export const getItemById = async (req: Request, res: Response) => {
         reverseStartDate: true,
         draftStatus: true,
         qrEmbedEnabled: true,
+        rarity: true,
         createdAt: true,
         updatedAt: true,
         // embedding & tags intentionally excluded — see getItemsBySaleId comment
@@ -329,6 +330,7 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         reverseDailyDrop: true,
         reverseFloorPrice: true,
         reverseStartDate: true,
+        rarity: true,
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
