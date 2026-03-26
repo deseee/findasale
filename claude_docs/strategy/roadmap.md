@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale
 
-**Last Updated:** 2026-03-26 (v74 — S290 moves: #27/#66/#125 exports + #65 tier gating moved to Shipped (all Nav ✅). #194 saved searches stays (Nav 📋). Chrome ⚠️ stripped to 📋 on #60/#46/#63/#187/#52/#201/#57/#18.)
+**Last Updated:** 2026-03-26 (v75 — S295: roadmap audit corrections applied, #85 QR verified, #13 workspace ⚠️, fee display fix noted)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -302,9 +302,9 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 8 | Batch Operations Toolkit | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Bulk price/status/category/tag/photo — Chrome ✅ S286 |
 | 170 | CSV Listing Import | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Bulk upload item lists from CSV — Chrome ✅ S286 |
 | 171 | Payout PDF Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Financial reporting for tax/accounting — Needs Chrome QA |
-| 172 | Stripe Connect Setup | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Payout bank account linking + verification — Chrome ✅ S288: settings page + Setup Stripe Connect button confirmed working |
+| 172 | Stripe Connect Setup | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | Payout bank account linking + verification — Chrome ✅ S288: settings page + Setup Stripe Connect button confirmed working. Checkout fee display P0 fixed S295 — buyer was seeing double fee (10%+10%). CheckoutModal.tsx corrected: regular items = listed price only, auction = +5% buyer premium. |
 | 18 | Post Performance Analytics | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | UTM tracking on social template downloads — Needs Chrome QA |
-| 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Multi-user workspace, role management — Needs Chrome QA |
+| 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Multi-user workspace, role management — Chrome 📋. Public URL loads (S292 404 fix verified) but page is placeholder shell — hardcoded copy, no join flow, no sales listed. Needs build-out. |
 | 68 | Command Center Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Per-sale widget dashboard — Chrome PASS S285 |
 | 136 | QR Code Auto-Embedding in Exports | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | qrEmbedEnabled field, Cloudinary QR overlay via cloudinaryWatermark.ts, exportController wired, organizer toggle in edit-item. — Needs Chrome QA |
 | 46 | Treasure Typology Classifier | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx — Needs Chrome QA |
@@ -371,7 +371,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 55 | Seasonal Discovery Challenges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Rotating challenges by season/category — Needs Chrome QA |
 | 122 | Explorer's Guild Phase 1 (Rebrand + Copy) | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | Collector→Explorer labels, collect→explore language throughout. Rank names updated. No schema changes — Chrome ✅ S286 |
 | 123 | Explorer's Guild Phase 2 (XP Economy + Loot Legend) | SHO | FREE/PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | User.guildXp + User.explorerRank + RarityBoost table. XP sinks (coupon-gen, rarity boost, Hunt Pass discount). Loot Legend portfolio. Full schema + endpoints — Chrome ✅ S286 |
-| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | TreasureHuntQRClue + TreasureHuntQRScan schema models, treasureHuntQRController (6 CRUD endpoints), TreasureHuntQRManager.tsx (organizer clue management + QR download), shopper clue detail page (/sales/[id]/treasure-hunt-qr/[clueId]). — Needs Chrome QA |
+| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Organizer: toggle + clues + XP bonus in edit-sale ✅. Shopper: QR modal renders 300×300, Download/Copy/XP message ✅. /shopper/hunt-pass page created S295. |
 | 133 | Hunt Pass Subscription Redesign | SHO | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | LEGENDARY 6h early access gate in itemController, 1.5x XP multiplier (applyHuntPassMultiplier in xpService), getLootLegend() + getCollectorLeague() endpoints + routes, loot-legend.tsx + league.tsx pages, loyalty.tsx updated. — Chrome ✅ S286 |
 | 214 | AI Sale Planner Chat | PUB | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/plan` page, public rate-limited acquisition tool — Chrome ✅ S288 |
 | 215 | AI Tag Suggestions (Haiku) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Part of Rapidfire, all tiers — Needs Chrome QA |

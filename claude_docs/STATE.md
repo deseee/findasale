@@ -7,13 +7,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S294 COMPLETE (2026-03-26):** Frontend inventory audit + page wiring + consent copy + roadmap audit prep.
+**S295 IN PROGRESS (2026-03-26):** Roadmap corrections + deletions complete. Chrome QA done. Dev fixes dispatched. Patrick workspace decision pending.
 
-**S295 priorities:**
-1. Apply roadmap corrections from `claude_docs/audits/roadmap-audit-S294.md` (subagent dispatch — 26 Chrome downgrades, 9 Nav corrections, 14 S290-S293 updates, ~4 new items, stale Coming Soon cleanup)
-2. Delete `/organizer/pro-features.tsx` (Patrick confirmed redundant) + git rm `/creator/connect-stripe.tsx` (gutted S294, needs actual removal)
-3. Chrome verify S292 fixes live (carried from S293): checkout fee, workspace invite, public workspace URL
-4. D6 Chrome QA: #85 Treasure Hunt QR
+**S295 complete:**
+- roadmap.md: 26 Chrome downgrades, nav corrections, S289-S292 verified upgrades, 2 new items (#218 Trades, #219 Achievements)
+- TierGate.tsx: /organizer/pro-features → /pricing
+- creator/dashboard.tsx: Connect Stripe → real OAuth endpoint (/api/stripe/create-connect-account)
+- Deleted: pro-features.tsx + connect-stripe.tsx (git rm)
+- CheckoutModal.tsx: P0 fee fix — removed buyer-facing 10% platform fee display for regular items. Buyer now sees item price only. Auction items still show 5% buyer premium.
+- shopper/hunt-pass.tsx: NEW PAGE created (was 404). Hunt Pass marketing + upgrade page.
+
+**S295 Chrome QA findings:**
+- #172 Stripe/Checkout: ✅ RESERVED error handling works. ⚠️ Fee display P0 — buyer was charged item × 1.2 (double fee bug). Dev fix dispatched + applied (CheckoutModal.tsx). Needs re-verify after push.
+- #13 Workspace invite: ✅ Invite Member button renders for workspace owner.
+- #13 Public workspace URL: ⚠️ Page loads (S292 404 fix confirmed). BUT content is placeholder shell — hardcoded boilerplate "About" copy, no contact mechanism, no sales listed, no join flow. DECISION NEEDED: build out vs defer.
+- #85 Treasure Hunt QR: ✅ Organizer: toggle + completion bonus + clue hints + 10-category dropdown + Add Clue button all present in edit-sale. ✅ Shopper: QR modal on item detail renders 300×300 blob, Download + Copy buttons, XP message. ⚠️ /shopper/hunt-pass was 404 — new page created by dev. ⚠️ Could not test clue save (Alice doesn't own test sale). ✅ Auth protection: non-owner correctly gets "not authorized" toast.
+
+**Pushblock pending:** CheckoutModal.tsx + shopper/hunt-pass.tsx + roadmap.md updates
+
+**Patrick decision needed:**
+- Workspace public page: BUILD (sales + join request) vs STUB (real description + contact email) vs DEFER (remove URL from settings UI)
 
 ---
 
