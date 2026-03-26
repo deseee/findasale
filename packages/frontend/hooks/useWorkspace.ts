@@ -12,7 +12,7 @@ export interface WorkspaceMember {
     id: string;
     businessName: string;
     profilePhoto?: string;
-    email?: string;
+    user?: { email?: string };
   };
 }
 
