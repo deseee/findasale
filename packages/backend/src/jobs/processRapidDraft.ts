@@ -83,6 +83,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
           description: aiResult.description || item.description,
           category: aiResult.category || item.category,
           condition: aiResult.condition || item.condition,
+          conditionGrade: aiResult.conditionGrade || item.conditionGrade, // BUG 5: Include conditionGrade from AI
           price: aiResult.suggestedPrice ?? item.price,
           tags: aiResult.tags || [],
           isAiTagged: true,
