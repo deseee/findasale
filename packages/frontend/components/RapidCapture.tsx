@@ -373,8 +373,15 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
           {/* Right: Review button */}
           <button
-            onClick={onNavigateToReview}
-            className="bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-3 py-1.5 rounded-full transition-colors"
+            onClick={() => {
+              if (!isRapidfire && photos.length > 0) {
+                setSelectedIndex(0);
+              } else {
+                onNavigateToReview();
+              }
+            }}
+            disabled={!isRapidfire && photos.length === 0}
+            className="bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Review{readyCount > 0 && ` (${readyCount})`}
           </button>
@@ -614,9 +621,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           <div className="flex items-center justify-center py-4 px-6 gap-4">
             {/* Gallery thumbnail (left) */}
             {lastItemThumbnail && (
-              <div className="w-12 h-12 rounded overflow-hidden border border-white/30 flex-shrink-0">
+              <button
+                onClick={() => !isRapidfire && photos.length > 0 && setSelectedIndex(photos.length - 1)}
+                disabled={isRapidfire || photos.length === 0}
+                className="w-12 h-12 rounded overflow-hidden border border-white/30 flex-shrink-0 disabled:cursor-not-allowed"
+              >
                 <img src={lastItemThumbnail} alt="Last capture" className="w-full h-full object-cover" />
-              </div>
+              </button>
             )}
             {!lastItemThumbnail && <div className="w-12" />}
 
