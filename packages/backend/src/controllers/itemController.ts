@@ -18,6 +18,7 @@ import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tie
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
 import { closeAuction } from '../services/auctionService'; // Auction close flow
+import { resetRapidDraftDebounce } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -882,6 +883,11 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: { photoUrls: [...item.photoUrls, url] },
     });
+    // If item is in DRAFT status, reset the AI analysis debounce timer to give user
+    // more time to add additional photos via the "+" button (multi-angle grouping)
+    if (item.draftStatus === 'DRAFT') {
+      resetRapidDraftDebounce(id);
+    }
     res.json({ photoUrls: updated.photoUrls });
   } catch (error) {
     console.error('addItemPhoto error:', error);

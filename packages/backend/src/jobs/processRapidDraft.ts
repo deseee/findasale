@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { analyzeItemImage } from '../services/cloudAIService';
+import { analyzeItemImage, analyzeItemImages } from '../services/cloudAIService';
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -50,20 +50,43 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       return;
     }
 
-    // AI tagging: Fetch the first photo and analyze it
-    const photoUrl = item.photoUrls[0];
-
+    // AI tagging: Download ALL photos and analyze them together
+    // Multiple angles help with brand identification, condition grading, and feature detection
     try {
-      // Download image from Cloudinary URL, convert to Buffer for analyzeItemImage
       const axios = (await import('axios')).default;
-      const response = await axios.get(photoUrl, { responseType: 'arraybuffer' });
-      const photoBuffer = Buffer.from(response.data);
 
-      // Determine MIME type from URL or default to image/jpeg
-      const mimeType = photoUrl.includes('.png') ? 'image/png' : 'image/jpeg';
+      // Download all photos as buffers
+      const photoBuffers: Buffer[] = [];
+      const mimeTypes: string[] = [];
 
-      // Call Vision → Haiku chain
-      const aiResult = await analyzeItemImage(photoBuffer, mimeType);
+      for (const photoUrl of item.photoUrls) {
+        try {
+          const response = await axios.get(photoUrl, { responseType: 'arraybuffer' });
+          const photoBuffer = Buffer.from(response.data);
+          photoBuffers.push(photoBuffer);
+
+          // Determine MIME type from URL or default to image/jpeg
+          const mimeType = photoUrl.includes('.png') ? 'image/png' : 'image/jpeg';
+          mimeTypes.push(mimeType);
+        } catch (downloadError) {
+          console.warn(`[rapidfire] Failed to download photo ${photoUrl}:`, downloadError);
+          // Skip this photo and continue with others
+        }
+      }
+
+      if (photoBuffers.length === 0) {
+        console.log(`[rapidfire] Item ${itemId} had no downloadable photos; marking PENDING_REVIEW without AI`);
+        await prisma.item.update({
+          where: { id: itemId },
+          data: { draftStatus: 'PENDING_REVIEW' }
+        });
+        return;
+      }
+
+      // Call Vision → Haiku chain with all photos (or single if only one available)
+      const aiResult = photoBuffers.length === 1
+        ? await analyzeItemImage(photoBuffers[0], mimeTypes[0])
+        : await analyzeItemImages(photoBuffers, mimeTypes);
 
       if (!aiResult) {
         // Cloud AI unavailable — mark as PENDING_REVIEW without AI tags

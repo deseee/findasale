@@ -17,6 +17,20 @@ cloudinary.config({
 // Multer — memory storage (buffers go straight to Cloudinary, no disk writes)
 export const upload = multer({ storage: multer.memoryStorage() });
 
+// Debounce AI analysis to allow "+" button usage (multi-photo grouping)
+export const rapidfireAIDebounce = new Map<string, ReturnType<typeof setTimeout>>();
+export const RAPIDFIRE_AI_DELAY_MS = 4500; // 4.5s window for user to add more photos via "+"
+
+export function resetRapidDraftDebounce(itemId: string): void {
+  const existingTimer = rapidfireAIDebounce.get(itemId);
+  if (existingTimer) clearTimeout(existingTimer);
+  const timer = setTimeout(() => {
+    rapidfireAIDebounce.delete(itemId);
+    enqueueProcessRapidDraft(itemId);
+  }, RAPIDFIRE_AI_DELAY_MS);
+  rapidfireAIDebounce.set(itemId, timer);
+}
+
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 
@@ -363,8 +377,8 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
       }
     });
 
-    // Queue background job (non-blocking)
-    enqueueProcessRapidDraft(item.id);
+    // Debounce: start AI trigger timer (4.5s window for user to add more photos via "+")
+    resetRapidDraftDebounce(item.id);
 
     // Return immediately with itemId and DRAFT status
     res.status(201).json({
