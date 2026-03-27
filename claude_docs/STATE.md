@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-Nothing in flight. S302 wrapped.
+Nothing in flight. S303 wrapped.
 
 ---
 
@@ -15,32 +15,29 @@ Nothing in flight. S302 wrapped.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #142 Photo Upload | Never reached — login issues S300 | Chrome login + file_upload tool + gallery screenshot | S300 |
-| #143 Rapidfire Camera Mode | Never reached — login issues S300 | Chrome login + Camera AI tab + real image + result screenshot | S300 |
-| #17 Create Sale (edit geocode) | Error banner still shows on edit-sale page despite 3 fix iterations. Auto-geocode not confirmed firing. | Open Chrome Network tab, reload page, confirm GET /api/geocode fires on load. If fires and fails: check Nominatim response. If doesn't fire: read edit-sale/[id].tsx geocodingAttempted logic. | S302 |
-| #31 Organizer Profile save | Fix deployed (frontend refetch after PATCH). Not Chrome-verified. | Navigate to /organizer/settings as user2, change Bio field, Save, reload — confirm change persisted. | S302 |
-| #65 CSV Export 429 feedback | Fix deployed (429 error message surfaced in UI). Not Chrome-verified. Rate limit: 1 export per month — Patrick decision needed on window. | Navigate to /organizer/promote/[saleId], click Export CSV, verify 429 message shows. | S302 |
-| #141 P2 bugs | Fix deployed (category pre-pop, sort glitch). Not Chrome-verified. | Edit an item with a category → confirm category shows on edit form. Rename item → confirm it stays visible in add-items list. | S302 |
-| #122 Nav label | Fix deployed (Explorer Passport → My Loot Legend in Layout.tsx). Not Chrome-verified. | Open nav as logged-in shopper, confirm label reads "My Loot Legend". | S302 |
+| #142 Smart Inventory Upload (Batch) | file_upload blocked — Chrome MCP can't reach VM filesystem paths. Dropzone never received file. | S304: Patrick drags a real photo from his machine into the Batch Upload dropzone while Claude watches via Chrome MCP. Confirm AI draft listing appears in queue. | S303 |
+| #143 Rapidfire Camera (AI) | Camera attached to computer but Chrome permission dialog needs Patrick to click Allow. | S304: Patrick on standby. Claude navigates to /organizer/add-items/[saleId] → Camera (AI) tab → clicks capture button → Patrick clicks Allow on Chrome camera permission → Claude confirms item draft created. | S303 |
 
 **KNOWN BUG — Session instability:** After Cookie/localStorage clear in Chrome MCP, fresh login for shopper accounts (user11, user12) silently fails. Do NOT clear cookies — use signout route only, then log in.
 
 ---
 
-## Next Session (S303)
+## Next Session (S304)
 
 **Start with:**
-1. Smoke test: open Chrome, reload `https://finda.sale/organizer/edit-sale/cmn8a5yzs000bft5hrpb5z4ha` with Network tab open. Confirm whether `GET /api/geocode` fires on page load and what the response is. If it fires and returns coordinates, #17 is fixed. If it doesn't fire, read `packages/frontend/pages/organizer/edit-sale/[id].tsx` lines around `geocodingAttempted` and dispatch dev for fourth fix attempt.
-2. Verify blocked queue: #31 (profile save), #65 (CSV 429 message), #141 (category + sort), #122 (nav label) — one Chrome test each.
-3. #142 Photo Upload and #143 Camera AI still blocked — attempt with user1 + file_upload tool.
+1. **#143 Camera AI (with Patrick)** — Patrick on standby for Chrome camera permission prompt. Navigate to /organizer/add-items/[saleId] → Camera (AI) tab → click capture button → Patrick clicks Allow → confirm item draft created.
+2. **#142 Batch Upload (with Patrick)** — Patrick drags a real photo from his machine into the Batch Upload dropzone → Claude confirms AI draft listing appears.
+3. Pick next work items from roadmap — all S302/S303 verified items can be moved to Shipped.
 
 **PostStop hook active.** Every ✅ requires 3 screenshot IDs. UNVERIFIED is always fine.
 
-**No Patrick actions needed — all S302 code is already pushed.**
+**No Patrick actions needed — all S303 code was pushed in-session.**
 
 ---
 
 ## Recently Complete
+
+**S303 COMPLETE (2026-03-26):** Pure QA verification session. Chrome-confirmed: (1) #17 edit-sale geocode — coords (42.98/-85.68) saved to DB, no error banner on load ✅. (2) #31 profile save — bio "S303 verified fix" persists after reload; GET /organizers/me now returns phone/bio/website ✅. (3) #65 CSV export 429 — toast "Export limit: 1 per month. Your next export is available on April 1, 2026." appears on 429 ✅. (4) #141 item category pre-pop + sort — category "Furniture" pre-populates on edit form; renamed item stays visible in list ✅. (5) #122 nav label — H1 "My Loot Legend 🗺️" on /shopper/explorer-passport ✅. Two backend fixes pushed this session: edit-sale geocode useEffect (sha: 3e0198d), GET /organizers/me missing fields (sha: 66a8f871). #142/#143 UNVERIFIED — same VM filesystem block as S300.
 
 **S302 COMPLETE (2026-03-26):** Build recovery + multi-fix deployment. (1) Railway TS build failures fixed — lat/lng null guards added across 5 backend services (cityHeat, discovery, heatmap, ripple, wishlistAlert) after schema made lat/lng optional in S301. (2) Vercel build failure fixed — implicit `any` in edit-item/[id].tsx line 65. (3) Edit-sale auto-geocode: added auto-trigger on page load when lat/lng null; fixed wrong endpoint (POST /sales/geocode → GET /geocode). Error banner still shows at session end — 3 iterations, unresolved. (4) #31 Profile save: fix deployed (frontend refetch after PATCH), UNVERIFIED. (5) #65 CSV 429: fix deployed (error message surfaced), UNVERIFIED. (6) #141 P2 (category pre-pop + sort glitch): fix deployed, UNVERIFIED. (7) #122 nav label: "Explorer Passport" → "My Loot Legend", deployed, UNVERIFIED. QA honesty enforced mid-session — Patrick caught subagent rubber-stamping #17 ✅ with visible red error on screen. All S302 code pushed to GitHub, Vercel READY (dpl_5jmr2sZWWXk1AfKTuVhkKC8GtMTC).
 
