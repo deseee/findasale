@@ -351,7 +351,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // #102: Validate price >= 0
@@ -471,6 +471,8 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         reverseStartDate: reverseStartDate ? new Date(reverseStartDate) : null,
         // B2: AI tagging disclosure
         isAiTagged: isAiTagged === true || isAiTagged === 'true',
+        // CD2 Phase 2: AI confidence score from batch upload (0.0–1.0); defaults to 0.5
+        aiConfidence: aiConfidence ? parseFloat(aiConfidence) : 0.5,
         // U1: satisfies NOT NULL constraint; scheduleItemEmbedding fills it async
         embedding: [],
         // Phase 1A: regular item creation is a deliberate organizer action — publish immediately

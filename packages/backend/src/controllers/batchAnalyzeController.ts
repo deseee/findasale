@@ -23,7 +23,7 @@ interface BatchAnalysisResult {
   suggestedCondition: string;
   suggestedPrice: number;
   suggestedTags: string[];
-  confidence: 'high' | 'medium' | 'low';
+  confidence: number; // AI confidence score (0.0–1.0)
   error?: string;
   errorCode?: 'AI_TIMEOUT' | 'AI_PARSE_ERROR' | 'AI_RATE_LIMIT' | 'AI_ERROR';
 }
@@ -163,7 +163,8 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               : Array.isArray(ai.suggestedTags)
               ? (ai.suggestedTags as string[])
               : [],
-            confidence: 'medium', // Default to medium; could be refined with model confidence scores
+            // Use actual confidence from AI response (0.0–1.0); fallback to 0.5 if missing
+            confidence: typeof ai.confidence === 'number' ? ai.confidence : 0.5,
           };
 
           return result;
