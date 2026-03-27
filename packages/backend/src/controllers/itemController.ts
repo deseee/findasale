@@ -869,7 +869,8 @@ const getItemForOrganizer = async (id: string, userId: string) => {
 
 export const addItemPhoto = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerAccess = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
     const { id } = req.params;
@@ -897,7 +898,8 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
 
 export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerAccess = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
     const { id, photoIndex } = req.params;
@@ -921,7 +923,8 @@ export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
 
 export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerAccess = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
     const { id } = req.params;
