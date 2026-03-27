@@ -620,151 +620,121 @@ const AddItemsDetailPage = () => {
     }
   };
 
-  // Rapidfire mode handler — each photo POSTs to /upload/rapidfire, creates a DRAFT item
-  // Phase 3: Pipeline: enhance → crop → quality check → face detect → upload
-  // Phase 5: If addingToItemId is set, append photo to that item instead of creating new
-  // Uses optimistic UI: temp entry added immediately, replaced with real itemId on success
-  const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
-    setCameraOpen(false);
-    if (photos.length === 0) return;
+  // Background upload handler for rapidfire photos — called async from onPhotoCapture
+  // Processes one photo: enhance → crop → quality check → face detect → upload
+  // On success: swaps temp ID with real itemId
+  // Does NOT block the camera; runs in background
+  const processAndUploadRapidPhoto = async (
+    photo: { blob: Blob; previewUrl: string },
+    tempId: string,
+    appendToItemId: string | null
+  ): Promise<void> => {
+    try {
+      // Phase 3: On-device processing pipeline
+      let processedBlob = photo.blob;
+      let autoEnhanced = false;
 
-    // Snapshot and reset add-mode so next capture goes to new item
-    const appendToItemId = addingToItemId;
-    if (appendToItemId) setAddingToItemId(null);
+      // 1. Auto-enhance (non-blocking)
+      const enhanced = await autoEnhanceImage(photo.blob);
+      processedBlob = enhanced.blob;
+      autoEnhanced = enhanced.enhanced;
 
-    for (const photo of photos) {
-      // In append-mode, create a temp entry (onPhotoCapture doesn't create one in append-mode)
-      // In normal mode, onPhotoCapture already created a temp entry — find it by previewUrl
-      let tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      // 2. Crop to 4:3
+      processedBlob = await cropTo4x3(processedBlob);
 
-      if (!appendToItemId) {
-        // Normal mode: onPhotoCapture already created an entry with this previewUrl
-        // Find it by matching previewUrl (most recent match with same previewUrl)
-        const existingEntry = rapidItems.find(
-          (item) => item.thumbnailUrl === photo.previewUrl && item.id.startsWith('temp-')
-        );
-        if (existingEntry) {
-          tempId = existingEntry.id;
-        }
-      } else {
-        // Append mode: need to create a temp entry for the appended photo
-        setRapidItems((prev) => [
-          ...prev,
-          { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
-        ]);
+      // 3. Check quality
+      const quality = await checkImageQuality(processedBlob);
+      if (quality.isDark) {
+        // Show retake toast
+        setShowRetakeToast(true);
+        if (retakeToastTimeout) clearTimeout(retakeToastTimeout);
+        const timeout = setTimeout(() => setShowRetakeToast(false), 4000);
+        setRetakeToastTimeout(timeout);
       }
 
-      try {
-        // Phase 3: On-device processing pipeline
-        let processedBlob = photo.blob;
-        let autoEnhanced = false;
+      // 4. Face detection
+      const hasFace = await detectFace(processedBlob);
+      if (hasFace) {
+        // Face detected — mark with warning but don't block; show face modal for next upload if needed
+        // For now, continue upload (face detection is optional in rapidfire)
+      }
 
-        // 1. Auto-enhance (non-blocking)
-        const enhanced = await autoEnhanceImage(photo.blob);
-        processedBlob = enhanced.blob;
-        autoEnhanced = enhanced.enhanced;
-
-        // 2. Crop to 4:3
-        processedBlob = await cropTo4x3(processedBlob);
-
-        // 3. Check quality
-        const quality = await checkImageQuality(processedBlob);
-        if (quality.isDark) {
-          // Show retake toast
-          setShowRetakeToast(true);
-          if (retakeToastTimeout) clearTimeout(retakeToastTimeout);
-          const timeout = setTimeout(() => setShowRetakeToast(false), 4000);
-          setRetakeToastTimeout(timeout);
-        }
-
-        // 4. Face detection
-        const hasFace = await detectFace(processedBlob);
-        if (hasFace) {
-          // Show face modal and pause upload
-          setShowFaceModal(true);
-          setPendingFaceUpload({
-            blob: processedBlob,
-            previewUrl: photo.previewUrl,
-            tempId,
-          });
-          return; // Wait for modal response
-        }
-
-        // 5. Upload
-        if (appendToItemId) {
-          // Phase 5: Append photo to existing item
-          // Upload photo via sale-photos (returns URL array)
-          const fd = new FormData();
-          fd.append('photos', processedBlob, 'rapidfire.jpg');
-          fd.append('saleId', saleId as string);
-          const uploadRes = await api.post('/upload/sale-photos', fd, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
-          const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
-          if (urls[0]) {
-            // Append URL to existing item
-            await api.post(`/items/${appendToItemId}/photos`, { url: urls[0] });
-            // Update local state to append photo
-            setRapidItems((prev) =>
-              prev.map((item) =>
-                item.id === appendToItemId
-                  ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
-                  : item
-              )
-            );
-          }
-          // No temp entry was added in append-mode, nothing to clean up
-        } else {
-          // Normal: create new item
-          const fd = new FormData();
-          fd.append('image', processedBlob, 'rapidfire.jpg');
-          fd.append('saleId', saleId as string);
-          fd.append('autoEnhanced', autoEnhanced ? 'true' : 'false');
-
-          const res = await api.post('/upload/rapidfire', fd, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
-
-          const { itemId } = res.data;
-
-          // Swap temp id for real DB item id and set autoEnhanced flag
+      // 5. Upload
+      if (appendToItemId) {
+        // Append photo to existing item
+        const fd = new FormData();
+        fd.append('photos', processedBlob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        const uploadRes = await api.post('/upload/sale-photos', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
+        if (urls[0]) {
+          // Append URL to existing item
+          await api.post(`/items/${appendToItemId}/photos`, { url: urls[0] });
+          // Update local state to append photo
           setRapidItems((prev) =>
             prev.map((item) =>
-              item.id === tempId
-                ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [photo.previewUrl], autoEnhanced }
+              item.id === appendToItemId
+                ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
                 : item
             )
           );
-
-          // Invalidate caches for item lists and draft counts
-          queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-          queryClient.invalidateQueries({ queryKey: ['draft-items', saleId] });
         }
-      } catch (err: any) {
-        console.error('[rapidfire] Upload failed:', err);
+      } else {
+        // Create new item
+        const fd = new FormData();
+        fd.append('image', processedBlob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        fd.append('autoEnhanced', autoEnhanced ? 'true' : 'false');
 
-        // Determine error message based on error type
-        let errorMessage = 'Upload failed';
-        if (err.response?.status === 429) {
-          const retryAfter = err.response.headers['retry-after'];
-          const retryAfterSecs = retryAfter ? parseInt(retryAfter, 10) : 60;
-          errorMessage = `Rate limited. Please wait ${retryAfterSecs}s before trying`;
-        }
+        const res = await api.post('/upload/rapidfire', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
 
+        const { itemId } = res.data;
+
+        // Swap temp id for real DB item id
         setRapidItems((prev) =>
           prev.map((item) =>
-            item.id === tempId ? { ...item, aiError: errorMessage } : item
+            item.id === tempId
+              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [photo.previewUrl], autoEnhanced }
+              : item
           )
         );
-        showToast(`Photo failed: ${errorMessage}`, 'error');
+
+        // Invalidate caches for item lists and draft counts
+        queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+        queryClient.invalidateQueries({ queryKey: ['draft-items', saleId] });
+      }
+    } catch (err: any) {
+      console.error('[rapidfire] Background upload failed:', err);
+
+      // Determine error message based on error type
+      let errorMessage = 'Upload failed';
+      if (err.response?.status === 429) {
+        const retryAfter = err.response.headers['retry-after'];
+        const retryAfterSecs = retryAfter ? parseInt(retryAfter, 10) : 60;
+        errorMessage = `Rate limited. Please wait ${retryAfterSecs}s before trying`;
       }
 
-      // Add sequential delay between uploads in rapidfire mode to prevent rate limiting
-      // Only add delay if not the last photo
-      if (appendToItemId === null && photos.indexOf(photo) < photos.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
+      setRapidItems((prev) =>
+        prev.map((item) =>
+          item.id === tempId ? { ...item, aiError: errorMessage } : item
+        )
+      );
+      showToast(`Photo failed: ${errorMessage}`, 'error');
     }
+  };
+
+  // Rapidfire mode handler — simplified after S305 refactor
+  // Background uploads now happen in onPhotoCapture as photos are captured
+  // This handler just closes the camera when user taps "Done"
+  const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
+    // Close camera — uploads already happened in background via onPhotoCapture
+    setCameraOpen(false);
+    // Reset add-mode when closing camera
+    setAddingToItemId(null);
   };
 
   // Face modal handlers
@@ -1440,10 +1410,14 @@ const AddItemsDetailPage = () => {
               readyCount={rapidItems.filter((i) => i.draftStatus === 'PENDING_REVIEW').length}
               onPhotoCapture={(photo) => {
                 const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                // Add temp entry to carousel immediately for live preview
                 setRapidItems((prev) => [
                   ...prev,
                   { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
                 ]);
+                // Start background upload pipeline (non-blocking)
+                // Uses current addingToItemId for append-mode detection
+                processAndUploadRapidPhoto(photo, tempId, addingToItemId);
               }}
               onEnhanceAll={() => {
                 // BUG 6 FIX: Show placeholder since no backend endpoint exists yet

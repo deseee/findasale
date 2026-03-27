@@ -518,7 +518,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   <div
                     key={item.id}
                     className={`flex-shrink-0 relative cursor-pointer transition-all w-16 h-auto ${
-                      isAddingTo ? 'ring-2 ring-amber-400 rounded-lg' : ''
+                      isAddingTo ? 'ring-2 ring-amber-400 rounded-lg shadow-lg shadow-amber-400/50' : ''
                     }`}
                     onClick={() => onThumbnailTap(item.id)}
                     title={item.title || 'Item'}
@@ -540,8 +540,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       )}
                     </div>
 
-                    {/* Loading spinner overlay (while DRAFT with no error) */}
-                    {item.draftStatus === 'DRAFT' && !item.aiError && item.thumbnailUrl && (
+                    {/* Loading spinner overlay (while DRAFT with no error, real items only) */}
+                    {!item.id.startsWith('temp-') && item.draftStatus === 'DRAFT' && !item.aiError && item.thumbnailUrl && (
                       <div className="absolute inset-0 rounded-lg bg-black/20 flex items-center justify-center">
                         <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
                       </div>
