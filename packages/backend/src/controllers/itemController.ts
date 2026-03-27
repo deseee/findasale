@@ -1117,7 +1117,8 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
 // Used by the review-before-publish page. Requires organizer ownership of the sale.
 export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ORGANIZER') {
+    const hasOrganizerAccess = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerAccess) {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 
