@@ -124,15 +124,15 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
 
   if (collapsed) {
     return (
-      <div className="bg-white border-b border-warm-200 p-2 flex items-center justify-between">
+      <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 p-2 flex items-center justify-between">
         <button
           onClick={onToggleCollapse}
-          className="px-2 py-1 text-warm-600 hover:text-warm-900 text-sm font-medium"
+          className="px-2 py-1 text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 text-sm font-medium"
           title="Expand carousel"
         >
           [━]
         </button>
-        <span className="text-xs text-warm-600">
+        <span className="text-xs text-warm-600 dark:text-warm-400">
           {items.length} photo{items.length !== 1 ? 's' : ''} ·{' '}
           {ready} ready
         </span>
@@ -141,11 +141,11 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
   }
 
   return (
-    <div className="bg-white border-b border-warm-200">
-      <div className="flex items-center gap-2 p-2 pb-3 border-b border-warm-100">
+    <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700">
+      <div className="flex items-center gap-2 p-2 pb-3 border-b border-warm-100 dark:border-gray-700">
         <button
           onClick={onToggleCollapse}
-          className="px-2 py-1 text-warm-600 hover:text-warm-900 text-sm font-medium"
+          className="px-2 py-1 text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 text-sm font-medium"
           title="Collapse carousel"
         >
           [━]
@@ -153,13 +153,13 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
 
         <button
           onClick={onTogglePause}
-          className="px-2 py-1 text-warm-600 hover:text-warm-900 text-sm font-medium"
+          className="px-2 py-1 text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 text-sm font-medium"
           title={aiPaused ? 'Resume AI analysis' : 'Pause AI analysis'}
         >
           {aiPaused ? '[▶]' : '[⏸]'}
         </button>
 
-        <span className="text-xs text-warm-600 flex-1">
+        <span className="text-xs text-warm-600 dark:text-warm-400 flex-1">
           {items.length} photo{items.length !== 1 ? 's' : ''} ·{' '}
           {ready} ready ·{' '}
           {analyzing} analyzing
@@ -187,7 +187,7 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
               title={item.title || 'Item'}
             >
               {/* Thumbnail container */}
-              <div className={`relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300 bg-warm-50 transition-all ${
+              <div className={`relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-700 transition-all ${
                 addingToItemId === item.id ? 'ring-2 ring-amber-400' : ''
               }`}>
                 {item.thumbnailUrl ? (
@@ -197,7 +197,7 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                  <div className="w-full h-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                     <span className="text-2xl">📷</span>
                   </div>
                 )}
@@ -242,10 +242,10 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
 
               {/* Title & Category */}
               <div className="mt-1 text-left">
-                <p className="text-10px font-medium text-warm-900 truncate w-20 leading-tight">
+                <p className="text-10px font-medium text-warm-900 dark:text-warm-100 truncate w-20 leading-tight">
                   {item.title || '—'}
                 </p>
-                <p className="text-9px text-warm-500 truncate w-20">
+                <p className="text-9px text-warm-500 dark:text-warm-400 truncate w-20">
                   {item.category || ''}
                 </p>
               </div>
@@ -263,8 +263,8 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
 
       {/* Phase 5: Enhanced count footer */}
       {enhancedCount > 0 && (
-        <div className="border-t border-warm-100 px-3 py-2 bg-warm-50">
-          <p className="text-center text-xs text-gray-500">
+        <div className="border-t border-warm-100 dark:border-gray-700 px-3 py-2 bg-warm-50 dark:bg-gray-800">
+          <p className="text-center text-xs text-gray-500 dark:text-gray-400">
             {enhancedCount} auto-enhanced ✨
           </p>
         </div>

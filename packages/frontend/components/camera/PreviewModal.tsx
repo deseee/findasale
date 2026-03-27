@@ -105,15 +105,15 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-screen overflow-y-auto"
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl max-h-screen overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-warm-200 p-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-warm-900">Review Item</h2>
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 p-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-warm-900 dark:text-warm-100">Review Item</h2>
           <button
             onClick={onClose}
-            className="text-warm-600 hover:text-warm-900 text-2xl leading-none"
+            className="text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 text-2xl leading-none"
           >
             ✕
           </button>
@@ -121,11 +121,11 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
         {/* Error banner */}
         {aiErrored && (
-          <div className="bg-red-50 border-b border-red-200 p-4 text-sm text-red-700">
+          <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-900 p-4 text-sm text-red-700 dark:text-red-400">
             AI analysis failed. Please review and fill in details manually.
             <button
               onClick={() => onRetake(item.id)}
-              className="block mt-2 text-red-600 hover:text-red-800 font-medium underline"
+              className="block mt-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
             >
               Retake photo
             </button>
@@ -150,7 +150,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             {/* Title */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-warm-700">Title *</label>
+                <label className="text-sm font-medium text-warm-700 dark:text-warm-300">Title *</label>
                 <button
                   onClick={() =>
                     setEditingField(editingField === 'title' ? null : 'title')
@@ -167,10 +167,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   onChange={(e) => setEdits({ ...edits, title: e.target.value })}
                   onBlur={() => setEditingField(null)}
                   autoFocus
-                  className="w-full px-3 py-2 border border-amber-400 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                  className="w-full px-3 py-2 border border-amber-400 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
                 />
               ) : (
-                <p className="text-warm-900 font-semibold text-base">
+                <p className="text-warm-900 dark:text-warm-100 font-semibold text-base">
                   {edits.title || '—'}
                 </p>
               )}
@@ -179,7 +179,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             {/* Category */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-warm-700">Category</label>
+                <label className="text-sm font-medium text-warm-700 dark:text-warm-300">Category</label>
                 <button
                   onClick={() =>
                     setEditingField(
@@ -199,7 +199,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   }
                   onBlur={() => setEditingField(null)}
                   autoFocus
-                  className="w-full px-3 py-2 border border-amber-400 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                  className="w-full px-3 py-2 border border-amber-400 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
                 >
                   <option value="">Select category</option>
                   {CATEGORIES.map((cat) => (
@@ -209,7 +209,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   ))}
                 </select>
               ) : (
-                <p className="text-warm-700 text-sm">
+                <p className="text-warm-700 dark:text-warm-300 text-sm">
                   {edits.category || '—'}
                 </p>
               )}
@@ -218,7 +218,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             {/* Condition */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-warm-700">Condition</label>
+                <label className="text-sm font-medium text-warm-700 dark:text-warm-300">Condition</label>
                 <button
                   onClick={() =>
                     setEditingField(
@@ -238,7 +238,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   }
                   onBlur={() => setEditingField(null)}
                   autoFocus
-                  className="w-full px-3 py-2 border border-amber-400 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                  className="w-full px-3 py-2 border border-amber-400 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
                 >
                   <option value="">Select condition</option>
                   {CONDITIONS.map((cond) => (
@@ -248,7 +248,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   ))}
                 </select>
               ) : (
-                <p className="text-warm-700 text-sm">
+                <p className="text-warm-700 dark:text-warm-300 text-sm">
                   {edits.condition || '—'}
                 </p>
               )}
@@ -257,7 +257,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             {/* Description */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-warm-700">Description</label>
+                <label className="text-sm font-medium text-warm-700 dark:text-warm-300">Description</label>
                 <button
                   onClick={() =>
                     setEditingField(
@@ -278,11 +278,11 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   onBlur={() => setEditingField(null)}
                   autoFocus
                   rows={4}
-                  className="w-full px-3 py-2 border border-amber-400 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                  className="w-full px-3 py-2 border border-amber-400 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
                 />
               ) : (
                 <div>
-                  <p className="text-warm-700 text-sm line-clamp-3">
+                  <p className="text-warm-700 dark:text-warm-300 text-sm line-clamp-3">
                     {edits.description || '—'}
                   </p>
                   {edits.description && edits.description.length > 150 && (
@@ -298,18 +298,18 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             </div>
 
             {/* Price (read-only note) */}
-            <div className="bg-warm-50 border border-warm-200 rounded-lg p-3">
-              <p className="text-xs text-warm-600">
+            <div className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-3">
+              <p className="text-xs text-warm-600 dark:text-warm-400">
                 Price will be set at the review stage before publishing.
               </p>
             </div>
           </div>
 
           {/* Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-warm-200">
+          <div className="flex gap-3 pt-4 border-t border-warm-200 dark:border-gray-700">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-warm-300 rounded-lg text-warm-700 hover:bg-warm-50 font-medium text-sm"
+              className="px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium text-sm"
             >
               Back
             </button>
@@ -322,7 +322,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             </button>
             <button
               onClick={handleDelete}
-              className="px-4 py-2 border border-red-300 rounded-lg text-red-600 hover:bg-red-50 font-medium text-sm"
+              className="px-4 py-2 border border-red-300 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium text-sm"
             >
               Delete
             </button>

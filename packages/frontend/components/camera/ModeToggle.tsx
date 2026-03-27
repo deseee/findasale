@@ -15,14 +15,14 @@ export interface ModeToggleProps {
 
 const ModeToggle: React.FC<ModeToggleProps> = ({ mode, onChange }) => {
   return (
-    <div className="flex items-center gap-2 bg-warm-50 rounded-full p-1 border border-warm-200">
+    <div className="flex items-center gap-2 bg-warm-50 dark:bg-gray-800 rounded-full p-1 border border-warm-200 dark:border-gray-600">
       <button
         onClick={() => onChange('rapidfire')}
         aria-pressed={mode === 'rapidfire'}
         className={`px-4 py-1.5 rounded-full font-medium text-sm transition-all ${
           mode === 'rapidfire'
             ? 'bg-amber-600 text-white'
-            : 'text-gray-500 hover:text-gray-700'
+            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
         }`}
       >
         Rapidfire
@@ -33,7 +33,7 @@ const ModeToggle: React.FC<ModeToggleProps> = ({ mode, onChange }) => {
         className={`px-4 py-1.5 rounded-full font-medium text-sm transition-all ${
           mode === 'regular'
             ? 'bg-amber-600 text-white'
-            : 'text-gray-500 hover:text-gray-700'
+            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
         }`}
       >
         Regular

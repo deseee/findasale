@@ -340,11 +340,11 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
   if (step === 'upload') {
     return (
       <div className="space-y-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
-          <h3 className="text-lg font-semibold text-warm-900 mb-2">
+        <div className="bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-700 rounded-lg p-8 text-center">
+          <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">
             📦 Smart Inventory Upload
           </h3>
-          <p className="text-warm-600 mb-6">
+          <p className="text-warm-600 dark:text-warm-400 mb-6">
             Drop up to 20 photos here. AI will analyze and create draft listings
             automatically.
           </p>
@@ -353,7 +353,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-blue-300 rounded-lg p-12 cursor-pointer hover:bg-blue-100 transition-colors"
+            className="border-2 border-dashed border-blue-300 dark:border-gray-600 rounded-lg p-12 cursor-pointer hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors"
           >
             <input
               ref={fileInputRef}
@@ -363,13 +363,13 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
               onChange={handleFileSelect}
               className="hidden"
             />
-            <p className="text-warm-600 font-medium">
+            <p className="text-warm-600 dark:text-warm-400 font-medium">
               {photoFiles.length > 0
                 ? `✓ ${photoFiles.length} photo${photoFiles.length !== 1 ? 's' : ''} selected`
                 : 'Click or drag photos here'}
             </p>
             {photoFiles.length > 0 && (
-              <p className="text-sm text-warm-500 mt-2">
+              <p className="text-sm text-warm-500 dark:text-warm-400 mt-2">
                 Click to add more or proceed to analysis
               </p>
             )}
@@ -390,7 +390,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                 </div>
               ))}
               {photoFiles.length > 4 && (
-                <div className="flex items-center justify-center bg-warm-100 rounded text-warm-600 font-semibold">
+                <div className="flex items-center justify-center bg-warm-100 dark:bg-gray-700 rounded text-warm-600 dark:text-warm-300 font-semibold">
                   +{photoFiles.length - 4}
                 </div>
               )}
@@ -399,13 +399,13 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
 
           {uploadProgress > 0 && (
             <div className="mt-6">
-              <div className="w-full bg-warm-200 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-warm-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-blue-600 h-full transition-all"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
-              <p className="text-sm text-warm-600 mt-2">
+              <p className="text-sm text-warm-600 dark:text-warm-400 mt-2">
                 {uploadProgress < 50
                   ? 'Uploading photos...'
                   : uploadProgress < 75
@@ -422,7 +422,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                 setUploadProgress(0);
               }}
               disabled={uploadPhotosMutation.isPending || batchAnalyzeMutation.isPending}
-              className="px-6 py-2 border border-warm-300 rounded-lg text-warm-900 hover:bg-warm-100 disabled:opacity-50"
+              className="px-6 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 disabled:opacity-50"
             >
               Clear
             </button>
@@ -461,10 +461,10 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-semibold text-warm-900 mb-4">
+          <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">
             Review & Edit Suggestions ({checkedCount} analyzed{errorCount > 0 ? ` · ${errorCount} failed` : ''})
           </h3>
-          <p className="text-warm-600 text-sm mb-4">
+          <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
             Edit any field inline. Uncheck items to skip them.
           </p>
           {errorCount > 0 && (
@@ -488,16 +488,16 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
               key={idx}
               className={`border rounded-lg p-4 ${
                 item.error
-                  ? 'border-red-200 bg-red-50'
+                  ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30'
                   : item.include
-                  ? 'border-blue-200 bg-blue-50'
-                  : 'border-warm-200 bg-warm-50 opacity-60'
+                  ? 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30'
+                  : 'border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-800 opacity-60'
               }`}
             >
               {/* Photo */}
               <div className="mb-4">
                 {item.error && (!item.photoUrl || item.photoUrl === '(unknown)') ? (
-                  <div className="w-full h-32 bg-red-200 rounded flex items-center justify-center text-red-600 font-semibold">
+                  <div className="w-full h-32 bg-red-200 dark:bg-red-900/30 rounded flex items-center justify-center text-red-600 dark:text-red-400 font-semibold">
                     No Photo
                   </div>
                 ) : (
@@ -512,7 +512,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                         if (placeholder) placeholder.style.display = 'flex';
                       }}
                     />
-                    <div className="w-full h-32 bg-warm-100 rounded items-center justify-center text-warm-400 text-sm hidden">
+                    <div className="w-full h-32 bg-warm-100 dark:bg-gray-700 rounded flex items-center justify-center text-warm-400 dark:text-gray-500 text-sm" style={{ display: 'none' }}>
                       📷 Preview unavailable
                     </div>
                   </>
@@ -541,7 +541,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                 <>
                   {/* Title */}
                   <div className="mb-3">
-                    <label className="text-xs font-semibold text-warm-900">
+                    <label className="text-xs font-semibold text-warm-900 dark:text-warm-100">
                       Title
                     </label>
                     <input
@@ -552,18 +552,18 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                           suggestedTitle: e.target.value,
                         })
                       }
-                      className="w-full px-2 py-1 border border-warm-300 rounded text-sm mt-1"
+                      className="w-full px-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
                     />
                   </div>
 
                   {/* Price */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
-                      <label className="text-xs font-semibold text-warm-900">
+                      <label className="text-xs font-semibold text-warm-900 dark:text-warm-100">
                         Price
                       </label>
                       <div className="relative">
-                        <span className="absolute left-2 top-1.5 text-warm-600 text-sm">
+                        <span className="absolute left-2 top-1.5 text-warm-600 dark:text-warm-400 text-sm">
                           $
                         </span>
                         <input
@@ -576,14 +576,14 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                           }
                           step="0.01"
                           min="0"
-                          className="w-full pl-5 pr-2 py-1 border border-warm-300 rounded text-sm mt-1"
+                          className="w-full pl-5 pr-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
                         />
                       </div>
                     </div>
 
                     {/* Category */}
                     <div>
-                      <label className="text-xs font-semibold text-warm-900">
+                      <label className="text-xs font-semibold text-warm-900 dark:text-warm-100">
                         Category
                       </label>
                       <select
@@ -593,7 +593,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                             suggestedCategory: e.target.value,
                           })
                         }
-                        className="w-full px-2 py-1 border border-warm-300 rounded text-sm mt-1"
+                        className="w-full px-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
                       >
                         {CATEGORIES.map((cat) => (
                           <option key={cat} value={cat}>
@@ -606,7 +606,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
 
                   {/* Condition */}
                   <div className="mb-3">
-                    <label className="text-xs font-semibold text-warm-900">
+                    <label className="text-xs font-semibold text-warm-900 dark:text-warm-100">
                       Condition
                     </label>
                     <select
@@ -616,7 +616,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                           suggestedCondition: e.target.value,
                         })
                       }
-                      className="w-full px-2 py-1 border border-warm-300 rounded text-sm mt-1"
+                      className="w-full px-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
                     >
                       {CONDITIONS.map((cond) => (
                         <option key={cond} value={cond}>
@@ -627,7 +627,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                   </div>
 
                   {/* Include Checkbox */}
-                  <label className="flex items-center gap-2 cursor-pointer mt-4 pt-4 border-t border-warm-200">
+                  <label className="flex items-center gap-2 cursor-pointer mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
                     <input
                       type="checkbox"
                       checked={item.include}
@@ -640,7 +640,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                       }}
                       className="w-4 h-4"
                     />
-                    <span className="text-sm font-medium text-warm-900">
+                    <span className="text-sm font-medium text-warm-900 dark:text-warm-100">
                       Include this item
                     </span>
                   </label>
@@ -667,7 +667,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
               setPhotoFiles([]);
             }}
             disabled={createItemsMutation.isPending}
-            className="px-6 py-3 border border-warm-300 rounded-lg text-warm-900 hover:bg-warm-100 disabled:opacity-50"
+            className="px-6 py-3 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             Back
           </button>
@@ -684,7 +684,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
 
         {saveProgress > 0 && (
           <div>
-            <div className="w-full bg-warm-200 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-warm-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
               <div
                 className="bg-green-600 h-full transition-all"
                 style={{ width: `${saveProgress}%` }}
@@ -699,11 +699,11 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
   // ─── STEP 3: Complete ───────────────────────────────────────────
   if (step === 'complete') {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
-        <h3 className="text-2xl font-bold text-green-700 mb-2">
+      <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-8 text-center">
+        <h3 className="text-2xl font-bold text-green-700 dark:text-green-400 mb-2">
           ✓ Items Added Successfully!
         </h3>
-        <p className="text-green-600 mb-6">
+        <p className="text-green-600 dark:text-green-500 mb-6">
           Your inventory has been updated. View it below or add more items.
         </p>
         <div className="flex gap-3 justify-center">
