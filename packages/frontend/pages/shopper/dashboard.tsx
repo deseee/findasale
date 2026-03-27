@@ -124,7 +124,7 @@ const ShopperDashboard = () => {
           {/* Quick Links */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
             <Link
-              href="/shopper/collector-passport"
+              href="/shopper/explorer-passport"
               className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
             >
               <div className="text-2xl mb-2">🗺️</div>
