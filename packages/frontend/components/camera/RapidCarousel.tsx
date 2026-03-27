@@ -142,7 +142,7 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
 
   return (
     <div className="bg-white border-b border-warm-200">
-      <div className="flex items-center gap-2 p-2 border-b border-warm-100">
+      <div className="flex items-center gap-2 p-2 pb-3 border-b border-warm-100">
         <button
           onClick={onToggleCollapse}
           className="px-2 py-1 text-warm-600 hover:text-warm-900 text-sm font-medium"

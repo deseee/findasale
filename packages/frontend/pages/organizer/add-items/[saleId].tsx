@@ -1557,6 +1557,7 @@ const AddItemsDetailPage = () => {
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
+                                referrerPolicy="no-referrer"
                               />
                             ) : (
                               <div className="w-16 h-16 bg-gray-200 rounded border border-warm-200 dark:border-gray-700 flex items-center justify-center text-gray-400 text-2xl">

@@ -58,8 +58,12 @@ const EditItemPage = () => {
       let rawCat = (item.category || '').trim();
       let normalizedCategory = '';
       if (rawCat) {
-        // Handle various formats: "tools", "Tools", "TOOLS" → "Tools"
-        normalizedCategory = rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase();
+        // Handle various formats: "tools", "Tools", "TOOLS", "vintage" → "Tools", "Vintage"
+        // Split on space, title-case each word, then join
+        normalizedCategory = rawCat
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
       }
 
       // Normalize condition to UPPERCASE (e.g. "good" → "GOOD", "Excellent" → "EXCELLENT")

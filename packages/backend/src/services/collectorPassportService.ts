@@ -20,25 +20,22 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * Returns empty passport if not yet created
  */
 export const getOrCreatePassport = async (userId: string): Promise<any> => {
-  let passport = await prisma.collectorPassport.findUnique({
+  // upsert is race-safe: concurrent calls won't produce P2002 unique constraint errors
+  const passport = await prisma.collectorPassport.upsert({
     where: { userId },
+    create: {
+      userId,
+      bio: null,
+      specialties: [],
+      categories: [],
+      keywords: [],
+      notifyEmail: true,
+      notifyPush: true,
+      totalFinds: 0,
+      isPublic: true,
+    },
+    update: {}, // no-op — just return the existing record
   });
-
-  if (!passport) {
-    passport = await prisma.collectorPassport.create({
-      data: {
-        userId,
-        bio: null,
-        specialties: [],
-        categories: [],
-        keywords: [],
-        notifyEmail: true,
-        notifyPush: true,
-        totalFinds: 0,
-        isPublic: true,
-      },
-    });
-  }
 
   return passport;
 };

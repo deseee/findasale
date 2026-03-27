@@ -147,6 +147,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 alt={`Item photo ${i + 1}`}
                 className="w-full aspect-square object-cover"
                 loading="lazy"
+                referrerPolicy="no-referrer"
               />
 
               {/* Cover badge on first photo */}
