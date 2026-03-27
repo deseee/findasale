@@ -506,7 +506,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -580,6 +580,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (status !== undefined) updateData.status = status;
     if (category !== undefined) updateData.category = category || null;
     if (condition !== undefined) updateData.condition = condition || null;
+    if (conditionGrade !== undefined) updateData.conditionGrade = conditionGrade || null; // #145: Persist condition grade
+    if (tags !== undefined) updateData.tags = tags; // #145: Persist tags from review page
+    if (backgroundRemoved !== undefined) updateData.backgroundRemoved = backgroundRemoved === true || backgroundRemoved === 'true'; // #145: Persist background removal state
     if (shippingAvailable !== undefined) updateData.shippingAvailable = shippingAvailable === true || shippingAvailable === 'true';
     if (shippingPrice !== undefined) updateData.shippingPrice = shippingPrice ? parseFloat(shippingPrice) : null;
     if (reverseAuction !== undefined) updateData.reverseAuction = reverseAuction === true || reverseAuction === 'true';
