@@ -421,6 +421,204 @@ export async function analyzeItemImage(
   return result;
 }
 
+/**
+ * Analyze multiple photos of the same item using Google Vision + Claude Haiku.
+ *
+ * This function is optimized for Rapidfire and regular camera modes where
+ * multiple photos (different angles, brand labels, close-ups) are captured
+ * of the same item.
+ *
+ * Flow:
+ *   1. Extract Vision labels from the primary photo (first in array)
+ *   2. Pass ALL images + labels to Claude Haiku for multi-view analysis
+ *   3. Map Vision labels → curated tags via Haiku (non-blocking)
+ *   4. Suggest condition grade using primary photo (non-blocking)
+ *
+ * Returns null if cloud AI is not configured or cost ceiling exceeded.
+ * Throws on API errors so the caller can handle/log them.
+ */
+export async function analyzeItemImages(
+  buffers: Buffer[],
+  mimeTypes: string[] = []
+): Promise<AITagResult | null> {
+  if (!isCloudAIAvailable()) return null;
+
+  // Feature #104: Cost ceiling check — graceful degradation
+  if (isAICostCeilingExceeded()) {
+    console.warn('[cloudAI] AI cost ceiling exceeded, returning null for fallback');
+    return null;
+  }
+
+  if (buffers.length === 0) {
+    throw new Error('analyzeItemImages requires at least one image buffer');
+  }
+
+  // Default all images to JPEG if mimeTypes not provided
+  const types = mimeTypes.length === buffers.length
+    ? mimeTypes
+    : buffers.map(() => 'image/jpeg');
+
+  const imageBase64Array = buffers.map(buf => buf.toString('base64'));
+
+  // Vision labels from primary photo only (best-effort)
+  let visionLabels: string[] = [];
+  try {
+    visionLabels = await getVisionLabels(imageBase64Array[0]);
+  } catch {
+    // Vision API unavailable or quota exceeded — proceed without labels
+  }
+
+  // Multi-image Haiku analysis
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, visionLabels);
+
+  // Sprint 1: Add curated tag suggestions (non-blocking)
+  try {
+    result.suggestedTags = await suggestCuratedTags(visionLabels);
+  } catch {
+    result.suggestedTags = [];
+  }
+
+  // #64: Add condition grade suggestion using primary photo (non-blocking)
+  try {
+    result.suggestedConditionGrade = await suggestConditionGrade(imageBase64Array[0], types[0]);
+  } catch {
+    // Condition grade suggestion failed — leave undefined
+  }
+
+  return result;
+}
+
+/**
+ * Claude Haiku structured analysis for multiple images of the same item.
+ * Passes all images in a single API call for holistic multi-view understanding.
+ */
+async function getHaikuAnalysisMultiImage(
+  imageBase64Array: string[],
+  mimeTypes: string[],
+  visionLabels: string[]
+): Promise<AITagResult> {
+  const labelContext =
+    visionLabels.length > 0
+      ? `\n\nVision API detected these objects/labels: ${visionLabels.join(', ')}.`
+      : '';
+
+  const imageCount = imageBase64Array.length;
+  const multiImagePrompt = imageCount > 1
+    ? `You are analyzing ${imageCount} photos of the same item from different angles.`
+    : 'You are analyzing a photo of an item.';
+
+  try {
+    const systemPrompt = `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
+
+${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`;
+    const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
+
+    // Build content array with all images
+    const contentArray: any[] = [];
+
+    // Add all images
+    imageBase64Array.forEach((imageBase64, idx) => {
+      contentArray.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: mimeTypes[idx] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: imageBase64,
+        },
+      });
+    });
+
+    // Add text prompt at the end
+    contentArray.push({
+      type: 'text',
+      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}
+
+Analyze and respond with ONLY valid JSON (no markdown, no explanation).
+
+Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include decade if identifiable (1950s, 1960s, Victorian). Avoid vague words like "Beautiful" or "Nice".
+Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
+Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
+Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
+Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
+Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
+
+{
+  "title": "short specific title",
+  "description": "1-2 sentence description with condition details",
+  "category": "best matching category",
+  "condition": "NEW | LIKE_NEW | GOOD | FAIR | POOR",
+  "suggestedPrice": 12.50,
+  "tags": ["Tag1", "Tag2", "Tag3"]
+}`,
+    });
+
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 400,
+        messages: [
+          {
+            role: 'user',
+            content: contentArray,
+          },
+        ],
+      },
+      {
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY as string,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        timeout: 30000,
+      }
+    );
+
+    const content: string = response.data.content?.[0]?.text ?? '';
+
+    // Track token usage for cost ceiling (#104)
+    const responseTokens = Math.ceil(content.length / 4) + 50;
+    trackAITokens(estimatedTokens + responseTokens);
+
+    const raw = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(raw) as AITagResult;
+
+    if (!Array.isArray(parsed.tags)) {
+      parsed.tags = [];
+    }
+    if (!parsed.confidence) {
+      parsed.confidence = 0.5;
+    }
+
+    return parsed;
+  } catch (error: any) {
+    // P0-3: Capture specific error context and re-throw with context for caller
+    if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {
+      const err = new Error('AI_TIMEOUT: AI service connection failed');
+      (err as any).errorCode = 'AI_TIMEOUT';
+      throw err;
+    }
+    if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+      const err = new Error('AI_TIMEOUT: AI service timed out');
+      (err as any).errorCode = 'AI_TIMEOUT';
+      throw err;
+    }
+    if (error.response?.status === 429) {
+      const err = new Error('AI_RATE_LIMIT: AI service busy — try again shortly');
+      (err as any).errorCode = 'AI_RATE_LIMIT';
+      throw err;
+    }
+    if (error instanceof SyntaxError || error.message?.includes('JSON')) {
+      const err = new Error('AI_PARSE_ERROR: AI returned invalid data');
+      (err as any).errorCode = 'AI_PARSE_ERROR';
+      throw err;
+    }
+    const err = new Error('AI_ERROR: AI analysis unavailable');
+    (err as any).errorCode = 'AI_ERROR';
+    throw err;
+  }
+}
+
 // ── Sale Description Generator ────────────────────────────────────────────────
 
 export interface SaleDescriptionInput {
