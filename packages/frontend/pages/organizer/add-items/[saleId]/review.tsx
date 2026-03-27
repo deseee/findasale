@@ -446,6 +446,10 @@ const ReviewPage = () => {
                             })}
                             alt={item.title}
                             className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer-when-downgrade"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"%3E%3Crect width="400" height="400" fill="%23f3f4f6"/%3E%3Ctext x="50%25" y="50%25" font-size="120" text-anchor="middle" dy=".3em" fill="%23d1d5db"%3E📷%3C/text%3E%3C/svg%3E';
+                            }}
                           />
                         )}
                       </div>
@@ -589,11 +593,11 @@ const ReviewPage = () => {
                       return (
                         <div
                           key={item.id}
-                          className={`bg-white dark:bg-gray-800 border rounded-lg overflow-hidden ${confidenceBorderClass(item.aiConfidence, item.isAiTagged)}`}
+                          className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden"
                         >
                           {/* Collapsed row — always visible */}
                           <div
-                            className="p-4 flex items-center gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
+                            className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged).split(' ').slice(1).join(' ')}`}
                             onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
                           >
                             <input
@@ -610,7 +614,15 @@ const ReviewPage = () => {
                               onClick={(e) => e.stopPropagation()}
                             />
                             {item.photoUrls[0] && (
-                              <img src={item.photoUrls[0]} alt={item.title} className="w-16 h-16 object-cover rounded flex-shrink-0" />
+                              <img
+                                src={item.photoUrls[0]}
+                                alt={item.title}
+                                className="w-16 h-16 object-cover rounded flex-shrink-0"
+                                referrerPolicy="no-referrer-when-downgrade"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" font-size="24" text-anchor="middle" dy=".3em" fill="%239ca3af"%3E📷%3C/text%3E%3C/svg%3E';
+                                }}
+                              />
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
