@@ -1733,7 +1733,7 @@ const AddItemsDetailPage = () => {
               throw new Error('Item not ready');
             }
             try {
-              await api.patch(`/items/${previewItemId}`, edits);
+              await api.put(`/items/${previewItemId}`, edits);
               setRapidItems((prev) =>
                 prev.map((i) =>
                   i.id === previewItemId
