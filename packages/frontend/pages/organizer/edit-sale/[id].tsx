@@ -94,8 +94,7 @@ const EditSalePage = () => {
 
     setIsAutoGeocodingOnLoad(true);
     try {
-      const fullAddress = `${address}, ${city}, ${state}${zip ? ` ${zip}` : ''}`;
-      const response = await api.post('/sales/geocode', { address: fullAddress });
+      const response = await api.get('/geocode', { params: { address, city, state, zip } });
 
       if (response.data.lat && response.data.lng) {
         // Store the geocoded coordinates in a temporary query state
