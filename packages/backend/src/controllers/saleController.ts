@@ -26,13 +26,25 @@ enum SaleType {
   YARD = 'YARD',
   AUCTION = 'AUCTION',
   FLEA_MARKET = 'FLEA_MARKET',
+  CONSIGNMENT = 'CONSIGNMENT',
+  CHARITY = 'CHARITY',
+  BUSINESS_CORPORATE = 'BUSINESS_CORPORATE',
 }
 
-// Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone
-const iso8601DatetimeSchema = z.string().regex(
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/,
-  'Invalid datetime format. Expected ISO 8601 format.'
-);
+// Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone,
+// or plain YYYY-MM-DD date strings (coerced to midnight UTC)
+const iso8601DatetimeSchema = z.string()
+  .regex(
+    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/,
+    'Invalid datetime format. Expected ISO 8601 format or YYYY-MM-DD.'
+  )
+  .transform((val) => {
+    // If it's a plain date (YYYY-MM-DD), convert to ISO datetime at midnight UTC
+    if (!/T/.test(val)) {
+      return `${val}T00:00:00Z`;
+    }
+    return val;
+  });
 
 // Validation schemas
 const saleQuerySchema = z.object({
@@ -56,15 +68,15 @@ const saleCreateSchema = z.object({
   city: z.string().min(1),
   state: z.string().min(2).max(2),
   zip: z.string().min(5).max(10),
-  lat: z.number(),
-  lng: z.number(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
   photoUrls: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   isAuctionSale: z.boolean().optional().default(false), // Deprecated: use saleType instead
   // B1: Sale type — Feature #5: Strict validation for enum consistency
-  // Only allow valid SaleType enum values
-  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET'], {
-    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET' })
+  // Allow all 7 sale type options from frontend
+  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'CONSIGNMENT', 'CHARITY', 'BUSINESS_CORPORATE'], {
+    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, CONSIGNMENT, CHARITY, BUSINESS_CORPORATE' })
   }).optional().default(SaleType.ESTATE),
   neighborhood: z.string().optional(), // U2
   // Feature 35: Front Door Locator

@@ -311,8 +311,8 @@ model Sale {
   city          String
   state         String
   zip           String
-  lat           Float
-  lng           Float
+  lat           Float?
+  lng           Float?
   neighborhood  String?    // Regional neighborhood slug e.g. "downtown"
   photoUrls     String[]
   tags          String[]

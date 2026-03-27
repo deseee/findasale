@@ -136,7 +136,7 @@ const CreateSalePage = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await api.post('/organizer/create-sale', formData);
+      const response = await api.post('/sales', formData);
       showToast('Sale created! Add items next.', 'success');
       router.push(`/organizer/add-items/${response.data.id}`);
     } catch (error: any) {
