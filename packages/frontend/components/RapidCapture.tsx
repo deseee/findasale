@@ -55,6 +55,8 @@ interface RapidCaptureProps {
   onNavigateToReview: () => void;
   /** Count of items in PENDING_REVIEW state (for Review button badge) */
   readyCount: number;
+  /** Called immediately when a photo is captured (before Done). Enables live carousel. */
+  onPhotoCapture?: (photo: { blob: Blob; previewUrl: string }) => void;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
@@ -69,6 +71,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   onThumbnailTap,
   onNavigateToReview,
   readyCount,
+  onPhotoCapture,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -218,6 +221,9 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           previewUrl: URL.createObjectURL(blob),
           timestamp: Date.now(),
         };
+
+        // Call onPhotoCapture immediately to enable live carousel
+        onPhotoCapture?.(photo);
 
         if (isRegularMode) {
           setPhotos((prev) => [...prev, photo]);
