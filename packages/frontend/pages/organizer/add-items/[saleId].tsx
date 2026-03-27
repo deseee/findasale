@@ -633,10 +633,21 @@ const AddItemsDetailPage = () => {
     if (appendToItemId) setAddingToItemId(null);
 
     for (const photo of photos) {
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      // In append-mode, create a temp entry (onPhotoCapture doesn't create one in append-mode)
+      // In normal mode, onPhotoCapture already created a temp entry — find it by previewUrl
+      let tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-      // Optimistic: show thumbnail in carousel immediately (skip for append-mode — no new item)
       if (!appendToItemId) {
+        // Normal mode: onPhotoCapture already created an entry with this previewUrl
+        // Find it by matching previewUrl (most recent match with same previewUrl)
+        const existingEntry = rapidItems.find(
+          (item) => item.thumbnailUrl === photo.previewUrl && item.id.startsWith('temp-')
+        );
+        if (existingEntry) {
+          tempId = existingEntry.id;
+        }
+      } else {
+        // Append mode: need to create a temp entry for the appended photo
         setRapidItems((prev) => [
           ...prev,
           { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
@@ -731,12 +742,27 @@ const AddItemsDetailPage = () => {
         }
       } catch (err: any) {
         console.error('[rapidfire] Upload failed:', err);
+
+        // Determine error message based on error type
+        let errorMessage = 'Upload failed';
+        if (err.response?.status === 429) {
+          const retryAfter = err.response.headers['retry-after'];
+          const retryAfterSecs = retryAfter ? parseInt(retryAfter, 10) : 60;
+          errorMessage = `Rate limited. Please wait ${retryAfterSecs}s before trying`;
+        }
+
         setRapidItems((prev) =>
           prev.map((item) =>
-            item.id === tempId ? { ...item, aiError: 'Upload failed' } : item
+            item.id === tempId ? { ...item, aiError: errorMessage } : item
           )
         );
-        showToast('One photo failed to upload. Try again.', 'error');
+        showToast(`Photo failed: ${errorMessage}`, 'error');
+      }
+
+      // Add sequential delay between uploads in rapidfire mode to prevent rate limiting
+      // Only add delay if not the last photo
+      if (appendToItemId === null && photos.indexOf(photo) < photos.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
     }
   };

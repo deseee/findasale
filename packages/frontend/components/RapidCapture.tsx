@@ -511,7 +511,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 return (
                   <div
                     key={item.id}
-                    className={`flex-shrink-0 relative cursor-pointer transition-all ${
+                    className={`flex-shrink-0 relative cursor-pointer transition-all w-16 h-auto ${
                       isAddingTo ? 'ring-2 ring-amber-400 rounded-lg' : ''
                     }`}
                     onClick={() => onThumbnailTap(item.id)}
