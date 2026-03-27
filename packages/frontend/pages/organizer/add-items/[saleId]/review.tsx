@@ -596,6 +596,17 @@ const ReviewPage = () => {
                         </button>
                       </div>
                     )}
+                    {/* Column headers */}
+                    <div className="px-4 py-2 flex items-center gap-4 text-xs font-medium text-warm-400 dark:text-warm-500 border-b border-warm-100 dark:border-gray-700 mb-1">
+                      <span className="w-4 flex-shrink-0" />
+                      <span className="w-16 flex-shrink-0">Photo</span>
+                      <span className="flex-1">Item · Health Score</span>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="w-20 text-right">AI Confidence</span>
+                        <span className="w-16 text-center">Status</span>
+                        <span className="w-4" />
+                      </div>
+                    </div>
                     <div className="space-y-3">
                       {items.map((item) => {
                       const conf = confidenceLabel(item.aiConfidence, item.isAiTagged);
