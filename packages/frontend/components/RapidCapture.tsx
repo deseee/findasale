@@ -1,19 +1,35 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
- * RapidCapture — Phase 14a camera overlay
+ * RapidCapture — Phase 14b camera overlay (refactored)
  *
- * Opens rear camera via WebRTC getUserMedia.
- * One-handed shutter button, filmstrip carousel of local blob captures.
- * No network calls — all photos stay as blobs until the organizer taps "Done".
+ * Integrated camera experience matching design spec:
+ * - Mode toggle (Rapidfire | Regular) built into camera top bar
+ * - Carousel of rapidItems with "+" add-to buttons (rapidfire only)
+ * - Mode-aware shutter button (amber gradient + ⚡ for rapidfire, deeper + for add-mode)
+ * - Corner brackets: faint white, not blue
+ * - Adding-to banner between carousel and shutter
+ * - Mode hint text below top bar
+ * - Gallery thumbnail on left of shutter row
  *
- * Layout: fullscreen on mobile, centered modal on desktop (md+).
+ * Opens fullscreen on mobile, centered modal on desktop (md+).
  */
 
 interface CapturedPhoto {
   blob: Blob;
   previewUrl: string;
   timestamp: number;
+}
+
+export interface RapidItem {
+  id: string;
+  thumbnailUrl?: string;
+  draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
+  title?: string;
+  category?: string;
+  aiError?: string;
+  photoUrls?: string[];
+  autoEnhanced?: boolean;
 }
 
 interface RapidCaptureProps {
@@ -23,17 +39,41 @@ interface RapidCaptureProps {
   onCancel: () => void;
   /** Max photos allowed (default 20) */
   maxPhotos?: number;
+  /** Current capture mode: rapidfire = 1 photo per item, regular = up to 5 per item */
+  mode: 'rapidfire' | 'regular';
+  /** Called when mode toggle changes */
+  onModeChange: (mode: 'rapidfire' | 'regular') => void;
+  /** Array of rapid-captured items (rapidfire mode only) */
+  rapidItems: RapidItem[];
+  /** If set, current item being added to. Triggers add-mode UI. */
+  addingToItemId: string | null;
+  /** Called when user taps "+" on a rapidItems thumbnail */
+  onAddToItem: (itemId: string) => void;
+  /** Called when user taps a rapidItems thumbnail to preview it */
+  onThumbnailTap: (itemId: string) => void;
+  /** Called when user taps Review button — navigate to review page */
+  onNavigateToReview: () => void;
+  /** Count of items in PENDING_REVIEW state (for Review button badge) */
+  readyCount: number;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
   onComplete,
   onCancel,
   maxPhotos = 20,
+  mode,
+  onModeChange,
+  rapidItems,
+  addingToItemId,
+  onAddToItem,
+  onThumbnailTap,
+  onNavigateToReview,
+  readyCount,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const filmstripRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
 
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [cameraReady, setCameraReady] = useState(false);
@@ -44,6 +84,12 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [torchSupported, setTorchSupported] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [preCaptureWarning, setPreCaptureWarning] = useState<string | null>(null);
+  const [photosThisItem, setPhotosThisItem] = useState(0);
+
+  const isRapidfire = mode === 'rapidfire';
+  const inAddMode = addingToItemId !== null;
+  const addingItem = inAddMode ? rapidItems.find((i) => i.id === addingToItemId) : null;
+  const MAX_REGULAR = 5;
 
   // Start camera on mount and when facingMode changes
   useEffect(() => {
@@ -138,7 +184,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
   // Capture a photo from the video stream
   const capturePhoto = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || photos.length >= maxPhotos) return;
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const isRegularMode = !isRapidfire;
+    const maxAllowed = isRegularMode ? MAX_REGULAR : maxPhotos;
+
+    if (isRegularMode && photosThisItem >= maxAllowed) return;
+    if (isRapidfire && photos.length >= maxPhotos) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -156,7 +208,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     setFlashEffect(true);
     setTimeout(() => setFlashEffect(false), 150);
 
-    // Convert to blob (JPEG, 85% quality — good balance of size vs quality)
+    // Convert to blob (JPEG, 85% quality)
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
@@ -167,22 +219,28 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           timestamp: Date.now(),
         };
 
-        setPhotos((prev) => {
-          const next = [...prev, photo];
-          // Auto-scroll filmstrip to end
-          requestAnimationFrame(() => {
-            filmstripRef.current?.scrollTo({
-              left: filmstripRef.current.scrollWidth,
-              behavior: 'smooth',
+        if (isRegularMode) {
+          setPhotos((prev) => [...prev, photo]);
+          setPhotosThisItem((prev) => prev + 1);
+        } else {
+          // Rapidfire mode
+          setPhotos((prev) => {
+            const next = [...prev, photo];
+            // Auto-scroll carousel to end
+            requestAnimationFrame(() => {
+              carouselRef.current?.scrollTo({
+                left: carouselRef.current.scrollWidth,
+                behavior: 'smooth',
+              });
             });
+            return next;
           });
-          return next;
-        });
+        }
       },
       'image/jpeg',
       0.85
     );
-  }, [photos.length, maxPhotos]);
+  }, [isRapidfire, photos.length, maxPhotos, photosThisItem]);
 
   // Delete a captured photo
   const deletePhoto = useCallback((index: number) => {
@@ -231,28 +289,34 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     onCancel();
   }, [photos, onCancel]);
 
+  // Handle mode change — reset regular mode counters if switching
+  const handleModeChange = useCallback((newMode: 'rapidfire' | 'regular') => {
+    if (newMode !== mode) {
+      setPhotosThisItem(0);
+      onModeChange(newMode);
+    }
+  }, [mode, onModeChange]);
+
+  // Get last item thumbnail for gallery thumbnail on left of shutter
+  const lastItemThumbnail = isRapidfire
+    ? rapidItems.length > 0 && rapidItems[0].thumbnailUrl
+      ? rapidItems[0].thumbnailUrl
+      : null
+    : photos.length > 0
+    ? photos[photos.length - 1].previewUrl
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black md:bg-black/70 md:p-8">
       {/* Inner container: fullscreen mobile, modal desktop */}
       <div className="w-full h-full md:max-w-2xl md:max-h-[85vh] md:rounded-2xl md:overflow-hidden md:shadow-2xl bg-black flex flex-col relative">
-      {/* Hidden canvas for frame capture */}
-      <canvas ref={canvasRef} className="hidden" />
+        {/* Hidden canvas for frame capture */}
+        <canvas ref={canvasRef} className="hidden" />
 
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent">
-        <button
-          onClick={handleCancel}
-          className="text-white text-2xl w-10 h-10 flex items-center justify-center"
-          aria-label="Cancel capture"
-        >
-          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
-        <div className="flex items-center gap-3">
-          {/* Torch toggle — only shown when hardware supports it */}
-          {torchSupported && (
+        {/* Top bar */}
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent">
+          {/* Left: Torch (if supported) or close button */}
+          {torchSupported ? (
             <button
               onClick={toggleTorch}
               className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
@@ -261,207 +325,366 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
               </svg>
+            </button>
+          ) : (
+            <button
+              onClick={handleCancel}
+              className="text-white text-lg w-9 h-9 flex items-center justify-center"
+              aria-label="Cancel capture"
+            >
+              ✕
             </button>
           )}
 
-          {/* Camera switch (front/back) */}
-          <button
-            onClick={switchCamera}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
-            aria-label="Switch camera"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+          {/* Center: Mode toggle */}
+          <div className="flex items-center bg-black/70 border border-white/15 rounded-full padding-1 gap-0.5 px-1 py-1">
+            {[
+              ['rapidfire', '⚡ Rapidfire'],
+              ['regular', '📷 Regular'],
+            ].map(([m, label]) => (
+              <button
+                key={m}
+                onClick={() => handleModeChange(m as 'rapidfire' | 'regular')}
+                className={`px-4 py-1.5 text-sm font-bold rounded-full transition-all ${
+                  mode === m
+                    ? m === 'rapidfire'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-white text-black'
+                    : 'text-white/50 hover:text-white/75'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-          <span className="text-white text-sm font-medium">
-            {photos.length} / {maxPhotos}
+          {/* Right: Review button */}
+          <button
+            onClick={onNavigateToReview}
+            className="bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-3 py-1.5 rounded-full transition-colors"
+          >
+            Review{readyCount > 0 && ` (${readyCount})`}
+          </button>
+        </div>
+
+        {/* Mode hint text */}
+        <div className="absolute top-14 left-0 right-0 z-10 flex justify-center pointer-events-none">
+          <span className="text-xs text-white/50 bg-black/30 rounded-full px-3 py-1.5">
+            {isRapidfire
+              ? inAddMode
+                ? `Adding photo → ${addingItem?.title || 'item'}`
+                : '1 photo = 1 item · tap + on any thumbnail to add more'
+              : `Up to ${MAX_REGULAR} photos per item`}
           </span>
         </div>
 
-        <button
-          onClick={handleDone}
-          disabled={photos.length === 0}
-          className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors ${
-            photos.length > 0
-              ? 'bg-amber-600 text-white'
-              : 'bg-white/20 text-white/50'
-          }`}
-        >
-          Done
-        </button>
-      </div>
-
-      {/* Camera viewfinder */}
-      <div className="flex-1 relative overflow-hidden">
-        {cameraError ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-            <svg className="w-16 h-16 text-warm-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-            </svg>
-            <p className="text-white text-lg font-medium mb-2">Camera Unavailable</p>
-            <p className="text-warm-400 text-sm">{cameraError}</p>
-            <button
-              onClick={handleCancel}
-              className="mt-6 px-6 py-2 bg-warm-700 text-white rounded-lg"
-            >
-              Go Back
-            </button>
+        {/* Regular mode photo counter (dots) */}
+        {!isRapidfire && (
+          <div className="absolute top-24 left-0 right-0 z-10 flex justify-center items-center gap-2">
+            {Array.from({ length: MAX_REGULAR }).map((_, i) => (
+              <div
+                key={i}
+                className={`rounded-full transition-all ${
+                  i < photosThisItem
+                    ? 'bg-white w-2.5 h-2.5'
+                    : 'bg-white/30 w-2 h-2'
+                }`}
+              />
+            ))}
+            <span className="text-white/50 text-xs ml-1">
+              {photosThisItem}/{MAX_REGULAR}
+            </span>
           </div>
-        ) : (
-          <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-
-            {/* Phase 3: 4:3 Framing Guide */}
-            <div className="absolute inset-0 pointer-events-none">
-              {/* Corner brackets */}
-              <div className="absolute top-4 left-4 w-10 h-10 border-t-4 border-l-4 border-blue-400/90" />
-              <div className="absolute top-4 right-4 w-10 h-10 border-t-4 border-r-4 border-blue-400/90" />
-              <div className="absolute bottom-4 left-4 w-10 h-10 border-b-4 border-l-4 border-blue-400/90" />
-              <div className="absolute bottom-4 right-4 w-10 h-10 border-b-4 border-r-4 border-blue-400/90" />
-              {/* Label */}
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-blue-400/60 text-xs">
-                4:3
-              </div>
-            </div>
-
-            {/* Phase 3: Pre-capture quality warning */}
-            {preCaptureWarning && (
-              <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-amber-500/90 text-white text-sm font-medium px-4 py-2 rounded-lg z-10">
-                {preCaptureWarning}
-              </div>
-            )}
-
-            {/* Flash overlay */}
-            {flashEffect && (
-              <div className="absolute inset-0 bg-white/30 pointer-events-none animate-fadeIn" />
-            )}
-
-            {/* Loading state */}
-            {!cameraReady && !cameraError && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white text-sm">Starting camera...</div>
-              </div>
-            )}
-          </>
         )}
-      </div>
 
-      {/* Filmstrip + shutter area */}
-      <div className="bg-black/90 pb-safe">
-        {/* Filmstrip carousel */}
-        {photos.length > 0 && (
-          <div
-            ref={filmstripRef}
-            className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {photos.map((photo, i) => (
-              <div key={photo.timestamp} className="relative flex-shrink-0">
-                <button
-                  onClick={() => setSelectedIndex(selectedIndex === i ? null : i)}
-                  className={`block rounded-lg overflow-hidden border-2 transition-colors ${
-                    selectedIndex === i ? 'border-amber-500' : 'border-transparent'
-                  }`}
-                >
-                  <img
-                    src={photo.previewUrl}
-                    alt={`Capture ${i + 1}`}
-                    className="w-14 h-14 object-cover"
-                  />
-                </button>
-                {selectedIndex === i && (
-                  <button
-                    onClick={() => deletePhoto(i)}
-                    className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md"
-                    aria-label={`Delete photo ${i + 1}`}
+        {/* Camera viewfinder */}
+        <div className="flex-1 relative overflow-hidden">
+          {cameraError ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
+              <svg className="w-16 h-16 text-warm-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+                />
+              </svg>
+              <p className="text-white text-lg font-medium mb-2">Camera Unavailable</p>
+              <p className="text-warm-400 text-sm">{cameraError}</p>
+              <button
+                onClick={handleCancel}
+                className="mt-6 px-6 py-2 bg-warm-700 text-white rounded-lg"
+              >
+                Go Back
+              </button>
+            </div>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+
+              {/* 4:3 Framing Guide with faint white corner brackets */}
+              <div className="absolute inset-0 pointer-events-none">
+                {/* Corner brackets — faint white, not blue */}
+                <div className="absolute top-4 left-4 w-10 h-10 border-t-2 border-l-2 border-white/50" />
+                <div className="absolute top-4 right-4 w-10 h-10 border-t-2 border-r-2 border-white/50" />
+                <div className="absolute bottom-4 left-4 w-10 h-10 border-b-2 border-l-2 border-white/50" />
+                <div className="absolute bottom-4 right-4 w-10 h-10 border-b-2 border-r-2 border-white/50" />
+                {/* Label */}
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 text-white/35 text-xs">
+                  4:3
+                </div>
+              </div>
+
+              {/* Phase 3: Pre-capture quality warning */}
+              {preCaptureWarning && (
+                <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-amber-500/90 text-white text-sm font-medium px-4 py-2 rounded-lg z-10">
+                  {preCaptureWarning}
+                </div>
+              )}
+
+              {/* Flash overlay */}
+              {flashEffect && (
+                <div className="absolute inset-0 bg-white/30 pointer-events-none animate-fadeIn" />
+              )}
+
+              {/* Loading state */}
+              {!cameraReady && !cameraError && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-white text-sm">Starting camera...</div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Bottom section: carousel (rapidfire only) + adding-to banner + shutter row */}
+        <div className="bg-black/90 pb-safe">
+          {/* Rapidfire carousel (above shutter) */}
+          {isRapidfire && rapidItems.length > 0 && (
+            <div
+              ref={carouselRef}
+              className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              {rapidItems.map((item) => {
+                const isAddingTo = addingToItemId === item.id;
+                const status = !item.thumbnailUrl
+                  ? { icon: '📷', bgColor: 'bg-gray-200' }
+                  : item.draftStatus === 'DRAFT' && !item.aiError
+                  ? { icon: '◐', bgColor: 'bg-amber-100' }
+                  : item.draftStatus === 'DRAFT' && item.aiError
+                  ? { icon: '⚠', bgColor: 'bg-red-100' }
+                  : { icon: '✓', bgColor: 'bg-green-100' };
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex-shrink-0 relative cursor-pointer transition-all ${
+                      isAddingTo ? 'ring-2 ring-amber-400 rounded-lg' : ''
+                    }`}
+                    onClick={() => onThumbnailTap(item.id)}
                   >
-                    ✕
-                  </button>
+                    {/* Thumbnail */}
+                    <div
+                      className={`w-16 h-16 rounded-lg overflow-hidden border border-white/30 flex items-center justify-center flex-shrink-0 ${
+                        isAddingTo ? 'bg-amber-900/30' : 'bg-white/10'
+                      }`}
+                    >
+                      {item.thumbnailUrl ? (
+                        <img
+                          src={item.thumbnailUrl}
+                          alt={item.title || 'Item'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xl">📷</span>
+                      )}
+                    </div>
+
+                    {/* Status badge (top-right) */}
+                    {item.thumbnailUrl && (
+                      <div
+                        className={`absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${status.bgColor}`}
+                      >
+                        {status.icon}
+                      </div>
+                    )}
+
+                    {/* Auto-enhance badge (top-left) */}
+                    {item.autoEnhanced && (
+                      <div className="absolute top-0.5 left-0.5 text-sm">✨</div>
+                    )}
+
+                    {/* Photo count badge (bottom-center) */}
+                    {item.photoUrls && item.photoUrls.length > 1 && (
+                      <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-1.5 rounded-full">
+                        ×{item.photoUrls.length}
+                      </span>
+                    )}
+
+                    {/* "+" button (bottom-right) — toggles to "×" when adding */}
+                    {item.thumbnailUrl && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddToItem(item.id);
+                        }}
+                        className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white transition-all ${
+                          isAddingTo ? 'bg-amber-500' : 'bg-gray-700/80 hover:bg-gray-600'
+                        }`}
+                        aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
+                      >
+                        {isAddingTo ? '×' : '+'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Publish shortcut tile */}
+              {rapidItems.length > 0 && (
+                <button
+                  onClick={onNavigateToReview}
+                  className="flex-shrink-0 w-16 h-16 rounded-lg bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-sm hover:bg-amber-500/30 transition-all"
+                >
+                  → Pub
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Carousel stats line (rapidfire only) */}
+          {isRapidfire && rapidItems.length > 0 && (
+            <div className="text-center text-xs text-white/50 px-4 pb-2">
+              {rapidItems.length} captured · {rapidItems.filter((i) => i.autoEnhanced).length} auto-enhanced ✨
+            </div>
+          )}
+
+          {/* Adding-to banner (shown when in add-mode) */}
+          {isRapidfire && inAddMode && addingItem && (
+            <div className="bg-amber-500/20 border-t border-b border-amber-500/30 px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {addingItem.thumbnailUrl && (
+                  <img
+                    src={addingItem.thumbnailUrl}
+                    alt={addingItem.title}
+                    className="w-8 h-8 rounded object-cover"
+                  />
                 )}
-                {/* Photo number badge */}
-                <span className="absolute bottom-0.5 left-0.5 bg-black/60 text-white text-[9px] px-1 rounded">
-                  {i + 1}
+                <span className="text-sm text-white font-medium">
+                  Next shot adds to: {addingItem.title || 'item'}
                 </span>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Shutter button row */}
-        <div className="flex items-center justify-center py-4 px-6">
-          {/* Spacer for centering */}
-          <div className="w-16" />
-
-          {/* Shutter button — large for one-handed use */}
-          <button
-            onClick={capturePhoto}
-            disabled={!cameraReady || photos.length >= maxPhotos}
-            className={`w-18 h-18 rounded-full border-4 border-white flex items-center justify-center transition-transform active:scale-90 ${
-              cameraReady && photos.length < maxPhotos
-                ? 'bg-white/20 hover:bg-white/30'
-                : 'bg-white/10 opacity-50'
-            }`}
-            style={{ width: '72px', height: '72px' }}
-            aria-label="Capture photo"
-          >
-            <div className="w-14 h-14 rounded-full bg-white" style={{ width: '56px', height: '56px' }} />
-          </button>
-
-          {/* Done shortcut on right */}
-          <div className="w-16 flex justify-end">
-            {photos.length > 0 && (
               <button
-                onClick={handleDone}
-                className="bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-full"
+                onClick={() => onAddToItem(addingToItemId)}
+                className="text-white/60 hover:text-white text-lg"
+                aria-label="Cancel add mode"
               >
-                Done ({photos.length})
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Full-screen preview overlay when a filmstrip photo is tapped */}
-      {selectedIndex !== null && photos[selectedIndex] && (
-        <div
-          className="absolute inset-0 z-20 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setSelectedIndex(null)}
-        >
-          <div className="relative max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={photos[selectedIndex].previewUrl}
-              alt={`Preview ${selectedIndex + 1}`}
-              className="max-w-full max-h-[70vh] rounded-lg object-contain"
-            />
-            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
-              <button
-                onClick={() => deletePhoto(selectedIndex)}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setSelectedIndex(null)}
-                className="bg-warm-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
-                Close
+                ✕
               </button>
             </div>
+          )}
+
+          {/* Shutter row */}
+          <div className="flex items-center justify-center py-4 px-6 gap-4">
+            {/* Gallery thumbnail (left) */}
+            {lastItemThumbnail && (
+              <div className="w-12 h-12 rounded overflow-hidden border border-white/30 flex-shrink-0">
+                <img src={lastItemThumbnail} alt="Last capture" className="w-full h-full object-cover" />
+              </div>
+            )}
+            {!lastItemThumbnail && <div className="w-12" />}
+
+            {/* Shutter button (center) */}
+            <button
+              onClick={capturePhoto}
+              disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
+              className={`w-20 h-20 rounded-full flex items-center justify-center transition-transform active:scale-90 flex-shrink-0 ${
+                isRapidfire
+                  ? inAddMode
+                    ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
+                    : 'bg-gradient-to-br from-amber-500 to-red-500 shadow-lg shadow-amber-500/50'
+                  : 'border-4 border-white bg-white/20'
+              }`}
+              style={{
+                opacity: cameraReady && (isRapidfire ? photos.length < maxPhotos : photosThisItem < MAX_REGULAR) ? 1 : 0.5,
+              }}
+              aria-label="Capture photo"
+            >
+              {isRapidfire ? (
+                <span className="text-2xl font-bold text-white">{inAddMode ? '+' : '⚡'}</span>
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-white" />
+              )}
+            </button>
+
+            {/* Camera switch (right) */}
+            <button
+              onClick={switchCamera}
+              className="w-12 h-12 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center flex-shrink-0"
+              aria-label="Switch camera"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
           </div>
         </div>
-      )}
-      </div>{/* end modal container */}
+
+        {/* Full-screen preview overlay when a photo is tapped (regular mode filmstrip or carousel tap) */}
+        {selectedIndex !== null && photos[selectedIndex] && (
+          <div
+            className="absolute inset-0 z-20 bg-black/80 flex items-center justify-center p-4"
+            onClick={() => setSelectedIndex(null)}
+          >
+            <div className="relative max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+              <img
+                src={photos[selectedIndex].previewUrl}
+                alt={`Preview ${selectedIndex + 1}`}
+                className="max-w-full max-h-[70vh] rounded-lg object-contain"
+              />
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                <button
+                  onClick={() => deletePhoto(selectedIndex)}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setSelectedIndex(null)}
+                  className="bg-warm-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
