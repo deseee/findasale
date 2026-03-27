@@ -17,16 +17,6 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // Cloudinary images — stale-while-revalidate
-    {
-      urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'cloudinary-images',
-        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-        cacheableResponse: { statuses: [0, 200] },
-      },
-    },
     // Picsum placeholder images — stale-while-revalidate
     {
       urlPattern: /^https:\/\/(?:fastly\.)?picsum\.photos\/.*/i,
