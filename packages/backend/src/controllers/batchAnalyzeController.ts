@@ -184,7 +184,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             suggestedCondition: 'GOOD',
             suggestedPrice: 10,
             suggestedTags: [],
-            confidence: 'low',
+            confidence: 0.4,
             error: (r.reason as Error)?.message ?? 'Failed to analyze',
           });
         }
