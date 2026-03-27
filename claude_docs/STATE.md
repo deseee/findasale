@@ -7,17 +7,19 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-S307 active — #143 camera pipeline repairs. Push block pending Patrick action.
+S307 WRAPPING — #143 camera pipeline. Railway TS fix pushed via MCP. Frontend + remaining backend files need Patrick push block below.
 
-**Files changed this session (NOT yet pushed — waiting on Patrick):**
-- `packages/frontend/components/RapidCapture.tsx` — spinner fix (temp-only), review button size, carousel padding, amber group glow
-- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — per-photo background upload, camera button clip, keep-camera-open on edit, AI spinner indicator, Enhance All stub
-- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — PATCH→PUT save fix, condition label map
-- `packages/frontend/pages/organizer/edit-sale/[id].tsx` — PATCH→PUT date fix
-- `packages/backend/src/jobs/processRapidDraft.ts` — multi-photo AI (all angles), conditionGrade mapping
-- `packages/backend/src/services/cloudAIService.ts` — `analyzeItemImages()` multi-image variant
-- `packages/backend/src/controllers/uploadController.ts` — 4.5s debounce before AI trigger
-- `packages/backend/src/controllers/itemController.ts` — reset debounce on photo append
+**Files still needing Patrick push (local only):**
+- `packages/frontend/components/RapidCapture.tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`
+- `packages/frontend/pages/organizer/edit-sale/[id].tsx`
+- `packages/backend/src/services/cloudAIService.ts`
+- `packages/backend/src/controllers/uploadController.ts`
+- `packages/backend/src/controllers/itemController.ts`
+
+**Already pushed to GitHub via MCP:**
+- `packages/backend/src/jobs/processRapidDraft.ts` — TS fix (suggestedConditionGrade), multi-photo AI
 
 ---
 
@@ -25,9 +27,9 @@ S307 active — #143 camera pipeline repairs. Push block pending Patrick action.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #143 Full pipeline E2E | Push block not yet run by Patrick. 8 files. | Run the S307 push block, wait for Railway+Vercel deploy, then test: capture → AI (wait 4.5s) → review → save → publish. | S307 |
-| #143 Review page "no items" | Timing issue likely resolved by 4.5s debounce — review can now be opened after photos upload but before AI completes. Items should appear in DRAFT state. | After push: take 1 photo, wait 2s, tap Review — should see 1 item. | S307 |
-| #143 AI field coverage | AI returns title correctly but category/condition/description output from `analyzeItemImage` not fully verified against real items. | After push: check a newly tagged item — does it have category + condition + description populated? | S307 |
+| #143 Full pipeline E2E | Frontend + 3 backend files not yet pushed. Railway rebuilding from MCP hotfix. | Run S308 push block after Railway is green, then test full flow on device. | S307 |
+| #143 Review page items | Items show in DRAFT while AI runs (4.5s debounce). Timing should be fixed post-push. | Take 1 photo, wait 2s, tap Review — should see item. If empty, needs backend debug. | S307 |
+| #143 AI field coverage | category/condition/description fields from AI unverified on real new items post-push. | After push: capture item, let AI run, open review — check all 4 AI fields populated. | S307 |
 
 **KNOWN BUG — Session instability:** After Cookie/localStorage clear in Chrome MCP, fresh login for shopper accounts (user11, user12) silently fails. Do NOT clear cookies — use signout route only, then log in.
 
@@ -35,21 +37,27 @@ S307 active — #143 camera pipeline repairs. Push block pending Patrick action.
 
 ## Next Session (S308)
 
-**Start with:**
-1. **Run Patrick's push block** (if not done this session) — 5 files
-2. **#143 E2E verify on device** — full flow: capture → AI → review → save → publish
-3. **AI multi-photo call audit** — check processRapidDraft handles appended photos (multi-angle for condition grading + brand detection)
-4. **Review page "no items" verify** — confirm timing fix works post-push
+**Context:** Photo-centric workflow is the #1 priority for the entire PWA. Both Rapidfire and Regular camera modes use the same AI pipeline. Multi-photo grouping (+ button) gives AI multiple angles for better condition grading and brand detection. 4.5s debounce holds AI trigger until organizer stops adding photos.
 
-**Patrick push block (copy-paste):**
+**Start with:**
+1. **Wait for Railway green** — MCP hotfix deployed, check Railway build status
+2. **Run push block** — 7 frontend/backend files (see below)
+3. **Device verify** — full flow: capture → carousel appears → wait 4.5s → spinner clears → tap Review → item shows with AI tags → save → publish
+4. **Deal with "builder"** — Patrick mentioned this at session end (context unclear, ask Patrick at S308 start)
+
+**Patrick push block:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
-git add packages/frontend/pages/organizer/edit-sale/[id].tsx
-git add packages/backend/src/jobs/processRapidDraft.ts
-git commit -m "fix: rapidfire pipeline — background upload, spinner logic, review 404s, condition labels, edit sale dates, carousel clipping"
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add "packages/frontend/pages/organizer/edit-sale/[id].tsx"
+git add packages/backend/src/services/cloudAIService.ts
+git add packages/backend/src/controllers/uploadController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: rapidfire pipeline — background upload, spinner, review 404s, condition labels, edit sale, multi-photo AI, 4.5s debounce"
 .\push.ps1
 ```
 
