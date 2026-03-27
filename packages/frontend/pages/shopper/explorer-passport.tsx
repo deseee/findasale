@@ -1,7 +1,7 @@
 /**
  * Feature #45: Explorer Passport Page
  *
- * Page: /shopper/collector-passport
+ * Page: /shopper/explorer-passport
  * - Display and edit explorer identity (bio, specialties, categories, keywords)
  * - View items from recent sales matching the passport
  * - Notification settings toggle
