@@ -91,6 +91,25 @@ const CATEGORIES = [
   'Other',
 ];
 
+// BUG 6: Map condition codes to human-readable labels
+const CONDITION_MAP: { [key: string]: string } = {
+  'S': 'Excellent',
+  'A': 'Excellent',
+  'B': 'Good',
+  'C': 'Fair',
+  'D': 'Poor',
+  'EXCELLENT': 'Excellent',
+  'GOOD': 'Good',
+  'FAIR': 'Fair',
+  'POOR': 'Poor',
+  'FOR_PARTS': 'For Parts / As-Is',
+};
+
+function formatCondition(value: string | null | undefined): string {
+  if (!value) return 'Not specified';
+  return CONDITION_MAP[value] || value;
+}
+
 function buildCloudinaryUrl(
   url: string,
   opts: {
@@ -182,7 +201,7 @@ const ReviewPage = () => {
       itemId: string;
       updates: Partial<Item>;
     }) => {
-      return await api.patch(`/items/${payload.itemId}`, payload.updates);
+      return await api.put(`/items/${payload.itemId}`, payload.updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });

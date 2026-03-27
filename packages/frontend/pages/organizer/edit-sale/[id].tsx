@@ -165,7 +165,7 @@ const EditSalePage = () => {
       const { markdownEnabled, markdownFloor, ...saleData } = formData;
 
       // First update the sale (includes treasure hunt fields)
-      await api.patch(`/sales/${id}`, saleData);
+      await api.put(`/sales/${id}`, saleData);
 
       // Then update markdown config if markdown fields changed
       await api.put(`/sales/${id}/markdown-config`, {

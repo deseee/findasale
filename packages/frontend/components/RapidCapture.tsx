@@ -387,7 +387,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               }
             }}
             disabled={!isRapidfire && photos.length === 0}
-            className="flex-shrink-0 bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-bold px-2 sm:px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            className="flex-shrink-0 max-w-[80px] bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-2 py-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap truncate"
           >
             Review{readyCount > 0 && ` (${readyCount})`}
           </button>
@@ -501,7 +501,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           {isRapidfire && rapidItems.length > 0 && (
             <div
               ref={carouselRef}
-              className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide"
+              className="flex gap-2 px-4 py-3 pr-20 overflow-x-auto scrollbar-hide"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {rapidItems.map((item) => {
