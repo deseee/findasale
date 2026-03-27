@@ -106,11 +106,11 @@ export async function processRapidDraft(itemId: string): Promise<void> {
           description: aiResult.description || item.description,
           category: aiResult.category || item.category,
           condition: aiResult.condition || item.condition,
-          conditionGrade: aiResult.conditionGrade || item.conditionGrade, // BUG 5: Include conditionGrade from AI
+          conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
           price: aiResult.suggestedPrice ?? item.price,
           tags: aiResult.tags || [],
           isAiTagged: true,
-          aiConfidence: aiResult.confidence ?? 0.5, // Camera Workflow v2: Store AI confidence
+          aiConfidence: aiResult.confidence ?? 0.5,
           draftStatus: 'PENDING_REVIEW'
         }
       });
@@ -128,7 +128,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         where: { id: itemId },
         data: {
           aiErrorLog: updatedErrors,
-          draftStatus: 'DRAFT' // Organizer can retry or edit manually
+          draftStatus: 'DRAFT'
         }
       });
 
