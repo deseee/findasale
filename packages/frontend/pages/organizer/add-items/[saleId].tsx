@@ -1404,6 +1404,13 @@ const AddItemsDetailPage = () => {
                 router.push(`/organizer/add-items/${saleId}/review`);
               }}
               readyCount={rapidItems.filter((i) => i.draftStatus === 'PENDING_REVIEW').length}
+              onPhotoCapture={(photo) => {
+                const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                setRapidItems((prev) => [
+                  ...prev,
+                  { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
+                ]);
+              }}
             />
           )}
 
