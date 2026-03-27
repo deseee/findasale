@@ -57,6 +57,10 @@ interface RapidCaptureProps {
   readyCount: number;
   /** Called immediately when a photo is captured (before Done). Enables live carousel. */
   onPhotoCapture?: (photo: { blob: Blob; previewUrl: string }) => void;
+  /** Called when user deletes a captured photo (regular mode only) */
+  onDeletePhoto?: (index: number) => void;
+  /** Called when user clicks "Enhance All" button */
+  onEnhanceAll?: () => void;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
@@ -72,6 +76,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   onNavigateToReview,
   readyCount,
   onPhotoCapture,
+  onDeletePhoto,
+  onEnhanceAll,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -320,12 +326,12 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent">
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 gap-2 bg-gradient-to-b from-black/60 to-transparent min-h-16">
           {/* Left: Torch (if supported) or close button */}
           {torchSupported ? (
             <button
               onClick={toggleTorch}
-              className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+              className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
                 torchOn ? 'bg-amber-500 text-white' : 'bg-white/20 text-white'
               }`}
               aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
@@ -342,7 +348,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           ) : (
             <button
               onClick={handleCancel}
-              className="text-white text-lg w-9 h-9 flex items-center justify-center"
+              className="flex-shrink-0 text-white text-lg w-10 h-10 flex items-center justify-center"
               aria-label="Cancel capture"
             >
               ✕
@@ -350,7 +356,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           )}
 
           {/* Center: Mode toggle */}
-          <div className="flex items-center bg-black/70 border border-white/15 rounded-full padding-1 gap-0.5 px-1 py-1">
+          <div className="flex items-center bg-black/70 border border-white/15 rounded-full gap-0.5 px-1 py-1">
             {[
               ['rapidfire', '⚡ Rapidfire'],
               ['regular', '📷 Regular'],
@@ -358,7 +364,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               <button
                 key={m}
                 onClick={() => handleModeChange(m as 'rapidfire' | 'regular')}
-                className={`px-4 py-1.5 text-sm font-bold rounded-full transition-all ${
+                className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-full transition-all whitespace-nowrap ${
                   mode === m
                     ? m === 'rapidfire'
                       ? 'bg-amber-500 text-white'
@@ -381,7 +387,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               }
             }}
             disabled={!isRapidfire && photos.length === 0}
-            className="bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-shrink-0 bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-bold px-2 sm:px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
             Review{readyCount > 0 && ` (${readyCount})`}
           </button>
@@ -515,6 +521,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       isAddingTo ? 'ring-2 ring-amber-400 rounded-lg' : ''
                     }`}
                     onClick={() => onThumbnailTap(item.id)}
+                    title={item.title || 'Item'}
                   >
                     {/* Thumbnail */}
                     <div
@@ -532,6 +539,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         <span className="text-xl">📷</span>
                       )}
                     </div>
+
+                    {/* Loading spinner overlay (while DRAFT with no error) */}
+                    {item.draftStatus === 'DRAFT' && !item.aiError && item.thumbnailUrl && (
+                      <div className="absolute inset-0 rounded-lg bg-black/20 flex items-center justify-center">
+                        <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                      </div>
+                    )}
 
                     {/* Status badge (top-right) */}
                     {item.thumbnailUrl && (
@@ -585,10 +599,21 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Carousel stats line (rapidfire only) */}
+          {/* Carousel stats line with Enhance All button (rapidfire only) */}
           {isRapidfire && rapidItems.length > 0 && (
-            <div className="text-center text-xs text-white/50 px-4 pb-2">
-              {rapidItems.length} captured · {rapidItems.filter((i) => i.autoEnhanced).length} auto-enhanced ✨
+            <div className="text-center text-xs text-white/50 px-4 pb-2 flex items-center justify-center gap-2">
+              <span>
+                {rapidItems.length} captured · {rapidItems.filter((i) => i.autoEnhanced).length} auto-enhanced ✨
+              </span>
+              {onEnhanceAll && (
+                <button
+                  onClick={onEnhanceAll}
+                  className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors"
+                  title="Trigger AI enhancement for all items"
+                >
+                  Enhance
+                </button>
+              )}
             </div>
           )}
 
@@ -684,6 +709,17 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 alt={`Preview ${selectedIndex + 1}`}
                 className="max-w-full max-h-[70vh] rounded-lg object-contain"
               />
+              {/* Delete button overlay (top-right corner) */}
+              <button
+                onClick={() => {
+                  deletePhoto(selectedIndex);
+                  setSelectedIndex(null);
+                }}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center text-lg font-bold transition-colors"
+                aria-label="Delete photo"
+              >
+                ×
+              </button>
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
                 <button
                   onClick={() => deletePhoto(selectedIndex)}
