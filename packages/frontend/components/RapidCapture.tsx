@@ -649,9 +649,23 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               <button
                 onClick={() => !isRapidfire && photos.length > 0 && setSelectedIndex(photos.length - 1)}
                 disabled={isRapidfire || photos.length === 0}
-                className="w-12 h-12 rounded overflow-hidden border border-white/30 flex-shrink-0 disabled:cursor-not-allowed"
+                className="w-12 h-12 rounded overflow-hidden border border-white/30 flex-shrink-0 disabled:cursor-not-allowed bg-white/10 flex items-center justify-center"
               >
-                <img src={lastItemThumbnail} alt="Last capture" className="w-full h-full object-cover" />
+                <img
+                  src={lastItemThumbnail}
+                  alt="Last capture"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback: replace broken image with camera icon
+                    const img = e.target as HTMLImageElement;
+                    img.style.display = 'none';
+                    img.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                    const icon = document.createElement('span');
+                    icon.textContent = '📷';
+                    icon.className = 'text-lg';
+                    img.parentElement?.appendChild(icon);
+                  }}
+                />
               </button>
             )}
             {!lastItemThumbnail && <div className="w-12" />}
