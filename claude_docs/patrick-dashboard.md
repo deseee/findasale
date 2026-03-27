@@ -2,7 +2,7 @@
 
 ---
 
-## ⚠️ Action Required — Push S301 Code Fixes (9 files + migration)
+## ⚠️ Action Required — Push S301 (12 files + migration)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -15,8 +15,8 @@ git add packages/frontend/pages/organizer/create-sale.tsx
 git add packages/backend/src/controllers/saleController.ts
 git add packages/database/prisma/schema.prisma
 git add packages/database/prisma/migrations/20260326_make_sale_lat_lng_optional/migration.sql
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "fix(create-sale): fix URL, lat/lng optional, date format, saleType enum; fix(photos): referrerPolicy; fix(passport): upsert P2002; S301 wrap"
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
+git commit -m "fix(create-sale): fix URL, lat/lng optional, date format, saleType enum; fix(photos): referrerPolicy; fix(passport): upsert P2002; S301 wrap + roadmap"
 .\push.ps1
 ```
 
@@ -32,61 +32,56 @@ npx prisma generate
 
 ## Build Status
 
-- **Railway:** Deployed — #87 backend fix from S298 live
-- **Vercel:** Deployed — #87 frontend fix (useBrandFollows.ts, bde8211) live
-- **DB:** No schema changes
-- **Hook:** PostStop QA evidence hook active locally (`.claude/hooks/` — gitignored, works on your machine)
-- **Skill:** findasale-qa updated with 7-step screenshot-first protocol — installed ✅
+- **Railway:** Deployed — last push was S300 (#87 fix)
+- **Vercel:** Deployed — last push was S300 (#87 fix)
+- **DB:** Migration pending (lat/lng optional on Sale table) — run block above before S302 QA
+- **Hook:** PostStop QA evidence hook active locally (gitignored, works on your machine)
 
 ---
 
-## Session 300 Summary
+## Session 301 Summary
 
-**Rubber-stamping confronted and fixed structurally**
-- Patrick caught fabricated ✅ marks for #141/#142/#143/#144 mid-session
-- Root cause explained: self-enforced rules fail under execution pressure
-- Structural fix: PostStop hook blocks sessions (exit 2) if ✅ marks exist with zero screenshot evidence
-- findasale-qa skill now requires 3 screenshot IDs per ✅ (before/after action/after reload)
-- Patrick can spot-check any ✅ in 10 seconds without retesting — just look at the screenshot
+**Chrome QA — 4 verified, 3 bugs found, 1 fix shipped**
 
-**#87 Brand Tracking — FIXED and deployed**
-- Root cause: useBrandFollows.ts used raw `fetch('/api/users/...')` hitting Vercel (no such route), not Railway
-- Secondary: wrong localStorage key `'authToken'` instead of `'token'` — all requests had empty Bearer
-- Fixed: replaced all fetch() calls with `api` axios instance
-- Pushed as part of commit bde8211 — Vercel redeployed
-- Retest still needed (login was stuck in Chrome this session)
+Verified ✅ with screenshot evidence:
+- **#141** Item Edit — title persisted on reload (ss_2485qquq4 → ss_7964gr7a4)
+- **#144** AI Suggest Price — returned "$15–$45, suggested $28" + "Use $28.00" CTA (ss_825360xz7)
+- **#87** Brand Tracking — Herman Miller added + persisted on reload (ss_1535iwo2a → ss_869725td0 → ss_59120puay)
+- **#169** Organizer Insights — KPI cards + Per-Sale Breakdown with real PRO data (ss_8974kxr2g → ss_4690ui68m → ss_03146gg4b)
 
-**D-series QA — 3 verified, 7 carry forward**
-- #137 ✅ Edit Sale page loads real data, LIVE badge + Unpublish present
-- #139 ✅ Leaflet map with geocoded address on /sales/[id]
-- #29 ✅ Loyalty XP/tier data real, coupon correctly gated
-- #141/#142/#143/#144/#87 — Chrome login stuck, carry to S301 with screenshot evidence protocol
-- #122 nav bug found: "Collector Passport" label in nav ≠ "My Loot Legend" page title (P2)
+Bugs found:
+- **#65 CSV Export ❌ P1** — 429 on both buttons, zero UI feedback (ss_06956hzal → ss_7950ow71a → ss_64569ef3f)
+- **#31 Organizer Profile ❌ P0** — success toast fires but data gone on reload (ss_89882ut9f → ss_2884cncce → ss_7808kolqb)
+- **#141 ⚠️ P2** — category blank on edit form; item invisible in add-items list after rename
+- **#41 Item Library ⚠️ PARTIAL** — page renders, empty state (no consignment items to test with)
+- **#17 Create Sale ❌ P0 → FIXED** — wrong URL + 3 backend schema mismatches diagnosed and fixed. Pending push + migration.
 
 ---
 
-## S301 Priorities
+## S302 Priorities
 
-1. **Nav label fix** — dispatch dev: "Collector Passport" → "Loot Legend" in Layout.tsx
-2. **Chrome QA #141** — item edit: change field, save, reload, screenshot persisted value
-3. **Chrome QA #142** — photo upload: file_upload tool, screenshot photo in gallery
-4. **Chrome QA #143** — Camera AI tab with real image, screenshot result
-5. **Chrome QA #144** — Suggest Price button, screenshot AI response
-6. **Chrome QA #87 retest** — login as user11, follow a brand, screenshot brand in list
-7. **D-series Pass 3 PRO** — user2@example.com: #65, #25, #31, #41, #17
+1. Push S301 + run migration (above) — do this first
+2. Chrome retest #17 Create Sale after deploy — fill form, submit, verify redirect to add-items
+3. Dispatch dev: fix #31 Organizer Profile save bug
+4. Dispatch dev: fix #65 CSV Export 429 UI feedback + rate limit review
+5. Dispatch dev: fix #141 P2 bugs (category pre-pop + sort order)
+6. Nav label fix: "Collector Passport" → "Loot Legend" in Layout.tsx
+7. Blocked queue: #142 (photo upload), #143 (Camera AI)
 
 ---
 
 ## Known Open Items
 
-- #141/#142/#143/#144 — D-series unverified, carry to S301
-- #87 Brand Tracking retest — fix deployed, retest pending
-- #122 Nav label mismatch — P2, dispatch S301
-- D-series Pass 3 PRO (#65/#25/#31/#41/#17) — not started
-- #85 Treasure Hunt QR — Auth bug fixed S296. Re-test in S301. Sale: user2 → cmn7eptmd0047xdmfryhj2m5d
+- **#17 Create Sale** — fix shipped, PENDING PUSH + migration + S302 retest
+- **#31 Organizer Profile** — P0 save bug, dispatch dev S302
+- **#65 CSV Export** — P1 silent 429, dispatch dev S302
+- **#141 P2 bugs** — category pre-pop + sort order, dispatch dev S302
+- **#122 Nav label** — "Collector Passport" ≠ "My Loot Legend" (P2)
+- **#142 Photo Upload** — never tested, carry to S302
+- **#143 Camera AI** — never tested, carry to S302
 - #37 Sale Reminders — iCal confirmed, push "Remind Me" not built (feature gap)
 - #59 Streak Rewards — StreakWidget on dashboard, not on loyalty page (P2)
-- customStorefrontSlug — All NULL in DB, organizer profile URLs work by numeric ID only
+- customStorefrontSlug — All NULL in DB, organizer profile URLs by numeric ID only
 
 ---
 

@@ -93,11 +93,11 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 137 | Create / Edit / Publish / Archive Sales | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S300 | Core workflow — Chrome ✅ S300: edit-sale page loads real data, LIVE badge + Unpublish button visible |
+| 137 | Create / Edit / Publish / Archive Sales | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Edit ✅ S300. CREATE ❌ S301: wrong URL + lat/lng required + date format mismatch + saleType enum too narrow. All 4 fixed S301 — PENDING PUSH. Retest S302. |
 | 139 | Sale Map with Geocoding | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S300 | Chrome ✅ S300: Leaflet map on /sales/[id] with geocoded address "4866 Leonard St, Grand Rapids" |
 | 140 | Sale Calendar View | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Organizer + shopper views |
-| 141 | Item Add / Edit / Delete / Status | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S125 | ✅ | 📋 | Core CRUD |
-| 144 | AI Tag Suggestions + Health Score | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S124 | ✅ | 📋 | Haiku-powered, part of intake |
+| 141 | Item Add / Edit / Delete / Status | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S125 | ✅ | ✅ S301 | Core CRUD. ✅ S301: title edit persisted on reload (ss_2485qquq4→ss_7964gr7a4). ⚠️ P2: category doesn't pre-populate on edit (shows "Select a category" vs saved value). ⚠️ P2: sort order glitch — item invisible in add-items list after rename. |
+| 144 | AI Tag Suggestions + Health Score | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S124 | ✅ | ✅ S301 | Haiku-powered, part of intake. ✅ S301: Suggest Price returned "$15–$45, suggested $28" with explanation + "Use $28.00" CTA. (ss_825360xz7) |
 | 151 | Notification Inbox | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | In-app notification center |
 | 162 | Stripe Terminal POS (v2) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Multi-item + cash, 10% fee parity |
 | 71 | Organizer Reputation Score | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | 1-5 star public score + reputation.tsx frontend |
@@ -113,14 +113,14 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 169 | Organizer Insights (Lifetime) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Cross-sale totals + benchmarking |
-| 25 | Organizer Item Library (Consignment Rack) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Upload once, reuse; cross-sale search, price history |
+| 169 | Organizer Insights (Lifetime) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S301 | Cross-sale totals + benchmarking. ✅ S301: KPI cards + Per-Sale Breakdown loaded with real data as Bob Smith PRO. (ss_8974kxr2g→ss_4690ui68m→ss_03146gg4b) |
+| 25 | Organizer Item Library (Consignment Rack) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Upload once, reuse; cross-sale search, price history. S301: page loads, empty state for PRO user with no consignment items. ⚠️ Empty state copy misleading (no CTA). Not a bug — needs real consignment data to verify. |
 | 42 | Voice-to-Tag | ORG | PRO | N/A | ✅ | ✅ | ✅ | ✅S202 | N/A | 📋 | VoiceTagButton.tsx + useVoiceTag.ts complete. Web Speech API integration |
 | 41 | Flip Report | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Item resale potential scoring |
 | 17 | Bid Bot Detector + Fraud Score | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | FraudBadge on holds page, fraud-signals.tsx |
 | 27 | CSV / JSON / Text Listing Exports | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | items.csv + sales.csv + purchases.csv download confirmed. PRO gate working. Chrome verified S290. |
 | 66 | Open Data Export (ZIP) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | items.csv (36 rows), sales.csv (3 rows), purchases.csv (header only — no Stripe purchases yet). Chrome verified S290. |
-| 125 | Inventory Syndication CSV Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | exportService.ts + csvExportController.ts. PRO/TEAMS gate. Confirmed download via organizer dashboard. Chrome verified S290. |
+| 125 | Inventory Syndication CSV Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | exportService.ts + csvExportController.ts. PRO/TEAMS gate. Chrome S290 prev confirmed. ❌ S301: persistent 429 (rate limit window spans entire session), zero UI feedback on either Export or Clipboard button. P1 — dispatch dev to add 429 error UI + review rate limit window. |
 
 ### Organizer — Marketing & Brand Amplification [SIMPLE/PRO mixed]
 
@@ -161,7 +161,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 62 | Digital Receipt + Returns | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Auto-generated receipt post-POS, return window |
 | 45 | Collector Passport | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Specialty collection tracking + achievement path |
 | 50 | Loot Log | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Personal purchase history with photos + prices |
-| 87 | Brand & Designer Tracking | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | S300: GET ✅ (Brands tab renders). POST ❌ FIXED — useBrandFollows.ts used raw fetch('/api/users/...') hitting Vercel 404 instead of Railway; also wrong localStorage key ('authToken' vs 'token'). Fixed to use api instance. Pushed cdc2723. Retest pending. |
+| 87 | Brand & Designer Tracking | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S301 | ✅ S301: Brands tab empty → added Herman Miller → appeared in list with Remove → persisted on reload. (ss_1535iwo2a→ss_869725td0→ss_59120puay) |
 | 88 | Haul Post Gallery (UGC Social Proof) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | UGCPhoto extended (isHaulPost, linkedItemIds, likeCount) + UGCPhotoReaction model. /hauls page live |
 | 51 | Sale Ripples | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Social proof activity tracking. RippleIndicator auto-records. ripples.tsx analytics. |
 | 54 | Crowdsourced Appraisal (Base) | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Request/submit/vote appraisals; AI Sprint 3 deferred. |
@@ -270,7 +270,7 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 | 149 | Email Reminders to Shoppers | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | `/api/reminders` — Needs Chrome QA |
 | 150 | Push Notification Subscriptions | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | `/api/push` VAPID — Chrome ✅ S286 |
 | 152 | Organizer Digest Emails | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Weekly activity summaries — Needs Chrome QA |
-| 153 | Basic Organizer Profile | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | businessName, phone, bio, website — Chrome ✅ S286 |
+| 153 | Basic Organizer Profile | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | businessName, phone, bio, website. ❌ S301: missing Phone shows no validation error; save fires success toast but data does NOT persist on reload. P0 — dispatch dev. |
 | 154 | Organizer Public Profile Page | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/organizers/[slug]` — Chrome ✅ S286 (slug 404 fixed by dev, push pending) |
 | 155 | Password Reset Flow | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Email-based password recovery — Chrome PASS S285 |
 | 156 | Refund Policy Configuration | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Per-organizer configurable refund window — Needs Chrome QA |
