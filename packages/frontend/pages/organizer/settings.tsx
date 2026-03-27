@@ -137,6 +137,13 @@ const OrganizerSettingsPage = () => {
         bio,
         website,
       });
+      // Refetch organizer data to sync local state with backend
+      const response = await api.get('/organizers/me');
+      if (response.data) {
+        setPhone(response.data.phone || '');
+        setBio(response.data.bio || '');
+        setWebsite(response.data.website || '');
+      }
       showToast('Profile updated', 'success');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to update profile', 'error');

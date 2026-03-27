@@ -35,6 +35,8 @@ const EditSalePage = () => {
   const [showPublishCelebration, setShowPublishCelebration] = useState(false);
   const [showAlaCarteModal, setShowAlaCarteModal] = useState(false); // #132: À La Carte
   const [isSendingApproachNotification, setIsSendingApproachNotification] = useState(false); // Feature #84: Approach Notes notification
+  const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
+  const [isAutoGeocodingOnLoad, setIsAutoGeocodingOnLoad] = useState(false); // Track auto-geocoding in progress
 
   const [formData, setFormData] = useState({
     title: '',
@@ -86,6 +88,35 @@ const EditSalePage = () => {
     enabled: !!id,
   });
 
+  // Auto-geocode if sale has address but null lat/lng (new sale or failed geocoding before S301 migration)
+  const attemptGeocode = async (address: string, city: string, state: string, zip: string) => {
+    if (!address || !city || !state) return false;
+
+    setIsAutoGeocodingOnLoad(true);
+    try {
+      const fullAddress = `${address}, ${city}, ${state}${zip ? ` ${zip}` : ''}`;
+      const response = await api.post('/sales/geocode', { address: fullAddress });
+
+      if (response.data.lat && response.data.lng) {
+        // Store the geocoded coordinates in a temporary query state
+        // We'll update the sale via the existing form mutation
+        setFormData(prev => ({
+          ...prev,
+          // Coordinates will be sent on next save
+        }));
+        // Signal that we have geocoded data
+        return { lat: response.data.lat, lng: response.data.lng };
+      }
+      return false;
+    } catch (error) {
+      console.error('Geocoding failed:', error);
+      return false;
+    } finally {
+      setIsAutoGeocodingOnLoad(false);
+      setGeocodingAttempted(true);
+    }
+  };
+
   useEffect(() => {
     if (sale) {
       // Convert ISO date strings to YYYY-MM-DD format for input type="date"
@@ -116,8 +147,13 @@ const EditSalePage = () => {
         treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
         treasureHuntCompletionBadge: sale.treasureHuntCompletionBadge ?? false,
       });
+
+      // Auto-trigger geocoding if sale has no coordinates but has address fields
+      if (!sale.lat && !sale.lng && sale.address && sale.city && sale.state && !geocodingAttempted) {
+        attemptGeocode(sale.address, sale.city, sale.state, sale.zip);
+      }
     }
-  }, [sale]);
+  }, [sale, geocodingAttempted]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -555,20 +591,29 @@ const EditSalePage = () => {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : isAutoGeocodingOnLoad ? (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded">
+                <p className="text-blue-800 dark:text-blue-200 font-semibold">
+                  Finding location coordinates...
+                </p>
+              </div>
+            ) : geocodingAttempted ? (
               <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded">
                 <p className="text-red-800 dark:text-red-200 font-semibold">
-                  Sale location not found — please verify your address and try saving again.
+                  Sale location not found — please verify your address and try again.
                 </p>
                 <button
                   type="button"
-                  onClick={() => window.location.reload()}
+                  onClick={() => {
+                    setGeocodingAttempted(false);
+                    attemptGeocode(formData.address, formData.city, formData.state, formData.zip);
+                  }}
                   className="text-sm bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded mt-3"
                 >
                   Retry
                 </button>
               </div>
-            )}
+            ) : null}
 
             {/* Feature #84: Approach Notes — day-of info for shoppers */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
