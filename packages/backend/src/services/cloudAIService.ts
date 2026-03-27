@@ -151,7 +151,7 @@ Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books
 Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
 Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
-Confidence: Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item.
+Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 
 {
   "title": "short specific title",
@@ -190,16 +190,12 @@ Confidence: Rate your confidence in this identification from 0.0 to 1.0. Use 0.9
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];
     }
-    // Camera Workflow v2: Set confidence from Vision API if available, default to 0.5
+    // Camera Workflow v2: Ensure confidence is always present (fallback if model doesn't return it)
     if (!parsed.confidence) {
-      // Derive from field completeness when model doesn't self-report
-      let score = 0.3;
-      if (parsed.title && parsed.title.length > 5) score += 0.2;
-      if (parsed.category && parsed.category !== 'Other') score += 0.15;
-      if (parsed.description && parsed.description.length > 20) score += 0.15;
-      if (parsed.suggestedPrice && parsed.suggestedPrice > 0) score += 0.1;
-      if (parsed.tags && parsed.tags.length >= 3) score += 0.1;
-      parsed.confidence = Math.min(score, 0.95);
+      // Derive confidence from field completeness when model doesn't self-report
+      const fieldCount = [parsed.title, parsed.description, parsed.category, parsed.condition, parsed.suggestedPrice]
+        .filter(f => f != null && f !== '').length;
+      parsed.confidence = 0.4 + (fieldCount / 5) * 0.4; // 0.4–0.8 range based on completeness
     }
     return parsed;
   } catch (error: any) {
@@ -551,7 +547,7 @@ Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books
 Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
 Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
-Confidence: Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item.
+Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 
 {
   "title": "short specific title",
@@ -600,14 +596,10 @@ Confidence: Rate your confidence in this identification from 0.0 to 1.0. Use 0.9
       parsed.tags = [];
     }
     if (!parsed.confidence) {
-      // Derive from field completeness when model doesn't self-report
-      let score = 0.3;
-      if (parsed.title && parsed.title.length > 5) score += 0.2;
-      if (parsed.category && parsed.category !== 'Other') score += 0.15;
-      if (parsed.description && parsed.description.length > 20) score += 0.15;
-      if (parsed.suggestedPrice && parsed.suggestedPrice > 0) score += 0.1;
-      if (parsed.tags && parsed.tags.length >= 3) score += 0.1;
-      parsed.confidence = Math.min(score, 0.95);
+      // Derive confidence from field completeness when model doesn't self-report
+      const fieldCount = [parsed.title, parsed.description, parsed.category, parsed.condition, parsed.suggestedPrice]
+        .filter(f => f != null && f !== '').length;
+      parsed.confidence = 0.4 + (fieldCount / 5) * 0.4; // 0.4–0.8 range based on completeness
     }
 
     return parsed;
