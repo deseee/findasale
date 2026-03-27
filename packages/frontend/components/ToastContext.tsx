@@ -35,7 +35,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3000);
+    }, 4500);
   }, []);
 
   const standardToasts = toasts.filter((t) => t.type !== 'points');

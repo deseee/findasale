@@ -19,7 +19,7 @@ export interface PreviewModalProps {
   isOpen: boolean;
   item: {
     id: string;
-    photoUrl?: string;
+    thumbnailUrl?: string;
     draftStatus: string;
     title?: string;
     category?: string;
@@ -168,10 +168,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Photo */}
-          {(fullItem?.photoUrls?.[0] || item.photoUrl) && (
+          {(fullItem?.photoUrls?.[0] || item.thumbnailUrl) && (
             <div className="flex justify-center">
               <img
-                src={fullItem?.photoUrls?.[0] || item.photoUrl}
+                src={fullItem?.photoUrls?.[0] || item.thumbnailUrl}
                 alt={fullItem?.title || item.title || 'Item'}
                 className="max-h-80 rounded-lg shadow-md object-cover"
               />

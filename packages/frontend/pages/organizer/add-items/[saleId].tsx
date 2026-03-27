@@ -692,13 +692,13 @@ const AddItemsDetailPage = () => {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
 
-        const { itemId } = res.data;
+        const { itemId, photoUrl } = res.data;
 
         // Swap temp id for real DB item id
         setRapidItems((prev) =>
           prev.map((item) =>
             item.id === tempId
-              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [photo.previewUrl], autoEnhanced }
+              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: photoUrl ? [photoUrl] : [photo.previewUrl], autoEnhanced }
               : item
           )
         );
