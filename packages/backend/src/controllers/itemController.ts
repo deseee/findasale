@@ -1166,7 +1166,6 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         autoEnhanced: true,
         createdAt: true,
         updatedAt: true,
-        quantity: true, // Frontend needs this for item card display
         // Sprint 1: Listing Health Score + AI tag suggestions
         tags: true,
       },
