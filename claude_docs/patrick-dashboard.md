@@ -1,20 +1,18 @@
-# Patrick's Dashboard — Session 307 Active (March 27, 2026)
+# Patrick's Dashboard — Session 308 Wrap (March 27, 2026)
 
 ---
 
-## 🔴 Push Required — Run this block now
+## 🔴 Push Required — Run this block now (S308)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/components/RapidCapture.tsx
 git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
 git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
-git add "packages/frontend/pages/organizer/edit-sale/[id].tsx"
-git add packages/backend/src/jobs/processRapidDraft.ts
-git add packages/backend/src/services/cloudAIService.ts
-git add packages/backend/src/controllers/uploadController.ts
 git add packages/backend/src/controllers/itemController.ts
-git commit -m "fix: rapidfire pipeline — background upload, spinner, review 404s, condition labels, edit sale, multi-photo AI, 4.5s debounce"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: camera pipeline — thumbnail fallback, Done Reviewing 404 guard, category normalization, draft list description field"
 .\push.ps1
 ```
 
@@ -29,52 +27,36 @@ git commit -m "fix: rapidfire pipeline — background upload, spinner, review 40
 
 ---
 
-## Session 306 Summary
+## Session 308 Summary
 
-**#143 Camera QA + 3 bug fixes**
+**#143 Camera Pipeline — Root cause found + 4 fixes**
 
-Chrome QA confirmed the S305 UX refactor landed correctly:
-- Mode toggle inside camera top bar ✅
-- Amber ⚡ shutter in Rapidfire, white in Regular ✅
-- Camera feed active (1920×1440) ✅
+S307 push got items onto the Review & Publish page. S308 tackled the remaining carousel issues.
 
-But three bugs were found and fixed:
+**What was fixed:**
+- "Done Reviewing" button no longer 404s while item is still uploading (shows toast instead)
+- Category dropdown now pre-populates from AI value (was failing silently due to case mismatch)
+- Description field now appears on Review & Publish page (was missing from backend SELECT)
+- Some thumbnail onError fallbacks added in earlier pass
 
-**Bug 1 — Carousel never showed in-camera (P1 fix)**
-Root cause: carousel renders `rapidItems` (a parent prop) which only populated *after* camera closes. So it was always empty during capture. Fixed by adding `onPhotoCapture` callback — parent now optimistically adds a thumbnail to `rapidItems` on each capture, making the carousel live in real-time.
-
-**Bug 2 — Regular mode gallery not tappable**
-The thumbnail next to the shutter showed the last photo but couldn't be tapped. Wrapped in a button → tapping now opens the full-screen preview/filmstrip so you can review and delete any of the 5 captured photos.
-
-**Bug 3 — Review button wrong in Regular mode**
-Was navigating to the rapidItems review page (always empty in Regular mode). Fixed: in Regular mode, Review now opens the photo preview filmstrip inside the camera. In Rapidfire it still navigates correctly to the publish queue.
-
-**Bonus fix — edit-sale TS corruption**
-`edit-sale/[id].tsx` had a trailing block of null bytes causing 20+ TypeScript errors. Stripped cleanly.
+**Root cause confirmed for the main remaining bug:**
+After AI finishes (spinner stops), the carousel thumbnail goes blank. Traced via live network requests in Chrome — the Cloudinary URL returns **503** at that moment. The poll update then overwrites the working blob URL with the broken Cloudinary URL. Two-line fix ready for S309.
 
 ---
 
-## What Still Needs Device Testing
+## S309 Start
 
-The VM can't trigger the shutter click (DPR coordinate mismatch in Chrome MCP). Need Patrick to test on phone:
-1. Open camera in **Rapidfire** → tap shutter → thumbnail should appear in carousel immediately
-2. Tap **+** on a carousel thumbnail → add-mode banner ("Adding to: [item]") should appear
-3. Open camera in **Regular** → capture up to 5 photos → tap the gallery thumbnail (left of shutter) → preview opens, can delete
-
-30-second check on your actual device.
-
----
-
-## S307 Start
-
-1. **#143 device verify** — quick phone test above
-2. **Pick next roadmap items** — consult roadmap.md "Pending Chrome QA" section
+1. **Run push block above** (S308 fixes)
+2. **Apply 2-line thumbnail fix** — S309 starts with this inline (see STATE.md Current Work for exact code)
+3. **Chrome verify** — capture 1 photo, confirm thumbnail stays visible after spinner stops
+4. **Then continue** → Pub quick review modal + Done Reviewing flow
 
 ---
 
 ## Known Open Items
 
-- **#143 carousel + add-mode** — device verify needed (30 sec on phone)
+- **#143 thumbnail 503 fix** — exact code in STATE.md, ready for S309 inline edit
+- **#143 → Pub modal** — Category/Condition/Description population (unverified post-fix)
 - #37 Sale Reminders — iCal confirmed, push "Remind Me" not built (feature gap)
 - #59 Streak Rewards — StreakWidget on dashboard, not on loyalty page (P2)
 - customStorefrontSlug — All NULL in DB, organizer profile URLs by numeric ID only

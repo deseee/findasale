@@ -7,13 +7,44 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-S308 WRAPPING — #143 camera pipeline. 4 bugs fixed this session. All need Patrick push.
+S308 COMPLETE — #143 camera pipeline. Root cause of thumbnail break confirmed with live network evidence. Push block below covers all S308 fixes.
 
 **Files changed S308 (local only — push block below):**
 - `packages/frontend/components/RapidCapture.tsx` — thumbnail onError → 📷 fallback (no more broken image)
 - `packages/backend/src/controllers/itemController.ts` — `description` field added to draft list endpoint SELECT
 - `packages/frontend/pages/organizer/add-items/[saleId].tsx` — guard: "Done Reviewing" blocked if item ID still temp- (prevents 404)
 - `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — category normalization (case-insensitive match to CATEGORIES array so AI value pre-populates dropdown)
+
+**ROOT CAUSE CONFIRMED S308 (thumbnail break after AI):**
+After AI processing completes, the polling endpoint (`GET /items/:id/draft-status`) returns `thumbnailUrl: photoUrls[0]` = the Cloudinary URL. The Cloudinary URL returns **503** (image not fully processed on Cloudinary side yet). The poll update in `[saleId].tsx` line 886 does `{ ...i, ...data }` which overwrites the working blob URL with the 503 Cloudinary URL. No `onError` on the carousel `<img>` to fall back. Result: broken thumbnail.
+
+**S309 FIXES NEEDED (2 targeted edits, ~10 lines total):**
+
+Fix 1 — `[saleId].tsx` line 885-887: preserve blob URL through poll update:
+```
+CURRENT:  prev.map((i) => (i.id === item.id ? { ...i, ...data } : i))
+REPLACE:  prev.map((i) =>
+            i.id !== item.id ? i :
+            { ...i, ...data, thumbnailUrl: i.thumbnailUrl || data.thumbnailUrl }
+          )
+```
+
+Fix 2 — `RapidCapture.tsx` lines 532-537: add onError to carousel img:
+```tsx
+<img
+  src={item.thumbnailUrl}
+  alt={item.title || 'Item'}
+  className="w-full h-full object-cover"
+  onError={(e) => {
+    const img = e.currentTarget;
+    img.style.display = 'none';
+    const icon = document.createElement('span');
+    icon.textContent = '📷';
+    icon.className = 'text-xl';
+    img.parentElement?.appendChild(icon);
+  }}
+/>
+```
 
 ---
 
@@ -31,12 +62,16 @@ S308 WRAPPING — #143 camera pipeline. 4 bugs fixed this session. All need Patr
 
 ## Next Session (S309)
 
-**Context:** Camera pipeline is close. Core flow works: capture → AI tags → carousel → Review & Publish page. Remaining issues are in the quick review modal (→ Pub button flow). Push S308 block, verify device.
+**Context:** Camera pipeline close to done. Core flow works: capture → AI tags → carousel → Review & Publish page. One confirmed remaining bug: carousel thumbnails break after AI spinner stops (Cloudinary 503 race condition). Exact fix documented in "Current Work" above — 2 targeted edits, ~10 lines.
 
 **Start with:**
-1. **Run push block** — 4 files changed S308
-2. **Device verify** — capture item → tap → Pub in carousel → check Category/Condition/Description populate → tap Done Reviewing → should save cleanly (or show "still uploading" if timing)
-3. **Check category pre-pop** — on Review & Publish full edit form, Category should now pre-fill from AI
+1. **Push S308 block** (below) — 4 files + STATE.md + dashboard
+2. **Fix thumbnail bug (inline — <20 lines across 2 files):**
+   - `[saleId].tsx` line 886: preserve blob URL through poll update (see fix above)
+   - `RapidCapture.tsx` lines 532-537: add onError to carousel img (see fix above)
+3. **Push S309 thumbnail fix** (tiny 2-file patch — MCP push ok)
+4. **Chrome verify** — capture 1 photo, watch carousel: thumbnail should stay visible after spinner stops
+5. **Then verify** → Pub quick review modal (Category/Condition/Description) + Done Reviewing flow
 
 **Patrick push block (S308):**
 ```powershell
@@ -55,7 +90,7 @@ git commit -m "fix: camera pipeline — thumbnail fallback, Done Reviewing 404 g
 
 ## Recently Complete
 
-**S308 COMPLETE (2026-03-27):** #143 camera pipeline — 4 bugs fixed based on Patrick device photos. (1) Thumbnail onError fallback: broken image → 📷 emoji (RapidCapture.tsx). (2) "Done Reviewing" 404 guard: if item ID still starts with `temp-`, shows toast "Item is still uploading" instead of 404 ([saleId].tsx lines 1725–1731). (3) Category normalization: `getEditState` now case-insensitively matches AI category against CATEGORIES array so dropdown pre-populates (review.tsx lines 254–280). (4) Draft list endpoint: `description: true` added to getDraftItemsBySaleId SELECT (itemController.ts). 4 files changed locally, push block provided. Verified from Patrick's photos: carousel shows items in camera ✅, AI title populates ✅, Review & Publish page shows items with price+category ✅, tags populate ✅, photos upload ✅. Remaining UNVERIFIED: Done Reviewing flow post-fix, category pre-pop in edit form post-fix.
+**S308 COMPLETE (2026-03-27):** #143 camera pipeline — 4 bugs fixed + thumbnail root cause confirmed via Chrome MCP network inspection. (1) Thumbnail onError fallback added to some locations. (2) "Done Reviewing" 404 guard: tempId check blocks PATCH to /items/temp-xxx ([saleId].tsx). (3) Category normalization in getEditState: case-insensitive match against CATEGORIES array (review.tsx). (4) Draft list endpoint: `description: true` added to SELECT (itemController.ts). ROOT CAUSE CONFIRMED: carousel thumbnail breaks after AI spinner stops because poll response replaces blob URL with Cloudinary URL returning 503 (race condition — Cloudinary not ready when poll fires). Fix documented in STATE.md Current Work. 4 files changed, push block provided. OUTSTANDING: S309 applies 2-line thumbnail preserve fix + onError on carousel img, then verifies full flow in Chrome.
 
 **S307 COMPLETE (2026-03-27):** #143 camera pipeline fixes. Background upload, spinner, review page 404 fixes, condition labels, edit-sale null-byte, multi-photo AI, 4.5s debounce. Key result: items now correctly appear on Review & Publish page (Patrick confirmed). processRapidDraft.ts MCP-pushed for TS fix. 7 frontend/backend files in Patrick push block (confirmed pushed by Patrick).
 
