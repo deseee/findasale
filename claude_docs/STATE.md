@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-S305 in progress — camera UX refactor deployed (awaiting push + verification).
+S306 complete — #143 camera QA + 3 bug fixes pushed.
 
 ---
 
@@ -15,29 +15,25 @@ S305 in progress — camera UX refactor deployed (awaiting push + verification).
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #143 Camera UX refactor | Camera UX rebuilt to match spec (mode toggle inside camera, carousel inside camera, shutter state-aware). Not yet pushed or browser-verified. | Patrick pushes + opens camera → confirms: mode toggle visible, carousel shows captured items, shutter changes to ⚡ for rapidfire, "+" add-mode banner appears when tapping + on thumbnail. | S305 |
+| #143 Carousel + add-mode | Fixes pushed (S306). Carousel needs Patrick to test on device — VM can't trigger shutter click. | On phone: open camera in Rapidfire → tap shutter → thumbnail should appear in carousel immediately. Tap + on thumbnail → add-mode banner shows. | S306 |
 
 **KNOWN BUG — Session instability:** After Cookie/localStorage clear in Chrome MCP, fresh login for shopper accounts (user11, user12) silently fails. Do NOT clear cookies — use signout route only, then log in.
 
 ---
 
-## Next Session (S306)
+## Next Session (S307)
 
 **Start with:**
-1. **#143 Camera UX verification** — After S305 push, open camera tab → verify: mode toggle is in the camera view, carousel of captured items appears in camera, shutter is amber ⚡ for rapidfire, add-mode banner shows when tapping +.
+1. **#143 device verify** — Patrick confirms carousel works on phone after S306 fixes (30-second check).
 2. **Pick next roadmap items** — consult roadmap.md for features in "Pending Chrome QA" state.
 
-**S305 Patrick push needed:**
-```
-git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git commit -m "feat(#143): Camera UX refactor — mode toggle + carousel inside camera view, spec-correct shutter states"
-.\push.ps1
-```
+**No Patrick push needed** — all S306 code already pushed.
 
 ---
 
 ## Recently Complete
+
+**S306 COMPLETE (2026-03-27):** #143 camera QA + 3 bug fixes. (1) Chrome QA confirmed: mode toggle inside camera top bar ✅, amber ⚡ shutter in Rapidfire ✅, white shutter in Regular ✅, camera feed active (readyState=4, 1920×1440) ✅. (2) Root cause found: carousel inside camera always empty — `rapidItems` (parent prop) only populated after camera closes; carousel renders off internal `photos` state with no bridge. (3) Fixed P1 — `onPhotoCapture` callback added to `RapidCaptureProps`; parent now optimistically pushes tempId entry to `rapidItems` on each capture, making carousel live in real-time. (4) Fixed Regular mode: gallery thumbnail wrapped in button (tappable → opens preview overlay); Review button now opens filmstrip preview in Regular mode instead of navigating to empty rapidItems review page. (5) Fixed `edit-sale/[id].tsx` null-byte corruption (trailing `\x00` block causing 20+ TS errors). 3 files changed, all pushed. Carousel + add-mode still need Patrick device verify (VM shutter click blocked by DPR coordinate mismatch).
 
 **S305 COMPLETE (2026-03-27):** Camera UX refactor for #143. The camera experience now matches the design mockup spec: (1) `RapidCapture.tsx` fully rebuilt — mode toggle (Rapidfire/Regular) now lives inside the camera top bar; rapidItems carousel embedded inside camera view above the shutter (not on the page below a button); shutter button is amber gradient + ⚡ in rapidfire mode, deeper amber + "+" in add-mode, white in regular mode; faint white corner brackets (was blue); mode hint text below top bar; adding-to banner between carousel and shutter; gallery thumbnail on left of shutter row; Review(N) button in top bar. (2) `[saleId].tsx` camera tab updated — removed standalone ModeToggle + CaptureButton from card; camera opens to fullscreen experience with all 10 new props wired. 0 TS errors. Push block provided. Pending: Patrick push + browser verification.
 

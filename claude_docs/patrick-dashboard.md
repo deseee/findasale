@@ -1,66 +1,66 @@
-# Patrick's Dashboard — Session 305 Wrapped (March 27, 2026)
+# Patrick's Dashboard — Session 306 Wrapped (March 27, 2026)
 
 ---
 
-## 🚀 Push Required — Camera UX Refactor (3 files)
-
-```
-git add packages/frontend/components/RapidCapture.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add claude_docs/STATE.md
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat(#143): Camera UX refactor — mode toggle + carousel inside camera view, spec-correct shutter states"
-.\push.ps1
-```
-
-After push: Vercel will redeploy frontend automatically. Railway is unchanged (no backend edits).
+## ✅ No Push Required — All S306 code already pushed
 
 ---
 
 ## Build Status
 
-- **Railway:** ✅ Green (no backend changes this session)
-- **Vercel:** ⏳ Redeploys after push
+- **Railway:** ✅ Green (no backend changes)
+- **Vercel:** ⏳ Redeploys after S306 pushes
 - **DB:** ✅ No new migrations
 - **Hook:** PostStop QA evidence hook active locally
 
 ---
 
-## Session 305 Summary
+## Session 306 Summary
 
-**#143 Camera UX refactor — rebuilt to match design spec**
+**#143 Camera QA + 3 bug fixes**
 
-The camera experience was completely wrong vs. the agreed mockup (`camera-mode-mockup.jsx`). It's now fixed:
+Chrome QA confirmed the S305 UX refactor landed correctly:
+- Mode toggle inside camera top bar ✅
+- Amber ⚡ shutter in Rapidfire, white in Regular ✅
+- Camera feed active (1920×1440) ✅
 
-**Before:** Page card with mode toggle + amber button. Tap button → fullscreen overlay opens. Carousel lived on the page behind the overlay.
+But three bugs were found and fixed:
 
-**After (matching spec):**
-- Mode toggle (⚡ Rapidfire | 📷 Regular) lives **inside** the camera view, in the top bar
-- Captured items carousel is **inside** the camera view, above the shutter — you see items while shooting
-- Shutter button: amber gradient + ⚡ in rapidfire, deeper amber + "+" in add-mode, white for regular
-- "Next shot adds to: [item]" banner shows when tapping "+" on a thumbnail
-- Corner brackets are faint white (were blue)
-- Mode hint text below top bar ("1 photo = 1 item · tap + to add more")
-- Review(N) button in top bar jumps to publish page
-- Gallery thumbnail (last shot) on left of shutter row
+**Bug 1 — Carousel never showed in-camera (P1 fix)**
+Root cause: carousel renders `rapidItems` (a parent prop) which only populated *after* camera closes. So it was always empty during capture. Fixed by adding `onPhotoCapture` callback — parent now optimistically adds a thumbnail to `rapidItems` on each capture, making the carousel live in real-time.
 
-**Session 304 verified (previously):**
-- **#142 Smart Inventory Upload** ✅ — Patrick uploaded real photo, AI analyzed as "Folding Chair, Gray Metal Frame" ($15, Furniture), saved with thumbnail
-- Dark mode for SmartInventoryUpload, ModeToggle, RapidCarousel, PreviewModal — all fixed
+**Bug 2 — Regular mode gallery not tappable**
+The thumbnail next to the shutter showed the last photo but couldn't be tapped. Wrapped in a button → tapping now opens the full-screen preview/filmstrip so you can review and delete any of the 5 captured photos.
+
+**Bug 3 — Review button wrong in Regular mode**
+Was navigating to the rapidItems review page (always empty in Regular mode). Fixed: in Regular mode, Review now opens the photo preview filmstrip inside the camera. In Rapidfire it still navigates correctly to the publish queue.
+
+**Bonus fix — edit-sale TS corruption**
+`edit-sale/[id].tsx` had a trailing block of null bytes causing 20+ TypeScript errors. Stripped cleanly.
 
 ---
 
-## S306 Start
+## What Still Needs Device Testing
 
-1. **#143 verify** — Open camera tab, confirm: mode toggle in view, carousel visible inside camera, shutter is ⚡ amber
+The VM can't trigger the shutter click (DPR coordinate mismatch in Chrome MCP). Need Patrick to test on phone:
+1. Open camera in **Rapidfire** → tap shutter → thumbnail should appear in carousel immediately
+2. Tap **+** on a carousel thumbnail → add-mode banner ("Adding to: [item]") should appear
+3. Open camera in **Regular** → capture up to 5 photos → tap the gallery thumbnail (left of shutter) → preview opens, can delete
+
+30-second check on your actual device.
+
+---
+
+## S307 Start
+
+1. **#143 device verify** — quick phone test above
 2. **Pick next roadmap items** — consult roadmap.md "Pending Chrome QA" section
 
 ---
 
 ## Known Open Items
 
-- **#143 Camera UX** — Pushed S305, Chrome verify S306
+- **#143 carousel + add-mode** — device verify needed (30 sec on phone)
 - #37 Sale Reminders — iCal confirmed, push "Remind Me" not built (feature gap)
 - #59 Streak Rewards — StreakWidget on dashboard, not on loyalty page (P2)
 - customStorefrontSlug — All NULL in DB, organizer profile URLs by numeric ID only
