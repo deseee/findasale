@@ -252,7 +252,28 @@ export default function PromotePage(): JSX.Element {
       const response = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token || ''}` },
       });
-      if (!response.ok) throw new Error('Export failed');
+
+      // Handle specific error codes
+      if (response.status === 429) {
+        try {
+          const errorData = await response.json();
+          showToast(errorData.message || 'Too many requests — please wait before exporting again', 'error');
+        } catch {
+          showToast('Too many requests — please wait before exporting again', 'error');
+        }
+        return;
+      }
+
+      if (!response.ok) {
+        try {
+          const errorData = await response.json();
+          showToast(errorData.message || 'Export failed', 'error');
+        } catch {
+          showToast('Export failed', 'error');
+        }
+        return;
+      }
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -262,8 +283,8 @@ export default function PromotePage(): JSX.Element {
       window.URL.revokeObjectURL(url);
       showToast('File downloaded! Check your downloads folder.', 'success');
     } catch (error) {
+      console.error('Download error:', error);
       showToast('Failed to download file', 'error');
-      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -276,13 +297,34 @@ export default function PromotePage(): JSX.Element {
       const response = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token || ''}` },
       });
-      if (!response.ok) throw new Error('Export failed');
+
+      // Handle specific error codes
+      if (response.status === 429) {
+        try {
+          const errorData = await response.json();
+          showToast(errorData.message || 'Too many requests — please wait before exporting again', 'error');
+        } catch {
+          showToast('Too many requests — please wait before exporting again', 'error');
+        }
+        return;
+      }
+
+      if (!response.ok) {
+        try {
+          const errorData = await response.json();
+          showToast(errorData.message || 'Export failed', 'error');
+        } catch {
+          showToast('Export failed', 'error');
+        }
+        return;
+      }
+
       const text = await response.text();
       await navigator.clipboard.writeText(text);
       showToast(successMessage, 'success');
     } catch (error) {
+      console.error('Clipboard copy error:', error);
       showToast('Failed to copy to clipboard', 'error');
-      console.error(error);
     } finally {
       setLoading(false);
     }
