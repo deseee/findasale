@@ -7,38 +7,36 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-S311 COMPLETE — #143 camera pipeline mobile re-verification + 3 dev fixes.
-All 3 S310 blocked items cleared: Check 4 (thumbnail tap → PreviewModal) ✅, Check 6 (Done Reviewing no 404) ✅, Condition pre-select ✅.
-New bugs found + dev dispatched: (1) PreviewModal image broken (photoUrl→thumbnailUrl), (2) review thumbnails (blob→Cloudinary URL), (3) toast 3000→4500ms. 3 files locally modified, unpushed.
+S312 FULLY CLOSED (S312 wrap + continuation confirmed 2026-03-27). Test item deletion confirmed via Chrome MCP + API (count: 21 ✅). PreviewModal onError bug identified and queued for S313 dev dispatch.
 
-**S311 dev fixes (not yet pushed):**
-1. `packages/frontend/components/camera/PreviewModal.tsx` — `photoUrl` → `thumbnailUrl` in interface + render
-2. `packages/frontend/pages/organizer/add-items/[saleId].tsx` — extract `photoUrl` from upload response, use Cloudinary URL in rapidItems state
-3. `packages/frontend/components/ToastContext.tsx` — toast duration 3000ms → 4500ms
+**S312 fixes pushed:**
+1. `packages/frontend/next.config.js` — removed broken Workbox `StaleWhileRevalidate` entry for `res.cloudinary.com` (sha: 29ba630). Root cause: SW intercepted Cloudinary image requests with empty cache, causing `naturalWidth:0` on all camera-captured thumbnails. Fix: let Cloudinary CDN handle its own caching. Verified: unregistering SW restores all 8 thumbnails (broken:0, working:8).
+
+**S311 fixes confirmed pushed (Vercel green before S312 started):**
+1. `packages/frontend/components/camera/PreviewModal.tsx` — `photoUrl` → `thumbnailUrl` ✅
+2. `packages/frontend/pages/organizer/add-items/[saleId].tsx` — blob→Cloudinary URL in rapidItems state ✅
+3. `packages/frontend/components/ToastContext.tsx` — toast 3000→4500ms ✅ (confirmed in code + "Item updated" toast appeared)
 
 ## Blocked/Unverified Queue
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|----------------|---------------|
-| #143 PreviewModal image | Fixed S311 (photoUrl→thumbnailUrl). Needs verify after push. | Mobile: capture photo → Pub → PreviewModal → confirm photo renders (not broken icon). | S311 |
-| #143 Review page thumbnails | Fixed S311 (blob→Cloudinary URL in state). Needs verify after push. | Mobile+desktop: Review & Publish → item cards show actual photos, not camera icon. | S311 |
-| QA skill thumbnail check | Skills dir read-only. Needs skill-creator dispatch next session. | Run skill-creator to add thumbnail zoom step to findasale-qa SKILL.md + present_files. | S311 |
-| Test item cleanup | QA test item not deleted. | Delete "Vintage Yellow Plastic Lighter" from sale cmn7epuiu004pxdmfub457vb1. | S311 |
+| #143 PreviewModal onError | Prop fix (photoUrl→thumbnailUrl) confirmed correct in code. New bug: no `onError` fallback on `<img>` in PreviewModal.tsx — Cloudinary 503 race condition (fresh upload) shows broken image. Fix queued for dev. | Dispatch findasale-dev: add `onError` to PreviewModal `<img>` (📷 emoji fallback, consistent with carousel). Then Chrome-verify. | S312 |
+| #143 Review thumbnails post-SW-fix | SW Cloudinary cache removed (sha: 29ba630). | After fresh capture: Review & Publish → item cards show Cloudinary photos (not camera icons) — zoom 2–3 cards. | S312 |
 
-## Next Session (S312)
+## Next Session (S313)
 
-**Patrick action first:** Push block below → confirm Vercel green.
-
-**Start with (mobile 390px, Alice John user1@example.com / password123):**
-1. Confirm S311 push green on Vercel
-2. **Verify PreviewModal image:** capture 1 photo → tap Pub → confirm photo renders in modal (not broken/placeholder) — zoom screenshot required
-3. **Verify review thumbnails:** Review & Publish → item cards show actual photos, not camera icon — zoom 2–3 cards
-4. **Verify toast duration:** trigger any action → toast stays ~4.5s
-5. Dispatch skill-creator: add thumbnail zoom verification step to findasale-qa SKILL.md
-6. Delete QA test item "Vintage Yellow Plastic Lighter" from sale cmn7epuiu004pxdmfub457vb1
-7. If all pass → full desktop E2E camera pipeline
+**Start with:**
+1. Confirm Vercel green for SW fix (sha: 29ba630)
+2. **Dispatch findasale-dev:** Add `onError` fallback to `PreviewModal.tsx` `<img>` tag — show 📷 emoji when Cloudinary returns 503 (consistent with carousel behavior)
+3. After dev fix pushed: Chrome-verify PreviewModal — open camera, capture, tap carousel → PreviewModal opens → photo renders (or 📷 fallback, not broken image icon)
+4. **Verify review thumbnails:** new capture → Review & Publish → item cards show Cloudinary photos — zoom 2–3 cards
+5. If both pass → full desktop E2E camera pipeline (#143 close-out)
+6. Consider #145 Condition Grading Chrome QA (Chrome 📋 since S303)
 
 ## Recently Complete
+
+**S312 COMPLETE (2026-03-27):** #143 camera pipeline — SW thumbnail bug fixed + QA cleanup. (1) Root cause found: Workbox `StaleWhileRevalidate` for `res.cloudinary.com` in `next.config.js` intercepted all Cloudinary image requests with no cache entries → `naturalWidth:0` on all camera thumbnails. Fix: removed 9-line entry (sha: 29ba630). Cloudinary CDN handles its own caching. (2) findasale-qa SKILL.md updated: thumbnail zoom rule added to Phase 3 + What Not To Do — packaged + installed by Patrick. (3) QA test item "Vintage Yellow Plastic Lighter, Mid-Century" deleted: confirmed via API (DELETE /api/items/cmn9f1cc3000fbaxnyc6llos1 → 200) + page reload count 21 ✅. (4) Toast duration: ✅ 4500ms confirmed in `ToastContext.tsx:38`. (5) PreviewModal: prop fix (photoUrl→thumbnailUrl) confirmed correct in code. New bug found: no `onError` on `<img>` tag — Cloudinary 503 race condition breaks image for freshly captured items. Queued for S313 dev dispatch. (6) Review thumbnails: pending verify post-SW-fix.
 
 **S311 COMPLETE (2026-03-27):** #143 camera pipeline — mobile re-verification. All 3 S310 blocked items cleared: Check 4 (thumbnail tap) ✅ ss_2271ub1kt/ss_1368kfswv, Check 6 (Done Reviewing no 404) ✅ ss_1368kfswv, Condition pre-select ✅ ss_87689gmt1. New bugs found: PreviewModal image (photoUrl mismatch), review thumbnails (blob→Cloudinary URL), toast duration too short. Dev dispatched, 3 files fixed. QA insight: camera icon fills same space as real photo — requires explicit zoom to detect. QA skill thumbnail zoom rule pending skill-creator activation.
 

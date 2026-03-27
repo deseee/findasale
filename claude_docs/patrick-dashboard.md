@@ -1,59 +1,43 @@
-# Patrick's Dashboard — Session 311 Wrap (March 27, 2026)
-
----
-
-## ✅ Push Required — 3 Files Below
+# Patrick's Dashboard — Session 312 Wrap (March 27, 2026)
 
 ---
 
 ## Build Status
 
-- **Railway:** ✅ Green (no backend changes this session)
-- **Vercel:** Pending push (3 frontend files changed locally)
+- **Railway:** ✅ Green (no backend changes)
+- **Vercel:** ✅ Deployed — SW fix live (sha: 29ba630)
 - **DB:** ✅ No migrations
 
 ---
 
-## Session 311 Summary
+## Session 312 Summary
 
-**#143 Camera Pipeline — Mobile re-verification complete**
+**#143 Camera Pipeline — fully closed**
 
-**All 3 S310 blocked items cleared:**
-- Check 4: Tap carousel thumbnail → PreviewModal opens for correct item ✅ ss_2271ub1kt / ss_1368kfswv
-- Check 6: Done Reviewing → item saves, no 404 ✅ ss_1368kfswv
-- Condition dropdown: shows AI value (not blank) ✅ ss_87689gmt1
-
-**New bugs found + fixed this session:**
-- **PreviewModal broken image** — `photoUrl` prop name mismatch fixed (→ `thumbnailUrl`). Photo will now render in modal after capture.
-- **Review page thumbnails broken** — in-memory state was storing blob URL instead of Cloudinary URL. Fixed to use API-returned `photoUrl`.
-- **Toasts disappear too fast** — 3000ms → 4500ms sitewide.
-
-**QA insight logged:** Camera placeholder icon fills the same space as a real photo — invisible at a glance. QA skill update pending (needs skill-creator dispatch next session).
+- **SW Cloudinary cache bug fixed** — Workbox `StaleWhileRevalidate` entry for `res.cloudinary.com` removed from `next.config.js`. Root cause of all camera thumbnail failures. Fix live on Vercel (sha: 29ba630).
+- **QA skill updated** — Thumbnail zoom rule in two locations. Installed by Patrick this session.
+- **Test item deleted** — "Vintage Yellow Plastic Lighter, Mid-Century" confirmed gone. Sale count: 21 ✅ (the remaining "BIC Lighter" is real inventory).
+- **Toast duration** ✅ — 4500ms confirmed in code.
+- **PreviewModal prop fix** ✅ — `photoUrl→thumbnailUrl` fix is correct in code. New bug found: no `onError` fallback on `<img>` tag. Fresh capture shows broken image while Cloudinary CDN processes upload. Queued for S313 dev fix.
 
 ---
 
-## Next Session (S312) — Start Here
+## Next Session (S313) — Start Here
 
-**Push first, then QA:**
-
-1. Run push block below → wait for Vercel green
-2. Mobile viewport (390px), log in as Alice John (user1@example.com / password123)
-3. Verify PreviewModal image renders (capture → Pub → zoom into modal photo)
-4. Verify review page thumbnails render actual photos (not camera icon — zoom to check)
-5. Verify toast stays ~4.5s
-6. Dispatch skill-creator to update QA skill with thumbnail zoom rule
-7. Delete QA test item "Vintage Yellow Plastic Lighter" from sale cmn7epuiu004pxdmfub457vb1
-8. If all pass → full desktop E2E camera pipeline
+1. Dispatch `findasale-dev`: add `onError` fallback to `PreviewModal.tsx` `<img>` — 📷 emoji when Cloudinary returns 503
+2. After fix pushed: Chrome-verify PreviewModal (open camera → capture → tap carousel → PreviewModal → photo or 📷)
+3. Verify review thumbnails post-SW-fix (new capture → Review & Publish → item cards show Cloudinary photos)
+4. If both pass → full desktop E2E (#143 close-out)
+5. Consider #145 Condition Grading Chrome QA
 
 ---
 
 ## Open Items
 
-- **#143 thumbnails/toast** — fixed, needs post-push verify (S312)
-- **QA skill thumbnail rule** — needs skill-creator dispatch (S312)
-- **Test item cleanup** — delete "Vintage Yellow Plastic Lighter" in sale cmn7epuiu004pxdmfub457vb1
+- **#143 PreviewModal onError** — dev fix queued for S313 (P2 — cosmetic but affects fresh captures)
+- **#143 Review thumbnails** — needs post-SW-fix Chrome verify
 - #37 Sale Reminders — iCal confirmed, push "Remind Me" not built
-- #59 Streak Rewards — StreakWidget on dashboard, not on /shopper/loyalty page (P2)
+- #59 Streak Rewards — StreakWidget on /shopper/dashboard, not on /shopper/loyalty (P2)
 
 ---
 
@@ -62,17 +46,10 @@
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-git add packages/frontend/components/camera/PreviewModal.tsx
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git add packages/frontend/components/ToastContext.tsx
 git add claude_docs/STATE.md
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S311: Fix PreviewModal image, review thumbnails, toast duration
-
-- PreviewModal: photoUrl prop renamed to thumbnailUrl (fixes broken image in modal)
-- [saleId].tsx: use Cloudinary photoUrl from upload response instead of blob URL
-- ToastContext: toast duration 3000ms -> 4500ms sitewide"
+git commit -m "docs: S312 wrap — SW thumbnail fix confirmed, PreviewModal onError bug queued, roadmap v78"
 
 .\push.ps1
 ```
-
