@@ -11,8 +11,9 @@
  * Saves via PATCH /api/items/:id
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useToast } from '../ToastContext';
+import api from '../../lib/api';
 
 export interface PreviewModalProps {
   isOpen: boolean;
@@ -70,6 +71,38 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const [editingField, setEditingField] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [expandDescription, setExpandDescription] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fullItem, setFullItem] = useState<any>(null);
+
+  // Fetch full item data when modal opens to ensure we have AI-analyzed fields
+  useEffect(() => {
+    if (!isOpen || !item.id || item.id.startsWith('temp-')) {
+      setFullItem(null);
+      return;
+    }
+
+    setLoading(true);
+    api
+      .get(`/items/${item.id}`)
+      .then((res) => {
+        const fetchedItem = res.data;
+        setFullItem(fetchedItem);
+        // Update edits with fetched data
+        setEdits({
+          title: fetchedItem.title || '',
+          category: fetchedItem.category || '',
+          condition: fetchedItem.condition || '',
+          description: fetchedItem.description || '',
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to fetch full item data:', err);
+        // Fallback to local state data
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [isOpen, item.id]);
 
   if (!isOpen) return null;
 
@@ -135,13 +168,21 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Photo */}
-          {item.photoUrl && (
+          {(fullItem?.photoUrls?.[0] || item.photoUrl) && (
             <div className="flex justify-center">
               <img
-                src={item.photoUrl}
-                alt={item.title || 'Item'}
+                src={fullItem?.photoUrls?.[0] || item.photoUrl}
+                alt={fullItem?.title || item.title || 'Item'}
                 className="max-h-80 rounded-lg shadow-md object-cover"
               />
+            </div>
+          )}
+
+          {/* Loading state for missing fields */}
+          {loading && (
+            <div className="flex items-center justify-center gap-2 text-sm text-warm-600 dark:text-warm-400 bg-warm-50 dark:bg-gray-700 rounded-lg p-3">
+              <div className="w-4 h-4 border-2 border-warm-400 border-t-warm-600 rounded-full animate-spin" />
+              Fetching item details...
             </div>
           )}
 

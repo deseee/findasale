@@ -11,6 +11,7 @@ S308 COMPLETE — #143 camera pipeline. Root cause of thumbnail break confirmed 
 
 **Files changed S308 (local only — push block below):**
 - `packages/frontend/components/RapidCapture.tsx` — thumbnail onError → 📷 fallback (no more broken image)
+- `packages/frontend/components/camera/PreviewModal.tsx` — fetches fresh item data from API when modal opens (ensures AI fields populate)
 - `packages/backend/src/controllers/itemController.ts` — `description` field added to draft list endpoint SELECT
 - `packages/frontend/pages/organizer/add-items/[saleId].tsx` — guard: "Done Reviewing" blocked if item ID still temp- (prevents 404)
 - `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — category normalization (case-insensitive match to CATEGORIES array so AI value pre-populates dropdown)
