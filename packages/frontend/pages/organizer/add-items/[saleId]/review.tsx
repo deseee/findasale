@@ -91,6 +91,8 @@ const CATEGORIES = [
   'Other',
 ];
 
+const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR'];
+
 // BUG 6: Map condition codes to human-readable labels
 const CONDITION_MAP: { [key: string]: string } = {
   'S': 'Excellent',
@@ -260,12 +262,19 @@ const ReviewPage = () => {
         normalizedCategory = match || normalizedCategory; // Use exact match if found, else keep original
       }
 
+      // Normalize condition: match against CONDITIONS array case-insensitively
+      let normalizedCondition = item.condition ?? '';
+      if (normalizedCondition) {
+        const match = CONDITIONS.find(cond => cond.toLowerCase() === normalizedCondition.toLowerCase());
+        normalizedCondition = match || normalizedCondition; // Use exact match if found, else keep original
+      }
+
       editStates.set(item.id, {
         title: item.title,
         description: item.description ?? '',
         price: item.price ?? 0,
         category: normalizedCategory,
-        condition: item.condition ?? '',
+        condition: normalizedCondition,
         conditionGrade: item.conditionGrade ?? undefined, // #64
         quantity: item.quantity ?? 1,
         aspectRatio: '4:3',
