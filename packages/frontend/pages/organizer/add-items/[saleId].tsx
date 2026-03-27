@@ -899,9 +899,12 @@ const AddItemsDetailPage = () => {
   // Polling for draft status updates
   useEffect(() => {
     const draftItems = rapidItems.filter(
-      (i) => i.draftStatus === 'DRAFT' && !i.aiError
+      (i) => i.draftStatus === 'DRAFT' && !i.aiError && !i.id.startsWith('temp-')
     );
     if (draftItems.length === 0 || aiPaused) return;
+
+    let retries = 0;
+    const MAX_RETRIES = 10;
 
     const interval = setInterval(async () => {
       for (const item of draftItems) {
@@ -914,7 +917,14 @@ const AddItemsDetailPage = () => {
             );
           }
         } catch (e) {
-          // Silent error
+          // If 404, stop retrying after MAX_RETRIES (item may have been deleted)
+          if ((e as any).response?.status === 404) {
+            retries++;
+            if (retries >= MAX_RETRIES) {
+              clearInterval(interval);
+              return;
+            }
+          }
         }
       }
     }, 3000);
@@ -1264,9 +1274,7 @@ const AddItemsDetailPage = () => {
 
           {/* Camera Tab */}
           {activeTab === 'camera' && (
-            <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8 transition-all duration-300 overflow-hidden ${
-              items.length > 0 ? 'max-h-60' : 'max-h-screen'
-            }`}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
               <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-6">
                 {items.length > 0 ? '📷 Add More Photos' : 'Capture with Camera'}
               </h2>
@@ -1422,7 +1430,7 @@ const AddItemsDetailPage = () => {
               addingToItemId={addingToItemId}
               onAddToItem={(id) => setAddingToItemId((prev) => (prev === id ? null : id))}
               onThumbnailTap={(id) => {
-                setCameraOpen(false);
+                // BUG 4 FIX: Keep camera open, open preview modal on top
                 setPreviewItemId(id);
               }}
               onNavigateToReview={() => {
@@ -1436,6 +1444,10 @@ const AddItemsDetailPage = () => {
                   ...prev,
                   { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
                 ]);
+              }}
+              onEnhanceAll={() => {
+                // BUG 6 FIX: Show placeholder since no backend endpoint exists yet
+                showToast('AI enhancement coming soon', 'info');
               }}
             />
           )}

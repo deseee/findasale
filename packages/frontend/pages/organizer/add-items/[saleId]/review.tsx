@@ -170,10 +170,8 @@ const ReviewPage = () => {
     queryKey: ['items', saleId, 'review'],
     queryFn: async () => {
       if (!saleId) return [];
-      // Fetch all published items for the sale so organizers can review
-      // items regardless of how they were created (Manual, Batch, CSV,
-      // or Rapidfire). Uses the same endpoint as the add-items table.
-      const response = await api.get(`/items?saleId=${saleId}`);
+      // Fetch draft/pending review items for this sale
+      const response = await api.get(`/items/drafts?saleId=${saleId}`);
       return (response.data || []) as Item[];
     },
     enabled: !!saleId,
