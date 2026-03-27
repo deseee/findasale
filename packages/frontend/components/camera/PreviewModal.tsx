@@ -73,14 +73,17 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const [expandDescription, setExpandDescription] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fullItem, setFullItem] = useState<any>(null);
+  const [imgFailed, setImgFailed] = useState(false);
 
   // Fetch full item data when modal opens to ensure we have AI-analyzed fields
   useEffect(() => {
     if (!isOpen || !item.id || item.id.startsWith('temp-')) {
       setFullItem(null);
+      setImgFailed(false);
       return;
     }
 
+    setImgFailed(false);
     setLoading(true);
     api
       .get(`/items/${item.id}`)
@@ -170,11 +173,20 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           {/* Photo */}
           {(fullItem?.photoUrls?.[0] || item.thumbnailUrl) && (
             <div className="flex justify-center">
-              <img
-                src={fullItem?.photoUrls?.[0] || item.thumbnailUrl}
-                alt={fullItem?.title || item.title || 'Item'}
-                className="max-h-80 rounded-lg shadow-md object-cover"
-              />
+              {!imgFailed ? (
+                <img
+                  src={fullItem?.photoUrls?.[0] || item.thumbnailUrl}
+                  alt={fullItem?.title || item.title || 'Item'}
+                  className="max-h-80 rounded-lg shadow-md object-cover"
+                  onError={() => {
+                    setImgFailed(true);
+                  }}
+                />
+              ) : (
+                <div className="max-h-80 w-80 rounded-lg shadow-md bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-6xl">
+                  📷
+                </div>
+              )}
             </div>
           )}
 
