@@ -21,7 +21,7 @@ interface AIAnalysis {
   suggestedCondition: string;
   suggestedPrice: number;
   suggestedTags: string[];
-  confidence: 'high' | 'medium' | 'low';
+  confidence: number; // AI confidence score (0.0–1.0)
   error?: string;
   errorCode?: 'AI_TIMEOUT' | 'AI_PARSE_ERROR' | 'AI_RATE_LIMIT' | 'AI_ERROR';
 }
@@ -127,6 +127,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       photoUrls: string[];
       tags: string[];
       isAiTagged: boolean;
+      aiConfidence: number;
     }>) => {
       const created = [];
       for (let i = 0; i < items.length; i++) {
@@ -282,6 +283,8 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
           tags: a.suggestedTags || [],
           // P0-4: Only mark as AI-tagged if no error and valid URL
           isAiTagged: Boolean(!a.error && a.photoUrl && a.photoUrl !== '(unknown)'),
+          // CD2 Phase 2: Pass AI confidence score for batch uploads
+          aiConfidence: a.confidence || 0.5,
         };
       });
 
