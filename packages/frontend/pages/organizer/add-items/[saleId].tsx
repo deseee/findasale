@@ -1723,6 +1723,12 @@ const AddItemsDetailPage = () => {
           item={rapidItems.find((i) => i.id === previewItemId) || { id: previewItemId, draftStatus: 'DRAFT' }}
           onClose={() => setPreviewItemId(null)}
           onSave={async (edits) => {
+            // Guard: if item ID is still temporary (temp-*), wait for real ID
+            const previewItem = rapidItems.find((i) => i.id === previewItemId);
+            if (!previewItem || previewItem.id.startsWith('temp-')) {
+              showToast('Item is still uploading. Please wait...', 'warning');
+              throw new Error('Item not ready');
+            }
             try {
               await api.patch(`/items/${previewItemId}`, edits);
               setRapidItems((prev) =>

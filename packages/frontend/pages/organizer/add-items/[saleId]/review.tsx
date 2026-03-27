@@ -253,11 +253,18 @@ const ReviewPage = () => {
 
   const getEditState = (item: Item): ItemEditState => {
     if (!editStates.has(item.id)) {
+      // Normalize category: match against CATEGORIES array case-insensitively
+      let normalizedCategory = item.category ?? '';
+      if (normalizedCategory) {
+        const match = CATEGORIES.find(cat => cat.toLowerCase() === normalizedCategory.toLowerCase());
+        normalizedCategory = match || normalizedCategory; // Use exact match if found, else keep original
+      }
+
       editStates.set(item.id, {
         title: item.title,
         description: item.description ?? '',
         price: item.price ?? 0,
-        category: item.category ?? '',
+        category: normalizedCategory,
         condition: item.condition ?? '',
         conditionGrade: item.conditionGrade ?? undefined, // #64
         quantity: item.quantity ?? 1,
