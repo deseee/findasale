@@ -1149,6 +1149,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         id: true,
         saleId: true,
         title: true,
+        description: true,
         category: true,
         condition: true,
         conditionGrade: true, // #64
@@ -1179,7 +1180,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       healthScore: computeHealthScore({
         photoUrls: item.photoUrls,
         title: item.title,
-        description: null, // TODO: Add description to schema if needed
+        description: item.description,
         tags: item.tags,
         price: item.price,
         conditionGrade: item.conditionGrade, // #64
