@@ -305,6 +305,7 @@ const ReviewPage = () => {
         price: editState.price,
         category: editState.category,
         condition: editState.condition,
+        conditionGrade: editState.conditionGrade, // #64: Persist condition grade on save
         quantity: editState.quantity,
         backgroundRemoved: editState.backgroundRemoved,
         tags: editState.tags, // Sprint 1: Save tags

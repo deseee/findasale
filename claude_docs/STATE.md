@@ -7,25 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S313 COMPLETE — Railway + Vercel green.**
-All S313 work pushed and live. See Recently Complete for details.
+**S314 COMPLETE — push pending Patrick action.**
+conditionGrade fix + CLAUDE.md QA rules updated. Push block provided. See Recently Complete for details.
 
 ## Blocked/Unverified Queue
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|----------------|---------------|
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod (Cloudinary ready by the time images display). ACCEPTABLE UNVERIFIED. | S312 |
-| #143 AI confidence Low (50%) | Fix pushed to prod (cloudAIService.ts). Haiku prompt now includes confidence field. | Chrome-verify: new item shows varied confidence (e.g., "Good 85%") not uniform "Low 50%". Existing DB items still show Low — expected. | S313 |
+| #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar, not "Low (50%)". | S314 |
+| #145 conditionGrade persist | Backend fix pushed (updateItem now handles conditionGrade). | Chrome: edit item condition grade, save, reload, confirm persisted. | S314 |
 
-## Next Session (S314)
+## Next Session (S315)
+
+**Patrick action needed first:**
+1. Push block from S314: `git add CLAUDE.md packages/backend/src/controllers/itemController.ts` → commit → `.\push.ps1`
+2. Delete test item "Abstract Geometric Art Print" (or similar) from sale `cmn7eptij0045xdmfm5lu9oyc` — published to live site during AI confidence testing
 
 **Start with:**
-1. Chrome-verify AI confidence fix: capture/analyze a new item, confirm Review & Publish shows "Good (X%)" or "Review (X%)" instead of "Low (50%)" for all items
-2. If AI confidence passes: close out #143 (Checks 5–7 are UNVERIFIED on desktop — accept as acceptable UNVERIFIED given mobile passed, mark #143 closed)
-3. #145 Condition Grading Chrome QA (pending since S303)
-4. Consider: full product walkthrough as beta prep (Patrick's last full walkthrough found 50+ issues)
+1. After push: Chrome-verify conditionGrade persists (#145) — edit item, change condition grade, save, reload
+2. Verify AI confidence on Camera-captured item if real camera available
+3. Consider: AI confidence batch upload path fix (3 bugs: batchAnalyzeController hardcodes 'medium', SmartInventoryUpload drops aiConfidence, createItem never stores it)
+4. Consider: full product walkthrough as beta prep
 
 ## Recently Complete
+
+**S314 COMPLETE (2026-03-27):** conditionGrade/tags/backgroundRemoved persistence fix + permanent QA behavior rules. (1) Root cause confirmed: `updateItem` backend handler destructured `req.body` without `conditionGrade`, `tags`, or `backgroundRemoved` — all three silently ignored on every PUT /items/:id. Fixed in itemController.ts (3 lines destructuring, 3 lines updateData). 0 TS errors. (2) CLAUDE.md §9 updated with two permanent hard rules: `upload_image` must be attempted before marking any camera/upload flow UNVERIFIED; code-on-GitHub confirmation ≠ browser-verified ✅. Both rules survive compression. SKILL.md is read-only at runtime (EROFS) — CLAUDE.md is the correct permanent location. (3) Discovered: batch upload path creates PUBLISHED items (draftStatus:'PUBLISHED') — they never appear in Review & Publish by design. AI confidence batch fix is a separate 3-part future task. (4) Test item "Abstract Geometric Art Print" accidentally published to live site during testing — Patrick must delete. Push block: `git add CLAUDE.md packages/backend/src/controllers/itemController.ts` → `.\push.ps1`.
 
 **S313 COMPLETE (2026-03-27):** #143 camera pipeline + AI confidence fix. (1) SW thumbnail fix (sha:29ba630) verified via hard refresh — all 8 Review & Publish thumbnails show real Cloudinary photos (was broken by Workbox StaleWhileRevalidate cache poisoning). (2) PreviewModal onError (sha:ffa4a83): `imgFailed` state + `onError` on main `<img>` — 📷 emoji fallback on Cloudinary 503 for freshly-captured items. (3) AI confidence root cause fixed (cloudAIService.ts): Haiku prompt lacked `confidence` field → always defaulted to 0.5 → all items showed "Low (50%)". Fix: added `confidence` to both Haiku schemas + field-completeness fallback (0.4–0.8 range). Pushed; Railway + Vercel green. Chrome QA of confidence labels queued for S314. (4) Existing DB items will continue showing Low until re-analyzed — expected behavior, no fix needed.
 
