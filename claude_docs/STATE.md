@@ -7,40 +7,27 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S313 IN PROGRESS:**
-
-**Vercel confirmed green for S312 fixes:**
-1. sha: 29ba630 (SW Cloudinary cache removal) — all 8 thumbnails on Review & Publish now show Cloudinary photos (not camera icons). Hard refresh confirmed ✅.
-2. sha: ffa4a83 (PreviewModal onError fallback) — added `imgFailed` state + `onError` handler on main preview `<img>`. When Cloudinary 503, shows 📷 emoji fallback instead of broken image. Zero TS errors.
-
-**Desktop E2E camera pipeline status:**
-- Check 1: Dashboard camera tab ✅
-- Check 2: Open camera (feed active, 4:3 framing) ✅
-- Check 3: Carousel inside camera (shows photos from current draft) ✅
-- Check 4: Tap carousel thumbnail → PreviewModal (opens, shows photo) ✅
-- Check 5: PreviewModal tap (UNVERIFIED — desktop doesn't expose in-page carousel easily)
-- Check 6: AI fields on review page (UNVERIFIED)
-- Check 7: Done Reviewing navigate (UNVERIFIED)
-- Check 8: Review thumbnails show Cloudinary photos ✅ (after hard refresh)
-
-**New bug found (dev dispatched):** All items show "Low (50%)" AI confidence because the AI prompt doesn't include a `confidence` field → Haiku never returns one → defaults to 0.5. Fix: add `confidence` to prompt + derive from field completeness as fallback. File: `packages/backend/src/services/cloudAIService.ts`. Dev fix awaiting push + Chrome verify.
+**S313 COMPLETE — Railway + Vercel green.**
+All S313 work pushed and live. See Recently Complete for details.
 
 ## Blocked/Unverified Queue
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|----------------|---------------|
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod (Cloudinary ready by the time images display). ACCEPTABLE UNVERIFIED. | S312 |
-| #143 AI confidence Low (50%) | All items defaulting to Low confidence. Haiku prompt missing confidence field. Fix dispatched to findasale-dev. | After fix pushed: Chrome verify confidence labels show correct values on Review & Publish (should vary by item completeness, not all Low). | S313 |
+| #143 AI confidence Low (50%) | Fix pushed to prod (cloudAIService.ts). Haiku prompt now includes confidence field. | Chrome-verify: new item shows varied confidence (e.g., "Good 85%") not uniform "Low 50%". Existing DB items still show Low — expected. | S313 |
 
 ## Next Session (S314)
 
 **Start with:**
-1. AI confidence fix — check dev dispatch status, push if ready
-2. After push: Chrome-verify confidence labels show correct values on Review & Publish
-3. If both #143 items clear: Full desktop E2E camera pipeline (#143 close-out)
-4. Then: #145 Condition Grading Chrome QA (pending since S303)
+1. Chrome-verify AI confidence fix: capture/analyze a new item, confirm Review & Publish shows "Good (X%)" or "Review (X%)" instead of "Low (50%)" for all items
+2. If AI confidence passes: close out #143 (Checks 5–7 are UNVERIFIED on desktop — accept as acceptable UNVERIFIED given mobile passed, mark #143 closed)
+3. #145 Condition Grading Chrome QA (pending since S303)
+4. Consider: full product walkthrough as beta prep (Patrick's last full walkthrough found 50+ issues)
 
 ## Recently Complete
+
+**S313 COMPLETE (2026-03-27):** #143 camera pipeline + AI confidence fix. (1) SW thumbnail fix (sha:29ba630) verified via hard refresh — all 8 Review & Publish thumbnails show real Cloudinary photos (was broken by Workbox StaleWhileRevalidate cache poisoning). (2) PreviewModal onError (sha:ffa4a83): `imgFailed` state + `onError` on main `<img>` — 📷 emoji fallback on Cloudinary 503 for freshly-captured items. (3) AI confidence root cause fixed (cloudAIService.ts): Haiku prompt lacked `confidence` field → always defaulted to 0.5 → all items showed "Low (50%)". Fix: added `confidence` to both Haiku schemas + field-completeness fallback (0.4–0.8 range). Pushed; Railway + Vercel green. Chrome QA of confidence labels queued for S314. (4) Existing DB items will continue showing Low until re-analyzed — expected behavior, no fix needed.
 
 **S313 PARTIAL (2026-03-27):** #143 camera pipeline — Vercel green confirmed, PreviewModal onError pushed, desktop E2E Checks 1–4 + 8 passing. (1) SW Cloudinary cache fix (sha: 29ba630) from S312 verified: hard refresh on Review & Publish → all 8 item thumbnails now show real Cloudinary photos (broken:0, working:8). Previous bug: Workbox `StaleWhileRevalidate` intercepted Cloudinary requests with empty cache → `naturalWidth:0` on all thumbnails. (2) PreviewModal onError fix pushed (sha: ffa4a83): added `imgFailed` state + `onError` handler on main preview `<img>`. When Cloudinary 503, shows 📷 emoji fallback (consistent with carousel). Zero TS errors. (3) Desktop E2E camera pipeline: Checks 1–4 (dashboard, camera, carousel, thumbnail) + Check 8 (review thumbnails) all ✅. Checks 5–7 (in-page interactions) UNVERIFIED (desktop doesn't expose camera carousel easily for tap testing). (4) New bug found: all items show "Low (50%)" AI confidence. Root cause: AI prompt doesn't include `confidence` field → Haiku defaults to 0.5. Fix: add `confidence` to prompt + fallback. Dev dispatched. Pending: push + Chrome verify confidence values vary by completeness.
 
