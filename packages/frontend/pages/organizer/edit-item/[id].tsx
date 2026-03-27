@@ -55,15 +55,18 @@ const EditItemPage = () => {
     if (item) {
       // Normalize category to Title Case (e.g. "tools" → "Tools") so the
       // select value matches the option values defined in the form.
-      let rawCat = (item.category || '').trim();
+      // If category is missing, use empty string (will show placeholder)
       let normalizedCategory = '';
-      if (rawCat) {
-        // Handle various formats: "tools", "Tools", "TOOLS", "vintage" → "Tools", "Vintage"
-        // Split on space, title-case each word, then join
-        normalizedCategory = rawCat
-          .split(' ')
-          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
+      if (item.category && typeof item.category === 'string') {
+        const rawCat = item.category.trim();
+        if (rawCat) {
+          // Handle various formats: "tools", "Tools", "TOOLS", "vintage" → "Tools", "Vintage"
+          // Split on space, title-case each word, then join
+          normalizedCategory = rawCat
+            .split(' ')
+            .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+        }
       }
 
       // Normalize condition to UPPERCASE (e.g. "good" → "GOOD", "Excellent" → "EXCELLENT")

@@ -863,6 +863,15 @@ const AddItemsDetailPage = () => {
     }
   }, [router.isReady, router.query.saleId, router, showToast]);
 
+  // Refetch items when returning from edit-item page (ensures sort order is fresh)
+  useEffect(() => {
+    const handleFocus = () => {
+      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [saleId, queryClient]);
+
   // Polling for draft status updates
   useEffect(() => {
     const draftItems = rapidItems.filter(
