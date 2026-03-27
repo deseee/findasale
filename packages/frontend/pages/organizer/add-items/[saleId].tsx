@@ -883,7 +883,10 @@ const AddItemsDetailPage = () => {
           const data = res.data;
           if (data.draftStatus !== 'DRAFT') {
             setRapidItems((prev) =>
-              prev.map((i) => (i.id === item.id ? { ...i, ...data } : i))
+              prev.map((i) =>
+                i.id !== item.id ? i :
+                { ...i, ...data, thumbnailUrl: i.thumbnailUrl || data.thumbnailUrl }
+              )
             );
           }
         } catch (e) {

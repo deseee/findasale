@@ -534,6 +534,14 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                           src={item.thumbnailUrl}
                           alt={item.title || 'Item'}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const img = e.currentTarget;
+                            img.style.display = 'none';
+                            const icon = document.createElement('span');
+                            icon.textContent = '📷';
+                            icon.className = 'text-xl';
+                            img.parentElement?.appendChild(icon);
+                          }}
                         />
                       ) : (
                         <span className="text-xl">📷</span>
