@@ -38,8 +38,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 import RapidCapture from '../../../components/RapidCapture';
-import ModeToggle from '../../../components/camera/ModeToggle';
-import CaptureButton from '../../../components/camera/CaptureButton';
 import RapidCarousel from '../../../components/camera/RapidCarousel';
 import PreviewModal from '../../../components/camera/PreviewModal';
 import { useUploadQueue } from '../../../hooks/useUploadQueue';
@@ -1243,24 +1241,37 @@ const AddItemsDetailPage = () => {
             <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8 transition-all duration-300 overflow-hidden ${
               items.length > 0 ? 'max-h-60' : 'max-h-screen'
             }`}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
-                  {items.length > 0 ? '📷 Add More Photos' : 'Capture with Camera'}
-                </h2>
-                {items.length === 0 && <ModeToggle mode={captureMode} onChange={setCaptureMode} />}
-              </div>
+              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-6">
+                {items.length > 0 ? '📷 Add More Photos' : 'Capture with Camera'}
+              </h2>
 
               {captureMode === 'rapidfire' ? (
                 <div className="space-y-6">
                   <p className="text-warm-600 dark:text-warm-400">
-                    Rapidly capture multiple items. Photos upload and analyze in the background.
+                    Rapidly capture multiple items. Photos upload and analyze in the background. Mode and options are in the camera view.
                   </p>
 
                   <div className="flex justify-center">
-                    <CaptureButton
-                      onCapture={() => setCameraOpen(true)}
-                      state={cameraOpen ? 'capturing' : 'ready'}
-                    />
+                    <button
+                      onClick={() => setCameraOpen(true)}
+                      className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2 2V9z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                      Open Camera
+                    </button>
                   </div>
 
                   {/* RapidCarousel - only shown when there are items or mode is rapidfire */}
@@ -1312,8 +1323,18 @@ const AddItemsDetailPage = () => {
                         className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2 2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2 2V9z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
                         </svg>
                         Open Camera
                       </button>
@@ -1369,6 +1390,20 @@ const AddItemsDetailPage = () => {
               onComplete={captureMode === 'rapidfire' ? handleRapidCameraComplete : handleCameraComplete}
               onCancel={() => setCameraOpen(false)}
               maxPhotos={captureMode === 'rapidfire' ? 20 : 5}
+              mode={captureMode}
+              onModeChange={setCaptureMode}
+              rapidItems={rapidItems}
+              addingToItemId={addingToItemId}
+              onAddToItem={(id) => setAddingToItemId((prev) => (prev === id ? null : id))}
+              onThumbnailTap={(id) => {
+                setCameraOpen(false);
+                setPreviewItemId(id);
+              }}
+              onNavigateToReview={() => {
+                setCameraOpen(false);
+                router.push(`/organizer/add-items/${saleId}/review`);
+              }}
+              readyCount={rapidItems.filter((i) => i.draftStatus === 'PENDING_REVIEW').length}
             />
           )}
 
