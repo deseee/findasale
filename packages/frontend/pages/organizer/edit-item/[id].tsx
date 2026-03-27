@@ -62,7 +62,7 @@ const EditItemPage = () => {
         // Split on space, title-case each word, then join
         normalizedCategory = rawCat
           .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');
       }
 

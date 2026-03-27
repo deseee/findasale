@@ -109,8 +109,11 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
     }
 
     const city = cityMap.get(cityKey)!;
-    city.latitudes.push(sale.lat);
-    city.longitudes.push(sale.lng);
+    // Only include sales with valid coordinates
+    if (sale.lat !== null && sale.lng !== null) {
+      city.latitudes.push(sale.lat);
+      city.longitudes.push(sale.lng);
+    }
     if (isThisWeek) city.salesThisWeek.push(sale.id);
     if (isLastWeek) city.salesLastWeek.push(sale.id);
     city.totalValue += saleValueMap.get(sale.id) ?? 0;

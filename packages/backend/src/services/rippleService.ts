@@ -211,9 +211,12 @@ export const notifyNearbyFavorites = async (saleId: string, io: Server): Promise
       select: { id: true, lat: true, lng: true },
     });
 
-    // Find sales within 5 miles
+    // Find sales within 5 miles (skip sales without coordinates)
     const nearbySaleIds = allSales
       .filter((s) => {
+        if (sale.lat === null || sale.lng === null || s.lat === null || s.lng === null) {
+          return false;
+        }
         const distance = haversineDistance(sale.lat, sale.lng, s.lat, s.lng);
         return distance <= 5;
       })

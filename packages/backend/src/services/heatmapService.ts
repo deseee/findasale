@@ -61,6 +61,9 @@ export const computeHeatmapTiles = async (
   const cellMap = new Map<string, { lat: number; lng: number; ids: string[] }>();
 
   for (const sale of sales) {
+    // Skip sales without coordinates
+    if (sale.lat === null || sale.lng === null) continue;
+
     const cellLat = Math.round(sale.lat * 100) / 100;
     const cellLng = Math.round(sale.lng * 100) / 100;
     const cellKey = `${cellLat},${cellLng}`;

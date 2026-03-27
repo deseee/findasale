@@ -191,6 +191,8 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
 
       // Check radius match
       if (query.lat && query.lng && query.radiusMiles) {
+        // Skip if sale coordinates are missing
+        if (sale.lat === null || sale.lng === null) continue;
         const distance = haversineDistance(query.lat, query.lng, sale.lat, sale.lng);
         if (distance > query.radiusMiles) continue;
       }

@@ -11,8 +11,8 @@ export interface SaleWithScore {
   city: string;
   state: string;
   zip: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   photoUrls: string[];
   tags: string[];
   status: string;
@@ -75,16 +75,18 @@ export async function getPersonalizedFeed(
     const userLat = lat ?? regionConfig.centerLat;
     const userLng = lng ?? regionConfig.centerLng;
 
-    const scored = serializedSales.map((sale) => {
-      const distance = haversineDistance(userLat, userLng, sale.lat, sale.lng);
+    const scored = serializedSales
+      .filter((sale) => sale.lat !== null && sale.lng !== null)
+      .map((sale) => {
+        const distance = haversineDistance(userLat, userLng, sale.lat!, sale.lng!);
       const dayOffset = Math.max(0, (sale.startDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
       const recencyBonus = Math.max(0, 5 - dayOffset); // 5 pts if today, 0 if 5+ days away
 
-      return {
-        ...sale,
-        score: recencyBonus + (distance < 25 ? 3 : 0), // Slight bonus for proximity
-      };
-    });
+        return {
+          ...sale,
+          score: recencyBonus + (distance < 25 ? 3 : 0), // Slight bonus for proximity
+        };
+      });
 
     return {
       sales: scored.sort((a, b) => {
@@ -147,7 +149,7 @@ export async function getPersonalizedFeed(
     score += recencyBonus;
 
     // Distance bonus: +15 if within 25 miles
-    if (lat !== undefined && lng !== undefined) {
+    if (lat !== undefined && lng !== undefined && sale.lat !== null && sale.lng !== null) {
       const distance = haversineDistance(lat, lng, sale.lat, sale.lng);
       if (distance < 25) {
         score += 15;
