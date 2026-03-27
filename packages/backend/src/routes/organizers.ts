@@ -254,6 +254,9 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     res.json({
       id: organizer.id,
       businessName: organizer.businessName,
+      phone: organizer.phone,
+      bio: organizer.bio,
+      website: organizer.website,
       reputationTier: organizer.reputationTier,
       avgRating: organizer.avgRating,
       totalReviews: organizer.totalReviews,

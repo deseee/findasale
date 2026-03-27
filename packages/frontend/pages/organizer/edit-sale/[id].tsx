@@ -79,7 +79,7 @@ const EditSalePage = () => {
     return null;
   }
 
-  const { data: sale, isLoading } = useQuery({
+  const { data: sale, isLoading, refetch } = useQuery({
     queryKey: ['sale', id],
     queryFn: async () => {
       const response = await api.get(`/sales/${id}`);
@@ -97,22 +97,17 @@ const EditSalePage = () => {
       const response = await api.get('/geocode', { params: { address, city, state, zip } });
 
       if (response.data.lat && response.data.lng) {
-        // Store the geocoded coordinates in a temporary query state
-        // We'll update the sale via the existing form mutation
-        setFormData(prev => ({
-          ...prev,
-          // Coordinates will be sent on next save
-        }));
-        // Signal that we have geocoded data
+        setIsAutoGeocodingOnLoad(false);
         return { lat: response.data.lat, lng: response.data.lng };
       }
+      setIsAutoGeocodingOnLoad(false);
+      setGeocodingAttempted(true);
       return false;
     } catch (error) {
       console.error('Geocoding failed:', error);
-      return false;
-    } finally {
       setIsAutoGeocodingOnLoad(false);
       setGeocodingAttempted(true);
+      return false;
     }
   };
 
@@ -149,7 +144,16 @@ const EditSalePage = () => {
 
       // Auto-trigger geocoding if sale has no coordinates but has address fields
       if (!sale.lat && !sale.lng && sale.address && sale.city && sale.state && !geocodingAttempted) {
-        attemptGeocode(sale.address, sale.city, sale.state, sale.zip);
+        attemptGeocode(sale.address, sale.city, sale.state, sale.zip).then(async (coords) => {
+          if (coords) {
+            try {
+              await api.patch(`/sales/${id}`, { lat: coords.lat, lng: coords.lng });
+              refetch();
+            } catch {
+              setGeocodingAttempted(true);
+            }
+          }
+        });
       }
     }
   }, [sale, geocodingAttempted]);
