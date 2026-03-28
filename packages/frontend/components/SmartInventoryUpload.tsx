@@ -508,7 +508,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                     <img
                       src={item.photoUrl}
                       alt="Item preview"
-                      className={`w-full h-32 object-cover rounded ${item.error ? 'opacity-50' : ''}`}
+                      className={`w-full h-40 object-contain rounded bg-gray-100 dark:bg-gray-800 ${item.error ? 'opacity-50' : ''}`}
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
                         const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
