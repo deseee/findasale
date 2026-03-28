@@ -125,8 +125,7 @@ function buildCloudinaryUrl(
   const transforms: string[] = [];
 
   if (opts.aspectRatio) {
-    const ar = opts.aspectRatio.replace(':', '_');
-    transforms.push(`ar_${ar},c_fill`);
+    transforms.push(`ar_${opts.aspectRatio},c_fill`);
   }
 
   if (opts.backgroundRemoved) {
