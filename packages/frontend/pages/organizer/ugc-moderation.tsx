@@ -114,6 +114,7 @@ export default function UGCModerationPage() {
                   {/* Photo Image */}
                   <div className="relative w-full h-48 bg-gray-200 overflow-hidden">
                     <img
+                      key={photo.photoUrl}
                       src={photo.photoUrl}
                       alt="Submitted photo"
                       className="w-full h-full object-cover"

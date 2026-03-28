@@ -134,6 +134,7 @@ function LootLegendPage() {
                 <div className="relative w-full aspect-square bg-gray-100 dark:bg-gray-700 overflow-hidden">
                   {purchase.item.photoUrls && purchase.item.photoUrls[0] && (
                     <img
+                      key={purchase.item.photoUrls[0]}
                       src={purchase.item.photoUrls[0]}
                       alt={purchase.item.title}
                       className="w-full h-full object-cover"

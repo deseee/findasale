@@ -132,6 +132,7 @@ const CheckoutSuccessPage = () => {
           {item?.photoUrls && item.photoUrls.length > 0 && (
             <div className="mb-10">
               <img
+                key={item.photoUrls[0]}
                 src={item.photoUrls[0]}
                 alt={item.title}
                 className="w-full max-h-56 object-cover rounded-lg shadow-md dark:shadow-lg"

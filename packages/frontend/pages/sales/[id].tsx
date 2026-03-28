@@ -486,6 +486,7 @@ const SaleDetailPage = () => {
                   onClick={() => setLightboxOpen(true)}
                 >
                   <img
+                    key={getThumbnailUrl(sale.photoUrls[currentPhotoIndex])}
                     src={getThumbnailUrl(sale.photoUrls[currentPhotoIndex])}
                     alt={`Sale photo ${currentPhotoIndex + 1}`}
                     className="w-full h-full object-cover hover:opacity-90 transition"
@@ -789,6 +790,7 @@ const SaleDetailPage = () => {
                     <Link href={`/items/${item.id}`} className="block">
                       {item.photoUrls.length > 0 ? (
                         <img
+                          key={getOptimizedUrl(item.photoUrls[0])}
                           src={getOptimizedUrl(item.photoUrls[0])}
                           alt={item.title}
                           className="w-full h-48 object-cover"

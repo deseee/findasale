@@ -38,6 +38,7 @@ const RecentlyViewed: React.FC = () => {
               <div className="relative w-24 h-24 bg-warm-100 rounded-lg overflow-hidden mb-2">
                 {item.photoUrl ? (
                   <img
+                    key={item.photoUrl}
                     src={item.photoUrl}
                     alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform"

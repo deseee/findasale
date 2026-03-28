@@ -51,6 +51,19 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
     }
   }, [sale.id]);
 
+  // Calculate image URLs
+  const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
+  const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
+  const lqipUrl_calc = photoUrl ? getLqipUrl(photoUrl) : null;
+  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl) : null;
+
+  // Reset image loading state when the photo URL changes
+  // This ensures new images load even if the component instance is reused
+  useEffect(() => {
+    setImgLoaded(false);
+    setImgError(false);
+  }, [optimizedUrl]);
+
   const formatSaleDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'TBA';
     try {
@@ -62,10 +75,7 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
     }
   };
 
-  const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
-  const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
-  const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
-  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl) : null;
+  const lqipUrl = lqipUrl_calc;
 
   return (
     <>
@@ -90,6 +100,7 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
 
           {photoUrl && !imgError ? (
             <Image
+              key={optimizedUrl}
               src={optimizedUrl!}
               alt={sale.title}
               fill

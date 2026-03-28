@@ -45,6 +45,7 @@ export default function UGCPhotoGallery({
           {/* Photo Image */}
           <div className="relative w-full h-48 bg-gray-200 overflow-hidden">
             <img
+              key={photo.photoUrl}
               src={photo.photoUrl}
               alt={photo.caption || 'UGC Photo'}
               className="w-full h-full object-cover"

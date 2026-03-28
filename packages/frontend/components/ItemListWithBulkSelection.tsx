@@ -100,6 +100,7 @@ const ItemListWithBulkSelection: React.FC<ItemListWithBulkSelectionProps> = ({
               {photoUrl && (
                 <div className="mb-3 rounded-lg overflow-hidden bg-warm-100 h-40">
                   <img
+                    key={photoUrl}
                     src={photoUrl}
                     alt={item.title}
                     className="w-full h-full object-cover"

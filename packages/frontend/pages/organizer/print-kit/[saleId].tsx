@@ -398,7 +398,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     {pageItems.map((item) => (
                       <div key={item.id} className="item-tag">
                         {item.photoUrl && (
-                          <img src={item.photoUrl} alt={item.title} className="item-photo" />
+                          <img key={item.photoUrl} src={item.photoUrl} alt={item.title} className="item-photo" />
                         )}
                         <div className="item-title">{item.title}</div>
                         <div className="item-price">${item.price.toFixed(2)}</div>

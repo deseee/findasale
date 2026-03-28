@@ -288,6 +288,7 @@ const ProfilePage = () => {
                           <div className="flex items-center">
                             {bid.item.photoUrls && bid.item.photoUrls.length > 0 ? (
                               <img
+                                key={bid.item.photoUrls[0]}
                                 src={bid.item.photoUrls[0]}
                                 alt={bid.item.title}
                                 className="h-10 w-10 rounded-md object-cover"

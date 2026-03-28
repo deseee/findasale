@@ -309,6 +309,7 @@ const OrganizerHoldsPage = () => {
                             <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-warm-100 dark:bg-gray-700">
                               {hold.item.photoUrls && hold.item.photoUrls.length > 0 ? (
                                 <img
+                                  key={hold.item.photoUrls[0]}
                                   src={hold.item.photoUrls[0]}
                                   alt={hold.item.title}
                                   className="w-full h-full object-cover"

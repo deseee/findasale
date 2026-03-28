@@ -531,6 +531,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     >
                       {item.thumbnailUrl ? (
                         <img
+                          key={item.thumbnailUrl}
                           src={item.thumbnailUrl}
                           alt={item.title || 'Item'}
                           className="w-full h-full object-cover"
@@ -637,6 +638,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               <div className="flex items-center gap-2">
                 {addingItem.thumbnailUrl && (
                   <img
+                    key={addingItem.thumbnailUrl}
                     src={addingItem.thumbnailUrl}
                     alt={addingItem.title}
                     className="w-8 h-8 rounded object-cover"

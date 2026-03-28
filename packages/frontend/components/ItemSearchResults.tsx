@@ -17,6 +17,7 @@ const ItemCard = ({ item }: { item: ItemSearchResult }) => (
   >
     {item.photoUrls?.[0] ? (
       <img
+        key={item.photoUrls[0]}
         src={item.photoUrls[0]}
         alt={item.title}
         className="aspect-square w-full object-cover"

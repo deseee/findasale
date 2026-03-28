@@ -181,6 +181,7 @@ const SaleMapInner = ({
                 <div style={{ minWidth: '180px' }}>
                   {pin.photoUrl && (
                     <img
+                      key={pin.photoUrl}
                       src={pin.photoUrl}
                       alt={pin.title}
                       style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px', marginBottom: '8px' }}

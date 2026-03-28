@@ -507,6 +507,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                 ) : (
                   <>
                     <img
+                      key={item.photoUrl}
                       src={item.photoUrl}
                       alt="Item preview"
                       className={`w-full h-40 object-contain rounded bg-gray-100 dark:bg-gray-800 ${item.error ? 'opacity-50' : ''}`}
