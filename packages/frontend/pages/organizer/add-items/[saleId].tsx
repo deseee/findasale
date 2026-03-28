@@ -218,12 +218,13 @@ const formatCategory = (category: string | null | undefined): string => {
 };
 
 const computeDraftStatus = (item: any): 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' => {
-  // If draftStatus is already set, use it
-  if (item.draftStatus) return item.draftStatus;
-  // Fallback logic: compute from item completeness
-  const hasMissingCritical = !item.photoUrls?.length || item.price == null;
-  if (hasMissingCritical) return 'DRAFT';
-  return 'PENDING_REVIEW';
+  // Use draftStatus from database as source of truth
+  // This field is now returned from GET /api/items?saleId=...
+  if (item.draftStatus === 'DRAFT' || item.draftStatus === 'PENDING_REVIEW' || item.draftStatus === 'PUBLISHED') {
+    return item.draftStatus;
+  }
+  // Fallback for items created locally before first save (e.g., temp-* IDs during rapidfire)
+  return 'DRAFT';
 };
 
 const emptyForm = {
