@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { ChevronRight } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
@@ -23,6 +24,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
   const [showBecomeOrganizerModal, setShowBecomeOrganizerModal] = useState(false);
+  const [mobileOrgToolsOpen, setMobileOrgToolsOpen] = useState(false);
+  const [mobileProToolsOpen, setMobileProToolsOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -419,33 +422,59 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </Link>
                 )}
 
-                {/* Organizer Tools Section */}
-                <SectionHeader label="Organizer Tools" />
-                <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Bounties
-                </Link>
-                <Link href="/organizer/message-templates" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Message Templates
-                </Link>
-                <Link href="/organizer/reputation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Reputation
-                </Link>
-                <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  UGC Moderation
-                </Link>
-                <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Performance
-                </Link>
+                {/* Organizer Tools Section — Collapsible */}
+                <button
+                  onClick={() => setMobileOrgToolsOpen(!mobileOrgToolsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  Organizer Tools
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileOrgToolsOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileOrgToolsOpen && (
+                  <>
+                    <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      Bounties
+                    </Link>
+                    <Link href="/organizer/message-templates" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      Message Templates
+                    </Link>
+                    <Link href="/organizer/reputation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      Reputation
+                    </Link>
+                    <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      UGC Moderation
+                    </Link>
+                    <Link href="/organizer/performance" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      Performance
+                    </Link>
+                  </>
+                )}
 
-                {/* Pro Tools Section */}
-                <SectionHeader label="Pro Tools" />
-                <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
-                <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
-                <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
-                <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
-                <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
-                <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
-                <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
+                {/* Pro Tools Section — Collapsible */}
+                <button
+                  onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  Pro Tools
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileProToolsOpen && (
+                  <>
+                    <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
+                  </>
+                )}
               </>
             ) : (
               authLinks
