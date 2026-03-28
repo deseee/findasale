@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S322 IN PROGRESS / NEEDS PUSH.** Edit-sale form fixes + bulk publish gate fix. Push block below.
+**S323 IN PROGRESS.** QA session — S322 verification + product audit. Chrome concurrency rule locked + added to CLAUDE.md and findasale-qa skill (Patrick to install .skill file). P2 bug found: duplicate Settings/Logout in shopper nav — dev fix pending. QA #4 (homepage search) and QA #5 (Sales Near You card) in progress.
 
 ## Blocked/Unverified Queue
 
@@ -15,43 +15,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 |---------|--------|----------------|---------------|
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod (Cloudinary ready by the time images display). ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar, not "Low (50%)". | S314 |
-| Nav menus (organizer + shopper) | All changes pushed but not Chrome-verified this session. | Open desktop dropdown + mobile drawer as Bob Smith (organizer) and Leo Thomas (shopper). Verify collapsible sections, correct items, consistent font/padding. | S321 |
-| Homepage search by tags | itemSearchService.ts updated to include item/sale tags. | Search "eames" or "mid century" from homepage — verify results appear. | S321 |
-| Sales Near You card redesign | index.tsx updated. | Verify card shows in 2-column layout, displays sale counts by type, links to /map on click. | S321 |
+| Review & Publish Publish All (SIMPLE) | No DRAFT items in seed — button doesn't appear. | Create a DRAFT item via camera or manual entry, then verify Publish All works without PRO toast. | S323 |
 
 **S321 COMPLETE (2026-03-28):** Nav full audit + homepage fixes. (1) Review Item modal thumbnail fixed: `thumbnailUrl` dropped during ID swap in [saleId].tsx (lines 701, 757) — now preserved so review modal shows captured photo instead of placeholder. (2) Desktop dropdown full nav audit: added Organizer Tools + Pro Tools collapsible sections (were missing entirely); normalized all links to `px-3 py-2 rounded-md`; added `text-sm` to TierGatedNav.tsx both link states. (3) Shopper menu parity: desktop dropdown had only About/Settings/Sign Out for shopper users — added Shopper Dashboard, My Profile, My Saves, Referrals, Host a Sale CTA, My Explorer Profile collapsible (10 links). (4) Dual-role: "My Dashboard" → "Shopper Dashboard" in mobile; both dashboards shown for dual-role users. (5) Homepage search: itemSearchService.ts now queries item tags + sale tags via PostgreSQL `@>` — "eames", "mid century", "rolex" now searchable. (6) Sales Near You card: redesigned as 2-column layout, sale counts by type, full card links to /map. Files: [saleId].tsx, AvatarDropdown.tsx, Layout.tsx, TierGatedNav.tsx, itemSearchService.ts, index.tsx. All pushed.
 
 **S322 COMPLETE (2026-03-28):** Edit-sale form fixes + bulk publish gate fix. (1) SaleMap restored to Sales Near You card (S321 removed it); collapsed text to single footer line. (2) Homepage search wired to `/api/search?q=...` FTS endpoint — was filtering client-side only; now finds items by name/tags/description. (3) `getSaleType()` fixed to read `sale.saleType` DB field instead of parsing tags. (4) Sale type select dropdown added to edit-sale form. (5) PickupSlotManager dark mode pass. (6) Pro gate on edit-sale fixed: try/catch swallows 403 from markdown-config endpoint so SIMPLE users can save. (7) Save Changes button added at top of form. (8) Form reset bug fixed: `refetchOnWindowFocus: false` + `queryClient.invalidateQueries` on save. (9) Entrance note dark mode fixed in EntrancePinPickerInner.tsx. (10) Root cause of non-saving fields found: `notes`, `treasureHuntEnabled`, `treasureHuntCompletionBadge` were not in `saleCreateSchema` Zod — Zod stripped them silently. Added all 3. (11) `notes` field added to Sale model in schema.prisma + migration `20260328_add_sale_notes`. (12) Review & Publish PRO gate fixed: `POST /items/bulk` was `requireTier('PRO')` — SIMPLE users couldn't publish items. Changed to `requireTier('SIMPLE')`. Files: edit-sale/[id].tsx, EntrancePinPickerInner.tsx, saleController.ts, schema.prisma, migration (NEW), items.ts.
 
-## Next Session (S323)
+**S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-**Patrick push action needed: YES — run migration first, then push.**
+## Next Session (S324)
 
-**Migration (run before pushing code):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**Then push:**
+**Patrick push needed:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/organizer/edit-sale/[id].tsx
-git add packages/frontend/components/EntrancePinPickerInner.tsx
-git add packages/backend/src/controllers/saleController.ts
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260328_add_sale_notes/migration.sql
-git add packages/backend/src/routes/items.ts
-git commit -m "fix: edit-sale non-saving fields + bulk publish PRO gate"
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/index.tsx
+git add CLAUDE.md
+git commit -m "fix: duplicate logout in mobile nav + search scroll-to-results UX + Chrome concurrency rule"
 .\push.ps1
 ```
 
-**Start with:**
-1. Chrome-verify edit sale as Alice (SIMPLE user): save entrance note, approach notes, treasure hunt toggle — confirm all persist after save.
-2. Chrome-verify review & publish page: "Publish All" should work for SIMPLE users without PRO toast.
-3. Continue product audit — homepage sale type filters.
+**Also:** Install `findasale-qa.skill` file from project folder via Cowork UI to activate Chrome concurrency rule in QA skill.
+
+**Start S324 with:**
+1. Smoke test: open mobile nav as Karen Anderson — verify Settings+Logout appear only once.
+2. Smoke test: search "chair" from homepage — verify page auto-scrolls to results.
+3. Continue product audit — sale type filter buttons (Estate/Yard/Auction/etc) on homepage.
+4. Verify Review & Publish Publish All for SIMPLE users (need to create a DRAFT item first).
 
 **S319 COMPLETE (2026-03-28):** 6 fixes shipped + reseed + shopper walkthrough. (1) "All items sold or reserved" banner fixed: `ACTIVE` → `AVAILABLE` + removed non-existent `PENDING` from soldCount in sales/[id].tsx. (2) Reseeded Railway with 17 real Cloudinary photos — picsum removed from seed.ts entirely. (3) Message compose footer fixed: `_app.tsx` supports `getLayout` pattern; messages/[id].tsx uses `noFooter={true}` (Chrome-verified ss_1731k6do9). (4) Badge loading P1 fixed: `/users/me/points` endpoint was missing — added `getBadges` controller + route (Chrome-verified ss_80947s2pv). (5) Badge empty state fixed: profile.tsx was rendering 3 dashed blank placeholder boxes when badges=[] — replaced with "No badges yet / Start shopping to earn your first badge!" (QA honesty failure caught by Patrick from screenshot). (6) Shopper walkthrough QA: likes ✅, profile ✅, Loot Legend ✅, Hunt Pass ✅, messaging ✅, dark mode ✅, mobile ✅.
 
