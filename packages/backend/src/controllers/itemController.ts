@@ -257,6 +257,9 @@ export const getItemById = async (req: Request, res: Response) => {
               select: { userId: true, businessName: true }
             }
           }
+        },
+        checkoutAttempts: {
+          select: { id: true }
         }
       }
     });
@@ -264,6 +267,18 @@ export const getItemById = async (req: Request, res: Response) => {
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
+
+    // Compute cartCount and views
+    const cartCount = item.checkoutAttempts?.length ?? 0;
+    const views = 0; // Placeholder: item-level view tracking not yet implemented; can be enhanced with dedicated tracking table
+
+    // Return item with computed fields
+    const itemWithCounts = {
+      ...item,
+      cartCount,
+      views,
+      checkoutAttempts: undefined // exclude from response
+    };
 
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
     const isOwner = authReq.user?.id === item.sale.organizer.userId;
@@ -276,7 +291,7 @@ export const getItemById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    res.json(item);
+    res.json(itemWithCounts);
   } catch (error) {
     console.error('Error fetching item:', error);
     res.status(500).json({ message: 'Server error while fetching item' });

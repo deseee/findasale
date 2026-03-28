@@ -13,7 +13,7 @@ interface TrendingItem {
   price: number;
   category: string;
   condition: string;
-  photos: { url: string }[];
+  photoUrls: string[];
   sale: { id: string; title: string; city: string; state: string };
   _count: { favorites: number };
 }
@@ -132,9 +132,9 @@ export default function TrendingPage() {
                   <Link key={item.id} href={`/items/${item.id}`}>
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition group cursor-pointer">
                       <div className="relative aspect-square bg-warm-100">
-                        {item.photos?.[0] ? (
+                        {item.photoUrls?.[0] ? (
                           <Image
-                            src={item.photos[0].url}
+                            src={item.photoUrls[0]}
                             alt={item.title}
                             fill
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
