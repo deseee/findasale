@@ -118,10 +118,10 @@ const AvatarDropdown: React.FC = () => {
         >
           {/* User Info Header */}
           <div className="px-4 py-3 border-b border-warm-200 dark:border-gray-700">
-            <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">
+            <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">
               {user.name || user.email}
             </p>
-            <p className="text-xs text-warm-600 dark:text-warm-400 truncate">
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
               {user.email}
             </p>
           </div>
@@ -207,7 +207,7 @@ const AvatarDropdown: React.FC = () => {
               {/* Organizer Tools Section — Collapsible */}
               <button
                 onClick={() => setOrgToolsOpen(!orgToolsOpen)}
-                className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
               >
                 Organizer Tools
                 <ChevronRight
@@ -258,7 +258,7 @@ const AvatarDropdown: React.FC = () => {
               {/* Pro Tools Section — Collapsible */}
               <button
                 onClick={() => setProToolsOpen(!proToolsOpen)}
-                className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
               >
                 Pro Tools
                 <ChevronRight
