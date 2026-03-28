@@ -26,6 +26,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [showBecomeOrganizerModal, setShowBecomeOrganizerModal] = useState(false);
   const [mobileOrgToolsOpen, setMobileOrgToolsOpen] = useState(false);
   const [mobileProToolsOpen, setMobileProToolsOpen] = useState(false);
+  const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -120,7 +121,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         {user?.roles?.includes('USER') && (
           <>
             <Link href="/shopper/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              My Dashboard
+              Shopper Dashboard
             </Link>
             <Link href="/profile" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               My Profile
@@ -148,40 +149,50 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </>
             )}
             <hr className="my-2 border-warm-200 dark:border-gray-700" />
-            <span className="block px-3 py-1 text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase">My Explorer Profile</span>
-            <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              My Loot Legend
-            </Link>
-            <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Loot Legend
-            </Link>
-            <Link href="/shopper/hauls" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Hauls
-            </Link>
-            <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Treasure Trails
-            </Link>
-            <Link href="/shopper/loot-log" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Loot Log
-            </Link>
-            <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Loyalty
-            </Link>
-            <Link href="/shopper/receipts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Receipts
-            </Link>
-            <Link href="/challenges" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Challenges
-            </Link>
-            <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Achievements
-            </Link>
-            <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Live Sale Feed
-            </Link>
-            <Link href="/encyclopedia" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Encyclopedia
-            </Link>
+            <button
+              onClick={() => setMobileExplorerOpen(!mobileExplorerOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              My Explorer Profile
+              <ChevronRight
+                size={16}
+                className={`transition-transform duration-200 ${mobileExplorerOpen ? 'rotate-90' : ''}`}
+              />
+            </button>
+            {mobileExplorerOpen && (
+              <>
+                <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  My Loot Legend
+                </Link>
+                <Link href="/shopper/hauls" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Hauls
+                </Link>
+                <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Treasure Trails
+                </Link>
+                <Link href="/shopper/loot-log" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Loot Log
+                </Link>
+                <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Loyalty
+                </Link>
+                <Link href="/shopper/receipts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Receipts
+                </Link>
+                <Link href="/challenges" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Challenges
+                </Link>
+                <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Achievements
+                </Link>
+                <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Live Sale Feed
+                </Link>
+                <Link href="/encyclopedia" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Encyclopedia
+                </Link>
+              </>
+            )}
             <hr className="my-2 border-warm-200 dark:border-gray-700" />
             <Link href="/shopper/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Settings

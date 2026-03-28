@@ -66,6 +66,7 @@ const AvatarDropdown: React.FC = () => {
   const isOrganizer = user.roles?.includes('ORGANIZER');
   const isUser = user.roles?.includes('USER');
   const isAdmin = user.roles?.includes('ADMIN');
+  const [explorerOpen, setExplorerOpen] = useState(false);
 
   return (
     <div className="relative">
@@ -293,6 +294,148 @@ const AvatarDropdown: React.FC = () => {
                   <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
                   <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
                   <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
+                </>
+              )}
+
+              <hr className="my-2 border-warm-200 dark:border-gray-700" />
+            </>
+          )}
+
+          {/* SHOPPER Menu Items */}
+          {isUser && (
+            <>
+              <Link
+                href="/shopper/dashboard"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Shopper Dashboard
+              </Link>
+              <Link
+                href="/profile"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                My Profile
+              </Link>
+              <Link
+                href="/inspiration"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Inspiration Gallery
+              </Link>
+              <Link
+                href="/shopper/wishlist"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                My Saves
+              </Link>
+              <Link
+                href="/referral-dashboard"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Referrals
+              </Link>
+
+              {/* Host a Sale CTA for shopper-only users */}
+              {!isOrganizer && (
+                <button
+                  onClick={() => {
+                    router.push('/organizer/register');
+                    setIsOpen(false);
+                  }}
+                  className="block w-full text-left px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium transition-colors"
+                >
+                  Host a Sale
+                </button>
+              )}
+
+              {/* My Explorer Profile — Collapsible */}
+              <button
+                onClick={() => setExplorerOpen(!explorerOpen)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              >
+                My Explorer Profile
+                <ChevronRight
+                  size={16}
+                  className={`transition-transform duration-200 ${explorerOpen ? 'rotate-90' : ''}`}
+                />
+              </button>
+              {explorerOpen && (
+                <>
+                  <Link
+                    href="/shopper/loot-legend"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    My Loot Legend
+                  </Link>
+                  <Link
+                    href="/shopper/hauls"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Hauls
+                  </Link>
+                  <Link
+                    href="/shopper/trails"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Treasure Trails
+                  </Link>
+                  <Link
+                    href="/shopper/loot-log"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Loot Log
+                  </Link>
+                  <Link
+                    href="/shopper/loyalty"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Loyalty
+                  </Link>
+                  <Link
+                    href="/shopper/receipts"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Receipts
+                  </Link>
+                  <Link
+                    href="/challenges"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Challenges
+                  </Link>
+                  <Link
+                    href="/shopper/achievements"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Achievements
+                  </Link>
+                  <Link
+                    href="/feed"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Live Sale Feed
+                  </Link>
+                  <Link
+                    href="/encyclopedia"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Encyclopedia
+                  </Link>
                 </>
               )}
 
