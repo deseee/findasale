@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
@@ -28,6 +28,7 @@ const EditSalePage = () => {
   const { id } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [isCloning, setIsCloning] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
@@ -87,6 +88,7 @@ const EditSalePage = () => {
       const response = await api.get(`/sales/${id}`);
       return response.data;
     },
+    refetchOnWindowFocus: false, // prevent background refetches from resetting the form mid-edit
     enabled: !!id,
   });
 
@@ -114,8 +116,7 @@ const EditSalePage = () => {
   };
 
   useEffect(() => {
-    if (sale && !formInitialized.current) {
-      formInitialized.current = true;
+    if (sale) {
       // Convert ISO date strings to YYYY-MM-DD format for input type="date"
       const formatDate = (isoDate: string | undefined) => {
         if (!isoDate) return '';
@@ -183,6 +184,7 @@ const EditSalePage = () => {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sale', id] });
       showToast('Sale updated', 'success');
       router.push(`/organizer/dashboard`);
     },
