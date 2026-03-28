@@ -508,7 +508,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -594,6 +594,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (listingType !== undefined) updateData.listingType = listingType;
     if (isAiTagged !== undefined) updateData.isAiTagged = isAiTagged === true || isAiTagged === 'true';
     if (qrEmbedEnabled !== undefined) updateData.qrEmbedEnabled = qrEmbedEnabled === true || qrEmbedEnabled === 'true';
+    if (draftStatus !== undefined) updateData.draftStatus = draftStatus; // Allow publish/unpublish via generic update
 
     const updatedItem = await prisma.item.update({
       where: { id },
@@ -1042,10 +1043,12 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
-    // B2 blocker: reject if draftStatus is not PENDING_REVIEW (AI analysis not complete)
-    if (item.draftStatus !== 'PENDING_REVIEW') {
+    // B2 blocker: reject if already published or in an unexpected state
+    if (item.draftStatus !== 'PENDING_REVIEW' && item.draftStatus !== 'DRAFT') {
       return res.status(400).json({
-        message: 'Item not ready — AI analysis still in progress.'
+        message: item.draftStatus === 'PUBLISHED'
+          ? 'Item is already published.'
+          : 'Item not ready — AI analysis still in progress.'
       });
     }
 

@@ -314,12 +314,24 @@ const ReviewPage = () => {
   };
 
   const handlePublishItem = async (item: Item) => {
-    const newStatus = item.draftStatus === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
-    await updateItemMutation.mutateAsync({
-      itemId: item.id,
-      updates: { draftStatus: newStatus } as any,
-    });
-    showToast(newStatus === 'PUBLISHED' ? 'Item published' : 'Item unpublished', 'success');
+    try {
+      if (item.draftStatus === 'PUBLISHED') {
+        // Unpublish: use generic update endpoint (draftStatus now accepted)
+        await updateItemMutation.mutateAsync({
+          itemId: item.id,
+          updates: { draftStatus: 'DRAFT' } as any,
+        });
+        showToast('Item unpublished', 'success');
+      } else {
+        // Publish: use dedicated publish endpoint
+        await api.post(`/items/${item.id}/publish`);
+        queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+        showToast('Item published!', 'success');
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to update item';
+      showToast(message, 'error');
+    }
   };
 
   const handleBulkPrice = () => {
