@@ -60,9 +60,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const staticNavLinks = [
     { href: '/trending', label: 'Trending' },
     { href: '/pricing', label: 'Pricing' },
-    { href: '/about', label: 'About' },
-    { href: '/leaderboard', label: 'Leaderboard' },
-    { href: '/contact', label: 'Contact' },
   ];
 
   const authLinks = isClient ? (
