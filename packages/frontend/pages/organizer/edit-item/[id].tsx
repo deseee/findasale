@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
@@ -25,6 +25,7 @@ const EditItemPage = () => {
   const { id } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState({
     title: '',
@@ -128,6 +129,36 @@ const EditItemPage = () => {
     },
   });
 
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      return await api.post(`/items/${id}/publish`);
+    },
+    onSuccess: () => {
+      showToast('Item published!', 'success');
+      // Refetch the item to update UI with new draftStatus
+      queryClient.invalidateQueries({ queryKey: ['item', id] });
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to publish item';
+      showToast(message, 'error');
+    },
+  });
+
+  const unpublishMutation = useMutation({
+    mutationFn: async () => {
+      return await api.put(`/items/${id}`, { draftStatus: 'DRAFT' });
+    },
+    onSuccess: () => {
+      showToast('Item unpublished', 'success');
+      // Refetch the item to update UI with new draftStatus
+      queryClient.invalidateQueries({ queryKey: ['item', id] });
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to unpublish item';
+      showToast(message, 'error');
+    },
+  });
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
@@ -158,6 +189,21 @@ const EditItemPage = () => {
       </div>
     );
   }
+
+  const handlePublishItem = async () => {
+    try {
+      if (item.draftStatus === 'PUBLISHED') {
+        // Unpublish
+        await unpublishMutation.mutateAsync();
+      } else {
+        // Publish
+        await publishMutation.mutateAsync();
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to update item status';
+      showToast(message, 'error');
+    }
+  };
 
   return (
     <>
@@ -446,13 +492,32 @@ const EditItemPage = () => {
               </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={updateMutation.isPending}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
-            >
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
+              >
+                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </button>
+
+              <button
+                type="button"
+                disabled={publishMutation.isPending || unpublishMutation.isPending}
+                onClick={handlePublishItem}
+                className={`flex-1 font-bold py-2 px-4 rounded-lg disabled:opacity-50 ${
+                  item.draftStatus === 'PUBLISHED'
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                {publishMutation.isPending || unpublishMutation.isPending
+                  ? 'Updating...'
+                  : item.draftStatus === 'PUBLISHED'
+                    ? 'Unpublish'
+                    : 'Publish'}
+              </button>
+            </div>
           </form>
         </div>
       </div>
