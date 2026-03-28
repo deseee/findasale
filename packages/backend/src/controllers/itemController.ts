@@ -240,11 +240,13 @@ export const getItemById = async (req: Request, res: Response) => {
         reverseFloorPrice: true,
         reverseStartDate: true,
         draftStatus: true,
+        conditionGrade: true,
+        tags: true,
         qrEmbedEnabled: true,
         rarity: true,
         createdAt: true,
         updatedAt: true,
-        // embedding & tags intentionally excluded — see getItemsBySaleId comment
+        // embedding intentionally excluded — crashes serialization
         sale: {
           select: {
             title: true,
