@@ -1,40 +1,53 @@
-# Patrick's Dashboard — Session 316 Wrap (March 27, 2026)
+# Patrick's Dashboard — Session 317 Wrap (March 27, 2026)
 
 ---
 
 ## Build Status
 
-- **Railway:** ✅ Green (sha: adfb92b — no changes this session)
-- **Vercel:** ✅ No changes this session
+- **Railway:** ✅ Green (last push: adfb92b from S316)
+- **Vercel:** ✅ Green (last push: adfb92b from S316)
 - **DB:** ✅ No migrations
+- **S317 Pending:** 4 files ready for push (see Push Block below)
 
 ---
 
-## Session 316 Summary
+## Session 317 Summary
 
-**AI confidence batch path — code verified, browser blocked**
+**Batch upload AI confidence verified + Cloudinary URL bug fixed**
 
-All 3 S315 bug fixes confirmed in codebase on GitHub:
-- `batchAnalyzeController`: error fallback is `0.4` numeric (not `'low'` string) ✅
-- `SmartInventoryUpload`: payload includes `aiConfidence` on item create ✅
-- `createItem`: destructures + stores `aiConfidence` with `parseFloat` ✅
-- `cloudAIService.ts`: Haiku prompt has `confidence` as required field (0.0–1.0) + field-completeness fallback (0.4–0.8) ✅
-
-**Browser test blocked:** `upload_image` only works with photos YOU drag into the chat window — it can't use Claude's own screenshots. `file_upload` is blocked by VM security. Visited Review & Publish page — AI Confidence column is live. 2 existing camera draft items show "Low (50%)" but these predate the S313 fix.
+**Completed:**
+1. **Batch upload AI confidence ✅ VERIFIED** — dropped folding chair photo into Batch Upload drop zone. AI analysis worked: "Folding Chair, Gray Metal Frame, Modern Utility Style", $18, Furniture, Good condition. Item created successfully to sale cmn7eptij0045xdmfm5lu9oyc (now 13 items total). Batch items go straight to PUBLISHED (not DRAFT), so they appear in the items list.
+2. **Cloudinary URL bug ROOT CAUSE FOUND AND FIXED** — uploadController.ts was using incomplete Cloudinary eager transform results (e.g., `/v1774657939/` with no filename). Now generates correct URLs from `result.secure_url` via `insertTransform` helper. This explains missing thumbnails and "preview unavailable" on batch uploads.
+3. **Shared Cloudinary URL utility created** — `packages/shared/src/cloudinaryUtils.ts` with 4 transform helpers. Exported from shared/index.ts. Backend keeps inline helper (TODO to wire workspace dependency).
+4. **Roadmap #220 added** — "Cloudinary URL Utility — Centralized transform helper" (P2 housekeeping).
 
 ---
 
-## No Patrick Action Needed
+## Patrick Action Needed
 
-No code changes this session. No push needed. Everything stays at sha: adfb92b.
+**Push 4 files:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/uploadController.ts packages/shared/src/cloudinaryUtils.ts packages/shared/src/index.ts claude_docs/strategy/roadmap.md
+git commit -m "S317: Fix Cloudinary URL truncation bug + create shared URL utility
+
+- uploadController: use result.secure_url instead of transform object (fixes missing thumbnails)
+- cloudinaryUtils: new shared utility with insertTransform, getCloudinaryThumbnailUrl, etc
+- roadmap: add #220 Cloudinary URL utility consolidation (P2)
+
+Verified: batch upload AI confidence working (folding chair test item)"
+.\push.ps1
+```
 
 ---
 
-## Next Session (S317) — Start Here
+## Next Session (S318) — Start Here
 
-1. **Drop a photo into the chat** — drag any item photo from your computer into the chat window, then say "verify batch upload confidence." Claude will inject it into the Batch Upload drop zone and confirm the resulting item shows a real AI confidence score (not 50%).
-2. **Full product walkthrough** — walk entire app as ORGANIZER + SHOPPER before beta. Find anything broken or embarrassing.
-3. **AI confidence camera mode** — still UNVERIFIED (needs real device camera).
+1. **Confirm S317 push** — 4 files pushed successfully
+2. **Verify batch upload thumbnails** — Navigate to Lakefront Estate Sale 11, check items list. Thumbnails should now load (Cloudinary URLs fixed).
+3. **Delete test item** — "Folding Chair, Gray Metal Frame, Modern Utility Style" from sale cmn7eptij0045xdmfm5lu9oyc (created during S317 test)
+4. **Full product walkthrough** — walk entire app as ORGANIZER + SHOPPER before beta users arrive. Find anything broken or embarrassing.
+5. **AI confidence camera mode** — still UNVERIFIED (needs real device camera)
 
 ---
 
@@ -42,12 +55,18 @@ No code changes this session. No push needed. Everything stays at sha: adfb92b.
 
 | Feature | Status | What's Needed |
 |---------|--------|----------------|
-| Batch Upload AI confidence (browser verify) | Code ✅ / Browser UNVERIFIED | Patrick drops photo in chat → Claude runs upload_image → checks confidence score |
 | #143 Camera AI confidence | UNVERIFIED since S314 | Real device camera capture → Review & Publish → confirm non-50% score |
 | #143 PreviewModal onError | Acceptable UNVERIFIED | Can't trigger Cloudinary 503 in prod — defensive fix is in place |
 
+*Removed: Batch Upload AI confidence — RESOLVED ✅ in S317*
+
 ---
 
-## Push Block
+## Files Changed (S317)
 
-No push needed this session — no code or doc changes were made.
+| File | Change | Status |
+|------|--------|--------|
+| `packages/backend/src/controllers/uploadController.ts` | Cloudinary URL fix: use `result.secure_url` instead of transform object | ✅ Ready |
+| `packages/shared/src/cloudinaryUtils.ts` | NEW: shared Cloudinary transform utility with 4 helpers | ✅ Ready |
+| `packages/shared/src/index.ts` | Export `cloudinaryUtils` from shared package | ✅ Ready |
+| `claude_docs/strategy/roadmap.md` | Add #220 Cloudinary URL utility consolidation | ✅ Ready |

@@ -7,7 +7,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S316 COMPLETE.** AI confidence batch path: code verified ✅ (all 3 fixes confirmed on GitHub/local). Browser UNVERIFIED — both upload tools blocked (upload_image requires user-uploaded image IDs, not screenshot IDs; file_upload blocked by VM security). Review & Publish confirmed live with AI Confidence column. 2 camera draft items show "Low (50%)" — predates S313 fix or genuinely uncertain items.
+**S317 COMPLETE.** Batch upload AI confidence verified + Cloudinary URL bug root cause found and fixed. (1) Batch upload AI confidence ✅ — Patrick dropped folding chair photo into Batch Upload, AI analysis confirmed working: "Folding Chair, Gray Metal Frame, Modern Utility Style", $18, Furniture, Good condition. Item created (13 items total on sale cmn7eptij0045xdmfm5lu9oyc). (2) Cloudinary URL bug found: uploadController.ts was using Cloudinary eager transform results which returned incomplete URLs (e.g., `/v1774657939/` with no filename). Fixed: now generates transform URLs from `result.secure_url` via `insertTransform` helper. This explains "preview unavailable" and missing thumbnails in items list. (3) Shared Cloudinary URL utility created — `packages/shared/src/cloudinaryUtils.ts` with 4 transform helpers, exported from shared index. Backend keeps inline helper (workspace dependency not yet wired) with TODO. (4) Roadmap #220 added (P2 housekeeping).
+
+**Files pending Patrick push:** uploadController.ts (Cloudinary URL fix), cloudinaryUtils.ts (NEW), shared/index.ts (exports), roadmap.md.
 
 ## Blocked/Unverified Queue
 
@@ -15,18 +17,21 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 |---------|--------|----------------|---------------|
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod (Cloudinary ready by the time images display). ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar, not "Low (50%)". | S314 |
-| #142/#143 AI confidence — Batch Upload browser verify | All 3 code fixes confirmed in codebase (sha: adfb92b). Browser test blocked: upload_image needs user-uploaded photo ID (not screenshot ID); file_upload blocked by VM security. | Patrick drops a photo into chat → Claude uses that imageId with upload_image → verifies Batch Upload → checks resulting item AI confidence score in items list. | S316 |
 
-## Next Session (S317)
+## Next Session (S318)
 
-**No Patrick push action needed** — all S316 work was verification only, no code changes.
+**Patrick push action needed: YES** — 4 files from S317 (uploadController, cloudinaryUtils, shared/index, roadmap).
 
 **Start with:**
-1. **Batch upload AI confidence verify** — Patrick drops a real item photo into chat, Claude injects it via upload_image into Batch Upload drop zone, verifies resulting item shows non-50% confidence. This is the fastest path to clearing the last unverified item from the S315 batch fix.
-2. **Full product walkthrough (deferred from S316)** — walk entire product as ORGANIZER + SHOPPER, find anything broken or embarrassing before real beta users hit it
-3. AI confidence Camera mode — still UNVERIFIED (needs real camera hardware)
+1. **Confirm S317 push** — Patrick pushed uploadController.ts (Cloudinary URL fix), cloudinaryUtils.ts (NEW), shared/index.ts (exports), roadmap.md
+2. **Verify batch upload thumbnails** — Navigate to Lakefront Estate Sale 11, check items list — thumbnails should now load (Cloudinary URLs no longer truncated)
+3. **Delete test folding chair item** — Item: "Folding Chair, Gray Metal Frame, Modern Utility Style" from sale cmn7eptij0045xdmfm5lu9oyc
+4. **Full product walkthrough (deferred from S316)** — walk entire product as ORGANIZER + SHOPPER, find anything broken or embarrassing before real beta users hit it
+5. **AI confidence Camera mode** — still UNVERIFIED (needs real camera hardware)
 
 ## Recently Complete
+
+**S317 COMPLETE (2026-03-27):** Batch upload AI confidence verified + Cloudinary URL bug fixed. (1) Batch upload AI confidence ✅ — Patrick dropped folding chair photo into Batch Upload drop zone. AI analysis confirmed working: "Folding Chair, Gray Metal Frame, Modern Utility Style", $18, Furniture, Good condition. Item created successfully (13 items total on sale cmn7eptij0045xdmfm5lu9oyc). Batch upload creates PUBLISHED items (not DRAFT), so they appear directly in items list (not Review & Publish). (2) Cloudinary URL bug root cause found and fixed: uploadController.ts was using `result.object` (Cloudinary eager transform results) which returned incomplete transform URLs (e.g., `/v1774657939/` with no filename). Fixed: now uses `result.secure_url` with `insertTransform` helper to generate correct URLs. This explains "preview unavailable" tooltips and missing thumbnails in items list when batch-uploading or using camera. (3) Shared Cloudinary utility created — `packages/shared/src/cloudinaryUtils.ts` with `insertCloudinaryTransform`, `getCloudinaryThumbnailUrl`, `getCloudinaryOptimizedUrl`, `getCloudinaryFullUrl`. Exported from shared/index.ts. Backend keeps inline helper (workspace dependency not wired yet) with TODO pointing to shared. (4) Roadmap #220 added ("Cloudinary URL Utility — Centralized transform helper", P2 housekeeping). Files pending push: uploadController.ts, cloudinaryUtils.ts (NEW), shared/index.ts, roadmap.md.
 
 **S316 COMPLETE (2026-03-27):** AI confidence batch path verification session. All 3 S315 bug fixes code-confirmed on GitHub: (1) batchAnalyzeController error fallback → 0.4 numeric (not 'low' string); (2) SmartInventoryUpload payload includes aiConfidence; (3) createItem handler stores aiConfidence with parseFloat. cloudAIService.ts Haiku prompt confirmed includes confidence field (0.0–1.0, required) + field-completeness fallback (0.4–0.8). Browser test BLOCKED — upload_image requires user-uploaded image IDs (Patrick drags photo into chat), not Claude screenshot IDs; file_upload blocked by VM security. Review & Publish page visited — AI Confidence column confirmed live (ss_1746po7qa). 2 camera draft items show "Low (50%)" — predates S313 fix. No code changes this session; no push needed.
 
