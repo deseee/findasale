@@ -8,7 +8,7 @@
  * - Status (active, draft, ended)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -37,6 +37,7 @@ const EditSalePage = () => {
   const [isSendingApproachNotification, setIsSendingApproachNotification] = useState(false); // Feature #84: Approach Notes notification
   const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
   const [isAutoGeocodingOnLoad, setIsAutoGeocodingOnLoad] = useState(false); // Track auto-geocoding in progress
+  const formInitialized = useRef(false); // prevent background refetches from resetting form
 
   const [formData, setFormData] = useState({
     title: '',
@@ -113,7 +114,8 @@ const EditSalePage = () => {
   };
 
   useEffect(() => {
-    if (sale) {
+    if (sale && !formInitialized.current) {
+      formInitialized.current = true;
       // Convert ISO date strings to YYYY-MM-DD format for input type="date"
       const formatDate = (isoDate: string | undefined) => {
         if (!isoDate) return '';
