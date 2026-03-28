@@ -71,7 +71,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         <span className="block px-3 py-2 text-sm text-warm-500 truncate">
           Hi, {user.name || user.email}
         </span>
-        {user?.role === 'ORGANIZER' && (
+        {user?.roles?.includes('ORGANIZER') && (
           <>
             <SectionHeader label="Primary" />
             <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -114,7 +114,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
           </>
         )}
-        {user?.role === 'USER' && (
+        {user?.roles?.includes('USER') && (
           <>
             <Link href="/shopper/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               My Dashboard
@@ -185,7 +185,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
           </>
         )}
-        {user?.role === 'ADMIN' && (
+        {user?.roles?.includes('ADMIN') && (
           <Link href="/admin" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium bg-amber-50 dark:bg-amber-900/20">
             Admin Panel
           </Link>
@@ -232,15 +232,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       {/* ── HEADER ── fixed, 48px mobile / 64px desktop */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-header dark:shadow-gray-800/50">
         <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center h-12 md:h-16">
-            <Link href="/" className="text-xl md:text-2xl font-bold text-amber-600 font-heading flex-shrink-0">
+          <div className="flex justify-between items-center h-12 lg:h-16">
+            <Link href="/" className="text-xl lg:text-2xl font-bold text-amber-600 font-heading flex-shrink-0">
               FindA.Sale
             </Link>
 
             {/* Desktop nav */}
-            <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
+            <nav className="hidden lg:flex items-center space-x-4" aria-label="Main navigation">
               {/* Show Browse/Map/Inspiration for all users */}
-              {isClient && user && (!!user.role) && (
+              {isClient && user && (!!user.roles?.length) && (
                 <>
                   <Link href="/feed" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Feed</Link>
                   <Link href="/map" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Map</Link>
@@ -252,7 +252,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link key={href} href={href} className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">{label}</Link>
               ))}
               {/* "Host a Sale" CTA for logged-in shoppers without ORGANIZER role */}
-              {isClient && user && user.role === 'USER' && !user?.roles?.includes('ORGANIZER') && (
+              {isClient && user && user.roles?.includes('USER') && !user?.roles?.includes('ORGANIZER') && (
                 <button
                   onClick={() => setShowBecomeOrganizerModal(true)}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-md font-medium text-sm"
@@ -263,7 +263,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </nav>
 
             {/* Desktop right-side nav (Saved, Messages, Profile + Auth) */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="hidden lg:flex items-center space-x-4">
               {!isClient ? (
                 <>
                   <Link href="/login" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Login</Link>
@@ -301,7 +301,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </div>
 
             {/* Mobile: notification bell (if logged in) + theme toggle + hamburger */}
-            <div className="md:hidden flex items-center gap-1">
+            <div className="lg:hidden flex items-center gap-1">
               {isClient && user && <NotificationBell />}
               <ThemeToggle compact={true} />
               <button
@@ -327,7 +327,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       </header>
 
       {/* ── MOBILE PERSISTENT SEARCH BAR ── fixed below header, mobile only */}
-      <div className="md:hidden fixed top-12 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 px-3 py-1.5">
+      <div className="lg:hidden fixed top-12 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 px-3 py-1.5">
         <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 pointer-events-none" aria-hidden="true">
@@ -350,7 +350,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       {/* ── MOBILE DRAWER BACKDROP ── */}
       {menuOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/40"
+          className="lg:hidden fixed inset-0 z-40 bg-black/40"
           aria-hidden="true"
           onClick={() => setMenuOpen(false)}
         />
@@ -364,7 +364,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
-        className={`md:hidden fixed top-0 right-0 bottom-0 z-50 w-[85vw] sm:w-72 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`lg:hidden fixed top-0 right-0 bottom-0 z-50 w-[85vw] sm:w-72 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col ${
           menuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -398,7 +398,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
           ))}
           <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
-            {isClient && user?.role === 'ORGANIZER' ? (
+            {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
                 {/* Primary organizer links */}
                 <Link href="/organizer/dashboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -504,7 +504,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <li><Link href="/contact" className="text-warm-400 hover:text-white">Contact</Link></li>
                 <li><Link href="/support" className="text-warm-400 hover:text-white">Support</Link></li>
                 <li><Link href="/faq" className="text-warm-400 hover:text-white">FAQ</Link></li>
-                {isClient && user?.role === 'ORGANIZER' && (
+                {isClient && user?.roles?.includes('ORGANIZER') && (
                   <>
                     <li><Link href="/organizer/dashboard" className="text-warm-400 hover:text-white">Dashboard</Link></li>
                     <li><Link href="/organizer/create-sale" className="text-warm-400 hover:text-white">Create Sale</Link></li>

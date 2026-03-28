@@ -67,7 +67,7 @@ type Tab = {
 const BottomTabNav = () => {
   const router = useRouter();
   const { user } = useAuth();
-  const isOrganizer = user?.role === 'ORGANIZER';
+  const isOrganizer = user?.roles?.includes('ORGANIZER');
   const { data: unreadData } = useUnreadMessages(!!user);
 
   // Profile tab destination and label depend on user role
