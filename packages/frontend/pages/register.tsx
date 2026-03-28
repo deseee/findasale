@@ -287,7 +287,7 @@ const RegisterPage = () => {
                   className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
                 <span className="text-sm text-warm-700 dark:text-warm-300">
-                  Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
+                  Check to receive emails about nearby sales, new features, and promotions. Unsubscribe any time in account settings.
                 </span>
               </label>
             )}
@@ -300,7 +300,7 @@ const RegisterPage = () => {
                   className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
                 <span className="text-sm text-warm-700 dark:text-warm-300">
-                  Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
+                  Check to receive emails about nearby sales, new features, and promotions. Unsubscribe any time in account settings.
                 </span>
               </label>
             )}
@@ -314,7 +314,7 @@ const RegisterPage = () => {
                     className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                   />
                   <span className="text-sm text-warm-700 dark:text-warm-300">
-                    Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
+                    Check to receive emails about nearby sales, new features, and promotions. Unsubscribe any time in account settings.
                   </span>
                 </label>
                 <label className="flex items-start gap-3">
@@ -325,7 +325,7 @@ const RegisterPage = () => {
                     className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                   />
                   <span className="text-sm text-warm-700 dark:text-warm-300">
-                    Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
+                    Check to receive emails about nearby sales, new features, and promotions. Unsubscribe any time in account settings.
                   </span>
                 </label>
               </>
