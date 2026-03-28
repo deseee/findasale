@@ -182,7 +182,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   const linkHref = `/items/${item.id}`;
 
   // Format price (support both price and currentBid)
-  const displayPrice = item.price ?? item.currentBid;
+  const displayPrice = (item as any).price ?? item.currentBid;
 
   const cardContent = (
     <div className={`card overflow-hidden hover:shadow-card-hover transition-shadow flex flex-col ${className}`}>
