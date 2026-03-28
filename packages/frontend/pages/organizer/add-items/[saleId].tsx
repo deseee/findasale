@@ -698,7 +698,7 @@ const AddItemsDetailPage = () => {
         setRapidItems((prev) =>
           prev.map((item) =>
             item.id === tempId
-              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: photoUrl ? [photoUrl] : [photo.previewUrl], autoEnhanced }
+              ? { ...item, id: itemId, draftStatus: 'DRAFT', thumbnailUrl: photo.previewUrl, photoUrls: photoUrl ? [photoUrl] : [photo.previewUrl], autoEnhanced }
               : item
           )
         );
@@ -754,7 +754,7 @@ const AddItemsDetailPage = () => {
       setRapidItems((prev) =>
         prev.map((item) =>
           item.id === pendingFaceUpload.tempId
-            ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: [pendingFaceUpload.previewUrl] }
+            ? { ...item, id: itemId, draftStatus: 'DRAFT', thumbnailUrl: pendingFaceUpload.previewUrl, photoUrls: [pendingFaceUpload.previewUrl] }
             : item
         )
       );
