@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S319 IN PROGRESS.** Pending: (1) Push 4 S318 files (SmartInventoryUpload query key fix, add-items orphaned invalidation, useAppraisal/useBidBot comments). (2) Verify batch upload items list auto-refresh after push. (3) Delete test folding chair item (cmn7eptij0045xdmfm5lu9oyc, still in queue). (4) Verify pre-S317 thumbnail backfill needed. (5) Full product walkthrough (organizer + shopper). (6) AI confidence camera — UNVERIFIED (hardware).
+**S319 COMPLETE.** All items resolved. S320: Chrome verify badge section loads with real data (currently skeleton — user11 has no earned badges yet), AI confidence camera still UNVERIFIED (hardware), delete test folding chair item (cmn7eptij0045xdmfm5lu9oyc).
 
 ## Blocked/Unverified Queue
 
@@ -16,19 +16,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod (Cloudinary ready by the time images display). ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar, not "Low (50%)". | S314 |
 
-## Next Session (S319)
+## Next Session (S320)
 
-**Patrick push action needed: YES** — 4 files from S318 batch (SmartInventoryUpload, add-items/[saleId], useAppraisal, useBidBot).
-
-Push block in patrick-dashboard.md.
+**Patrick push action needed: NO** — all S319 files already pushed.
 
 **Start with:**
-1. **Push 4 pending S318 files** (block in patrick-dashboard.md)
-2. **Verify batch upload items list refresh** — After push: add items to batch, click Save Batch → items list auto-refreshes (no hard refresh)
-3. **Fix "All items sold or reserved" banner (P2)** — Shows incorrectly when items AVAILABLE. Find condition in sales/[id].tsx near items section, fix SOLD/RESERVED check.
-4. **Backfill pre-S317 item thumbnail URLs** — Items uploaded before S317 have broken Cloudinary URLs in DB. Add roadmap item, decide if automated or manual fix.
-5. **Continue full product walkthrough** — Organizer side complete. Shopper side remaining: likes persist, shopper profile, Loot Legend, Hunt Pass, messaging, dark mode, mobile.
-6. **AI confidence camera mode** — still UNVERIFIED (hardware)
+1. **Delete test folding chair item** — cmn7eptij0045xdmfm5lu9oyc still in DB, needs delete via admin or API
+2. **Verify badge section with real data** — user11 has no earned badges; confirm by checking a user WITH badges or earning one in test
+3. **AI confidence camera mode** — still UNVERIFIED (hardware), needs real device test
+4. **Roadmap #220 Cloudinary utility** — backend still has inline helper with TODO; wire shared/cloudinaryUtils.ts when ready
+
+**S319 COMPLETE (2026-03-28):** 5 fixes shipped + reseed + shopper walkthrough. (1) "All items sold or reserved" banner fixed: `ACTIVE` → `AVAILABLE` + removed non-existent `PENDING` from soldCount in sales/[id].tsx. (2) Reseeded Railway with 17 real Cloudinary photos — picsum removed from seed.ts entirely. (3) Message compose appearing below site footer fixed: `_app.tsx` updated to support `getLayout` pattern; messages/[id].tsx uses `noFooter={true}`. (4) Badge loading P1 fixed: `/users/me/points` endpoint was missing — added `getBadges` controller + route to userController.ts + users.ts. (5) Shopper walkthrough QA: 7/8 flows passed (likes ✅, profile ✅, Loot Legend ✅, Hunt Pass ✅, messaging ✅, dark mode ✅, mobile ✅). Both fixes Chrome-verified post-deploy (ss_1731k6do9, ss_80947s2pv). 5 files pushed by Patrick.
 
 **S318 COMPLETE (2026-03-27):** 4 fixes shipped + sale detail P0 resolved. (1) Batch upload preview image scaling fixed: `h-32 object-cover` → `h-40 object-contain bg-gray-100 dark:bg-gray-800` in SmartInventoryUpload — full item photo now visible without cropping. (2) Items list auto-refresh after batch save: wrong query key `['sale-items']` → `['items']` + `onComplete?.()` — no hard refresh needed after saving batch items. (3) Query key audit: orphaned `['draft-items']` invalidation removed from add-items page; clarifying comments on intentional prefix-match patterns in useAppraisal + useBidBot. (4) Sale detail P0 crash fixed: `formatPrice(null)` null guard in sales/[id].tsx — returns `'—'` instead of throwing TypeError. Chrome-verified as Karen Anderson (user11): sale detail loads, 6 items render with prices + photos (ss_1060ufr5m). Full organizer walkthrough: all core flows working (dashboard, create-sale, items, edit, profile, messaging, insights, dark mode). 2 items queued for S319: "All items sold or reserved" wrong banner (P2), pre-S317 thumbnail backfill. All 4 files pushed by Patrick.
 

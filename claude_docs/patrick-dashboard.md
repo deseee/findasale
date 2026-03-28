@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Session 319 (March 27, 2026)
+# Patrick's Dashboard — Session 319 (March 28, 2026)
 
 ---
 
@@ -7,27 +7,25 @@
 - **Railway:** ✅ Green
 - **Vercel:** ✅ Green
 - **DB:** ✅ No migrations
-- **S318 Status:** ✅ COMPLETE — all 4 files pushed
+- **S319 Status:** ✅ COMPLETE — all files pushed, Railway green
 
 ---
 
-## Session 318 Summary
+## Session 319 Summary
 
-**4 batch fixes shipped + sale detail P0 verified**
+**5 fixes shipped + reseed + shopper walkthrough complete**
 
-All completed and pushed:
-1. **S317 push confirmed** ✅ — uploadController.ts and cloudinaryUtils.ts on GitHub
-2. **Batch upload image scaling fixed** ✅ — SmartInventoryUpload.tsx: `h-32 object-cover` → `h-40 object-contain bg-gray-100` (line 511)
-3. **Items list auto-refresh fixed** ✅ — SmartInventoryUpload.tsx: `['sale-items', saleId]` → `['items', saleId]` (line 151) + `onComplete?.()` call
-4. **Orphaned invalidation removed** ✅ — add-items/[saleId].tsx: deleted `['draft-items', saleId]` (line 708)
-5. **Clarifying comments added** ✅ — useAppraisal.ts and useBidBot.ts (prefix-match pattern clarified)
-6. **Sale detail P0 crash fixed** ✅ — sales/[id].tsx: `formatPrice(null)` returns `'—'` (Chrome-verified as user11: ss_1060ufr5m)
+1. **"All items sold or reserved" banner fixed** ✅ — was checking `ACTIVE` (wrong), now checks `AVAILABLE` (correct schema status); `PENDING` removed from soldCount (not an item status)
+2. **Reseeded Railway with real Cloudinary photos** ✅ — harvested 17 real Cloudinary URLs from DB before wipe; seed.ts now uses actual product photos instead of picsum placeholders
+3. **Message compose footer bug fixed** ✅ — `_app.tsx` now supports `getLayout` pattern; messages/[id].tsx suppresses site footer (`noFooter={true}`) so compose input renders correctly at screen bottom (Chrome-verified ss_1731k6do9)
+4. **Badge loading P1 fixed** ✅ — `/users/me/points` endpoint was missing entirely; added `getBadges` controller + route; profile badge section loads cleanly (Chrome-verified ss_80947s2pv)
+5. **Shopper walkthrough QA** ✅ — 7/8 flows pass: likes persist, profile loads, Loot Legend, Hunt Pass ($4.99), messaging send+thread, dark mode, mobile 390px all working
 
-**Organizer walkthrough complete:** Dashboard, create-sale, items, edit, profile, messaging, insights, dark mode all working.
-
-**2 items queued for S319:**
-- "All items sold or reserved" banner showing incorrectly on sale detail (P2)
-- Pre-S317 item thumbnail URLs need backfill (broken Cloudinary eager-transform URLs in DB)
+**Next session (S320):**
+- Delete test folding chair item (cmn7eptij0045xdmfm5lu9oyc)
+- Verify badge section with a user who has earned badges
+- AI confidence camera — still UNVERIFIED (hardware)
+- No push action needed — all files already on GitHub
 
 ---
 
