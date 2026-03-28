@@ -26,7 +26,7 @@ export function TierGatedNavLink({
     return (
       <Link
         href={href}
-        className="flex items-center justify-between px-3 py-2 text-warm-500 dark:text-warm-400 hover:text-warm-600 dark:hover:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-800 rounded-md"
+        className="flex items-center justify-between px-3 py-2 text-sm text-warm-500 dark:text-warm-400 hover:text-warm-600 dark:hover:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-800 rounded-md"
         title={`Upgrade to ${requiredTier} to unlock ${label}`}
       >
         <span className="flex items-center gap-1">
@@ -42,7 +42,7 @@ export function TierGatedNavLink({
   return (
     <Link
       href={href}
-      className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+      className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
     >
       {icon} {label}
     </Link>

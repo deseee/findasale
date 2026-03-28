@@ -131,7 +131,7 @@ const AvatarDropdown: React.FC = () => {
             <>
               <Link
                 href="/admin"
-                className="block px-4 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Admin Panel
@@ -145,28 +145,28 @@ const AvatarDropdown: React.FC = () => {
             <>
               <Link
                 href="/organizer/dashboard"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Organizer Dashboard
               </Link>
               <Link
                 href="/profile"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Organizer Profile
               </Link>
               <Link
                 href="/plan"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Plan a Sale
               </Link>
               <Link
                 href="/organizer/payouts"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Payouts
@@ -175,7 +175,7 @@ const AvatarDropdown: React.FC = () => {
               {canAccess('PRO') && (
                 <Link
                   href="/organizer/insights"
-                  className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                   onClick={() => setIsOpen(false)}
                 >
                   Insights
@@ -185,7 +185,7 @@ const AvatarDropdown: React.FC = () => {
               {canAccess('TEAMS') && (
                 <Link
                   href="/organizer/workspace"
-                  className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                   onClick={() => setIsOpen(false)}
                 >
                   Workspace
@@ -194,7 +194,7 @@ const AvatarDropdown: React.FC = () => {
 
               <Link
                 href="/organizer/subscription"
-                className="block px-4 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 {canAccess('TEAMS')
@@ -207,7 +207,7 @@ const AvatarDropdown: React.FC = () => {
               {/* Organizer Tools Section — Collapsible */}
               <button
                 onClick={() => setOrgToolsOpen(!orgToolsOpen)}
-                className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
                 Organizer Tools
                 <ChevronRight
@@ -219,35 +219,35 @@ const AvatarDropdown: React.FC = () => {
                 <>
                   <Link
                     href="/organizer/bounties"
-                    className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Bounties
                   </Link>
                   <Link
                     href="/organizer/message-templates"
-                    className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Message Templates
                   </Link>
                   <Link
                     href="/organizer/reputation"
-                    className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Reputation
                   </Link>
                   <Link
                     href="/organizer/ugc-moderation"
-                    className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     UGC Moderation
                   </Link>
                   <Link
                     href="/organizer/performance"
-                    className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Performance
@@ -258,7 +258,7 @@ const AvatarDropdown: React.FC = () => {
               {/* Pro Tools Section — Collapsible */}
               <button
                 onClick={() => setProToolsOpen(!proToolsOpen)}
-                className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
                 Pro Tools
                 <ChevronRight
@@ -287,21 +287,21 @@ const AvatarDropdown: React.FC = () => {
             <>
               <Link
                 href="/shopper/dashboard"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Shopper Dashboard
               </Link>
               <Link
                 href="/profile"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 My Profile
               </Link>
               <Link
                 href="/shopper/wishlist"
-                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 My Saves
@@ -315,21 +315,21 @@ const AvatarDropdown: React.FC = () => {
           <hr className="my-2 border-warm-200 dark:border-gray-700" />
           <Link
             href="/about"
-            className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
             About
           </Link>
           <Link
             href="/leaderboard"
-            className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
             Leaderboard
           </Link>
           <Link
             href="/contact"
-            className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
             Contact
@@ -339,7 +339,7 @@ const AvatarDropdown: React.FC = () => {
           <hr className="my-2 border-warm-200 dark:border-gray-700" />
           <Link
             href="/settings"
-            className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
             Settings
@@ -347,7 +347,7 @@ const AvatarDropdown: React.FC = () => {
 
           <button
             onClick={handleLogout}
-            className="w-full text-left px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+            className="w-full text-left px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             role="menuitem"
           >
             Sign Out
