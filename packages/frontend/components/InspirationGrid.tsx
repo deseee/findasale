@@ -32,7 +32,7 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
   const [imageErrors, setImageErrors] = React.useState<Set<string>>(new Set());
 
   const handleImageError = (itemId: string) => {
-    setImageErrors(prev => new Set([...prev, itemId]));
+    setImageErrors(prev => { const next = new Set(prev); next.add(itemId); return next; });
   };
 
   if (isLoading) {
