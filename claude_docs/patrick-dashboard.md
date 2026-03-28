@@ -1,44 +1,43 @@
-# Patrick's Dashboard — Session 326 (March 28, 2026)
+# Patrick's Dashboard — Session 327 (March 28, 2026)
 
 ---
 
 ## Build Status
 
-- **Railway:** ✅ Green (pending redeploy after push)
-- **Vercel:** ✅ Green (pending redeploy after push)
+- **Railway:** ✅ Green
+- **Vercel:** ✅ Green
 - **DB:** ✅ No migration pending
-- **S326 Status:** ✅ COMPLETE — 3 bug fixes + test item cleanup
+- **S327 Status:** ✅ COMPLETE — S326 smoke test, 2 of 3 fixes verified
 
 ---
 
-## Push Needed
+## No Push Needed
 
-S326 has 3 changed files. Pushblock at bottom of this file.
-
----
-
-## Session 326 Summary
-
-**3 bugs fixed, 1 test item cleanup, product audit continued.**
-
-1. **P1 Buyer Preview placeholder — FIXED & VERIFIED.** Root cause: `buildCloudinaryUrl()` was converting `ar_4:3` to `ar_4_3` (Cloudinary rejects underscores in aspect ratio). Removed the bad `.replace()`. Chrome-verified with screenshots — Buyer Preview now shows real photos.
-
-2. **P1 Single-item Publish button — FIXED, needs live verify.** The Publish button on Review & Publish did nothing — it sent `draftStatus` via the generic PUT endpoint, which silently ignored it. Fixed: now uses the dedicated `POST /items/:itemId/publish` endpoint. Also added `draftStatus` to the generic update handler (for unpublish). Also relaxed the publish gate to allow DRAFT items (was PENDING_REVIEW-only).
-
-3. **Face-detection blob URL fix.** Camera face-detection upload path was storing blob URLs instead of Cloudinary URLs. Now stores the real URL from the API response.
-
-4. **Nav search — already working.** S322/S323 fixed this. Desktop has no nav search (mobile-only) — logged as P3.
-
-5. **Test item cleanup.** Deleted 2 of 3 test lighters per Patrick's instruction. Sale has 14 items.
+S327 was QA-only. No code changes.
 
 ---
 
-## Next Session (S327) — Start Here
+## Session 327 Summary
 
-1. **Smoke test S326 fixes** — Chrome-verify single-item Publish on live site after deploy
-2. **Smoke test Buyer Preview** — confirm photos render in preview grid
-3. Continue product audit
-4. P3 gaps: desktop nav search, map sale type filter, edit-sale cover photo
+**S326 smoke test session — verified 2 of 3 fixes on live site.**
+
+1. **Buyer Preview Cloudinary photos — ✅ VERIFIED.** All item cards on the public sale page show real Cloudinary photos with correct aspect ratios. The `ar_4:3` fix is confirmed working in production.
+
+2. **Review & Publish hooks fix — ✅ VERIFIED.** Page correctly handles static export empty `router.query`. API call to `/items/drafts` fires after hydration. Shows "0 items" correctly because all items are AVAILABLE. The React hooks violation bug is fixed.
+
+3. **Single-item Publish button — UNVERIFIED.** No DRAFT items exist to test against. Manual Entry creates items as AVAILABLE, skipping the draft pipeline. Need to camera-capture an item to create a DRAFT, then test the Publish button.
+
+4. **New P2 found: draft counter mismatch.** Add Items page says "14 items • 1 draft" but all items are AVAILABLE and the `/items/drafts` endpoint returns empty. The counter is lying.
+
+---
+
+## Next Session (S328) — Start Here
+
+1. **Fix P2 draft counter mismatch** on Add Items page
+2. **Delete "QA Test Item - Delete Me"** from the sale (0 photos, clutter)
+3. **Camera-capture a test item** → creates DRAFT → verify single-item Publish button
+4. Continue product audit — organizer + shopper flows
+5. P3 gaps: desktop nav search, map sale type filter, edit-sale cover photo
 
 ---
 
@@ -46,8 +45,9 @@ S326 has 3 changed files. Pushblock at bottom of this file.
 
 | Feature | Status | What's Needed |
 |---------|--------|----------------|
-| Single-item publish fix | Code pushed S326 — NEEDS VERIFY | Chrome: Review & Publish → Publish one item → confirm toast + status |
+| Single-item publish fix | Code deployed S326, verified S327 API fires but no DRAFT items | Camera-capture item → Review & Publish → Publish → confirm toast + status |
 | #143 Camera AI confidence | UNVERIFIED since S314 | Real device camera capture |
 | #143 PreviewModal onError | Acceptable UNVERIFIED | Can't trigger Cloudinary 503 in prod |
+| Draft counter mismatch | P2 found S327 | Investigate Add Items page "1 draft" counter vs `/items/drafts` endpoint |
 
 ---

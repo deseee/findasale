@@ -7,13 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S326 complete. Next session starts fresh.
+No active work. S327 complete. Next session starts fresh.
 
 **Remaining bugs/gaps:**
-- **P1 — Single-item publish:** Fix pushed but NOT yet Chrome-verified on live site. Must verify next session after Vercel/Railway deploy.
+- **P2 — "1 draft" counter mismatch on Add Items page:** Subtitle shows "14 items • 1 draft" but all items are AVAILABLE. The `/items/drafts` endpoint returns 0. Counter uses a different counting mechanism — lying to organizer.
+- **UNVERIFIED — Single-item Publish button:** S326 fix deployed and code-correct, but no DRAFT items exist to test against. Manual Entry creates items as AVAILABLE (skips draft pipeline). Test blocked until camera capture creates a DRAFT item.
 - **P3 — Desktop nav search:** Desktop header has no search input (mobile-only). Low priority UX gap.
 - **P3 — Map sale type filter:** Homepage map doesn't respect sale type filter — always shows all pins.
 - **Finding — Edit-sale cover photo:** Edit-sale page missing cover photo section.
+- **Cleanup — QA Test Item:** "QA Test Item - Delete Me" still in sale with 0 photos, AVAILABLE status. Should be deleted.
 
 ## Blocked/Unverified Queue
 
@@ -21,7 +23,7 @@ No active work. S326 complete. Next session starts fresh.
 |---------|--------|----------------|---------------|
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod. ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar. | S314 |
-| Single-item publish fix | Code fix pushed S326 (review.tsx + itemController.ts). Needs live-site Chrome verify after deploy. | Navigate to Review & Publish → click Publish on single item → confirm status changes + toast appears. | S326 |
+| Single-item publish fix | S326 code fix deployed. S327 confirmed API call fires but no DRAFT items exist to test the button. Manual Entry creates AVAILABLE items, skipping draft pipeline. | Camera-capture an item → go to Review & Publish → click Publish on single item → confirm status changes + toast. | S326/S327 |
 
 **S326 COMPLETE (2026-03-28):** 3 bugs fixed + 1 test item cleanup. (1) **P1 Buyer Preview placeholder — ROOT CAUSE FIXED:** `buildCloudinaryUrl()` in review.tsx was replacing `:` with `_` in aspect ratio transforms (`ar_4_3` → Cloudinary rejects). Removed the `.replace(':', '_')` so it sends correct `ar_4:3`. Chrome-verified: Buyer Preview grid now shows real Cloudinary photos (ss_7201mwej2, ss_6354i4qpv). (2) **Face-detection blob URL fix (secondary):** `handleFaceUploadAnyway` in [saleId].tsx was storing blob URLs instead of Cloudinary URLs returned by API. Now stores `res.data.photoUrl`. (3) **P1 Single-item Publish button — FIXED:** `handlePublishItem` was sending `draftStatus` via generic PUT `/items/:id`, but backend `updateItem` didn't include `draftStatus` in destructured fields — silently dropped. Fix: frontend now uses dedicated `POST /items/:itemId/publish` endpoint for publishing, generic PUT for unpublishing (with `draftStatus` added to backend's accepted fields). Also relaxed publish gate to allow DRAFT + PENDING_REVIEW items (was PENDING_REVIEW-only). NEEDS CHROME VERIFY after deploy. (4) **P2 Nav search — already working:** S322/S323 fixed this. Desktop has no nav search (mobile-only) — logged as P3 gap. (5) **Test item cleanup:** Deleted 2 of 3 test lighters per Patrick, kept 1. Sale now has 14 items. Files: review.tsx, [saleId].tsx, itemController.ts. Pushblock provided.
 
@@ -31,17 +33,16 @@ No active work. S326 complete. Next session starts fresh.
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S327)
-
-**Patrick action required:** Push the S326 changes (pushblock below in dashboard). Wait for Vercel green + Railway redeploy.
+## Next Session (S328)
 
 **Priority:**
-1. **Smoke test S326 fixes** — Chrome-verify single-item Publish button on live site (Review & Publish page, click Publish on one item, confirm status change + toast)
-2. **Smoke test Buyer Preview** — confirm Cloudinary photos render (not camera icons) after S326 aspect ratio fix
-3. Continue product audit — organizer flows, shopper flows
-4. P3 gaps: desktop nav search, map sale type filter, edit-sale cover photo section
+1. **Fix P2 — "1 draft" counter mismatch** on Add Items page (shows "1 draft" but no drafts exist per API)
+2. **Delete QA Test Item** ("QA Test Item - Delete Me") — 0 photos, cluttering sale
+3. **Camera-capture a test item** to create a DRAFT → then verify single-item Publish button on Review & Publish page
+4. Continue product audit — organizer flows, shopper flows
+5. P3 gaps: desktop nav search, map sale type filter, edit-sale cover photo section
 
-**P3 gap to track:** Map on homepage doesn't respect sale type filter — always shows all pins regardless of Estate/Yard/Auction etc. selection. Not blocking but jarring UX.
+**S327 COMPLETE (2026-03-28):** S326 smoke test session. (1) **Buyer Preview Cloudinary photos ✅ VERIFIED** — all item cards on public sale page show real Cloudinary photos with correct aspect ratios. `ar_4:3` fix confirmed working. (2) **Review & Publish hooks fix ✅ VERIFIED** — page correctly handles static export empty `router.query`. Performance API confirms `/api/items/drafts?saleId=...` fires after hydration. Shows "0 items" because all items are AVAILABLE (no DRAFT items). Hooks violation and early-return bugs both fixed. (3) **Single-item Publish button — UNVERIFIED** — no DRAFT items exist to test against. Manual Entry creates items as AVAILABLE, skipping draft pipeline entirely. (4) **New P2 found:** Add Items page subtitle says "14 items • 1 draft" but all items show AVAILABLE in table and `/items/drafts` returns empty — draft counter is wrong. (5) **Review & Publish P1 bug from S327 (now fixed):** React Rules of Hooks violation — early returns before `useQuery`/`useMutation` hooks + static export `router.query = {}`. Fixed by moving all guards after hooks and using `enabled: !!saleId`. Deployed and verified working. No files changed this session — QA only.
 
 **S325 COMPLETE (2026-03-28):** S324 thumbnail fix smoke test — comprehensive live-site QA of photo rendering across 16+ surfaces. (1) Thumbnail fix confirmed working: Cloudinary photos render without hard refresh on sale pages, item detail, search results, map popups, category grids, feed cards, organizer dashboards, add-items table, edit-item. (2) Service Worker fix verified: added Cloudinary `StaleWhileRevalidate` route to runtimeCaching + `connect-src` CSP for SW fetch in next.config.js. Removed stale custom sw.js. (3) Camera (AI) full pipeline tested: Rapidfire capture, Regular multi-angle (1/5, 2/5), mode switching, thumbnail → Review Item modal with AI-generated fields (title, description, price, category, condition, tags), Done Reviewing (save toast), Enhance, camera switch, → Pub button, close. All working end-to-end with real Cloudinary uploads. (4) **P1 bug found:** Buyer Preview card component shows camera placeholder icon instead of actual Cloudinary photo for DRAFT/PENDING items. Photo exists everywhere else. (5) P2 finding: nav search bar doesn't trigger search. (6) Finding: edit-sale missing cover photo section. No code changes this session — QA only. 3 test items created (lighters) need cleanup.
 
