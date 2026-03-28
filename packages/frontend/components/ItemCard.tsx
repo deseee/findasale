@@ -245,7 +245,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           {/* Favorite count badge — top-right (trending) */}
           {shouldShowFavoriteCount && (
             <div className="absolute top-2 right-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-xs font-semibold px-2 py-0.5 rounded-full text-warm-700 dark:text-amber-400 shadow">
-              ❤️ {item._count?.favorites}
+              ❤️ {(item as any)._count?.favorites}
             </div>
           )}
 
