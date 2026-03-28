@@ -83,9 +83,12 @@ export const createReview = async (req: AuthRequest, res: Response) => {
       include: { user: { select: { name: true } } },
     });
 
-    // Recalculate organizer avgRating + totalReviews
+    // Recalculate organizer avgRating + totalReviews (only APPROVED reviews)
     const allReviews = await prisma.review.findMany({
-      where: { sale: { organizerId: sale.organizer.id } },
+      where: {
+        sale: { organizerId: sale.organizer.id },
+        moderationStatus: 'APPROVED' // #116: Only count approved reviews
+      },
       select: { rating: true },
     });
     const avg = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;

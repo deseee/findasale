@@ -10,7 +10,7 @@
  * Simpler than ItemPhotoManager — handles only a single photo (no reordering).
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import api from '../lib/api';
 import { getThumbnailUrl } from '../lib/imageUtils';
 
@@ -29,6 +29,11 @@ const SaleCoverPhotoManager: React.FC<SaleCoverPhotoManagerProps> = ({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync state when initialPhotoUrl changes (e.g., from async form data load)
+  useEffect(() => {
+    setPhotoUrl(initialPhotoUrl || '');
+  }, [initialPhotoUrl]);
 
   const MAX_FILE_SIZE_MB = 5;
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;

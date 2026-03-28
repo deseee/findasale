@@ -105,7 +105,9 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
           <div className="flex items-center gap-2">
             <StarRating value={avgRating} size="md" />
             <span className="font-semibold text-warm-800 dark:text-gray-100">{avgRating.toFixed(1)}</span>
-            <span className="text-sm text-warm-500 dark:text-gray-400">({totalReviews ?? data?.total ?? 0})</span>
+            {((totalReviews ?? data?.total ?? 0) > 0) && (
+              <span className="text-sm text-warm-500 dark:text-gray-400">({totalReviews ?? data?.total})</span>
+            )}
           </div>
         )}
       </div>
