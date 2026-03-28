@@ -332,6 +332,7 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         reverseFloorPrice: true,
         reverseStartDate: true,
         rarity: true,
+        draftStatus: true,
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
