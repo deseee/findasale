@@ -83,6 +83,11 @@ const saleCreateSchema = z.object({
   entranceLat: z.number().optional(),
   entranceLng: z.number().optional(),
   entranceNote: z.string().max(150).optional(),
+  // Feature #84: Day-of Approach Notes
+  notes: z.string().optional(),
+  // Feature #85: Treasure Hunt QR
+  treasureHuntEnabled: z.boolean().optional(),
+  treasureHuntCompletionBadge: z.boolean().optional(),
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();

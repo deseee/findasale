@@ -325,6 +325,7 @@ model Sale {
   entranceLat   Float?     // Latitude of entrance/parking location
   entranceLng   Float?     // Longitude of entrance/parking location
   entranceNote  String?    @db.VarChar(150) // Optional note: "Side entrance", "Park in back", etc.
+  notes         String?    // Feature #84: Day-of approach notes (parking, entrance, hours, etc.)
   // Feature #24: Holds-Only Item View — configurable hold duration per sale
   holdDurationHours  Int        @default(48) // Default 48h hold; organizer can change per sale
   // #62: Digital Receipt + Returns — return window in hours
