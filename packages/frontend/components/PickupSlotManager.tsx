@@ -109,28 +109,28 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-warm-900 mb-6">Pickup Scheduling</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+      <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-6">Pickup Scheduling</h2>
 
       {/* Existing Slots */}
       {slots && slots.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-warm-800 mb-4">Available Slots</h3>
+          <h3 className="text-lg font-semibold text-warm-800 dark:text-gray-200 mb-4">Available Slots</h3>
           <div className="space-y-3">
             {slots.map((slot) => (
               <div
                 key={slot.id}
-                className="flex items-start justify-between bg-warm-50 border border-warm-200 rounded-lg p-4"
+                className="flex items-start justify-between bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-4"
               >
                 <div className="flex-1">
-                  <p className="font-medium text-warm-900">
+                  <p className="font-medium text-warm-900 dark:text-gray-100">
                     {format(parseISO(slot.startsAt), 'EEE, MMM d, yyyy')}
                   </p>
-                  <p className="text-sm text-warm-600">
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
                     {format(parseISO(slot.startsAt), 'h:mm a')} —{' '}
                     {format(parseISO(slot.endsAt), 'h:mm a')}
                   </p>
-                  <p className="text-sm text-warm-600 mt-1">
+                  <p className="text-sm text-warm-600 dark:text-gray-400 mt-1">
                     Capacity: {slot.capacity} | Booked: {slot.bookingCount}
                   </p>
                   {!slot.available && (
@@ -159,7 +159,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
 
       {/* No Slots Message */}
       {slots && slots.length === 0 && !showForm && (
-        <p className="text-warm-600 mb-6">
+        <p className="text-warm-600 dark:text-gray-400 mb-6">
           No pickup slots yet. Click "Add Slot" to create one.
         </p>
       )}
@@ -173,10 +173,10 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
           + Add Pickup Slot
         </button>
       ) : (
-        <form onSubmit={handleSubmit} className="bg-warm-50 border border-warm-200 rounded-lg p-6">
+        <form onSubmit={handleSubmit} className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-6">
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
                 Start Date
               </label>
               <input
@@ -185,11 +185,11 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                 onChange={(e) =>
                   setFormData({ ...formData, startDate: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-warm-300 rounded"
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-gray-100"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
                 Start Time
               </label>
               <input
@@ -198,14 +198,14 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                 onChange={(e) =>
                   setFormData({ ...formData, startTime: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-warm-300 rounded"
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-gray-100"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
                 End Date
               </label>
               <input
@@ -214,11 +214,11 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                 onChange={(e) =>
                   setFormData({ ...formData, endDate: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-warm-300 rounded"
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-gray-100"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-warm-700 mb-2">
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
                 End Time
               </label>
               <input
@@ -227,13 +227,13 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                 onChange={(e) =>
                   setFormData({ ...formData, endTime: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-warm-300 rounded"
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-gray-100"
               />
             </div>
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-warm-700 mb-2">
+            <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
               Capacity
             </label>
             <input
@@ -244,9 +244,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
               onChange={(e) =>
                 setFormData({ ...formData, capacity: e.target.value })
               }
-              className="w-full px-3 py-2 border border-warm-300 rounded"
+              className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-gray-100"
             />
-            <p className="text-xs text-warm-600 mt-1">Max 10 shoppers per slot</p>
+            <p className="text-xs text-warm-600 dark:text-gray-400 mt-1">Max 10 shoppers per slot</p>
           </div>
 
           <div className="flex gap-3">

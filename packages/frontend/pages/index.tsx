@@ -31,6 +31,7 @@ interface Sale {
   };
   tags?: string[];
   isAuctionSale?: boolean;
+  saleType?: string;
 }
 
 interface SearchItem {
@@ -149,14 +150,14 @@ const HomePage = () => {
     }
   }, []);
 
-  // Helper function to determine sale type from tags
+  // Helper function to determine sale type from saleType field
   const getSaleType = (sale: Sale): string => {
-    const tagLower = (sale.tags || []).map(t => t.toLowerCase());
-    if (tagLower.some(t => t.includes('estate'))) return 'estate';
-    if (tagLower.some(t => t.includes('yard') || t.includes('garage'))) return 'yard';
-    if (tagLower.some(t => t.includes('auction'))) return 'auction';
-    if (tagLower.some(t => t.includes('flea') || t.includes('market'))) return 'flea-market';
-    if (tagLower.some(t => t.includes('consignment'))) return 'consignment';
+    const t = (sale.saleType || '').toUpperCase();
+    if (t === 'ESTATE') return 'estate';
+    if (t === 'YARD') return 'yard';
+    if (t === 'AUCTION') return 'auction';
+    if (t === 'FLEA_MARKET') return 'flea-market';
+    if (t === 'CONSIGNMENT') return 'consignment';
     return 'other';
   };
 
