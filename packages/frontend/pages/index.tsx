@@ -33,6 +33,25 @@ interface Sale {
   isAuctionSale?: boolean;
 }
 
+interface SearchItem {
+  id: string;
+  title: string;
+  description?: string;
+  price?: number;
+  photoUrls: string[];
+  sale: {
+    id: string;
+    title: string;
+    city: string;
+  };
+}
+
+interface SearchResults {
+  query: string;
+  sales: Sale[];
+  items: SearchItem[];
+}
+
 type DateFilter = 'all' | 'upcoming' | 'this-weekend' | 'this-month';
 type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'consignment';
 
@@ -90,6 +109,17 @@ const HomePage = () => {
   });
 
   const sales = feedData?.sales as Sale[] | undefined;
+
+  // Search API query — call backend FTS when searchQuery is >= 2 chars
+  const { data: searchResults, isLoading: isSearching } = useQuery({
+    queryKey: ['search', searchQuery],
+    queryFn: async () => {
+      const res = await api.get('/search', { params: { q: searchQuery, type: 'all', limit: 20 } });
+      return res.data as SearchResults;
+    },
+    enabled: searchQuery.trim().length >= 2,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     // Bug #24: Make geolocation non-blocking with timeout fallback
@@ -403,80 +433,163 @@ const HomePage = () => {
             </div>
           </section>
 
-          {/* Featured Sales */}
+          {/* Featured Sales / Search Results */}
           <section>
-            <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-              <div className="flex items-center gap-3 flex-wrap">
-                {feedData?.personalized && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-full text-xs font-medium text-amber-700 dark:text-amber-400">
-                    ✨ Picked for you
-                  </span>
-                )}
-                {!feedData?.personalized && sales && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-medium text-blue-700 dark:text-blue-400">
-                    📍 Sales Near You
-                  </span>
-                )}
-                <h2 className="font-heading text-3xl font-bold text-warm-900 dark:text-gray-100">Featured Sales</h2>
-              </div>
-              {!isLoading && sales && (
-                <span className="text-sm text-warm-500 dark:text-gray-400">
-                  {filteredSales.length} of {sales.length} sale{sales.length !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
+            {/* Show search results when query >= 2 chars */}
+            {searchQuery.trim().length >= 2 ? (
+              <>
+                <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                  <h2 className="font-heading text-3xl font-bold text-warm-900 dark:text-gray-100">
+                    {isSearching ? 'Searching…' : `${(searchResults?.items?.length ?? 0) + (searchResults?.sales?.length ?? 0)} results for "${searchQuery}"`}
+                  </h2>
+                </div>
 
-            {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
-              </div>
-            ) : isError ? (
-              <div className="text-center py-12">
-                <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h2>
-                <p className="text-warm-600 dark:text-gray-400 mb-4">There was a problem loading sales data.</p>
-                <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
-                  Retry
-                </button>
-              </div>
-            ) : filteredSales.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredSales.map((sale) => (
-                  <SaleCard key={sale.id} sale={sale} />
-                ))}
-              </div>
-            ) : (
-              <div>
-                {searchQuery ? (
-                  <EmptyState
-                    icon="🔍"
-                    heading={`Nothing matched "${searchQuery}"`}
-                    subtext="Try different keywords, or browse all nearby sales to discover great finds."
-                  />
-                ) : (dateFilter !== 'all' || saleTypeFilter !== 'all') ? (
-                  <div>
-                    <EmptyState
-                      icon="🏷️"
-                      heading="No sales found"
-                      subtext="No sales match your current filters. Try broadening your search or checking back later — new sales are added every day."
-                    />
-                    <div className="flex justify-center mt-6">
-                      <button
-                        type="button"
-                        onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter('all'); }}
-                        className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
-                      >
-                        Clear all filters
-                      </button>
-                    </div>
+                {isSearching ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
                   </div>
+                ) : (searchResults?.items?.length ?? 0) + (searchResults?.sales?.length ?? 0) > 0 ? (
+                  <>
+                    {/* Item Results Grid */}
+                    {searchResults?.items && searchResults.items.length > 0 && (
+                      <div className="mb-12">
+                        <h3 className="font-heading text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Items</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                          {searchResults.items.map((item) => (
+                            <Link key={item.id} href={`/sales/${item.sale.id}`}>
+                              <a className="group rounded-lg border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full hover:shadow-card-hover transition-shadow duration-300">
+                                {/* Item Photo */}
+                                <div className="w-full h-48 bg-warm-100 dark:bg-gray-700 relative overflow-hidden">
+                                  {item.photoUrls && item.photoUrls.length > 0 ? (
+                                    <img
+                                      src={item.photoUrls[0]}
+                                      alt={item.title}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-warm-300 dark:text-gray-600">
+                                      📷 No photo
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Item Info */}
+                                <div className="p-4 space-y-2 flex flex-col flex-1">
+                                  <h3 className="font-medium text-warm-900 dark:text-gray-100 line-clamp-2 group-hover:text-sage-600 dark:group-hover:text-sage-400 transition-colors">
+                                    {item.title}
+                                  </h3>
+                                  {item.price != null && (
+                                    <p className="text-sm font-semibold text-sage-600 dark:text-sage-400">
+                                      ${item.price.toFixed(2)}
+                                    </p>
+                                  )}
+                                </div>
+                                {/* Sale Footer */}
+                                <div className="px-4 py-3 border-t border-warm-200 dark:border-gray-700 space-y-1">
+                                  <p className="text-xs font-medium text-warm-600 dark:text-gray-400">
+                                    {item.sale.title}
+                                  </p>
+                                  <p className="text-xs text-warm-500 dark:text-gray-500">
+                                    {item.sale.city} · View Sale →
+                                  </p>
+                                </div>
+                              </a>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sale Results */}
+                    {searchResults?.sales && searchResults.sales.length > 0 && (
+                      <div>
+                        <h3 className="font-heading text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Sales</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                          {searchResults.sales.map((sale) => (
+                            <SaleCard key={sale.id} sale={sale} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <EmptyState
-                    icon="📭"
-                    heading="No sales yet in your area"
-                    subtext="Great sales are coming soon! Check back daily or sign up to receive alerts when new sales open near you."
+                    icon="🔍"
+                    heading={`No items found for "${searchQuery}"`}
+                    subtext="Try a different keyword, or browse all nearby sales to discover great finds."
                   />
                 )}
-              </div>
+              </>
+            ) : (
+              <>
+                {/* Regular Featured Sales view (when not searching) */}
+                <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {feedData?.personalized && (
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-full text-xs font-medium text-amber-700 dark:text-amber-400">
+                        ✨ Picked for you
+                      </span>
+                    )}
+                    {!feedData?.personalized && sales && (
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-medium text-blue-700 dark:text-blue-400">
+                        📍 Sales Near You
+                      </span>
+                    )}
+                    <h2 className="font-heading text-3xl font-bold text-warm-900 dark:text-gray-100">Featured Sales</h2>
+                  </div>
+                  {!isLoading && sales && (
+                    <span className="text-sm text-warm-500 dark:text-gray-400">
+                      {filteredSales.length} of {sales.length} sale{sales.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+
+                {isLoading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
+                  </div>
+                ) : isError ? (
+                  <div className="text-center py-12">
+                    <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h2>
+                    <p className="text-warm-600 dark:text-gray-400 mb-4">There was a problem loading sales data.</p>
+                    <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
+                      Retry
+                    </button>
+                  </div>
+                ) : filteredSales.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredSales.map((sale) => (
+                      <SaleCard key={sale.id} sale={sale} />
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    {dateFilter !== 'all' || saleTypeFilter !== 'all' ? (
+                      <div>
+                        <EmptyState
+                          icon="🏷️"
+                          heading="No sales found"
+                          subtext="No sales match your current filters. Try broadening your search or checking back later — new sales are added every day."
+                        />
+                        <div className="flex justify-center mt-6">
+                          <button
+                            type="button"
+                            onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter('all'); }}
+                            className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
+                          >
+                            Clear all filters
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <EmptyState
+                        icon="📭"
+                        heading="No sales yet in your area"
+                        subtext="Great sales are coming soon! Check back daily or sign up to receive alerts when new sales open near you."
+                      />
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </section>
         </div>
