@@ -17,13 +17,13 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // Picsum placeholder images — stale-while-revalidate
+    // Cloudinary product images — stale-while-revalidate
     {
-      urlPattern: /^https:\/\/(?:fastly\.)?picsum\.photos\/.*/i,
+      urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
       handler: 'StaleWhileRevalidate',
       options: {
-        cacheName: 'picsum-images',
-        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+        cacheName: 'cloudinary-images',
+        expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
         cacheableResponse: { statuses: [0, 200] },
       },
     },
@@ -180,8 +180,8 @@ const nextConfig = {
               // Blocked by CSP → all pins invisible. Must be alongside unpkg.com (default icons).
               // api.qrserver.com: SaleQRCode component fetches QR images and downloads via fetch().
               // Missing from img-src → blank QR on dashboard. Missing from connect-src → download fails.
-              "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://unpkg.com https://raw.githubusercontent.com https://picsum.photos https://fastly.picsum.photos https://api.qrserver.com",
-              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://terminal-simulator.stripe.com wss://terminal-simulator.stripe.com wss://ws.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://raw.githubusercontent.com https://picsum.photos https://fastly.picsum.photos http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
+              "img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://unpkg.com https://raw.githubusercontent.com https://api.qrserver.com",
+              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://terminal-simulator.stripe.com wss://terminal-simulator.stripe.com wss://ws.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://raw.githubusercontent.com https://res.cloudinary.com http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
               "frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
