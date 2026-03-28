@@ -34,18 +34,9 @@ export function resetRapidDraftDebounce(itemId: string): void {
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 
-// ── Cloudinary image variants (Phase 14c) ────────────────────────────
-// Eager transformations generate optimized variants at upload time.
-// No webhooks needed — all variants are ready when the upload resolves.
-const EAGER_TRANSFORMS = [
-  // Thumbnail: 200×200 auto-crop face/center, WebP, quality 60
-  { width: 200, height: 200, crop: 'fill', gravity: 'auto', quality: 60, format: 'webp' },
-  // Optimized: 800px wide, auto quality, WebP — listing cards + detail page
-  { width: 800, crop: 'limit', quality: 'auto', format: 'webp' },
-  // Full-res: 1600px cap, auto quality, WebP — lightbox / zoom
-  { width: 1600, crop: 'limit', quality: 'auto:good', format: 'webp' },
-];
-
+// ── Cloudinary image variants ─────────────────────────────────────────
+// Transformation URLs are generated on-the-fly from the original URL.
+// This ensures the public_id is always preserved and URLs remain valid.
 interface CloudinaryUrls {
   original: string;
   thumbnail: string;
@@ -61,25 +52,31 @@ const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<Cloud
       {
         resource_type: 'auto',
         folder,
-        eager: EAGER_TRANSFORMS,
-        eager_async: false, // wait for transforms before resolving
+        // Note: not using eager transforms — transformation URLs are generated on-the-fly
+        // from the original URL to ensure public_id is always preserved
       },
       (error, result) => {
         if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
 
         // Track Cloudinary serve for bandwidth monitoring (#105)
-        // Each image upload typically produces 4 variants (original + 3 eager transforms)
+        // Use original URL only — avoid eager transformation URLs which may be incomplete
         trackCloudinaryServe(); // original
-        trackCloudinaryServe(); // thumbnail
-        trackCloudinaryServe(); // optimized
-        trackCloudinaryServe(); // full
 
-        const eager = result.eager || [];
+        const originalUrl = result.secure_url;
+
+        // Helper to insert transformation before /upload/ in the URL
+        const insertTransform = (url: string, transform: string): string => {
+          const uploadIdx = url.indexOf('/upload/');
+          if (uploadIdx === -1) return url;
+          return url.slice(0, uploadIdx + 8) + transform + '/' + url.slice(uploadIdx + 8);
+        };
+
         resolve({
-          original: result.secure_url,
-          thumbnail: eager[0]?.secure_url || result.secure_url,
-          optimized: eager[1]?.secure_url || result.secure_url,
-          full: eager[2]?.secure_url || result.secure_url,
+          original: originalUrl,
+          // Generate transformation URLs on-the-fly from original to ensure public_id is preserved
+          thumbnail: insertTransform(originalUrl, 'w_200,h_200,c_fill,g_auto,q_60,f_webp'),
+          optimized: insertTransform(originalUrl, 'w_800,c_limit,q_auto,f_webp'),
+          full: insertTransform(originalUrl, 'w_1600,c_limit,q_auto:good,f_webp'),
         });
       }
     );
