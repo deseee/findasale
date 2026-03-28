@@ -687,8 +687,8 @@ const SaleDetailPage = () => {
 
           {/* CD2 Phase 1: Scarcity + Social Proof Stats Bar */}
           {sale.items.length > 0 && (() => {
-            const availableCount = sale.items.filter(i => i.status === 'ACTIVE').length;
-            const soldCount = sale.items.filter(i => i.status === 'SOLD' || i.status === 'PENDING').length;
+            const availableCount = sale.items.filter(i => i.status === 'AVAILABLE').length;
+            const soldCount = sale.items.filter(i => i.status === 'SOLD').length;
             const reservedCount = sale.items.filter(i => i.status === 'RESERVED').length;
             const isLowStock = availableCount > 0 && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
             const isSoldOut = availableCount === 0;
