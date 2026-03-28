@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
@@ -45,6 +45,20 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const [imgError, setImgError] = useState(false);
   const { isLowBandwidth } = useNetworkQuality();
 
+  // Calculate image URLs
+  const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
+  const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
+  const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
+  const imageQuality = isLowBandwidth ? 40 : 75;
+  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl, imageQuality) : null;
+
+  // Reset image loading state when the photo URL changes
+  // This ensures new images load even if the component instance is reused
+  useEffect(() => {
+    setImgLoaded(false);
+    setImgError(false);
+  }, [optimizedUrl]);
+
   const formatSaleDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'TBA';
     try {
@@ -68,11 +82,6 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
     }
   };
 
-  const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
-  const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
-  const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
-  const imageQuality = isLowBandwidth ? 40 : 75;
-  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl, imageQuality) : null;
   const showToday = isHappeningToday();
 
   const getStatusBadge = () => {
@@ -111,6 +120,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
         {/* Tier 3: Main lazy WebP image (fades in on load) */}
         {photoUrl && !imgError ? (
           <img
+            key={optimizedUrl}
             src={optimizedUrl!}
             alt={sale.title}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
