@@ -18,6 +18,7 @@ import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
+import { CURATED_TAGS } from '../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -32,6 +33,8 @@ const EditItemPage = () => {
     quantity: 1,
     category: '',
     condition: '',
+    conditionGrade: '',
+    tags: [] as string[],
     status: 'AVAILABLE',
     auctionEndTime: '',
     qrEmbedEnabled: true,
@@ -90,6 +93,8 @@ const EditItemPage = () => {
         quantity: item.quantity ?? 1,
         category: normalizedCategory,
         condition: normalizedCondition,
+        conditionGrade: item.conditionGrade || '',
+        tags: item.tags || [],
         status: item.status || 'AVAILABLE',
         auctionEndTime: item.auctionEndTime ? new Date(item.auctionEndTime).toISOString().slice(0, 16) : '',
         qrEmbedEnabled: item.qrEmbedEnabled !== false,
@@ -241,6 +246,96 @@ const EditItemPage = () => {
                 <option value="FAIR">Fair</option>
                 <option value="POOR">Poor</option>
               </select>
+            </div>
+
+            {/* #64: Condition Grade Picker */}
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                Condition Grade
+              </label>
+              <div className="flex gap-2">
+                {(['S','A','B','C','D'] as const).map(grade => {
+                  const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                  return (
+                    <button
+                      key={grade}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, conditionGrade: grade })}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${formData.conditionGrade === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-indigo-400'}`}
+                      title={labels[grade]}
+                    >
+                      {grade}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                {(['S','A','B','C','D'] as const).map(g => {
+                  const labels: Record<string, string> = { S:'Like new', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                  return `${g}=${labels[g]}`;
+                }).join(' · ')}
+              </div>
+            </div>
+
+            {/* Sprint 1: Tag Picker */}
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
+
+              {/* Curated tag grid — show top 20 visible, scrollable */}
+              <div className="grid grid-cols-3 gap-1 mb-2 max-h-32 overflow-y-auto pb-1">
+                {(CURATED_TAGS as readonly string[]).slice(0, 20).map(tag => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      if (formData.tags.includes(tag)) {
+                        setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
+                      } else {
+                        setFormData({ ...formData, tags: [...formData.tags, tag] });
+                      }
+                    }}
+                    className={`text-xs px-2 py-1 rounded border truncate transition-colors
+                      ${formData.tags.includes(tag)
+                        ? 'bg-indigo-100 dark:bg-indigo-900 border-indigo-400 text-indigo-700 dark:text-indigo-200 font-medium'
+                        : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-indigo-300'
+                      }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom tag input */}
+              <input
+                type="text"
+                placeholder="Add a custom tag..."
+                className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = (e.target as HTMLInputElement).value.trim();
+                    if (value && !formData.tags.includes(value)) {
+                      setFormData({ ...formData, tags: [...formData.tags, value] });
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }
+                }}
+              />
+
+              {/* Current tags display */}
+              <div className="flex flex-wrap gap-1">
+                {formData.tags.map(tag => (
+                  <span key={tag} className="inline-flex items-center bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 text-xs px-2 py-0.5 rounded-full">
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) })}
+                      className="ml-1 text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-bold"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
 
             <div>
