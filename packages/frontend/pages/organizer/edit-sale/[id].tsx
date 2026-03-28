@@ -169,11 +169,16 @@ const EditSalePage = () => {
       // First update the sale (includes treasure hunt fields)
       await api.put(`/sales/${id}`, saleData);
 
-      // Then update markdown config if markdown fields changed
-      await api.put(`/sales/${id}/markdown-config`, {
-        markdownEnabled,
-        markdownFloor,
-      });
+      // Then update markdown config — PRO-only endpoint, silently skip for lower tiers
+      try {
+        await api.put(`/sales/${id}/markdown-config`, {
+          markdownEnabled,
+          markdownFloor,
+        });
+      } catch (err: any) {
+        if (err?.response?.status !== 403) throw err;
+        // 403 = user isn't PRO — markdown settings not saved, but sale update succeeded
+      }
     },
     onSuccess: () => {
       showToast('Sale updated', 'success');
@@ -400,6 +405,15 @@ const EditSalePage = () => {
           </div>
 
           <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-6">
+            {/* Save button at top for quick access */}
+            <button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
+            >
+              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </button>
+
             {sale?.status === 'PUBLISHED' && (
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200 font-semibold">
@@ -727,6 +741,9 @@ const EditSalePage = () => {
               }
             />
 
+            {/* Pickup Scheduling Section */}
+            {id && <div className="mt-4"><PickupSlotManager saleId={id as string} /></div>}
+
             <button
               type="submit"
               disabled={updateMutation.isPending}
@@ -735,9 +752,6 @@ const EditSalePage = () => {
               {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
-
-          {/* Pickup Scheduling Section */}
-          {id && <div className="mt-12"><PickupSlotManager saleId={id as string} /></div>}
         </div>
       </div>
     </>
