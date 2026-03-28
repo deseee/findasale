@@ -181,10 +181,12 @@ const ReviewPage = () => {
     }
   }, [router.query.preview]);
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
+  // P1-A: Validate saleId on route ready (fixes static export empty query issue)
+  useEffect(() => {
+    if (router.isReady && !saleId) {
+      router.replace('/organizer/dashboard');
+    }
+  }, [router.isReady, saleId, router]);
 
   const { data: items = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['items', saleId, 'review'],
@@ -251,6 +253,20 @@ const ReviewPage = () => {
       showToast(message, 'error');
     },
   });
+
+  // Auth + saleId guards (MUST be after all hooks to respect Rules of Hooks)
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
+
+  if (!saleId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-warm-400">Loading...</div>
+      </div>
+    );
+  }
 
   const getEditState = (item: Item): ItemEditState => {
     if (!editStates.has(item.id)) {
