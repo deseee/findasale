@@ -49,6 +49,7 @@ export const authOptions: NextAuthOptions = {
           });
           token.backendJwt = data.token;
           token.userRole   = data.user?.role ?? 'USER';
+          token.userId     = data.user?.id;
         } catch (err: any) {
           console.error('[NextAuth] Backend OAuth exchange failed:', err?.message);
         }
@@ -65,6 +66,7 @@ export const authOptions: NextAuthOptions = {
 
   pages: {
     signIn: '/login',
+    callback: '/auth/oauth-callback',
   },
 
   secret: process.env.NEXTAUTH_SECRET,

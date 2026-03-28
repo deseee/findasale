@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Session 319 (March 28, 2026)
+# Patrick's Dashboard — Session 320 (March 27, 2026)
 
 ---
 
@@ -7,35 +7,38 @@
 - **Railway:** ✅ Green
 - **Vercel:** ✅ Green
 - **DB:** ✅ No migrations
-- **S319 Status:** ✅ COMPLETE — all files pushed, Railway green
+- **S320 Status:** ✅ COMPLETE — 6 files pushed, 1 pending (OAuth fix from dev)
 
 ---
 
-## Session 319 Summary
+## Session 320 Summary
 
-**5 fixes shipped + reseed + shopper walkthrough complete**
+**Nav cleanup + item page public access + email copy update**
 
-1. **"All items sold or reserved" banner fixed** ✅ — was checking `ACTIVE` (wrong), now checks `AVAILABLE` (correct schema status); `PENDING` removed from soldCount (not an item status)
-2. **Reseeded Railway with real Cloudinary photos** ✅ — harvested 17 real Cloudinary URLs from DB before wipe; seed.ts now uses actual product photos instead of picsum placeholders
-3. **Message compose footer bug fixed** ✅ — `_app.tsx` now supports `getLayout` pattern; messages/[id].tsx suppresses site footer (`noFooter={true}`) so compose input renders correctly at screen bottom (Chrome-verified ss_1731k6do9)
-4. **Badge loading P1 fixed** ✅ — `/users/me/points` endpoint was missing entirely; added `getBadges` controller + route; profile badge section loads cleanly (Chrome-verified ss_80947s2pv)
-5. **Shopper walkthrough QA** ✅ — 7/8 flows pass: likes persist, profile loads, Loot Legend, Hunt Pass ($4.99), messaging send+thread, dark mode, mobile 390px all working
+1. **Multi-role nav bug fixed** ✅ — `user.role` → `user.roles[]` migration incomplete in Layout.tsx (7 occurrences) + BottomTabNav.tsx (1 occurrence). Multi-role users (ADMIN+ORGANIZER) now see correct nav links everywhere.
+2. **Header breakpoint adjusted** ✅ — Shifted from `md:` (768px) to `lg:` (1024px). Hamburger now kicks in at 1024px, eliminating the cramped tablet nav zone.
+3. **Desktop nav trimmed (Option B)** ✅ — Moved About, Leaderboard, Contact from nav bar into avatar dropdown. Desktop nav now: Feed → Map → Inspiration → Trending → Pricing.
+4. **Logged-out nav fixed** ✅ — Feed, Map, Inspiration now publicly visible (were hidden). Nav order consistent for all users.
+5. **Item page auth gate removed** ✅ — Global axios 401 interceptor was hard-redirecting all 401s to /login, breaking public endpoints. Removed. Contextual sign-in prompts added at action buttons (bid, buy, save).
+6. **Register email opt-in copy updated** ✅ — 4 instances: "Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings."
+7. **OAuth invite code fix** ⏳ — Dispatched to findasale-dev (results pending).
 
-**Next session (S320):**
-- Delete test folding chair item (cmn7eptij0045xdmfm5lu9oyc)
-- Verify badge section with a user who has earned badges
-- AI confidence camera — still UNVERIFIED (hardware)
-- No push action needed — all files already on GitHub
+**Next session (S321):**
+- Wait for OAuth invite code fix results from dev
+- Chrome verify item page public access (unauthenticated user can view items)
+- Chrome verify header breakpoint (desktop 1280px full nav, tablet 800px hamburger)
+- Consider roadmap update — item page public access is a product milestone
+
+**Push action needed:** YES — OAuth fix (if completed in S320). All other S320 files already pushed.
 
 ---
 
-## Next Session (S319) — Start Here
+## Next Session (S321) — Start Here
 
-1. **Fix "All items sold or reserved" banner (P2)** — Showing when items are AVAILABLE. Find condition in sales/[id].tsx near items section.
-2. **Backfill pre-S317 thumbnail URLs** — Add roadmap item for Cloudinary URL backfill (items uploaded before S317 have broken URLs).
-3. **Continue full product walkthrough** — Shopper side remaining: likes persist, shopper profile, Loot Legend, Hunt Pass, messaging, dark mode, mobile viewport.
-4. **Delete test item** — "Folding Chair..." from sale cmn7eptij0045xdmfm5lu9oyc (still in batch queue, not saved).
-5. **AI confidence camera mode** — still UNVERIFIED (needs real device camera)
+1. **OAuth invite code fix** — Check if findasale-dev completed the fix. If yes: push + Chrome verify (create account via OAuth link with invite code, verify pre-filled workspace + email)
+2. **Chrome verify item page public access** — Navigate to /items/[id] without login. Verify no 403 errors, clean layout on Feed/Map/Inspiration.
+3. **Chrome verify header breakpoint** — Test nav at desktop 1280px (should show full nav) and tablet 800px (should show hamburger).
+4. **Roadmap update** — Item page public access is a completed product milestone; consider adding to Insights/Reports section if tracked.
 
 ---
 
@@ -46,16 +49,16 @@
 | #143 Camera AI confidence | UNVERIFIED since S314 | Real device camera capture → Review & Publish → confirm non-50% score |
 | #143 PreviewModal onError | Acceptable UNVERIFIED | Can't trigger Cloudinary 503 in prod — defensive fix is in place |
 
-*Removed: Batch Upload AI confidence — RESOLVED ✅ in S317*
-
 ---
 
-## Files Changed (S318)
+## Files Changed (S320)
 
 | File | Change | Status |
 |------|--------|--------|
-| `packages/frontend/components/SmartInventoryUpload.tsx` | Query key fix: `['sale-items', saleId]` → `['items', saleId]` (line 151) + add `onComplete?.()` call | ⏳ Pending push |
-| `packages/frontend/pages/organizer/add-items/[saleId].tsx` | Remove orphaned `['draft-items', saleId]` invalidation (line 708) | ⏳ Pending push |
-| `packages/frontend/hooks/useAppraisal.ts` | Add clarifying comment on prefix-match pattern | ⏳ Pending push |
-| `packages/frontend/hooks/useBidBot.ts` | Add clarifying comment on prefix-match pattern | ⏳ Pending push |
-| `packages/frontend/components/SmartInventoryUpload.tsx` (prior) | Scaling fix: `h-32 object-cover` → `h-40 object-contain bg-gray-100` (line 511) | ✅ Already pushed |
+| `packages/frontend/components/Layout.tsx` | Multi-role nav fix: `user.role` → `user.roles[]` (7 occurrences) | ✅ Pushed |
+| `packages/frontend/components/BottomTabNav.tsx` | Multi-role nav fix: `user.role` → `user.roles[]` (1 occurrence) | ✅ Pushed |
+| `packages/frontend/components/AvatarDropdown.tsx` | Option B nav: moved About, Leaderboard, Contact from nav bar | ✅ Pushed |
+| `packages/frontend/pages/items/[id].tsx` | Contextual sign-in prompts at action buttons (bid, buy, save) | ✅ Pushed |
+| `packages/frontend/lib/api.ts` | Removed global 401 interceptor hard-redirect to /login | ✅ Pushed |
+| `packages/frontend/pages/register.tsx` | Updated email opt-in copy (4 instances) | ✅ Pushed |
+| OAuth invite code fix | TBD — dispatched to findasale-dev | ⏳ Pending dev completion |

@@ -287,7 +287,7 @@ const RegisterPage = () => {
                   className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
                 <span className="text-sm text-warm-700 dark:text-warm-300">
-                  I'd like to receive emails from FindA.Sale about sale management tips, new features, and promotions. You can unsubscribe at any time in your account settings.
+                  Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
                 </span>
               </label>
             )}
@@ -300,7 +300,7 @@ const RegisterPage = () => {
                   className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
                 <span className="text-sm text-warm-700 dark:text-warm-300">
-                  I'd like to receive emails from FindA.Sale about nearby sales, deals, and personalized recommendations. You can unsubscribe at any time in your account settings.
+                  Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
                 </span>
               </label>
             )}
@@ -314,7 +314,7 @@ const RegisterPage = () => {
                     className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                   />
                   <span className="text-sm text-warm-700 dark:text-warm-300">
-                    I'd like to receive emails from FindA.Sale about sale management tips, new features, and promotions. You can unsubscribe at any time in your account settings.
+                    Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
                   </span>
                 </label>
                 <label className="flex items-start gap-3">
@@ -325,7 +325,7 @@ const RegisterPage = () => {
                     className="mt-1 h-4 w-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                   />
                   <span className="text-sm text-warm-700 dark:text-warm-300">
-                    I'd like to receive emails from FindA.Sale about nearby sales, deals, and personalized recommendations. You can unsubscribe at any time in your account settings.
+                    Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings.
                   </span>
                 </label>
               </>
@@ -359,7 +359,13 @@ const RegisterPage = () => {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => signIn('google', { callbackUrl: '/' })}
+            onClick={() => {
+              // Store invite code in sessionStorage for OAuth flow
+              if (formData.inviteCode) {
+                sessionStorage.setItem('pendingInviteCode', formData.inviteCode);
+              }
+              signIn('google', { callbackUrl: '/' });
+            }}
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -372,7 +378,13 @@ const RegisterPage = () => {
           </button>
           <button
             type="button"
-            onClick={() => signIn('facebook', { callbackUrl: '/' })}
+            onClick={() => {
+              // Store invite code in sessionStorage for OAuth flow
+              if (formData.inviteCode) {
+                sessionStorage.setItem('pendingInviteCode', formData.inviteCode);
+              }
+              signIn('facebook', { callbackUrl: '/' });
+            }}
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
           >
             <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24" aria-hidden="true">
