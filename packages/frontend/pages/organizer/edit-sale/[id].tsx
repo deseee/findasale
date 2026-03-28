@@ -22,6 +22,7 @@ import Skeleton from '../../../components/Skeleton';
 import PublishCelebration from '../../../components/PublishCelebration';
 import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // #132: À La Carte
 import TreasureHuntQRManager from '../../../components/TreasureHuntQRManager'; // Feature #85
+import SaleCoverPhotoManager from '../../../components/SaleCoverPhotoManager';
 
 const EditSalePage = () => {
   const router = useRouter();
@@ -51,6 +52,8 @@ const EditSalePage = () => {
     zip: '',
     neighborhood: '',
     saleType: 'ESTATE' as string,
+    // Cover photo
+    photoUrls: [] as string[],
     // Feature 35: Front Door Locator
     entranceLat: undefined as number | undefined,
     entranceLng: undefined as number | undefined,
@@ -134,6 +137,7 @@ const EditSalePage = () => {
         zip: sale.zip,
         neighborhood: sale.neighborhood ?? '',
         saleType: sale.saleType ?? 'ESTATE',
+        photoUrls: sale.photoUrls ?? [],
         entranceLat: sale.entranceLat ?? undefined,
         entranceLng: sale.entranceLng ?? undefined,
         entranceNote: sale.entranceNote ?? '',
@@ -681,6 +685,17 @@ const EditSalePage = () => {
                 placeholder="e.g., Park in back lot. Enter through the red door. We open at 8 AM sharp."
                 rows={4}
                 className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Cover Photo Manager */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <SaleCoverPhotoManager
+                saleId={id as string}
+                initialPhotoUrl={formData.photoUrls[0]}
+                onPhotoChange={(url) =>
+                  setFormData({ ...formData, photoUrls: url ? [url] : [] })
+                }
               />
             </div>
 

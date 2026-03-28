@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Search } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
@@ -247,6 +247,24 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               {staticNavLinks.map(({ href, label }) => (
                 <Link key={href} href={href} className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">{label}</Link>
               ))}
+
+              {/* Desktop search input */}
+              <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales" className="flex items-center ml-2">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 pointer-events-none" aria-hidden="true">
+                    <Search size={16} />
+                  </span>
+                  <input
+                    type="search"
+                    value={headerSearch}
+                    onChange={(e) => setHeaderSearch(e.target.value)}
+                    placeholder="Search…"
+                    aria-label="Search sales and items"
+                    className="pl-9 pr-3 py-1.5 text-sm border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 w-40"
+                  />
+                </div>
+              </form>
+
               {/* "Host a Sale" CTA for logged-in shoppers without ORGANIZER role */}
               {isClient && user && user.roles?.includes('USER') && !user?.roles?.includes('ORGANIZER') && (
                 <button

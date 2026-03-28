@@ -29,17 +29,31 @@ interface Sale {
   };
   tags?: string[];
   isAuctionSale?: boolean;
+  saleType?: string;
 }
 
 type DateFilter = 'all' | 'this-week' | 'this-weekend' | 'today';
+type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'consignment';
 
 const MapPage = () => {
   const { showToast } = useToast();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isGeolocationRequested, setIsGeolocationRequested] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
   const [filteredPins, setFilteredPins] = useState<SalePin[]>([]);
   const [showHeatmap, setShowHeatmap] = useState(false);
+
+  // Helper function to determine sale type from saleType field
+  const getSaleType = (sale: Sale): string => {
+    const t = (sale.saleType || '').toUpperCase();
+    if (t === 'ESTATE') return 'estate';
+    if (t === 'YARD') return 'yard';
+    if (t === 'AUCTION') return 'auction';
+    if (t === 'FLEA_MARKET') return 'flea-market';
+    if (t === 'CONSIGNMENT') return 'consignment';
+    return 'other';
+  };
 
   // Feature #28: Fetch heatmap tiles
   const { data: heatmapData, isLoading: isHeatmapLoading } = useHeatmapTiles({
@@ -85,7 +99,7 @@ const MapPage = () => {
     }
   }, [isGeolocationRequested, showToast]);
 
-  // Filter sales by date and geo-location
+  // Filter sales by date, sale type, and geo-location
   const filteredSales = useMemo(() => {
     if (!sales) return [];
     let result = [...sales];
@@ -125,8 +139,13 @@ const MapPage = () => {
       return true; // 'all'
     });
 
+    // Filter by sale type
+    if (saleTypeFilter !== 'all') {
+      result = result.filter((s) => getSaleType(s) === saleTypeFilter);
+    }
+
     return result;
-  }, [sales, dateFilter]);
+  }, [sales, dateFilter, saleTypeFilter]);
 
   // Convert filtered sales to map pins
   useMemo(() => {
@@ -259,6 +278,7 @@ const MapPage = () => {
 
           {/* Filter Chips */}
           <div className="flex gap-2 flex-wrap">
+            {/* Date Filters */}
             {(['all', 'today', 'this-weekend', 'this-week'] as DateFilter[]).map((f) => (
               <button
                 key={f}
@@ -270,7 +290,23 @@ const MapPage = () => {
                     : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-amber-400 dark:hover:border-gray-500'
                 }`}
               >
-                {f === 'all' ? 'All' : f === 'today' ? 'Today' : f === 'this-weekend' ? 'This Weekend' : 'This Week'}
+                {f === 'all' ? 'All Dates' : f === 'today' ? 'Today' : f === 'this-weekend' ? 'This Weekend' : 'This Week'}
+              </button>
+            ))}
+
+            {/* Sale Type Filters */}
+            {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment'] as SaleTypeFilter[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSaleTypeFilter(type)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  saleTypeFilter === type
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-gray-500'
+                }`}
+              >
+                {type === 'all' ? 'All Types' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : 'Consignment'}
               </button>
             ))}
           </div>
