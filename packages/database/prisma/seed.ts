@@ -87,29 +87,33 @@ const categories = [
 const conditions = ['mint', 'excellent', 'good', 'fair', 'poor'];
 
 const salePhotoUrls = [
-  'https://picsum.photos/seed/estate-sale-1/800/600',
-  'https://picsum.photos/seed/estate-sale-2/800/600',
-  'https://picsum.photos/seed/estate-sale-3/800/600',
-  'https://picsum.photos/seed/estate-sale-4/800/600',
-  'https://picsum.photos/seed/estate-sale-5/800/600',
-  'https://picsum.photos/seed/estate-sale-6/800/600',
-  'https://picsum.photos/seed/estate-sale-7/800/600',
-  'https://picsum.photos/seed/estate-sale-8/800/600',
-  'https://picsum.photos/seed/estate-sale-9/800/600',
-  'https://picsum.photos/seed/estate-sale-10/800/600',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774572270/findasale/zdz9nnjs9qskngq4pprv.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774613425/findasale/zpd2x0qi9uqdpors6e8r.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774621665/findasale/l17agiqk4fupvmwnylv2.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624097/findasale/hw0citcz5wbofji41thk.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624183/findasale/edswprrevqnjs9bw5ojq.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624409/findasale/joohqy18vsgsblxtcqdm.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624763/findasale/romiardlvccoou0cviul.jpg',
 ];
 
 const itemPhotoPool = [
-  'https://picsum.photos/seed/vintage-dresser/600/400',
-  'https://picsum.photos/seed/leather-chair/600/400',
-  'https://picsum.photos/seed/crystal-vase/600/400',
-  'https://picsum.photos/seed/dining-table/600/400',
-  'https://picsum.photos/seed/pocket-watch/600/400',
-  'https://picsum.photos/seed/sofa-mid-century/600/400',
-  'https://picsum.photos/seed/persian-rug/600/400',
-  'https://picsum.photos/seed/typewriter-vintage/600/400',
-  'https://picsum.photos/seed/floor-lamp/600/400',
-  'https://picsum.photos/seed/bookshelf/600/400',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774572270/findasale/zdz9nnjs9qskngq4pprv.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774613425/findasale/zpd2x0qi9uqdpors6e8r.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774621665/findasale/l17agiqk4fupvmwnylv2.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624097/findasale/hw0citcz5wbofji41thk.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624183/findasale/edswprrevqnjs9bw5ojq.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624409/findasale/joohqy18vsgsblxtcqdm.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624763/findasale/romiardlvccoou0cviul.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774625653/findasale/jhk3clxk0onhzy6biffc.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627143/findasale/cxa6drwrkvm8ao8ltn8b.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627155/findasale/d3zgbc5uskbg1akmzsf8.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627346/findasale/xps2v1tcmcrfmthuvkq2.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627514/findasale/gyjudlre435tzopxtpn6.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774629065/findasale/owxkp4gten1r2svcqmat.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774631273/findasale/rij4e0k8e8eqxclkszgz.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774649337/findasale/xtozesgqbqzfqijxynga.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774650289/findasale/kggddivtetbnwpkgczsy.jpg',
+  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774659629/findasale/ujcavof49vro4dfid6vn.jpg',
 ];
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
