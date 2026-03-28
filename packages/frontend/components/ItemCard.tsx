@@ -108,7 +108,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   const { isLowBandwidth } = useNetworkQuality();
 
   // Resolve primary photo URL (photoUrls array takes precedence, fallback to photoUrl)
-  const primaryPhotoUrl = (item.photoUrls && item.photoUrls[0]) || (item as any).photoUrl || null;
+  const primaryPhotoUrl = ((item as any).photoUrls?.[0]) || (item as any).photoUrl || null;
 
   // Calculate image URLs based on optimization mode
   let lqipUrl_calc: string | null = null;
