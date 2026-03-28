@@ -340,7 +340,7 @@ const HomePage = () => {
               <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full">
                 {/* Map Section */}
                 {!isLoading && sales && sales.length > 0 && (
-                  <div className="w-full h-48 border-b border-warm-200 dark:border-gray-700">
+                  <div className="w-full flex-1 min-h-[220px]">
                     <SaleMap
                       pins={sales
                         .filter((s) => s.lat != null && s.lng != null)
@@ -358,57 +358,25 @@ const HomePage = () => {
                         }))}
                       center={[42.9634, -85.6681]}
                       zoom={11}
-                      height="192px"
+                      height="100%"
                     />
                   </div>
                 )}
 
-                {/* Content Section */}
-                <div className="p-6 flex flex-col justify-between flex-1">
-                  <div className="mb-4">
-                    <h2 className="font-heading text-xl font-bold text-warm-900 dark:text-gray-100 mb-2">Sales Near You</h2>
-                    {isLoading ? (
-                      <>
-                        <Skeleton className="h-4 w-32 mb-4" />
-                        <Skeleton className="h-3 w-full mb-2" />
-                        <Skeleton className="h-3 w-5/6" />
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm text-warm-600 dark:text-gray-400 mb-4 flex items-center gap-2">
-                          📍 {defaultCity}
-                        </p>
-                        <div className="text-2xl font-bold text-sage-600 dark:text-sage-400 mb-3">
-                          {sales?.length ?? 0} active sale{sales && sales.length !== 1 ? 's' : ''}
-                        </div>
-                        <div className="space-y-2 text-sm">
-                          {sales && sales.length > 0 ? (
-                            <>
-                              {['estate', 'yard', 'auction', 'flea-market', 'consignment'].map((type) => {
-                                const count = sales.filter((s) => getSaleType(s) === type).length;
-                                if (count === 0) return null;
-                                return (
-                                  <div key={type} className="flex items-center gap-2 text-warm-700 dark:text-gray-300">
-                                    <span className="text-warm-400 dark:text-gray-600">•</span>
-                                    <span className="capitalize">
-                                      {type === 'flea-market' ? 'Flea Market' : type === 'consignment' ? 'Consignment' : type.charAt(0).toUpperCase() + type.slice(1)}: {count}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </>
-                          ) : (
-                            <p className="text-warm-500 dark:text-gray-400 italic">No sales available</p>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex justify-end pt-4 border-t border-warm-100 dark:border-gray-700">
-                    <Link href="/map">
-                      <span className="text-sm font-medium text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 cursor-pointer">View on Map →</span>
-                    </Link>
-                  </div>
+                {/* Footer Line */}
+                <div className="px-4 py-3 border-t border-warm-200 dark:border-gray-700 flex items-center justify-between">
+                  {isLoading ? (
+                    <Skeleton className="h-4 w-48" />
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium text-warm-800 dark:text-gray-200">
+                        Sales Near You · <span className="text-sage-600 dark:text-sage-400">{sales?.length ?? 0} active</span>
+                      </span>
+                      <Link href="/map" className="text-sm font-medium text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300">
+                        View on Map →
+                      </Link>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
