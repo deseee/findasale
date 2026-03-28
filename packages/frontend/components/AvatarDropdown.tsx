@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useRouter } from 'next/router';
+import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 
 const AvatarDropdown: React.FC = () => {
   const { user, logout } = useAuth();
@@ -199,6 +200,58 @@ const AvatarDropdown: React.FC = () => {
                     ? 'Upgrade to TEAMS'
                     : 'Upgrade to PRO'}
               </Link>
+
+              {/* Organizer Tools Section */}
+              <div className="px-4 py-2">
+                <SectionHeader label="Organizer Tools" />
+              </div>
+              <Link
+                href="/organizer/bounties"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Bounties
+              </Link>
+              <Link
+                href="/organizer/message-templates"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Message Templates
+              </Link>
+              <Link
+                href="/organizer/reputation"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Reputation
+              </Link>
+              <Link
+                href="/organizer/ugc-moderation"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                UGC Moderation
+              </Link>
+              <Link
+                href="/organizer/performance"
+                className="block px-4 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                Performance
+              </Link>
+
+              {/* Pro Tools Section */}
+              <div className="px-4 py-2">
+                <SectionHeader label="Pro Tools" />
+              </div>
+              <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
+              <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
+              <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
+              <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
+              <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
+              <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
+              <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>
