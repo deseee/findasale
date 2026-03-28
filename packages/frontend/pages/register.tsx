@@ -364,7 +364,7 @@ const RegisterPage = () => {
               if (formData.inviteCode) {
                 sessionStorage.setItem('pendingInviteCode', formData.inviteCode);
               }
-              signIn('google', { callbackUrl: '/' });
+              signIn('google', { callbackUrl: '/auth/oauth-callback' });
             }}
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
           >
@@ -383,7 +383,7 @@ const RegisterPage = () => {
               if (formData.inviteCode) {
                 sessionStorage.setItem('pendingInviteCode', formData.inviteCode);
               }
-              signIn('facebook', { callbackUrl: '/' });
+              signIn('facebook', { callbackUrl: '/auth/oauth-callback' });
             }}
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
           >
