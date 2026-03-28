@@ -65,8 +65,8 @@ router.post('/:itemId/publish', authenticate, publishItem);
 // Declared before /:id to prevent 'bulk' being captured as an item ID.
 // Frontend (add-items.tsx) uses this for delete / status / category / price_adjust / isActive / price / tags.
 // All operations verify organizer ownership + status-safe constraints before mutating.
-// #65 Sprint 2: Gated to PRO tier only (batch operations require paid plan)
-router.post('/bulk', authenticate, requireTier('PRO'), async (req, res) => {
+// #65 Sprint 2: Gated to SIMPLE tier (paid) — publishing is a basic need for all organizers
+router.post('/bulk', authenticate, requireTier('SIMPLE'), async (req, res) => {
   try {
     const authReq = req as AuthRequest;
     const hasOrganizerRole = authReq.user?.roles?.includes('ORGANIZER') || authReq.user?.role === 'ORGANIZER';
