@@ -150,13 +150,31 @@ const AvatarDropdown: React.FC = () => {
               >
                 Organizer Dashboard
               </Link>
+              {isUser && (
+                <Link
+                  href="/shopper/dashboard"
+                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Shopper Dashboard
+                </Link>
+              )}
               <Link
                 href="/profile"
                 className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                Organizer Profile
+                My Profile
               </Link>
+              {isUser && (
+                <Link
+                  href="/shopper/wishlist"
+                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  onClick={() => setIsOpen(false)}
+                >
+                  My Saves
+                </Link>
+              )}
               <Link
                 href="/plan"
                 className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -277,35 +295,6 @@ const AvatarDropdown: React.FC = () => {
                   <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
                 </>
               )}
-
-              <hr className="my-2 border-warm-200 dark:border-gray-700" />
-            </>
-          )}
-
-          {/* USER/SHOPPER Menu Items */}
-          {isUser && (
-            <>
-              <Link
-                href="/shopper/dashboard"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                Shopper Dashboard
-              </Link>
-              <Link
-                href="/profile"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                My Profile
-              </Link>
-              <Link
-                href="/shopper/wishlist"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                My Saves
-              </Link>
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>

@@ -44,7 +44,9 @@ export function TierGatedNavLink({
       href={href}
       className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
     >
-      {icon} {label}
+      <span className="flex items-center gap-1 text-sm">
+        {icon} {label}
+      </span>
     </Link>
   );
 }
