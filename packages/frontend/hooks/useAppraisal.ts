@@ -160,7 +160,7 @@ export const useSubmitResponse = (requestId: string) => {
     onSuccess: () => {
       // Invalidate and refetch the appraisal detail
       queryClient.invalidateQueries({ queryKey: ['appraisal', requestId] });
-      // Invalidate feed to reflect updated response counts
+      // Invalidate feed to reflect updated response counts (matches all page/limit combinations)
       queryClient.invalidateQueries({ queryKey: ['appraisals-feed'] });
     },
   });

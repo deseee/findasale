@@ -703,9 +703,8 @@ const AddItemsDetailPage = () => {
           )
         );
 
-        // Invalidate caches for item lists and draft counts
+        // Invalidate caches for item lists
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-        queryClient.invalidateQueries({ queryKey: ['draft-items', saleId] });
       }
     } catch (err: any) {
       console.error('[rapidfire] Background upload failed:', err);

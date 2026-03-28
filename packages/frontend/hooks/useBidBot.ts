@@ -82,7 +82,7 @@ export function useReviewSignal() {
       return res.data;
     },
     onSuccess: (_, { signalId }) => {
-      // Invalidate fraud signals queries to refetch updated data
+      // Invalidate fraud signals queries to refetch updated data (matches all saleId/page/filter combinations)
       queryClient.invalidateQueries({ queryKey: ['fraudSignals'] });
     },
   });

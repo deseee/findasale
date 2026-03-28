@@ -148,11 +148,12 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
         `✓ ${created.length} items added to your sale!`,
         'success'
       );
-      queryClient.invalidateQueries({ queryKey: ['sale-items', saleId] });
+      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
       setSaveProgress(0);
       setStep('complete');
       setPhotoFiles([]);
       setAnalyses([]);
+      onComplete?.();
     },
     onError: () => {
       showToast('Some items failed to save', 'error');
