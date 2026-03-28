@@ -39,7 +39,7 @@ export const expireStaleHolds = async (): Promise<void> => {
   }
 };
 
-// Run every 30 minutes
-cron.schedule('*/30 * * * *', () => {
+// Feature #121: Run every 10 minutes (was 30 min) for faster expiry
+cron.schedule('*/10 * * * *', () => {
   expireStaleHolds();
 });

@@ -66,6 +66,7 @@ model User {
   checkoutAttempts      CheckoutAttempt[]
   waitlistEntries       ItemWaitlist[]
   pickupBookings        PickupBooking[]
+  saleCheckins          SaleCheckin[]         // Feature #121: GPS-based check-ins for hold validation
   notificationPrefs     Json? // Notification preferences: { emailNewSalesFromFollowed, emailFlashDeals, emailWeeklyDigest, pushSalesNearMe }
   emailWeeklyOrganizerDigest Boolean @default(true) // Organizer weekly analytics digest preference
   feedbacks             Feedback[]
@@ -231,6 +232,8 @@ model Organizer {
   workspaceMemberships WorkspaceMember[] @relation("OrganizerWorkspaces")
   // D-007: Enterprise account flag (unlimited team members, annual contracts)
   isEnterpriseAccount Boolean @default(false)
+  // Feature #121: Hold system settings
+  holdSettings    OrganizerHoldSettings?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -376,6 +379,8 @@ model Sale {
   // Feature #91: Auto-Markdown (Smart Clearance)
   markdownEnabled  Boolean   @default(false)
   markdownFloor    Float?
+  // Feature #121: Hold system — check-ins and hold limits
+  checkins         SaleCheckin[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -757,8 +762,52 @@ model ItemReservation {
   status    String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED, EXPIRED
   expiresAt DateTime
   note      String?
+  // Hold-specific enhancements (Feature #121)
+  gpsLatitude    Float?                    // GPS location at hold creation
+  gpsLongitude   Float?                    // GPS location at hold creation
+  qrScanId       String?                   // Fraud detection: which QR scan validated this hold
+  fraudScore     Float  @default(0.0)      // Fraud detection score (0.0-1.0)
+  fraudFlags     String[]  @default([])    // Fraud red flags: HIGH_VELOCITY, SUSPICIOUS_PATTERN, etc.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Feature #121: Sale Check-in — per-shopper GPS-based validation for hold rank enforcement
+model SaleCheckin {
+  id             String   @id @default(cuid())
+  saleId         String
+  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  latitude       Float
+  longitude      Float
+  qrScanned      Boolean  @default(false)  // did user scan QR to verify?
+  qrScanId       String?  // links to future TreasureHuntQRScan or equivalent QR record
+  // Shopper rank in arrival line (derived from createdAt order at checkout)
+  arrivalRank    Int?                      // calculated rank (1=first, 2=second, etc.)
+  checkinAt      DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@unique([saleId, userId])  // one check-in per shopper per sale
+  @@index([saleId, checkinAt])
+  @@index([userId])
+}
+
+// Feature #121: Organizer hold settings
+model OrganizerHoldSettings {
+  id                    String   @id @default(cuid())
+  organizerId           String   @unique
+  organizer             Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  // Rank-based hold allocation
+  maxHoldsPerRank       Int      @default(3)      // max items first-arriver can hold
+  enableGpsValidation   Boolean  @default(false)  // require GPS check-in near sale
+  enableQrValidation    Boolean  @default(false)  // require QR scan to confirm hold
+  // Anti-fraud settings
+  maxHoldsPerSession    Int      @default(10)     // max total holds per shopper per visit
+  fraudCheckEnabled     Boolean  @default(true)   // run synchronous fraud detector
+  autoSuspendThreshold  Float    @default(0.85)   // auto-suspend holds > this fraud score
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 // V3: UGC missing-listing bounties

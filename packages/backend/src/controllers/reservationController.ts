@@ -5,28 +5,90 @@ import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
 import { sendHoldPlacedAlert } from '../services/saleAlertEmailService';
-import { checkForFraud } from '../services/fraudDetectionService';
+import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
 
 const DEFAULT_HOLD_HOURS = 48; // #24: default hold duration (was 24h)
+const GPS_VALIDATION_RADIUS_M = 100; // Feature #121: 100m radius for GPS validation
 
 // POST /api/reservations — shopper places a hold on an item (duration set per-sale)
+// Feature #121: Enhanced with GPS validation, QR check, fraud scoring, rank-based limits
 export const placeHold = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (hasOrganizerRole) return res.status(403).json({ message: 'Organizers cannot place holds' });
 
-    const { itemId, note } = req.body;
+    const { itemId, note, latitude, longitude, qrScanId } = req.body;
     if (!itemId) return res.status(400).json({ message: 'itemId is required' });
 
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: true },
+      include: { sale: { include: { organizer: { include: { holdSettings: true } } } } },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
     if (item.status !== 'AVAILABLE') return res.status(409).json({ message: 'Item is not available for hold' });
 
-    const durationMs = ((item.sale as any)?.holdDurationHours ?? DEFAULT_HOLD_HOURS) * 3600000;
+    const sale = (item.sale as any);
+    const holdSettings = sale?.organizer?.holdSettings;
+
+    // Feature #121: GPS validation — if organizer requires it, check proximity
+    if (holdSettings?.enableGpsValidation && latitude && longitude) {
+      const saleLat = sale?.lat;
+      const saleLng = sale?.lng;
+      if (saleLat && saleLng) {
+        const distance = calculateDistance(latitude, longitude, saleLat, saleLng);
+        if (distance > GPS_VALIDATION_RADIUS_M) {
+          return res.status(403).json({
+            message: 'You are not close enough to the sale location to place a hold',
+            distance
+          });
+        }
+      }
+    }
+
+    // Feature #121: QR validation — if organizer requires it, check that QR was scanned
+    if (holdSettings?.enableQrValidation && !qrScanId) {
+      return res.status(403).json({ message: 'Organizer requires QR validation to place a hold' });
+    }
+
+    // Feature #121: Rate limiting — check holds per session for this user
+    if (holdSettings?.maxHoldsPerSession) {
+      const sessionHolds = await prisma.itemReservation.count({
+        where: {
+          userId: req.user!.id,
+          item: { saleId: item.saleId },
+          status: { in: ['PENDING', 'CONFIRMED'] },
+        },
+      });
+      if (sessionHolds >= holdSettings.maxHoldsPerSession) {
+        return res.status(403).json({
+          message: `You have reached the hold limit (${holdSettings.maxHoldsPerSession}) for this sale`
+        });
+      }
+    }
+
+    // Feature #121: Fraud detection — synchronous check
+    let fraudScore = 0;
+    let fraudFlags: string[] = [];
+    if (holdSettings?.fraudCheckEnabled) {
+      try {
+        const fraudResult = await calculateConfidenceScore(req.user!.id, itemId, item.saleId);
+        fraudScore = fraudResult.score / 100; // normalize to 0.0-1.0
+        fraudFlags = fraudResult.signals;
+
+        // Feature #121: Auto-suspend if fraud score is too high
+        if (holdSettings.autoSuspendThreshold && fraudScore >= holdSettings.autoSuspendThreshold) {
+          return res.status(403).json({
+            message: 'Your account has been temporarily flagged for suspicious activity. Contact support.',
+            fraudScore
+          });
+        }
+      } catch (err) {
+        console.warn('[holds] Fraud check error (non-blocking):', err);
+      }
+    }
+
+    const durationMs = (sale?.holdDurationHours ?? DEFAULT_HOLD_HOURS) * 3600000;
     const expiresAt = new Date(Date.now() + durationMs);
 
     const reservation = await prisma.$transaction(async (tx) => {
@@ -37,6 +99,11 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
           status: 'PENDING',
           expiresAt,
           note: note?.trim() || null,
+          gpsLatitude: latitude || null,
+          gpsLongitude: longitude || null,
+          qrScanId: qrScanId || null,
+          fraudScore,
+          fraudFlags,
         },
       });
       await tx.item.update({ where: { id: itemId }, data: { status: 'RESERVED' } });
@@ -403,3 +470,137 @@ export const updateHold = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// GET /api/reservations/organizer/settings — get organizer's hold settings
+export const getHoldSettings = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+
+    let settings = await prisma.organizerHoldSettings.findUnique({
+      where: { organizerId: organizer.id },
+    });
+
+    // Create default settings if they don't exist
+    if (!settings) {
+      settings = await prisma.organizerHoldSettings.create({
+        data: { organizerId: organizer.id },
+      });
+    }
+
+    res.json(settings);
+  } catch (error) {
+    console.error('[reservations] getHoldSettings error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// PATCH /api/reservations/organizer/settings — update organizer's hold settings
+export const updateHoldSettings = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
+
+    const {
+      maxHoldsPerRank,
+      enableGpsValidation,
+      enableQrValidation,
+      maxHoldsPerSession,
+      fraudCheckEnabled,
+      autoSuspendThreshold,
+    } = req.body;
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+
+    const settings = await prisma.organizerHoldSettings.upsert({
+      where: { organizerId: organizer.id },
+      create: {
+        organizerId: organizer.id,
+        maxHoldsPerRank: maxHoldsPerRank ?? 3,
+        enableGpsValidation: enableGpsValidation ?? false,
+        enableQrValidation: enableQrValidation ?? false,
+        maxHoldsPerSession: maxHoldsPerSession ?? 10,
+        fraudCheckEnabled: fraudCheckEnabled ?? true,
+        autoSuspendThreshold: autoSuspendThreshold ?? 0.85,
+      },
+      update: {
+        ...(maxHoldsPerRank !== undefined && { maxHoldsPerRank }),
+        ...(enableGpsValidation !== undefined && { enableGpsValidation }),
+        ...(enableQrValidation !== undefined && { enableQrValidation }),
+        ...(maxHoldsPerSession !== undefined && { maxHoldsPerSession }),
+        ...(fraudCheckEnabled !== undefined && { fraudCheckEnabled }),
+        ...(autoSuspendThreshold !== undefined && { autoSuspendThreshold }),
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json(settings);
+  } catch (error) {
+    console.error('[reservations] updateHoldSettings error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/reservations/checkin — record shopper check-in at sale (GPS-based)
+export const checkinAtSale = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const { saleId, latitude, longitude, qrScanned, qrScanId } = req.body;
+    if (!saleId || latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ message: 'saleId, latitude, longitude are required' });
+    }
+
+    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+
+    // Create or update check-in
+    const checkin = await prisma.saleCheckin.upsert({
+      where: { saleId_userId: { saleId, userId: req.user.id } },
+      create: {
+        saleId,
+        userId: req.user.id,
+        latitude,
+        longitude,
+        qrScanned: qrScanned ?? false,
+        qrScanId: qrScanId || null,
+      },
+      update: {
+        latitude,
+        longitude,
+        qrScanned: qrScanned ?? false,
+        qrScanId: qrScanId || null,
+        checkinAt: new Date(),
+      },
+    });
+
+    res.status(201).json(checkin);
+  } catch (error) {
+    console.error('[reservations] checkinAtSale error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Feature #121: Calculate distance in meters between two GPS coordinates (Haversine formula)
+ */
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Earth's radius in meters
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaLat = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLon = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
