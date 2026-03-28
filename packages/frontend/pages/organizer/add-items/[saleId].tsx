@@ -750,11 +750,11 @@ const AddItemsDetailPage = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      const { itemId } = res.data;
+      const { itemId, photoUrl } = res.data;
       setRapidItems((prev) =>
         prev.map((item) =>
           item.id === pendingFaceUpload.tempId
-            ? { ...item, id: itemId, draftStatus: 'DRAFT', thumbnailUrl: pendingFaceUpload.previewUrl, photoUrls: [pendingFaceUpload.previewUrl] }
+            ? { ...item, id: itemId, draftStatus: 'DRAFT', thumbnailUrl: pendingFaceUpload.previewUrl, photoUrls: photoUrl ? [photoUrl] : [pendingFaceUpload.previewUrl] }
             : item
         )
       );
