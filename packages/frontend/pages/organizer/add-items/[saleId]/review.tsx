@@ -450,6 +450,7 @@ const ReviewPage = () => {
                       <div className="aspect-square bg-warm-100 dark:bg-gray-700 overflow-hidden">
                         {item.photoUrls[0] && (
                           <img
+                            key={item.photoUrls[0]}
                             src={buildCloudinaryUrl(item.photoUrls[0], {
                               aspectRatio: '4:3',
                               backgroundRemoved: item.backgroundRemoved,
@@ -636,6 +637,7 @@ const ReviewPage = () => {
                             />
                             {item.photoUrls[0] && (
                               <img
+                                key={item.photoUrls[0]}
                                 src={item.photoUrls[0]}
                                 alt={item.title}
                                 className="w-16 h-16 object-cover rounded flex-shrink-0"

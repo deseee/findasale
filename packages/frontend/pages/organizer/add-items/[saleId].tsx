@@ -1616,6 +1616,7 @@ const AddItemsDetailPage = () => {
                           <td className="px-4 py-3">
                             {item.photoUrls && item.photoUrls.length > 0 ? (
                               <img
+                                key={item.photoUrls[0]}
                                 src={item.photoUrls[0]}
                                 alt={item.title}
                                 className="w-16 h-16 object-cover rounded border border-warm-200 dark:border-gray-700"
