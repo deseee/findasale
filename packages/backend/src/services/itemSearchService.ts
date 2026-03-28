@@ -124,7 +124,7 @@ async function ftsSearch(params: {
   let idx = 1;
 
   // Base SELECT with FTS rank
-  // Search item title + description + organizer businessName
+  // Search item title + description + item tags + sale tags + organizer businessName
   sqlParts.push(`
     SELECT
       i.id,
@@ -147,6 +147,8 @@ async function ftsSearch(params: {
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
+        OR i.tags @> ARRAY[$${idx}]
+        OR s.tags @> ARRAY[$${idx}]
       )
   `);
   sqlParams.push(q, q);
@@ -218,10 +220,12 @@ async function ilikeSearch(params: {
         OR i.description ILIKE '%' || $${idx} || '%'
         OR i.category ILIKE '%' || $${idx} || '%'
         OR o."businessName" ILIKE '%' || $${idx} || '%'
+        OR i.tags @> ARRAY[$${idx}]
+        OR s.tags @> ARRAY[$${idx}]
       )
   `);
-  sqlParams.push(q);
-  idx += 1;
+  sqlParams.push(q, q, q);
+  idx += 3;
 
   idx = appendFilters(sqlParts, sqlParams, idx, { category, condition, saleId, priceMin, priceMax });
 
@@ -301,6 +305,8 @@ async function countFts(
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
+        OR i.tags @> ARRAY[$${idx}]
+        OR s.tags @> ARRAY[$${idx}]
       )
   `);
   sqlParams.push(q);
@@ -333,10 +339,12 @@ async function countIlike(
         OR i.description ILIKE '%' || $${idx} || '%'
         OR i.category ILIKE '%' || $${idx} || '%'
         OR o."businessName" ILIKE '%' || $${idx} || '%'
+        OR i.tags @> ARRAY[$${idx}]
+        OR s.tags @> ARRAY[$${idx}]
       )
   `);
-  sqlParams.push(q);
-  idx += 1;
+  sqlParams.push(q, q, q);
+  idx += 3;
   appendFilters(sqlParts, sqlParams, idx, filters);
 
   const rows = await prisma.$queryRawUnsafe<{ count: number }[]>(sqlParts.join('\n'), ...sqlParams);
