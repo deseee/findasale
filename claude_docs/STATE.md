@@ -7,13 +7,13 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S329 complete. Next session starts fresh.
+No active work. S330 complete. S331 priorities staged below.
 
-**Remaining bugs/gaps:**
-- **P3 — Trending "Most Wanted Items" blank cards (data gap):** Items without `photoUrls` in DB show blank gradient — correct fallback behavior. Items WITH photos now render correctly. Not a code bug; a data quality gap for un-photographed seeded items.
-- **P3 — Desktop nav search:** Desktop header has no search input (mobile-only). Low priority UX gap.
-- **P3 — Map sale type filter:** Map doesn't filter by sale type — always shows all pins.
-- **Finding — Edit-sale cover photo:** Edit-sale page missing cover photo section.
+**S330 COMPLETE (2026-03-28):** Desktop nav search + map sale type filter + edit-sale cover photo. (1) **Desktop nav search ✅ VERIFIED** — Layout.tsx updated. Search icon in nav bar expands to input on click, collapses on Escape/blur. Submits form to `/?q=<term>`. Chrome-verified working (ss_62400ab1c, ss_1378f5bto). (2) **Map sale type filter ✅ VERIFIED** — map.tsx updated with filter pills (All Types / Estate / Yard / Auction / Flea Market / Consignment). Chrome-verified: Estate → 15 sales, Auction → 0 sales (ss_1871l57bx → ss_3209bt61b → ss_57862pvhm). (3) **Edit-sale cover photo section ✅ (CODE-VERIFIED, NOT YET BROWSER-TESTED)** — NEW SaleCoverPhotoManager.tsx component + edit-sale/[id].tsx integration. Section visible in form with upload/preview/remove buttons. (4) ⚠️ **Cover photo useState bug found:** Component uses `useState(initialPhotoUrl)` which only reads the value at mount time. When formData loads async from API, the component doesn't update — seeded photo doesn't show. Fix: add `useEffect` hook to sync state when `initialPhotoUrl` changes. P2 for S331. (5) ⚠️ **Cover photo save behavior:** Currently saves immediately on upload (bypasses "Save Changes" button). Decision pending: should hold in formData and commit only on Save Changes. P2 for S331.
+
+**Decisions logged:**
+- Sale cover photo: 1 photo only (not a gallery). Index 0 of `photoUrls[]` array.
+- Remind Me: email reminders backend is built. "Push reminders coming soon" copy is stale — should say "Remind me by email."
 
 **Resolved this session:**
 - ✅ P2 draft counter mismatch — FIXED: backend `getItemsBySaleId` wasn't returning `draftStatus` field. Added to select clause. Frontend `computeDraftStatus` now uses real DB value instead of guessing.
@@ -29,6 +29,7 @@ No active work. S329 complete. Next session starts fresh.
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod. ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar. | S314 |
 | Single-item publish fix | S326 code fix deployed. S327 confirmed API call fires but no DRAFT items exist to test the button. Manual Entry creates AVAILABLE items, skipping draft pipeline. | Camera-capture an item → go to Review & Publish → click Publish on single item → confirm status changes + toast. | S326/S327 |
+| Cover photo doesn't show seed value | useState bug — initialPhotoUrl only read at mount time. When formData loads async, component doesn't re-render. | Fix: useEffect hook in SaleCoverPhotoManager to sync state when initialPhotoUrl changes. | S330 |
 
 **S326 COMPLETE (2026-03-28):** 3 bugs fixed + 1 test item cleanup. (1) **P1 Buyer Preview placeholder — ROOT CAUSE FIXED:** `buildCloudinaryUrl()` in review.tsx was replacing `:` with `_` in aspect ratio transforms (`ar_4_3` → Cloudinary rejects). Removed the `.replace(':', '_')` so it sends correct `ar_4:3`. Chrome-verified: Buyer Preview grid now shows real Cloudinary photos (ss_7201mwej2, ss_6354i4qpv). (2) **Face-detection blob URL fix (secondary):** `handleFaceUploadAnyway` in [saleId].tsx was storing blob URLs instead of Cloudinary URLs returned by API. Now stores `res.data.photoUrl`. (3) **P1 Single-item Publish button — FIXED:** `handlePublishItem` was sending `draftStatus` via generic PUT `/items/:id`, but backend `updateItem` didn't include `draftStatus` in destructured fields — silently dropped. Fix: frontend now uses dedicated `POST /items/:itemId/publish` endpoint for publishing, generic PUT for unpublishing (with `draftStatus` added to backend's accepted fields). Also relaxed publish gate to allow DRAFT + PENDING_REVIEW items (was PENDING_REVIEW-only). NEEDS CHROME VERIFY after deploy. (4) **P2 Nav search — already working:** S322/S323 fixed this. Desktop has no nav search (mobile-only) — logged as P3 gap. (5) **Test item cleanup:** Deleted 2 of 3 test lighters per Patrick, kept 1. Sale now has 14 items. Files: review.tsx, [saleId].tsx, itemController.ts. Pushblock provided.
 
@@ -38,11 +39,32 @@ No active work. S329 complete. Next session starts fresh.
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S330)
+## Next Session (S331) — Sale Page Rabbit Hole
 
-**Priority:**
-1. P3 gaps: desktop nav search, map sale type filter, edit-sale cover photo section.
-2. Consider re-seeding or photo-capturing un-photographed items to fill the Trending "Most Wanted Items" blank cards (data gap, not a bug).
+**Patrick identified P1/P2 bugs + decisions needed on sale page (sales/[id].tsx).**
+
+### P1/P2 Bugs (Fix These First)
+1. Views/shares/saves stats — dark grey text, hard to read in dark mode
+2. Stray "0" under organizer badges — likely 0 reviews rendering as number without label
+3. Add to Calendar button → `calendar.ics` returns 404
+4. Buy Now → payment succeeds → success card shows ~5 sec then disappears. No purchase history visible, no notification, no animation
+5. Reviews card shows "3 stars" count but no actual reviews render
+6. "Plan My Route" in maps opens organizer address, not sale address (bug)
+7. Location card: make same size as About card, move it below About card
+
+### P2 Bugs from S330 (Dispatch to Dev)
+- Cover photo useState bug — useEffect sync needed in SaleCoverPhotoManager
+- Cover photo save timing — decision: hold in formData or save immediately?
+
+### Decisions Needed (Return to Patrick)
+8. Share buttons — Facebook/Twitter/Nextdoor are plain links. Should use proper web share APIs (intent URLs). Build real share intents?
+9. "Remind me" button — backend email reminders ARE built. Wire frontend to email reminder endpoint, remove "coming soon" copy?
+10. Vibe Check feature — Patrick thinks awkward on sale page. Move to POS or organizer dashboard? **Patrick's call.**
+11. QR code — currently visible to shoppers. Patrick thinks organizer-only. Hide from shoppers, move to organizer management? **Patrick's call.**
+12. Reviews card placement — currently below items. Patrick wants folded into "Organized by" card or organizer profile pages. **Patrick's call.**
+13. Hold button — backend `ItemHold` model is built. Should front-end wire it on item cards on sale page? **Patrick's call.**
+14. Item card uniformity — should all item cards sitewide (sale detail, feed, search results, trending, etc.) be uniform? **Patrick's preference: yes (pending confirmation).**
+15. Save/Wishlist on sale page — can like (save) but wishlist is separate per S251 decision. UI surfacing both correctly? **Audit needed.**
 
 **S329 COMPLETE (2026-03-28):** Discovery page photo fixes + two P3 fixes. (1) **Trending photos:** `getTrendingItems` backend was missing `photoUrls` in Prisma select; frontend interface referenced `photos[0].url` instead of `photoUrls[0]`. Fixed both — items with photos now render. (2) **Inspiration Gallery:** InspirationGrid.tsx had an `absolute inset-0` "Image unavailable" overlay that was unconditionally rendered on top of every card even when images loaded. Fixed with `imageErrors` Set state — overlay now only shows on `onError`. TS fix: `new Set(prev); next.add(itemId)` to avoid Set spread downlevelIteration error. (3) **Duplicate category filter pills:** Normalized category to `.toLowerCase()` before grouping in `sales/[id].tsx`. (4) **Item detail cart/views counts:** `getItemById` now queries `checkoutAttempts` and returns computed `cartCount`; `views` returns 0 (no view-tracking table yet). (5) `next.config.js`: added `picsum.photos` to image domains + CSP (later confirmed irrelevant — real issue was the overlay bug). Files: trendingController.ts, trending.tsx, sales/[id].tsx, itemController.ts, next.config.js, InspirationGrid.tsx. Chrome-verified: Inspiration ✅ (ss_3444tt102), category pills ✅ (ss_9986zybr4), cart/views counts ✅ (ss_0398yzw9c).
 
