@@ -29,6 +29,12 @@ interface InspirationGridProps {
  * 2-col mobile, 3-col desktop. Each card links to item detail.
  */
 const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = false }) => {
+  const [imageErrors, setImageErrors] = React.useState<Set<string>>(new Set());
+
+  const handleImageError = (itemId: string) => {
+    setImageErrors(prev => { const next = new Set(prev); next.add(itemId); return next; });
+  };
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
@@ -74,30 +80,28 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
                     className="object-cover group-hover:scale-105 transition-transform duration-300"
                     sizes="(max-width: 768px) 50vw, 33vw"
                     priority={false}
-                    onError={(e) => {
-                      // If image fails to load, hide it to reveal placeholder
-                      const img = e.target as HTMLImageElement;
-                      img.style.display = 'none';
-                    }}
+                    onError={() => handleImageError(item.id)}
                   />
                   {/* Fallback placeholder shown if image fails to load */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-warm-400 dark:text-gray-500 bg-gradient-to-br from-warm-100 to-warm-200 dark:from-gray-700 dark:to-gray-600">
-                    <svg
-                      className="w-12 h-12 mb-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <span className="text-xs text-warm-500 dark:text-gray-400">Image unavailable</span>
-                  </div>
+                  {imageErrors.has(item.id) && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-warm-400 dark:text-gray-500 bg-gradient-to-br from-warm-100 to-warm-200 dark:from-gray-700 dark:to-gray-600">
+                      <svg
+                        className="w-12 h-12 mb-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <span className="text-xs text-warm-500 dark:text-gray-400">Image unavailable</span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-warm-400 dark:text-gray-500">
