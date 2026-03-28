@@ -264,6 +264,12 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   }, [id, refetchItem, refetchBids]);
 
   const handlePlaceBid = async () => {
+    if (!user) {
+      showToast('Please sign in to place a bid', 'warning');
+      router.push('/login');
+      return;
+    }
+
     if (!bidAmount || bidAmount <= 0) {
       setBidError('Please enter a valid bid amount.');
       return;
@@ -526,14 +532,17 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               <div className="flex gap-3">
                 <button
                   onClick={handleLike}
-                  disabled={updateFavoriteMutation.isPending}
+                  disabled={updateFavoriteMutation.isPending || !user}
+                  title={!user ? 'Sign in to save items' : ''}
                   className={`flex-1 py-2 px-4 rounded-lg font-semibold transition ${
                     isUserLiked
                       ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      : user
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      : 'bg-gray-100 dark:bg-gray-750 text-gray-500 dark:text-gray-500 cursor-not-allowed'
                   } disabled:opacity-50`}
                 >
-                  {isUserLiked ? '❤️ Saved' : '🧡 Save'}
+                  {isUserLiked ? '❤️ Saved' : user ? '🧡 Save' : '🧡 Sign in to save'}
                 </button>
                 <ItemShareButton
                   itemId={item.id}
@@ -555,6 +564,11 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   {isAuction ? (
                     <div className="space-y-3">
+                      {!user && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-blue-700 dark:text-blue-300 text-sm">
+                          Sign in to place a bid on this item.
+                        </div>
+                      )}
                       <input
                         type="number"
                         placeholder="Enter bid amount"
@@ -563,17 +577,25 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                           setBidAmount(e.target.value ? parseFloat(e.target.value) : null);
                           setBidError('');
                         }}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100"
+                        disabled={!user}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500"
                       />
                       {bidError && <p className="text-red-600 text-sm">{bidError}</p>}
                       <button
                         onClick={handlePlaceBid}
-                        disabled={isSubmittingBid || placeBidMutation.isPending}
-                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        disabled={isSubmittingBid || placeBidMutation.isPending || !user}
+                        title={!user ? 'Sign in to place a bid' : ''}
+                        className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
+                          user
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700 cursor-not-allowed'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        {isSubmittingBid || placeBidMutation.isPending
-                          ? 'Placing Bid...'
-                          : 'Place Bid'}
+                        {user ? (
+                          isSubmittingBid || placeBidMutation.isPending ? 'Placing Bid...' : 'Place Bid'
+                        ) : (
+                          'Sign in to bid'
+                        )}
                       </button>
                       <button
                         onClick={() => setShowBidHistory(!showBidHistory)}
@@ -585,9 +607,15 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   ) : (
                     <button
                       onClick={handleAddToCart}
-                      className="w-full bg-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      disabled={!user}
+                      title={!user ? 'Sign in to purchase' : ''}
+                      className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
+                        user
+                          ? 'bg-green-600 text-white hover:bg-green-700'
+                          : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700 cursor-not-allowed'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      Buy It Now
+                      {user ? 'Buy It Now' : 'Sign in to buy'}
                     </button>
                   )}
                 </div>

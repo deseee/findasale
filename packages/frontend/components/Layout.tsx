@@ -58,6 +58,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   };
 
   const staticNavLinks = [
+    { href: '/feed', label: 'Feed' },
+    { href: '/map', label: 'Map' },
+    { href: '/inspiration', label: 'Inspiration' },
     { href: '/trending', label: 'Trending' },
     { href: '/pricing', label: 'Pricing' },
   ];
@@ -236,15 +239,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
             {/* Desktop nav */}
             <nav className="hidden lg:flex items-center space-x-4" aria-label="Main navigation">
-              {/* Show Browse/Map/Inspiration for all users */}
-              {isClient && user && (!!user.roles?.length) && (
-                <>
-                  <Link href="/feed" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Feed</Link>
-                  <Link href="/map" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Map</Link>
-                  <Link href="/inspiration" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Inspiration</Link>
-                </>
-              )}
-              {/* Static nav links for all users */}
+              {/* Static nav links for all users (includes discovery pages and utilities) */}
               {staticNavLinks.map(({ href, label }) => (
                 <Link key={href} href={href} className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">{label}</Link>
               ))}
