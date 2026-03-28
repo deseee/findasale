@@ -246,7 +246,10 @@ const SaleDetailPage = () => {
     queryClient.invalidateQueries({ queryKey: ['sale', id] });
   };
 
-  const formatPrice = (amount: number) => `$${amount.toFixed(2)}`;
+  const formatPrice = (amount: number | null | undefined) => {
+    if (amount == null) return '—';
+    return `$${amount.toFixed(2)}`;
+  };
 
   const handleDownloadMarketingKit = async () => {
     if (!sale || typeof window === 'undefined') return;
