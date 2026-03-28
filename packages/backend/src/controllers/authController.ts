@@ -246,7 +246,7 @@ export const register = async (req: Request, res: Response) => {
 // Phase 31: OAuth social login — find-or-create user by provider identity, return JWT
 export const oauthLogin = async (req: Request, res: Response) => {
   try {
-    const { provider, providerId, email: rawEmail, name: rawName, returnTo } = req.body;
+    const { provider, providerId, email: rawEmail, name: rawName, returnTo, inviteCode } = req.body;
 
     if (!provider || !providerId) {
       return res.status(400).json({ message: 'provider and providerId are required' });
@@ -275,15 +275,62 @@ export const oauthLogin = async (req: Request, res: Response) => {
     // 3. Create new account (shoppers only — role upgrade via settings)
     if (!user) {
       const userReferralCode = randomUUID().substring(0, 8).toUpperCase();
-      user = await prisma.user.create({
-        data: {
-          email: email ?? `${provider}_${providerId}@oauth.placeholder`,
-          name,
-          role: 'USER',
-          oauthProvider: provider,
-          oauthId: providerId,
-          referralCode: userReferralCode,
-        },
+
+      // Validate invite code if provided (beta access gate for OAuth)
+      let validatedInvite = null;
+      if (inviteCode) {
+        validatedInvite = await prisma.betaInvite.findUnique({
+          where: { code: inviteCode.toUpperCase() }
+        });
+        if (!validatedInvite) {
+          return res.status(400).json({ message: 'Invalid invite code' });
+        }
+        if (validatedInvite.usedAt) {
+          return res.status(400).json({ message: 'This invite code has already been used' });
+        }
+        if (validatedInvite.email && validatedInvite.email.toLowerCase() !== email) {
+          return res.status(400).json({ message: 'This invite code is restricted to a different email address' });
+        }
+      }
+
+      // Invite codes grant ORGANIZER role; otherwise default to USER (shopper)
+      const effectiveRole = validatedInvite ? 'ORGANIZER' : 'USER';
+
+      // Create user and organizer (if invite code present) atomically
+      user = await prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: email ?? `${provider}_${providerId}@oauth.placeholder`,
+            name,
+            role: effectiveRole,
+            oauthProvider: provider,
+            oauthId: providerId,
+            referralCode: userReferralCode,
+          },
+        });
+
+        // If invite code was used, promote to ORGANIZER and create organizer profile
+        if (validatedInvite) {
+          await tx.organizer.create({
+            data: {
+              userId: newUser.id,
+              businessName: name || 'Business',
+              phone: '',
+              address: '',
+            }
+          });
+
+          // Mark invite code as used
+          await tx.betaInvite.update({
+            where: { code: validatedInvite.code },
+            data: {
+              usedAt: new Date(),
+              usedById: newUser.id
+            }
+          });
+        }
+
+        return newUser;
       });
 
       // Subscribe to weekly digest (fire-and-forget, non-blocking)
@@ -465,5 +512,123 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });
+  }
+};
+
+// Redeem a beta invite code for an authenticated user (OAuth flow)
+// This endpoint is called after OAuth login to upgrade an existing shopper to organizer
+export const redeemInvite = async (req: Request, res: Response) => {
+  try {
+    const { inviteCode } = req.body;
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    if (!inviteCode) {
+      return res.status(400).json({ message: 'Invite code is required' });
+    }
+
+    // Validate invite code
+    const validatedInvite = await prisma.betaInvite.findUnique({
+      where: { code: inviteCode.toUpperCase() }
+    });
+
+    if (!validatedInvite) {
+      return res.status(400).json({ message: 'Invalid invite code' });
+    }
+
+    if (validatedInvite.usedAt) {
+      return res.status(400).json({ message: 'This invite code has already been used' });
+    }
+
+    // Get current user
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check email restriction on invite
+    if (validatedInvite.email && validatedInvite.email.toLowerCase() !== user.email.toLowerCase()) {
+      return res.status(400).json({ message: 'This invite code is restricted to a different email address' });
+    }
+
+    // Promote user to ORGANIZER and create organizer profile
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      // Update user role to ORGANIZER
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: { role: 'ORGANIZER' }
+      });
+
+      // Check if organizer profile already exists
+      const existingOrganizer = await tx.organizer.findUnique({
+        where: { userId }
+      });
+
+      // Create organizer profile if it doesn't exist
+      if (!existingOrganizer) {
+        await tx.organizer.create({
+          data: {
+            userId,
+            businessName: user.name || 'Business',
+            phone: '',
+            address: '',
+          }
+        });
+      }
+
+      // Mark invite code as used
+      await tx.betaInvite.update({
+        where: { code: validatedInvite.code },
+        data: {
+          usedAt: new Date(),
+          usedById: userId
+        }
+      });
+
+      return updated;
+    });
+
+    // Generate new JWT with ORGANIZER role
+    const organizerProfile = await prisma.organizer.findUnique({
+      where: { userId }
+    });
+
+    const userRoles = updatedUser.roles && updatedUser.roles.length > 0 ? updatedUser.roles : ['ORGANIZER'];
+    const token = jwt.sign(
+      {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: 'ORGANIZER',
+        roles: userRoles,
+        referralCode: updatedUser.referralCode,
+        tokenVersion: updatedUser.tokenVersion,
+        subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+        subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
+        onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+        createdAt: updatedUser.createdAt.toISOString(),
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    const { password: _, ...userWithoutPassword } = updatedUser;
+
+    res.json({
+      success: true,
+      message: 'Invite code redeemed successfully',
+      user: userWithoutPassword,
+      token
+    });
+  } catch (error) {
+    console.error('Redeem invite error:', error);
+    res.status(500).json({ message: 'Server error while redeeming invite code' });
   }
 };
