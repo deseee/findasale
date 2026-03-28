@@ -7,12 +7,10 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S328 complete. Next session starts fresh.
+No active work. S329 complete. Next session starts fresh.
 
 **Remaining bugs/gaps:**
-- **P1 — Item photos broken on Trending + Inspiration pages:** All item cards show cardboard box placeholder / "Image unavailable" instead of real Cloudinary photos. Affects Trending "Most Wanted Items" section and entire Inspiration Gallery. Sale-level cards (Hot Sales) work fine. Sale detail page item cards also work fine. Root cause: Trending/Inspiration pages use a different rendering path or API that doesn't return/render photoUrls.
-- **P3 — Duplicate category filter pills on sale detail page:** "Clothing" and "Collectibles" each appear twice in the filter bar (e.g. "Clothing (2)" and "Clothing (1)"). Likely case-sensitivity issue in category grouping.
-- **P3 — Item detail page "in cart • views" shows no numbers:** Labels render but counts are empty/missing.
+- **P3 — Trending "Most Wanted Items" blank cards (data gap):** Items without `photoUrls` in DB show blank gradient — correct fallback behavior. Items WITH photos now render correctly. Not a code bug; a data quality gap for un-photographed seeded items.
 - **P3 — Desktop nav search:** Desktop header has no search input (mobile-only). Low priority UX gap.
 - **P3 — Map sale type filter:** Map doesn't filter by sale type — always shows all pins.
 - **Finding — Edit-sale cover photo:** Edit-sale page missing cover photo section.
@@ -40,13 +38,13 @@ No active work. S328 complete. Next session starts fresh.
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S329)
+## Next Session (S330)
 
 **Priority:**
-1. **Fix P1 — Item photos broken on Trending + Inspiration pages.** Dispatch findasale-dev. Investigate why item cards on `/trending` (Most Wanted Items section) and `/inspiration` show placeholder icons instead of real Cloudinary photos. Sale-level cards work fine; sale detail page item cards work fine. The issue is specific to these two discovery pages. Check: (a) what API endpoint these pages use, (b) whether `photoUrls` is in the response, (c) whether the image component differs from the sale detail page's item cards.
-2. **Fix P3 — Duplicate category filter pills.** Categories like "Clothing" and "Collectibles" appear twice on the sale detail page filter bar. Likely case-sensitivity: items have "Clothing" vs "clothing" or "CLOTHING". Fix: normalize case in the category grouping logic on the frontend.
-3. **Fix P3 — Item detail "in cart / views" counts empty.** The `/items/[id]` page shows labels "in cart • views" with no numbers. Either the data isn't being fetched or the template renders labels without values.
-4. P3 gaps: desktop nav search, map sale type filter, edit-sale cover photo section
+1. P3 gaps: desktop nav search, map sale type filter, edit-sale cover photo section.
+2. Consider re-seeding or photo-capturing un-photographed items to fill the Trending "Most Wanted Items" blank cards (data gap, not a bug).
+
+**S329 COMPLETE (2026-03-28):** Discovery page photo fixes + two P3 fixes. (1) **Trending photos:** `getTrendingItems` backend was missing `photoUrls` in Prisma select; frontend interface referenced `photos[0].url` instead of `photoUrls[0]`. Fixed both — items with photos now render. (2) **Inspiration Gallery:** InspirationGrid.tsx had an `absolute inset-0` "Image unavailable" overlay that was unconditionally rendered on top of every card even when images loaded. Fixed with `imageErrors` Set state — overlay now only shows on `onError`. TS fix: `new Set(prev); next.add(itemId)` to avoid Set spread downlevelIteration error. (3) **Duplicate category filter pills:** Normalized category to `.toLowerCase()` before grouping in `sales/[id].tsx`. (4) **Item detail cart/views counts:** `getItemById` now queries `checkoutAttempts` and returns computed `cartCount`; `views` returns 0 (no view-tracking table yet). (5) `next.config.js`: added `picsum.photos` to image domains + CSP (later confirmed irrelevant — real issue was the overlay bug). Files: trendingController.ts, trending.tsx, sales/[id].tsx, itemController.ts, next.config.js, InspirationGrid.tsx. Chrome-verified: Inspiration ✅ (ss_3444tt102), category pills ✅ (ss_9986zybr4), cart/views counts ✅ (ss_0398yzw9c).
 
 **S328 COMPLETE (2026-03-28):** Full product audit + 2 backend fixes. (1) **P2 draft counter fix:** Added `draftStatus: true` to `getItemsBySaleId` select clause in itemController.ts. Frontend `computeDraftStatus` now uses real DB field. Chrome-verified: "15 items • 14 published" (correct). (2) **conditionGrade + tags fix:** Added `conditionGrade: true` and `tags: true` to `getItemById` select clause. Chrome-verified: Edit Item page loads grade "B" highlighted + 7 tags with remove buttons. (3) **Edit Item / Review & Publish parity:** Dev dispatched to add Condition Grade (S/A/B/C/D), Tags (curated grid + custom), Suggest Price, Publish/Unpublish button to edit-item page. All deployed and working. (4) **Single-item Publish verified:** Camera-captured lighter → AI auto-tagged → Review & Publish → single-item Publish → moved to published. S326 fix confirmed. (5) **QA Test Item deleted** via live site. (6) **Full product audit (organizer + shopper flows):** Feed ✅, Map ✅, Trending Hot Sales ✅, Sale Detail ✅, Organizer Dashboard ✅, Shopper Dashboard ✅, Item Detail ✅. **3 bugs found:** P1 item photos broken on Trending "Most Wanted" + Inspiration Gallery (cardboard box placeholders), P3 duplicate category filter pills, P3 item detail missing view/cart counts. Files: itemController.ts (2 select clause fixes), edit-item/[id].tsx (conditionGrade, tags, publish/unpublish).
 
