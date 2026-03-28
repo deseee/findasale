@@ -38,13 +38,9 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Remove token and redirect to login — skip if already on /login to prevent redirect loops
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-      }
-    }
+    // Public endpoints (like GET /api/items/:id) allow 401 to propagate — auth is optional for these routes.
+    // Only redirect if the request was intended to be authenticated (indicated by presence of auth token).
+    // Do NOT redirect from public item viewing — let the page gracefully handle unauthenticated state.
 
     // Handle 429 Too Many Requests — rate limit exceeded
     if (error.response?.status === 429) {
