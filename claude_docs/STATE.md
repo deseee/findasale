@@ -7,8 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S314 COMPLETE — push pending Patrick action.**
-conditionGrade fix + CLAUDE.md QA rules updated. Push block provided. See Recently Complete for details.
+**S316 COMPLETE.** AI confidence batch path: code verified ✅ (all 3 fixes confirmed on GitHub/local). Browser UNVERIFIED — both upload tools blocked (upload_image requires user-uploaded image IDs, not screenshot IDs; file_upload blocked by VM security). Review & Publish confirmed live with AI Confidence column. 2 camera draft items show "Low (50%)" — predates S313 fix or genuinely uncertain items.
 
 ## Blocked/Unverified Queue
 
@@ -16,21 +15,22 @@ conditionGrade fix + CLAUDE.md QA rules updated. Push block provided. See Recent
 |---------|--------|----------------|---------------|
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod (Cloudinary ready by the time images display). ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar, not "Low (50%)". | S314 |
-| #145 conditionGrade persist | Backend fix pushed (updateItem now handles conditionGrade). | Chrome: edit item condition grade, save, reload, confirm persisted. | S314 |
+| #142/#143 AI confidence — Batch Upload browser verify | All 3 code fixes confirmed in codebase (sha: adfb92b). Browser test blocked: upload_image needs user-uploaded photo ID (not screenshot ID); file_upload blocked by VM security. | Patrick drops a photo into chat → Claude uses that imageId with upload_image → verifies Batch Upload → checks resulting item AI confidence score in items list. | S316 |
 
-## Next Session (S315)
+## Next Session (S317)
 
-**Patrick action needed first:**
-1. Push block from S314: `git add CLAUDE.md packages/backend/src/controllers/itemController.ts` → commit → `.\push.ps1`
-2. Delete test item "Abstract Geometric Art Print" (or similar) from sale `cmn7eptij0045xdmfm5lu9oyc` — published to live site during AI confidence testing
+**No Patrick push action needed** — all S316 work was verification only, no code changes.
 
 **Start with:**
-1. After push: Chrome-verify conditionGrade persists (#145) — edit item, change condition grade, save, reload
-2. Verify AI confidence on Camera-captured item if real camera available
-3. Consider: AI confidence batch upload path fix (3 bugs: batchAnalyzeController hardcodes 'medium', SmartInventoryUpload drops aiConfidence, createItem never stores it)
-4. Consider: full product walkthrough as beta prep
+1. **Batch upload AI confidence verify** — Patrick drops a real item photo into chat, Claude injects it via upload_image into Batch Upload drop zone, verifies resulting item shows non-50% confidence. This is the fastest path to clearing the last unverified item from the S315 batch fix.
+2. **Full product walkthrough (deferred from S316)** — walk entire product as ORGANIZER + SHOPPER, find anything broken or embarrassing before real beta users hit it
+3. AI confidence Camera mode — still UNVERIFIED (needs real camera hardware)
 
 ## Recently Complete
+
+**S316 COMPLETE (2026-03-27):** AI confidence batch path verification session. All 3 S315 bug fixes code-confirmed on GitHub: (1) batchAnalyzeController error fallback → 0.4 numeric (not 'low' string); (2) SmartInventoryUpload payload includes aiConfidence; (3) createItem handler stores aiConfidence with parseFloat. cloudAIService.ts Haiku prompt confirmed includes confidence field (0.0–1.0, required) + field-completeness fallback (0.4–0.8). Browser test BLOCKED — upload_image requires user-uploaded image IDs (Patrick drags photo into chat), not Claude screenshot IDs; file_upload blocked by VM security. Review & Publish page visited — AI Confidence column confirmed live (ss_1746po7qa). 2 camera draft items show "Low (50%)" — predates S313 fix. No code changes this session; no push needed.
+
+**S315 COMPLETE (2026-03-27):** conditionGrade Chrome-verified + AI confidence batch path fix. (1) #145 conditionGrade ✅ VERIFIED — navigated to edit-item/cmn7eq7l300bbxdmf2ol3dsav as user1, changed Condition from Poor→Good, saved (redirected to dashboard), reloaded page → Good persisted (ss_4398w1jns→ss_63876sigo). Fix from S314 confirmed working in production. (2) Test item "Abstract Geometric Art Print" already deleted by Patrick — not present in sale cmn7eptij0045xdmfm5lu9oyc item list. (3) AI confidence batch path: 3 bugs fixed (batchAnalyzeController hardcoded 'low' string on error fallback → 0.4 numeric; SmartInventoryUpload dropped aiConfidence from create payload → now includes it; createItem handler never stored aiConfidence → now destructures and saves with parseFloat). Dev agent missed error-fallback string→number, caught by Railway build — fixed inline + pushed via MCP (sha: adfb92b). Railway green.
 
 **S314 COMPLETE (2026-03-27):** conditionGrade/tags/backgroundRemoved persistence fix + permanent QA behavior rules. (1) Root cause confirmed: `updateItem` backend handler destructured `req.body` without `conditionGrade`, `tags`, or `backgroundRemoved` — all three silently ignored on every PUT /items/:id. Fixed in itemController.ts (3 lines destructuring, 3 lines updateData). 0 TS errors. (2) CLAUDE.md §9 updated with two permanent hard rules: `upload_image` must be attempted before marking any camera/upload flow UNVERIFIED; code-on-GitHub confirmation ≠ browser-verified ✅. Both rules survive compression. SKILL.md is read-only at runtime (EROFS) — CLAUDE.md is the correct permanent location. (3) Discovered: batch upload path creates PUBLISHED items (draftStatus:'PUBLISHED') — they never appear in Review & Publish by design. AI confidence batch fix is a separate 3-part future task. (4) Test item "Abstract Geometric Art Print" accidentally published to live site during testing — Patrick must delete. Push block: `git add CLAUDE.md packages/backend/src/controllers/itemController.ts` → `.\push.ps1`.
 

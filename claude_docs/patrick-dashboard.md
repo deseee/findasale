@@ -1,55 +1,53 @@
-# Patrick's Dashboard — Session 312 Wrap (March 27, 2026)
+# Patrick's Dashboard — Session 316 Wrap (March 27, 2026)
 
 ---
 
 ## Build Status
 
-- **Railway:** ✅ Green (no backend changes)
-- **Vercel:** ✅ Deployed — SW fix live (sha: 29ba630)
+- **Railway:** ✅ Green (sha: adfb92b — no changes this session)
+- **Vercel:** ✅ No changes this session
 - **DB:** ✅ No migrations
 
 ---
 
-## Session 312 Summary
+## Session 316 Summary
 
-**#143 Camera Pipeline — fully closed**
+**AI confidence batch path — code verified, browser blocked**
 
-- **SW Cloudinary cache bug fixed** — Workbox `StaleWhileRevalidate` entry for `res.cloudinary.com` removed from `next.config.js`. Root cause of all camera thumbnail failures. Fix live on Vercel (sha: 29ba630).
-- **QA skill updated** — Thumbnail zoom rule in two locations. Installed by Patrick this session.
-- **Test item deleted** — "Vintage Yellow Plastic Lighter, Mid-Century" confirmed gone. Sale count: 21 ✅ (the remaining "BIC Lighter" is real inventory).
-- **Toast duration** ✅ — 4500ms confirmed in code.
-- **PreviewModal prop fix** ✅ — `photoUrl→thumbnailUrl` fix is correct in code. New bug found: no `onError` fallback on `<img>` tag. Fresh capture shows broken image while Cloudinary CDN processes upload. Queued for S313 dev fix.
+All 3 S315 bug fixes confirmed in codebase on GitHub:
+- `batchAnalyzeController`: error fallback is `0.4` numeric (not `'low'` string) ✅
+- `SmartInventoryUpload`: payload includes `aiConfidence` on item create ✅
+- `createItem`: destructures + stores `aiConfidence` with `parseFloat` ✅
+- `cloudAIService.ts`: Haiku prompt has `confidence` as required field (0.0–1.0) + field-completeness fallback (0.4–0.8) ✅
 
----
-
-## Next Session (S313) — Start Here
-
-1. Dispatch `findasale-dev`: add `onError` fallback to `PreviewModal.tsx` `<img>` — 📷 emoji when Cloudinary returns 503
-2. After fix pushed: Chrome-verify PreviewModal (open camera → capture → tap carousel → PreviewModal → photo or 📷)
-3. Verify review thumbnails post-SW-fix (new capture → Review & Publish → item cards show Cloudinary photos)
-4. If both pass → full desktop E2E (#143 close-out)
-5. Consider #145 Condition Grading Chrome QA
+**Browser test blocked:** `upload_image` only works with photos YOU drag into the chat window — it can't use Claude's own screenshots. `file_upload` is blocked by VM security. Visited Review & Publish page — AI Confidence column is live. 2 existing camera draft items show "Low (50%)" but these predate the S313 fix.
 
 ---
 
-## Open Items
+## No Patrick Action Needed
 
-- **#143 PreviewModal onError** — dev fix queued for S313 (P2 — cosmetic but affects fresh captures)
-- **#143 Review thumbnails** — needs post-SW-fix Chrome verify
-- #37 Sale Reminders — iCal confirmed, push "Remind Me" not built
-- #59 Streak Rewards — StreakWidget on /shopper/dashboard, not on /shopper/loyalty (P2)
+No code changes this session. No push needed. Everything stays at sha: adfb92b.
+
+---
+
+## Next Session (S317) — Start Here
+
+1. **Drop a photo into the chat** — drag any item photo from your computer into the chat window, then say "verify batch upload confidence." Claude will inject it into the Batch Upload drop zone and confirm the resulting item shows a real AI confidence score (not 50%).
+2. **Full product walkthrough** — walk entire app as ORGANIZER + SHOPPER before beta. Find anything broken or embarrassing.
+3. **AI confidence camera mode** — still UNVERIFIED (needs real device camera).
+
+---
+
+## Blocked/Unverified Queue
+
+| Feature | Status | What's Needed |
+|---------|--------|----------------|
+| Batch Upload AI confidence (browser verify) | Code ✅ / Browser UNVERIFIED | Patrick drops photo in chat → Claude runs upload_image → checks confidence score |
+| #143 Camera AI confidence | UNVERIFIED since S314 | Real device camera capture → Review & Publish → confirm non-50% score |
+| #143 PreviewModal onError | Acceptable UNVERIFIED | Can't trigger Cloudinary 503 in prod — defensive fix is in place |
 
 ---
 
 ## Push Block
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add claude_docs/STATE.md
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S312 wrap — SW thumbnail fix confirmed, PreviewModal onError bug queued, roadmap v78"
-
-.\push.ps1
-```
+No push needed this session — no code or doc changes were made.
