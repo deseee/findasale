@@ -67,6 +67,7 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
               {photoUrl ? (
                 <>
                   <Image
+                    key={photoUrl}
                     src={photoUrl}
                     alt={item.title}
                     fill

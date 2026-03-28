@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
@@ -28,6 +28,18 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
   const [imgError, setImgError] = useState(false);
   const { isLowBandwidth } = useNetworkQuality();
 
+  // Calculate image URLs
+  const lqipUrl_calc = item.photoUrl ? getLqipUrl(item.photoUrl) : null;
+  const imageQuality = isLowBandwidth ? 40 : 75;
+  const optimizedUrl = item.photoUrl ? getOptimizedUrl(item.photoUrl, imageQuality) : null;
+
+  // Reset image loading state when the photo URL changes
+  // This ensures new images load even if the component instance is reused
+  useEffect(() => {
+    setImgLoaded(false);
+    setImgError(false);
+  }, [optimizedUrl]);
+
   const getCountdownText = (): string => {
     if (!item.auctionEndTime) return '';
     const endTime = new Date(item.auctionEndTime).getTime();
@@ -55,9 +67,7 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
     }
   };
 
-  const lqipUrl = item.photoUrl ? getLqipUrl(item.photoUrl) : null;
-  const imageQuality = isLowBandwidth ? 40 : 75;
-  const optimizedUrl = item.photoUrl ? getOptimizedUrl(item.photoUrl, imageQuality) : null;
+  const lqipUrl = lqipUrl_calc;
   const badge = getStatusBadge();
   const countdown = getCountdownText();
 
@@ -87,6 +97,7 @@ const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
           {/* Tier 3: Main lazy WebP image */}
           {item.photoUrl && !imgError ? (
             <img
+              key={optimizedUrl}
               src={optimizedUrl!}
               alt={item.title}
               className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${

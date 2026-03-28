@@ -630,6 +630,7 @@ export default function POSPage() {
                 <div className="min-w-0 flex-1">
                   {item.photoUrl && (
                     <img
+                      key={item.photoUrl}
                       src={item.photoUrl}
                       alt={item.title}
                       className="w-8 h-8 rounded mb-1 object-cover"

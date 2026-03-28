@@ -70,6 +70,7 @@ export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDa
             <div key={idx} className="flex items-center gap-4 pb-3 border-b border-gray-100 last:border-0">
               {item.photoUrl && (
                 <img
+                  key={item.photoUrl}
                   src={item.photoUrl}
                   alt={item.itemTitle}
                   className="w-12 h-12 object-cover rounded"

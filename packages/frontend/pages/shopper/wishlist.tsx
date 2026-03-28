@@ -219,6 +219,7 @@ const WishlistPage = () => {
                           <div className="flex gap-3 p-3">
                             {item.photoUrls?.[0] ? (
                               <img
+                                key={item.photoUrls[0]}
                                 src={item.photoUrls[0]}
                                 alt={item.title}
                                 className="w-20 h-20 object-cover rounded-lg flex-shrink-0 bg-warm-100 dark:bg-gray-700"
@@ -299,6 +300,7 @@ const WishlistPage = () => {
                                 <div className="card overflow-hidden dark:bg-gray-800 dark:border-gray-700">
                                   {wItem.item.photoUrls?.[0] ? (
                                     <img
+                                      key={wItem.item.photoUrls[0]}
                                       src={wItem.item.photoUrls[0]}
                                       alt={wItem.item.title}
                                       className="w-full h-24 object-cover bg-warm-100 dark:bg-gray-700 group-hover:opacity-80 transition-opacity"

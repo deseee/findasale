@@ -309,6 +309,7 @@ function ExplorerPassportPage() {
                     <div className="relative bg-gray-100 h-32 overflow-hidden">
                       {item.photoUrls[0] ? (
                         <img
+                          key={item.photoUrls[0]}
                           src={item.photoUrls[0]}
                           alt={item.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"

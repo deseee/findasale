@@ -224,6 +224,7 @@ const SurpriseMePage = () => {
                   <div className="aspect-square relative bg-warm-100 dark:bg-gray-700 overflow-hidden border-b border-warm-100 dark:border-gray-700">
                     {item.photoUrls?.[0] ? (
                       <Image
+                        key={item.photoUrls[0]}
                         src={item.photoUrls[0]}
                         alt={item.title}
                         fill

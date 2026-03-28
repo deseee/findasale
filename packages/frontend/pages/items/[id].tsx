@@ -408,6 +408,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer group"
               >
                 <img
+                  key={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
                   src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
                   alt={item.title}
                   className="w-full h-96 object-cover group-hover:opacity-90 transition"

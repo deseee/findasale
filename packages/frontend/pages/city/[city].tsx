@@ -225,6 +225,7 @@ export default function CityPage({
                       <div className="bg-warm-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-3 aspect-square relative">
                         {item.photoUrls[0] ? (
                           <img
+                            key={item.photoUrls[0]}
                             src={item.photoUrls[0]}
                             alt={item.title}
                             className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"

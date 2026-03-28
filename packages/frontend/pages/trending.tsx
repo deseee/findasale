@@ -86,6 +86,7 @@ export default function TrendingPage() {
                       <div className="relative h-36 bg-warm-100">
                         {sale.photoUrls?.[0] ? (
                           <Image
+                            key={sale.photoUrls[0]}
                             src={sale.photoUrls[0]}
                             alt={sale.title}
                             fill

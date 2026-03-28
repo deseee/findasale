@@ -473,6 +473,7 @@ const HomePage = () => {
                                 <div className="w-full h-48 bg-warm-100 dark:bg-gray-700 relative overflow-hidden">
                                   {item.photoUrls && item.photoUrls.length > 0 ? (
                                     <img
+                                      key={item.photoUrls[0]}
                                       src={item.photoUrls[0]}
                                       alt={item.title}
                                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

@@ -125,6 +125,7 @@ const ShopperHoldsPage = () => {
                     <div className="flex-shrink-0 w-full sm:w-32">
                       <Link href={`/items/${hold.item.id}`}>
                         <img
+                          key={hold.item.photoUrls?.[0] ? getThumbnailUrl(hold.item.photoUrls[0]) : '/images/placeholder.svg'}
                           src={hold.item.photoUrls?.[0] ? getThumbnailUrl(hold.item.photoUrls[0]) : '/images/placeholder.svg'}
                           alt={hold.item.title}
                           className="w-full h-32 object-cover rounded-lg hover:opacity-90 transition-opacity"

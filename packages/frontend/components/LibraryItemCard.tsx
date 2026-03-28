@@ -51,6 +51,7 @@ const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
       {/* Photo */}
       <div className="relative w-full h-32 bg-gray-200 dark:bg-gray-700 overflow-hidden">
         <img
+          key={photoUrl}
           src={photoUrl}
           alt={title}
           className="w-full h-full object-cover"

@@ -319,7 +319,7 @@ const ShopperDashboard = () => {
                   {favorites.map((item: any) => (
                     <Link key={item.id} href={`/items/${item.id}`} className="card overflow-hidden hover:shadow-md transition-shadow">
                       {item.photoUrls?.[0] && (
-                        <img src={item.photoUrls[0]} alt={item.title} className="aspect-square w-full object-cover" loading="lazy" />
+                        <img key={item.photoUrls[0]} src={item.photoUrls[0]} alt={item.title} className="aspect-square w-full object-cover" loading="lazy" />
                       )}
                       <div className="p-3">
                         <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 line-clamp-1">{item.title}</h3>

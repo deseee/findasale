@@ -160,6 +160,7 @@ export default function BidsPage() {
                   <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-warm-100 dark:bg-gray-700 border border-warm-200 dark:border-gray-600">
                     {bid.item.photoUrls && bid.item.photoUrls.length > 0 && bid.item.photoUrls[0] ? (
                       <img
+                        key={bid.item.photoUrls[0]}
                         src={bid.item.photoUrls[0]}
                         alt={bid.item.title}
                         className="w-full h-full object-cover"

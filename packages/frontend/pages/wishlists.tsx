@@ -306,6 +306,7 @@ const WishlistsPage = () => {
                             <div className="relative w-full h-32 bg-warm-200 overflow-hidden">
                               {wishlistItem.item.photoUrls.length > 0 ? (
                                 <img
+                                  key={getThumbnailUrl(wishlistItem.item.photoUrls[0]) || wishlistItem.item.photoUrls[0]}
                                   src={getThumbnailUrl(wishlistItem.item.photoUrls[0]) || wishlistItem.item.photoUrls[0]}
                                   alt={wishlistItem.item.title}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
