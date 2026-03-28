@@ -207,24 +207,31 @@ const ProfilePage = () => {
         )}
 
         {/* Badges Section — only for shoppers */}
-        {!isOrganizerOnly && badgesData?.badges && badgesData.badges.length > 0 && (
+        {!isOrganizerOnly && badgesData && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Badges</h2>
-            <div className="flex flex-wrap gap-4">
-              {badgesData.badges.map((badge: any) => (
-                <div key={badge.id} className="flex items-center bg-warm-50 dark:bg-gray-700 rounded-lg p-3">
-                  {badge.iconUrl ? (
-                    <img src={badge.iconUrl} alt={badge.name} className="w-10 h-10 mr-3" loading="lazy"/>
-                  ) : (
-                    <div className="bg-warm-200 dark:bg-warm-900/30 border-2 border-dashed rounded-xl w-10 h-10 mr-3" />
-                  )}
-                  <div>
-                    <h3 className="font-semibold text-warm-900 dark:text-warm-100">{badge.name}</h3>
-                    <p className="text-sm text-warm-600 dark:text-warm-400">{badge.description}</p>
+            {badgesData.badges && badgesData.badges.length > 0 ? (
+              <div className="flex flex-wrap gap-4">
+                {badgesData.badges.map((badge: any) => (
+                  <div key={badge.id} className="flex items-center bg-warm-50 dark:bg-gray-700 rounded-lg p-3">
+                    {badge.iconUrl ? (
+                      <img src={badge.iconUrl} alt={badge.name} className="w-10 h-10 mr-3" loading="lazy"/>
+                    ) : (
+                      <div className="bg-warm-200 dark:bg-warm-900/30 border-2 border-dashed rounded-xl w-10 h-10 mr-3" />
+                    )}
+                    <div>
+                      <h3 className="font-semibold text-warm-900 dark:text-warm-100">{badge.name}</h3>
+                      <p className="text-sm text-warm-600 dark:text-warm-400">{badge.description}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-warm-600 dark:text-warm-400 mb-2">No badges yet</p>
+                <p className="text-sm text-warm-500 dark:text-warm-500">Start shopping to earn your first badge!</p>
+              </div>
+            )}
           </div>
         )}
 
