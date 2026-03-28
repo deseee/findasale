@@ -7,7 +7,21 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S323 IN PROGRESS.** QA session — S322 verification + product audit. Chrome concurrency rule locked + added to CLAUDE.md and findasale-qa skill (Patrick to install .skill file). P2 bug found: duplicate Settings/Logout in shopper nav — dev fix pending. QA #4 (homepage search) and QA #5 (Sales Near You card) in progress.
+**S324 IN PROGRESS.** Smoke tests + product audit. Sitewide thumbnail first-load fix in progress — SaleCard.tsx + [saleId].tsx + review.tsx fixed; camera workflow + remaining pages dispatched to dev.
+
+**S324 Smoke Tests ✅:**
+1. Mobile nav (Karen Anderson) — Settings+Logout appear once only ✅
+2. Homepage search "chair" — auto-scrolls to results heading ✅
+3. Sale type filters — Estate/Yard/Auction/Flea/Consignment buttons work ✅ (P3 gap: map doesn't filter, always shows all pins)
+4. Review & Publish Publish All SIMPLE — ✅ CLEARED (Alice SIMPLE tier: green "Publish All (1 unpublished)" button, no PRO toast, publishes successfully)
+
+**S324 Fixes so far:**
+- SaleCard.tsx: `useEffect` resets `imgLoaded`/`imgError` when `optimizedUrl` changes; `key={optimizedUrl}` on `<img>` — fixes first-load placeholder bug
+- [saleId].tsx: `key={item.photoUrls[0]}` on item table thumbnail img (line 1619)
+- review.tsx: `key={item.photoUrls[0]}` on buyer preview grid img (line 453) + item table img (line 640)
+- Push block given for [saleId].tsx + review.tsx; SaleCard.tsx may need separate commit
+
+**Active:** Dev dispatch for sitewide thumbnail audit — camera workflow + all remaining pages
 
 ## Blocked/Unverified Queue
 
@@ -15,7 +29,6 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 |---------|--------|----------------|---------------|
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod (Cloudinary ready by the time images display). ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar, not "Low (50%)". | S314 |
-| Review & Publish Publish All (SIMPLE) | No DRAFT items in seed — button doesn't appear. | Create a DRAFT item via camera or manual entry, then verify Publish All works without PRO toast. | S323 |
 
 **S321 COMPLETE (2026-03-28):** Nav full audit + homepage fixes. (1) Review Item modal thumbnail fixed: `thumbnailUrl` dropped during ID swap in [saleId].tsx (lines 701, 757) — now preserved so review modal shows captured photo instead of placeholder. (2) Desktop dropdown full nav audit: added Organizer Tools + Pro Tools collapsible sections (were missing entirely); normalized all links to `px-3 py-2 rounded-md`; added `text-sm` to TierGatedNav.tsx both link states. (3) Shopper menu parity: desktop dropdown had only About/Settings/Sign Out for shopper users — added Shopper Dashboard, My Profile, My Saves, Referrals, Host a Sale CTA, My Explorer Profile collapsible (10 links). (4) Dual-role: "My Dashboard" → "Shopper Dashboard" in mobile; both dashboards shown for dual-role users. (5) Homepage search: itemSearchService.ts now queries item tags + sale tags via PostgreSQL `@>` — "eames", "mid century", "rolex" now searchable. (6) Sales Near You card: redesigned as 2-column layout, sale counts by type, full card links to /map. Files: [saleId].tsx, AvatarDropdown.tsx, Layout.tsx, TierGatedNav.tsx, itemSearchService.ts, index.tsx. All pushed.
 
@@ -23,25 +36,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S324)
+## Next Session (S325)
 
-**Patrick push needed:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/pages/index.tsx
-git add CLAUDE.md
-git commit -m "fix: duplicate logout in mobile nav + search scroll-to-results UX + Chrome concurrency rule"
-.\push.ps1
-```
+**Patrick push needed (S324 thumbnail fixes — pending dev dispatch result):**
+Pushblock will be provided at S324 wrap after dev returns.
 
-**Also:** Install `findasale-qa.skill` file from project folder via Cowork UI to activate Chrome concurrency rule in QA skill.
+**Remaining Blocked Queue items:**
+- Camera AI confidence mode — UNVERIFIED (requires real device hardware)
 
-**Start S324 with:**
-1. Smoke test: open mobile nav as Karen Anderson — verify Settings+Logout appear only once.
-2. Smoke test: search "chair" from homepage — verify page auto-scrolls to results.
-3. Continue product audit — sale type filter buttons (Estate/Yard/Auction/etc) on homepage.
-4. Verify Review & Publish Publish All for SIMPLE users (need to create a DRAFT item first).
+**P3 gap to track:** Map on homepage doesn't respect sale type filter — always shows all pins regardless of Estate/Yard/Auction etc. selection. Not blocking but jarring UX.
 
 **S319 COMPLETE (2026-03-28):** 6 fixes shipped + reseed + shopper walkthrough. (1) "All items sold or reserved" banner fixed: `ACTIVE` → `AVAILABLE` + removed non-existent `PENDING` from soldCount in sales/[id].tsx. (2) Reseeded Railway with 17 real Cloudinary photos — picsum removed from seed.ts entirely. (3) Message compose footer fixed: `_app.tsx` supports `getLayout` pattern; messages/[id].tsx uses `noFooter={true}` (Chrome-verified ss_1731k6do9). (4) Badge loading P1 fixed: `/users/me/points` endpoint was missing — added `getBadges` controller + route (Chrome-verified ss_80947s2pv). (5) Badge empty state fixed: profile.tsx was rendering 3 dashed blank placeholder boxes when badges=[] — replaced with "No badges yet / Start shopping to earn your first badge!" (QA honesty failure caught by Patrick from screenshot). (6) Shopper walkthrough QA: likes ✅, profile ✅, Loot Legend ✅, Hunt Pass ✅, messaging ✅, dark mode ✅, mobile ✅.
 
