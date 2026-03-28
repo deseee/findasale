@@ -224,6 +224,9 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
       })
   );
 
+  // Support per-page layouts via getLayout function
+  const getLayout = (Component as any).getLayout || ((page: React.ReactNode) => <Layout>{page}</Layout>);
+
   return (
     <SessionProvider session={session}>
       <ToastProvider>
@@ -233,9 +236,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <QueryClientProvider client={queryClient}>
               <ThemeInitializer />
               <ErrorBoundary key={router.asPath}>
-                <Layout>
-                  <Component {...pageProps} />
-                </Layout>
+                {getLayout(<Component {...pageProps} />)}
               </ErrorBoundary>
               {/* PWA helpers */}
               <ServiceWorkerUpdateNotifier />

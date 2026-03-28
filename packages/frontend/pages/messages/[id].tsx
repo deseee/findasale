@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, ReactNode } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import Layout from '../../components/Layout';
 
 interface Message {
   id: string;
@@ -201,5 +202,9 @@ const MessageThreadPage = () => {
     </div>
   );
 };
+
+MessageThreadPage.getLayout = (page: ReactNode) => (
+  <Layout noFooter={true}>{page}</Layout>
+);
 
 export default MessageThreadPage;

@@ -446,3 +446,42 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error while fetching profile' });
   }
 };
+
+export const getBadges = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const userBadges = await prisma.userBadge.findMany({
+      where: {
+        userId: req.user.id,
+      },
+      include: {
+        badge: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            iconUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        awardedAt: 'desc',
+      },
+    });
+
+    res.json({
+      badges: userBadges.map((ub) => ({
+        id: ub.id,
+        badgeId: ub.badgeId,
+        awardedAt: ub.awardedAt,
+        badge: ub.badge,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching user badges:', error);
+    res.status(500).json({ message: 'Server error while fetching badges' });
+  }
+};

@@ -4,7 +4,8 @@ import {
   getFavorites,
   getUserProfile,
   getLeaderboard,
-  getPublicShopperProfile
+  getPublicShopperProfile,
+  getBadges
 } from '../controllers/userController';
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -109,6 +110,7 @@ router.get('/me/referrals', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
+router.get('/me/points', authenticate, getBadges);
 
 // Create or update organizer profile
 // Allow any authenticated user (including SHOPPER) to register as organizer
