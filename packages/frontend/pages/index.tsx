@@ -337,8 +337,34 @@ const HomePage = () => {
 
             {/* Right Column: Sales Near You Card */}
             <div className="lg:col-span-2">
-              <Link href="/map">
-                <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 cursor-pointer hover:shadow-lg hover:scale-[1.01] transition-all duration-300 h-full flex flex-col justify-between">
+              <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full">
+                {/* Map Section */}
+                {!isLoading && sales && sales.length > 0 && (
+                  <div className="w-full h-48 border-b border-warm-200 dark:border-gray-700">
+                    <SaleMap
+                      pins={sales
+                        .filter((s) => s.lat != null && s.lng != null)
+                        .map((s) => ({
+                          id: s.id,
+                          title: s.title,
+                          lat: s.lat,
+                          lng: s.lng,
+                          city: s.city,
+                          state: s.state,
+                          startDate: s.startDate,
+                          endDate: s.endDate,
+                          organizerName: s.organizer.businessName,
+                          status: 'active' as const,
+                        }))}
+                      center={[42.9634, -85.6681]}
+                      zoom={11}
+                      height="192px"
+                    />
+                  </div>
+                )}
+
+                {/* Content Section */}
+                <div className="p-6 flex flex-col justify-between flex-1">
                   <div className="mb-4">
                     <h2 className="font-heading text-xl font-bold text-warm-900 dark:text-gray-100 mb-2">Sales Near You</h2>
                     {isLoading ? (
@@ -379,10 +405,12 @@ const HomePage = () => {
                     )}
                   </div>
                   <div className="flex justify-end pt-4 border-t border-warm-100 dark:border-gray-700">
-                    <span className="text-sm font-medium text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300">View on Map →</span>
+                    <Link href="/map">
+                      <span className="text-sm font-medium text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 cursor-pointer">View on Map →</span>
+                    </Link>
                   </div>
                 </div>
-              </Link>
+              </div>
             </div>
           </section>
 
