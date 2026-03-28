@@ -737,20 +737,20 @@ const SaleDetailPage = () => {
                 >
                   Show: All
                 </button>
-                {Array.from(new Set(sale.items.map((item) => item.category).filter(Boolean))).map(
-                  (category) => {
-                    const count = sale.items.filter((item) => item.category === category).length;
+                {Array.from(new Set(sale.items.map((item) => item.category?.toLowerCase()).filter(Boolean))).map(
+                  (normalizedCategory) => {
+                    const count = sale.items.filter((item) => item.category?.toLowerCase() === normalizedCategory).length;
                     return (
                       <button
-                        key={category}
-                        onClick={() => setSelectedCategory(category as string)}
+                        key={normalizedCategory}
+                        onClick={() => setSelectedCategory(normalizedCategory as string)}
                         className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                          selectedCategory === category
+                          selectedCategory === normalizedCategory
                             ? 'bg-amber-600 text-white'
                             : 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
                         }`}
                       >
-                        {(category as string).charAt(0).toUpperCase() + (category as string).slice(1)} ({count})
+                        {(normalizedCategory as string).charAt(0).toUpperCase() + (normalizedCategory as string).slice(1)} ({count})
                       </button>
                     );
                   }
@@ -782,7 +782,7 @@ const SaleDetailPage = () => {
               {sale.items
                 .filter(
                   (item) =>
-                    selectedCategory === null || item.category === selectedCategory
+                    selectedCategory === null || item.category?.toLowerCase() === selectedCategory
                 )
                 .map((item) => (
                 <div key={item.id} className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">

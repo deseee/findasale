@@ -14,7 +14,13 @@ export const getTrendingItems = async (req: Request, res: Response) => {
         sale: { status: 'PUBLISHED' },
         ...PUBLIC_ITEM_FILTER,
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        category: true,
+        condition: true,
+        photoUrls: true,
         sale: { select: { id: true, title: true, city: true, state: true } },
         _count: { select: { favorites: true } },
       },
