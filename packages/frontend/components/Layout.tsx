@@ -193,10 +193,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </Link>
               </>
             )}
-            <hr className="my-2 border-warm-200 dark:border-gray-700" />
-            <Link href="/shopper/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              Settings
-            </Link>
           </>
         )}
         {user?.roles?.includes('ADMIN') && (
@@ -204,12 +200,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             Admin Panel
           </Link>
         )}
-        <button
-          onClick={handleLogout}
-          className="block w-full text-left px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
-        >
-          Logout
-        </button>
       </>
     ) : (
       <>

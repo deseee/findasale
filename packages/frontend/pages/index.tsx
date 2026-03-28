@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -82,6 +82,7 @@ const HomePage = () => {
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
   const [isSavingSearch, setIsSavingSearch] = useState(false);
+  const resultsRef = useRef<HTMLHeadingElement>(null);
 
   // Initialize search from ?q= URL param (set by header search bar)
   useEffect(() => {
@@ -89,6 +90,15 @@ const HomePage = () => {
       setSearchQuery(String(router.query.q));
     }
   }, [router.isReady, router.query.q]);
+
+  // Auto-scroll to results when search query is active
+  useEffect(() => {
+    if (searchQuery.trim().length >= 2 && resultsRef.current) {
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    }
+  }, [searchQuery]);
 
   const { data: feedData, isLoading, isError, refetch } = useQuery({
     queryKey: ['feed', userLocation?.lat, userLocation?.lng],
@@ -440,7 +450,7 @@ const HomePage = () => {
             {searchQuery.trim().length >= 2 ? (
               <>
                 <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-                  <h2 className="font-heading text-3xl font-bold text-warm-900 dark:text-gray-100">
+                  <h2 ref={resultsRef} className="font-heading text-3xl font-bold text-warm-900 dark:text-gray-100">
                     {isSearching ? 'Searching…' : `${(searchResults?.items?.length ?? 0) + (searchResults?.sales?.length ?? 0)} results for "${searchQuery}"`}
                   </h2>
                 </div>
