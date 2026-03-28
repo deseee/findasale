@@ -75,7 +75,7 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
       <div className="flex items-center gap-3">
         <div className="flex flex-col gap-1">
           <StarRating score={reputation.score} />
-          <span className="text-sm text-warm-600">
+          <span className="text-sm text-warm-600 dark:text-gray-400">
             {reputation.score.toFixed(1)} out of 5 • {reputation.salesCount} sales
           </span>
         </div>
@@ -87,22 +87,22 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
       </div>
 
       {/* Breakdown Details (optional expandable, but shown on hover tooltip in full version) */}
-      <div className="text-xs text-warm-500 grid grid-cols-2 gap-2 pt-2 border-t border-warm-200">
+      <div className="text-xs text-warm-500 dark:text-gray-400 grid grid-cols-2 gap-2 pt-2 border-t border-warm-200 dark:border-gray-700">
         <div>
-          <span className="block font-medium">Response Time</span>
-          <span className="text-warm-600">{reputation.breakdown.holdResponseTime.toFixed(1)}/5</span>
+          <span className="block font-medium text-warm-700 dark:text-gray-300">Response Time</span>
+          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.holdResponseTime.toFixed(1)}/5</span>
         </div>
         <div>
-          <span className="block font-medium">Sale Frequency</span>
-          <span className="text-warm-600">{reputation.breakdown.saleFrequency.toFixed(1)}/5</span>
+          <span className="block font-medium text-warm-700 dark:text-gray-300">Sale Frequency</span>
+          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.saleFrequency.toFixed(1)}/5</span>
         </div>
         <div>
-          <span className="block font-medium">Photo Quality</span>
-          <span className="text-warm-600">{reputation.breakdown.photoQuality.toFixed(1)}/5</span>
+          <span className="block font-medium text-warm-700 dark:text-gray-300">Photo Quality</span>
+          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.photoQuality.toFixed(1)}/5</span>
         </div>
         <div>
-          <span className="block font-medium">Reliability</span>
-          <span className="text-warm-600">{reputation.breakdown.disputeRate.toFixed(1)}/5</span>
+          <span className="block font-medium text-warm-700 dark:text-gray-300">Reliability</span>
+          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.disputeRate.toFixed(1)}/5</span>
         </div>
       </div>
     </div>

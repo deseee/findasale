@@ -358,7 +358,7 @@ const SaleDetailPage = () => {
               <p className="text-lg text-warm-700 dark:text-gray-300 mb-4">
                 {sale.address}, {sale.city}, {sale.state} {sale.zip}
               </p>
-              <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
                 {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
               </p>
               {sale.status && (
@@ -415,9 +415,9 @@ const SaleDetailPage = () => {
               {sale.organizer.avgRating && (
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-sm font-medium text-warm-700 dark:text-gray-300">Rating:</span>
-                  <span className="text-sm text-warm-600 dark:text-gray-400">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
+                  <span className="text-sm text-warm-600 dark:text-gray-200">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
                   {(sale.organizer.reviewCount ?? 0) > 0 && (
-                    <span className="text-sm text-warm-500 dark:text-gray-400">({sale.organizer.reviewCount} reviews)</span>
+                    <span className="text-sm text-warm-500 dark:text-gray-200">({sale.organizer.reviewCount} reviews)</span>
                   )}
                 </div>
               )}
@@ -658,6 +658,34 @@ const SaleDetailPage = () => {
             {/* Feature #70: Live Feed Ticker — real-time sale events (SOLD, HOLD, PRICE_DROP) */}
             <div className="mb-8">
               <LiveFeedTicker saleId={sale.id} />
+            </div>
+
+            {/* Location Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+              <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
+              {sale.lat && sale.lng ? (
+                <SaleMap
+                  singlePin={{
+                    lat: sale.lat,
+                    lng: sale.lng,
+                    label: `${sale.title} \u2014 ${sale.address}, ${sale.city}, ${sale.state}`,
+                  }}
+                  entrancePin={sale.entranceLat && sale.entranceLng ? {
+                    lat: sale.entranceLat,
+                    lng: sale.entranceLng,
+                    note: sale.entranceNote,
+                  } : undefined}
+                  photoOpStations={photoOpStations}
+                  height="360px"
+                />
+              ) : (
+                <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                  <p className="text-warm-500 dark:text-gray-400">Location not available</p>
+                </div>
+              )}
+              <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
+                {sale.address}, {sale.city}, {sale.state} {sale.zip}
+              </p>
             </div>
 
             {/* Pickup Scheduling */}
@@ -991,34 +1019,6 @@ const SaleDetailPage = () => {
             <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
           </div>
         )}
-
-        {/* Map Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
-          {sale.lat && sale.lng ? (
-            <SaleMap
-              singlePin={{
-                lat: sale.lat,
-                lng: sale.lng,
-                label: `${sale.title} \u2014 ${sale.address}, ${sale.city}, ${sale.state}`,
-              }}
-              entrancePin={sale.entranceLat && sale.entranceLng ? {
-                lat: sale.entranceLat,
-                lng: sale.entranceLng,
-                note: sale.entranceNote,
-              } : undefined}
-              photoOpStations={photoOpStations}
-              height="360px"
-            />
-          ) : (
-            <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-              <p className="text-warm-500 dark:text-gray-400">Location not available</p>
-            </div>
-          )}
-          <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
-            {sale.address}, {sale.city}, {sale.state} {sale.zip}
-          </p>
-        </div>
 
         {/* Feature #84: Approach Notes — day-of info for shoppers */}
         {approachNotes && approachNotes.notes && (
