@@ -436,7 +436,7 @@ const EditSalePage = () => {
               <select
                 name="saleType"
                 value={formData.saleType}
-                onChange={handleChange}
+                onChange={(e) => setFormData((prev) => ({ ...prev, saleType: e.target.value }))}
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
               >
                 <option value="ESTATE">Estate Sale</option>
