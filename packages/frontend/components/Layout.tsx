@@ -395,10 +395,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
             {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
-                {/* Primary organizer links */}
+                {/* Dashboards — show both if dual-role user */}
                 <Link href="/organizer/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Dashboard
+                  Organizer Dashboard
                 </Link>
+                {user?.roles?.includes('USER') && (
+                  <Link href="/shopper/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                    Shopper Dashboard
+                  </Link>
+                )}
                 <Link href="/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   My Profile
                 </Link>
