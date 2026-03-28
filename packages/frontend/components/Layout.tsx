@@ -405,6 +405,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link href="/organizer/subscription" className="block px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
                 </Link>
+                <Link href="/organizer/payouts" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Payouts
+                </Link>
                 {canAccess('PRO') && (
                   <Link href="/organizer/insights" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                     Insights
@@ -446,6 +449,30 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </>
             ) : (
               authLinks
+            )}
+            {isClient && user && (
+              <>
+                <div className="border-t border-warm-200 dark:border-gray-700 pt-3 mt-2 space-y-1">
+                  <Link href="/about" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                    About
+                  </Link>
+                  <Link href="/leaderboard" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                    Leaderboard
+                  </Link>
+                  <Link href="/contact" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                    Contact
+                  </Link>
+                  <Link href="/settings" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                    Settings
+                  </Link>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-3 py-2 mt-3 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+                >
+                  Logout
+                </button>
+              </>
             )}
           </div>
         </nav>
