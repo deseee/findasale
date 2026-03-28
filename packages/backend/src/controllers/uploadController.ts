@@ -65,6 +65,8 @@ const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<Cloud
         const originalUrl = result.secure_url;
 
         // Helper to insert transformation before /upload/ in the URL
+        // NOTE: This logic is duplicated in @findasale/shared → cloudinaryUtils.insertCloudinaryTransform
+        // Once shared is properly set up as a workspace dependency, this should be imported from there
         const insertTransform = (url: string, transform: string): string => {
           const uploadIdx = url.indexOf('/upload/');
           if (uploadIdx === -1) return url;

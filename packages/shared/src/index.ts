@@ -1,5 +1,13 @@
 // Shared types and utilities will go here
 
+// Cloudinary URL utilities — consolidated for frontend + backend
+export {
+  insertCloudinaryTransform,
+  getCloudinaryThumbnailUrl,
+  getCloudinaryOptimizedUrl,
+  getCloudinaryFullUrl,
+} from './cloudinaryUtils';
+
 // Feature #51: Sale Ripples — social proof activity
 export { RippleType, type RippleSummaryDTO, type RippleTrendDTO, type RippleActivityDTO } from './types/ripples';
 
