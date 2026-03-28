@@ -13,21 +13,22 @@
 
 ## Session 320 Summary
 
-**Nav cleanup + item page public access + email copy update**
+**Nav cleanup + item page public access + email copy update + mobile drawer additions**
 
 1. **Multi-role nav bug fixed** ✅ — `user.role` → `user.roles[]` migration incomplete in Layout.tsx (7 occurrences) + BottomTabNav.tsx (1 occurrence). Multi-role users (ADMIN+ORGANIZER) now see correct nav links everywhere.
 2. **Header breakpoint adjusted** ✅ — Shifted from `md:` (768px) to `lg:` (1024px). Hamburger now kicks in at 1024px, eliminating the cramped tablet nav zone.
 3. **Desktop nav trimmed (Option B)** ✅ — Moved About, Leaderboard, Contact from nav bar into avatar dropdown. Desktop nav now: Feed → Map → Inspiration → Trending → Pricing.
 4. **Logged-out nav fixed** ✅ — Feed, Map, Inspiration now publicly visible (were hidden). Nav order consistent for all users.
 5. **Item page auth gate removed** ✅ — Global axios 401 interceptor was hard-redirecting all 401s to /login, breaking public endpoints. Removed. Contextual sign-in prompts added at action buttons (bid, buy, save).
-6. **Register email opt-in copy updated** ✅ — 4 instances: "Receive emails from FindA.Sale about sale management, new features, and promotions. You can unsubscribe at any time in your account settings."
-7. **OAuth invite code fix** ⏳ — Dispatched to findasale-dev (results pending).
+6. **Register email opt-in copy updated** ✅ — 4 instances: "Check to receive emails about nearby sales, new features, and promotions. Unsubscribe any time in account settings."
+7. **Mobile drawer additions** ✅ — Payouts added to organizer section; About, Leaderboard, Contact, Settings added as utility section before Sign Out.
+8. **OAuth invite code fix** ⏳ — Dispatched to findasale-dev (results pending).
 
 **Next session (S321):**
-- Wait for OAuth invite code fix results from dev
-- Chrome verify item page public access (unauthenticated user can view items)
-- Chrome verify header breakpoint (desktop 1280px full nav, tablet 800px hamburger)
-- Consider roadmap update — item page public access is a product milestone
+- Push full S320 session block (all 6 files already on GitHub; await OAuth fix from dev for bundled push)
+- Chrome verify item page public access (unauthenticated user can view /items/[id] without 403 errors; sign-in prompts at action buttons)
+- Chrome verify nav breakpoints (desktop 1280px: full nav; tablet 800px: hamburger; mobile: drawer with Payouts in organizer section + About/Leaderboard/Contact/Settings as utility before Sign Out)
+- Chrome verify register email copy ("Check to receive emails about nearby sales, new features, and promotions. Unsubscribe any time in account settings.")
 
 **Push action needed:** YES — OAuth fix (if completed in S320). All other S320 files already pushed.
 
