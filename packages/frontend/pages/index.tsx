@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
@@ -310,54 +311,78 @@ const HomePage = () => {
           {/* CD2 Phase 2: Treasure Hunt Banner */}
           <TreasureHuntBanner />
 
-          {/* Sale Type Filter Pills */}
-          <section className="mb-8 py-6 border-b border-warm-200 dark:border-gray-700">
-            <div className="flex items-center gap-3 overflow-x-auto pb-2 -mx-4 px-4">
-              <span className="text-sm font-medium text-warm-600 dark:text-gray-400 whitespace-nowrap">Sale Type:</span>
-              {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment'] as SaleTypeFilter[]).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setSaleTypeFilter(type)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
-                    saleTypeFilter === type
-                      ? 'bg-sage-600 text-white shadow-md'
-                      : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-700 hover:border-sage-400 hover:text-sage-600 dark:hover:text-sage-400'
-                  }`}
-                >
-                  {type === 'all' ? 'All' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : 'Consignment'}
-                </button>
-              ))}
-            </div>
-          </section>
 
-          {/* Map Section */}
-          <section className="mb-12">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card p-6 relative overflow-hidden">
-              <h2 className="font-heading text-2xl font-bold mb-4 text-warm-900 dark:text-gray-100">Sales Near You</h2>
-              {isLoading ? (
-                <Skeleton className="h-96 w-full" />
-              ) : (
-                <SaleMap
-                  pins={
-                    filteredSales
-                      .filter((s) => s.lat && s.lng)
-                      .map((s): SalePin => ({
-                        id: s.id,
-                        title: s.title,
-                        lat: s.lat,
-                        lng: s.lng,
-                        city: s.city,
-                        state: s.state,
-                        startDate: s.startDate,
-                        endDate: s.endDate,
-                        organizerName: s.organizer?.businessName ?? '',
-                        photoUrl: s.photoUrls?.[0],
-                      }))}
-                  userLocation={userLocation}
-                  height="300px"
-                />
-              )}
+          {/* Sales Near You Card + Sale Type Filters Grid */}
+          <section className="mb-12 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Sale Type Filter Chips */}
+            <div className="lg:col-span-1 flex flex-col">
+              <h3 className="font-heading text-sm font-semibold text-warm-700 dark:text-gray-300 mb-3 uppercase tracking-wide">Sale Type</h3>
+              <div className="space-y-2">
+                {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment'] as SaleTypeFilter[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSaleTypeFilter(type)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      saleTypeFilter === type
+                        ? 'bg-sage-600 text-white shadow-md'
+                        : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-700 hover:border-sage-400 hover:text-sage-600 dark:hover:text-sage-400'
+                    }`}
+                  >
+                    {type === 'all' ? 'All Types' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : 'Consignment'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Right Column: Sales Near You Card */}
+            <div className="lg:col-span-2">
+              <Link href="/map">
+                <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 cursor-pointer hover:shadow-lg hover:scale-[1.01] transition-all duration-300 h-full flex flex-col justify-between">
+                  <div className="mb-4">
+                    <h2 className="font-heading text-xl font-bold text-warm-900 dark:text-gray-100 mb-2">Sales Near You</h2>
+                    {isLoading ? (
+                      <>
+                        <Skeleton className="h-4 w-32 mb-4" />
+                        <Skeleton className="h-3 w-full mb-2" />
+                        <Skeleton className="h-3 w-5/6" />
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-warm-600 dark:text-gray-400 mb-4 flex items-center gap-2">
+                          📍 {defaultCity}
+                        </p>
+                        <div className="text-2xl font-bold text-sage-600 dark:text-sage-400 mb-3">
+                          {sales?.length ?? 0} active sale{sales && sales.length !== 1 ? 's' : ''}
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          {sales && sales.length > 0 ? (
+                            <>
+                              {['estate', 'yard', 'auction', 'flea-market', 'consignment'].map((type) => {
+                                const count = sales.filter((s) => getSaleType(s) === type).length;
+                                if (count === 0) return null;
+                                return (
+                                  <div key={type} className="flex items-center gap-2 text-warm-700 dark:text-gray-300">
+                                    <span className="text-warm-400 dark:text-gray-600">•</span>
+                                    <span className="capitalize">
+                                      {type === 'flea-market' ? 'Flea Market' : type === 'consignment' ? 'Consignment' : type.charAt(0).toUpperCase() + type.slice(1)}: {count}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          ) : (
+                            <p className="text-warm-500 dark:text-gray-400 italic">No sales available</p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex justify-end pt-4 border-t border-warm-100 dark:border-gray-700">
+                    <span className="text-sm font-medium text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300">View on Map →</span>
+                  </div>
+                </div>
+              </Link>
             </div>
           </section>
 
