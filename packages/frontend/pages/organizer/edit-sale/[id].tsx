@@ -48,6 +48,7 @@ const EditSalePage = () => {
     state: '',
     zip: '',
     neighborhood: '',
+    saleType: 'ESTATE' as string,
     // Feature 35: Front Door Locator
     entranceLat: undefined as number | undefined,
     entranceLng: undefined as number | undefined,
@@ -129,6 +130,7 @@ const EditSalePage = () => {
         state: sale.state,
         zip: sale.zip,
         neighborhood: sale.neighborhood ?? '',
+        saleType: sale.saleType ?? 'ESTATE',
         entranceLat: sale.entranceLat ?? undefined,
         entranceLng: sale.entranceLng ?? undefined,
         entranceNote: sale.entranceNote ?? '',
@@ -427,6 +429,22 @@ const EditSalePage = () => {
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Sale Type</label>
+              <select
+                name="saleType"
+                value={formData.saleType}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+              >
+                <option value="ESTATE">Estate Sale</option>
+                <option value="YARD">Yard Sale</option>
+                <option value="AUCTION">Auction</option>
+                <option value="FLEA_MARKET">Flea Market</option>
+                <option value="CONSIGNMENT">Consignment</option>
+              </select>
             </div>
 
             <div>
