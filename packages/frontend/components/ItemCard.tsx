@@ -161,7 +161,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   };
 
   const shouldShowRankingBadge = showRankingBadge && (item as any).rankingIndex !== undefined && (item as any).rankingIndex < 3;
-  const shouldShowFavoriteCount = showFavoriteCount && item._count?.favorites !== undefined;
+  const shouldShowFavoriteCount = showFavoriteCount && (item as any)._count?.favorites !== undefined;
   const lqipUrl = lqipUrl_calc;
   const badge = getStatusBadge();
   const countdown = showCountdown ? getCountdownText() : '';
