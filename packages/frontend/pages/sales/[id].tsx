@@ -381,7 +381,18 @@ const SaleDetailPage = () => {
                 📅 Add to Calendar
               </a>
               <button
-                onClick={() => showToast('Push reminders coming soon! Add to Calendar above to get notified.', 'info')}
+                onClick={async () => {
+                  if (!user) {
+                    showToast('Please log in to set a reminder', 'error');
+                    return;
+                  }
+                  try {
+                    await api.post('/reminders', { saleId: sale.id, reminderType: 'email' });
+                    showToast('Reminder set! We\'ll email you 24 hours before the sale starts.', 'success');
+                  } catch (error) {
+                    showToast('Couldn\'t set reminder — please try again.', 'error');
+                  }
+                }}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-800/40 text-green-900 dark:text-green-100 text-sm font-medium transition-colors"
               >
                 🔔 Remind Me
@@ -413,12 +424,13 @@ const SaleDetailPage = () => {
                 <OrganizerReputation organizerId={sale.organizer.id} />
               </div>
               {sale.organizer.avgRating && (
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="text-sm font-medium text-warm-700 dark:text-gray-300">Rating:</span>
-                  <span className="text-sm text-warm-600 dark:text-gray-200">{sale.organizer.avgRating.toFixed(1)}/5.0</span>
-                  {(sale.organizer.reviewCount ?? 0) > 0 && (
-                    <span className="text-sm text-warm-500 dark:text-gray-200">({sale.organizer.reviewCount} reviews)</span>
-                  )}
+                <div className="mb-4">
+                  <Link href={`/organizers/${sale.organizer.id}`} className="flex items-center gap-2 text-sm hover:underline">
+                    <span className="font-medium text-amber-600 dark:text-amber-400">⭐ {sale.organizer.avgRating.toFixed(1)}</span>
+                    {(sale.organizer.reviewCount ?? 0) > 0 && (
+                      <span className="text-warm-600 dark:text-gray-400">({sale.organizer.reviewCount} {sale.organizer.reviewCount === 1 ? 'review' : 'reviews'})</span>
+                    )}
+                  </Link>
                 </div>
               )}
               <BadgeDisplay badges={sale.organizer.badges || []} />
@@ -535,6 +547,38 @@ const SaleDetailPage = () => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
               <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Share</h2>
               <div className="flex flex-col gap-2">
+                {/* Primary Share Button using Web Share API */}
+                <button
+                  onClick={async () => {
+                    const shareData = {
+                      title: sale.title,
+                      text: `Check out this sale: ${sale.title}`,
+                      url: typeof window !== 'undefined' ? window.location.href : '',
+                    };
+                    if (navigator.share) {
+                      try {
+                        await navigator.share(shareData);
+                      } catch (error) {
+                        // User cancelled or error occurred; silently fail
+                      }
+                    } else {
+                      // Fallback: open Facebook intent URL
+                      const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
+                      window.open(url, '_blank');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
+                  Share
+                </button>
+
                 {/* Facebook Share */}
                 <button
                   onClick={() => {
@@ -549,8 +593,23 @@ const SaleDetailPage = () => {
                   Facebook
                 </button>
 
+                {/* Twitter Share */}
+                <button
+                  onClick={() => {
+                    const text = `Check out this sale: ${sale.title}`;
+                    const url = `https://twitter.com/intent/tweet?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}&text=${encodeURIComponent(text)}`;
+                    window.open(url, '_blank');
+                  }}
+                  className="flex items-center bg-blue-400 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded"
+                >
+                  <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8.29 20c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
+                  </svg>
+                  Twitter
+                </button>
+
                 {/* Post to Nextdoor Button */}
-                <button 
+                <button
                   onClick={() => {
                     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.clipboard) {
                       const postText = `Check out this estate sale on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
@@ -571,12 +630,14 @@ const SaleDetailPage = () => {
               </div>
             </div>
 
-            {/* CD2-P2: QR Code for print marketing */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-2">QR Code</h2>
-              <p className="text-xs text-warm-400 dark:text-gray-500 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
-              <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
-            </div>
+            {/* CD2-P2: QR Code for print marketing — organizer only */}
+            {isOrganizer && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+                <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-2">QR Code</h2>
+                <p className="text-xs text-warm-400 dark:text-gray-500 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
+                <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
+              </div>
+            )}
 
             {/* Feature #90: Sale Soundtrack — Ambient Vibes */}
             {sale.saleType && SALE_TYPE_PLAYLISTS[sale.saleType] && (
@@ -1046,14 +1107,14 @@ const SaleDetailPage = () => {
           </div>
         )}
 
-        {/* Phase 15: Reviews section */}
-        <ReviewsSection
+        {/* Reviews moved to organizer profile page - see /organizers/[id].tsx */}
+        {/* <ReviewsSection
           mode="sale"
           saleId={sale.id}
           saleStatus={sale.status}
           avgRating={sale.organizer.avgRating}
           totalReviews={sale.organizer.reviewCount}
-        />
+        /> */}
       </main>
 
       {/* Modals */}
