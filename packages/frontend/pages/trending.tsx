@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
-import FavoriteButton from '../components/FavoriteButton';
+import ItemCard from '../components/ItemCard';
 import { SkeletonCard, SkeletonSaleCard } from '../components/SkeletonCards';
 
 interface TrendingItem {
@@ -129,38 +129,18 @@ export default function TrendingPage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {(itemsData?.items || []).map((item: TrendingItem, index: number) => (
-                  <Link key={item.id} href={`/items/${item.id}`}>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition group cursor-pointer">
-                      <div className="relative aspect-square bg-warm-100">
-                        {item.photoUrls?.[0] ? (
-                          <Image
-                            src={item.photoUrls[0]}
-                            alt={item.title}
-                            fill
-                            className="object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-4xl">📦</div>
-                        )}
-                        <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-xs font-semibold px-2 py-0.5 rounded-full text-warm-700">
-                          ❤️ {item._count.favorites}
-                        </div>
-                        {index < 3 && (
-                          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                            🔥 Hot
-                          </div>
-                        )}
-                        <div className="absolute top-2 right-2">
-                          <FavoriteButton itemId={item.id} variant="icon" size="md" />
-                        </div>
-                      </div>
-                      <div className="p-3">
-                        <p className="font-semibold text-warm-900 dark:text-gray-100 text-sm line-clamp-2">{item.title}</p>
-                        <p className="text-amber-600 dark:text-amber-400 font-bold mt-1">{formatPrice(item.price)}</p>
-                        <p className="text-xs text-warm-400 dark:text-gray-400 mt-0.5 truncate">{item.sale.title}</p>
-                      </div>
-                    </div>
-                  </Link>
+                  <ItemCard
+                    key={item.id}
+                    item={{
+                      ...item,
+                      rankingIndex: index,
+                    }}
+                    variant="compact"
+                    showRankingBadge={index < 3}
+                    showFavoriteCount={true}
+                    showSaleInfo={true}
+                    imageOptimization="basic"
+                  />
                 ))}
               </div>
             )}
