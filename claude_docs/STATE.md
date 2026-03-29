@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S333 complete. QA queue deferred to S334.
+No active work. S335 complete. Push block provided — 5 frontend files ready to stage.
 
 **S332 COMPLETE (2026-03-28):** Hold Button #13 full board review + design finalization + foundation implementation. (1) **Board session unanimous GO (12/12 + 1 advisory):** DA + Steelman + Hacker + Advisory Board all dispatched on abuse/fraud risk, business model, gamification angle, organizer control. Unanimous recommendation: GO with rank-gated durations (no Hunt Pass paywall, no deposit required). (2) **Design finalized:** QR check-in primary, GPS fallback by sale type (outdoor/flea 150m, indoor estate 250m, large/auction 400m). En route grace for shoppers within 10mi but outside geofence (limited holds: Initiate/Scout 1, Ranger 2, Sage/Grandmaster 3). Hold duration by rank: Initiate/Scout 30min/1 hold, Ranger 45min/2 holds, Sage 60min/3 holds, Grandmaster 90min/3 holds. Natural expiry at timer end + navigate-to-different-sale prompt (no continuous GPS polling). Organizer controls: per-sale `holdsEnabled` toggle, view/cancel/extend/edit all active holds. Business model: rank-gated free, no Hunt Pass gate, no deposit. (3) **Architecture spec produced (400+ lines):** staged in VM, locked designs for GPS haversine, QR validation, fraud detection, organizer settings, cron expiry 10min. (4) **Foundation shipped (5 files):** schema (SaleCheckin + OrganizerHoldSettings), migration, reservationController.ts (GPS/QR/fraud/rate-limit gates), 3 new routes (placeHold, checkHoldStatus, organizer endpoints), cron 30min → 10min. (5) **4 P1 gaps remain for S333:** GPS radii by sale type (built flat 100m, needs 150/250/400m), rank-based hold duration (not implemented), en route logic (not implemented), per-sale holdsEnabled toggle (not added to Sale model). Frontend HoldButton + OrganizerHoldsPanel stubs not pushed. (6) **ItemCard.tsx TS fixes:** photoUrls cast + _count cast (union type UnifiedItemCardItem | Item) shipped. Files: ItemCard.tsx (cast fixes), schema.prisma (models), migration, reservationController.ts, routes/reservations.ts, jobs/reservationExpiryJob.ts, decisions-log.md (6 decisions logged).
 
@@ -41,33 +41,27 @@ No active work. S333 complete. QA queue deferred to S334.
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S334) — QA Queue
+## Next Session (S336)
 
 ### Push Required First
-Patrick must run S333 push block (see patrick-dashboard.md) before S334 begins. Then run migrations:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+Patrick must run S335 push block (see patrick-dashboard.md) before S336 begins. No new migrations — schema unchanged this session.
 
-### S334 Priority 1: Hold Button QA (4 focused dispatches — sequential)
-1. Shopper: navigate to item detail → click Hold → confirm hold created + timer shows
-2. Organizer: /organizer/holds → view active hold → cancel/extend
-3. holdsEnabled=false: organizer disables holds on sale → shopper sees no Hold button
-4. En route: shopper >geofence but <10mi → confirm limited holds allowed
+### S336 Priority 1: Post-deploy smoke test (mandatory)
+After Vercel deploys S335 fixes, Chrome-verify these 5 items:
+1. holdsEnabled toggle — edit-sale form, uncheck, save, reload → confirm false persists → Hold button hidden for shoppers
+2. QR button hidden — item detail as user11 (Karen) → confirm no 📱 QR button
+3. HoldTimer — find a held item as shopper → confirm countdown shows instead of "Check back soon"
+4. Toast duration — trigger any toast → confirm it stays ≥10 seconds before dismissing
+5. Organizer profile dark mode — /organizers/[id] in dark mode → confirm no white background
 
-### S334 Priority 2: QA Queue (From S331/S332)
-- Bug 1: Dark mode stats visibility on sale page — Chrome verify
-- Bug 4: Buy Now success card persists (no auto-dismiss) — Chrome verify
-- Bug 5: Reviews aggregate count matches displayed reviews — Chrome verify
-- Decision #9: Remind Me button fires API + correct toast — Chrome verify
+### S336 Priority 2: Remaining QA Queue
+- Bug 4: Buy Now success card persists (no auto-dismiss) — Chrome verify (needs Stripe test mode)
+- Bug 5: Reviews aggregate count matches displayed reviews — Chrome verify (needs seed reviews data)
 - Decision #8: Share button native share sheet on mobile — Chrome verify
-- Decision #11: QR code hidden from shopper view — Chrome verify
 - Decision #12: Reviews summary in Organized By card — Chrome verify
-- Decision #14: Trending page renders via unified ItemCard — Chrome verify
-- Cover photo useEffect fix: seeded photo shows on edit-sale form load — Chrome verify
+- Cover photo useEffect: seeded photo shows on edit-sale form load — Chrome verify
+
+**S335 (2026-03-28):** QA bug fixes shipped (5 files). (1) **holdsEnabled stale closure fixed:** edit-sale/[id].tsx — `useRef` pattern added so save mutation reads `formDataRef.current` instead of stale closure capture. Toggle now correctly persists false. (2) **Toast duration extended:** ToastContext.tsx 4500ms → 10000ms globally for beta. (3) **QR button gated to organizers:** items/[id].tsx — QR code button hidden from shoppers via `user?.roles?.includes('ORGANIZER')` check. (4) **HoldTimer for shoppers on held items:** items/[id].tsx — replaced static "Check back soon" text with `<HoldTimer>` component showing live countdown. (5) **Organizer profile dark mode:** organizers/[id].tsx — added `dark:bg-gray-900` to page wrapper, fixing white background in dark mode. (6) **Sale page stats dark mode contrast:** sales/[id].tsx — `text-gray-600` → `text-gray-600 dark:text-gray-300` on stats row; orphaned "0" below "New Organizer" badge now labeled. Push block provided — Vercel deploy pending Patrick push.
 
 **S333 (2026-03-28):** Hold Button #13 P1 gaps closed + Railway green. (1) **ItemCard.tsx TS root fix:** Full file audit — added all missing optional fields to legacy `Item` interface (`price`, `photoUrls`, `category`, `condition`, `sale`, `businessName`, `_count`, `rankingIndex`) eliminating union type errors without casting. (2) **Hold Button P1 gaps all closed:** GPS radii by sale type (ESTATE 250m, YARD/FLEA_MARKET 150m, AUCTION 400m), rank-based hold duration (Initiate/Scout 30min, Ranger 45min, Sage 60min, Grandmaster 90min), en route grace 10mi with rank-limited holds (1/2/3), per-sale `holdsEnabled` toggle on Sale model with `placeHold()` gate. (3) **Schema additions:** `holdsEnabled Boolean @default(true)` on Sale, `enRoute Boolean @default(false)` on ItemReservation. 2 new migrations. (4) **Railway fixes:** Removed invalid `user.tier` from Prisma include; replaced `DEFAULT_HOLD_HOURS` reference with inline `48` in batchUpdateHolds extend action. (5) **Frontend wired:** HoldButton + HoldTimer stubs pushed; HoldButton wired into items/[id].tsx below Buy It Now for AVAILABLE non-auction items with cache invalidation on success. (6) **QA queue deferred to S334.** Files: ItemCard.tsx, schema.prisma, migration x2, reservationController.ts, items/[id].tsx, HoldButton.tsx, HoldTimer.tsx, STATE.md, patrick-dashboard.md.
 
