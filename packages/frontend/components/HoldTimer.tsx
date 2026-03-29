@@ -9,7 +9,8 @@ import { useState, useEffect } from 'react';
 import api from '../lib/api';
 
 interface HoldTimerProps {
-  itemId: string;
+  itemId?: string;      // fetch expiresAt from API — use when expiresAt isn't available
+  expiresAt?: string;   // use directly when already known (e.g. CartDrawer)
   onExpiry?: () => void;
 }
 
@@ -20,12 +21,17 @@ interface TimeRemaining {
   totalMs: number;
 }
 
-export default function HoldTimer({ itemId, onExpiry }: HoldTimerProps) {
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+export default function HoldTimer({ itemId, expiresAt: expiresAtProp, onExpiry }: HoldTimerProps) {
+  const [expiresAt, setExpiresAt] = useState<string | null>(expiresAtProp ?? null);
   const [timeRemaining, setTimeRemaining] = useState<TimeRemaining | null>(null);
 
-  // Fetch the hold/reservation data for this item
+  // If expiresAt wasn't passed directly, fetch it from the API using itemId
   useEffect(() => {
+    if (expiresAtProp) {
+      setExpiresAt(expiresAtProp);
+      return;
+    }
+    if (!itemId) return;
     const fetchHold = async () => {
       try {
         const response = await api.get(`/reservations/item/${itemId}`);
@@ -33,13 +39,11 @@ export default function HoldTimer({ itemId, onExpiry }: HoldTimerProps) {
           setExpiresAt(response.data.expiresAt);
         }
       } catch (error) {
-        // No reservation found or error fetching — render nothing
         console.warn(`Failed to fetch hold for item ${itemId}:`, error);
       }
     };
-
     fetchHold();
-  }, [itemId]);
+  }, [itemId, expiresAtProp]);
 
   // Countdown timer — only runs if expiresAt is set
   useEffect(() => {
