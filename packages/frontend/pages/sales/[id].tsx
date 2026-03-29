@@ -423,10 +423,10 @@ const SaleDetailPage = () => {
               <div className="mb-4">
                 <OrganizerReputation organizerId={sale.organizer.id} />
               </div>
-              {sale.organizer.avgRating && (
+              {(sale.organizer.avgRating ?? 0) > 0 && (
                 <div className="mb-4">
                   <Link href={`/organizers/${sale.organizer.id}`} className="flex items-center gap-2 text-sm hover:underline">
-                    <span className="font-medium text-amber-600 dark:text-amber-400">⭐ {sale.organizer.avgRating.toFixed(1)}</span>
+                    <span className="font-medium text-amber-600 dark:text-amber-400">⭐ {(sale.organizer.avgRating ?? 0).toFixed(1)}</span>
                     {(sale.organizer.reviewCount ?? 0) > 0 && (
                       <span className="text-warm-600 dark:text-gray-400">({sale.organizer.reviewCount} {sale.organizer.reviewCount === 1 ? 'review' : 'reviews'})</span>
                     )}
