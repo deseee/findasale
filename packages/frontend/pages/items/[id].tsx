@@ -23,6 +23,7 @@ import Skeleton from '../../components/Skeleton';
 import ItemOGMeta from '../../components/ItemOGMeta';
 import QrCodeModal from '../../components/QrCodeModal'; // Feature #85: Treasure Hunt QR
 import HoldButton from '../../components/HoldButton'; // Feature #121: Hold Button
+import HoldTimer from '../../components/HoldTimer'; // Feature #121: Hold Timer
 
 interface Item {
   id: string;
@@ -552,13 +553,15 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   itemPrice={currentPrice}
                   userId={user?.id}
                 />
-                <button
-                  onClick={() => setShowQrModal(true)}
-                  title="Generate QR code for this item"
-                  className="flex items-center justify-center px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
-                >
-                  📱 QR
-                </button>
+                {user?.roles?.includes('ORGANIZER') && (
+                  <button
+                    onClick={() => setShowQrModal(true)}
+                    title="Generate QR code for this item"
+                    className="flex items-center justify-center px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
+                  >
+                    📱 QR
+                  </button>
+                )}
               </div>
 
               {/* Bid/Cart Section */}
@@ -609,7 +612,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   ) : item.status === 'RESERVED' ? (
                     <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
                       <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm">🔒 This item is currently on hold</p>
-                      <p className="text-amber-600 dark:text-amber-400 text-xs mt-1">Check back soon — holds expire automatically</p>
+                      <div className="mt-2">
+                        <HoldTimer itemId={item.id} />
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-2">

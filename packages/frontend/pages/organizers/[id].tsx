@@ -78,7 +78,7 @@ const OrganizerProfilePage = () => {
   const pastSales = organizer.sales.filter(s => new Date(s.endDate) < new Date());
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{organizer.businessName} – FindA.Sale</title>
         <meta name="description" content={`Estate sales by ${organizer.businessName}`} />

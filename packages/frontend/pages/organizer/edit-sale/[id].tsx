@@ -40,6 +40,7 @@ const EditSalePage = () => {
   const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
   const [isAutoGeocodingOnLoad, setIsAutoGeocodingOnLoad] = useState(false); // Track auto-geocoding in progress
   const formInitialized = useRef(false); // prevent background refetches from resetting form
+  const formDataRef = useRef<any>(null); // Capture current formData to avoid stale closure in mutations
 
   const [formData, setFormData] = useState({
     title: '',
@@ -96,6 +97,11 @@ const EditSalePage = () => {
     refetchOnWindowFocus: false, // prevent background refetches from resetting the form mid-edit
     enabled: !!id,
   });
+
+  // Keep formDataRef in sync with formData state to avoid stale closure in mutations
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
 
   // Auto-geocode if sale has address but null lat/lng (new sale or failed geocoding before S301 migration)
   const attemptGeocode = async (address: string, city: string, state: string, zip: string) => {
@@ -176,7 +182,7 @@ const EditSalePage = () => {
       // Feature #91: Exclude markdown fields from main update (they go to separate endpoint)
       // Feature #85: Include treasure hunt fields in main update
       // Feature #121: Include holdsEnabled in main update
-      const { markdownEnabled, markdownFloor, ...saleData } = formData;
+      const { markdownEnabled, markdownFloor, ...saleData } = formDataRef.current;
 
       // First update the sale (includes treasure hunt fields and holdsEnabled)
       await api.put(`/sales/${id}`, saleData);
