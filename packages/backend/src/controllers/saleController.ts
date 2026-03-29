@@ -88,6 +88,7 @@ const saleCreateSchema = z.object({
   // Feature #85: Treasure Hunt QR
   treasureHuntEnabled: z.boolean().optional(),
   treasureHuntCompletionBadge: z.boolean().optional(),
+  holdsEnabled: z.boolean().optional(),  // Feature #121: allow organizer to disable holds per-sale
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();

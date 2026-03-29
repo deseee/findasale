@@ -15,7 +15,10 @@ import {
 
 const router = express.Router();
 
-// All reservation routes require auth
+// Public route — item hold status is display-only (item is already shown as RESERVED publicly)
+router.get('/item/:itemId', getItemReservation);               // unauthenticated: hold expiry for HoldTimer
+
+// All other reservation routes require auth
 router.use(authenticate);
 
 // Organizer-specific routes (before generic :id routes)
@@ -27,9 +30,6 @@ router.post('/batch', batchUpdateHolds);                       // #24: batch rel
 
 // Check-in endpoint (Feature #121)
 router.post('/checkin', checkinAtSale);                        // Feature #121: shopper check-in at sale
-
-// Generic reservation routes
-router.get('/item/:itemId', getItemReservation);               // any auth'd user: hold on a specific item
 router.post('/', placeHold);                                   // shopper: place a hold (Feature #121 enhanced)
 router.delete('/:id', cancelHold);                             // shopper/organizer: cancel a hold
 router.patch('/:id', updateHold);                              // organizer: confirm or cancel
