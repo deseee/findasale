@@ -484,7 +484,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       } else if (action === 'extend') {
         // Extend each hold by its sale's holdDurationHours from now
         for (const h of validHolds) {
-          const hours = (h.item.sale as any)?.holdDurationHours ?? DEFAULT_HOLD_HOURS;
+          const hours = (h.item.sale as any)?.holdDurationHours ?? 48;
           await tx.itemReservation.update({
             where: {
               id: h.id,
