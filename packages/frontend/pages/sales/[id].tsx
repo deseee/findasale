@@ -247,7 +247,7 @@ const SaleDetailPage = () => {
   };
 
   const formatPrice = (amount: number | null | undefined) => {
-    if (amount == null) return '\u2014';
+    if (amount == null) return '—';
     return `$${amount.toFixed(2)}`;
   };
 
@@ -344,7 +344,7 @@ const SaleDetailPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
-          \u2190 Back to home
+          ← Back to home
         </Link>
 
         {/* Sale Header */}
@@ -378,7 +378,7 @@ const SaleDetailPage = () => {
                 download={`${sale.title.replace(/[^a-z0-9]/gi, '_')}.ics`}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-900 dark:text-blue-100 text-sm font-medium transition-colors"
               >
-                \ud83d\udcc5 Add to Calendar
+                📅 Add to Calendar
               </a>
               <button
                 onClick={async () => {
@@ -390,12 +390,12 @@ const SaleDetailPage = () => {
                     await api.post('/reminders', { saleId: sale.id, reminderType: 'email' });
                     showToast('Reminder set! We\'ll email you 24 hours before the sale starts.', 'success');
                   } catch (error) {
-                    showToast('Couldn\'t set reminder \u2014 please try again.', 'error');
+                    showToast('Couldn\'t set reminder — please try again.', 'error');
                   }
                 }}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-800/40 text-green-900 dark:text-green-100 text-sm font-medium transition-colors"
               >
-                \ud83d\udd14 Remind Me
+                🔔 Remind Me
               </button>
             </div>
           </div>
@@ -643,7 +643,7 @@ const SaleDetailPage = () => {
             {sale.saleType && SALE_TYPE_PLAYLISTS[sale.saleType] && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
                 <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-2 flex items-center gap-2">
-                  <span>\ud83c\udfb5</span>
+                  <span>🎵</span>
                   Sale Soundtrack
                 </h2>
                 <p className="text-sm text-warm-600 dark:text-gray-400 mb-1">
@@ -662,7 +662,7 @@ const SaleDetailPage = () => {
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0m5.521 17.34c-.24.315-.74.42-1.14.175-3.12-1.92-7.02-2.357-11.64-1.29-.42.12-.84-.12-.96-.51-.12-.41.12-.84.51-.96 5.04-1.137 9.46-.676 12.98 1.498.41.25.48.75.25 1.14m1.44-3.3c-.301.39-.921.54-1.44.42-3.3-.602-8.34-.755-12.33.298-.525.15-1.076-.165-1.227-.66-.15-.498.165-1.045.66-1.2 4.513-1.112 9.938-.935 13.61.644.529.277.667.94.385 1.456m.126-3.403c-3.96-.7-10.717-.777-15.02.298-.533.111-1.053-.26-1.16-.795-.105-.527.26-1.067.795-1.157 4.763-.981 12.022-.899 16.22.589.524.161.853.688.692 1.226-.161.537-.688.865-1.226.705z" />
                     </svg>
-                    \u266b Spotify
+                    ♫ Spotify
                   </a>
                   <a
                     href={SALE_TYPE_PLAYLISTS[sale.saleType].appleMusic}
@@ -670,7 +670,7 @@ const SaleDetailPage = () => {
                     rel="noopener noreferrer"
                     className="flex-1 inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
                   >
-                    <span className="text-lg">\u266b</span>
+                    <span className="text-lg">♫</span>
                     Apple Music
                   </a>
                 </div>
@@ -794,7 +794,7 @@ const SaleDetailPage = () => {
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-sm font-semibold px-3 py-1.5 rounded-full">
-                    \u2713 {availableCount} available
+                    ✓ {availableCount} available
                   </span>
                 )}
                 {soldCount > 0 && (
@@ -909,7 +909,7 @@ const SaleDetailPage = () => {
                         )}
                         {(item.status === 'SOLD' || item.status === 'PENDING') && (
                           <span className="inline-block bg-warm-700 dark:bg-gray-700 text-white dark:text-gray-200 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            \u2713 Sold
+                            ✓ Sold
                           </span>
                         )}
                         {item.auctionEndTime && (
@@ -1085,7 +1085,7 @@ const SaleDetailPage = () => {
         {approachNotes && approachNotes.notes && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
             <h2 className="text-xl font-bold mb-4 text-blue-900 dark:text-blue-100 flex items-center gap-2">
-              <span>\ud83d\udccd</span> Approach Notes
+              <span>📍</span> Approach Notes
             </h2>
             <div className="bg-white dark:bg-gray-800 rounded p-4 mb-4">
               <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap">
@@ -1140,4 +1140,14 @@ const SaleDetailPage = () => {
       )}
 
       <MessageComposeModal
-        open={mess
+        open={messageModalOpen}
+        onClose={() => setMessageModalOpen(false)}
+        organizerId={sale.organizer.id}
+        saleId={sale.id}
+        onSuccess={handleMessageSuccess}
+      />
+    </div>
+  );
+};
+
+export default SaleDetailPage;
