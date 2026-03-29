@@ -64,7 +64,6 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
             organizer: {
               include: {
                 holdSettings: true,
-                user: { select: { tier: true } },
               },
             },
           },
