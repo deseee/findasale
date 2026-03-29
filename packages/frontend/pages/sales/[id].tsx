@@ -798,7 +798,7 @@ const SaleDetailPage = () => {
                   </span>
                 )}
                 {soldCount > 0 && (
-                  <span className="text-sm text-warm-500 dark:text-gray-400">
+                  <span className="text-sm text-warm-500 dark:text-gray-300">
                     {soldCount} sold
                   </span>
                 )}
