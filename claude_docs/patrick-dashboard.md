@@ -1,13 +1,13 @@
-# Patrick's Dashboard — Session 338 (March 29, 2026)
+# Patrick's Dashboard — Session 339 (March 29, 2026)
 
 ---
 
 ## Build Status
 
-- **Railway:** ✅ Green
-- **Vercel:** ✅ Green (avgRating fix deployed — bare "0" gone from organizer card)
-- **DB:** No new migrations this session — schema unchanged
-- **S338 Status:** ✅ COMPLETE — all P1/P2 items resolved. Doc files need staging.
+- **Railway:** Pending push (code changes local only)
+- **Vercel:** ✅ Green (no frontend changes this session)
+- **DB:** No migrations — schema unchanged
+- **S339 Status:** ✅ COMPLETE — hold notifications shipped, 4 bugs fixed, toast confirmed
 
 ---
 
@@ -15,66 +15,60 @@
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git fetch
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/services/saleAlertEmailService.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S338 session wrap — bare-0 fixed, HoldTimer verified, file recovery"
+git commit -m "feat: hold notification system + 4 bug fixes
+
+- Shopper gets in-app notification + email on approve/cancel/extend/release
+- Organizer gets in-app notification when hold is placed
+- Fix: clear stale reservations before new hold (P2002 unique constraint)
+- Fix: batch extend uses rank-based duration instead of 48h
+- Fix: markSold notification copy corrected
+- Toast duration confirmed working at 10s"
 .\push.ps1
 ```
 
-Note: Code files (`sales/[id].tsx`, `OrganizerReputation.tsx`, `HoldButton.tsx`) were already pushed to GitHub this session. Only doc files need staging above.
+---
+
+## Session 339 Summary
+
+**Hold notifications wired end-to-end. 4 bugs fixed from Patrick's live testing. Toast confirmed.**
+
+### What Was Built
+
+1. **Shopper notifications on hold status changes** — in-app Notification record + Resend email for: approve, cancel, extend, release. Tailored copy per action. Fire-and-forget (non-blocking).
+2. **Organizer in-app notification on hold placed** — was email-only, now also creates bell notification.
+3. **Bug: "Item already has active hold" after cancel** — stale CANCELLED record blocked new holds due to `@unique` constraint. Fixed: placeHold now clears stale records first.
+4. **Bug: batch extend hardcoded 48h** — now uses rank-based duration (30/45/60/90 min by explorer rank).
+5. **Bug: markSold notification said "thanks for purchase"** — corrected to neutral "marked as sold by the organizer."
+6. **Toast ✅ confirmed** — Patrick tested, fires for full 10 seconds. Off the queue.
+
+### Product Direction Logged
+
+Patrick wants **Mark Sold to evolve** into:
+- **POS organizers:** held item appears in POS cart, ring up at checkout
+- **Non-POS organizers:** Mark Sold sends Stripe checkout link to shopper for remote payment
+
+Needs architect spec — logged for S340.
 
 ---
 
-## Session 338 Summary
+## What Needs Attention (S340)
 
-**Bare "0" fixed. HoldTimer ✅ verified. File recovery completed. Vercel green.**
+### 1. Verify S339 fixes after deploy (P1)
+After push: shopper places hold → organizer bell notification. Organizer cancels → shopper re-holds same item. Batch extend → rank-based not 48h.
 
-### QA Results
+### 2. Mark Sold → POS/Invoice spec (P2)
+Architect dispatch to design the two paths (POS cart vs Stripe invoice).
 
-| Test | Status | Notes |
-|------|--------|-------|
-| Bare "0" avgRating in organizer card | ✅ FIXED & DEPLOYED | `(avgRating ?? 0) > 0` guard + `(avgRating ?? 0).toFixed(1)` TS fix in `sales/[id].tsx`. React falsy `{0 && ...}` was the root cause. |
-| OrganizerReputation salesCount "0" | ✅ FIXED (sha: 213169d) | `salesCount > 0` guard — "New Organizer" badge area clean. |
-| HoldButton organizer gate (dual-role) | ✅ FIXED (sha: 462fff1) | Now checks `roles?.includes('ORGANIZER')` — handles users with `role: 'USER'` but organizer in `roles[]` array. |
-| HoldTimer countdown | ✅ VERIFIED | user12 (Leo Thomas, shopper) placed hold on "Vintage Record Player #7". Timer showed "00:29:50". |
-| Toast duration ≥10s | ⚠️ STILL UNVERIFIED | Code reads 10000ms. Browser showed <6s dismissal. Possible stale Vercel build. Check next session. |
-| Bug 4 (Buy Now card persist) | UNVERIFIED | Needs Stripe test mode. |
-| Bug 5 (reviews aggregate count) | UNVERIFIED | No seeded reviews in DB. |
-| Decision #8 (Share native) | UNVERIFIED | Needs mobile viewport test. |
+### 3. Remaining QA Queue (P3)
+- Bug 4: Buy Now card persist — needs Stripe test mode
+- Bug 5: Reviews aggregate — needs seeded reviews
+- Decision #8: Share native — needs mobile viewport
 
 ---
 
-## What Was Shipped This Session
-
-**Code files already on GitHub:**
-
-1. **`packages/frontend/pages/sales/[id].tsx`** — avgRating fix (`{(avgRating ?? 0) > 0 && ...}` + `.toFixed(1)` TS narrowing fix). File also recovered from truncation (1142 → 1153 lines) via `git show 4f63036`.
-2. **`packages/frontend/components/OrganizerReputation.tsx`** (sha: 213169d) — salesCount guard.
-3. **`packages/frontend/components/HoldButton.tsx`** (sha: 462fff1) — roles array organizer gate.
-
----
-
-## What Needs Attention (S339)
-
-### 1. Toast duration — confirm or fix (P2)
-ToastContext is 10000ms in code. Browser showed dismissal <6s. Steps:
-- Check Vercel deployment SHA in Vercel dashboard matches `git log --oneline -1` on GitHub
-- If stale, push a trivial change to force redeploy
-- Re-test: trigger "Saved!" toast, confirm it stays ≥10s
-
-### 2. Remaining QA Queue (P3)
-- Bug 4: Buy Now success card persist — needs Stripe test mode checkout
-- Bug 5: Reviews aggregate count — needs seeded reviews
-- Decision #8: Share native sheet — needs mobile viewport
-
-### Shopper Test Account (for future holds QA)
+## Shopper Test Account
 - **user12@example.com** — Leo Thomas — confirmed pure shopper, no organizer role
-- Use this account for any holds/shopper flow testing going forward
-
----
-
-## Next Session (S339) Priorities
-
-1. **Toast duration** — confirm stale build or fix 10s persistence
-2. **Bug 4/5 + Decision #8** — queue for when test infrastructure available
