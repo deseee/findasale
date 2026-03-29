@@ -58,6 +58,15 @@ interface Item {
   photoUrl?: string;
   isAiTagged?: boolean;
   rarity?: string | null;
+  // Optional fields added to satisfy union type with UnifiedItemCardItem
+  price?: number;
+  photoUrls?: string[];
+  category?: string;
+  condition?: string;
+  sale?: { id: string; title: string; city?: string; state?: string };
+  businessName?: string;
+  _count?: { favorites?: number };
+  rankingIndex?: number;
 }
 
 export interface ItemCardProps {
