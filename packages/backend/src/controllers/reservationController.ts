@@ -314,8 +314,7 @@ export const cancelHold = async (req: AuthRequest, res: Response) => {
 // GET /api/reservations/item/:itemId — get the active reservation for an item (any auth'd user)
 export const getItemReservation = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-
+    // Public endpoint — no auth required. Hold expiry is display-only info.
     const { itemId } = req.params;
     const reservation = await prisma.itemReservation.findUnique({
       where: { itemId },
