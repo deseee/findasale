@@ -173,6 +173,10 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     const expiresAt = new Date(Date.now() + holdMinutes * 60000);
 
     const reservation = await prisma.$transaction(async (tx) => {
+      // Clear any stale (CANCELLED/EXPIRED) reservation so @unique slot is free
+      await tx.itemReservation.deleteMany({
+        where: { itemId, status: { in: ['CANCELLED', 'EXPIRED'] } },
+      });
       const r = await tx.itemReservation.create({
         data: {
           itemId,
@@ -224,14 +228,27 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       console.warn('[saleStatus] Failed to push status update:', err);
     }
 
-    // Feature #14: Send organizer alert email (fire-and-forget)
+    // Feature #14: Send organizer alert email + in-app notification (fire-and-forget)
     try {
       const sale = (item.sale as any);
       const organizer = await prisma.organizer.findUnique({
         where: { id: sale?.organizerId },
-        include: { user: { select: { email: true, name: true } } },
+        include: { user: { select: { id: true, email: true, name: true } } },
       });
       if (organizer?.user) {
+        // In-app notification for organizer
+        await prisma.notification.create({
+          data: {
+            userId: organizer.user.id,
+            type: 'hold_update',
+            title: 'New hold placed',
+            body: `A shopper placed a hold on "${item.title}" from ${sale?.title || 'your sale'}.`,
+            link: '/organizer/holds',
+            notificationChannel: 'IN_APP',
+            channel: 'OPERATIONAL',
+          },
+        });
+        // Email alert
         setImmediate(() => {
           sendHoldPlacedAlert({
             organizerEmail: organizer.user.email,
@@ -453,7 +470,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       const holds = await tx.itemReservation.findMany({
         where: { id: { in: ids }, status: { in: ['PENDING', 'CONFIRMED'] } },
         include: {
-          user: { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, name: true, email: true, explorerRank: true } },
           item: {
             include: { sale: true },
           },
@@ -494,11 +511,12 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           })),
         });
       } else if (action === 'extend') {
-        // Extend each hold by its sale's holdDurationHours from now
+        // Extend each hold by rank-based duration from now
         const extendedHolds: Array<{ hold: typeof validHolds[0]; newExpiry: Date }> = [];
         for (const h of validHolds) {
-          const hours = (h.item.sale as any)?.holdDurationHours ?? 48;
-          const newExpiry = new Date(Date.now() + hours * 3600000);
+          const rank = (h.user as any)?.explorerRank ?? 'INITIATE';
+          const holdMinutes = getHoldDurationMinutes(rank);
+          const newExpiry = new Date(Date.now() + holdMinutes * 60000);
           await tx.itemReservation.update({
             where: { id: h.id },
             data: { expiresAt: newExpiry },
@@ -534,8 +552,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           data: validHolds.map((h) => ({
             userId: h.userId,
             type: 'hold_update',
-            title: 'Item marked as sold',
-            body: `"${h.item.title}" that you had on hold has been marked as sold. Thank you for your purchase!`,
+            title: 'Item sold',
+            body: `"${h.item.title}" that you had on hold has been marked as sold by the organizer.`,
             link: `/items/${h.item.id}`,
             notificationChannel: 'IN_APP',
             channel: 'OPERATIONAL',
