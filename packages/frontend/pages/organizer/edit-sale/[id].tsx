@@ -66,6 +66,8 @@ const EditSalePage = () => {
     // Feature #85: Treasure Hunt QR
     treasureHuntEnabled: true,
     treasureHuntCompletionBadge: false,
+    // Feature #121: Allow item holds for this sale
+    holdsEnabled: true,
   });
 
   // Helper: Compute distance between two lat/lng points (degrees, approx)
@@ -149,6 +151,8 @@ const EditSalePage = () => {
         // Feature #85: Treasure Hunt QR
         treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
         treasureHuntCompletionBadge: sale.treasureHuntCompletionBadge ?? false,
+        // Feature #121: Allow item holds for this sale
+        holdsEnabled: sale.holdsEnabled ?? true,
       });
 
       // Auto-trigger geocoding if sale has no coordinates but has address fields
@@ -171,9 +175,10 @@ const EditSalePage = () => {
     mutationFn: async () => {
       // Feature #91: Exclude markdown fields from main update (they go to separate endpoint)
       // Feature #85: Include treasure hunt fields in main update
+      // Feature #121: Include holdsEnabled in main update
       const { markdownEnabled, markdownFloor, ...saleData } = formData;
 
-      // First update the sale (includes treasure hunt fields)
+      // First update the sale (includes treasure hunt fields and holdsEnabled)
       await api.put(`/sales/${id}`, saleData);
 
       // Then update markdown config — PRO-only endpoint, silently skip for lower tiers
@@ -744,6 +749,25 @@ const EditSalePage = () => {
                     </p>
                   </div>
                 )}
+
+                <div className="flex items-start space-x-3 pt-4">
+                  <input
+                    type="checkbox"
+                    id="holdsEnabled"
+                    name="holdsEnabled"
+                    checked={formData.holdsEnabled}
+                    onChange={(e) => setFormData({ ...formData, holdsEnabled: e.target.checked })}
+                    className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded cursor-pointer"
+                  />
+                  <label htmlFor="holdsEnabled" className="cursor-pointer flex flex-col">
+                    <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
+                      Allow item holds for this sale
+                    </span>
+                    <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      Shoppers can reserve items for pickup. Holds expire automatically.
+                    </span>
+                  </label>
+                </div>
               </div>
             </div>
 
