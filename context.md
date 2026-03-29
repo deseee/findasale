@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-23T03:12:54.695Z*
+*Generated at 2026-03-29T11:57:31.618Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -15,17 +15,20 @@ See report for details.
 - Dev stack: native (backend/frontend/postgres run natively on Windows — no Docker)
 
 ## Signals
-⚠ Env drift — in .env.example but missing from .env: MAILERLITE_API_KEY, DEFAULT_CITY, DEFAULT_STATE, DEFAULT_STATE_ABBREV, DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS_MILES, DEFAULT_COUNTY, DEFAULT_TIMEZONE
+⚠ Env drift — in .env.example but missing from .env: 
 ⚠ 10+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/funny-charming-cerf/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
-  /sessions/funny-charming-cerf/mnt/FindaSale/packages/backend/src/controllers/authController.ts:394:    // TODO: Send email with reset link (non-blocking)
-  /sessions/funny-charming-cerf/mnt/FindaSale/packages/backend/src/controllers/fraudController.ts:175:    // TODO: Add suspendedAt field to User schema (#73-phase3) — logging suspension for now
-  /sessions/funny-charming-cerf/mnt/FindaSale/packages/backend/src/controllers/fraudController.ts:223:    // TODO: Clear suspendedAt field in User schema (#73-phase3) — logging restoration for now
-  /sessions/funny-charming-cerf/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
+  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/controllers/authController.ts:422:    // TODO: Send email with reset link (non-blocking)
+  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/helpers/itemQueries.ts:43:// TODO: Make draftStatus String? (optional) or backfill NULLs before re-enabling.
+  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/jobs/fraudDetectionJob.ts:23:    // TODO: Integrate with node-cron:
 
 ## Project File Tree
 ```
+├── .checkpoint-manifest.json
 ├── .claude/
+│   ├── hooks/ (1 files)
+│   ├── settings.json
 │   └── worktrees/
 │       ├── agent-a149904c/
 │       │   ├── .checkpoint-manifest.json
@@ -1023,6 +1026,8 @@ See report for details.
 ├── _tmp_20883_a5422550ee8c28a338c754488ad81595
 ├── _tmp_22214_a1f14e2eec910bab06aff6790baa32c2
 ├── _tmp_22214_b17ce583c13a1091e6e17065b84fc332
+├── _tmp_23454_136d73c317eecddad0c5d2f0cd4d8b31
+├── _tmp_23454_a4243f91b2825e163c03ddc29f0c635d
 ├── _tmp_79153_b78de4bad81704a77606cd957038642b
 ├── _tmp_79153_dd2c0afeeac46b8dda065f928d380dee
 ├── ai-config/
@@ -1032,9 +1037,14 @@ See report for details.
 │   ├── .last-wrap
 │   ├── CORE.md
 │   ├── RECOVERY.md
+│   ├── S248-walkthrough-findings.md
 │   ├── SECURITY.md
 │   ├── STACK.md
 │   ├── STATE.md
+│   ├── UX_MODERNIZATION_SPEC.md
+│   ├── UX_SPECS/
+│   │   ├── save-wishlist-item-card.md
+│   │   └── shopper_to_organizer_conversion_flow.md
 │   ├── architecture/
 │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
 │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
@@ -1049,6 +1059,9 @@ See report for details.
 │   │   ├── ADR-068-QUICK-REFERENCE.md
 │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
 │   │   ├── ADR-PHASE4-BRIEF.md
+│   │   ├── ADR-roadmap-batch-d-72-75.md
+│   │   ├── BATCH-D-SUMMARY.md
+│   │   ├── ItemCard-Unification-Spec.md
 │   │   ├── adr-072-dual-role-account-schema.md
 │   │   ├── adr-073-two-channel-notification-system.md
 │   │   ├── feature-spec-73-notifications.md
@@ -1062,6 +1075,7 @@ See report for details.
 │   │   ├── QUICK-REFERENCE-QA-2026-03-20.md
 │   │   ├── README-QA-SESSION-2026-03-20.md
 │   │   ├── accessibility-audit-2026-03-18.md
+│   │   ├── brand-drift-2026-03-24.md
 │   │   ├── business-plan-brand-review-2026-03-19.md
 │   │   ├── chrome-audit-2026-03-20-roadmap-updates.md
 │   │   ├── chrome-audit-2026-03-20.md
@@ -1072,46 +1086,78 @@ See report for details.
 │   │   ├── create-sale-verify-s216.md
 │   │   ├── design-critique-2026-03-18.md
 │   │   ├── doc-structure-audit-2026-03-22.md
+│   │   ├── frontend-pages-inventory-S294.html
 │   │   ├── organizer-happy-path-s216.md
 │   │   ├── passkey-qa-audit-s200.md
 │   │   ├── periodic-docs-audit-2026-03-18.md
 │   │   ├── qa-audit-S236-live.md
+│   │   ├── qa-findings-B2-organizer-profile-20260325.md
+│   │   ├── qa-findings-B3-item-management-20260325.md
+│   │   ├── qa-findings-C4-public-pages-20260325.md
+│   │   ├── qa-findings-D1-priority-retests-20260325.md
+│   │   ├── qa-findings-D3-shopper-discovery-20260325.md
+│   │   ├── qa-round2-S288-20260325.md
+│   │   ├── qa-round3-S288-20260325.md
+│   │   ├── qa-round4-S288-20260325.md
 │   │   ├── records-audit-2026-03-22.md
+│   │   ├── roadmap-audit-S294.md
 │   │   ├── s222-qa-audit.md
 │   │   ├── s227-qa-audit.md
+│   │   ├── s290-qa-retroaudit-s285-s289.md
 │   │   ├── ux-audit-nav-overload-2026-03-18.md
-│   │   └── weekly-audit-2026-03-22.md
+│   │   ├── weekly-audit-2026-03-22.md
+│   │   └── weekly-audit-2026-03-26.md
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (11 files)
-│   ├── competitor-intel/ (2 files)
+│   ├── brand-voice/
+│   │   └── COLLECTORS_GUILD_BRAND_VOICE.md
+│   ├── competitor-intel/ (4 files)
 │   ├── decisions-log.md
 │   ├── escalation-log.md
 │   ├── feature-decisions/
 │   │   ├── CAMERA_WORKFLOW_V2_ARCHITECTURE.md
 │   │   ├── CASH_FEE_COLLECTION_ARCHITECTURE.md
 │   │   ├── CASH_FEE_COLLECTION_SUMMARY.md
+│   │   ├── D2-tier-lapse-behavior.md
 │   │   ├── FINDASALE_PUSH_COORDINATOR_SKILL_TEMPLATE.md
+│   │   ├── GAMIFICATION_IMPLEMENTATION_CHECKLIST_PHASE1.md
 │   │   ├── MANAGER_SUBAGENT_ARCHITECTURE.md
 │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
 │   │   ├── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
 │   │   ├── advisory-board-S236-print-kit-etsy.md
 │   │   └── demo-readiness-plan-S236.md
-│   ├── feature-notes/ (20 files)
+│   ├── feature-notes/ (21 files)
 │   ├── guides/ (1 files)
-│   ├── health-reports/ (8 files)
-│   ├── improvement-memos/ (1 files)
+│   ├── handoffs/
+│   │   └── 125_csv_export_handoff.md
+│   ├── health-reports/ (9 files)
+│   ├── human-QA-walkthrough-findings.md
+│   ├── improvement-memos/ (2 files)
 │   ├── logs/ (3 files)
+│   ├── marketing/
+│   │   └── content-pipeline/
+│   │       ├── content-2026-03-23.md
+│   │       └── content-2026-03-26.md
 │   ├── next-session-brief.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (48 files)
+│   ├── operations/ (61 files)
 │   ├── patrick-dashboard.md
-│   ├── research/ (23 files)
+│   ├── patrick-walkthrough-S248.md
+│   ├── research/ (37 files)
 │   ├── self-healing/ (1 files)
 │   ├── session-log.md
-│   ├── skills-package/ (47 files)
+│   ├── skill-updates/
+│   │   ├── findasale-dev-SKILL.md
+│   │   └── findasale-qa-SKILL.md
+│   ├── skills-package/ (49 files)
 │   ├── strategy/ (19 files)
+│   ├── ux-audits/
+│   │   └── explorer-guild-phase2-audit.md
 │   ├── ux-spotchecks/
+│   │   ├── 2026-03-25.md
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
+│   │   ├── S256-UX-HANDOFF.md
+│   │   ├── S256-UX-SPECS-41-items-onboarding.md
 │   │   ├── add-items-ux-audit-2026-03-15.md
 │   │   ├── comprehensive-frontend-audit-2026-03-20.md
 │   │   ├── design-polish-vision-2026-03-19.md
@@ -1119,6 +1165,7 @@ See report for details.
 │   │   └── ux-audit-S236.md
 │   └── workflow-retrospectives/ (3 files)
 ├── conversation-defaults-SKILL-v8.md.tmp.35852.1773930503120
+├── frontend-pages-inventory-S294.html
 ├── next
 ├── package-lock.json
 ├── package.json
@@ -1129,6 +1176,25 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── Dockerfile.production
+│   │   ├── dist/
+│   │   │   ├── _triggerDigest.js
+│   │   │   ├── config/
+│   │   │   │   └── regionConfig.js
+│   │   │   ├── constants/
+│   │   │   │   └── tierLimits.js
+│   │   │   ├── controllers/ (105 files)
+│   │   │   ├── helpers/
+│   │   │   │   └── itemQueries.js
+│   │   │   ├── index.js
+│   │   │   ├── instrument.js
+│   │   │   ├── jobs/ (19 files)
+│   │   │   ├── lib/ (12 files)
+│   │   │   ├── middleware/ (12 files)
+│   │   │   ├── models/ (1 files)
+│   │   │   ├── routes/ (98 files)
+│   │   │   ├── services/ (56 files)
+│   │   │   ├── types/ (1 files)
+│   │   │   └── utils/ (5 files)
 │   │   ├── docs/
 │   │   │   └── EMAIL_SMS_REMINDERS.md
 │   │   ├── nodemon.json
@@ -1144,19 +1210,19 @@ See report for details.
 │   │   │   │   └── regionConfig.ts
 │   │   │   ├── constants/
 │   │   │   │   └── tierLimits.ts
-│   │   │   ├── controllers/ (96 files)
+│   │   │   ├── controllers/ (105 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
 │   │   │   ├── instrument.ts
-│   │   │   ├── jobs/ (14 files)
+│   │   │   ├── jobs/ (19 files)
 │   │   │   ├── lib/ (12 files)
 │   │   │   ├── middleware/ (12 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (96 files)
-│   │   │   ├── services/ (50 files)
+│   │   │   ├── routes/ (99 files)
+│   │   │   ├── services/ (56 files)
 │   │   │   ├── types/ (1 files)
-│   │   │   └── utils/ (4 files)
+│   │   │   └── utils/ (5 files)
 │   │   └── tsconfig.json
 │   ├── database/
 │   │   ├── .env
@@ -1167,9 +1233,10 @@ See report for details.
 │   │   ├── package.json
 │   │   ├── prisma/
 │   │   │   ├── fix-seed-city.ts
-│   │   │   ├── migrations/ (115 migrations)
+│   │   │   ├── migrations/ (138 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
+│   │   ├── test-query.cjs
 │   │   └── tsconfig.json
 │   ├── frontend/
 │   │   ├── .env.local
@@ -1178,22 +1245,22 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (163 files)
+│   │   ├── components/ (178 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (3 files)
-│   │   ├── hooks/ (54 files)
-│   │   ├── lib/ (9 files)
+│   │   ├── hooks/ (60 files)
+│   │   ├── lib/ (10 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
 │   │   ├── next.config.js
 │   │   ├── package.json
-│   │   ├── pages/ (58 files)
+│   │   ├── pages/ (63 files)
 │   │   ├── postcss.config.js
 │   │   ├── public/ (14 files)
 │   │   ├── sentry.client.config.ts
 │   │   ├── sentry.edge.config.ts
 │   │   ├── sentry.server.config.ts
-│   │   ├── styles/ (2 files)
+│   │   ├── styles/ (3 files)
 │   │   ├── tailwind.config.js
 │   │   ├── tsconfig.json
 │   │   ├── types/ (5 files)
@@ -1202,6 +1269,7 @@ See report for details.
 │       ├── CLAUDE.md
 │       ├── package.json
 │       ├── src/
+│       │   ├── cloudinaryUtils.ts
 │       │   ├── constants/
 │       │   │   └── tagVocabulary.ts
 │       │   ├── index.ts
@@ -1211,6 +1279,7 @@ See report for details.
 ├── pnpm
 ├── pnpm-workspace.yaml
 ├── push.ps1
+├── query.sql
 ├── railway.toml
 ├── scripts/
 │   ├── fix-seed-city.ts
@@ -1221,7 +1290,11 @@ See report for details.
 │   ├── statusline-token-usage.sh
 │   ├── stress-test.js
 │   └── update-context.js
-└── updated-skills/
+├── test_item.jpg
+├── updated-skills/
+├── ziSe4sNr
+├── zisZbNTx
+└── zixqMWik
 
 ```
 
