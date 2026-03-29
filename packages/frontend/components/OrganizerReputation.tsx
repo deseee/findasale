@@ -62,9 +62,11 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
     return (
       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full">
         <span className="text-sm font-medium text-blue-700">New Organizer</span>
-        <span className="text-xs text-blue-600">
-          ({reputation.salesCount} sale{reputation.salesCount !== 1 ? 's' : ''} so far)
-        </span>
+        {reputation.salesCount > 0 && (
+          <span className="text-xs text-blue-600">
+            ({reputation.salesCount} sale{reputation.salesCount !== 1 ? 's' : ''} so far)
+          </span>
+        )}
       </div>
     );
   }
