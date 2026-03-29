@@ -118,12 +118,13 @@ const HoldButton: React.FC<HoldButtonProps> = ({
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to place hold';
       showToast(msg, 'error');
+      setIsOpen(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (!user) {
+  if (!user || user.role === 'ORGANIZER') {
     return null;
   }
 
