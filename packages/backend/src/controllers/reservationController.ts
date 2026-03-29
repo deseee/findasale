@@ -4,7 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
-import { sendHoldPlacedAlert } from '../services/saleAlertEmailService';
+import { sendHoldPlacedAlert, sendHoldStatusToShopper } from '../services/saleAlertEmailService';
 import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
 
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
@@ -453,6 +453,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       const holds = await tx.itemReservation.findMany({
         where: { id: { in: ids }, status: { in: ['PENDING', 'CONFIRMED'] } },
         include: {
+          user: { select: { id: true, name: true, email: true } },
           item: {
             include: { sale: true },
           },
@@ -480,17 +481,42 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           where: { id: { in: validItemIds } },
           data: { status: 'AVAILABLE' },
         });
+        // Notify each shopper their hold was released
+        await tx.notification.createMany({
+          data: validHolds.map((h) => ({
+            userId: h.userId,
+            type: 'hold_update',
+            title: 'Hold released',
+            body: `Your hold on "${h.item.title}" has been released by the organizer.`,
+            link: `/items/${h.item.id}`,
+            notificationChannel: 'IN_APP',
+            channel: 'OPERATIONAL',
+          })),
+        });
       } else if (action === 'extend') {
         // Extend each hold by its sale's holdDurationHours from now
+        const extendedHolds: Array<{ hold: typeof validHolds[0]; newExpiry: Date }> = [];
         for (const h of validHolds) {
           const hours = (h.item.sale as any)?.holdDurationHours ?? 48;
+          const newExpiry = new Date(Date.now() + hours * 3600000);
           await tx.itemReservation.update({
-            where: {
-              id: h.id,
-            },
-            data: { expiresAt: new Date(Date.now() + hours * 3600000) },
+            where: { id: h.id },
+            data: { expiresAt: newExpiry },
           });
+          extendedHolds.push({ hold: h, newExpiry });
         }
+        // Notify each shopper their hold was extended
+        await tx.notification.createMany({
+          data: extendedHolds.map(({ hold, newExpiry }) => ({
+            userId: hold.userId,
+            type: 'hold_update',
+            title: 'Hold extended',
+            body: `Your hold on "${hold.item.title}" has been extended by the organizer.`,
+            link: `/items/${hold.item.id}`,
+            notificationChannel: 'IN_APP',
+            channel: 'OPERATIONAL',
+          })),
+        });
       } else if (action === 'markSold') {
         await tx.itemReservation.updateMany({
           where: {
@@ -503,17 +529,55 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           where: { id: { in: validItemIds } },
           data: { status: 'SOLD' },
         });
+        // Notify each shopper their reserved item was marked sold
+        await tx.notification.createMany({
+          data: validHolds.map((h) => ({
+            userId: h.userId,
+            type: 'hold_update',
+            title: 'Item marked as sold',
+            body: `"${h.item.title}" that you had on hold has been marked as sold. Thank you for your purchase!`,
+            link: `/items/${h.item.id}`,
+            notificationChannel: 'IN_APP',
+            channel: 'OPERATIONAL',
+          })),
+        });
       }
 
-      return { updated: validHolds.length, failed: ids.length - validHolds.length };
+      return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds };
     }).catch((err) => {
       if (err.message === 'No valid holds found') {
-        return { updated: 0, failed: ids.length };
+        return { updated: 0, failed: ids.length, holds: [] };
       }
       throw err;
     });
 
-    res.json(result);
+    // Fire-and-forget emails to shoppers for release/extend actions
+    const batchHolds = (result as any).holds as Array<{
+      userId: string;
+      user: { name: string | null; email: string };
+      item: { id: string; title: string };
+    }> | undefined;
+    if (batchHolds && batchHolds.length > 0) {
+      const emailAction = action === 'release' ? 'released' : action === 'extend' ? 'extended' : null;
+      if (emailAction) {
+        setImmediate(() => {
+          Promise.allSettled(
+            batchHolds.map((h) =>
+              sendHoldStatusToShopper({
+                shopperEmail: h.user.email,
+                shopperName: h.user.name,
+                itemTitle: h.item.title,
+                itemId: h.item.id,
+                action: emailAction,
+              })
+            )
+          ).catch(() => {});
+        });
+      }
+    }
+
+    const { holds: _holds, ...responseResult } = result as any;
+    res.json(responseResult);
   } catch (error) {
     console.error('[reservations] batchUpdateHolds error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -534,7 +598,13 @@ export const updateHold = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'status must be CONFIRMED or CANCELLED' });
     }
 
-    const reservation = await prisma.itemReservation.findUnique({ where: { id } });
+    const reservation = await prisma.itemReservation.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        item: { select: { id: true, title: true, saleId: true } },
+      },
+    });
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -542,7 +612,33 @@ export const updateHold = async (req: AuthRequest, res: Response) => {
       if (status === 'CANCELLED') {
         await tx.item.update({ where: { id: reservation.itemId }, data: { status: 'AVAILABLE' } });
       }
+      // In-app notification for shopper
+      await tx.notification.create({
+        data: {
+          userId: reservation.userId,
+          type: 'hold_update',
+          title: status === 'CONFIRMED' ? 'Hold confirmed ✓' : 'Hold cancelled',
+          body: status === 'CONFIRMED'
+            ? `Your hold on "${reservation.item.title}" has been confirmed by the organizer.`
+            : `Your hold on "${reservation.item.title}" was cancelled by the organizer.`,
+          link: `/items/${reservation.item.id}`,
+          notificationChannel: 'IN_APP',
+          channel: 'OPERATIONAL',
+        },
+      });
       return r;
+    });
+
+    // Fire-and-forget email to shopper
+    setImmediate(() => {
+      sendHoldStatusToShopper({
+        shopperEmail: reservation.user.email,
+        shopperName: reservation.user.name,
+        itemTitle: reservation.item.title,
+        itemId: reservation.item.id,
+        action: status === 'CONFIRMED' ? 'confirmed' : 'cancelled',
+        expiresAt: status === 'CONFIRMED' ? updated.expiresAt : undefined,
+      }).catch(err => console.warn('[holdNotify] Failed to send hold status email:', err));
     });
 
     res.json(updated);
