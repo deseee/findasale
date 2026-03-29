@@ -2,12 +2,14 @@
  * HoldTimer Component
  * Displays a countdown timer for item holds with visual urgency warnings.
  * Shows time remaining, changes color as expiry approaches.
+ * Fetches hold expiry from the API using itemId.
  */
 
 import { useState, useEffect } from 'react';
+import api from '../lib/api';
 
 interface HoldTimerProps {
-  expiresAt: string;
+  itemId: string;
   onExpiry?: () => void;
 }
 
@@ -18,10 +20,31 @@ interface TimeRemaining {
   totalMs: number;
 }
 
-export default function HoldTimer({ expiresAt, onExpiry }: HoldTimerProps) {
+export default function HoldTimer({ itemId, onExpiry }: HoldTimerProps) {
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<TimeRemaining | null>(null);
 
+  // Fetch the hold/reservation data for this item
   useEffect(() => {
+    const fetchHold = async () => {
+      try {
+        const response = await api.get(`/reservations/item/${itemId}`);
+        if (response.data?.expiresAt) {
+          setExpiresAt(response.data.expiresAt);
+        }
+      } catch (error) {
+        // No reservation found or error fetching — render nothing
+        console.warn(`Failed to fetch hold for item ${itemId}:`, error);
+      }
+    };
+
+    fetchHold();
+  }, [itemId]);
+
+  // Countdown timer — only runs if expiresAt is set
+  useEffect(() => {
+    if (!expiresAt) return;
+
     const tick = () => {
       const now = new Date().getTime();
       const expiry = new Date(expiresAt).getTime();
