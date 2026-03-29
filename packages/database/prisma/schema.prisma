@@ -381,6 +381,7 @@ model Sale {
   markdownFloor    Float?
   // Feature #121: Hold system — check-ins and hold limits
   checkins         SaleCheckin[]
+  holdsEnabled     Boolean   @default(true)   // Feature #121: organizer can disable holds per-sale
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -768,6 +769,7 @@ model ItemReservation {
   qrScanId       String?                   // Fraud detection: which QR scan validated this hold
   fraudScore     Float  @default(0.0)      // Fraud detection score (0.0-1.0)
   fraudFlags     String[]  @default([])    // Fraud red flags: HIGH_VELOCITY, SUSPICIOUS_PATTERN, etc.
+  enRoute        Boolean   @default(false) // Feature #121: shopper was outside geofence but within 10mi (en route grace)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

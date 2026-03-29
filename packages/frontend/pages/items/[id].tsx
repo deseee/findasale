@@ -22,6 +22,7 @@ import { useHeartAnimation } from '../../hooks/useHeartAnimation';
 import Skeleton from '../../components/Skeleton';
 import ItemOGMeta from '../../components/ItemOGMeta';
 import QrCodeModal from '../../components/QrCodeModal'; // Feature #85: Treasure Hunt QR
+import HoldButton from '../../components/HoldButton'; // Feature #121: Hold Button
 
 interface Item {
   id: string;
@@ -605,19 +606,35 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                         {showBidHistory ? 'Hide' : 'View'} Bid History
                       </button>
                     </div>
+                  ) : item.status === 'RESERVED' ? (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
+                      <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm">🔒 This item is currently on hold</p>
+                      <p className="text-amber-600 dark:text-amber-400 text-xs mt-1">Check back soon — holds expire automatically</p>
+                    </div>
                   ) : (
-                    <button
-                      onClick={handleAddToCart}
-                      disabled={!user}
-                      title={!user ? 'Sign in to purchase' : ''}
-                      className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
-                        user
-                          ? 'bg-green-600 text-white hover:bg-green-700'
-                          : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700 cursor-not-allowed'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      {user ? 'Buy It Now' : 'Sign in to buy'}
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        onClick={handleAddToCart}
+                        disabled={!user}
+                        title={!user ? 'Sign in to purchase' : ''}
+                        className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
+                          user
+                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700 cursor-not-allowed'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {user ? 'Buy It Now' : 'Sign in to buy'}
+                      </button>
+                      {/* Feature #121: Hold Button — AVAILABLE items only */}
+                      {item.status === 'AVAILABLE' && (
+                        <HoldButton
+                          item={{ id: item.id, title: item.title, sale: item.sale ? { id: item.sale.id, title: item.sale.title } : undefined }}
+                          onHoldPlaced={() => queryClient.invalidateQueries({ queryKey: ['item', item.id] })}
+                          variant="default"
+                          className="bg-amber-500 hover:bg-amber-600"
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
               )}

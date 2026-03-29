@@ -7,10 +7,45 @@ import { pushSaleStatus } from '../services/saleStatusService';
 import { sendHoldPlacedAlert } from '../services/saleAlertEmailService';
 import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
 
-const DEFAULT_HOLD_HOURS = 48; // #24: default hold duration (was 24h)
-const GPS_VALIDATION_RADIUS_M = 100; // Feature #121: 100m radius for GPS validation
+const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
+const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
 
-// POST /api/reservations — shopper places a hold on an item (duration set per-sale)
+// Feature #121: GPS radius by sale type (meters)
+function getGpsRadiusBySaleType(saleType: string): number {
+  switch (saleType?.toUpperCase()) {
+    case 'YARD':
+    case 'FLEA_MARKET': return 150;
+    case 'AUCTION':     return 400;
+    case 'ESTATE':
+    default:            return 250;
+  }
+}
+
+// Feature #121: Hold duration in minutes by explorer rank
+function getHoldDurationMinutes(rank: string): number {
+  switch (rank) {
+    case 'RANGER':      return 45;
+    case 'SAGE':        return 60;
+    case 'GRANDMASTER': return 90;
+    case 'INITIATE':
+    case 'SCOUT':
+    default:            return 30;
+  }
+}
+
+// Feature #121: Max en-route holds by explorer rank
+function getEnRouteHoldLimit(rank: string): number {
+  switch (rank) {
+    case 'RANGER':      return 2;
+    case 'SAGE':
+    case 'GRANDMASTER': return 3;
+    case 'INITIATE':
+    case 'SCOUT':
+    default:            return 1;
+  }
+}
+
+// POST /api/reservations — shopper places a hold on an item (duration set per-rank)
 // Feature #121: Enhanced with GPS validation, QR check, fraud scoring, rank-based limits
 export const placeHold = async (req: AuthRequest, res: Response) => {
   try {
@@ -23,7 +58,18 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: { include: { holdSettings: true } } } } },
+      include: {
+        sale: {
+          include: {
+            organizer: {
+              include: {
+                holdSettings: true,
+                user: { select: { tier: true } },
+              },
+            },
+          },
+        },
+      },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
     if (item.status !== 'AVAILABLE') return res.status(409).json({ message: 'Item is not available for hold' });
@@ -31,17 +77,52 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     const sale = (item.sale as any);
     const holdSettings = sale?.organizer?.holdSettings;
 
-    // Feature #121: GPS validation — if organizer requires it, check proximity
-    if (holdSettings?.enableGpsValidation && latitude && longitude) {
+    // Feature #121: Per-sale holdsEnabled toggle
+    if (sale?.holdsEnabled === false) {
+      return res.status(403).json({ message: 'Holds are disabled for this sale' });
+    }
+
+    // Fetch user with explorerRank for rank-based logic
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { id: true, explorerRank: true },
+    });
+    const explorerRank = (user?.explorerRank as string) ?? 'INITIATE';
+
+    // Feature #121: GPS validation — sale-type-based radius
+    let enRoute = false;
+    if (latitude && longitude) {
       const saleLat = sale?.lat;
       const saleLng = sale?.lng;
       if (saleLat && saleLng) {
         const distance = calculateDistance(latitude, longitude, saleLat, saleLng);
-        if (distance > GPS_VALIDATION_RADIUS_M) {
-          return res.status(403).json({
-            message: 'You are not close enough to the sale location to place a hold',
-            distance
-          });
+        const gpsRadius = getGpsRadiusBySaleType(sale?.saleType ?? 'ESTATE');
+
+        if (distance > gpsRadius) {
+          // Outside geofence — check en route grace (within 10 miles)
+          if (distance <= EN_ROUTE_RADIUS_M) {
+            enRoute = true;
+            // Enforce rank-based en route hold limit
+            const enRouteLimit = getEnRouteHoldLimit(explorerRank);
+            const enRouteHolds = await prisma.itemReservation.count({
+              where: {
+                userId: req.user!.id,
+                enRoute: true,
+                status: { in: ['PENDING', 'CONFIRMED'] },
+              },
+            });
+            if (enRouteHolds >= enRouteLimit) {
+              return res.status(403).json({
+                message: `En route hold limit reached for your rank (${enRouteLimit} hold${enRouteLimit > 1 ? 's' : ''} allowed while navigating)`
+              });
+            }
+          } else if (holdSettings?.enableGpsValidation) {
+            // GPS validation required and user is too far away (beyond en route zone)
+            return res.status(403).json({
+              message: 'You are not close enough to the sale location to place a hold',
+              distance
+            });
+          }
         }
       }
     }
@@ -88,8 +169,9 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const durationMs = (sale?.holdDurationHours ?? DEFAULT_HOLD_HOURS) * 3600000;
-    const expiresAt = new Date(Date.now() + durationMs);
+    // Feature #121: Rank-based hold duration
+    const holdMinutes = getHoldDurationMinutes(explorerRank);
+    const expiresAt = new Date(Date.now() + holdMinutes * 60000);
 
     const reservation = await prisma.$transaction(async (tx) => {
       const r = await tx.itemReservation.create({
@@ -104,6 +186,7 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
           qrScanId: qrScanId || null,
           fraudScore,
           fraudFlags,
+          enRoute,
         },
       });
       await tx.item.update({ where: { id: itemId }, data: { status: 'RESERVED' } });
