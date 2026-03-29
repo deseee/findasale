@@ -339,17 +339,27 @@ const OrganizerHoldsPage = () => {
                                     <button
                                       onClick={() => updateMutation.mutate({ id: hold.id, status: 'CONFIRMED' })}
                                       disabled={updateMutation.isPending}
+                                      title="Approve this hold — shopper will be notified they can come pick up the item"
                                       className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded disabled:opacity-50"
                                     >
-                                      Confirm
+                                      Approve Hold
                                     </button>
                                   )}
                                   <button
+                                    onClick={() => batchMutation.mutate({ ids: [hold.id], action: 'extend' })}
+                                    disabled={batchMutation.isPending}
+                                    title="Add 30 minutes to this hold's expiry"
+                                    className="text-xs border border-blue-400 text-blue-600 hover:bg-blue-50 px-3 py-1 rounded disabled:opacity-50"
+                                  >
+                                    Extend (+30min)
+                                  </button>
+                                  <button
                                     onClick={() => updateMutation.mutate({ id: hold.id, status: 'CANCELLED' })}
                                     disabled={updateMutation.isPending}
+                                    title="Cancel this hold — item becomes available again for other shoppers"
                                     className="text-xs border border-red-400 text-red-600 hover:bg-red-50 px-3 py-1 rounded disabled:opacity-50"
                                   >
-                                    Release
+                                    Cancel Hold
                                   </button>
                                 </div>
                               </div>
