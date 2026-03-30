@@ -454,6 +454,76 @@ const OrganizerDashboard = () => {
               </div>
             </div>
 
+            {/* Calendar Widget - Upcoming Sales */}
+            <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">📅 Upcoming Sales</h3>
+              </div>
+              {salesData && salesData.length > 0 ? (
+                <>
+                  {(() => {
+                    const now = new Date();
+                    const upcomingSales = salesData
+                      .filter((sale: any) => {
+                        const saleStart = new Date(sale.startDate);
+                        return saleStart > now && (sale.status === 'PUBLISHED' || sale.status === 'ACTIVE');
+                      })
+                      .sort((a: any, b: any) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+                      .slice(0, 3);
+
+                    if (upcomingSales.length > 0) {
+                      return (
+                        <div className="space-y-3">
+                          {upcomingSales.map((sale: any) => (
+                            <div key={sale.id} className="flex justify-between items-center p-3 bg-warm-50 dark:bg-gray-700 rounded-md">
+                              <p className="font-medium text-warm-900 dark:text-warm-100">{sale.title}</p>
+                              <p className="text-sm text-warm-600 dark:text-warm-400">
+                                {new Date(sale.startDate).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: new Date(sale.startDate).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+                                })}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="text-center py-6">
+                          <p className="text-warm-600 dark:text-warm-400 mb-4">No upcoming sales</p>
+                          <Link
+                            href="/organizer/create-sale"
+                            className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                          >
+                            Create Sale →
+                          </Link>
+                        </div>
+                      );
+                    }
+                  })()}
+                  <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">
+                    <Link
+                      href="/calendar"
+                      className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium"
+                    >
+                      View Full Calendar →
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-warm-600 dark:text-warm-400 mb-4">No sales yet</p>
+                  <Link
+                    href="/organizer/create-sale"
+                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Create Sale →
+                  </Link>
+                </div>
+              )}
+            </div>
+
             {/* Section 2: Essential Tools (collapsible on mobile, visible on desktop) */}
             <details open={!isMobileView} className="group">
               <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors md:pointer-events-none md:cursor-default">

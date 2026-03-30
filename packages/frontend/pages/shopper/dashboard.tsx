@@ -181,6 +181,30 @@ const ShopperDashboard = () => {
             </Link>
           </div>
 
+          {/* Calendar Widget - Saved Sales Coming Up */}
+          <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">📅 Saved Sales Coming Up</h3>
+            </div>
+            <div className="text-center py-6">
+              <p className="text-warm-600 dark:text-warm-400 mb-4">No upcoming saved sales</p>
+              <Link
+                href="/"
+                className="inline-block text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
+              >
+                Browse Sales →
+              </Link>
+            </div>
+            <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">
+              <Link
+                href="/calendar"
+                className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium"
+              >
+                View Full Calendar →
+              </Link>
+            </div>
+          </div>
+
           {/* Tabs */}
           <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
             {[

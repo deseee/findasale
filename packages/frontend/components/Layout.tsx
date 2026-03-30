@@ -86,6 +86,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const staticNavLinks = [
     { href: '/feed', label: 'Feed' },
     { href: '/map', label: 'Map' },
+    { href: '/calendar', label: 'Calendar' },
     { href: '/inspiration', label: 'Inspiration' },
     { href: '/trending', label: 'Trending' },
     { href: '/pricing', label: 'Pricing' },
@@ -122,15 +123,26 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/brand-kit" label="Brand Kit" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/flip-report" label="Flip Report" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
             <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
+            <TierGatedNavLink href="/organizer/webhooks" label="Webhooks" requiredTier="TEAMS" />
 
             <SectionHeader label="Organizer Tools" />
             <Link href="/organizer/bounties" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Bounties
             </Link>
+            <Link href="/organizer/holds" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              Holds
+            </Link>
+            <Link href="/organizer/pos" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              POS
+            </Link>
             <Link href="/organizer/message-templates" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Message Templates
+            </Link>
+            <Link href="/organizer/print-inventory" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              Print Inventory
             </Link>
             <Link href="/organizer/reputation" className="block px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               Reputation
@@ -183,6 +195,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </button>
             {mobileExplorerOpen && (
               <>
+                <Link href="/shopper/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  My Holds
+                </Link>
+                <Link href="/shopper/bids" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  My Bids
+                </Link>
+                <Link href="/shopper/purchases" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Purchases
+                </Link>
                 <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   My Loot Legend
                 </Link>
@@ -195,11 +216,23 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link href="/shopper/loot-log" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Loot Log
                 </Link>
+                <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Hunt Pass
+                </Link>
+                <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Explorer Passport
+                </Link>
                 <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Explorer's Guild
                 </Link>
+                <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  League
+                </Link>
                 <Link href="/shopper/receipts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Receipts
+                </Link>
+                <Link href="/shopper/disputes" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  Disputes
                 </Link>
                 <Link href="/challenges" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Challenges
@@ -504,8 +537,17 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       Bounties
                     </Link>
+                    <Link href="/organizer/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      Holds
+                    </Link>
+                    <Link href="/organizer/pos" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      POS
+                    </Link>
                     <Link href="/organizer/message-templates" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       Message Templates
+                    </Link>
+                    <Link href="/organizer/print-inventory" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      Print Inventory
                     </Link>
                     <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       Reputation
@@ -537,8 +579,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
                     <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
                     <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/brand-kit" label="Brand Kit" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/flip-report" label="Flip Report" requiredTier="PRO" />
                     <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
                     <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
+                    <TierGatedNavLink href="/organizer/webhooks" label="Webhooks" requiredTier="TEAMS" />
                   </>
                 )}
               </>
