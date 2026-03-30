@@ -22,6 +22,7 @@ import { useXpSink } from '@/hooks/useXpSink';
 import StreakWidget from '@/components/StreakWidget';
 import { useMyAchievements } from '@/hooks/useAchievements';
 import { AchievementBadgesSection } from '@/components/AchievementBadgesSection';
+import { RarityBoostModal } from '@/components/RarityBoostModal';
 
 function LoyaltyPage() {
   const router = useRouter();
@@ -40,6 +41,7 @@ function LoyaltyPage() {
   const [mounted, setMounted] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
+  const [showRarityBoostModal, setShowRarityBoostModal] = useState(false);
   const { data: achievementsData, isLoading: achievementsLoading } = useMyAchievements();
 
   useEffect(() => {
@@ -320,8 +322,8 @@ function LoyaltyPage() {
                   )}
                 </div>
 
-                {/* Coming Soon: Rarity Boost */}
-                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-6 border border-amber-200 dark:from-gray-700 dark:to-gray-600 dark:border-amber-700 opacity-60">
+                {/* Rarity Boost Sink */}
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-6 border border-amber-200 dark:from-gray-700 dark:to-gray-600 dark:border-amber-700">
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">✨</p>
@@ -334,12 +336,26 @@ function LoyaltyPage() {
                   </div>
 
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Increase your chances of discovering legendary finds at a sale of your choice for 24 hours. Target your hunt and maximize your rewards!
+                    Spend XP to boost the rarity score of a sale you love. Items will be more visible in discovery and searches!
                   </p>
 
-                  <button disabled className="w-full py-3 rounded-lg font-semibold bg-gray-300 text-gray-500 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed">
-                    Coming Soon
+                  <button
+                    onClick={() => setShowRarityBoostModal(true)}
+                    disabled={xpProfile.guildXp < 15}
+                    className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                      xpProfile.guildXp < 15
+                        ? 'bg-gray-300 text-gray-500 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-800'
+                    }`}
+                  >
+                    Boost a Sale
                   </button>
+
+                  {xpProfile.guildXp < 15 && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                      Need {(15 - xpProfile.guildXp).toLocaleString()} more XP
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -557,6 +573,18 @@ function LoyaltyPage() {
             </Link>
           </div>
         </div>
+
+        {/* Rarity Boost Modal */}
+        <RarityBoostModal
+          isOpen={showRarityBoostModal}
+          onClose={() => setShowRarityBoostModal(false)}
+          userXp={xpProfile?.guildXp || 0}
+          onSuccess={() => {
+            // Refetch XP profile to update balance
+            // The hook should handle this internally, but if needed:
+            // refetchXpProfile();
+          }}
+        />
     </>
   );
 }

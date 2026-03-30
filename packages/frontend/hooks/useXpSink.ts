@@ -20,20 +20,20 @@ export const useXpSink = (options?: UseXpSinkOptions) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const spendXpRarityBoost = async (): Promise<boolean> => {
+  const spendXpRarityBoost = async (saleId: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
 
     try {
       const response = await api.post('/xp/sink/rarity-boost', {
-        saleId: null, // Will be supplied by caller or via context
+        saleId,
       });
 
       if (options?.onSuccess) {
         options.onSuccess({
           success: true,
           cost: 15,
-          message: '🎯 Rarity boost activated! Your items now have +2% legendary odds for this sale.',
+          message: '✨ Rarity boost activated! Your odds just got boosted.',
         });
       }
 
