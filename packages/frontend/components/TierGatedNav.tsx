@@ -122,13 +122,12 @@ interface SectionHeaderProps {
   color?: 'amber' | 'purple' | 'indigo' | 'red';
 }
 
-export function SectionHeader({ label, icon: Icon, color = 'warm' }: SectionHeaderProps) {
+export function SectionHeader({ label, icon: Icon, color = 'amber' }: SectionHeaderProps) {
   const colorClasses = {
     amber: 'text-amber-600 dark:text-amber-400',
     purple: 'text-purple-600 dark:text-purple-400',
     indigo: 'text-indigo-600 dark:text-indigo-400',
     red: 'text-red-600 dark:text-red-400',
-    warm: 'text-warm-500 dark:text-warm-400',
   };
 
   return (
