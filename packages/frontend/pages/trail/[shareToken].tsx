@@ -114,12 +114,12 @@ export default function PublicTrailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {trail.highlights.map((hl: any) => (
                   <div key={hl.id} className="p-3 border border-sage-200 dark:border-sage-700 rounded-lg bg-sage-50 dark:bg-sage-900">
-                    <p className="font-semibold text-sage-900 dark:text-sage-100">{hl.item?.title}</p>
+                    <p className="font-semibold text-sage-900 dark:text-white">{hl.item?.title}</p>
                     {hl.item?.price && (
-                      <p className="text-sm text-sage-700 dark:text-sage-300">${(hl.item.price / 100).toFixed(2)}</p>
+                      <p className="text-sm text-sage-700 dark:text-sage-100">${(hl.item.price / 100).toFixed(2)}</p>
                     )}
                     {hl.note && (
-                      <p className="text-xs text-sage-600 dark:text-sage-400 mt-1">{hl.note}</p>
+                      <p className="text-xs text-sage-600 dark:text-sage-200 mt-1">{hl.note}</p>
                     )}
                   </div>
                 ))}

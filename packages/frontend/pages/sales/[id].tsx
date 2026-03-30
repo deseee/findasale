@@ -603,7 +603,7 @@ const SaleDetailPage = () => {
 
             {/* Organizer Contact */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Contact Info</h2>
+              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Organized By</h2>
               <p className="text-sm text-warm-600 dark:text-gray-400 mb-2">
                 <span className="font-medium text-warm-900 dark:text-gray-200">Phone:</span> {sale.organizer.phone}
               </p>
@@ -638,6 +638,17 @@ const SaleDetailPage = () => {
                   Plan My Route in Maps
                 </button>
               )}
+            </div>
+
+            {/* Reviews Section */}
+            <div className="mb-8">
+              <ReviewsSection
+                mode="sale"
+                saleId={sale.id}
+                saleStatus={sale.status}
+                avgRating={sale.organizer.avgRating}
+                totalReviews={sale.organizer.reviewCount}
+              />
             </div>
 
             {/* Feature #70: Live Feed Ticker — real-time sale events (SOLD, HOLD, PRICE_DROP) */}
@@ -798,18 +809,18 @@ const SaleDetailPage = () => {
                     selectedCategory === null || item.category?.toLowerCase() === selectedCategory
                 )
                 .map((item) => (
-                <div key={item.id} className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-                  <div className="relative">
-                    <Link href={`/items/${item.id}`} className="block">
+                <div key={item.id} className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800 h-full flex flex-col">
+                  <div className="relative aspect-square overflow-hidden">
+                    <Link href={`/items/${item.id}`} className="block h-full">
                       {item.photoUrls.length > 0 ? (
                         <img
                           key={getOptimizedUrl(item.photoUrls[0])}
                           src={getOptimizedUrl(item.photoUrls[0])}
                           alt={item.title}
-                          className="w-full h-48 object-cover"
+                          className="w-full h-full object-cover hover:opacity-90 transition"
                          loading="lazy"/>
                       ) : (
-                        <div className="bg-warm-200 dark:bg-gray-700 h-48 flex items-center justify-center">
+                        <div className="bg-warm-200 dark:bg-gray-700 w-full h-full flex items-center justify-center">
                           <span className="text-warm-500 dark:text-gray-400 text-sm">No image</span>
                         </div>
                       )}
@@ -818,9 +829,9 @@ const SaleDetailPage = () => {
                       <FavoriteButton itemId={item.id} variant="icon" size="md" />
                     </div>
                   </div>
-                  <div className="p-4">
+                  <div className="p-4 flex flex-col flex-grow">
                     <h3 className="font-bold text-lg mb-2 text-warm-900 dark:text-gray-50">{item.title}</h3>
-                    <p className="text-warm-600 dark:text-gray-300 text-sm mb-3 line-clamp-2">{item.description}</p>
+                    <p className="text-warm-600 dark:text-gray-300 text-sm mb-3 line-clamp-2 flex-grow">{item.description}</p>
 
                     {/* Category, Condition, Auction, and Status badges */}
                     {(item.category || item.condition || item.auctionEndTime || item.status === 'RESERVED' || item.status === 'SOLD' || item.status === 'PENDING') && (
@@ -1031,14 +1042,6 @@ const SaleDetailPage = () => {
           </div>
         )}
 
-        {/* Reviews moved to organizer profile page - see /organizers/[id].tsx */}
-        {/* <ReviewsSection
-          mode="sale"
-          saleId={sale.id}
-          saleStatus={sale.status}
-          avgRating={sale.organizer.avgRating}
-          totalReviews={sale.organizer.reviewCount}
-        /> */}
       </main>
 
       {/* Modals */}

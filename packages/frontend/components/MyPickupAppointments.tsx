@@ -39,7 +39,8 @@ const MyPickupAppointments: React.FC = () => {
   // Cancel booking mutation
   const cancelMutation = useMutation({
     mutationFn: async (bookingId: string) => {
-      return await api.delete(`/pickup/booking/${bookingId}`);
+      const response = await api.delete(`/pickup/booking/${bookingId}`);
+      return response.data;
     },
     onSuccess: () => {
       showToast('Appointment cancelled', 'success');

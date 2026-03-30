@@ -36,11 +36,12 @@ const PickupBookingCard: React.FC<Props> = ({ saleId }) => {
   // Book slot mutation
   const bookMutation = useMutation({
     mutationFn: async (slotId: string) => {
-      return await api.post(`/pickup/book/${slotId}`, {});
+      const response = await api.post(`/pickup/book/${slotId}`, {});
+      return response.data;
     },
-    onSuccess: (response) => {
+    onSuccess: (booking) => {
       showToast('Pickup appointment booked!', 'success');
-      setBookingSuccess(response.data.slotId);
+      setBookingSuccess(booking.slotId);
       queryClient.invalidateQueries({ queryKey: ['pickup-slots', saleId] });
       // Clear success message after 5 seconds
       setTimeout(() => setBookingSuccess(null), 5000);

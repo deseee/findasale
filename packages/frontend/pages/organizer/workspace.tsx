@@ -72,7 +72,7 @@ export default function WorkspacePage() {
       setWorkspaceName('');
       setShowCreateForm(false);
     } catch (error: any) {
-      const msg = error.response?.data?.error || 'Failed to create workspace';
+      const msg = error.response?.data?.message || 'Failed to create workspace';
       showToast(msg, 'error');
     }
   };
@@ -89,7 +89,7 @@ export default function WorkspacePage() {
       setInviteEmail('');
       setShowInviteForm(false);
     } catch (error: any) {
-      const msg = error.response?.data?.error || 'Failed to invite member';
+      const msg = error.response?.data?.message || 'Failed to invite member';
       showToast(msg, 'error');
     }
   };
@@ -102,7 +102,7 @@ export default function WorkspacePage() {
       await removeMemberMutation.mutateAsync(organizerId);
       showToast('Member removed successfully', 'success');
     } catch (error: any) {
-      const msg = error.response?.data?.error || 'Failed to remove member';
+      const msg = error.response?.data?.message || 'Failed to remove member';
       showToast(msg, 'error');
     }
   };

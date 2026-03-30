@@ -218,24 +218,43 @@ function SettingsPage() {
               </div>
 
               {/* Push Notifications */}
-              <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Push Notifications</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Get real-time alerts on your device for important updates
-                    </p>
+              {typeof window !== 'undefined' && 'Notification' in window && (
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Push Notifications</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Get real-time alerts on your device for important updates
+                      </p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (Notification.permission === 'granted') {
+                          const reg = await navigator.serviceWorker.ready;
+                          const sub = await reg.pushManager.getSubscription();
+                          if (sub) {
+                            await sub.unsubscribe();
+                          }
+                        } else {
+                          await Notification.requestPermission();
+                        }
+                      }}
+                      className={`flex-shrink-0 relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                        Notification.permission === 'granted' ? 'bg-amber-600' : 'bg-gray-300'
+                      }`}
+                      role="switch"
+                      aria-checked={Notification.permission === 'granted'}
+                      aria-label="Push notifications"
+                    >
+                      <span
+                        className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 transition-transform ${
+                          Notification.permission === 'granted' ? 'translate-x-7' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
                   </div>
-                  <button
-                    className={`flex-shrink-0 relative inline-flex h-8 w-14 items-center rounded-full transition-colors bg-amber-600`}
-                    role="switch"
-                    aria-checked={true}
-                    aria-label="Push notifications"
-                  >
-                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white dark:bg-gray-800 translate-x-7`} />
-                  </button>
                 </div>
-              </div>
+              )}
 
               {/* Wishlist Alerts */}
               <div>

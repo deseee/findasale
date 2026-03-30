@@ -95,16 +95,8 @@ router.get('/me/bids', authenticate, async (req: AuthRequest, res: Response) => 
       }
     });
 
-    // Add bid status logic here (WINNING, LOSING, etc.)
-    const bidsWithStatus = bids.map((bid: any) => {
-      // Simplified status logic - in a real app, you'd compare with current highest bid
-      return {
-        ...bid,
-        status: 'PARTICIPATING' // Would be determined by comparing with other bids
-      };
-    });
-
-    res.json(bidsWithStatus);
+    // Return bids with their actual status from the database
+    res.json(bids);
   } catch (error) {
     console.error('Error fetching user bids:', error);
     res.status(500).json({ message: 'Server error while fetching bids' });

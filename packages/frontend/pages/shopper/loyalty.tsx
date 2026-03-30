@@ -20,6 +20,8 @@ import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
 import { useXpSink } from '@/hooks/useXpSink';
 import StreakWidget from '@/components/StreakWidget';
+import { useMyAchievements } from '@/hooks/useAchievements';
+import { AchievementBadgesSection } from '@/components/AchievementBadgesSection';
 
 function LoyaltyPage() {
   const router = useRouter();
@@ -38,6 +40,7 @@ function LoyaltyPage() {
   const [mounted, setMounted] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
+  const { data: achievementsData, isLoading: achievementsLoading } = useMyAchievements();
 
   useEffect(() => {
     setMounted(true);
@@ -89,14 +92,16 @@ function LoyaltyPage() {
   }
 
   // Mock tier data for display — adjust based on actual tier logic
+  // Using Explorer's Guild tier names and emojis
   const tierLevels = [
-    { name: 'Bronze', min: 0, max: 99, color: '#8B4513', nextStamps: 100 },
-    { name: 'Silver', min: 100, max: 299, color: '#C0C0C0', nextStamps: 300 },
-    { name: 'Gold', min: 300, max: 499, color: '#FFD700', nextStamps: 500 },
-    { name: 'Platinum', min: 500, max: Infinity, color: '#E5E4E2', nextStamps: null },
+    { name: 'Initiate', emoji: '🌱', min: 0, max: 99, color: '#8B4513', nextStamps: 100 },
+    { name: 'Scout', emoji: '🐦', min: 100, max: 299, color: '#C0C0C0', nextStamps: 300 },
+    { name: 'Ranger', emoji: '🧗', min: 300, max: 499, color: '#FFD700', nextStamps: 500 },
+    { name: 'Sage', emoji: '🧙', min: 500, max: 999, color: '#9933FF', nextStamps: 1000 },
+    { name: 'Grandmaster', emoji: '👑', min: 1000, max: Infinity, color: '#FFD700', nextStamps: null },
   ];
 
-  const currentTierData = tierLevels[Math.min(Math.floor(passport.totalStamps / 100), 3)];
+  const currentTierData = tierLevels[Math.min(Math.floor(passport.totalStamps / 100), 4)];
   const progressPercent = ((passport.stampsToNextMilestone || 0) / (currentTierData.nextStamps || 100)) * 100;
 
   const handleOnboardingClose = () => {
@@ -228,10 +233,39 @@ function LoyaltyPage() {
             <StreakWidget />
           </div>
 
+          {/* How to Earn XP */}
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-6 mb-8 border-l-4 border-indigo-500 dark:border-indigo-400">
+            <h3 className="text-lg font-semibold text-indigo-900 dark:text-indigo-200 mb-4">How to Earn Guild XP</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="flex gap-3">
+                <span className="text-2xl">📱</span>
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Scan an Item</p>
+                  <p className="text-gray-600 dark:text-gray-400">+10 XP per scan</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-2xl">🚪</span>
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Visit a Sale</p>
+                  <p className="text-gray-600 dark:text-gray-400">+5 XP per visit</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-2xl">🛒</span>
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Make a Purchase</p>
+                  <p className="text-gray-600 dark:text-gray-400">+25 XP per transaction</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Spend XP Section */}
           {xpProfile && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8 border-l-4 border-indigo-500 dark:border-indigo-400">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Spend Your XP ✨</h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-2">Spend Your Guild XP ✨</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Unlock exclusive rewards and perks by spending the XP you earn.</p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Coupon Generation Sink */}
@@ -239,7 +273,7 @@ function LoyaltyPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">🎫</p>
-                      <h4 className="text-lg font-semibold text-gray-900 dark:text-warm-100 mt-2">Generate Coupon</h4>
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-warm-100 mt-2">Discount Coupon</h4>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Cost</p>
@@ -248,7 +282,7 @@ function LoyaltyPage() {
                   </div>
 
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Create a $1 off discount coupon to use on future purchases. Coupons expire in 30 days.
+                    Generate a $1 off coupon to use at any sale. Coupons are valid for 30 days. Redeem your XP for real savings!
                   </p>
 
                   <button
@@ -274,7 +308,7 @@ function LoyaltyPage() {
                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-6 border border-amber-200 dark:from-gray-700 dark:to-gray-600 dark:border-amber-700 opacity-60">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">🎯</p>
+                      <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">✨</p>
                       <h4 className="text-lg font-semibold text-gray-900 dark:text-warm-100 mt-2">Rarity Boost</h4>
                     </div>
                     <div className="text-right">
@@ -284,7 +318,7 @@ function LoyaltyPage() {
                   </div>
 
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Boost your odds of finding legendary items at a specific sale for 24 hours. Choose a sale and activate!
+                    Increase your chances of discovering legendary finds at a sale of your choice for 24 hours. Target your hunt and maximize your rewards!
                   </p>
 
                   <button disabled className="w-full py-3 rounded-lg font-semibold bg-gray-300 text-gray-500 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed">
@@ -306,13 +340,13 @@ function LoyaltyPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Tier Info */}
               <div>
-                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Current Tier</p>
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Your Explorer Tier</p>
                 <div className="flex items-end gap-3 mb-4">
                   <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md"
+                    className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold shadow-md"
                     style={{ backgroundColor: currentTierData.color }}
                   >
-                    {currentTierData.name[0]}
+                    {currentTierData.emoji}
                   </div>
                   <div>
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-warm-100">{currentTierData.name}</h2>
@@ -321,16 +355,16 @@ function LoyaltyPage() {
                 </div>
               </div>
 
-              {/* Points Balance */}
+              {/* Stamps Balance */}
               <div className="flex flex-col justify-center">
-                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Points Balance</p>
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Total Stamps Earned</p>
                 <div className="text-4xl font-bold text-amber-700 dark:text-amber-400 mb-2">
                   {passport.totalStamps ?? 0}
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {currentTierData.nextStamps
-                    ? `${currentTierData.nextStamps - (passport.totalStamps ?? 0)} stamps to ${tierLevels[Math.min(Math.floor((passport.totalStamps ?? 0) / 100) + 1, 3)].name}`
-                    : 'You\'ve reached max tier!'}
+                    ? `${currentTierData.nextStamps - (passport.totalStamps ?? 0)} stamps to ${tierLevels[Math.min(Math.floor((passport.totalStamps ?? 0) / 1000) + 1, 4)].name}`
+                    : 'You\'ve reached Grandmaster — the peak of the Explorer\'s Guild!'}
                 </p>
               </div>
             </div>
@@ -354,7 +388,8 @@ function LoyaltyPage() {
 
           {/* Stamps Breakdown */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Your Stamps</h3>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-2">Your Stamps</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Stamps track your lifetime achievement. Collect enough to climb the tiers and unlock exclusive perks.</p>
 
             {passport.stamps && passport.stamps.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -440,9 +475,20 @@ function LoyaltyPage() {
             </div>
           </div>
 
+          {/* Achievements Badges */}
+          {achievementsData?.achievements && achievementsData.achievements.length > 0 && !achievementsLoading && (
+            <div className="mb-8">
+              <AchievementBadgesSection
+                achievements={achievementsData.achievements}
+                showStats={true}
+              />
+            </div>
+          )}
+
           {/* Benefits & Rewards */}
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-md p-8 border border-green-200 dark:from-gray-800 dark:to-gray-700 dark:border-green-700">
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-6">Your Benefits</h3>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-2">Explorer's Guild Perks</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Unlock exclusive benefits and recognition as you climb the ranks.</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex gap-4">

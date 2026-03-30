@@ -51,12 +51,13 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
         throw new Error('Start time must be before end time');
       }
 
-      return await api.post('/pickup/slots', {
+      const response = await api.post('/pickup/slots', {
         saleId,
         startsAt: startDateTime.toISOString(),
         endsAt: endDateTime.toISOString(),
         capacity: parseInt(formData.capacity, 10),
       });
+      return response.data;
     },
     onSuccess: () => {
       showToast('Pickup slot created successfully!', 'success');
@@ -81,7 +82,8 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
   // Delete slot mutation
   const deleteMutation = useMutation({
     mutationFn: async (slotId: string) => {
-      return await api.delete(`/pickup/slot/${slotId}`);
+      const response = await api.delete(`/pickup/slot/${slotId}`);
+      return response.data;
     },
     onSuccess: () => {
       showToast('Slot deleted', 'success');
