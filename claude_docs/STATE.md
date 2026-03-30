@@ -7,9 +7,11 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S344 complete — push block below.
+No active work. S344 complete (Batch 1 + Batch 2) — push block below.
 
-**S344 COMPLETE (2026-03-30):** 5-agent parallel roadmap batch. (1) **P2 cleanup:** XP language fixed on 3 remaining components (HuntPassModal, TreasureHuntBanner, StreakWidget). EmptyState dark mode contrast added. D-001 "Estate Sale" placeholder copy fixed. (2) **city-heat-index.tsx:** Replaced Coming Soon stub with redirect to /cities per locked decision #49. (3) **#149 Email Reminders frontend:** RemindMeButton enhanced — copy → "Remind me by email", toggle-off "Cancel Reminder" state added, disabled for ended/cancelled sales, dark mode fixed. Wired into sales/[id].tsx replacing inline button. (4) **#200 Shopper Public Profiles full stack:** schema.prisma + new migration (profileSlug @unique, purchasesVisible Boolean @default(true), collectorTitle String?), backend GET /shoppers/:id + PATCH /users/me extended, /shoppers/[id].tsx UI (avatar, rank, collectorTitle badge, recent finds grid), shopper/settings.tsx Public Profile section (title dropdown, slug input, visibility toggle). **Patrick must deploy migration 20260330_add_shopper_profile_fields to Railway.** (5) **#64 My Collections full consolidation:** Favorites tab removed from shopper/dashboard.tsx, BottomTabNav + Layout.tsx nav updated to /shopper/wishlist, /shopper/favorites + /shopper/alerts already redirect from S343. Nav now unified. (6) **Architect spec #174+#80:** Full spec in claude_docs/architecture/AUCTION_WIN_SPEC.md. Key finding: no schema changes needed — all fields exist. Code-only, 3-phase plan (auctionJob+reserve ~3-4h, /purchases/[id] page ~2-3h, organizer UI deferred). No Patrick decisions needed — ready for dev dispatch in S345.
+**S344 Batch 2 COMPLETE (2026-03-30):** 5-agent parallel bug-fix + feature batch. (1) **#174+#80 Phase 1+2 shipped:** auctionJob.ts reserve price check (16-line block — if reserve not met, item moves to AUCTION_ENDED + organizer notified); /purchases/[id].tsx new 400+ line persistent confirmation page (hero, item details, pickup info, order details, status badges, auction buyer premium 5%); CheckoutModal now captures purchaseId and redirects to /purchases/${id}; checkout-success.tsx backward-compat redirect added. (2) **#184 iCal FIXED:** Express route ordering fix in routes/sales.ts — /:id/calendar.ics moved before generic /:id catch-all. (3) **#41 Flip Report FIXED:** null-safety on bestCategory.category + itemsSold division-by-zero guard in flipReportService.ts; enhanced error logging in flipReportController.ts. (4) **#7 Referral FIXED:** missing return statements before res.json() on lines 26+38 of referralController.ts — API was hanging silently, frontend showed 0. (5) **#89 Print Kit FIXED:** frontend was POSTing to /organizer/sales/{id}/print-kit (wrong prefix) — corrected to /organizers/{id}/print-kit in print-inventory.tsx. (6) **#62 Digital Receipts FIXED:** receiptController.getMyReceipts now queries Purchase model (status: PAID) directly instead of DigitalReceipt which had no auto-created records. Response shape preserved (issuedAt mapped from createdAt). (7) **#50 Loot Log:** NOT a code bug — user11's purchases are PENDING not PAID. Loot Log correctly filters PAID only. No fix needed.
+
+**S344 COMPLETE (2026-03-30):** 5-agent parallel roadmap batch. (1) **P2 cleanup:** XP language fixed on 3 remaining components (HuntPassModal, TreasureHuntBanner, StreakWidget). EmptyState dark mode contrast added. D-001 "Estate Sale" placeholder copy fixed. (2) **city-heat-index.tsx:** Replaced Coming Soon stub with redirect to /cities per locked decision #49. (3) **#149 Email Reminders frontend:** RemindMeButton enhanced — copy → "Remind me by email", toggle-off "Cancel Reminder" state added, disabled for ended/cancelled sales, dark mode fixed. Wired into sales/[id].tsx replacing inline button. (4) **#200 Shopper Public Profiles full stack:** schema.prisma + new migration (profileSlug @unique, purchasesVisible Boolean @default(true), collectorTitle String?), backend GET /shoppers/:id + PATCH /users/me extended, /shoppers/[id].tsx UI (avatar, rank, collectorTitle badge, recent finds grid), shopper/settings.tsx Public Profile section (title dropdown, slug input, visibility toggle). **Patrick must deploy migration 20260330_add_shopper_profile_fields to Railway.** (5) **#64 My Collections full consolidation:** Favorites tab removed from shopper/dashboard.tsx, BottomTabNav + Layout.tsx nav updated to /shopper/wishlist, /shopper/favorites + /shopper/alerts already redirect from S343. Nav now unified. (6) **Architect spec #174+#80:** Full spec in claude_docs/architecture/AUCTION_WIN_SPEC.md. Key finding: no schema changes needed — all fields exist. Code-only, 3-phase plan (auctionJob+reserve ~3-4h, /purchases/[id] page ~2-3h, organizer UI deferred).
 
 **S343 Part 2 COMPLETE (2026-03-30):** Guild Phase 1 wrap-up + My Collections + BUSINESS_PLAN.md fix. (1) **Guild Items 6 & 7 schema shipped:** SourcebookEntry model (author/sale/organizer FKs, @@unique per author+target, 3 indexes) + Sale.prelaunchAt DateTime? + index added to schema.prisma. Migration SQL at `migrations/20260330_add_sourcebook_and_prelaunch/migration.sql` — Patrick must deploy to Railway manually per CLAUDE.md §6. prisma validate ✅ TypeScript ✅. (2) **Hunt Pass trial banner wired (loot-legend.tsx):** Amber banner, useState dismiss (no localStorage), POST /api/hunt-pass/trial on CTA, toast on success, silent 409 hide. Only shows if huntPassActive !== true. TS ✅. (3) **#64 My Collections shipped:** Renamed Saves/Wishlist → "My Collections" on 6 surfaces (wishlist.tsx, wishlists.tsx, AvatarDropdown.tsx, Layout.tsx, ActivitySummary.tsx, dashboard.tsx). Added collections stub UI (All Saves pill + "+ New Collection" Coming Soon toast). No backend changes. TS ✅. (4) **BUSINESS_PLAN.md truncation fixed:** Last two lines were cut off — restored "Quarterly)" + Author line. (5) **roadmap.old.md:** 179-line deletion confirmed as intentional prior cleanup — including in push block.
 
@@ -66,18 +68,56 @@ npx prisma generate
 ### S345 Priority 2: Hold-to-Pay QA (evening — off peak hours)
 Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets email + in-app notification → ClaimCard visible → Stripe link → payment → SOLD + organizer notified + +15 guildXP. Test accounts: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
 
-### S345 Priority 3: Dev dispatch #174+#80 Phase 1+2
-Architect spec ready: `claude_docs/architecture/AUCTION_WIN_SPEC.md`. Phase 1: auctionJob + reserve check (~3-4h). Phase 2: /purchases/[id].tsx persistent confirmation page (~2-3h). Phase 3 (organizer UI) deferred. No schema changes needed.
+### S345 Priority 3: Chrome QA — all FIXED S344 items
+#174+#80, #184, #41, #7, #89, #62 all need browser verification. One dispatch per feature, sequential.
 
 ### S345 Notes
 - XP test accounts: SQL in decisions-log.md S342 section to set users to any rank for beta testing
 - Sage threshold is 2500 XP (was 4000) — beta-only, revert post-beta
 
 ### Patrick Actions Before S345
-1. Run S344 push block (19 files + wrap docs)
+1. Run S344 push block below (31 files + wrap docs)
 2. Run shopper profiles migration (above)
 3. Confirm Railway + Vercel green
 4. Check STRIPE_WEBHOOK_SECRET in Railway env vars (for Hold-to-Pay QA)
+
+### S344 Complete Push Block (31 files)
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/architecture/AUCTION_WIN_SPEC.md
+git add packages/frontend/components/HuntPassModal.tsx
+git add packages/frontend/components/TreasureHuntBanner.tsx
+git add packages/frontend/components/StreakWidget.tsx
+git add packages/frontend/components/EmptyState.tsx
+git add "packages/frontend/pages/city-heat-index.tsx"
+git add packages/frontend/components/RemindMeButton.tsx
+git add "packages/frontend/pages/sales/[id].tsx"
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260330_add_shopper_profile_fields/migration.sql
+git add packages/backend/src/controllers/userController.ts
+git add packages/backend/src/routes/users.ts
+git add "packages/frontend/pages/shoppers/[id].tsx"
+git add packages/frontend/pages/shopper/settings.tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/components/BottomTabNav.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/_app.tsx
+git add packages/backend/src/jobs/auctionJob.ts
+git add "packages/frontend/pages/purchases/[id].tsx"
+git add packages/frontend/components/CheckoutModal.tsx
+git add packages/frontend/pages/shopper/checkout-success.tsx
+git add packages/backend/src/routes/sales.ts
+git add packages/backend/src/services/flipReportService.ts
+git add packages/backend/src/controllers/flipReportController.ts
+git add packages/backend/src/controllers/referralController.ts
+git add packages/frontend/pages/organizer/print-inventory.tsx
+git add packages/backend/src/controllers/receiptController.ts
+git commit -m "S344: roadmap batch — shopper profiles, reminders, collections, auction win UX, 6 bug fixes"
+.\push.ps1
+```
 
 ### S342 Priority 3: Remaining QA queue
 - Bug 4: Buy Now success card persist (needs Stripe test mode)

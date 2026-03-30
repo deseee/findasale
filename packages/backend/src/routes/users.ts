@@ -16,30 +16,56 @@ const router = Router();
 
 // Authenticated endpoints
 router.get('/purchases', authenticate, getPurchases);
-router.get('/purchases/:itemId', authenticate, async (req: AuthRequest, res: Response) => {
+
+// Fetch single purchase by purchase ID (for confirmation page)
+router.get('/purchases/:purchaseId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { itemId } = req.params;
+    const { purchaseId } = req.params;
 
-    const purchase = await prisma.purchase.findFirst({
-      where: {
-        userId: req.user.id,
-        itemId: itemId,
-        status: 'PAID' // Only count completed purchases
-      }
+    // Attempt to fetch by purchase ID first
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        item: {
+          select: {
+            id: true,
+            title: true,
+            photoUrls: true,
+            listingType: true,
+            auctionStartPrice: true,
+          },
+        },
+        sale: {
+          select: {
+            startDate: true,
+            endDate: true,
+            address: true,
+            city: true,
+            state: true,
+            zip: true,
+            organizer: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    if (purchase) {
-      res.json({ hasPurchased: true, purchasedAt: purchase.createdAt });
-    } else {
-      res.json({ hasPurchased: false });
+    if (!purchase || purchase.userId !== req.user.id) {
+      return res.status(404).json({ message: 'Purchase not found' });
     }
+
+    // Return purchase with full details
+    res.json(purchase);
   } catch (error) {
-    console.error('Error checking purchase status:', error);
-    res.status(500).json({ message: 'Server error while checking purchase status' });
+    console.error('Error fetching purchase:', error);
+    res.status(500).json({ message: 'Server error while fetching purchase' });
   }
 });
 router.get('/favorites', authenticate, getFavorites);

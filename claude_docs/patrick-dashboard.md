@@ -2,45 +2,50 @@
 
 ---
 
-## ✅ S344 Complete — 5-Feature Roadmap Batch + Architect Spec
+## ✅ S344 Complete — Roadmap Batch 1+2: 6 bugs fixed, 4 features shipped
 
-P2 cleanup, Email Reminders, Shopper Profiles, My Collections consolidation, Auction Win spec. Push block below.
+P2 cleanup, Email Reminders, Shopper Profiles, Collections, Auction Win UX, + 6 BROKEN items fixed. Push block below (31 files).
 
 ---
 
 ## What Happened This Session (S344)
 
-5 agents ran in parallel. All TS ✅ zero errors:
-
+**Batch 1 — 5 agents, all TS ✅:**
 - **P2 cleanup:** XP language on 3 components, EmptyState dark mode, D-001 copy fixed, city-heat-index → /cities redirect
-- **#149 Email Reminders:** "Remind me by email" copy, toggle-off state, disabled for ended sales
-- **#200 Shopper Public Profiles:** Full stack — schema + migration, API endpoints, /shoppers/[id] page, settings section
+- **#149 Email Reminders:** "Remind me by email" copy, toggle-off "Cancel Reminder" state, disabled for ended sales
+- **#200 Shopper Public Profiles:** Full stack — schema + migration + API + /shoppers/[id] page + settings section
 - **#64 My Collections:** Nav fully unified to /shopper/wishlist, favorites tab removed from dashboard
-- **#174+#80 Architect spec:** Complete — no schema changes, ready for dev in S345
+
+**Batch 2 — 5 agents, all TS ✅:**
+- **#174+#80 Auction Win UX:** Reserve price check in auctionJob + persistent /purchases/[id] confirmation page + CheckoutModal redirect
+- **#184 iCal FIXED:** Express route ordering (generic /:id was intercepting .ics requests)
+- **#41 Flip Report FIXED:** Null safety + division-by-zero guard
+- **#7 Referral Shows 0 FIXED:** Missing `return` before res.json() in referralController
+- **#89 Print Kit Download FIXED:** Wrong endpoint prefix in frontend
+- **#62 Receipts Blank FIXED:** receiptController now queries Purchase directly (DigitalReceipt had no records)
 
 ---
 
-## What's Next (S345)
+## Your Actions Before S345
 
-1. **Run S344 push block first** (19 files below)
-2. **Run shopper profiles migration** (new — required):
+1. **Run push block below (31 files)**
+2. **Run shopper profiles migration:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
-3. **Hold-to-Pay QA** — this evening. user12 (shopper) + user6/Family Collection Sale 16 (organizer). STRIPE_WEBHOOK_SECRET must be set in Railway.
-4. **#174+#80 dev dispatch** — architect spec ready at `claude_docs/architecture/AUCTION_WIN_SPEC.md`
+3. Confirm Railway + Vercel green
+4. Verify STRIPE_WEBHOOK_SECRET in Railway env vars (for Hold-to-Pay QA)
 
 ---
 
-## Your Actions Before S345
+## What's Next (S345)
 
-1. Run push block below
-2. Run shopper profiles migration
-3. Confirm Railway + Vercel green
-4. Verify STRIPE_WEBHOOK_SECRET in Railway env vars
+1. Chrome QA of all 6 FIXED items (#174+#80, #184, #41, #7, #89, #62)
+2. Hold-to-Pay QA (evening) — user12 + user6/Family Collection Sale 16
+3. Continue roadmap batch if context allows
 
 ---
 

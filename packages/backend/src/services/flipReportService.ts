@@ -170,10 +170,11 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
 
   // Recommendation 2: Category performance
   const bestCategory = categoryBreakdown.sort((a, b) => (b.sold / b.total) - (a.sold / a.total))[0];
-  if (bestCategory) {
+  if (bestCategory && bestCategory.total > 0) {
     const catRate = (bestCategory.sold / bestCategory.total) * 100;
     if (catRate >= 75) {
-      recommendations.push(`Your ${bestCategory.category.toLowerCase()} items sold exceptionally well — prioritize this category in future sales.`);
+      const catName = (bestCategory.category || 'Other').toLowerCase();
+      recommendations.push(`Your ${catName} items sold exceptionally well — prioritize this category in future sales.`);
     }
   }
 
@@ -185,7 +186,7 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   }
 
   // Recommendation 4: Revenue & volume feedback
-  if (totalRevenue > 0) {
+  if (totalRevenue > 0 && itemsSold > 0) {
     const avgItemValue = totalRevenue / itemsSold;
     if (avgItemValue > 100) {
       recommendations.push('High average item value. Focus on similar high-value items in future sales.');

@@ -78,14 +78,14 @@ These are decisions that block other work. Only Patrick can decide.
 | # | Feature | Tier | Decision | Impact | Blocker? |
 |-----|---------|------|----------|--------|----------|
 | 188 | Neighborhood Pages | FREE | Pages are FUNCTIONAL — was stale note. 14 GR neighborhoods live. Needs Chrome QA only. | Site nav | Yes — nav links to dead pages |
-|  49 | City Heat Index | FREE | CONSOLIDATE into /cities page — heat indicator (color/emoji by activity). ~30 min. No separate page. | Dashboard layout | No |
+|  49 | City Heat Index | FREE | Shipped S344 — /city-heat-index now redirects to /cities. Heat density indicator on /cities page is future enhancement. | Dashboard layout | No |
 |  90 | Sale Soundtrack (Ambient Vibes) | FREE | DEFERRED to organizer-side — remove from sale detail. Rebuild as inline player when POS/dashboard ready. S342. | Page redesign | No |
-| 200 | Shopper Public Profiles | FREE | Spec complete S342 — /shoppers/[id], optional slug, visibility toggle, curated collector title. Dev pending M effort. | Shopper profile UX | No |
+| 200 | Shopper Public Profiles | FREE | Shipped S344 — full stack: profileSlug/purchasesVisible/collectorTitle schema + migration (deploy needed), GET /shoppers/:id, /shoppers/[id].tsx, settings section. Pending Chrome QA. | Shopper profile UX | No |
 |  69 | Local-First Offline Mode | PRO | DEFERRED — coming soon. Post-beta. | Architecture | No |
-|  64 | Save/Wishlist/Hold UX | FREE | UX spec complete S342 — Unify Favorites+Wishlists → My Collections. Hold separate. Dev pending M effort. | Nav, user mental model | Yes — dashboard redesign |
-| 122 | Explorer's Guild Phase 1 (Rebrand + Copy) | FREE | Gamification naming and narrative locked or needs revision? | Gamification naming | No |
-| 149 | Email Reminders to Shoppers | SIMPLE | Backend complete. Dev pending S effort — copy fix + toggle-off UI only. | Settings redesign | No |
-| 174 | Auction Mechanics + Close Flow | SIMPLE | MERGED WITH #80 — Unified Auction Win + Persistent Purchase Confirmation. Payment at winning bid. Spec complete S342. | Checkout redesign | Yes — blocks purchase UX |
+|  64 | Save/Wishlist/Hold UX | FREE | Shipped S344 — nav unified to /shopper/wishlist, favorites tab removed from dashboard, /shopper/favorites + /shopper/alerts redirect. Pending Chrome QA. | Nav, user mental model | Yes — dashboard redesign |
+| 122 | Explorer's Guild Phase 1 | FREE | Shipped S342–S343 — XP scan cap (100/day), visit XP, Guild nav link, onboarding modal, Sage 2500 threshold (beta). SourcebookEntry + Sale.prelaunchAt schema S343. Hunt Pass trial banner S343. Pending Chrome QA. | Gamification | No |
+| 149 | Email Reminders to Shoppers | SIMPLE | Shipped S344 — copy → "Remind me by email", toggle-off "Cancel Reminder" state, disabled for ended sales. Pending Chrome QA. | Settings redesign | No |
+| 174 | Auction Mechanics + Close Flow | SIMPLE | MERGED WITH #80 — Phase 1 (auctionJob reserve check) + Phase 2 (/purchases/[id] page + CheckoutModal redirect + checkout-success compat) SHIPPED S344 Batch 2. Pending Chrome QA. Arch spec: claude_docs/architecture/AUCTION_WIN_SPEC.md. | Checkout redesign | Yes — blocks purchase UX |
 |  82 | Trademark — FindA.Sale | LEGAL | File USPTO trademark? ~$250–400/class + attorney fees | Legal | No |
 |  83 | Trade Secret Housekeeping | LEGAL | Document proprietary algorithms as trade secrets + NDA review | Legal | No | 
 
@@ -95,19 +95,19 @@ Features that Patrick's human QA walkthrough confirmed are broken. Use the two-s
 
 |  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
 |-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
-| 174 | ✅ | ✅ | ✅ | NA | ⬜ | ❌ Walkthrough: user clicks "Buy Now" → checkout works → stripe processes → success card displays for ~5 sec → disappears (no way to see purchase history) → 404 on calendar export. | BROKEN | Auction Mechanics + Close Flow | ORG | SIMPLE | P0 fix: persist success card or redirect to purchase detail | Countdown timer, bid modal, auto-bid, cron closing, manual end-auction button, auctionEndTime field, winner Stripe checkout link, organizer close notification, admin bid-review queue | 
-|  41 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "Error Unable to load" on flip-report page for PRO user | BROKEN | Flip Report | ORG | PRO | P1 fix: API returns error on page load | Item resale potential scoring | 
-|  62 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "receipts page blank" despite user11 having completed purchases + auction win | BROKEN | Digital Receipt + Returns | SHO | FREE | P1 fix: query not returning data or page not wired to API | Auto-generated receipt post-POS, return window | 
-|  50 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "page blank, user11 has purchases" | BROKEN | Loot Log | SHO | FREE | P1 fix: data not loading or page not hitting correct endpoint | Personal purchase history with photos + prices | 
-| 184 | ✅ | ✅ | ✅ | NA | ⬜ | ❌ Walkthrough: "add to calendar button clicks but calendar.ics is 404" | BROKEN | iCal / Calendar Export | SHO | SIMPLE | P1 fix: .ics export route broken or missing | Download .ics file for sales + items | 
+| 174 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ FIXED S344 | Auction Mechanics + Close Flow | ORG | SIMPLE | Pending Chrome QA — Phase 1: reserve price check in auctionJob.ts. Phase 2: /purchases/[id].tsx persistent confirmation, CheckoutModal redirects to it, checkout-success backward compat. | Countdown timer, bid modal, auto-bid, cron closing, manual end-auction button, auctionEndTime field, winner Stripe checkout link, organizer close notification, admin bid-review queue |
+|  41 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ FIXED S344 | Flip Report | ORG | PRO | Pending Chrome QA — null safety on bestCategory.category + itemsSold division-by-zero guard. Enhanced error logging in controller. | Item resale potential scoring |
+|  62 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ FIXED S344 | Digital Receipt + Returns | SHO | FREE | Pending Chrome QA — receiptController now queries Purchase directly (PAID status) instead of DigitalReceipt model which had no records. Response shape preserved for frontend compat. | Auto-generated receipt post-POS, return window |
+|  50 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⚠️ NOT A CODE BUG — test data issue | Loot Log | SHO | FREE | user11's purchases are PENDING not PAID — Loot Log correctly filters PAID only. No code fix needed. Verify with a PAID purchase. | Personal purchase history with photos + prices |
+| 184 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ FIXED S344 | iCal / Calendar Export | SHO | SIMPLE | Pending Chrome QA — Express route ordering fix in sales.ts: /:id/calendar.ics moved before generic /:id catch-all handler which was intercepting .ics requests. | Download .ics file for sales + items |
 |  48 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "can't edit trails, light text on mint background" | BROKEN | Treasure Trail Route Builder | SHO | FREE | P1 fix: CRUD broken + dark mode text contrast | Trail pages + share token, multi-sale routing | 
 |  13 | ✅ | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: workspace "Not Found", can't invite members | BROKEN | TEAMS Workspace | ORG | TEAMS | P1 fix: workspace lookup + invites broken or not wired | Multi-user workspace, role management | 
 | 157 | ✅ | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "doesn't work" — feature does not function end-to-end | BROKEN | Pickup Scheduling | BOTH | SIMPLE | P1 fix: scheduling flow broken (organizer slots, shopper booking, or confirmation) | Organizer slots + shopper booking | 
-|   7 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "rewards shows 0 referrals despite user having one confirmed referral" | BROKEN | Shopper Referral Rewards | SHO | FREE | P1 fix: referral count query broken | Referral tracking + rewards distribution | 
-|  37 | ✅ | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "Remind Me button says 'push reminders coming soon'" | BROKEN | Sale Reminders (Remind Me) | SHO | SIMPLE | P1 fix: wire frontend to existing backend (backend built, frontend shows stale copy) | Sale alerts for shoppers — iCal confirmed but push "Remind Me" button NOT BUILT — feature gap | 
+|   7 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ FIXED S344 | Shopper Referral Rewards | SHO | FREE | Pending Chrome QA — missing return statement before res.json() in referralController.ts (lines 26 + 38) caused API to hang with no response → frontend showed 0. | Referral tracking + rewards distribution |
+|  37 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ FIXED S344 | Sale Reminders (Remind Me) | SHO | SIMPLE | Pending Chrome QA — copy updated to "Remind me by email", toggle-off state, disabled for ended sales | Sale alerts for shoppers | 
 |  46 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "Batch classification failed" error on page | BROKEN | Treasure Typology Classifier | ORG | PRO | P1 fix: API error + dark mode text contrast issue | AI item classification; useTypology.ts, TypologyBadge.tsx | 
-|  80 | NA | NA | ✅ | 📋 | ⬜ | ❌ Walkthrough: "success card displays for ~5 sec then disappears, no way to see what was bought" | BROKEN | Purchase Confirmation Redesign | SHO | FREE | P2 fix: persist card or redirect to purchase detail page | MERGED WITH #174 — see #174 | 
-|  89 | NA | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "prints whole page, download fails" | BROKEN | Unified Print Kit | ORG | SIMPLE | P2 fix: print CSS not targeting correct elements + download handler broken | /organizer/print-kit/[saleId] — yard sign + item price tags (6/page). Print CSS. | 
+|  80 | NA | NA | ✅ | 📋 | ⬜ | ⬜ FIXED S344 | Purchase Confirmation Redesign | SHO | FREE | Pending Chrome QA — MERGED WITH #174. Persistent /purchases/[id].tsx page shipped: hero check, item photo, pickup info, order details, status badges, auction buyer premium breakdown. | MERGED WITH #174 — see #174 |
+|  89 | NA | ✅ | ✅ | 📋 | ⬜ | ⬜ FIXED S344 | Unified Print Kit | ORG | SIMPLE | Pending Chrome QA — frontend was calling /organizer/sales/{saleId}/print-kit (wrong prefix). Fixed to /organizers/{saleId}/print-kit. | /organizer/print-kit/[saleId] — yard sign + item price tags (6/page). Print CSS. |
 
 
 ## TESTING — Active QA Queue
@@ -176,11 +176,11 @@ Features built but never browser-tested or Chrome test is stale (>3 sessions old
 |  35 | ✅ | ✅ | ✅ | ✅ | ⬜ | ✅ | UNTESTED | Entrance Pin / Front Door Locator | BOTH | SIMPLE | Chrome QA: verify entrance marker displays on map, stores location | Shopper convenience, parking + entrance detail | 
 | 142 | ✅ | ✅ | ✅ | NA | ⬜ | ✅ | UNTESTED | Photo Upload (Single + Multi) | ORG | SIMPLE | Chrome QA: verify upload to Cloudinary, files visible, multi-upload works |  | 
 | 145 | ✅ | ✅ | ✅ | NA | ⬜ | ✅ | UNTESTED | Condition Grading (S/A/B/C/D) | ORG | SIMPLE | Chrome QA: verify AI grades condition, manual override works |  | 
-| 146 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Item Holds / Reservations | BOTH | SIMPLE | Chrome QA: verify holds creation, expiry, shopper notification |  | 
-| 147 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Hold Duration Configuration | ORG | SIMPLE | Chrome QA: verify per-sale configurable hold expiry |  | 
-|  24 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Holds-Only Item View (Batch Ops) | ORG | SIMPLE | Chrome QA: verify holds grouped by buyer, batch actions work |  | 
+| 146 | ✅ | ✅ | ✅ | NA | ✅ | ⬜ | Pending Chrome QA | Item Holds / Reservations | BOTH | SIMPLE | Shipped S332–S340. HoldButton UI, GPS/QR gates, expiry cron, shopper notifications. HoldTimer countdown Chrome-verified S338. Full E2E pending tonight's QA. |  |
+| 147 | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | Pending Chrome QA | Hold Duration Configuration | ORG | SIMPLE | Shipped S333. Rank-based: Initiate/Scout 30min, Ranger 45min, Sage 60min, Grandmaster 90min. holdsEnabled toggle per sale. Verified S340 rank duration correct. |  |
+|  24 | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | Pending Chrome QA | Holds-Only Item View (Batch Ops) | ORG | SIMPLE | Shipped S333–S340. Organizer can view/cancel/extend holds. Batch extend endpoint verified S340. |  | 
 | 148 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Sale Checklist | ORG | SIMPLE | Chrome QA: verify checklist CRUD, per-sale customization |  | 
-| 149 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Email Reminders to Shoppers | ORG | SIMPLE | Chrome QA: verify reminder UI, scheduling, email sends |  | 
+| 149 | ✅ | ✅ | ✅ | NA | ✅ | ⬜ | Pending Chrome QA | Email Reminders to Shoppers | SHO | SIMPLE | Shipped S344. RemindMeButton: "Remind me by email" copy, toggle-off "Cancel Reminder" state, disabled for ended/cancelled sales. Backend was complete. |  | 
 | 150 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Push Notification Subscriptions | BOTH | SIMPLE | Chrome QA: verify VAPID, service worker registration, notification display |  | 
 | 152 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Organizer Digest Emails | ORG | SIMPLE | Chrome QA: verify weekly email content, scheduling |  | 
 | 154 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Organizer Public Profile Page | ORG | SIMPLE | Chrome QA: verify `/organizers/[slug]` loads, sales list displays |  | 
@@ -238,7 +238,7 @@ Features built but never browser-tested or Chrome test is stale (>3 sessions old
 | 196 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Buying Pools | SHO | FREE | Chrome QA: verify group buying on items |  | 
 | 197 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Bounties (Item Requests) | SHO | FREE | Chrome QA: verify want-ads, shopper requests work |  | 
 | 198 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Reviews (Submit Sale / Organizer) | SHO | FREE | Chrome QA: verify review submit, organizer receives |  | 
-| 200 | 📋 | 📋 | 📋 | 📋 | ⬜ | ⬜ | UNTESTED | Shopper Public Profiles | SHO | FREE | Chrome QA: verify `/shoppers/[slug]` collection showcase |  | 
+| 200 | ✅ | ✅ | ✅ | 📋 | ✅ | ⬜ | Pending Chrome QA | Shopper Public Profiles | SHO | FREE | Shipped S344. profileSlug/purchasesVisible/collectorTitle schema + migration (deploy needed). GET /shoppers/:id, /shoppers/[id].tsx, settings section. |  | 
 | 201 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Favorites | SHO | FREE | Chrome QA: verify item-level favorites, seller-follow (deferred post-beta per S285) |  | 
 | 202 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Notification Center | SHO | FREE | Chrome QA: verify `/notifications` page, notification display |  | 
 | 203 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Email + SMS Validation (Twilio) | BOTH | SIMPLE | Chrome QA: verify phone verification via SMS |  | 
