@@ -15,6 +15,23 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
         id: true,
         name: true,
         streakPoints: true,
+        userBadges: {
+          select: {
+            id: true,
+            badge: {
+              select: {
+                id: true,
+                name: true,
+                iconUrl: true,
+              },
+            },
+            awardedAt: true,
+          },
+          orderBy: {
+            awardedAt: 'desc',
+          },
+          take: 3,
+        },
       },
       take: 50,
     });
@@ -40,6 +57,12 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       userId: user.id.slice(0, 4), // Mask user ID for privacy
       name: user.name.split(' ')[0] || 'Shopper', // First name only
       score: user.score,
+      badges: user.userBadges.map((ub) => ({
+        id: ub.badge.id,
+        name: ub.badge.name,
+        iconUrl: ub.badge.iconUrl,
+        awardedAt: ub.awardedAt.toISOString(),
+      })),
     }));
 
     res.json(leaderboard);

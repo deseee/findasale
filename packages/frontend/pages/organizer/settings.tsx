@@ -35,6 +35,9 @@ const OrganizerSettingsPage = () => {
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [etsy, setEtsy] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [fontSize, setFontSize] = useState(16);
@@ -63,7 +66,7 @@ const OrganizerSettingsPage = () => {
     }
   });
 
-  // Fetch full organizer profile data (phone, bio, website)
+  // Fetch full organizer profile data (phone, bio, website, facebook, instagram, etsy)
   useEffect(() => {
     const fetchOrganizerData = async () => {
       if (!user?.id) return;
@@ -73,6 +76,9 @@ const OrganizerSettingsPage = () => {
           setPhone(response.data.phone || '');
           setBio(response.data.bio || '');
           setWebsite(response.data.website || '');
+          setFacebook(response.data.facebook || '');
+          setInstagram(response.data.instagram || '');
+          setEtsy(response.data.etsy || '');
         }
       } catch (error) {
         console.error('Failed to fetch organizer data:', error);
@@ -136,6 +142,9 @@ const OrganizerSettingsPage = () => {
         phone,
         bio,
         website,
+        facebook,
+        instagram,
+        etsy,
       });
       // Refetch organizer data to sync local state with backend
       const response = await api.get('/organizers/me');
@@ -143,6 +152,9 @@ const OrganizerSettingsPage = () => {
         setPhone(response.data.phone || '');
         setBio(response.data.bio || '');
         setWebsite(response.data.website || '');
+        setFacebook(response.data.facebook || '');
+        setInstagram(response.data.instagram || '');
+        setEtsy(response.data.etsy || '');
       }
       showToast('Profile updated', 'success');
     } catch (error: any) {
@@ -496,6 +508,39 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setWebsite(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://example.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Facebook Page URL</label>
+                  <input
+                    type="url"
+                    value={facebook}
+                    onChange={(e) => setFacebook(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://facebook.com/yourpage"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Instagram Profile URL</label>
+                  <input
+                    type="url"
+                    value={instagram}
+                    onChange={(e) => setInstagram(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://instagram.com/yourprofile"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Etsy Shop URL</label>
+                  <input
+                    type="url"
+                    value={etsy}
+                    onChange={(e) => setEtsy(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://etsy.com/shop/yourshop"
                   />
                 </div>
 

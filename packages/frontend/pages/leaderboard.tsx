@@ -227,10 +227,12 @@ const Leaderboard = () => {
                       </div>
 
                       {/* Items Sold */}
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-amber-600">{org.totalItemsSold}</p>
-                        <p className="text-xs text-warm-600 dark:text-warm-400">items sold</p>
-                      </div>
+                      {org.totalItemsSold > 0 && (
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-amber-600">{org.totalItemsSold}</p>
+                          <p className="text-xs text-warm-600 dark:text-warm-400">items sold</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))

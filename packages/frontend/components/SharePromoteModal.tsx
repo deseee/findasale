@@ -213,6 +213,9 @@ Hope to see some familiar faces!`,
 
   const currentTemplate = templates[activeTab];
 
+  // Build shareable URL for social platforms
+  const saleUrl = typeof window !== 'undefined' ? `${window.location.origin}/sales/${sale.id}` : '';
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(currentTemplate.content);
@@ -231,6 +234,39 @@ Hope to see some familiar faces!`,
       showToast('Copied to clipboard!', 'success');
       setCopiedTab(activeTab);
       setTimeout(() => setCopiedTab(null), 2000);
+    }
+  };
+
+  const handleSocialShare = () => {
+    if (activeTab === 'social') {
+      // Facebook Share
+      const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(saleUrl)}`;
+      window.open(facebookUrl, 'facebook-share', 'width=600,height=400');
+    } else if (activeTab === 'threads') {
+      // Threads Share
+      const threadsUrl = `https://www.threads.net/intent/post?text=${encodeURIComponent(currentTemplate.content)}`;
+      window.open(threadsUrl, 'threads-share', 'width=600,height=400');
+    } else if (activeTab === 'nextdoor') {
+      // Nextdoor: Copy + Open
+      handleCopy();
+      showToast('Copied! Opening Nextdoor in a new tab. Paste your link there.', 'info');
+      setTimeout(() => {
+        window.open('https://nextdoor.com/news_feed/', 'nextdoor-open');
+      }, 500);
+    } else if (activeTab === 'pinterest') {
+      // Pinterest Share
+      const pinterestUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(saleUrl)}&description=${encodeURIComponent(currentTemplate.content.substring(0, 100))}`;
+      window.open(pinterestUrl, 'pinterest-share', 'width=600,height=400');
+    } else if (activeTab === 'tiktok') {
+      // TikTok: Copy + Open (TikTok doesn't have web share API)
+      handleCopy();
+      showToast('Copied! TikTok link copied. Open TikTok and paste in your video caption.', 'info');
+      setTimeout(() => {
+        window.open('https://www.tiktok.com/', 'tiktok-open');
+      }, 500);
+    } else {
+      // For other tabs (email, flyer, neighborhood), just copy
+      handleCopy();
     }
   };
 
@@ -298,18 +334,39 @@ Hope to see some familiar faces!`,
             </div>
           </div>
 
-          {/* Footer with Copy Button */}
+          {/* Footer with Copy/Share Buttons */}
           <div className="px-6 py-4 bg-warm-50 dark:bg-gray-700 border-t border-warm-200 dark:border-gray-600 flex gap-3">
-            <button
-              onClick={handleCopy}
-              className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
-                copiedTab === activeTab
-                  ? 'bg-green-600 text-white'
-                  : 'bg-amber-600 hover:bg-amber-700 text-white'
-              }`}
-            >
-              {copiedTab === activeTab ? '✓ Copied!' : 'Copy to Clipboard'}
-            </button>
+            {['social', 'threads', 'nextdoor', 'pinterest', 'tiktok'].includes(activeTab) ? (
+              <>
+                <button
+                  onClick={handleSocialShare}
+                  className="flex-1 py-2 px-4 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white transition"
+                >
+                  {activeTab === 'nextdoor' || activeTab === 'tiktok' ? 'Copy & Open' : 'Share Now'}
+                </button>
+                <button
+                  onClick={handleCopy}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+                    copiedTab === activeTab
+                      ? 'bg-green-600 text-white'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  {copiedTab === activeTab ? '✓ Copied!' : 'Copy Text'}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleCopy}
+                className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
+                  copiedTab === activeTab
+                    ? 'bg-green-600 text-white'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                }`}
+              >
+                {copiedTab === activeTab ? '✓ Copied!' : 'Copy to Clipboard'}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="py-2 px-4 rounded-lg font-medium bg-warm-200 dark:bg-gray-600 text-warm-900 dark:text-warm-100 hover:bg-warm-300 dark:hover:bg-gray-500 transition"

@@ -244,24 +244,30 @@ const ShopperDashboard = () => {
 
               {/* Hunt Pass Info Card */}
               {!isHuntPassDismissed && userData && !userData.huntPassActive && (
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl">👑</span>
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-2 border-purple-300 dark:border-purple-600 rounded-lg p-6">
+                  <div className="flex items-start gap-4">
+                    <span className="text-3xl">👑</span>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to flash deals, earn 2x XP on every action, and receive an exclusive badge. $4.99/month.</p>
-                      <div className="flex gap-2 mt-3">
+                      <h3 className="font-bold text-lg text-purple-900 dark:text-purple-300 mb-2">Unlock Hunt Pass Premium</h3>
+                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">Level up your treasure hunting with exclusive benefits:</p>
+                      <ul className="text-sm text-purple-800 dark:text-purple-200 mb-4 space-y-1 ml-4">
+                        <li>⭐ <strong>2x XP multiplier</strong> on every action</li>
+                        <li>⚡ <strong>6h early access</strong> to Legendary item drops</li>
+                        <li>🎖️ <strong>Exclusive Hunt Pass badge</strong> on your profile</li>
+                      </ul>
+                      <p className="text-xs text-purple-700 dark:text-purple-400 mb-4 font-semibold">Only $4.99/month. Cancel anytime.</p>
+                      <div className="flex gap-2 mt-4">
                         <Link
                           href="/shopper/hunt-pass"
-                          className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-200 underline"
+                          className="inline-block py-2 px-5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
                         >
-                          Learn More
+                          Upgrade Now
                         </Link>
                         <button
                           onClick={handleDismissHuntPass}
                           className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-200 underline"
                         >
-                          Dismiss
+                          Not interested
                         </button>
                       </div>
                     </div>

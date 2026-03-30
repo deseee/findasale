@@ -206,9 +206,17 @@ function LoyaltyPage() {
                   <div className="flex items-center gap-6">
                     <RankBadge rank={xpProfile.explorerRank} size="lg" />
                     <div>
-                      <p className="text-3xl font-bold text-indigo-700 dark:text-indigo-400">
-                        {xpProfile.guildXp.toLocaleString()}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-3xl font-bold text-indigo-700 dark:text-indigo-400">
+                          {xpProfile.guildXp.toLocaleString()}
+                        </p>
+                        <div className="group relative cursor-help">
+                          <span className="text-lg text-indigo-600 dark:text-indigo-400">ℹ️</span>
+                          <div className="hidden group-hover:block absolute left-0 z-10 w-56 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg whitespace-normal">
+                            Earn XP by visiting sales (+5), scanning items (+10), and making purchases (+25).
+                          </div>
+                        </div>
+                      </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Guild XP</p>
                     </div>
                   </div>
@@ -216,7 +224,15 @@ function LoyaltyPage() {
 
                 {/* Progress to Next Rank */}
                 <div className="flex flex-col justify-center">
-                  <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Rank Progress</p>
+                  <div className="flex items-center gap-2 mb-4">
+                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Rank Progress</p>
+                    <div className="group relative cursor-help">
+                      <span className="text-sm text-indigo-600 dark:text-indigo-400 font-bold">ℹ️</span>
+                      <div className="hidden group-hover:block absolute right-0 z-10 w-48 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg whitespace-normal">
+                        Rank thresholds: 🌱 Initiate (0 XP) → 🐦 Scout (500 XP) → 🧗 Ranger (1,500 XP) → 🧙 Sage (2,500 XP) → 👑 Grandmaster (5,000 XP)
+                      </div>
+                    </div>
+                  </div>
                   <RankProgressBar
                     currentXp={xpProfile.rankProgress.currentXp}
                     nextRankXp={xpProfile.rankProgress.nextRankXp}
@@ -453,7 +469,10 @@ function LoyaltyPage() {
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-lg shadow-md p-8 mb-8 border-2 border-yellow-300 dark:from-yellow-900 dark:to-amber-900 dark:border-yellow-600">
             <div className="flex items-start justify-between gap-6">
               <div>
-                <h3 className="text-2xl font-bold text-yellow-900 dark:text-yellow-100 mb-2">🎯 Hunt Pass Exclusive</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">🎯 Hunt Pass Exclusive</h3>
+                  <span className="inline-block px-3 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 text-sm font-semibold rounded">$4.99/month</span>
+                </div>
                 <p className="text-yellow-800 dark:text-yellow-200 mb-4">
                   Upgrade to Hunt Pass for early access to legendary items and earn 1.5x XP rewards.
                 </p>
