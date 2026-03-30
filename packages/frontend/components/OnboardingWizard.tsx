@@ -199,7 +199,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
             </div>
           )}
 
-          {/* Step 2: Profile Setup (was Step 1) */}
+          {/* Step 2: Profile Setup */}
           {currentStep === 2 && (
             <div className="space-y-6">
               <div>
@@ -227,7 +227,6 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                   Phone Number
                 </label>
                 <input
-tml
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
