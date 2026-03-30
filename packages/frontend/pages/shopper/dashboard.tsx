@@ -30,6 +30,7 @@ import StreakWidget from '../../components/StreakWidget'; // CD2 Phase 2: Streak
 import Skeleton from '../../components/Skeleton';
 import { useFollows } from '../../hooks/useFollows';
 import BrandFollowManager from '../../components/BrandFollowManager';
+import ClaimCard from '../../components/ClaimCard'; // Hold-to-Pay: Shopper pending payments
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -96,6 +97,16 @@ const ShopperDashboard = () => {
   });
 
   const { data: follows, isLoading: followsLoading } = useFollows();
+
+  // Hold-to-Pay: Fetch pending invoices for shopper
+  const { data: pendingInvoices = [] } = useQuery({
+    queryKey: ['pending-invoices'],
+    queryFn: async () => {
+      const response = await api.get('/reservations/my-invoices');
+      return response.data || [];
+    },
+    enabled: !!user?.id,
+  });
 
   if (isLoading) {
     return (
@@ -204,6 +215,38 @@ const ShopperDashboard = () => {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Hold-to-Pay: Pending Payments Section */}
+              {pendingInvoices && pendingInvoices.length > 0 && (
+                <div>
+                  <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+                    💳 Pending Payments ({pendingInvoices.length})
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {pendingInvoices.map((invoice: any) => (
+                      <ClaimCard
+                        key={invoice.id}
+                        invoiceId={invoice.id}
+                        itemId={invoice.itemId}
+                        itemTitle={invoice.itemTitle}
+                        itemPrice={invoice.itemPrice}
+                        itemPhoto={invoice.itemPhoto}
+                        checkoutUrl={invoice.checkoutUrl}
+                        expiresAt={invoice.expiresAt}
+                        organizerName={invoice.organizerName}
+                        onPaymentSuccess={() => {
+                          // Refetch invoices after payment
+                          window.location.reload();
+                        }}
+                        onReleaseHold={() => {
+                          // Refetch invoices after releasing hold
+                          window.location.reload();
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Hunt Pass Info Card */}
               {!isHuntPassDismissed && userData && !userData.huntPassActive && (
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">

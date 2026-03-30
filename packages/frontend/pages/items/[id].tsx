@@ -24,6 +24,8 @@ import ItemOGMeta from '../../components/ItemOGMeta';
 import QrCodeModal from '../../components/QrCodeModal'; // Feature #85: Treasure Hunt QR
 import HoldButton from '../../components/HoldButton'; // Feature #121: Hold Button
 import HoldTimer from '../../components/HoldTimer'; // Feature #121: Hold Timer
+import HoldToPayModal from '../../components/HoldToPayModal'; // Hold-to-Pay: Organizer invoice modal
+import HoldInvoiceStatusCard from '../../components/HoldInvoiceStatusCard'; // Hold-to-Pay: Shopper payment status
 
 interface Item {
   id: string;
@@ -83,6 +85,10 @@ interface Item {
   itemPosition?: number; // V3: Physical position in multi-item layout
   isReserved?: boolean;
   reservedBy?: string;
+  reservedByName?: string;
+  reservedByEmail?: string;
+  invoiceCheckoutUrl?: string;
+  invoiceExpiresAt?: string;
   variantSku?: string; // V4: Multi-variant support
 }
 
@@ -131,6 +137,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [estimatedTax, setEstimatedTax] = useState(0);
   const [buyersPremium, setBuyersPremium] = useState(0);
   const [showQrModal, setShowQrModal] = useState(false); // Feature #85: Treasure Hunt QR
+  const [showHoldToPayModal, setShowHoldToPayModal] = useState(false); // Hold-to-Pay: organizer invoice
   const socketRef = useRef<Socket | null>(null);
 
   // Queries
@@ -562,7 +569,28 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                     📱 QR
                   </button>
                 )}
+                {/* Hold-to-Pay: Organizer "Mark Sold" button for RESERVED items */}
+                {user?.roles?.includes('ORGANIZER') && item.status === 'RESERVED' && (
+                  <button
+                    onClick={() => setShowHoldToPayModal(true)}
+                    title="Mark as sold and send payment request to shopper"
+                    className="flex items-center justify-center px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition font-semibold"
+                  >
+                    ✓ Mark Sold
+                  </button>
+                )}
               </div>
+
+              {/* Hold-to-Pay: Show payment status card if item is INVOICE_ISSUED */}
+              {item.status === 'INVOICE_ISSUED' && user?.id === item.reservedBy && (
+                <HoldInvoiceStatusCard
+                  itemId={item.id}
+                  itemPrice={item.price}
+                  checkoutUrl={item.invoiceCheckoutUrl || ''}
+                  expiresAt={item.invoiceExpiresAt || ''}
+                  organizerName={item.sale.organizer?.businessName ?? item.sale.organizer?.name ?? 'Organizer'}
+                />
+              )}
 
               {/* Bid/Cart Section */}
               {!isSold && !purchaseStatus?.hasPurchased && (
@@ -725,6 +753,24 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
         isOpen={showQrModal}
         onClose={() => setShowQrModal(false)}
       />
+
+      {/* Hold-to-Pay Modal: Organizer sends invoice */}
+      {item.status === 'RESERVED' && item.reservedBy && (
+        <HoldToPayModal
+          itemId={item.id}
+          itemTitle={item.title}
+          itemPrice={item.price}
+          itemPhoto={item.photoUrls[0]}
+          shopperId={item.reservedBy}
+          shopperName={item.reservedByName || 'Shopper'}
+          shopperEmail={item.reservedByEmail || ''}
+          organizerTier={user?.organizerTier || 'SIMPLE'}
+          expiresAt={item.invoiceExpiresAt || ''}
+          isOpen={showHoldToPayModal}
+          onClose={() => setShowHoldToPayModal(false)}
+          onSuccess={() => refetchItem()}
+        />
+      )}
 
       {isLightboxOpen && (
         <PhotoLightbox
