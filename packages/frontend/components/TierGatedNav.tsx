@@ -112,16 +112,29 @@ export function TierGatedButton({
 }
 
 /**
- * SectionHeader — Consistent styling for nav section headers
+ * SectionHeader — Consistent styling for nav section headers with optional icon
  */
+import type { LucideIcon } from 'lucide-react';
+
 interface SectionHeaderProps {
   label: string;
+  icon?: LucideIcon;
+  color?: 'amber' | 'purple' | 'indigo' | 'red';
 }
 
-export function SectionHeader({ label }: SectionHeaderProps) {
+export function SectionHeader({ label, icon: Icon, color = 'warm' }: SectionHeaderProps) {
+  const colorClasses = {
+    amber: 'text-amber-600 dark:text-amber-400',
+    purple: 'text-purple-600 dark:text-purple-400',
+    indigo: 'text-indigo-600 dark:text-indigo-400',
+    red: 'text-red-600 dark:text-red-400',
+    warm: 'text-warm-500 dark:text-warm-400',
+  };
+
   return (
-    <span className="block px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warm-500 dark:text-warm-400 mt-3">
-      {label}
-    </span>
+    <div className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide ${colorClasses[color]} mt-2`}>
+      {Icon && <Icon size={16} />}
+      <span>{label}</span>
+    </div>
   );
 }

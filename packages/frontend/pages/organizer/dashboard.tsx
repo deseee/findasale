@@ -57,6 +57,78 @@ const TIER_DESCRIPTIONS: Record<string, string> = {
   GOLD: 'Top tier for high-volume organizers. Featured placement and dedicated support.',
 };
 
+// CollapsibleSection component for tier-aware dashboard sections
+interface CollapsibleSectionProps {
+  title: string;
+  icon?: string;
+  isLocked: boolean;
+  lockedMessage: string;
+  lockedTier?: string;
+  children?: React.ReactNode;
+  defaultOpen?: boolean;
+}
+
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
+  title,
+  icon,
+  isLocked,
+  lockedMessage,
+  lockedTier = 'PRO',
+  children,
+  defaultOpen = true,
+}) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen && !isLocked);
+
+  if (isLocked) {
+    return (
+      <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 opacity-75">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+            </svg>
+            <span className="font-medium text-gray-600 dark:text-gray-400">
+              {icon ? `${icon} ` : ''}{title}
+            </span>
+          </div>
+          <svg className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        </button>
+        {isOpen && (
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+            <p className="text-sm text-gray-500 dark:text-gray-400">{lockedMessage}</p>
+            <Link
+              href="/pricing"
+              className="inline-block text-sm bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-full transition-colors font-medium"
+            >
+              Upgrade to {lockedTier}
+            </Link>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 px-3 py-2 rounded transition-colors"
+      >
+        <svg className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+        </svg>
+        {icon ? `${icon} ` : ''}{title}
+      </button>
+      {isOpen && <div className="mt-3 ml-3 flex flex-wrap gap-4">{children}</div>}
+    </div>
+  );
+};
+
 const OrganizerDashboard = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
@@ -524,122 +596,114 @@ const OrganizerDashboard = () => {
               )}
             </div>
 
-            {/* Section 2: Essential Tools (collapsible on mobile, visible on desktop) */}
-            <details open={!isMobileView} className="group">
-              <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors md:pointer-events-none md:cursor-default">
-                <span className="group-open:hidden md:hidden">▶</span>
-                <span className="hidden group-open:inline">▼</span>
-                Essential Tools
-              </summary>
-              <div className="flex flex-wrap gap-4 md:mt-0">
-                <Link
-                  href="/organizer/print-inventory"
-                  className="bg-purple-100 hover:bg-purple-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-purple-900 dark:text-purple-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  🖨️ Print Inventory
-                </Link>
-                <Link
-                  href="/organizer/message-templates"
-                  className="bg-green-100 hover:bg-green-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-green-900 dark:text-green-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  📝 Message Templates
-                </Link>
-              </div>
-            </details>
+            {/* Section 2: Selling Tools (always available in SIMPLE+) */}
+            <CollapsibleSection
+              title="Selling Tools"
+              icon="🛠️"
+              isLocked={false}
+              lockedMessage=""
+              defaultOpen={true}
+            >
+              <Link
+                href="/organizer/holds"
+                className="relative bg-amber-100 hover:bg-amber-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-amber-900 dark:text-amber-100 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🤝 Holds
+                {(holdCountData?.count ?? 0) > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-bold rounded-full h-5 min-w-[1.25rem] flex items-center justify-center px-1">
+                    {holdCountData!.count}
+                  </span>
+                )}
+              </Link>
+              <Link
+                href="/organizer/pos"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                💳 POS / Checkout
+              </Link>
+              <Link
+                href="/organizer/print-inventory"
+                className="bg-purple-100 hover:bg-purple-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-purple-900 dark:text-purple-100 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🖨️ Print Inventory
+              </Link>
+              <Link
+                href="/organizer/sale-map"
+                className="bg-cyan-100 hover:bg-cyan-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-cyan-900 dark:text-cyan-100 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🗺️ Sale Map
+              </Link>
+              <Link
+                href="/organizer/qr"
+                className="bg-blue-100 hover:bg-blue-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-blue-900 dark:text-blue-100 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                📱 QR Codes
+              </Link>
+            </CollapsibleSection>
 
-            {/* Section 3: Pro Features (collapsible) */}
-            <details open={!isMobileView && (canAccess('PRO') || canAccess('TEAMS'))} className="group">
-              <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors">
-                <span className="group-open:hidden">▶</span>
-                <span className="hidden group-open:inline">▼</span>
-                Pro Features
-              </summary>
-              <div className="mt-3 ml-3 flex flex-wrap gap-4">
-                <TierGatedButton
-                  href="/organizer/insights"
-                  label="Insights"
-                  icon="📊"
-                  requiredTier="PRO"
-                  className="bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100"
-                />
-                <TierGatedButton
-                  href="/organizer/command-center"
-                  label="Command Center"
-                  icon="⚙️"
-                  requiredTier="PRO"
-                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
-                />
-                <TierGatedButton
-                  href="/organizer/typology"
-                  label="Typology Classifier"
-                  icon="🏷️"
-                  requiredTier="PRO"
-                  className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
-                />
-                <TierGatedButton
-                  href="/organizer/fraud-signals"
-                  label="Fraud Signals"
-                  icon="⚠️"
-                  requiredTier="PRO"
-                  className="bg-red-100 hover:bg-red-200 dark:bg-red-900/30 text-red-900 dark:text-red-100"
-                />
-                <TierGatedButton
-                  href="/organizer/offline"
-                  label="Offline Mode"
-                  icon="📵"
-                  requiredTier="PRO"
-                  className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100"
-                />
-                <TierGatedButton
-                  href="/organizer/appraisals"
-                  label="Appraisals"
-                  icon="💎"
-                  requiredTier="PRO"
-                  className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100"
-                />
-                <TierGatedButton
-                  href="/organizer/brand-kit"
-                  label="Brand Kit"
-                  icon="🎨"
-                  requiredTier="PRO"
-                  className="bg-pink-100 hover:bg-pink-200 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100"
-                />
-                <TierGatedButton
-                  href="/organizer/item-library"
-                  label="Item Library"
-                  icon="📚"
-                  requiredTier="PRO"
-                  className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100"
-                />
-                <TierGatedButton
-                  href="/organizer/flip-report"
-                  label="Flip Report"
-                  icon="📈"
-                  requiredTier="PRO"
-                  className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100"
-                />
-                <TierGatedButton
-                  label="Export Data"
-                  icon="↓"
-                  requiredTier="PRO"
-                  onClick={() => {
-                    api.get('/organizers/export', { responseType: 'blob' })
-                      .then((res) => {
-                        const url = window.URL.createObjectURL(new Blob([res.data]));
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.setAttribute('download', `organizer-export-${new Date().toISOString().split('T')[0]}.zip`);
-                        document.body.appendChild(link);
-                        link.click();
-                        link.parentNode?.removeChild(link);
-                        showToast('Export downloaded successfully', 'success');
-                      })
-                      .catch((err: any) => {
-                        showToast(err.response?.data?.message || 'Failed to export data', 'error');
-                      });
-                  }}
-                  className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
-                />
+            {/* Section 3: Analytics & Performance (SIMPLE+) */}
+            <CollapsibleSection
+              title="Analytics & Performance"
+              icon="📊"
+              isLocked={!canAccess('SIMPLE')}
+              lockedMessage="Upgrade to Simple to unlock Analytics & Earnings"
+              lockedTier="SIMPLE"
+              defaultOpen={canAccess('SIMPLE')}
+            >
+              <TierGatedButton
+                href="/organizer/insights"
+                label="Analytics"
+                icon="📊"
+                requiredTier="SIMPLE"
+                className="bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100"
+              />
+              <TierGatedButton
+                href="/organizer/payouts"
+                label="Earnings"
+                icon="💰"
+                requiredTier="SIMPLE"
+                className="bg-green-100 hover:bg-green-200 dark:bg-green-900/30 text-green-900 dark:text-green-100"
+              />
+              <TierGatedButton
+                href="/organizer/ripples"
+                label="Sale Ripples"
+                icon="🌊"
+                requiredTier="SIMPLE"
+                className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100"
+              />
+            </CollapsibleSection>
+
+            {/* Section 4: Pro Tools (PRO+) */}
+            <CollapsibleSection
+              title="Pro Tools"
+              icon="🚀"
+              isLocked={!canAccess('PRO')}
+              lockedMessage="Upgrade to Pro to unlock Brand Kit, Flip Report & more"
+              lockedTier="PRO"
+              defaultOpen={canAccess('PRO')}
+            >
+              <TierGatedButton
+                href="/organizer/brand-kit"
+                label="Brand Kit"
+                icon="🎨"
+                requiredTier="PRO"
+                className="bg-pink-100 hover:bg-pink-200 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100"
+              />
+              <TierGatedButton
+                href="/organizer/flip-report"
+                label="Flip Report"
+                icon="📈"
+                requiredTier="PRO"
+                className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100"
+              />
+              <TierGatedButton
+                href="/organizer/item-tagger"
+                label="Item Tagger"
+                icon="🏷️"
+                requiredTier="PRO"
+                className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
+              />
+              {canAccess('TEAMS') && (
                 <TierGatedButton
                   href="/organizer/webhooks"
                   label="Webhooks"
@@ -647,46 +711,70 @@ const OrganizerDashboard = () => {
                   requiredTier="TEAMS"
                   className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
                 />
-              </div>
-            </details>
+              )}
+            </CollapsibleSection>
 
-            {/* Section 4: Community (collapsible, closed by default) */}
-            <details open={!isMobileView ? false : undefined}>
-              <summary className="flex items-center gap-2 cursor-pointer px-3 py-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded transition-colors">
-                <span className="group-open:hidden">▶</span>
-                <span className="hidden group-open:inline">▼</span>
-                Community
-              </summary>
-              <div className="mt-3 ml-3 flex flex-wrap gap-4">
+            {/* Section 5: Staff & Collaboration (TEAMS) */}
+            <CollapsibleSection
+              title="Staff & Collaboration"
+              icon="👥"
+              isLocked={!canAccess('TEAMS')}
+              lockedMessage="Upgrade to Teams to unlock Staff Accounts & collaboration tools"
+              lockedTier="TEAMS"
+              defaultOpen={canAccess('TEAMS')}
+            >
+              <TierGatedButton
+                href="/organizer/staff"
+                label="Staff Accounts"
+                icon="👤"
+                requiredTier="TEAMS"
+                className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100"
+              />
+              <TierGatedButton
+                href="/organizer/sale-hubs"
+                label="Sale Hubs"
+                icon="🏢"
+                requiredTier="TEAMS"
+                className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100"
+              />
+              <TierGatedButton
+                href="/organizer/virtual-queue"
+                label="Virtual Queue"
+                icon="📋"
+                requiredTier="TEAMS"
+                className="bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100"
+              />
+            </CollapsibleSection>
+
+            {/* Community Links (collapsed by default) */}
+            <CollapsibleSection
+              title="Community"
+              icon="🌍"
+              isLocked={false}
+              lockedMessage=""
+              defaultOpen={false}
+            >
+              <Link
+                href="/organizer/bounties"
+                className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🏆 Bounties
+              </Link>
+              <Link
+                href="/organizer/reputation"
+                className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                ⭐ Reputation
+              </Link>
+              {canAccess('PRO') && (
                 <Link
-                  href="/organizer/bounties"
-                  className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100 font-bold py-2 px-6 rounded-lg transition-colors"
+                  href="/neighborhoods"
+                  className="bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100 font-bold py-2 px-6 rounded-lg transition-colors"
                 >
-                  🏆 Bounties
+                  🏘️ Neighborhoods
                 </Link>
-                <Link
-                  href="/organizer/reputation"
-                  className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  ⭐ Reputation
-                </Link>
-                {canAccess('PRO') && (
-                  <Link
-                    href="/neighborhoods"
-                    className="bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                  >
-                    🏘️ Neighborhoods
-                  </Link>
-                )}
-                <TierGatedButton
-                  href="/organizer/performance"
-                  label="Performance"
-                  icon="📈"
-                  requiredTier="PRO"
-                  className="bg-violet-100 hover:bg-violet-200 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100"
-                />
-              </div>
-            </details>
+              )}
+            </CollapsibleSection>
 
             {/* Section 5: Upgrade CTA for SIMPLE tier */}
             {isSimple && showUpgradeCTA && (

@@ -5,7 +5,48 @@ import Link from 'next/link';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useRouter } from 'next/router';
-import { ChevronRight } from 'lucide-react';
+import {
+  ChevronRight,
+  Store,
+  Zap,
+  List,
+  PlusCircle,
+  Calendar,
+  Network,
+  Users,
+  Wrench,
+  Bookmark,
+  ShoppingCart,
+  Printer,
+  Map,
+  QrCode,
+  BarChart2,
+  DollarSign,
+  UserPlus,
+  Sparkles,
+  Palette,
+  TrendingUp,
+  Webhook,
+  Tag,
+  Heart,
+  Star,
+  Gavel,
+  Clock,
+  Package,
+  Compass,
+  Award,
+  Ticket,
+  Trophy,
+  Target,
+  Shield,
+  ArrowLeftRight,
+  ShieldAlert,
+  LayoutDashboard,
+  Search,
+  MapPin,
+  Lightbulb,
+  MessageSquare,
+} from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 
 const AvatarDropdown: React.FC = () => {
@@ -15,6 +56,7 @@ const AvatarDropdown: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [orgToolsOpen, setOrgToolsOpen] = useState(false);
   const [proToolsOpen, setProToolsOpen] = useState(false);
+  const [mobileProToolsOpen, setMobileProToolsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -125,17 +167,77 @@ const AvatarDropdown: React.FC = () => {
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
               {user.email}
             </p>
+            {/* Rank badge — TODO: wire to real XP data */}
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">⚔️ Scout</span>
+              <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full max-w-[120px] overflow-hidden">
+                <div className="h-full bg-indigo-500" style={{ width: '40%' }} />
+              </div>
+            </div>
           </div>
 
           {/* ADMIN Menu Items */}
           {isAdmin && (
             <>
+              <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">
+                <ShieldAlert size={16} />
+                <span>Admin</span>
+              </div>
               <Link
                 href="/admin"
-                className="block px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                Admin Panel
+                <ChevronRight size={14} className="text-red-400" />
+                <span>Admin Dashboard</span>
+              </Link>
+              <Link
+                href="/admin/users"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ChevronRight size={14} className="text-red-400" />
+                <span>Manage Users</span>
+              </Link>
+              <Link
+                href="/admin/sales"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ChevronRight size={14} className="text-red-400" />
+                <span>Manage Sales</span>
+              </Link>
+              <Link
+                href="/admin/items"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ChevronRight size={14} className="text-red-400" />
+                <span>Manage Items</span>
+              </Link>
+              <Link
+                href="/admin/reports"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ChevronRight size={14} className="text-red-400" />
+                <span>Reports</span>
+              </Link>
+              <Link
+                href="/admin/feature-flags"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ChevronRight size={14} className="text-red-400" />
+                <span>Feature Flags</span>
+              </Link>
+              <Link
+                href="/admin/broadcast"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ChevronRight size={14} className="text-red-400" />
+                <span>Broadcast Message</span>
               </Link>
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>
@@ -146,89 +248,50 @@ const AvatarDropdown: React.FC = () => {
             <>
               <Link
                 href="/organizer/dashboard"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                Organizer Dashboard
+                <LayoutDashboard size={16} className="text-amber-600" />
+                <span>Organizer Dashboard</span>
               </Link>
-              {isUser && (
-                <Link
-                  href="/shopper/dashboard"
-                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Shopper Dashboard
-                </Link>
-              )}
               <Link
                 href="/profile"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                My Profile
+                <Shield size={16} className="text-amber-600" />
+                <span>My Profile</span>
               </Link>
-              {isUser && (
-                <Link
-                  href="/shopper/wishlist"
-                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  My Collections
-                </Link>
-              )}
               <Link
                 href="/plan"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                Plan a Sale
+                <PlusCircle size={16} className="text-amber-600" />
+                <span>Plan a Sale</span>
               </Link>
-              <Link
-                href="/organizer/payouts"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                Payouts
-              </Link>
-
-              {canAccess('PRO') && (
-                <Link
-                  href="/organizer/insights"
-                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Insights
-                </Link>
-              )}
-
-              {canAccess('TEAMS') && (
-                <Link
-                  href="/organizer/workspace"
-                  className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Workspace
-                </Link>
-              )}
-
               <Link
                 href="/organizer/subscription"
-                className="block px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                {canAccess('TEAMS')
+                <Sparkles size={16} />
+                <span>{canAccess('TEAMS')
                   ? 'Subscription'
                   : canAccess('PRO')
                     ? 'Upgrade to TEAMS'
-                    : 'Upgrade to PRO'}
+                    : 'Upgrade to PRO'}</span>
               </Link>
 
-              {/* Organizer Tools Section — Collapsible */}
+              {/* Your Sales Section — Collapsible */}
               <button
                 onClick={() => setOrgToolsOpen(!orgToolsOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
-                Organizer Tools
+                <div className="flex items-center gap-2">
+                  <Store size={16} />
+                  <span>Your Sales</span>
+                </div>
                 <ChevronRight
                   size={16}
                   className={`transition-transform duration-200 ${orgToolsOpen ? 'rotate-90' : ''}`}
@@ -237,60 +300,138 @@ const AvatarDropdown: React.FC = () => {
               {orgToolsOpen && (
                 <>
                   <Link
-                    href="/organizer/bounties"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    href="/organizer/active-sale"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    Bounties
+                    <Zap size={16} className="text-amber-500" />
+                    <span>Active Sale</span>
                   </Link>
                   <Link
-                    href="/organizer/holds"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    href="/organizer/sales"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    Holds
+                    <List size={16} className="text-amber-500" />
+                    <span>All Sales</span>
+                  </Link>
+                  <Link
+                    href="/plan"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <PlusCircle size={16} className="text-amber-500" />
+                    <span>Create Sale</span>
+                  </Link>
+                  <Link
+                    href="/organizer/calendar"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Calendar size={16} className="text-amber-500" />
+                    <span>Calendar</span>
+                  </Link>
+                  <Link
+                    href="/organizer/hubs"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Network size={16} className="text-amber-400" />
+                    <span>Sale Hubs <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                  </Link>
+                  <Link
+                    href="/organizer/queue"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Users size={16} className="text-amber-400" />
+                    <span>Virtual Queue <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                  </Link>
+                </>
+              )}
+
+              {/* Selling Tools Section — Collapsible */}
+              <button
+                onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Wrench size={16} />
+                  <span>Selling Tools</span>
+                </div>
+                <ChevronRight
+                  size={16}
+                  className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
+                />
+              </button>
+              {mobileProToolsOpen && (
+                <>
+                  <Link
+                    href="/organizer/holds"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Reserve items for buyers before the sale starts"
+                  >
+                    <Bookmark size={16} className="text-amber-500" />
+                    <span>Holds</span>
                   </Link>
                   <Link
                     href="/organizer/pos"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Process in-person payments at your sale"
                   >
-                    POS
-                  </Link>
-                  <Link
-                    href="/organizer/message-templates"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Message Templates
+                    <ShoppingCart size={16} className="text-amber-500" />
+                    <span>POS / Checkout</span>
                   </Link>
                   <Link
                     href="/organizer/print-inventory"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Generate printable item sheets for your sale table"
                   >
-                    Print Inventory
+                    <Printer size={16} className="text-amber-500" />
+                    <span>Print Inventory</span>
                   </Link>
                   <Link
-                    href="/organizer/reputation"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    href="/organizer/map"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    Reputation
+                    <Map size={16} className="text-amber-500" />
+                    <span>Sale Map</span>
                   </Link>
                   <Link
-                    href="/organizer/ugc-moderation"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    href="/organizer/qr-codes"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    UGC Moderation
+                    <QrCode size={16} className="text-amber-500" />
+                    <span>QR Codes</span>
                   </Link>
                   <Link
-                    href="/organizer/performance"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    href="/organizer/analytics"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    Performance
+                    <BarChart2 size={16} className="text-amber-500" />
+                    <span>Analytics</span>
+                  </Link>
+                  <Link
+                    href="/organizer/earnings"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <DollarSign size={16} className="text-amber-500" />
+                    <span>Earnings</span>
+                  </Link>
+                  <Link
+                    href="/organizer/staff"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <UserPlus size={16} className="text-amber-500" />
+                    <span>Staff Accounts</span>
                   </Link>
                 </>
               )}
@@ -298,9 +439,12 @@ const AvatarDropdown: React.FC = () => {
               {/* Pro Tools Section — Collapsible */}
               <button
                 onClick={() => setProToolsOpen(!proToolsOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
-                Pro Tools
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} />
+                  <span>Pro Tools</span>
+                </div>
                 <ChevronRight
                   size={16}
                   className={`transition-transform duration-200 ${proToolsOpen ? 'rotate-90' : ''}`}
@@ -308,60 +452,110 @@ const AvatarDropdown: React.FC = () => {
               </button>
               {proToolsOpen && (
                 <>
-                  <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/brand-kit" label="Brand Kit" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/flip-report" label="Flip Report" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
-                  <TierGatedNavLink href="/organizer/webhooks" label="Webhooks" requiredTier="TEAMS" />
+                  <Link
+                    href="/organizer/brand-kit"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Custom logos, colors, and banners for your sale pages"
+                  >
+                    <Palette size={16} className="text-purple-400" />
+                    <span>Brand Kit</span>
+                  </Link>
+                  <Link
+                    href="/organizer/flip-report"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="AI analysis of your best-performing item categories"
+                  >
+                    <TrendingUp size={16} className="text-purple-400" />
+                    <span>Flip Report</span>
+                  </Link>
+                  <Link
+                    href="/organizer/webhooks"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Send real-time sale events to your own systems (TEAMS plan)"
+                  >
+                    <Webhook size={16} className="text-purple-400" />
+                    <span>Webhooks</span>
+                  </Link>
+                  <Link
+                    href="/organizer/item-tagger"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="AI-powered item category and condition detection"
+                  >
+                    <Tag size={16} className="text-purple-400" />
+                    <span>Item Tagger</span>
+                  </Link>
                 </>
               )}
+
+              <hr className="my-2 border-warm-200 dark:border-gray-700" />
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>
           )}
 
-          {/* SHOPPER Menu Items */}
+          {/* SHOPPER Menu Items — only show if USER role exists */}
           {isUser && (
             <>
-              <Link
-                href="/shopper/dashboard"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                Shopper Dashboard
-              </Link>
-              <Link
-                href="/profile"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                My Profile
-              </Link>
-              <Link
-                href="/inspiration"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                Inspiration Gallery
-              </Link>
+              {/* Shopper Dashboard — only if not also an organizer (dual-role dedup) */}
+              {!isOrganizer && (
+                <Link
+                  href="/shopper/dashboard"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <LayoutDashboard size={16} className="text-indigo-600" />
+                  <span>Shopper Dashboard</span>
+                </Link>
+              )}
+
+              {/* My Collection Section */}
+              <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                <Heart size={16} />
+                <span>My Collection</span>
+              </div>
               <Link
                 href="/shopper/wishlist"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                My Collections
+                <Bookmark size={16} className="text-indigo-500" />
+                <span>Saved Sales</span>
               </Link>
               <Link
-                href="/referral-dashboard"
-                className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                href="/shopper/saved-items"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                Referrals
+                <Star size={16} className="text-indigo-500" />
+                <span>Saved Items</span>
+              </Link>
+              <Link
+                href="/shopper/bids"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <Gavel size={16} className="text-indigo-500" />
+                <span>My Bids</span>
+              </Link>
+              <Link
+                href="/shopper/holds"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <Clock size={16} className="text-indigo-500" />
+                <span>My Holds</span>
+              </Link>
+              <Link
+                href="/shopper/purchases"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <Package size={16} className="text-indigo-500" />
+                <span>Purchases</span>
               </Link>
 
               {/* Host a Sale CTA for shopper-only users */}
@@ -377,177 +571,76 @@ const AvatarDropdown: React.FC = () => {
                 </button>
               )}
 
-              {/* My Explorer Profile — Collapsible */}
-              <button
-                onClick={() => setExplorerOpen(!explorerOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              {/* Explore & Connect Section */}
+              <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                <Compass size={16} />
+                <span>Explore & Connect</span>
+              </div>
+              <Link
+                href="/shopper/explorer-passport"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+                title="Your full shopper profile, badges, and history"
               >
-                My Explorer Profile
-                <ChevronRight
-                  size={16}
-                  className={`transition-transform duration-200 ${explorerOpen ? 'rotate-90' : ''}`}
-                />
-              </button>
-              {explorerOpen && (
-                <>
-                  <Link
-                    href="/shopper/holds"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    My Holds
-                  </Link>
-                  <Link
-                    href="/shopper/bids"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    My Bids
-                  </Link>
-                  <Link
-                    href="/shopper/purchases"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Purchases
-                  </Link>
-                  <Link
-                    href="/shopper/loot-legend"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    My Loot Legend
-                  </Link>
-                  <Link
-                    href="/shopper/hauls"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Hauls
-                  </Link>
-                  <Link
-                    href="/shopper/trails"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Treasure Trails
-                  </Link>
-                  <Link
-                    href="/shopper/loot-log"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Loot Log
-                  </Link>
-                  <Link
-                    href="/shopper/hunt-pass"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Hunt Pass
-                  </Link>
-                  <Link
-                    href="/shopper/explorer-passport"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Explorer Passport
-                  </Link>
-                  <Link
-                    href="/shopper/loyalty"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Explorer's Guild
-                  </Link>
-                  <Link
-                    href="/shopper/league"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    League
-                  </Link>
-                  <Link
-                    href="/shopper/receipts"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Receipts
-                  </Link>
-                  <Link
-                    href="/shopper/disputes"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Disputes
-                  </Link>
-                  <Link
-                    href="/challenges"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Challenges
-                  </Link>
-                  <Link
-                    href="/shopper/achievements"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Achievements
-                  </Link>
-                  <Link
-                    href="/feed"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Live Sale Feed
-                  </Link>
-                  <Link
-                    href="/encyclopedia"
-                    className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Encyclopedia
-                  </Link>
-                </>
-              )}
+                <Award size={16} className="text-indigo-500" />
+                <span>Explorer Passport</span>
+              </Link>
+              <Link
+                href="/shopper/hunt-pass"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+                title="2x XP, early access to sales, and exclusive badges — $4.99/mo"
+              >
+                <Ticket size={16} className="text-indigo-500" />
+                <span>Hunt Pass <span className="text-xs text-gray-400">(Soon)</span></span>
+              </Link>
+              <Link
+                href="/shopper/league"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+                title="Weekly XP leaderboard — compete with shoppers in your region"
+              >
+                <Trophy size={16} className="text-indigo-500" />
+                <span>League</span>
+              </Link>
+              <Link
+                href="/shopper/bounties"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <Target size={16} className="text-indigo-500" />
+                <span>Bounties</span>
+              </Link>
+              <Link
+                href="/shopper/reputation"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <Shield size={16} className="text-indigo-500" />
+                <span>Reputation</span>
+              </Link>
+              <Link
+                href="/shopper/trades"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <ArrowLeftRight size={16} className="text-indigo-400" />
+                <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
+              </Link>
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>
           )}
 
-          {/* About / Leaderboard / Contact */}
-          <hr className="my-2 border-warm-200 dark:border-gray-700" />
-          <Link
-            href="/about"
-            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            onClick={() => setIsOpen(false)}
-          >
-            About
-          </Link>
-          <Link
-            href="/leaderboard"
-            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            onClick={() => setIsOpen(false)}
-          >
-            Leaderboard
-          </Link>
-          <Link
-            href="/contact"
-            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            onClick={() => setIsOpen(false)}
-          >
-            Contact
-          </Link>
-
-          {/* Common Menu Items */}
+          {/* Help & Settings */}
           <hr className="my-2 border-warm-200 dark:border-gray-700" />
           <Link
             href="/settings"
-            className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
-            Settings
+            <Shield size={16} className="text-warm-600" />
+            <span>Settings</span>
           </Link>
 
           <button

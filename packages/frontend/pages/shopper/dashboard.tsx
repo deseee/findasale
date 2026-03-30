@@ -181,6 +181,92 @@ const ShopperDashboard = () => {
             </Link>
           </div>
 
+          {/* Gamification Widgets */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {/* Widget 1: Streak Tracker */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-300 mb-1">🔥 Streak Tracker</p>
+                  <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">0</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">days</p>
+                </div>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300">Start your streak — visit a sale this week!</p>
+            </div>
+
+            {/* Widget 2: Rank & XP Bar */}
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg p-4">
+              <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-300 mb-3">⭐ Rank & XP</p>
+              <div className="mb-2">
+                <p className="text-lg font-bold text-indigo-700 dark:text-indigo-400">Initiate</p>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400">0 / 500 XP</p>
+              </div>
+              <div className="w-full bg-indigo-200 dark:bg-indigo-800 rounded-full h-2 overflow-hidden">
+                <div className="bg-indigo-600 dark:bg-indigo-500 h-full" style={{ width: '0%' }}></div>
+              </div>
+              {/* TODO: wire to real ExplorerProfile XP/rank data */}
+            </div>
+
+            {/* Widget 3: Recent Achievements */}
+            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+              <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-3">🏅 Recent Achievements</p>
+              <p className="text-xs text-purple-700 dark:text-purple-300">No badges yet — start exploring sales!</p>
+              {/* TODO: wire to real Achievement/UserAchievement data */}
+            </div>
+
+            {/* Widget 4: Hunt Pass CTA (spans full width on mobile, 1/3 on desktop if not active) */}
+            {userData && !userData.huntPassActive && (
+              <div className="sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-600 rounded-lg p-4">
+                <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-2">🎟️ Hunt Pass</p>
+                <p className="text-xs text-purple-800 dark:text-purple-200 mb-3">$4.99/mo</p>
+                <ul className="text-xs text-purple-800 dark:text-purple-200 space-y-1 mb-3">
+                  <li>⭐ 2x XP multiplier</li>
+                  <li>⚡ 6h early access</li>
+                </ul>
+                <Link
+                  href="/hunt-pass"
+                  className="inline-block text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded font-medium transition-colors"
+                >
+                  Get Hunt Pass →
+                </Link>
+              </div>
+            )}
+
+            {userData && userData.huntPassActive && (
+              <div className="sm:col-span-2 lg:col-span-1 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-600 rounded-lg p-4">
+                <p className="text-sm font-semibold text-green-900 dark:text-green-300 mb-1">✅ Hunt Pass Active</p>
+                <p className="text-xs text-green-800 dark:text-green-300">You're earning 2x XP and get early access!</p>
+              </div>
+            )}
+
+            {/* Widget 5: Leaderboard Snippet */}
+            <div className="sm:col-span-2 lg:col-span-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-3">🏆 This Week's Top Explorers</p>
+              <div className="space-y-2 text-xs text-blue-800 dark:text-blue-300 mb-3">
+                <div className="flex justify-between">
+                  <span>1. Explorer #1</span>
+                  <span className="font-semibold">5,200 XP</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>2. Explorer #2</span>
+                  <span className="font-semibold">4,850 XP</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>3. Explorer #3</span>
+                  <span className="font-semibold">4,100 XP</span>
+                </div>
+              </div>
+              <Link
+                href="/league"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+              >
+                View Full League →
+              </Link>
+              {/* TODO: wire to real leaderboard API endpoint */}
+            </div>
+          </div>
+
           {/* Calendar Widget - Saved Sales Coming Up */}
           <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
