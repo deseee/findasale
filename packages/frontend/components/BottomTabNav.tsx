@@ -92,10 +92,10 @@ const BottomTabNav = () => {
       matchPaths: ['/map'],
     },
     {
-      href: '/shopper/dashboard#favorites',
+      href: '/shopper/wishlist',
       label: 'Saved',
       icon: HeartIcon,
-      matchPaths: ['/shopper/dashboard'],
+      matchPaths: ['/shopper/wishlist'],
     },
     {
       href: '/messages',

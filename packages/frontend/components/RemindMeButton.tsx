@@ -15,9 +15,10 @@ import { useToast } from './ToastContext';
 interface RemindMeButtonProps {
   saleId: string;
   saleName: string;
+  disabled?: boolean; // Disable button if sale is ended or cancelled
 }
 
-const RemindMeButton: React.FC<RemindMeButtonProps> = ({ saleId, saleName }) => {
+const RemindMeButton: React.FC<RemindMeButtonProps> = ({ saleId, saleName, disabled = false }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [reminderId, setReminderId] = useState<string | null>(null);
@@ -83,6 +84,11 @@ const RemindMeButton: React.FC<RemindMeButtonProps> = ({ saleId, saleName }) => 
   });
 
   const handleClick = () => {
+    if (disabled) {
+      showToast('Reminders cannot be set for ended or cancelled sales', 'info');
+      return;
+    }
+
     if (!user?.id) {
       showToast('Sign in to set reminders', 'info');
       return;
@@ -105,16 +111,22 @@ const RemindMeButton: React.FC<RemindMeButtonProps> = ({ saleId, saleName }) => 
   return (
     <button
       onClick={handleClick}
-      disabled={isProcessing}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+      disabled={isProcessing || disabled}
+      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
         isActive
-          ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
-          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-800/40 dark:text-amber-100'
+          : 'bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-800/40 dark:text-green-100'
       } disabled:opacity-50 disabled:cursor-not-allowed`}
-      title={isActive ? 'Cancel reminder' : 'Set email reminder for this sale'}
+      title={
+        disabled
+          ? 'Reminders not available for this sale'
+          : isActive
+          ? 'Cancel email reminder for this sale'
+          : 'Set email reminder — we\'ll notify you 24 hours before the sale'
+      }
     >
-      <span className={isActive ? '🔔' : '🔔'}></span>
-      {isActive ? 'Reminder Set' : 'Remind Me'}
+      <span>🔔</span>
+      {isActive ? 'Cancel Reminder' : 'Remind Me by Email'}
     </button>
   );
 };

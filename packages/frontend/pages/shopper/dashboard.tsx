@@ -8,7 +8,8 @@
  * - Active flash deals
  * - Wishlist previews
  * - Notification preferences
- * - Purchase history, favorites, subscriptions, and pickups in tabs
+ * - Purchase history, subscriptions, and pickups in tabs
+ * Note: Favorites consolidated into /shopper/wishlist (My Collections page)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -35,14 +36,14 @@ import ClaimCard from '../../components/ClaimCard'; // Hold-to-Pay: Shopper pend
 const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'favorites' | 'subscribed' | 'pickups' | 'brands'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
     if (router.isReady && router.asPath.includes('#')) {
       const hash = router.asPath.split('#')[1];
-      if (['overview', 'purchases', 'favorites', 'subscribed', 'pickups', 'brands'].includes(hash)) {
+      if (['overview', 'purchases', 'subscribed', 'pickups', 'brands'].includes(hash)) {
         setActiveTab(hash as any);
       }
     }
@@ -75,17 +76,7 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
-  const { data: favorites } = useQuery({
-    queryKey: ['shopper-favorites'],
-    queryFn: async () => {
-      const response = await api.get('/favorites');
-      // API returns { favorites: [], categories: [], total: N } — extract array
-      const favoritesArray = response.data.favorites ?? [];
-      // Ensure we always return an array, never an object
-      return Array.isArray(favoritesArray) ? favoritesArray : [];
-    },
-    enabled: !!user?.id,
-  });
+  // Favorites consolidated to /shopper/wishlist (My Collections page)
 
   const { data: userData } = useQuery({
     queryKey: ['user'],
@@ -190,7 +181,6 @@ const ShopperDashboard = () => {
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'purchases', label: 'Purchases' },
-              { id: 'favorites', label: 'Favorites' },
               { id: 'subscribed', label: 'Subscribed' },
               { id: 'pickups', label: 'Pickups' },
               { id: 'brands', label: 'Brands' },
@@ -348,42 +338,6 @@ const ShopperDashboard = () => {
                     className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
                   >
                     Browse Sales
-                  </Link>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Favorites Tab */}
-          {activeTab === 'favorites' && (
-            <div>
-              {favorites && favorites.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {favorites.map((item: any) => (
-                    <Link key={item.id} href={`/items/${item.id}`} className="card overflow-hidden hover:shadow-md transition-shadow">
-                      {item.photoUrls?.[0] && (
-                        <img key={item.photoUrls[0]} src={item.photoUrls[0]} alt={item.title} className="aspect-square w-full object-cover" loading="lazy" />
-                      )}
-                      <div className="p-3">
-                        <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 line-clamp-1">{item.title}</h3>
-                        {item.price != null && <p className="text-amber-600 font-bold text-sm">${Number(item.price).toFixed(2)}</p>}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16">
-                  <div className="text-6xl mb-4 text-warm-300">❤️</div>
-                  <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">Nothing saved yet</h3>
-                  <p className="text-warm-600 dark:text-warm-400 mb-6">
-                    Tap the heart on any item you like and it will appear here.
-                    You also earn 2 Hunt Pass XP for every favorite!
-                  </p>
-                  <Link
-                    href="/"
-                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-                  >
-                    Start Browsing
                   </Link>
                 </div>
               )}

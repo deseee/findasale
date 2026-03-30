@@ -113,7 +113,7 @@ function OAuthBridge() {
  * Phase 27: Show 3-step onboarding modal to new shoppers on first login.
  * Organizers and admins are excluded. Completion stored in localStorage.
  * CRITICAL: Only show on first shopper page (homepage, trending), not on
- * secondary pages like /shopper/favorites, /shopper/messages, /inspiration.
+ * secondary pages like /shopper/wishlist, /shopper/messages, /inspiration.
  */
 function OnboardingShower() {
   const { user } = useAuth();

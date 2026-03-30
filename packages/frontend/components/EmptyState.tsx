@@ -33,8 +33,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({ icon = '📦', heading, subtext
           {icon}
         </div>
       )}
-      <h2 className="text-xl font-semibold text-warm-900 mb-2">{heading}</h2>
-      {subtext && <p className="text-warm-600 mb-6">{subtext}</p>}
+      <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">{heading}</h2>
+      {subtext && <p className="text-warm-600 dark:text-gray-300 mb-6">{subtext}</p>}
       {cta && cta.href ? (
         <Link
           href={cta.href}

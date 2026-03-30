@@ -79,7 +79,7 @@ const TreasureHuntBanner: React.FC = () => {
               {hunt.category.toUpperCase()}
             </span>
             <span className="text-sm text-amber-800 dark:text-amber-200">
-              <span className="font-semibold">+{hunt.pointReward}</span> Hunt Pass points
+              <span className="font-semibold">+{hunt.pointReward}</span> Hunt Pass XP
             </span>
           </div>
 
@@ -102,14 +102,14 @@ const TreasureHuntBanner: React.FC = () => {
               </div>
             ) : user ? (
               <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
-                Find it to earn points!
+                Find it to earn XP!
               </p>
             ) : (
               <p className="text-sm text-amber-700 dark:text-amber-300">
                 <a href="/login" className="font-semibold hover:underline">
                   Sign in
                 </a>
-                {' '}to earn points
+                {' '}to earn XP
               </p>
             )}
           </div>

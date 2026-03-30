@@ -53,11 +53,11 @@ const StreakWidget: React.FC = () => {
         </div>
       </div>
 
-      {/* Points badge */}
+      {/* XP badge */}
       <div className="flex items-center gap-1 border-l border-orange-300 dark:border-orange-700 pl-3">
         <span className="text-lg">⭐</span>
         <div className="flex flex-col">
-          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Points</span>
+          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">XP</span>
           <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{profile.streakPoints}</span>
         </div>
       </div>
@@ -68,7 +68,7 @@ const StreakWidget: React.FC = () => {
           <span className="text-lg">👑</span>
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Hunt Pass</span>
-            <span className="text-xs font-bold text-purple-600 dark:text-purple-400">2x Points</span>
+            <span className="text-xs font-bold text-purple-600 dark:text-purple-400">2x XP</span>
           </div>
         </div>
       ) : (
@@ -76,7 +76,7 @@ const StreakWidget: React.FC = () => {
           <button
             onClick={() => setIsHuntPassModalOpen(true)}
             className="py-1 px-3 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold rounded transition"
-            title="Get early access to flash deals, 2x points, and exclusive badge"
+            title="Get early access to flash deals, 2x XP, and exclusive badge"
           >
             Upgrade
           </button>

@@ -390,6 +390,9 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
         createdAt: true,
         role: true,
         streakPoints: true,
+        profileSlug: true,
+        purchasesVisible: true,
+        collectorTitle: true,
         userBadges: {
           include: {
             badge: {
@@ -423,12 +426,54 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
       select: { currentStreak: true }
     });
 
-    res.json({
+    // Fetch recent purchases if purchasesVisible is true
+    let purchases = null;
+    if (user.purchasesVisible) {
+      const purchaseData = await prisma.purchase.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          createdAt: true,
+          item: {
+            select: {
+              id: true,
+              title: true,
+              photoUrls: true,
+              estimatedValue: true,
+            }
+          },
+          sale: {
+            select: {
+              id: true,
+              title: true,
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+      });
+      purchases = purchaseData.map((p: any) => ({
+        id: p.id,
+        createdAt: p.createdAt,
+        item: {
+          id: p.item.id,
+          title: p.item.title,
+          photoUrls: p.item.photoUrls,
+          estimatedValue: p.item.estimatedValue ? convertDecimalsToNumbers({ value: p.item.estimatedValue }).value : null,
+        },
+        sale: p.sale,
+      }));
+    }
+
+    const responseBody: any = {
       id: user.id,
       name: user.name,
       createdAt: user.createdAt,
       role: user.role,
       streakPoints: user.streakPoints,
+      profileSlug: user.profileSlug,
+      purchasesVisible: user.purchasesVisible,
+      collectorTitle: user.collectorTitle,
       totalPurchases: user._count.purchases,
       totalFavorites: user._count.favorites,
       totalWishlists: user._count.wishlists,
@@ -440,7 +485,13 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
         description: ub.badge.description,
         iconUrl: ub.badge.iconUrl,
       })) || [],
-    });
+    };
+
+    if (purchases !== null) {
+      responseBody.purchases = purchases;
+    }
+
+    res.json(responseBody);
   } catch (error) {
     console.error('Error fetching public shopper profile:', error);
     res.status(500).json({ message: 'Server error while fetching profile' });

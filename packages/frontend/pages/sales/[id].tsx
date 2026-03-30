@@ -35,6 +35,7 @@ import { LiveFeedTicker } from '../../components/LiveFeedTicker'; // Feature #70
 import MessageComposeModal from '../../components/MessageComposeModal'; // Feature #29: Message Organizer
 import HuntSummary from '../../components/HuntSummary'; // Feature #85: Treasure Hunt QR
 import { useArrivalAssistant } from '../../hooks/useArrivalAssistant'; // Feature #84: Approach Notes
+import RemindMeButton from '../../components/RemindMeButton';
 
 
 interface Sale {
@@ -353,23 +354,11 @@ const SaleDetailPage = () => {
               >
                 📅 Add to Calendar
               </a>
-              <button
-                onClick={async () => {
-                  if (!user) {
-                    showToast('Please log in to set a reminder', 'error');
-                    return;
-                  }
-                  try {
-                    await api.post('/reminders', { saleId: sale.id, reminderType: 'email' });
-                    showToast('Reminder set! We\'ll email you 24 hours before the sale starts.', 'success');
-                  } catch (error) {
-                    showToast('Couldn\'t set reminder — please try again.', 'error');
-                  }
-                }}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-800/40 text-green-900 dark:text-green-100 text-sm font-medium transition-colors"
-              >
-                🔔 Remind Me
-              </button>
+              <RemindMeButton
+                saleId={sale.id}
+                saleName={sale.title}
+                disabled={sale.status === 'ENDED'}
+              />
             </div>
           </div>
         </div>
