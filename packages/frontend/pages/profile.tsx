@@ -198,7 +198,7 @@ const ProfilePage = () => {
                 <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">🎯 Hunt Pass</h2>
                 <p className="text-warm-600 dark:text-warm-400 text-sm">
                   {user.huntPassActive
-                    ? `Active until ${new Date(user.huntPassExpiry).toLocaleDateString()}`
+                    ? `Active until ${user.huntPassExpiry ? new Date(user.huntPassExpiry).toLocaleDateString() : 'N/A'}`
                     : 'Unlock 1.5x XP and early access to inventory'}
                 </p>
               </div>
