@@ -1,74 +1,51 @@
-# Patrick's Dashboard — Session 339 (March 29, 2026)
+# Patrick's Dashboard — Week of March 30, 2026
 
 ---
 
-## Build Status
+## ✅ S340 Complete — Nothing Needed from You
 
-- **Railway:** Pending push (code changes local only)
-- **Vercel:** ✅ Green (no frontend changes this session)
-- **DB:** No migrations — schema unchanged
-- **S339 Status:** ✅ COMPLETE — hold notifications shipped, 4 bugs fixed, toast confirmed
+No push block required. All S340 work was pushed via MCP directly to GitHub.
 
 ---
 
-## Push Required — Run This Now
+## What Happened This Session (S340)
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/reservationController.ts
-git add packages/backend/src/services/saleAlertEmailService.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat: hold notification system + 4 bug fixes
+**S339 hold system fully verified.** The earlier "P0 organizer notification" was a wrong-account QA error. Logged into user6 (Frank Davis / Priority Estate Sales) directly via Railway API and confirmed: organizer has an unread bell notification — "A shopper placed a hold on 'Vintage Record Player #7' from Family Collection Sale 16." All three S339 fixes confirmed clean:
 
-- Shopper gets in-app notification + email on approve/cancel/extend/release
-- Organizer gets in-app notification when hold is placed
-- Fix: clear stale reservations before new hold (P2002 unique constraint)
-- Fix: batch extend uses rank-based duration instead of 48h
-- Fix: markSold notification copy corrected
-- Toast duration confirmed working at 10s"
-.\push.ps1
-```
+- Organizer in-app notification on hold placed ✅
+- Cancel→re-hold (P2002 fix) ✅ — cancelled hold, re-placed immediately, no error
+- Rank-based batch extend ✅ — INITIATE rank = 30 min, not 48h
+
+**Onboarding modal P0 fixes shipped.** Pushed to GitHub (commit `1d633ce`), Vercel deploying now. Two bugs fixed:
+1. Step 1 stub text replaced with real brand-voice copy
+2. Close button no longer traps after Step 1 (z-index + event propagation fix)
 
 ---
 
-## Session 339 Summary
+## Audit Items Still Open
 
-**Hold notifications wired end-to-end. 4 bugs fixed from Patrick's live testing. Toast confirmed.**
-
-### What Was Built
-
-1. **Shopper notifications on hold status changes** — in-app Notification record + Resend email for: approve, cancel, extend, release. Tailored copy per action. Fire-and-forget (non-blocking).
-2. **Organizer in-app notification on hold placed** — was email-only, now also creates bell notification.
-3. **Bug: "Item already has active hold" after cancel** — stale CANCELLED record blocked new holds due to `@unique` constraint. Fixed: placeHold now clears stale records first.
-4. **Bug: batch extend hardcoded 48h** — now uses rank-based duration (30/45/60/90 min by explorer rank).
-5. **Bug: markSold notification said "thanks for purchase"** — corrected to neutral "marked as sold by the organizer."
-6. **Toast ✅ confirmed** — Patrick tested, fires for full 10 seconds. Off the queue.
-
-### Product Direction Logged
-
-Patrick wants **Mark Sold to evolve** into:
-- **POS organizers:** held item appears in POS cart, ring up at checkout
-- **Non-POS organizers:** Mark Sold sends Stripe checkout link to shopper for remote payment
-
-Needs architect spec — logged for S340.
+- **P1 — Legacy "points" language:** Three surfaces still say "points" instead of "Guild XP" (Hunt Pass banner, Leaderboard, Loyalty page).
+- **P2 — Messages dark mode contrast:** "No messages yet" text is nearly invisible in dark mode.
+- **P3 — D-001 drift:** Placeholder copy defaults to "Estate Sale" examples in onboarding/create-sale form.
 
 ---
 
-## What Needs Attention (S340)
+## Pending Decisions
 
-### 1. Verify S339 fixes after deploy (P1)
-After push: shopper places hold → organizer bell notification. Organizer cancels → shopper re-holds same item. Batch extend → rank-based not 48h.
-
-### 2. Mark Sold → POS/Invoice spec (P2)
-Architect dispatch to design the two paths (POS cart vs Stripe invoice).
-
-### 3. Remaining QA Queue (P3)
-- Bug 4: Buy Now card persist — needs Stripe test mode
-- Bug 5: Reviews aggregate — needs seeded reviews
-- Decision #8: Share native — needs mobile viewport
+**Mark Sold evolution** — say the word and the architect spec gets dispatched. Two paths: (1) POS organizers get cart integration, (2) non-POS organizers get a Stripe checkout link sent to the shopper.
 
 ---
 
-## Shopper Test Account
-- **user12@example.com** — Leo Thomas — confirmed pure shopper, no organizer role
+## This Week's Priority (S341)
+
+1. **Mark Sold architect spec** — if you want to move forward, just say so.
+2. **Points → Guild XP language fix** — P1, quick dev pass on 3 surfaces.
+3. **Remaining QA queue** — Buy Now card persist, reviews aggregate, Share native sheet.
+
+---
+
+## Action Items for Patrick
+
+- [ ] **Decision: Mark Sold evolution** — say the word and the spec gets dispatched
+- [ ] **Manual mobile test** — Chrome MCP can't truly test 375px viewport. Worth a quick scroll before showing beta testers
+- [ ] **Verify onboarding modal** — if you have a fresh organizer account or can reset onboarding, confirm the close button and Step 1 copy look right (Vercel should be deployed within a few minutes)

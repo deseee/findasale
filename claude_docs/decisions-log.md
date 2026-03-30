@@ -5,6 +5,48 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-03-30 (S341) — Hold-to-Pay Architecture Decisions (7 items)
+
+**Status:** LOCKED (all 7 items)
+
+**1. Stripe fee model — organizer pays (matches POS/Buy Now)**
+**Status:** LOCKED
+**Rationale:** Same application_fee_amount + transfer_data destination charges model as existing flows. Organizer absorbs Stripe processing fee (~3%) on top of platform fee. Shopper pays item price only. This model was decided in prior sessions (S176+) — logged here as explicit reference anchor.
+
+**2. Invoice bundling — per shopper per sale**
+**Status:** LOCKED
+**Rationale:** One consolidated Stripe Checkout link per shopper covering ALL their held items at a given sale. Not per-item. Not cross-organizer (only one organizer per checkout). Simplifies reconciliation and shopper UX.
+
+**3. Payment retry window — hold timer is the deadline**
+**Status:** LOCKED
+**Rationale:** Shopper can retry payment any number of times as long as their hold timer is still active. No separate invoice retry window. Invoice expires when hold expires. Hold duration = payment deadline (30–90 min by rank).
+
+**4. Flash liquidation — organizer opt-in per sale**
+**Status:** LOCKED
+**Rationale:** When a hold expires without payment, the organizer manually activates the flash liquidation window (not automatic). Toggle in OrganizerHoldSettings. Prevents accidental liquidations and respects organizer intent.
+
+**5. Shopper notification on invoice — in-app + email**
+**Status:** LOCKED
+**Rationale:** Both channels. In-app notification (existing Notification model) + email via Resend. No SMS. Provides redundant delivery of critical payment deadline.
+
+**6. Organizer payout timing — immediate (matches POS/Buy Now)**
+**Status:** LOCKED
+**Rationale:** Immediate transfer to organizer's Stripe Connect account via transfer_data destination on payment capture. Stripe handles bank payout on its standard schedule. No custom batching. Matches existing POS and Buy Now payout flow.
+
+**7. Invoice payment window = hold timer remainder (game design windows dropped)**
+**Status:** LOCKED
+**Rationale:** The architect's game design decision for separate rank-gated invoice windows (Initiate 2h → Grandmaster 8h) is SUPERSEDED. The payment window is simply the time remaining on the hold when the invoice is sent. Rank already expresses itself in hold duration (30–90 min). No additional rank-gated invoice window needed. Simplification reduces complexity without losing rank signal.
+
+---
+
+## 2026-03-30 (S341) — Platform Fee Model (Organizer-Paid, Shopper-Free)
+
+**Status:** LOCKED
+**Made by:** Records audit (clarification of prior decisions)
+**Rationale:** Platform fee (10% or 8%) is paid by the ORGANIZER, deducted from their Stripe Connect payout. Shoppers only pay 5% auction fee (auction sales only). Shoppers never see a platform fee line item — they pay item price only. Hold-to-Pay Remote Path: shopper pays item price via consolidated Stripe Checkout link, organizer receives item price minus platform fee. This model was decided in S106/S153/S176 but got lost in context.
+
+---
+
 ## 2026-03-24 (S274) — #86 Follow Network DEFERRED Post-Beta
 
 **Status:** DEFERRED

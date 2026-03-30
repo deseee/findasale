@@ -1,44 +1,37 @@
-# ROADMAP – FindA.Sale
+# ROADMAP – FindA.Sale v2
 
-**Last Updated:** 2026-03-27 (v80 — S313: SW Cloudinary cache fix verified, PreviewModal onError pushed sha:ffa4a83, AI confidence fix pushed and live)
+**Last Updated:** 2026-03-30 (v83 — fixed-width format rebuild with roadmap.md integration)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
----
-
-## Product Summary
-
-FindA.Sale is a PWA for sale organizers and shoppers, reducing manual work and improving inventory visibility across the sale lifecycle.
-The platform currently ships **95+ features across 4 tiers** (FREE, SIMPLE, PRO, TEAMS) and
-supports organizer-side operations, analytics, marketing, and
-shopper-side discovery, engagement, and gamification.
-Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + Stripe winner checkout) live.
-
----
-
 ## Formatting Rules (Agents Must Read Before Editing)
 
-**STOP. Read this section before making any changes to this file. This is binding on all agents. Violations will be flagged by findasale-records.**
+**STOP. Read this section before making any changes to this file. This is binding on all agents.**
 
-1. **No session-specific notes in this file.** Do not add QA audit results, bug lists, session numbers, or work-session plans to the roadmap. Those belong in:
-   - Session-specific findings → `claude_docs/session-log.md` or `claude_docs/audits/`
-   - QA results → `claude_docs/health-reports/`
-   - Work queues → `claude_docs/STATE.md` or `claude_docs/next-session-prompt.md`
-   - Operational tasks → `claude_docs/operations/`
+1. **Fixed-Width Format (NOT Markdown Tables).** Feature lines use this locked column-aligned format:
+   ```
+    #   Feature                                                 Role     Tier        DB API UI QA Chr Nav Hum  Notes
+   138 Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE)           ORG      SIMPLE      Y  Y  Y  Y  P  -  P  Enum validation + validation matrix
+   ```
+   - Column alignment is strict. Use 3-char padding for # (` 7`, `41`, `174`)
+   - NO PIPES. NO MARKDOWN TABLES for feature lines. Exception: Deferred & Rejected use markdown tables (different columns).
+   - Columns: # | Feature | Role | Tier | DB | API | UI | QA | Chr | Nav | Hum | Notes
+   - Status markers: Y = confirmed working, P = pending/not tested, W = issues found, F = fix in progress, - = not human-testable, NA = not applicable
 
-2. **Session numbers must not appear in Notes.** Write "QA confirmed" not "QA re-confirmed S201". Write "P0 race condition fixed" not "P0 FIX S199".
+2. **Section header format:**
+   ```
+    #   Feature                                                 Role     Tier        DB API UI QA Chr Nav Hum  Notes
+   -------------------------------------------------------------------------------------------------
+   ```
+   Dashes = fixed-width separator line (96 chars).
 
-3. **Column format is locked.** Shipped feature tables must use exactly these columns: `# | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes`. Do not add or remove columns without Patrick's approval.
+3. **When updating status:** Only change the specific column that changed. Do not rewrite Notes or other rows.
 
-4. **Status markers:** ✅ = confirmed working, 📋 = pending/not tested, 📋PEND = pending QA, ⚠️ = issues found, 🔧 = fix in progress, N/A = not human-testable (infrastructure/internal only).
+4. **This document is the source of truth for product roadmap.** Update at every session wrap.
 
-5. **Deferred section:** Keep all deferred items — even rejected ideas may spark good ones. Use format: `Feature | Tier | Reason | Revisit Trigger`.
+5. **Nothing gets dropped.** Every feature must appear somewhere in v2.
 
-6. **When adding a new shipped feature:** Add it to the correct section table with all 11 columns filled. Set Chrome/Nav/Human to 📋 unless already verified.
-
-7. **When updating status:** Only change the specific column that changed. Do not rewrite the Notes column or other feature rows.
-
----
+6. This document is the source of truth for product roadmap. Updated at every session wrap when a feature ships, beta status changes, or a deferred item is revisited. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
 ## Patrick's Checklist
 
@@ -73,325 +66,278 @@ Production MVP launched Q1 2026. Full auction lifecycle (bidding + close flow + 
 
 ### Pre-Beta Prep
 - [ ] Brand Voice Session — use brand-voice plugin to establish documented voice, tone, and messaging pillars before beta outreach and email sequences
-- [ ] Trademark filing — see backlog item #82
+- [ ] Trademark filing — see Decisions Needed (#82)
 
 ### Human Verification (Patrick must run)
 - [ ] **Auction E2E — Stripe test mode:** Set auction end time on a test item → click End Auction button → confirm winner notification sent → open Stripe checkout link → complete checkout → confirm organizer close notification fires. (Documented S279; feature shipped S278.)
 
-### Legal & Business (Patrick Action Items)
+## Decisions Needed (Product Decisions Only — Patrick Sign-Off Required)
+
+These are decisions that block other work. Only Patrick can decide.
+
+| # | Feature | Tier | Decision | Impact | Blocker? |
+|-----|---------|------|----------|--------|----------|
+| 188 | Neighborhood Pages | FREE | Pages are 404 — rebuild as static content or remove from nav? | Site nav | Yes — nav links to dead pages |
+|  49 | City Heat Index | FREE | Orphaned route, not in nav — rebuild or defer? | Dashboard layout | No |
+|  90 | Sale Soundtrack (Ambient Vibes) | FREE | Spotify/Apple Music external links on sale detail — keep or remove? | Page redesign | No |
+| 200 | Shopper Public Profiles | FREE | `/shoppers/[slug]` collection showcase — build out or defer? | Shopper profile UX | No |
+|  69 | Local-First Offline Mode | PRO | Service worker sync queue + offline catalog — build or defer? | Architecture | No |
+|  64 | Save/Wishlist/Hold UX | FREE | Are Saves, Wishlists, and Holds different features or one unified feature with tabs? Patrick walkthrough showed confusion. | Nav, user mental model | Yes — dashboard redesign |
+| 122 | Explorer's Guild Phase 1 (Rebrand + Copy) | FREE | Gamification naming and narrative locked or needs revision? | Gamification naming | No |
+| 149 | Email Reminders to Shoppers | SIMPLE | Needs Chrome QA — keep or rebuild reminder flow? | Settings redesign | No |
+| 174 | Auction Mechanics + Close Flow | SIMPLE | Post-purchase UX broken — redesign checkout success flow? | Checkout redesign | Yes — blocks purchase UX |
+|  82 | Trademark — FindA.Sale | LEGAL | File USPTO trademark? ~$250–400/class + attorney fees | Legal | No |
+|  83 | Trade Secret Housekeeping | LEGAL | Document proprietary algorithms as trade secrets + NDA review | Legal | No | 
+
+## BROKEN — Fix Before Anything Else
+
+Features that Patrick's human QA walkthrough confirmed are broken. Use the two-stage format.
+
+|  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
+|-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
+| 174 | ✅ | ✅ | ✅ | NA | ⬜ | ❌ Walkthrough: user clicks "Buy Now" → checkout works → stripe processes → success card displays for ~5 sec → disappears (no way to see purchase history) → 404 on calendar export. | BROKEN | Auction Mechanics + Close Flow | ORG | SIMPLE | P0 fix: persist success card or redirect to purchase detail | Countdown timer, bid modal, auto-bid, cron closing, manual end-auction button, auctionEndTime field, winner Stripe checkout link, organizer close notification, admin bid-review queue | 
+|  41 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "Error Unable to load" on flip-report page for PRO user | BROKEN | Flip Report | ORG | PRO | P1 fix: API returns error on page load | Item resale potential scoring | 
+|  62 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "receipts page blank" despite user11 having completed purchases + auction win | BROKEN | Digital Receipt + Returns | SHO | FREE | P1 fix: query not returning data or page not wired to API | Auto-generated receipt post-POS, return window | 
+|  50 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "page blank, user11 has purchases" | BROKEN | Loot Log | SHO | FREE | P1 fix: data not loading or page not hitting correct endpoint | Personal purchase history with photos + prices | 
+| 184 | ✅ | ✅ | ✅ | NA | ⬜ | ❌ Walkthrough: "add to calendar button clicks but calendar.ics is 404" | BROKEN | iCal / Calendar Export | SHO | SIMPLE | P1 fix: .ics export route broken or missing | Download .ics file for sales + items | 
+|  48 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "can't edit trails, light text on mint background" | BROKEN | Treasure Trail Route Builder | SHO | FREE | P1 fix: CRUD broken + dark mode text contrast | Trail pages + share token, multi-sale routing | 
+|  13 | ✅ | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: workspace "Not Found", can't invite members | BROKEN | TEAMS Workspace | ORG | TEAMS | P1 fix: workspace lookup + invites broken or not wired | Multi-user workspace, role management | 
+| 157 | ✅ | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "doesn't work" — feature does not function end-to-end | BROKEN | Pickup Scheduling | BOTH | SIMPLE | P1 fix: scheduling flow broken (organizer slots, shopper booking, or confirmation) | Organizer slots + shopper booking | 
+|   7 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "rewards shows 0 referrals despite user having one confirmed referral" | BROKEN | Shopper Referral Rewards | SHO | FREE | P1 fix: referral count query broken | Referral tracking + rewards distribution | 
+|  37 | ✅ | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "Remind Me button says 'push reminders coming soon'" | BROKEN | Sale Reminders (Remind Me) | SHO | SIMPLE | P1 fix: wire frontend to existing backend (backend built, frontend shows stale copy) | Sale alerts for shoppers — iCal confirmed but push "Remind Me" button NOT BUILT — feature gap | 
+|  46 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "Batch classification failed" error on page | BROKEN | Treasure Typology Classifier | ORG | PRO | P1 fix: API error + dark mode text contrast issue | AI item classification; useTypology.ts, TypologyBadge.tsx | 
+|  80 | NA | NA | ✅ | 📋 | ⬜ | ❌ Walkthrough: "success card displays for ~5 sec then disappears, no way to see what was bought" | BROKEN | Purchase Confirmation Redesign | SHO | FREE | P2 fix: persist card or redirect to purchase detail page | /shopper/checkout-success — item photo hero, seller, pickup, CTAs | 
+|  89 | NA | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "prints whole page, download fails" | BROKEN | Unified Print Kit | ORG | SIMPLE | P2 fix: print CSS not targeting correct elements + download handler broken | /organizer/print-kit/[saleId] — yard sign + item price tags (6/page). Print CSS. | 
+
+
+## TESTING — Active QA Queue
+
+### PARTIAL — Works but has known issues
+
+Features that work but need fixes or refinement before shipping.
+
+|  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
+|-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
+| 177 | ✅ | ✅ | ✅ | ✅ | ✅ `/sales/[slug]` loads. Items display. Clicking item → detail. Share button → social links. Add to calendar → iCal ✅. | ⚠️ Walkthrough: many layout/UX issues (reviews placement, pickup scheduling doesn't work, platform fee shown on non-auction items, item cards not uniform, contact info position confusing) | PARTIAL | Sale Detail Page | SHO | FREE | Fix: move reviews into Organized By card, fix item card uniform styling, verify pickup scheduling flow works end-to-end, remove platform fee from non-auction items | /sales/[slug] — Chrome verified | 
+| 176 | ✅ | ✅ | ✅ | ✅ | ✅ Homepage loads. Filter pills display. Map renders sales. Clicking sale card → detail. | ⚠️ Walkthrough: filter pill fix applied S288 but needs re-verify. Sales near you missing. | PARTIAL | Browse Sales (Homepage + Map) | SHO | FREE | Chrome QA verify filter pills still work after S288 fix | Filter pill fix applied; needs re-verify | 
+|  29 | ✅ | ✅ | ✅ | ✅ | ✅ S300: `/shopper/loyalty` loads real data (0 XP, Bronze tier, Generate Coupon correctly gated at 20 XP min, layout correct) | ⚠️ Walkthrough: "needs reworking with new gaming narrative" — copy, features, and XP explanation outdated | PARTIAL | Loyalty Passport | SHO | FREE | Rewrite: update XP/tier descriptions to match gamification narrative, add user instructions/tooltips, clarify badges vs. stamps vs. milestones | /shopper/loyalty loads real data (0 XP, Bronze tier, Generate Coupon correctly gated at 20 XP min). | 
+| 199 | ✅ | ✅ | ✅ | 📋 | ✅ S286: `/profile` page loads, user name displays, edit form works. | ⚠️ Walkthrough: "hunt pass not mentioned, badges not loading, bid status wrong, referral shows 0 despite having referral, push notification toggle incorrectly placed" | PARTIAL | User Profile Page | SHO | FREE | Fix: add Hunt Pass mention, load badges correctly, verify bid status, fix referral count, move push notification to Settings | /profile — Chrome verified | 
+|  71 | ✅ | ✅ | ✅ | ✅ | ✅ S202: reputation.tsx displays 1-5 star score. | ⚠️ Walkthrough: stray 0 visible on leaderboard (data issue) | PARTIAL | Reputation Score | ORG | SIMPLE | Fix: seed data cleanup on Railway or query fix to filter null scores | 1-5 star public score + reputation.tsx frontend | 
+| 131 | NA | ✅ | ✅ | ✅ | ✅ S289: 8-tab modal, real data, copy works, SharePromoteModal renders correctly | ⚠️ Walkthrough: social links need updating (Facebook just a link, Nextdoor not functional, Threads missing) | PARTIAL | Share Templates | ORG | SIMPLE | Update: add proper sharing integrations for Nextdoor, Threads; verify Facebook share button | SharePromoteModal: 4 templates (social post, flyer, email invite, neighborhood post) | 
+| 212 | ✅ | ✅ | ✅ | 📋 | ✅ S288: `/leaderboard` page loads, rankings display | ⚠️ Walkthrough: "no shoppers have badges displaying" | PARTIAL | Leaderboard | SHO | FREE | Fix: ensure badges render on leaderboard cards or add badge display logic | Public rankings | 
+| 213 | ✅ | ✅ | ✅ | NA | ✅ S288: Hunt Pass purchase flow works, Stripe checkout integrates | ⚠️ Walkthrough: "no upgrade button or purchase CTA on dashboard, why should they upgrade?" | PARTIAL | Hunt Pass | SHO | PAID_ADDON | Add: prominent upgrade CTA to dashboard, benefit explanation, early access messaging | 2x streak multiplier, recurring Stripe billing | 
+| 172 | ✅ | ✅ | ✅ | NA | ✅ S288: settings page + Setup Stripe Connect button confirmed working. S295: Checkout fee display fixed (double-fee bug resolved). | ⚠️ Needs full e2e verification | PARTIAL | Stripe Connect Setup | ORG | SIMPLE | Verify: complete payout flow (connect account → make sale → money arrives in bank) | Payout bank account linking + verification | 
+| 132 | ✅ | ✅ | ✅ | NA | ✅ S288: Stripe checkout works, fee charged correctly | ⚠️ Walkthrough: payment incomplete, needs verification | PARTIAL | À La Carte Single-Sale Fee ($9.99) | ORG | PAID_ADDON | Verify: purchase flow end-to-end, receipt generation, organizer sees payment | Sale.purchaseModel + alaCarte + alaCarteFeePaid. Stripe checkout. AlaCartePublishModal for SIMPLE tier | 
+| 153 | ✅ | ✅ | ✅ | 📋 | ✅ S286: businessName, phone, bio, website. Save persists on reload. | ⚠️ Walkthrough: "super basic only business name visible" + needs automated data fill for licensed businesses | PARTIAL | Basic Organizer Profile | ORG | SIMPLE | Enhance: auto-fill from business license if available, add more profile fields (hours, social links) | businessName, phone, bio, website. Save persists on reload. | 
+|  58 | ✅ | ✅ | ✅ | ✅ | ✅ S286: `/shopper/achievements` page loads, badge grid displays | ⚠️ Walkthrough: "badges not loading in dashboard" — badges missing from other dashboard tabs | PARTIAL | Achievement Badges | SHO | FREE | Verify: badges load on loyalty passport, explorer passport, and dashboard tabs | /shopper/achievements page — Chrome verified | 
+| 123 | ✅ | ✅ | ✅ | ✅ | ✅ S286: XP endpoints live, Loot Legend page displays | ⚠️ Walkthrough: "confusing naming" and "missing user instructions/tooltips" | PARTIAL | Explorer's Guild Phase 2 | SHO | FREE/PAID_ADDON | Clarify: finalize name (Explorer/Guild/Loot Legend terms), add onboarding tooltips explaining XP/badges/tiers | User.guildXp + User.explorerRank + RarityBoost table. XP sinks (coupon-gen, rarity boost, Hunt Pass discount). Loot Legend portfolio. | 
+|  59 | ✅ | ✅ | ✅ | ⚠️ | ✅ Widget on /shopper/dashboard loads | ⚠️ Walkthrough: "not on /shopper/loyalty page" — placement inconsistent | PARTIAL | Streak Rewards | SHO | FREE | Verify: should Streaks appear on both pages or just one? Add to missing page or hide from dashboard | Visit/save/purchase streaks wired to Layout — widget on /shopper/dashboard but NOT on /shopper/loyalty — P2 gap | 
+|  27 | NA | ✅ | ✅ | 📋 | ✅ S290: items.csv + sales.csv + purchases.csv download confirmed. PRO gate working. | ⚠️ Needs re-verify | PARTIAL | Exports (CSV/JSON) | ORG | PRO | Chrome verify export files generate with correct data | items.csv + sales.csv + purchases.csv download confirmed. PRO gate working. | 
+|  66 | ✅ | ✅ | ✅ | ✅ | ✅ S290: items.csv (36 rows), sales.csv (3 rows), purchases.csv (header only) | ⚠️ Needs real data scenario | PARTIAL | Open Data Export (ZIP) | ORG | PRO | Test with real purchases (not just headers) | items.csv (36 rows), sales.csv (3 rows), purchases.csv (header only). | 
+|  31 | ✅ | ✅ | ✅ | ✅ | ✅ Colors, logo, socials page loads | ⚠️ Walkthrough: "needs data" and verification that auto-propagation works | PARTIAL | Brand Kit | ORG | PRO | Test: upload brand kit → verify colors/logo appear on social templates and export | Colors, logo, socials (auto-propagates) | 
+
+### WORKS — Ready for Human QA only
+
+Claude has verified these with real Chrome evidence. Patrick: ~30 sec per feature.
+
+|  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
+|-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
+| 140 | ✅ | ✅ | ✅ | ✅ | ✅ Organizer + shopper views load, events display on calendar, click event → sale detail | ⬜ | WORKS | Sale Calendar View | BOTH | SIMPLE | Human QA |  | 
+| 151 | ✅ | ✅ | ✅ | ✅ | ✅ In-app notification center loads, notifications display with timestamps, click → navigate to relevant page | ⬜ | WORKS | Notification Inbox | BOTH | SIMPLE | Human QA |  | 
+| 162 | ✅ | ✅ | ✅ | ✅ | ✅ Multi-item + cash, 10% fee parity, POS checkout works | ⬜ | WORKS | Stripe Terminal POS (v2) | ORG | SIMPLE | Human QA |  | 
+|  22 | NA | ✅ | ✅ | ✅ | ✅ Network API detection, localStorage, LowBandwidthContext loads, images compress on slow networks | ⬜ | WORKS | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | Human QA |  | 
+|  19 | ✅ | ✅ | ✅ | ✅ | ✅ Passkey registration works, login with passkey works, fallback to password works | ⬜ | WORKS | Passkey / WebAuthn Login | ORG | SIMPLE | Human QA |  | 
+| 167 | ✅ | ✅ | ✅ | ✅ | ✅ Trust & safety dispute flow wired, dispute form submits, admin queue receives | ⬜ | WORKS | Disputes Management | BOTH | SIMPLE | Human QA |  | 
+| 135 | NA | NA | ✅ | 📋 | ✅ SharePromoteModal renders TikTok, Pinterest, Threads, Nextdoor tabs (external links) | ⬜ | WORKS | Social Templates Expansion | ORG | SIMPLE | Human QA |  | 
+|  65 | —- | ✅ | ✅ | -— | ✅ S289+S290: Full tier infrastructure (SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI). SIMPLE user sees upgrade wall. | ⬜ | WORKS | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | Human QA | |
+|  25 | ✅ | ✅ | ✅ | ✅ | ✅ S301: page loads, empty state for PRO user with no consignment items. Not a bug — needs real consignment data. | ⬜ | WORKS | Organizer Item Library (Consignment Rack) | ORG | PRO | Human QA |  | 
+|  42 | NA | ✅ | ✅ | NA | ✅ VoiceTagButton.tsx + useVoiceTag.ts complete, Web Speech API integration functional | ⬜ | WORKS | Voice-to-Tag | ORG | PRO | Human QA |  | 
+|  30 | ✅ | ✅ | ✅ | ✅ | ✅ S202: ValuationWidget (PRO-gated) on add-items page, suggestions display, CTA works | ⬜ | WORKS | AI Item Valuation & Comparables | ORG | PRO | Human QA |  | 
+|  14 | ✅ | ✅ | ✅ | NA | ✅ S202: Organizer widget, SMS/email alerts, SaleStatusWidget functional | ⬜ | WORKS | Real-Time Status Updates | BOTH | PRO | Human QA |  | 
+|  20 | NA | ✅ | ✅ | NA | ✅ S202: DegradationBanner + middleware for offline, fallback UI displays | ⬜ | WORKS | Proactive Degradation Mode | BOTH | PRO | Human QA |  | 
+| 179 | ✅ | ✅ | ✅ | ✅ | ✅ Advanced filters + location search functional, results accurate | ⬜ | WORKS | Full-Text Search | SHO | FREE | Human QA |  | 
+| 189 | ✅ | ✅ | ✅ | ✅ | ✅ S288: `/trending` page + API, items/sales sorted by views/engagement | ⬜ | WORKS | Trending Items / Sales | SHO | FREE | Human QA |  | 
+| 190 | ✅ | ✅ | ✅ | ✅ | ✅ S297: `/feed` page + API, activity timeline loads | ⬜ | WORKS | Activity Feed | SHO | FREE | Human QA |  | 
+|  78 | NA | ✅ | ✅ | 📋 | ✅ S286: `/inspiration` masonry grid, items from active/upcoming sales display | ⬜ | WORKS | Inspiration Page — Item Gallery | SHO | FREE | Human QA |  | 
+|  92 | NA | ✅ | ✅ | 📋 | ✅ S286: `/city/[city].tsx` ISR pages with Schema.org JSON-LD, Grand Rapids pre-generated, live | ⬜ | WORKS | City Weekend Landing Pages | SHO | FREE | Human QA |  | 
+| 204 | ✅ | ✅ | ✅ | 📋 | ✅ S286: `/unsubscribe` + `/api/unsubscribe`, preference toggles work | ⬜ | WORKS | Unsubscribe / Preferences | SHO | FREE | Human QA |  | 
+| 206 | ✅ | ✅ | ✅ | 📋 | ✅ S288: `/condition-guide` educational page loads with condition descriptions | ⬜ | WORKS | Condition Guide | SHO | FREE | Human QA |  | 
+| 207 | ✅ | ✅ | ✅ | 📋 | ✅ S286: Legal + help pages load, content displays correctly | ⬜ | WORKS | FAQ / Guide / Terms / Privacy | PUB | FREE | Human QA |  | 
+| 214 | ✅ | ✅ | ✅ | 📋 | ✅ S288: `/plan` page, public rate-limited acquisition tool, chat works | ⬜ | WORKS | AI Sale Planner Chat | PUB | FREE | Human QA |  | 
+
+### UNTESTED — Need Chrome QA
+
+Features built but never browser-tested or Chrome test is stale (>3 sessions old). Dispatch to findasale-qa.
+
+|  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
+|-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
+| 138 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | ORG | SIMPLE | Chrome QA: verify 4 sale types selectable, API validates, enum works | Enum validation + validation matrix | 
+|   5 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Listing Type Schema Validation | ORG | SIMPLE | Chrome QA: test FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS validation | Backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS | 
+|  35 | ✅ | ✅ | ✅ | ✅ | ⬜ | ✅ | UNTESTED | Entrance Pin / Front Door Locator | BOTH | SIMPLE | Chrome QA: verify entrance marker displays on map, stores location | Shopper convenience, parking + entrance detail | 
+| 142 | ✅ | ✅ | ✅ | NA | ⬜ | ✅ | UNTESTED | Photo Upload (Single + Multi) | ORG | SIMPLE | Chrome QA: verify upload to Cloudinary, files visible, multi-upload works |  | 
+| 145 | ✅ | ✅ | ✅ | NA | ⬜ | ✅ | UNTESTED | Condition Grading (S/A/B/C/D) | ORG | SIMPLE | Chrome QA: verify AI grades condition, manual override works |  | 
+| 146 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Item Holds / Reservations | BOTH | SIMPLE | Chrome QA: verify holds creation, expiry, shopper notification |  | 
+| 147 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Hold Duration Configuration | ORG | SIMPLE | Chrome QA: verify per-sale configurable hold expiry |  | 
+|  24 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Holds-Only Item View (Batch Ops) | ORG | SIMPLE | Chrome QA: verify holds grouped by buyer, batch actions work |  | 
+| 148 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Sale Checklist | ORG | SIMPLE | Chrome QA: verify checklist CRUD, per-sale customization |  | 
+| 149 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Email Reminders to Shoppers | ORG | SIMPLE | Chrome QA: verify reminder UI, scheduling, email sends |  | 
+| 150 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Push Notification Subscriptions | BOTH | SIMPLE | Chrome QA: verify VAPID, service worker registration, notification display |  | 
+| 152 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Organizer Digest Emails | ORG | SIMPLE | Chrome QA: verify weekly email content, scheduling |  | 
+| 154 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Organizer Public Profile Page | ORG | SIMPLE | Chrome QA: verify `/organizers/[slug]` loads, sales list displays |  | 
+| 155 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Password Reset Flow | ORG | SIMPLE | Chrome QA: verify email sent, reset link works, password updates |  | 
+| 156 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Refund Policy Configuration | ORG | SIMPLE | Chrome QA: verify per-organizer refund window config |  | 
+| 158 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Sale Waitlist | BOTH | SIMPLE | Chrome QA: verify shopper join, organizer broadcast | Shopper join + organizer broadcast | 
+| 159 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Flash Deals | ORG | SIMPLE | Chrome QA: verify time-limited price drops, countdown timer | Time-limited price drops | 
+| 160 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Reviews (Receive + View) | BOTH | SIMPLE | Chrome QA: verify review submit, display, organizer receives | Shopper → sale + organizer | 
+| 161 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Contact Form | PUB | SIMPLE | Chrome QA: verify form submit, email sent |  | 
+| 163 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Payout Transparency / Earnings Dashboard | ORG | SIMPLE | Chrome QA: verify item-level fee breakdown, PDF export |  | 
+|  11 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Organizer Referral (Fee Bypass) | ORG | SIMPLE | Chrome QA: verify referral code application, fee bypass |  | 
+| 164 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Tiers Backend Infrastructure | ORG | SIMPLE | Chrome QA: verify getMyTier, syncTier, tier display | |
+| 165 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | A/B Testing Infrastructure | ORG | SIMPLE | Chrome QA: verify A/B variant assignment, tracking |  | 
+| 166 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Invites | ORG | SIMPLE | Chrome QA: verify invite-to-sale, beta code acceptance |  | 
+|  72 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Dual-Role Account Schema | BOTH | SIMPLE | Chrome QA: verify admin+organizer dual roles work on all endpoints (S309 fixed 4 itemController endpoints) | |
+|  74 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Role-Aware Registration Consent | BOTH | FREE | Chrome QA: verify consent checkboxes at signup, copy attorney-reviewed | |
+|  75 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Tier Lapse State Logic | ORG | PRO | Chrome QA: verify lapse warning, cron suspension, feature suspension logic | |
+| 127 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | POS Value Unlock Tiers | ORG | SIMPLE | Chrome QA: verify dual-gate (tx+revenue), tier unlocks, gates enforce | |
+|  77 | NA | NA | ✅ | NA | ⬜ | ⬜ | UNTESTED | Sale Published Celebration | ORG | SIMPLE | Chrome QA: verify confetti overlay, full-screen celebration UX |  | 
+|  79 | NA | NA | ✅ | NA | ⬜ | ⬜ | UNTESTED | Earnings Counter Animation | ORG | SIMPLE | Chrome QA: verify counter animation on dashboard load |  | 
+|  60 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Premium Tier Bundle | ORG | PRO | Chrome QA: verify tier landing, comparison matrix, upgrade CTA | |
+| 168 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Seller Performance Dashboard | ORG | PRO | Chrome QA: verify per-sale analytics, insights load |  | 
+|   8 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Batch Operations Toolkit | ORG | PRO | Chrome QA: verify bulk price/status/category/tag/photo updates |  | 
+| 170 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | CSV Listing Import | ORG | SIMPLE | Chrome QA: verify bulk upload, validation, items created |  | 
+| 171 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Payout PDF Export | ORG | PRO | Chrome QA: verify PDF generation, content, download |  | 
+|  18 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Post Performance Analytics | ORG | PRO | Chrome QA: verify UTM tracking on social template downloads |  | 
+| 136 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | QR Code Auto-Embedding in Exports | ORG | SIMPLE | Chrome QA: verify QR overlay, export with QR embedded |  | 
+| 27a | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Social Templates (3 tones × 2 platforms) | ORG | SIMPLE | Chrome QA: verify 3 tone variants, Instagram/Facebook copy | |
+| 27b | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Cloudinary Watermark on Photo Exports | ORG | SIMPLE | Chrome QA: verify watermark applied, brand protection visible | |
+| 27c | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | CSV/JSON Listing Exports (Listing Factory) | ORG | SIMPLE | Chrome QA: verify multi-platform export formats | |
+|  33 | NA | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Share Card Factory (OG Tags) | ORG | SIMPLE | Chrome QA: verify branded social previews, OG images |  | 
+|  34 | NA | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Hype Meter | ORG | SIMPLE | Chrome QA: verify real-time social proof display |  | 
+|  63 | NA | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Dark Mode + Accessibility | BOTH | FREE | Chrome QA: verify dark mode works, WCAG 2.1 AA compliant |  | 
+|  67 | NA | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Social Proof Notifications | BOTH | SIMPLE | Chrome QA: verify engagement notifications (favorites, bids, holds) |  | 
+|   6 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Virtual Queue / Line Management | ORG | SIMPLE | Chrome QA: verify queue UI, call next flow, SMS integration |  | 
+|  28 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Neighborhood Heatmap | BOTH | SIMPLE | Chrome QA: verify density overlay on map, neighborhood highlighting |  | 
+|  39 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Photo Op Stations | ORG | PRO | Chrome QA: verify PhotoOpMarker on map, rate limiting |  | 
+|  40 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Sale Hubs | ORG | PRO | Chrome QA: verify hub pages, membership UI |  | 
+|  16 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Verified Organizer Badge | ORG | PRO | Chrome QA: verify badge on sales detail, VerifiedBadge renders |  | 
+| 175 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Coupons (PERCENT/FIXED) | ORG | SIMPLE | Chrome QA: verify coupon creation, validation, application |  | 
+| 178 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Item Detail Page | SHO | FREE | Chrome QA: verify `/items/[id]` loads, item details display |  | 
+| 180 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Category Browsing | SHO | FREE | Chrome QA: verify `/categories` index, `/categories/[slug]` pages |  | 
+| 181 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Tag Browsing | SHO | FREE | Chrome QA: verify `/tags/[slug]` ISR pages |  | 
+| 183 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Sale Calendar (Upcoming) | SHO | FREE | Chrome QA: verify `/calendar` page, upcoming sales list |  | 
+| 185 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | QR Code Signs (Yard + Item Labels) | ORG | SIMPLE | Chrome QA: verify printable QR codes, yard signs |  | 
+| 186 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | QR Scan Analytics | ORG | SIMPLE | Chrome QA: verify QR scan tracking, insights |  | 
+| 187 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | City Pages | SHO | FREE | Chrome QA: verify `/cities` index, `/city/[slug]` pages |  | 
+| 191 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Route Planning (Multi-Sale) | SHO | FREE | Chrome QA: verify `/api/routes` OSRM-based routing |  | 
+| 192 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Price History Tracking | SHO | FREE | Chrome QA: verify price trends display, historical data |  | 
+|  52 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Estate Sale Encyclopedia | SHO | FREE | Chrome QA: verify wiki-style knowledge base, EncyclopediaCard |  | 
+|  70 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Live Sale Feed | SHO | SIMPLE | Chrome QA: verify Redis adapter, JWT socket auth, LiveFeedTicker |  | 
+| 193 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Wishlists | SHO | FREE | Chrome QA: verify full CRUD, distinct from favorites |  | 
+| 194 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Saved Searches with notifyOnNew | SHO | FREE | Chrome QA: verify save search button, notification on new matches |  | 
+| 195 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Shopper ↔ Organizer Messaging | BOTH | FREE | Chrome QA: verify threaded conversations, real-time updates |  | 
+| 196 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Buying Pools | SHO | FREE | Chrome QA: verify group buying on items |  | 
+| 197 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Bounties (Item Requests) | SHO | FREE | Chrome QA: verify want-ads, shopper requests work |  | 
+| 198 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Reviews (Submit Sale / Organizer) | SHO | FREE | Chrome QA: verify review submit, organizer receives |  | 
+| 200 | 📋 | 📋 | 📋 | 📋 | ⬜ | ⬜ | UNTESTED | Shopper Public Profiles | SHO | FREE | Chrome QA: verify `/shoppers/[slug]` collection showcase |  | 
+| 201 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Favorites | SHO | FREE | Chrome QA: verify item-level favorites, seller-follow (deferred post-beta per S285) |  | 
+| 202 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Notification Center | SHO | FREE | Chrome QA: verify `/notifications` page, notification display |  | 
+| 203 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Email + SMS Validation (Twilio) | BOTH | SIMPLE | Chrome QA: verify phone verification via SMS |  | 
+|  36 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Weekly Treasure Digest (Email) | SHO | FREE | Chrome QA: verify MailerLite Sunday 6pm email send |  | 
+| 205 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Contact Organizer | SHO | FREE | Chrome QA: verify messaging system initiates correctly |  | 
+| 208 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Pickup Booking (Schedule Pickup) | SHO | FREE | Chrome QA: verify shopper-side scheduling, confirmation |  | 
+|  84 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Approach Notes (Arrival Assistant) | SHO | SIMPLE | Chrome QA: verify arrival notification, notes display |  | 
+|  47 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | UGC Photo Tags | SHO | FREE | Chrome QA: verify shopper photo upload, moderation queue |  | 
+| 209 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Points System | SHO | FREE | Chrome QA: verify 1 pt/visit/day, tier-based points |  | 
+| 210 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Streaks (Visit / Save / Purchase) | SHO | FREE | Chrome QA: verify daily streak tracking, multiplier |  | 
+| 211 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Treasure Hunt (Daily) | SHO | FREE | Chrome QA: verify daily clue, category matching |  | 
+|  61 | NA | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Near-Miss Nudges | SHO | FREE | Chrome QA: verify 4 nudge types, variable-ratio psychology |  | 
+|  23 | NA | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Unsubscribe-to-Snooze (MailerLite) | SHO | SIMPLE | Chrome QA: verify unsubscribe intercept, 30-day snooze |  | 
+|  57 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Shiny / Rare Item Badges | SHO | FREE | Chrome QA: verify RarityBadge on item cards, data loads |  | 
+|  55 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Seasonal Discovery Challenges | SHO | FREE | Chrome QA: verify rotating challenges, season logic |  | 
+| 124 | -— | ✅ | -— | NA | ⬜ | ⬜ | UNTESTED | Rarity Boost XP Sink | SHO | FREE/PAID_ADDON | Chrome QA: verify POST /api/xp/sink/rarity-boost, UI build out "Coming Soon" placeholder |  | 
+| 215 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | AI Tag Suggestions (Haiku) | ORG | SIMPLE | Chrome QA: verify part of Rapidfire, all tiers |  | 
+| 216 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | AI Condition Grade Suggestions | ORG | SIMPLE | Chrome QA: verify S/A/B/C/D from photo, manual override |  | 
+| 217 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | AI SEO Description Optimization | ORG | SIMPLE | Chrome QA: verify high-intent search term bias |  | 
+|  21 | NA | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | User Impact Scoring in Sentry | BOTH | FREE | Chrome QA: verify error prioritization by tier/points/hunt-pass |  | 
+| 128 | NA | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Automated Support Stack (5-Layer) | PLATFORM | ALL | Chrome QA: verify /support page, fuse.js FAQ, Claude API chat L2, escalation L4 |  | 
+| 218 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Shopper Trades | SHO | FREE | Chrome QA: verify `/shopper/trades` page, trade/swap system | |
+| 219 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Shopper Achievements | SHO | FREE | Chrome QA: verify `/shopper/achievements` page, badge display | |
+|  17 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Bid Bot Detector + Fraud Score | ORG | PRO | Chrome QA: verify FraudBadge on holds page, fraud-signals.tsx |  | 
+|  32 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Shopper Wishlist Alerts + Smart Follow | SHO | FREE | Chrome QA: verify category/tag/organizer alerts on new items |  | 
+|  45 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Collector Passport | SHO | FREE | Chrome QA: verify specialty collection tracking, achievement path |  | 
+|  51 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Sale Ripples | SHO | FREE | Chrome QA: verify social proof activity tracking, RippleIndicator |  | 
+|  54 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Crowdsourced Appraisal (Base) | BOTH | FREE | Chrome QA: verify request/submit/vote appraisals |  | 
+|  68 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Command Center Dashboard | ORG | PRO | Chrome QA: verify per-sale widget dashboard, command center |  | 
+|  73 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Two-Channel Notification System | BOTH | SIMPLE | Chrome QA: verify OPERATIONAL + DISCOVERY channels, inbox tabs |  | 
+|  76 | NA | NA | ✅ | NA | ⬜ | ⬜ | UNTESTED | Skeleton Loaders | BOTH | FREE | Chrome QA: verify ghost card layouts on item/sale grids |  | 
+|  81 | NA | NA | ✅ | NA | ⬜ | ⬜ | UNTESTED | Empty State Audit + Copy Pass | BOTH | FREE | Chrome QA: verify EmptyState component across 8 pages |  | 
+|  88 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Haul Post Gallery (UGC Social Proof) | SHO | FREE | Chrome QA: verify UGCPhoto extended, `/hauls` page live |  | 
+|  91 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Auto-Markdown (Smart Clearance) | ORG | PRO | Chrome QA: verify markdownEnabled, markdownFloor, markdownCron |  | 
+| 125 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Inventory Syndication CSV Export | ORG | PRO | Chrome QA: verify PRO/TEAMS gate, export rate limiting (1/month) |  | 
+| 133 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Hunt Pass Subscription Redesign | SHO | PAID_ADDON | Chrome QA: verify LEGENDARY early access gate, 1.5x XP multiplier |  | 
+| 134 | NA | NA | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Plan a Sale Dashboard Card | ORG | SIMPLE | Chrome QA: verify "Coming Soon" card on organizer dashboard |  | 
+| 143 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Rapidfire Camera Mode | ORG | SIMPLE | Chrome QA: verify S313 AI confidence fix deployed, photo upload E2E |  | 
+| 173 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Message Templates | ORG | PRO | Chrome QA: verify `/organizer/message-templates` page, templates CRUD |  |
+| 221 | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Mark Sold → Hold-to-Pay (Remote Invoice + POS Cart) | BOTH | SIMPLE | Architect spec in progress (S341). Remote Path: consolidated Stripe Checkout for held items, shopper pays item price, organizer receives minus platform fee. POS Path: pre-stage into organizer's active POS cart. Rank-gated payment windows (Initiate 2h→Scout 3h→Ranger 4h→Sage 6h→Grandmaster 8h), +15 guildXP, Hunt Pass fast-track, Verified Buyer badge, 3-strike no-show system. | Depends on #13 (shipped S332-S340) + Stripe Connect (existing) + POS (existing) |
+
+## ✅ SHIPPED & VERIFIED (Both Claude QA + Human QA)
+
+Features fully shipped and verified by both Claude and Patrick. Compact format — no detailed notes.
+
+| # | Feature | Role | Tier | Notes |
+|-----|---------|------|------|-------|
+| 137 | Create / Edit / Publish / Archive Sales | ORG | SIMPLE | Edit + Create ✅. 4 create-sale fixes. Chrome QA confirmed. |
+| 139 | Sale Map with Geocoding | ORG | SIMPLE | Chrome ✅ S300: Leaflet map with geocoded address |
+| 141 | Item Add / Edit / Delete / Status | ORG | SIMPLE | Core CRUD ✅. Chrome QA confirmed. |
+| 144 | AI Tag Suggestions + Health Score | ORG | SIMPLE | Haiku-powered. ✅ S301: Suggest Price with CTA. |
+| 169 | Organizer Insights (Lifetime) | ORG | PRO | ✅ S301: KPI cards + Per-Sale Breakdown with real data. |
+|  87 | Brand & Designer Tracking | SHO | FREE | ✅ S301: Add/remove brands, persists on reload. |
+|  85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | Organizer toggle + clues + XP. Shopper QR modal + hunt-pass page. |
+| 182 | Surprise Me / Serendipity Search | SHO | FREE | `/surprise-me` random discovery |
+| 126 | Gamification Legacy Cleanup | SHO | FREE | User.points removed, pointsService deleted. No pts refs live. | 
+
+## Platform Safety & Infrastructure
+
+Infrastructure and internal systems that don't need browser QA. All verified. Format preserved from original.
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 82 | Trademark — FindA.Sale | BIZ | LEGAL | — | — | — | — | N/A | N/A | 📋 | File USPTO trademark on "FindA.Sale" brand name if not already done. ~$250–400/class + attorney fees (~$1,500–2,500 total). First priority IP action. Attorney required. |
-| 83 | Trade Secret Housekeeping | BIZ | LEGAL | — | — | — | — | N/A | N/A | 📋 | Document proprietary algorithms (fraud scoring, Near-Miss Nudge logic, City Heat Index formula, Flip Report scoring, AI condition grading prompts) as trade secrets in internal docs. Ensure all contractors/contributors have signed NDAs or are covered by agreements. No filing required — zero cost. |
-
----
-
-## Feature Inventory — Shipped
-
-### Organizer — Core Operations [SIMPLE]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 137 | Create / Edit / Publish / Archive Sales | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Edit + Create ✅. 4 create-sale fixes applied (URL, lat/lng validation, date format, saleType enum). Geocode auto-saves coords on edit when lat/lng absent — no error banner. Chrome QA confirmed. |
-| 139 | Sale Map with Geocoding | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S300 | Chrome ✅ S300: Leaflet map on /sales/[id] with geocoded address "4866 Leonard St, Grand Rapids" |
-| 140 | Sale Calendar View | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Organizer + shopper views |
-| 141 | Item Add / Edit / Delete / Status | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Core CRUD ✅. Title edit persists on reload. Category pre-populates on edit form. Renamed items stay visible in add-items list. Chrome QA confirmed. |
-| 144 | AI Tag Suggestions + Health Score | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S124 | ✅ | ✅ S301 | Haiku-powered, part of intake. ✅ S301: Suggest Price returned "$15–$45, suggested $28" with explanation + "Use $28.00" CTA. (ss_825360xz7) |
-| 151 | Notification Inbox | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | In-app notification center |
-| 162 | Stripe Terminal POS (v2) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Multi-item + cash, 10% fee parity |
-| 71 | Organizer Reputation Score | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | 1-5 star public score + reputation.tsx frontend |
-| 22 | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | N/A | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Network API detection, localStorage, LowBandwidthContext |
-| 19 | Passkey / WebAuthn Login | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | QA confirmed, clear to deploy |
-| 167 | Disputes Management | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Trust & safety |
-| 135 | Social Templates Expansion | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | SharePromoteModal + TikTok, Pinterest, Threads, Nextdoor. Shipped S280. |
-| 89 | Unified Print Kit | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/organizer/print-kit/[saleId]` — yard sign + item price tags (6/page). Print CSS. Shipped S280. |
-| 69 | Local-First Offline Mode | BOTH | PRO | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Service worker sync queue; offline catalog. |
-| 65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Full tier infrastructure: SubscriptionTier enum, tierGate.ts, requireTier, Stripe billing, Progressive Disclosure UI. SIMPLE user sees upgrade wall — Chrome verified S289+S290. |
-
-### Organizer — Analytics & Intelligence [PRO]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 169 | Organizer Insights (Lifetime) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S301 | Cross-sale totals + benchmarking. ✅ S301: KPI cards + Per-Sale Breakdown loaded with real data as Bob Smith PRO. (ss_8974kxr2g→ss_4690ui68m→ss_03146gg4b) |
-| 25 | Organizer Item Library (Consignment Rack) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Upload once, reuse; cross-sale search, price history. S301: page loads, empty state for PRO user with no consignment items. ⚠️ Empty state copy misleading (no CTA). Not a bug — needs real consignment data to verify. |
-| 42 | Voice-to-Tag | ORG | PRO | N/A | ✅ | ✅ | ✅ | ✅S202 | N/A | 📋 | VoiceTagButton.tsx + useVoiceTag.ts complete. Web Speech API integration |
-| 41 | Flip Report | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Item resale potential scoring |
-| 17 | Bid Bot Detector + Fraud Score | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | FraudBadge on holds page, fraud-signals.tsx |
-| 27 | CSV / JSON / Text Listing Exports | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | items.csv + sales.csv + purchases.csv download confirmed. PRO gate working. Chrome verified S290. |
-| 66 | Open Data Export (ZIP) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | items.csv (36 rows), sales.csv (3 rows), purchases.csv (header only — no Stripe purchases yet). Chrome verified S290. |
-| 125 | Inventory Syndication CSV Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | exportService.ts + csvExportController.ts. PRO/TEAMS gate. 429 rate-limit message confirmed in UI — shows next available export date (1 export/month window). Chrome QA confirmed. |
-
-### Organizer — Marketing & Brand Amplification [SIMPLE/PRO mixed]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 31 | Brand Kit | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Colors, logo, socials (auto-propagates) |
-| 173 | Message Templates | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Saved organizer reply templates — page `/organizer/message-templates` exists |
-
-### Organizer — Sales Tools & Workflow [SIMPLE/PRO mixed]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 174 | Auction Mechanics + Close Flow | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Countdown timer, bid modal, auto-bid, cron closing, manual end-auction button, auctionEndTime field, winner Stripe checkout link, organizer close notification, admin bid-review queue |
-| 14 | Real-Time Status Updates | BOTH | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | N/A | 📋 | Organizer widget, SMS/email alerts, SaleStatusWidget |
-| 20 | Proactive Degradation Mode | BOTH | PRO | N/A | ✅ | ✅ | ✅ | ✅S202 | N/A | 📋 | DegradationBanner + middleware for offline |
-| 30 | AI Item Valuation & Comparables | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | ValuationWidget (PRO-gated) on add-items page |
-
-### Shopper — Discovery & Search [FREE]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 176 | Browse Sales (Homepage + Map) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | ⚠️ | filter pill fix applied S288; needs re-verify |
-| 177 | Sale Detail Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S288 | 📋 | `/sales/[slug]` |
-| 179 | Full-Text Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Advanced filters + location |
-| 182 | Surprise Me / Serendipity Search | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ S288 | `/surprise-me` random discovery |
-| 188 | Neighborhood Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | `/neighborhoods/[slug]` + index page lists 6 GR neighborhoods. Page 404 per S290 audit — not implemented |
-| 90 | Sale Soundtrack (Ambient Vibes) | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | N/A | 📋 | Spotify + Apple Music playlist suggestions per sale type on sale detail page. External links only. Shipped S280. |
-| 189 | Trending Items / Sales | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S288 | 📋 | `/trending` page + API |
-| 190 | Activity Feed | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S297 | 📋 | `/feed` page + API |
-| 49 | City Heat Index | SHO | FREE | ⚠️ | ✅ | ⚠️ | ✅ | ✅S194 | 📋 | 📋 | Weekly "hottest metro" ranking; aggregated sale data — orphaned, route not found in nav |
-
-### Shopper — Engagement & Community [FREE]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 29 | Shopper Loyalty Passport | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S300 | Chrome ✅ S300: /shopper/loyalty loads real data (0 XP, Bronze tier, Generate Coupon correctly gated at 20 XP min) |
-| 32 | Shopper Wishlist Alerts + Smart Follow | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Category/tag/organizer alerts on new items |
-| 62 | Digital Receipt + Returns | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅S202 | ✅ | 📋 | Auto-generated receipt post-POS, return window |
-| 45 | Collector Passport | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Specialty collection tracking + achievement path |
-| 50 | Loot Log | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Personal purchase history with photos + prices |
-| 87 | Brand & Designer Tracking | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ S301 | ✅ S301: Brands tab empty → added Herman Miller → appeared in list with Remove → persisted on reload. (ss_1535iwo2a→ss_869725td0→ss_59120puay) |
-| 88 | Haul Post Gallery (UGC Social Proof) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | UGCPhoto extended (isHaulPost, linkedItemIds, likeCount) + UGCPhotoReaction model. /hauls page live |
-| 51 | Sale Ripples | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Social proof activity tracking. RippleIndicator auto-records. ripples.tsx analytics. |
-| 54 | Crowdsourced Appraisal (Base) | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Request/submit/vote appraisals; AI Sprint 3 deferred. |
-
-### Shopper — Gamification [FREE + HUNT_PASS]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 126 | Gamification Legacy Cleanup | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | User.points removed, pointsService deleted, points routes deleted. All awardPoints() calls removed. QA confirmed no pts refs live |
-
-### Platform & AI [FREE/SIMPLE]
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-
-### Platform Safety & Cost Control
-
-#### Bidding Integrity
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 93 | Bidder Account Age Gate (7-day) | PLATFORM | ALL | N/A | ✅ | N/A | ✅ | N/A | N/A | N/A | accountAgeGate.ts confirmed in code. 7-day minimum, ADMIN bypass. Wired to POST /:id/bids. (S280 verified) |
-| 94 | Same-IP Bidder Detection | PLATFORM | ALL | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | BidIpRecord model + IP tracking in itemController. Admin bid-review page built. (S280 verified) |
-| 95 | Bidding Velocity Limits | PLATFORM | ALL | N/A | ✅ | N/A | ✅ | N/A | N/A | N/A | bidRateLimiter.ts confirmed — 10 bids/60s via Redis, graceful degradation. (S280 verified) |
-
-#### Buyer Transparency
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 96 | Buyer Premium Disclosure (4-Point Visibility) | PLATFORM | ALL | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A | Confirmed: stripeController itemized breakdown + CheckoutModal disclosure. (S280 verified) |
-| 97 | Post-Purchase Confirmation Email (Premium Breakdown) | PLATFORM | ALL | N/A | ✅ | N/A | ✅ | N/A | N/A | N/A | Confirmed: breakdownHtml in stripeController with buyer premium, item photo, org name, etc. (S280 verified) |
-| 98 | Chargeback Defense Documentation | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Confirmed: CheckoutEvidence model in schema + auto-capture in stripeController. (S280 verified) |
-
-#### Account Controls
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 99 | Export Rate Limiting (1/month) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | CSV/JSON exports limited to 1 per month per account; prevents data harvesting. See anti-abuse-system-design-2026-03-19.md §Vector 1 |
-| 100 | First-Month Refund Cap (50%) | PLATFORM | ALL | N/A | ✅ | N/A | ✅ | N/A | N/A | N/A | Refunds capped at 50% if requested <30 days post-signup. See anti-abuse-system-design-2026-03-19.md §Vector 1 |
-| 101 | Email Verification (Unique per Organizer) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Hard gate: no multi-account signup with same email. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
-| 102 | Payment Method Deduplication | PLATFORM | ALL | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | Links organizer accounts sharing Stripe card/PayPal; suggests merge to Pro tier. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
-
-#### Cost Control
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 103 | Photo Retention Policy (90-day archive, 1-year delete) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Auto-archive after 90 days, delete after 1 year; reduces Cloudinary costs indefinitely. See total-cost-of-ownership-2026-03-19.md §Section 3 |
-
-#### Fraud Detection & Account Management
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 106 | Organizer Reputation Scoring System | PLATFORM | ALL | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | OrganizerReputation model + computeReputationScore service confirmed in code. Badge endpoint live. (S280 verified) |
-| 107 | Chargeback + Collusion Tracking | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Flags pattern of chargebacks + same-IP bidding; suspension after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
-| 108 | Winning Bid Velocity Check (low vs. value) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Flags auctions with winning bid <10% of estimated value; holds payment 24h for review. See anti-abuse-system-design-2026-03-19.md §Vector 3 |
-| 109 | Off-Platform Transaction Detection (Post-Sale Monitoring) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | 30-day pattern detection: low-price sales with no activity flagged. See anti-abuse-system-design-2026-03-19.md §Vector 3 |
-| 110 | IP-Based Soft Linking (Multi-Account Detection) | PLATFORM | ALL | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | Suggests merge for accounts from same IP with >3 concurrent sales in <7 days. See anti-abuse-system-design-2026-03-19.md §Vector 4 |
-| 114 | Bid Cancellation Audit Trail | PLATFORM | ALL | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | Tracks bid cancellations; pattern flagged after 5+ cancellations + 3+ chargebacks. See anti-abuse-system-design-2026-03-19.md §Vector 2 |
-| 117 | Chargeback Response + Serial Buyer Account Suspension | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Flags buyers at 2+ chargebacks; suspends after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 6 |
-
-#### Review Integrity & Spam Prevention
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 115 | Verified Purchase Badge on Reviews | PLATFORM | ALL | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | Only non-refunded past purchasers can leave reviews; prevents fake review spam. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
-| 116 | Review Timing Anomaly Detection | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Flags reviews <1 hour post-purchase or from same IP within 24 hours; manual moderation queue. See anti-abuse-system-design-2026-03-19.md §Novel Vector B |
-
-#### Advanced Fraud Monitoring & Data Governance
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 111 | Bot/Scraper Rate Limiting on CDN | PLATFORM | ALL | N/A | ✅ | N/A | ✅ | N/A | N/A | N/A | Rate limits image endpoints; prevents bot harvesting via Cloudinary bandwidth spike. See total-cost-of-ownership-2026-03-19.md §Section 4 |
-| 112 | Database Record Archival Policy (Soft-Delete) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Quarterly soft-delete of old sales/items; reduces Neon compute bloat. See total-cost-of-ownership-2026-03-19.md §Section 3 |
-| 113 | Async AI Tagging Queue (Prevent Rate-Limit Spikes) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Background worker processes tags; prevents Claude API rate limiting during peak uploads. See total-cost-of-ownership-2026-03-19.md §Risk #4 |
-| 118 | Photo Compression at Upload (Reduce Storage Bloat) | PLATFORM | ALL | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A | Auto-compress photos on-device; reject images <100×100px or >50MB. See anti-abuse-system-design-2026-03-19.md §Novel Vector C |
-| 120 | Sale Cancellation Audit (Rapid Cancellation Detection) | PLATFORM | ALL | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | Flags sales cancelled <2h post-publication with >100 holds; requires organizer explanation. See anti-abuse-system-design-2026-03-19.md §Novel Vector A |
-
----
-
----
+|  93 | NA | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | accountAgeGate.ts confirmed in code. 7-day minimum, ADMIN bypass. Wired to POST /:id/bids. (S280 verified) | 
+|  94 | ✅ | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | BidIpRecord model + IP tracking in itemController. Admin bid-review page built. (S280 verified) | 
+|  95 | NA | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | bidRateLimiter.ts confirmed — 10 bids/60s via Redis, graceful degradation. (S280 verified) | 
+|  96 | NA | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | Confirmed: stripeController itemized breakdown + CheckoutModal disclosure. (S280 verified) | 
+|  97 | NA | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Confirmed: breakdownHtml in stripeController with buyer premium, item photo, org name, etc. (S280 verified) | 
+|  98 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Confirmed: CheckoutEvidence model in schema + auto-capture in stripeController. (S280 verified) | 
+|  99 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | CSV/JSON exports limited to 1 per month per account; prevents data harvesting. See anti-abuse-system-design-2026-03-19.md §Vector 1 | 
+| 100 | NA | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Refunds capped at 50% if requested <30 days post-signup. See anti-abuse-system-design-2026-03-19.md §Vector 1 | 
+| 101 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Hard gate: no multi-account signup with same email. See anti-abuse-system-design-2026-03-19.md §Vector 4 | 
+| 102 | ✅ | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | Links organizer accounts sharing Stripe card/PayPal; suggests merge to Pro tier. See anti-abuse-system-design-2026-03-19.md §Vector 4 | 
+| 103 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Auto-archive after 90 days, delete after 1 year; reduces Cloudinary costs indefinitely. See total-cost-of-ownership-2026-03-19.md §Section 3 | 
+| 106 | ✅ | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | OrganizerReputation model + computeReputationScore service confirmed in code. Badge endpoint live. (S280 verified) | 
+| 107 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Flags pattern of chargebacks + same-IP bidding; suspension after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 2 | 
+| 108 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Flags auctions with winning bid <10% of estimated value; holds payment 24h for review. See anti-abuse-system-design-2026-03-19.md §Vector 3 | 
+| 109 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | 30-day pattern detection: low-price sales with no activity flagged. See anti-abuse-system-design-2026-03-19.md §Vector 3 | 
+| 110 | ✅ | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | Suggests merge for accounts from same IP with >3 concurrent sales in <7 days. See anti-abuse-system-design-2026-03-19.md §Vector 4 | 
+| 114 | ✅ | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | Tracks bid cancellations; pattern flagged after 5+ cancellations + 3+ chargebacks. See anti-abuse-system-design-2026-03-19.md §Vector 2 | 
+| 117 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Flags buyers at 2+ chargebacks; suspends after 3+ incidents. See anti-abuse-system-design-2026-03-19.md §Vector 6 | 
+| 115 | ✅ | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | Only non-refunded past purchasers can leave reviews; prevents fake review spam. See anti-abuse-system-design-2026-03-19.md §Novel Vector B | 
+| 116 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Flags reviews <1 hour post-purchase or from same IP within 24 hours; manual moderation queue. See anti-abuse-system-design-2026-03-19.md §Novel Vector B | 
+| 111 | NA | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Rate limits image endpoints; prevents bot harvesting via Cloudinary bandwidth spike. See total-cost-of-ownership-2026-03-19.md §Section 4 | 
+| 112 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Quarterly soft-delete of old sales/items; reduces Neon compute bloat. See total-cost-of-ownership-2026-03-19.md §Section 3 | 
+| 113 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Background worker processes tags; prevents Claude API rate limiting during peak uploads. See total-cost-of-ownership-2026-03-19.md §Risk #4 | 
+| 118 | NA | ✅ | ✅ | NA | ✅ | ✅ | ✅ | NA | NA | NA | Auto-compress photos on-device; reject images <100×100px or >50MB. See anti-abuse-system-design-2026-03-19.md §Novel Vector C | 
+| 120 | ✅ | ✅ | NA | NA | ✅ | NA | ✅ | NA | NA | NA | Flags sales cancelled <2h post-publication with >100 holds; requires organizer explanation. See anti-abuse-system-design-2026-03-19.md §Novel Vector A | 
+| 121 | Tiered Photo Storage Migration (Cloudinary → B2/Bunny) | PLATFORM | ALL | ✅ | ✅ | -— | — | NA | NA | NA | Implements 3-tier strategy: Active (0–90d on Cloudinary), Warm (90d–2y on B2 + Bunny CDN), Cold (2y+ metadata-only). Saves ~70% storage cost; enables B2B analytics. See photo-storage-strategy-2026-03-19.md |
+| 104 | NA | ✅ | -— | NA | ✅ | -— | ✅ | NA | NA | NA | Auto-switch to Ollama if Claude API cost exceeds monthly threshold. See total-cost-of-ownership-2026-03-19.md §Section 5 | 
+| 105 | NA | ✅ | -— | NA | ✅ | -— | ✅ | NA | NA | NA | cloudinaryBandwidthTracker.ts confirmed — tracks daily serves, alerts at 80% of 25GB free tier. (S280 verified) | 
+| 119 | ✅ | ✅ | -— | NA | ✅ | -— | ✅ | NA | NA | NA | Tracks monthly chargeback rate; triggers pre-auth + payment hold if >0.8%, account escalation if >1%. See anti-abuse-system-design-2026-03-19.md §Novel Vector D | 
+| 220 | ✅ | -— | —- | NA | -— | —- | -— | NA | NA | NA | Consolidate scattered Cloudinary URL generation into single shared utility. S317. | 
 
 ## Blocked
 
 | # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
 |---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 53 | Cross-Platform Aggregator | ORG | TEAMS | — | — | — | — | N/A | N/A | — | Legal review required — ToS risk with EstateSales.NET/Facebook scraping. ADR written |
-
----
-
-## Backlog — Prioritized
-
-### Pending Chrome QA
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 138 | Sale Types (ESTATE/CHARITY/BUSINESS/CORPORATE) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Enum validation + validation matrix — Chrome ✅ S286 (4 types added by dev fix, push pending) |
-| 5 | Listing Type Schema Validation | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Backend validation for FIXED/AUCTION/REVERSE_AUCTION/LIVE_DROP/POS — Needs Chrome QA |
-| 35 | Entrance Pin / Front Door Locator | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Shopper convenience, parking + entrance detail — Chrome ✅ S286 |
-| 142 | Photo Upload (Single + Multi) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | `/api/upload` with Cloudinary — Chrome ✅ S286 |
-| 143 | Rapidfire Camera Mode | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | S305 UX refactor. S306–S309: thumbnail race fix, → Pub opens PreviewModal, 403 role check fixed (4 endpoints), onError 📷 fallback. S310: api.patch→api.put (Done Reviewing), Condition normalization. S311: mobile QA 6/8 ✅; photoUrl→thumbnailUrl fix, blob→Cloudinary URL in rapidItems state, toast 4500ms. S312: SW Cloudinary cache bug fixed (sha: 29ba630) — Workbox entry intercepted requests with empty cache → naturalWidth:0; removed. QA skill thumbnail zoom rule added. Test item deleted (count: 21 ✅). PreviewModal onError fix pushed (sha: ffa4a83). S313: AI confidence fix pushed to prod (cloudAIService.ts — Haiku prompt now includes confidence field). Vercel + Railway green. Desktop E2E Checks 1–4 + 8 passing. Checks 5–7 UNVERIFIED on desktop but acceptable (mobile passed). Chrome QA of confidence labels pending S314. |
-| 145 | Condition Grading (S/A/B/C/D) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | AI + manual override — Needs Chrome QA |
-| 146 | Item Holds / Reservations | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | `/api/reservations` with expiry — Chrome ✅ S286 |
-| 147 | Hold Duration Configuration | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Per-sale configurable — Needs Chrome QA |
-| 24 | Holds-Only Item View (Batch Ops) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Grouped by buyer — Chrome ✅ S286 |
-| 148 | Sale Checklist | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Per-sale custom checklist — Needs Chrome QA |
-| 149 | Email Reminders to Shoppers | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | `/api/reminders` — Needs Chrome QA |
-| 150 | Push Notification Subscriptions | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | `/api/push` VAPID — Chrome ✅ S286 |
-| 152 | Organizer Digest Emails | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Weekly activity summaries — Needs Chrome QA |
-| 153 | Basic Organizer Profile | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | businessName, phone, bio, website. Save persists on reload — all fields including phone/bio/website confirmed. Chrome QA confirmed. |
-| 154 | Organizer Public Profile Page | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/organizers/[slug]` — Chrome ✅ S286 (slug 404 fixed by dev, push pending) |
-| 155 | Password Reset Flow | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Email-based password recovery — Chrome PASS S285 |
-| 156 | Refund Policy Configuration | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Per-organizer configurable refund window — Needs Chrome QA |
-| 157 | Pickup Scheduling | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Organizer slots + shopper booking — Chrome ✅ S286 |
-| 158 | Sale Waitlist | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Shopper join + organizer broadcast — Needs Chrome QA |
-| 159 | Flash Deals | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Time-limited price drops — Needs Chrome QA |
-| 160 | Reviews (Receive + View) | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Shopper → sale + organizer — Needs Chrome QA |
-| 161 | Contact Form | PUB | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | `/api/contact` — Chrome ✅ S286 |
-| 163 | Payout Transparency / Earnings Dashboard | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Item-level fee breakdown + PDF — Needs Chrome QA |
-| 11 | Organizer Referral (Fee Bypass) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | referralDiscountExpiry — Needs Chrome QA |
-| 164 | Tiers Backend Infrastructure | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | N/A | `/api/tiers` — getMyTier, syncTier — Needs Chrome QA |
-| 165 | A/B Testing Infrastructure | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | N/A | Internal optimization tool — Needs Chrome QA |
-| 166 | Invites | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Invite-to-sale / invite-to-platform — Chrome PASS S285 (admin invite flow works; no dedicated DB model, route-based) |
-| 72 | Dual-Role Account Schema | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | JWT roles[] array, auth middleware updated. S309: fixed 4 itemController endpoints using singular req.user.role check that broke admin+organizer dual-role users (getDraftItemsBySaleId + addItemPhoto + removeItemPhoto + reorderItemPhotos). Needs Chrome QA. |
-| 73 | Two-Channel Notification System | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | OPERATIONAL (organizer) + DISCOVERY (shopper) channels. Inbox tabs. Migration applied — Chrome ✅ S286 |
-| 74 | Role-Aware Registration Consent | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Opt-in checkboxes at signup. Attorney review of consent copy required before launch — Needs Chrome QA |
-| 75 | Tier Lapse State Logic | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | 8am warning + 11pm lapse cron. Dashboard banner. Suspends ORG features, retains SHO features — Needs Chrome QA |
-| 127 | POS Value Unlock Tiers | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Dual-gate (tx+revenue). 3 tiers at 5/20/50 tx. /api/organizer/pos-tiers + PosTierGates.tsx — Chrome ✅ S286 |
-| 131 | Share & Promote Templates | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | SharePromoteModal: 4 templates (social post, flyer, email invite, neighborhood post) — Chrome ✅ S289 verified: 8-tab modal, real data, copy works |
-| 76 | Skeleton Loaders | BOTH | FREE | N/A | N/A | ✅ | ✅ | ✅ | N/A | N/A | Ghost card layouts on item/sale grids. SkeletonCards component. Shipped S280. — Chrome ✅ S286 |
-| 77 | Sale Published Celebration | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | 📋 | N/A | 📋 | Full-screen confetti overlay on publish. Confetti.tsx + PublishCelebration.tsx. Shipped S280. — Needs Chrome QA |
-| 79 | Earnings Counter Animation | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | 📋 | N/A | N/A | AnimatedCounter.tsx — rolls up to value on dashboard load. Shipped S280. — Needs Chrome QA |
-| 80 | Purchase Confirmation Redesign | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | /shopper/checkout-success — item photo hero, seller, pickup, CTAs. Shipped S280. — Chrome ✅ S286 |
-| 81 | Empty State Audit + Copy Pass | BOTH | FREE | N/A | N/A | ✅ | ✅ | ✅ | N/A | N/A | EmptyState component + human copy across 8 pages (index, feed, hauls, messages, item-library, holds ×2, wishlists). Shipped S280. — Chrome ✅ S286 |
-| 132 | À La Carte Single-Sale Fee ($9.99) | ORG | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Sale.purchaseModel + alaCarte + alaCarteFeePaid. Stripe checkout. AlaCartePublishModal for SIMPLE tier — Chrome ✅ S288 |
-| 134 | Plan a Sale Dashboard Card | ORG | SIMPLE | N/A | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | "Coming Soon" card on organizer dashboard overview tab — Chrome ✅ S286 |
-| 60 | Premium Tier Bundle | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Tier landing page + comparison matrix + upgrade CTA. — Needs Chrome QA |
-| 168 | Seller Performance Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Per-sale analytics + insights — Chrome ✅ S286 |
-| 8 | Batch Operations Toolkit | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Bulk price/status/category/tag/photo — Chrome ✅ S286 |
-| 170 | CSV Listing Import | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Bulk upload item lists from CSV — Chrome ✅ S286 |
-| 171 | Payout PDF Export | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Financial reporting for tax/accounting — Needs Chrome QA |
-| 172 | Stripe Connect Setup | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | Payout bank account linking + verification — Chrome ✅ S288: settings page + Setup Stripe Connect button confirmed working. Checkout fee display P0 fixed S295 — buyer was seeing double fee (10%+10%). CheckoutModal.tsx corrected: regular items = listed price only, auction = +5% buyer premium. |
-| 18 | Post Performance Analytics | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | UTM tracking on social template downloads — Needs Chrome QA |
-| 13 | TEAMS Workspace | ORG | TEAMS | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Multi-user workspace, role management — Chrome 📋. Public URL loads (S292 404 fix verified) but page is placeholder shell — hardcoded copy, no join flow, no sales listed. Needs build-out. |
-| 68 | Command Center Dashboard | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Per-sale widget dashboard — Chrome PASS S285 |
-| 136 | QR Code Auto-Embedding in Exports | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | qrEmbedEnabled field, Cloudinary QR overlay via cloudinaryWatermark.ts, exportController wired, organizer toggle in edit-item. — Needs Chrome QA |
-| 46 | Treasure Typology Classifier | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | AI item classification; useTypology.ts, TypologyBadge.tsx — Needs Chrome QA |
-| 27 | Social Templates (3 tones × 2 platforms) | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Instagram/Facebook copy — Needs Chrome QA |
-| 27 | Cloudinary Watermark on Photo Exports | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Brand protection — Needs Chrome QA |
-| 27 | CSV/JSON Listing Exports (Listing Factory) | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Multi-platform sharing — Needs Chrome QA |
-| 33 | Share Card Factory (OG Tags) | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Branded social previews, dynamic OG images — Needs Chrome QA |
-| 34 | Hype Meter | ORG | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Real-time social proof — Needs Chrome QA |
-| 63 | Dark Mode + Accessibility | BOTH | FREE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Tailwind dark variants, WCAG 2.1 AA, high-contrast outdoor mode — Needs Chrome QA |
-| 67 | Social Proof Notifications | BOTH | SIMPLE | N/A | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Engagement aggregation (favorites, bids, holds) — Chrome ✅ S286 |
-| 6 | Virtual Queue / Line Management | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Start/call next/join line + SMS; free for all — loads only, full flow untested per S289 |
-| 37 | Sale Reminders (Calendar + Remind Me) | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | ⚠️ | 📋 | 📋 | Sale alerts for shoppers — iCal ✅ but push "Remind Me" button NOT BUILT — feature gap |
-| 28 | Neighborhood Heatmap | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Density-based Leaflet overlay — Chrome ✅ S286 |
-| 39 | Photo Op Stations | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | PhotoOpMarker on map, rate-limited — Needs Chrome QA |
-| 40 | Sale Hubs | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Hub pages + membership UI — Needs Chrome QA |
-| 16 | Verified Organizer Badge | ORG | PRO | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | VerifiedBadge on sales detail + SaleCard — Needs Chrome QA |
-| 175 | Coupons (PERCENT/FIXED) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Post-purchase coupon issuance + validation. Rate-limited — Needs Chrome QA |
-| 91 | Auto-Markdown (Smart Clearance) | ORG | PRO | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | markdownEnabled/markdownFloor on Sale, markdownApplied/priceBeforeMarkdown on Item, markdownCron (every 5min), saleController config endpoints, edit-sale UI toggle + floor input. — Chrome ✅ S286 |
-| 178 | Item Detail Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | `/items/[id]` — Chrome PASS S285 |
-| 180 | Category Browsing | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/categories` index + `/categories/[slug]` — Chrome ✅ S286 |
-| 181 | Tag Browsing | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/tags/[slug]` ISR pages — Chrome ✅ S286 |
-| 183 | Sale Calendar (Upcoming) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/calendar` — Chrome ✅ S286 |
-| 184 | iCal / Calendar Export | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | Download .ics file for sales + items — Chrome ✅ S288 |
-| 185 | QR Code Signs (Yard + Item Labels) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Printable QR codes linking to sales/items — Needs Chrome QA |
-| 186 | QR Scan Analytics | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Tracking + insights on QR scans — Needs Chrome QA |
-| 187 | City Pages | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | /cities fix dispatched S288 but not Chrome-verified; /city/[slug] — Needs Chrome QA |
-| 92 | City Weekend Landing Pages (Metro Explorer) | SHO | FREE | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/city/[city].tsx` ISR pages with Schema.org JSON-LD. Grand Rapids pre-generated. Confirmed live in code (S280). — Chrome ✅ S286 |
-| 78 | Inspiration Page — Item Gallery | SHO | FREE | N/A | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/inspiration` masonry grid of items from active/upcoming sales. Confirmed live in code (S280). — Chrome ✅ S286 |
-| 191 | Route Planning (Multi-Sale) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | `/api/routes` OSRM-based — Needs Chrome QA |
-| 192 | Price History Tracking | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | `/api/price-history` price trends — Needs Chrome QA |
-| 52 | Estate Sale Encyclopedia | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Wiki-style knowledge base; EncyclopediaCard.tsx — Needs Chrome QA |
-| 70 | Live Sale Feed | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Real-time sale activity feed. Redis adapter + JWT socket auth + LiveFeedTicker on sale detail page. — Needs Chrome QA |
-| 193 | Wishlists | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Full CRUD, distinct from favorites — Chrome PASS S285 |
-| 194 | Saved Searches with notifyOnNew | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Save This Search button renders on search, wired to POST /saved-searches + toast. Chrome ✅ S290 verified: POST /saved-searches works + toast |
-| 195 | Shopper ↔ Organizer Messaging | BOTH | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Threaded conversations — Chrome PASS S285 (P0-A blank thread reclassified as poll lag; polling reduced 15s→5s, RESOLVED) |
-| 196 | Buying Pools | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Group buying on items — Needs Chrome QA |
-| 197 | Bounties (Item Requests) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | Shopper want-ads — Chrome ✅ S289 verified: loads, Create Bounty works |
-| 198 | Reviews (Submit Sale / Organizer) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Via `/api/reviews` — Needs Chrome QA |
-| 199 | User Profile Page | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/profile` — Chrome ✅ S286 |
-| 200 | Shopper Public Profiles | SHO | FREE | 📋 | 📋 | 📋 | 📋 | 📋 | 📋 | 📋 | `/shoppers/[slug]` collection showcase — never tested per audit |
-| 201 | Favorites | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Save items for later — S285 PARTIAL: item-level favorites tested, seller-follow tab deferred post-beta. Needs full Chrome re-verification. |
-| 202 | Notification Center | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/notifications` page — Chrome ✅ S286 |
-| 203 | Email + SMS Validation (Twilio) | BOTH | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Phone number verification via SMS — Needs Chrome QA |
-| 204 | Unsubscribe / Preferences | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/unsubscribe` + `/api/unsubscribe` — Chrome ✅ S286 |
-| 36 | Weekly Treasure Digest (Email) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | MailerLite Sunday 6pm — Needs Chrome QA |
-| 205 | Contact Organizer | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Via messaging system — Needs Chrome QA |
-| 206 | Condition Guide | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/condition-guide` educational page — Chrome ✅ S288 |
-| 207 | FAQ / Guide / Terms / Privacy | PUB | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Legal + help pages — Chrome ✅ S286 |
-| 208 | Pickup Booking (Schedule Pickup) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Shopper-side scheduling — Needs Chrome QA |
-| 84 | Approach Notes (Arrival Assistant) | SHO | SIMPLE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | PushNotificationLog model, arrivalController (get/update notes + send-approach-notification with 24h dedup), useArrivalAssistant hook, sale detail page section, edit-sale textarea + notify button. — Chrome ✅ S289 verified: section visible on LIVE sale edit |
-| 47 | UGC Photo Tags | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Shopper-submitted item photos + moderation — Needs Chrome QA |
-| 7 | Shopper Referral Rewards | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Referral tracking + rewards distribution — Needs Chrome QA |
-| 209 | Points System | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | 1 pt/visit/day, tier-based — Needs Chrome QA |
-| 210 | Streaks (Visit / Save / Purchase) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Daily streak tracking — Needs Chrome QA |
-| 211 | Treasure Hunt (Daily) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Daily clue + category matching — Needs Chrome QA |
-| 212 | Leaderboard (Shoppers + Organizers) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | Public rankings — Chrome ✅ S288 |
-| 213 | **Hunt Pass ($4.99/30 days)** | SHO | **PAID_ADDON** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | 📋 | **2× streak multiplier, recurring Stripe billing** — Chrome ✅ S288 |
-| 61 | Near-Miss Nudges | SHO | FREE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Variable-ratio casino psychology; 4 types — Needs Chrome QA |
-| 23 | Unsubscribe-to-Snooze (MailerLite) | SHO | SIMPLE | N/A | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Intercept unsubscribe → 30-day snooze via MailerLite custom fields — Needs Chrome QA |
-| 59 | Streak Rewards | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ⚠️ | 📋 | Visit/save/purchase streaks wired to Layout — widget on /shopper/dashboard but NOT on /shopper/loyalty — P2 gap |
-| 58 | Achievement Badges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | `/shopper/achievements` page — Chrome ✅ S286 |
-| 57 | Shiny / Rare Item Badges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | RarityBadge wired to item cards. Seed re-run S290 (rarity was null on Railway). Needs Chrome re-verification. |
-| 48 | Treasure Trail Route Builder | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | ✅ | 📋 | Trail pages + share token, multi-sale routing — Chrome ✅ S288 |
-| 55 | Seasonal Discovery Challenges | SHO | FREE | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | Rotating challenges by season/category — Needs Chrome QA |
-| 122 | Explorer's Guild Phase 1 (Rebrand + Copy) | SHO | FREE | N/A | N/A | ✅ | ✅ | ✅ | 📋 | ✅ | Collector→Explorer labels, collect→explore language throughout. Rank names updated. "My Loot Legend" heading confirmed on /shopper/explorer-passport. Chrome QA confirmed. |
-| 123 | Explorer's Guild Phase 2 (XP Economy + Loot Legend) | SHO | FREE/PAID_ADDON | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | User.guildXp + User.explorerRank + RarityBoost table. XP sinks (coupon-gen, rarity boost, Hunt Pass discount). Loot Legend portfolio. Full schema + endpoints — Chrome ✅ S286 |
-| 85 | Treasure Hunt QR (In-Sale Scavenger Hunt) | SHO | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Organizer: toggle + clues + XP bonus in edit-sale ✅. Shopper: QR modal renders 300×300, Download/Copy/XP message ✅. /shopper/hunt-pass page created S295. |
-| 133 | Hunt Pass Subscription Redesign | SHO | PAID_ADDON | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | LEGENDARY 6h early access gate in itemController, 1.5x XP multiplier (applyHuntPassMultiplier in xpService), getLootLegend() + getCollectorLeague() endpoints + routes, loot-legend.tsx + league.tsx pages, loyalty.tsx updated. — Chrome ✅ S286 |
-| 214 | AI Sale Planner Chat | PUB | FREE | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | 📋 | `/plan` page, public rate-limited acquisition tool — Chrome ✅ S288 |
-| 215 | AI Tag Suggestions (Haiku) | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | Part of Rapidfire, all tiers — Needs Chrome QA |
-| 216 | AI Condition Grade Suggestions | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | S/A/B/C/D from photo — Needs Chrome QA |
-| 217 | AI SEO Description Optimization | ORG | SIMPLE | ✅ | ✅ | ✅ | ✅ | 📋 | N/A | 📋 | High-intent search term bias — Needs Chrome QA |
-| 21 | User Impact Scoring in Sentry | BOTH | FREE | N/A | ✅ | ✅ | ✅ | 📋 | N/A | N/A | Error prioritization by tier/points/hunt-pass status — Needs Chrome QA |
-| 128 | Automated Support Stack (5-Layer) | PLATFORM | ALL | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | 📋 | /support page, fuse.js FAQ (L1), Claude API chat PRO/TEAMS (L2), community forum TEAMS (L3), smart escalation (L4). Zero human support for L1-L3 — Chrome ✅ S286 |
-| 218 | Shopper Trades | SHO | FREE | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | 📋 | `/shopper/trades` page exists. Feature: trade/swap system for shoppers. UI ✅, Chrome 📋, Nav 📋 — Needs Chrome QA |
-| 219 | Shopper Achievements | SHO | FREE | ✅ | ✅ | ✅ | 📋 | 📋 | 📋 | 📋 | `/shopper/achievements` page exists. Feature: achievement badges for shoppers. UI ✅, Chrome 📋, Nav 📋 — Needs Chrome QA |
-
-
-
-| # | Feature | Role | Tier | DB | API | UI | QA | Chrome | Nav | Human | Notes |
-|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
-| 124 | Rarity Boost XP Sink | SHO | FREE/PAID_ADDON | — | ✅ | — | — | N/A | N/A | — | Frontend UI for POST /api/xp/sink/rarity-boost. Backend endpoint confirmed live. Frontend shows 'Coming Soon' placeholder only — full UI not built. |
-| 121 | Tiered Photo Storage Migration (Cloudinary → B2/Bunny) | PLATFORM | ALL | ✅ | ✅ | — | — | N/A | N/A | N/A | Implements 3-tier strategy: Active (0–90d on Cloudinary), Warm (90d–2y on B2 + Bunny CDN), Cold (2y+ metadata-only). Saves ~70% storage cost; enables B2B analytics. See photo-storage-strategy-2026-03-19.md |
-| 104 | AI Cost Ceiling + Ollama Fallback | PLATFORM | ALL | N/A | ✅ | — | ✅ | N/A | N/A | N/A | Auto-switch to Ollama if Claude API cost exceeds monthly threshold. See total-cost-of-ownership-2026-03-19.md §Section 5 |
-| 105 | Cloudinary Bandwidth Monitoring + Alerts | PLATFORM | ALL | N/A | ✅ | — | ✅ | N/A | N/A | N/A | cloudinaryBandwidthTracker.ts confirmed — tracks daily serves, alerts at 80% of 25GB free tier. (S280 verified) |
-| 119 | Aggregate Chargeback Monitoring (Stripe Health) | PLATFORM | ALL | ✅ | ✅ | — | ✅ | N/A | N/A | N/A | Tracks monthly chargeback rate; triggers pre-auth + payment hold if >0.8%, account escalation if >1%. See anti-abuse-system-design-2026-03-19.md §Novel Vector D |
-| 220 | Cloudinary URL Utility — Centralized transform helper | PLATFORM | SIMPLE | ✅ | — | — | — | N/A | N/A | N/A | Consolidate scattered Cloudinary URL generation (imageUtils.ts, uploadController.ts, individual components) into a single shared utility. Prevents divergence-driven bugs (Workbox caching S312, missing public_id S317, etc.). Medium effort — touches frontend, backend, shared. S317. |
+|  53 | -— | -— | -— | NA | -— | — | -— | NA | NA | -— | Legal review required — ToS risk with EstateSales.NET/Facebook scraping. ADR written. | 
 
 ## Deferred & Long-Term Hold
 
@@ -533,7 +479,6 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 | Marketplace Watermark Variants | ORG | SIMPLE | Too micro-tactical. Merge into Nextdoor export template work. |
 
 ### Historical Rejections
-
 | Idea | Role | Tier | Reason |
 |------|------|------|--------|
 | Pokéstop-Style Sale Markers | SHO | FREE | Gamification mismatch — estate sale shoppers skew older, Pokémon framing alienates core demo. |
@@ -545,10 +490,7 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 | Mood Boards | SHO | FREE | Nice-to-have but no clear retention or revenue driver. |
 | AR Item Overlay | SHO | TEAMS | Hardware/browser support still spotty. High build cost for novelty feature. |
 
----
-
 ## Design Decisions (Locked — Session 155)
-
 - **Holds expiry:** 48 hours default, configurable per-sale in organizer settings. Nightly cron cleanup.
 - **Health score:** Hybrid gate — block publishing below 40% (no photo or title), nudge 40–70%, free above 70%. Progress bar UX, never punitive.
 - **Tag vocabulary:** Curated list of 30–50 core tags + 1 free-form custom slot per item. AI suggests from curated list. Quarterly review.
@@ -558,15 +500,4 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 - **Holds grouping:** By-item in schema, grouped-by-buyer in display. No junction table.
 - **Reputation scoring:** Two separate scores — organizer reputation (sale quality, reliability) and shopper reputation (buyer reliability, pickup behavior). Schema must accommodate both; shopper score can be deferred but field must exist from day one. Single-score merge not permitted after schema is locked.
 - **Tier lapse state:** Lapsing organizer subscription suspends organizer-only features. Shopper features retained. Full account freeze is not the default behavior. Re-activation on billing resume restores organizer features immediately.
-- **Notification defaults:** Both notification channels default to opt-in. Shopper discovery alerts and organizer operational alerts are separate consent items at registration. No "all on" default for either channel.
-Roadmap (bottom) — 7 locked UX/product decisions from S155 (holds expiry, health score, tag vocabulary, social templates, heatmap density, background removal, holds grouping)
-claude_docs/architecture/ — 13 ADR files covering feature-specific technical specs (#13/#60 Teams Bundle, #17/#19 Bid Bot/Passkey, #30/#46/#69 AI/Offline, #40/#44/#48 Hubs/Trail, #52/#53/#54 Encyclopedia/Aggregator/Appraisal, #65 Tiers, #68 Command Center)
-claude_docs/feature-decisions/ — 7 files covering architecture choices (camera workflow, cash fee collection, push coordinator, manager subagent)
-decisions-log.md — governance/process decisions (subagent-first gate, file delivery rule, roadmap schema)
-FindaSale\claude_docs\feature-notes.md - design decisions based on emotion and animations
-
----
-
-## Maintenance
-
-This document is the source of truth for product roadmap. Updated at every session wrap when a feature ships, beta status changes, or a deferred item is revisited. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
+- **Notification defaults:** Both notification channels default to opt-in. Shopper discovery alerts and organizer operational alerts are separate consent items at registration. No "all on" default for either channel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 

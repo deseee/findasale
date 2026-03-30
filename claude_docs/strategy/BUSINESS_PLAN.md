@@ -463,7 +463,7 @@ Once an organizer adopts our photo-to-listing workflow, they are invested in:
 - **Auctioneers:** Live and online auction houses
 - **Flea market operators & vendors:** Multi-booth and single-vendor setups
 - **Nonprofits & charities:** Rummage sales, charity liquidations
-- **Corporate liquidators:** Business asset disposal
+- **Corporate liquidators:** Business asset disposal, universites, governmental organizations that do auctions.
 
 *Why they choose FindA.Sale:*
 1. **Time savings:** 70% reduction in listing creation time (photo upload vs. manual entry)

@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S339 complete. Push block provided — 2 code files + 2 doc files.
+No active work. S340 complete.
 
 **S339 COMPLETE (2026-03-29):** Hold notification system + 5 bug fixes + product direction. (1) **Hold notification system shipped:** Shopper gets in-app Notification + Resend email on approve/cancel/extend/release via `updateHold` and `batchUpdateHolds`. New `sendHoldStatusToShopper()` in saleAlertEmailService.ts covers 4 action types (confirmed/cancelled/extended/released) with tailored copy and CTA. (2) **Organizer in-app notification on hold placed:** `placeHold` now creates Notification record for organizer (was email-only). (3) **Bug fix — "Item already has active hold" after cancel:** `itemId @unique` on ItemReservation blocked new holds when old CANCELLED/EXPIRED record existed. Fix: `deleteMany` stale records inside placeHold transaction before creating new reservation. (4) **Bug fix — batch extend used 48h hardcoded:** Changed to rank-based `getHoldDurationMinutes()` using shopper's `explorerRank`. Added `explorerRank` to user select in batch query. (5) **Bug fix — markSold notification copy:** Removed incorrect "Thank you for your purchase!" — replaced with neutral "marked as sold by the organizer." (6) **Toast duration ✅ CONFIRMED:** Patrick tested manually — toast fires for full 10 seconds. Removed from unverified queue. (7) **Product direction logged:** Patrick wants markSold to evolve into POS cart integration (for POS organizers) or Stripe invoice/checkout link (for non-POS organizers). Logged for architect spec in future session. Files: reservationController.ts, saleAlertEmailService.ts.
 
@@ -33,7 +33,7 @@ No active work. S339 complete. Push block provided — 2 code files + 2 doc file
 | #143 PreviewModal onError | Code fix pushed (sha: ffa4a83). 📷 fallback on Cloudinary 503 in place. | Defensive fix only — can't trigger 503 in prod. ACCEPTABLE UNVERIFIED. | S312 |
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar. | S314 |
 | Single-item publish fix | S326 code fix deployed. S327 confirmed API call fires but no DRAFT items exist to test the button. Manual Entry creates AVAILABLE items, skipping draft pipeline. | Camera-capture an item → go to Review & Publish → click Publish on single item → confirm status changes + toast. | S326/S327 |
-| Hold Button #13 — notification re-test | S339 notification system shipped. Patrick tested: approve ✅, cancel ✅ (but re-hold blocked — fixed), batch release ✅, batch extend ✅ (48h fixed to rank-based). markSold copy fixed. | Push S339 code → re-test cancel→re-hold flow, verify rank-based extend duration, verify organizer gets in-app notification on hold placed. | S339 |
+| Hold Button #13 — notification re-test | ✅ VERIFIED S340 via Railway API. Organizer bell notification confirmed (user6 inbox: "A shopper placed a hold on 'Vintage Record Player #7' from Family Collection Sale 16"). Cancel→re-hold confirmed clean (no P2002). Rank-based extend confirmed (INITIATE = 30min). | COMPLETE — remove from queue next session. | S339/S340 |
 | Mark Sold → POS/Invoice evolution | Patrick wants markSold to become POS cart item (POS organizers) or Stripe checkout link (non-POS organizers). | Architect spec needed — touches POS, Stripe, holds, notifications, checkout flow. Future session. | S339 |
 
 **S326 COMPLETE (2026-03-28):** 3 bugs fixed + 1 test item cleanup. (1) **P1 Buyer Preview placeholder — ROOT CAUSE FIXED:** `buildCloudinaryUrl()` in review.tsx was replacing `:` with `_` in aspect ratio transforms (`ar_4_3` → Cloudinary rejects). Removed the `.replace(':', '_')` so it sends correct `ar_4:3`. Chrome-verified: Buyer Preview grid now shows real Cloudinary photos (ss_7201mwej2, ss_6354i4qpv). (2) **Face-detection blob URL fix (secondary):** `handleFaceUploadAnyway` in [saleId].tsx was storing blob URLs instead of Cloudinary URLs returned by API. Now stores `res.data.photoUrl`. (3) **P1 Single-item Publish button — FIXED:** `handlePublishItem` was sending `draftStatus` via generic PUT `/items/:id`, but backend `updateItem` didn't include `draftStatus` in destructured fields — silently dropped. Fix: frontend now uses dedicated `POST /items/:itemId/publish` endpoint for publishing, generic PUT for unpublishing (with `draftStatus` added to backend's accepted fields). Also relaxed publish gate to allow DRAFT + PENDING_REVIEW items (was PENDING_REVIEW-only). NEEDS CHROME VERIFY after deploy. (4) **P2 Nav search — already working:** S322/S323 fixed this. Desktop has no nav search (mobile-only) — logged as P3 gap. (5) **Test item cleanup:** Deleted 2 of 3 test lighters per Patrick, kept 1. Sale now has 14 items. Files: review.tsx, [saleId].tsx, itemController.ts. Pushblock provided.
@@ -44,25 +44,27 @@ No active work. S339 complete. Push block provided — 2 code files + 2 doc file
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S340)
+## Next Session (S341)
 
-### Patrick Action Required First
-Run S339 push block (see patrick-dashboard.md) — 2 code files + 2 doc files.
+### S341 Priority 1: Mark Sold → POS/Invoice architect spec
+Patrick wants markSold to evolve: POS organizers get cart integration, non-POS organizers get Stripe checkout link sent to shopper. Dispatch findasale-architect for spec. (Confirmed Patrick intention from S339, awaiting green light.)
 
-### S340 Priority 1: Verify S339 fixes after deploy
-Smoke test on live site: (1) Shopper places hold → organizer gets in-app notification (bell icon). (2) Organizer cancels hold → shopper re-holds same item (was blocked, now fixed). (3) Organizer batch-extends → verify duration is rank-based not 48h.
+### S341 Priority 2: P1 audit items still open
+- **P1 — Legacy "points" language:** Three surfaces still say "points" instead of "Guild XP" (Hunt Pass banner, Leaderboard, Loyalty page). Quick dev pass.
+- **P2 — Messages dark mode contrast:** "No messages yet" text nearly invisible in dark mode.
+- **P3 — D-001 drift:** Placeholder copy fields default to "Estate Sale" examples on onboarding/create-sale.
 
-### S340 Priority 2: Mark Sold → POS/Invoice architect spec
-Patrick wants markSold to evolve: POS organizers get cart integration, non-POS organizers get Stripe checkout link sent to shopper. Dispatch findasale-architect for spec.
-
-### S340 Priority 3: Remaining QA Queue
+### S341 Priority 3: Remaining QA Queue
 - Bug 4: Buy Now success card persist (no auto-dismiss) — needs Stripe test mode
 - Bug 5: Reviews aggregate count — needs seeded reviews in DB
 - Decision #8: Share button native share sheet — needs mobile viewport
 
-### S340 Notes
-- user12@example.com (Leo Thomas) confirmed pure shopper — use for holds/shopper QA
-- Toast duration ✅ confirmed 10s by Patrick — off the queue
+### S341 Notes
+- OnboardingWizard P0 fixes deployed (commit 1d633ce) — verify live on first fresh organizer onboard
+- Hold notification system fully verified via Railway API — no further hold smoke tests needed
+- user12@example.com (Leo Thomas) = reliable pure shopper test account
+
+**S340 (2026-03-30):** S339 verification + onboarding P0 fix. (1) **S339 hold notification system — ✅ FULLY VERIFIED via Railway API:** Authenticated as user6 (Frank Davis / Priority Estate Sales) directly against Railway backend. Confirmed organizer inbox has unread `hold_update` notification: "A shopper placed a hold on 'Vintage Record Player #7' from Family Collection Sale 16." Previous QA agent had been checking wrong account (user1 Alice Johnson instead of user6). No P0 existed — system was working the whole time. (2) **Cancel→re-hold (P2002 fix) — ✅ VERIFIED:** Cancelled hold via API, immediately re-placed on same item. New hold created cleanly, no unique constraint error. (3) **Rank-based batch extend — ✅ VERIFIED:** Batch-extended 2 holds via API. Both now expire in ~30 min. INITIATE rank = 30 min per `getHoldDurationMinutes()`. Correct, not hardcoded 48h. (4) **OnboardingWizard.tsx P0 fix — PUSHED (commit 1d633ce):** Vercel deploying. Fixes: (a) Step 1 stub text replaced with brand-voice copy "Check your email for a verification link. This helps us send you sale alerts and payment confirmations to the right address." (b) Close button trap fixed: `z-10` on sticky header, `e.preventDefault()`/`e.stopPropagation()` on click handler, `type="button"`, `cursor-pointer pointer-events-auto` classes.
 
 **S338 (2026-03-29):** Bare "0" fix + HoldTimer verified + file recovery. (1) **Bare "0" avgRating — FIXED & VERIFIED:** `sales/[id].tsx` line 426: `{sale.organizer.avgRating && (` → `{(sale.organizer.avgRating ?? 0) > 0 && (` — React falsy `{0 && ...}` rendered literal "0" in DOM. TS fix at line 429: `.toFixed(1)` → `(avgRating ?? 0).toFixed(1)` (TS doesn't narrow inside the guard). Vercel green. (2) **OrganizerReputation.tsx salesCount guard** — `{reputation.salesCount > 0 && ...}` — "New Organizer" badge area now clean (sha: 213169d). (3) **HoldButton roles array fix** — organizer gate updated from `user.role === 'ORGANIZER'` to `user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'` — handles dual-role users who have `role: 'USER'` but `roles: ['ORGANIZER', 'USER']` (sha: 462fff1). (4) **HoldTimer countdown — ✅ VERIFIED:** user12@example.com (Leo Thomas, shopper) placed hold on "Vintage Record Player #7" via UI. HoldTimer showed "Your hold expires in 00:29:50" confirmed in Chrome. user12 confirmed as reliable shopper test account. (5) **File recovery:** MCP push from earlier in session had truncated `sales/[id].tsx` at 1142 lines (ended mid-line). Recovered full 1153-line version from git commit `4f63036` via `git show`, applied fixes with sed, resolved merge conflict, repushed. Vercel green confirmed. (6) **Toast duration ⚠️ STILL UNVERIFIED** — kicked to S339. Files: `pages/sales/[id].tsx`, `components/OrganizerReputation.tsx`, `components/HoldButton.tsx`.
 

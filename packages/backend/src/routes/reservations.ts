@@ -21,11 +21,11 @@ router.get('/item/:itemId', getItemReservation);               // unauthenticate
 // All other reservation routes require auth
 router.use(authenticate);
 
-// Organizer-specific routes (before generic :id routes)
+// Organizer-specific routes (more specific routes BEFORE less specific — critical for Express routing)
 router.get('/organizer/settings', getHoldSettings);            // Feature #121: get hold settings
 router.patch('/organizer/settings', updateHoldSettings);       // Feature #121: update hold settings
-router.get('/organizer', getOrganizerHolds);                   // #24: organizer holds with filters
 router.get('/organizer/count', getOrganizerHoldCount);         // #24: lightweight count for dashboard badge
+router.get('/organizer', getOrganizerHolds);                   // #24: organizer holds with filters
 router.post('/batch', batchUpdateHolds);                       // #24: batch release/extend/markSold
 
 // Check-in endpoint (Feature #121)

@@ -138,6 +138,9 @@ model User {
   affiliatePayoutsReceived AffiliatePayout[] @relation("AffiliatePayoutsReceived")
   affiliateReferralsGiven AffiliateReferral[] @relation("AffiliateReferrals_Referrer")
   affiliateReferralsReceived AffiliateReferral[] @relation("AffiliateReferrals_Referred")
+  // Hold-to-Pay feature: invoices (shopper and organizer sides)
+  shopperInvoices HoldInvoice[] @relation("ShopperInvoices")
+  organizerInvoices HoldInvoice[] @relation("OrganizerInvoices")
 
   // Phase 2a: Explorer's Guild — XP Economy
   guildXp         Int           @default(0)         // Phase 2a: Cumulative XP, never resets, used for rank calculation
@@ -382,6 +385,8 @@ model Sale {
   // Feature #121: Hold system — check-ins and hold limits
   checkins         SaleCheckin[]
   holdsEnabled     Boolean   @default(true)   // Feature #121: organizer can disable holds per-sale
+  // Hold-to-Pay feature: invoices for held items
+  holdInvoices     HoldInvoice[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -400,7 +405,7 @@ model Item {
   bidIncrement     Float?    @default(1)
   auctionEndTime   DateTime?
   auctionClosed    Boolean   @default(false)
-  status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, AUCTION_ENDED
+  status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED
   category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
   condition        String?   // mint, excellent, good, fair, poor
   conditionGrade   String?   // S | A | B | C | D — null for items not yet graded
@@ -770,8 +775,40 @@ model ItemReservation {
   fraudScore     Float  @default(0.0)      // Fraud detection score (0.0-1.0)
   fraudFlags     String[]  @default([])    // Fraud red flags: HIGH_VELOCITY, SUSPICIOUS_PATTERN, etc.
   enRoute        Boolean   @default(false) // Feature #121: shopper was outside geofence but within 10mi (en route grace)
+  invoiceId      String?   @unique // FK to HoldInvoice (optional, set when invoice created)
+  invoice        HoldInvoice? // relation
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Hold-to-Pay feature: Payment invoice for held items
+model HoldInvoice {
+  id                    String    @id @default(cuid())
+  reservationId         String    @unique
+  reservation           ItemReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  shopperUserId         String
+  shopper               User      @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade)
+  organizerUserId       String
+  organizer             User      @relation("OrganizerInvoices", fields: [organizerUserId], references: [id], onDelete: Cascade)
+  saleId                String
+  sale                  Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  stripeSessionId       String?   @unique  // Stripe Checkout session ID
+  stripePaymentIntentId String?   @unique  // Stripe payment intent ID
+  status                InvoiceStatus @default(PENDING)
+  totalAmount           Int       // in cents
+  platformFeeAmount     Int       // in cents (deducted from organizer payout)
+  stripeFeeAmount       Int?      // in cents (estimated Stripe processing fee)
+  itemIds               String[]  // all item IDs included in this invoice
+  expiresAt             DateTime  // = ItemReservation.expiresAt at time of invoice creation
+  paidAt                DateTime?
+  releasedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([saleId, status])
+  @@index([shopperUserId])
+  @@index([organizerUserId])
+  @@index([expiresAt])
 }
 
 // Feature #121: Sale Check-in — per-shopper GPS-based validation for hold rank enforcement
@@ -808,6 +845,8 @@ model OrganizerHoldSettings {
   maxHoldsPerSession    Int      @default(10)     // max total holds per shopper per visit
   fraudCheckEnabled     Boolean  @default(true)   // run synchronous fraud detector
   autoSuspendThreshold  Float    @default(0.85)   // auto-suspend holds > this fraud score
+  // Hold-to-Pay feature settings
+  flashLiquidationEnabled Boolean @default(false) // organizer opt-in for flash liquidation after hold expires without payment
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
@@ -1355,6 +1394,15 @@ enum ReturnStatus {
 }
 
 // Feature #57: Shiny/Rare Item Badges
+// Hold-to-Pay feature: invoice status lifecycle
+enum InvoiceStatus {
+  PENDING        // invoice created, awaiting payment
+  PAID           // payment captured
+  EXPIRED        // hold timer ran out before payment
+  CANCELLED      // organizer cancelled
+  REFUNDED       // post-payment refund issued
+}
+
 enum ItemRarity {
   COMMON
   UNCOMMON

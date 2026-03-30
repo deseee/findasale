@@ -432,7 +432,7 @@ Before ending any session:
 | Patrick's shorthand | `operations/patrick-language-map.md` |
 | Model routing | `operations/model-routing.md` |
 | QA accountability | `operations/orchestrator-qa-accountability.md` |
-| Wrap protocol | `WRAP_PROTOCOL_QUICK_REFERENCE.md` |
+| Wrap protocol | `operations/WRAP_PROTOCOL_QUICK_REFERENCE.md` |
 | Tech stack | `STACK.md` |
 | Security | `SECURITY.md` |
 | Recovery | `RECOVERY.md` |
