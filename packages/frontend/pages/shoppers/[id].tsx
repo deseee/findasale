@@ -13,19 +13,38 @@ interface Badge {
   iconUrl?: string;
 }
 
+interface Purchase {
+  id: string;
+  createdAt: string;
+  item: {
+    id: string;
+    title: string;
+    photoUrls: string[];
+    estimatedValue: number | null;
+  };
+  sale: {
+    id: string;
+    title: string;
+  };
+}
+
 interface ShopperProfile {
   id: string;
   name: string;
   createdAt: string;
   role: string;
   streakPoints: number;
-  reputationScore: number;
+  reputationScore?: number;
   totalPurchases: number;
   totalFavorites: number;
   totalWishlists: number;
   totalReviews: number;
   streakDays: number;
   badges: Badge[];
+  profileSlug?: string;
+  purchasesVisible: boolean;
+  collectorTitle?: string;
+  purchases?: Purchase[];
 }
 
 const ShopperProfilePage = () => {
@@ -79,6 +98,11 @@ const ShopperProfilePage = () => {
           <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
               <h1 className="text-4xl font-bold text-warm-900 mb-2">{profile.name}</h1>
+              {profile.collectorTitle && (
+                <p className="text-amber-600 font-medium text-sm mb-2 inline-block bg-amber-50 px-3 py-1 rounded-full">
+                  {profile.collectorTitle}
+                </p>
+              )}
               <p className="text-warm-600 text-sm">Member since {memberSince}</p>
             </div>
             <div className="text-right">
@@ -108,19 +132,68 @@ const ShopperProfilePage = () => {
           </div>
 
           {/* Reputation score */}
-          <div className="mt-8 pt-6 border-t border-warm-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-warm-600">Reputation Score</p>
-                <p className="text-3xl font-bold text-warm-900">{profile.reputationScore}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-warm-600">Total Reviews Left</p>
-                <p className="text-3xl font-bold text-amber-600">{profile.totalReviews}</p>
+          {profile.reputationScore !== undefined && (
+            <div className="mt-8 pt-6 border-t border-warm-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-warm-600">Reputation Score</p>
+                  <p className="text-3xl font-bold text-warm-900">{profile.reputationScore}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-warm-600">Total Reviews Left</p>
+                  <p className="text-3xl font-bold text-amber-600">{profile.totalReviews}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
+
+        {/* Recent Purchases Section */}
+        {!profile.purchasesVisible ? (
+          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
+            <p className="text-warm-600 text-center italic">
+              This shopper prefers to keep their purchase history private.
+            </p>
+          </div>
+        ) : profile.purchases && profile.purchases.length > 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-warm-900 mb-6">Recent Finds</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {profile.purchases.map((purchase) => (
+                <Link
+                  key={purchase.id}
+                  href={`/items/${purchase.item.id}`}
+                  className="group block bg-warm-50 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                >
+                  <div className="relative aspect-square overflow-hidden bg-gray-200">
+                    {purchase.item.photoUrls && purchase.item.photoUrls.length > 0 ? (
+                      <img
+                        src={purchase.item.photoUrls[0]}
+                        alt={purchase.item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-warm-200 text-warm-600">
+                        No Image
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <h3 className="font-semibold text-warm-900 text-sm line-clamp-2 group-hover:text-amber-600 transition-colors">
+                      {purchase.item.title}
+                    </h3>
+                    <p className="text-xs text-warm-600 mt-1">{purchase.sale.title}</p>
+                    {purchase.item.estimatedValue && (
+                      <p className="text-sm font-semibold text-amber-600 mt-2">
+                        ${purchase.item.estimatedValue.toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* Info section */}
         <div className="bg-white rounded-lg shadow-md p-6">

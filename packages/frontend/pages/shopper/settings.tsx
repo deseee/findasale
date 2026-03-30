@@ -20,6 +20,19 @@ const SALE_CATEGORIES = [
   'antiques', 'jewelry', 'books', 'tools', 'electronics', 'clothing', 'home', 'other'
 ];
 
+const COLLECTOR_TITLES = [
+  'Furniture Curator',
+  'Vintage Hunter',
+  'Antique Aficionado',
+  'Book Collector',
+  'Jewelry Hunter',
+  'Mid-Century Modernist',
+  'Kitchen Collector',
+  'Art Enthusiast',
+  'Tool Time',
+  'General Picker'
+];
+
 function SettingsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
@@ -28,6 +41,9 @@ function SettingsPage() {
   const [lowBandwidthEnabled, setLowBandwidthEnabled] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [profileSlug, setProfileSlug] = useState<string>('');
+  const [collectorTitle, setCollectorTitle] = useState<string>('');
+  const [purchasesVisible, setPurchasesVisible] = useState<boolean>(true);
 
   useEffect(() => {
     setMounted(true);
@@ -39,6 +55,14 @@ function SettingsPage() {
       setSelectedInterests(user.categoryInterests);
     }
   }, [user?.categoryInterests]);
+
+  useEffect(() => {
+    if (user) {
+      setProfileSlug(user.profileSlug || '');
+      setCollectorTitle(user.collectorTitle || '');
+      setPurchasesVisible(user.purchasesVisible !== false);
+    }
+  }, [user]);
 
   // Mutation for updating category interests
   const updateInterestsMutation = useMutation({
@@ -52,6 +76,23 @@ function SettingsPage() {
     },
     onError: () => {
       setSuccessMessage('Failed to save interests');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    }
+  });
+
+  // Mutation for updating profile settings
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { profileSlug?: string | null; collectorTitle?: string | null; purchasesVisible?: boolean }) => {
+      const response = await api.patch('/users/me', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      setSuccessMessage('Public profile settings saved!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to save profile settings';
+      setSuccessMessage(message);
       setTimeout(() => setSuccessMessage(''), 3000);
     }
   });
@@ -260,6 +301,98 @@ function SettingsPage() {
             >
               {updateInterestsMutation.isPending ? 'Saving...' : 'Save Interests'}
             </button>
+          </div>
+
+          {/* Public Profile Section */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Public Profile</h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">Customize how you appear to other shoppers browsing the FindA.Sale community.</p>
+
+            {successMessage && (
+              <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${
+                successMessage.includes('saved')
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                  : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+              }`}>
+                {successMessage}
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {/* Collector Title */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                  Collector Title (Optional)
+                </label>
+                <select
+                  value={collectorTitle}
+                  onChange={(e) => setCollectorTitle(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">Select a title...</option>
+                  {COLLECTOR_TITLES.map((title) => (
+                    <option key={title} value={title}>
+                      {title}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Show other shoppers what you collect
+                </p>
+              </div>
+
+              {/* Profile Slug */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                  Profile Slug (Optional)
+                </label>
+                <div className="flex items-center">
+                  <span className="text-gray-600 dark:text-gray-400 mr-2">findasale.com/shoppers/</span>
+                  <input
+                    type="text"
+                    value={profileSlug}
+                    onChange={(e) => setProfileSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                    placeholder="your-custom-url"
+                    maxLength={50}
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Letters, numbers, dashes, and underscores only
+                </p>
+              </div>
+
+              {/* Purchases Visibility */}
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={purchasesVisible}
+                    onChange={(e) => setPurchasesVisible(e.target.checked)}
+                    className="w-4 h-4 text-amber-600 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Show my recent purchases on my profile
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Other shoppers can see your 12 most recent finds from sales
+                </p>
+              </div>
+
+              {/* Save Button */}
+              <button
+                onClick={() => updateProfileMutation.mutate({
+                  profileSlug: profileSlug || null,
+                  collectorTitle: collectorTitle || null,
+                  purchasesVisible,
+                })}
+                disabled={updateProfileMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
+              >
+                {updateProfileMutation.isPending ? 'Saving...' : 'Save Profile Settings'}
+              </button>
+            </div>
           </div>
 
           {/* Account Section */}

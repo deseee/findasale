@@ -58,7 +58,7 @@ const PaymentForm = ({ price, onClose, onSuccess, showToast }: PaymentFormProps)
         await api.post('/streaks/confirm-huntpass', {
           paymentIntentId: paymentIntent.id,
         });
-        showToast?.('Hunt Pass activated! You\'re now earning 2x points.', 'success');
+        showToast?.('Hunt Pass activated! You\'re now earning 2x XP.', 'success');
         onSuccess();
       } catch (err: any) {
         setErrorMessage(
@@ -77,7 +77,7 @@ const PaymentForm = ({ price, onClose, onSuccess, showToast }: PaymentFormProps)
         <ul className="space-y-2 text-sm text-warm-700">
           <li className="flex items-start gap-2">
             <span className="text-purple-600 font-bold">✓</span>
-            <span>2x points on every action</span>
+            <span>2x XP on every action</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-purple-600 font-bold">✓</span>

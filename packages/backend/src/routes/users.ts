@@ -217,37 +217,84 @@ router.patch('/me/interests', authenticate, async (req: AuthRequest, res: Respon
   }
 });
 
-// Update user's notification preferences
+// Curated collector titles for Task #200: Shopper Public Profiles
+const VALID_COLLECTOR_TITLES = [
+  'Furniture Curator',
+  'Vintage Hunter',
+  'Antique Aficionado',
+  'Book Collector',
+  'Jewelry Hunter',
+  'Mid-Century Modernist',
+  'Kitchen Collector',
+  'Art Enthusiast',
+  'Tool Time',
+  'General Picker'
+];
+
+// Update user's notification preferences and profile settings
 router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { notificationPrefs } = req.body;
+    const { notificationPrefs, profileSlug, purchasesVisible, collectorTitle } = req.body;
 
     // Validate notification preferences if provided
     if (notificationPrefs && typeof notificationPrefs !== 'object') {
       return res.status(400).json({ message: 'notificationPrefs must be an object' });
     }
 
+    // Validate collector title if provided
+    if (collectorTitle && !VALID_COLLECTOR_TITLES.includes(collectorTitle)) {
+      return res.status(400).json({
+        message: 'Invalid collector title. Must be one of: ' + VALID_COLLECTOR_TITLES.join(', ')
+      });
+    }
+
+    // Validate profile slug if provided (alphanumeric, dash, underscore)
+    if (profileSlug && !/^[a-zA-Z0-9_-]+$/.test(profileSlug)) {
+      return res.status(400).json({
+        message: 'Profile slug can only contain letters, numbers, dashes, and underscores'
+      });
+    }
+
+    const updateData: any = {};
+    if (notificationPrefs) {
+      updateData.notificationPrefs = notificationPrefs;
+    }
+    if (profileSlug !== undefined) {
+      updateData.profileSlug = profileSlug || null;
+    }
+    if (purchasesVisible !== undefined) {
+      updateData.purchasesVisible = purchasesVisible;
+    }
+    if (collectorTitle !== undefined) {
+      updateData.collectorTitle = collectorTitle || null;
+    }
+
     const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: {
-        ...(notificationPrefs && { notificationPrefs }),
-      },
+      data: updateData,
       select: {
         id: true,
         email: true,
         name: true,
         streakPoints: true,
         notificationPrefs: true,
+        profileSlug: true,
+        purchasesVisible: true,
+        collectorTitle: true,
       }
     });
 
     res.json(updated);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating user preferences:', error);
+    // Handle unique constraint violation for profileSlug
+    if (error.code === 'P2002' && error.meta?.target?.includes('profileSlug')) {
+      return res.status(409).json({ message: 'This profile slug is already taken' });
+    }
     res.status(500).json({ message: 'Server error while updating preferences' });
   }
 });

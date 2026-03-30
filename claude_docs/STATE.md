@@ -7,7 +7,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S343 Part 2 complete.
+No active work. S344 complete — push block below.
+
+**S344 COMPLETE (2026-03-30):** 5-agent parallel roadmap batch. (1) **P2 cleanup:** XP language fixed on 3 remaining components (HuntPassModal, TreasureHuntBanner, StreakWidget). EmptyState dark mode contrast added. D-001 "Estate Sale" placeholder copy fixed. (2) **city-heat-index.tsx:** Replaced Coming Soon stub with redirect to /cities per locked decision #49. (3) **#149 Email Reminders frontend:** RemindMeButton enhanced — copy → "Remind me by email", toggle-off "Cancel Reminder" state added, disabled for ended/cancelled sales, dark mode fixed. Wired into sales/[id].tsx replacing inline button. (4) **#200 Shopper Public Profiles full stack:** schema.prisma + new migration (profileSlug @unique, purchasesVisible Boolean @default(true), collectorTitle String?), backend GET /shoppers/:id + PATCH /users/me extended, /shoppers/[id].tsx UI (avatar, rank, collectorTitle badge, recent finds grid), shopper/settings.tsx Public Profile section (title dropdown, slug input, visibility toggle). **Patrick must deploy migration 20260330_add_shopper_profile_fields to Railway.** (5) **#64 My Collections full consolidation:** Favorites tab removed from shopper/dashboard.tsx, BottomTabNav + Layout.tsx nav updated to /shopper/wishlist, /shopper/favorites + /shopper/alerts already redirect from S343. Nav now unified. (6) **Architect spec #174+#80:** Full spec in claude_docs/architecture/AUCTION_WIN_SPEC.md. Key finding: no schema changes needed — all fields exist. Code-only, 3-phase plan (auctionJob+reserve ~3-4h, /purchases/[id] page ~2-3h, organizer UI deferred). No Patrick decisions needed — ready for dev dispatch in S345.
 
 **S343 Part 2 COMPLETE (2026-03-30):** Guild Phase 1 wrap-up + My Collections + BUSINESS_PLAN.md fix. (1) **Guild Items 6 & 7 schema shipped:** SourcebookEntry model (author/sale/organizer FKs, @@unique per author+target, 3 indexes) + Sale.prelaunchAt DateTime? + index added to schema.prisma. Migration SQL at `migrations/20260330_add_sourcebook_and_prelaunch/migration.sql` — Patrick must deploy to Railway manually per CLAUDE.md §6. prisma validate ✅ TypeScript ✅. (2) **Hunt Pass trial banner wired (loot-legend.tsx):** Amber banner, useState dismiss (no localStorage), POST /api/hunt-pass/trial on CTA, toast on success, silent 409 hide. Only shows if huntPassActive !== true. TS ✅. (3) **#64 My Collections shipped:** Renamed Saves/Wishlist → "My Collections" on 6 surfaces (wishlist.tsx, wishlists.tsx, AvatarDropdown.tsx, Layout.tsx, ActivitySummary.tsx, dashboard.tsx). Added collections stub UI (All Saves pill + "+ New Collection" Coming Soon toast). No backend changes. TS ✅. (4) **BUSINESS_PLAN.md truncation fixed:** Last two lines were cut off — restored "Quarterly)" + Author line. (5) **roadmap.old.md:** 179-line deletion confirmed as intentional prior cleanup — including in push block.
 
@@ -51,12 +53,9 @@ No active work. S343 Part 2 complete.
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S344)
+## Next Session (S345)
 
-### S344 Priority 1: Hold-to-Pay QA (deferred to evening — off peak hours)
-Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets email + in-app notification → ClaimCard visible → Stripe link → payment → SOLD + organizer notified + +15 guildXP. Test accounts: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
-
-### S344 Priority 2: Deploy Guild schema migration (Patrick manual action)
+### S345 Priority 1: Deploy shopper profiles migration (Patrick manual action — required before Railway works)
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -64,23 +63,21 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-### S344 Priority 3: city-heat-index.tsx deletion
-`git rm packages/frontend/pages/city-heat-index.tsx` — Coming Soon stub, /cities is the real feature. No nav links. Safe to delete.
+### S345 Priority 2: Hold-to-Pay QA (evening — off peak hours)
+Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets email + in-app notification → ClaimCard visible → Stripe link → payment → SOLD + organizer notified + +15 guildXP. Test accounts: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
 
-### S344 Notes
+### S345 Priority 3: Dev dispatch #174+#80 Phase 1+2
+Architect spec ready: `claude_docs/architecture/AUCTION_WIN_SPEC.md`. Phase 1: auctionJob + reserve check (~3-4h). Phase 2: /purchases/[id].tsx persistent confirmation page (~2-3h). Phase 3 (organizer UI) deferred. No schema changes needed.
+
+### S345 Notes
 - XP test accounts: SQL in decisions-log.md S342 section to set users to any rank for beta testing
 - Sage threshold is 2500 XP (was 4000) — beta-only, revert post-beta
-- roadmap.old.md + BUSINESS_PLAN.md show as modified in git status — pre-existing uncommitted changes from prior sessions, not from S343. Patrick may want to stage/discard separately.
 
-### Patrick Actions Before S344
-1. Run the S343 push block below (13 files)
-2. Confirm Railway + Vercel green
-3. Check STRIPE_WEBHOOK_SECRET in Railway env vars
-
-### S342 Priority 2: P2 cleanup items
-- Legacy "points" language on 3 surfaces (Hunt Pass banner, Leaderboard, Loyalty page) — quick dev pass
-- Messages dark mode contrast ("No messages yet" nearly invisible)
-- D-001 drift: placeholder copy defaults to "Estate Sale" on onboarding/create-sale
+### Patrick Actions Before S345
+1. Run S344 push block (19 files + wrap docs)
+2. Run shopper profiles migration (above)
+3. Confirm Railway + Vercel green
+4. Check STRIPE_WEBHOOK_SECRET in Railway env vars (for Hold-to-Pay QA)
 
 ### S342 Priority 3: Remaining QA queue
 - Bug 4: Buy Now success card persist (needs Stripe test mode)

@@ -166,6 +166,11 @@ model User {
   sourcebookEntries    SourcebookEntry[] @relation("SourcebookAuthor")
   organizedSourcebook  SourcebookEntry[] @relation("OrganizerSourcebook")
 
+  // Task #200: Shopper Public Profiles
+  profileSlug      String?  @unique                                           // Optional custom slug for public profile URL
+  purchasesVisible Boolean  @default(true)                                    // Toggle to show/hide purchase history on public profile
+  collectorTitle   String?                                                    // Title from curated list (e.g., "Furniture Curator", "Vintage Hunter")
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])

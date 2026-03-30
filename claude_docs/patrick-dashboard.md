@@ -2,39 +2,45 @@
 
 ---
 
-## ✅ S343 Complete — Guild Phase 1 Done + My Collections + Schema Shipped
+## ✅ S344 Complete — 5-Feature Roadmap Batch + Architect Spec
 
-All Guild Phase 1 items complete. My Collections #64 renamed. Schema ready. Hold-to-Pay QA tonight.
-
----
-
-## What Happened This Session (S343 — two pushes)
-
-**Push 1 (earlier):** CLAUDE.md wrap rule, Visit XP wired, Soundtrack removed, P2 cleanup. **Push 2 (this):** SourcebookEntry + Sale.prelaunchAt schema shipped, prisma migration SQL created, Hunt Pass trial banner wired in loot-legend.tsx, #64 My Collections renamed across 6 surfaces (wishlist.tsx, wishlists.tsx, AvatarDropdown, Layout, ActivitySummary, dashboard), BUSINESS_PLAN.md truncation fixed, roadmap.old.md cleanup committed.
+P2 cleanup, Email Reminders, Shopper Profiles, My Collections consolidation, Auction Win spec. Push block below.
 
 ---
 
-## What's Next (S344)
+## What Happened This Session (S344)
 
-1. **Hold-to-Pay QA — tonight (off peak hours).** STRIPE_WEBHOOK_SECRET confirmed in Railway.
+5 agents ran in parallel. All TS ✅ zero errors:
 
-2. **Run schema migration (Patrick manual — Railway):**
+- **P2 cleanup:** XP language on 3 components, EmptyState dark mode, D-001 copy fixed, city-heat-index → /cities redirect
+- **#149 Email Reminders:** "Remind me by email" copy, toggle-off state, disabled for ended sales
+- **#200 Shopper Public Profiles:** Full stack — schema + migration, API endpoints, /shoppers/[id] page, settings section
+- **#64 My Collections:** Nav fully unified to /shopper/wishlist, favorites tab removed from dashboard
+- **#174+#80 Architect spec:** Complete — no schema changes, ready for dev in S345
+
+---
+
+## What's Next (S345)
+
+1. **Run S344 push block first** (19 files below)
+2. **Run shopper profiles migration** (new — required):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
-
-3. **city-heat-index.tsx:** `git rm packages/frontend/pages/city-heat-index.tsx` then commit.
+3. **Hold-to-Pay QA** — this evening. user12 (shopper) + user6/Family Collection Sale 16 (organizer). STRIPE_WEBHOOK_SECRET must be set in Railway.
+4. **#174+#80 dev dispatch** — architect spec ready at `claude_docs/architecture/AUCTION_WIN_SPEC.md`
 
 ---
 
-## Your Actions Before S344
+## Your Actions Before S345
 
-1. Run the push block below (13 files)
-2. Confirm Railway + Vercel green
-3. Check STRIPE_WEBHOOK_SECRET in Railway env vars (needed for Hold-to-Pay QA)
+1. Run push block below
+2. Run shopper profiles migration
+3. Confirm Railway + Vercel green
+4. Verify STRIPE_WEBHOOK_SECRET in Railway env vars
 
 ---
 
