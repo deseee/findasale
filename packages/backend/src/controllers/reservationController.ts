@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { getIO } from '../lib/socket';
@@ -806,3 +806,448 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
   return R * c; // Distance in meters
 }
+
+// POST /api/reservations/:id/mark-sold — organizer marks held item sold and creates invoice
+// Hold-to-Pay Phase 2: Create Stripe Checkout session for payment collection
+export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
+
+    const { id: reservationId } = req.params;
+
+    // Fetch the reservation with full context
+    const reservation = await prisma.itemReservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        item: {
+          include: {
+            sale: {
+              include: {
+                organizer: {
+                  include: { user: { select: { id: true, subscriptionTier: true } } },
+                },
+              },
+            },
+          },
+        },
+        user: { select: { id: true, email: true, name: true } },
+      },
+    });
+
+    if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
+    if (!['PENDING', 'CONFIRMED'].includes(reservation.status)) {
+      return res.status(409).json({ message: 'Reservation is not in a valid state for invoicing' });
+    }
+
+    // Verify organizer owns the sale
+    const organizer = reservation.item.sale.organizer;
+    if (organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied — you do not own this sale' });
+    }
+
+    // Query ALL active reservations for this shopper at this sale
+    const allShopperHolds = await prisma.itemReservation.findMany({
+      where: {
+        item: { saleId: reservation.item.saleId },
+        userId: reservation.user.id,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+      include: { item: true },
+    });
+
+    // Check for existing PENDING invoice for this shopper+sale combo
+    const existingInvoice = await prisma.holdInvoice.findFirst({
+      where: {
+        saleId: reservation.item.saleId,
+        shopperUserId: reservation.user.id,
+        status: 'PENDING',
+      },
+    });
+
+    if (existingInvoice) {
+      return res.json({ invoiceId: existingInvoice.id, checkoutUrl: existingInvoice.checkoutUrl, expiresAt: existingInvoice.expiresAt });
+    }
+
+    // LOCKED DECISION #1: Fee calculation based on organizer tier
+    // Calculate total from all bundled items
+    const subscriptionTier = organizer.user?.subscriptionTier || 'SIMPLE';
+    const platformFeePercent = subscriptionTier === 'PRO' ? 0.08 : 0.10;
+
+    let totalAmount = 0;
+    let totalPlatformFeeAmount = 0;
+    const bundledItemIds: string[] = [];
+
+    for (const hold of allShopperHolds) {
+      const itemPrice = hold.item.price || 0;
+      totalAmount += itemPrice;
+      const itemPlatformFee = Math.round(itemPrice * platformFeePercent * 100) / 100;
+      totalPlatformFeeAmount += itemPlatformFee;
+      bundledItemIds.push(hold.item.id);
+    }
+
+    // LOCKED DECISION #7: Payment window = hold timer remainder (earliest expiry)
+    const expiresAt = new Date(Math.min(...allShopperHolds.map(h => h.expiresAt.getTime())));
+
+    // Create Stripe Checkout Session
+    const stripe = require('../utils/stripe').getStripe();
+    const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+
+    let stripeSession;
+    try {
+      // Build line_items from all bundled items
+      const line_items = allShopperHolds.map(hold => ({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: hold.item.title,
+            description: `From ${hold.item.sale.title}`,
+            images: hold.item.photoUrls && hold.item.photoUrls.length > 0 ? [hold.item.photoUrls[0]] : [],
+          },
+          unit_amount_decimal: String(Math.round((hold.item.price || 0) * 100)),
+        },
+        quantity: 1,
+      }));
+
+      stripeSession = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        customer_email: reservation.user.email,
+        line_items,
+        success_url: `${baseUrl}/items?paymentStatus=success`,
+        cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
+        expires_at: Math.floor(expiresAt.getTime() / 1000), // Unix timestamp
+        // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount + transfer_data
+        payment_intent_data: {
+          metadata: {
+            invoiceId: null, // Will be filled after HoldInvoice is created
+            itemIds: bundledItemIds.join(','), // Comma-separated item IDs
+            shopperId: reservation.user.id,
+            organizerId: organizer.id,
+            saleId: reservation.item.saleId,
+          },
+          application_fee_amount: Math.round(totalPlatformFeeAmount * 100),
+          transfer_data: {
+            destination: organizer.stripeConnectId,
+          },
+        },
+        metadata: {
+          organizerId: organizer.id,
+        },
+      });
+    } catch (stripeError: any) {
+      console.error('[hold-invoice] Stripe session creation failed:', stripeError);
+      return res.status(400).json({ message: 'Failed to create Stripe checkout session', error: stripeError.message });
+    }
+
+    // Create HoldInvoice record in transaction with item + reservation updates
+    const transaction = await prisma.$transaction(async (tx) => {
+      const holdInvoice = await tx.holdInvoice.create({
+        data: {
+          reservationId: reservationId, // Store first reservation for backward compatibility
+          shopperUserId: reservation.user.id,
+          organizerUserId: organizer.id,
+          saleId: reservation.item.saleId,
+          stripeSessionId: stripeSession.id,
+          checkoutUrl: stripeSession.url || '',
+          totalAmount: Math.round(totalAmount * 100),
+          platformFeeAmount: Math.round(totalPlatformFeeAmount * 100),
+          itemIds: bundledItemIds,
+          status: 'PENDING',
+          expiresAt,
+        },
+      });
+
+      // Update ALL bundled ItemReservations with invoiceId
+      await tx.itemReservation.updateMany({
+        where: { id: { in: allShopperHolds.map(h => h.id) } },
+        data: {
+          invoiceId: holdInvoice.id,
+          paymentAttemptedAt: new Date(),
+        },
+      });
+
+      // Update ALL bundled items to INVOICE_ISSUED (LOCKED DECISION #6)
+      await tx.item.updateMany({
+        where: { id: { in: bundledItemIds } },
+        data: { status: 'INVOICE_ISSUED' },
+      });
+
+      // Create in-app notification for shopper (LOCKED DECISION #5) — mention all items
+      const itemList = bundledItemIds.length > 1
+        ? `${bundledItemIds.length} items`
+        : `"${allShopperHolds[0]?.item.title}"`;
+
+      await tx.notification.create({
+        data: {
+          userId: reservation.user.id,
+          type: 'invoice_sent',
+          title: 'Payment requested',
+          body: `Payment requested for ${itemList}. Complete payment before your hold expires.`,
+          link: `/items/${bundledItemIds[0]}`,
+          channel: 'OPERATIONAL',
+        },
+      });
+
+      return holdInvoice;
+    });
+
+    // Send checkout email to shopper (fire-and-forget)
+    setImmediate(async () => {
+      try {
+        const resend = require('resend').Resend ? new (require('resend').Resend)(process.env.RESEND_API_KEY) : null;
+        if (resend) {
+          const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+          const itemList = bundledItemIds.length > 1
+            ? `${bundledItemIds.length} items from ${reservation.item.sale.title}`
+            : `${allShopperHolds[0]?.item.title} from ${reservation.item.sale.title}`;
+
+          await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale',
+            to: reservation.user.email,
+            subject: `Complete your purchase: ${itemList}`,
+            html: `
+              <h2>Complete Your Purchase</h2>
+              <p>Hi ${reservation.user.name},</p>
+              <p>The organizer is ready for payment on <strong>${itemList}</strong>.</p>
+              <p><a href="${stripeSession.url}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Review and Pay</a></p>
+              <p style="color: #6b7280; font-size: 14px;">This link expires at ${expiryTime} (in approximately ${Math.round((expiresAt.getTime() - Date.now()) / 3600000)} hours).</p>
+            `,
+          });
+        }
+      } catch (err) {
+        console.warn('[hold-invoice] Failed to send checkout email:', err);
+      }
+    });
+
+    res.status(201).json({
+      invoiceId: transaction.id,
+      checkoutUrl: stripeSession.url,
+      expiresAt,
+      totalAmount,
+      totalPlatformFeeAmount,
+      estimatedOrganizerPayout: totalAmount - totalPlatformFeeAmount,
+      itemCount: bundledItemIds.length,
+    });
+  } catch (error: any) {
+    console.error('[hold-invoice] markSoldAndCreateInvoice error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// GET /api/invoices/:invoiceId — fetch invoice details
+// Auth: Shopper (owns invoice) or Organizer (sold the item)
+export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const { invoiceId } = req.params;
+
+    const invoice = await prisma.holdInvoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        itemReservation: {
+          include: {
+            item: {
+              include: {
+                sale: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
+
+    // Authorization: shopper or organizer
+    const isShopper = invoice.shopperId === req.user.id;
+
+    // Get organizer's ID from request user
+    const userOrganizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+    const isOrganizer = invoice.organizerId === userOrganizer?.id;
+
+    if (!isShopper && !isOrganizer) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    res.json({
+      id: invoice.id,
+      status: invoice.status,
+      itemPrice: invoice.itemPrice,
+      platformFeeAmount: invoice.platformFeeAmount,
+      stripeFeeAmount: invoice.stripeFeeAmount,
+      organizerPayout: invoice.organizerPayout,
+      checkoutUrl: invoice.checkoutUrl,
+      expiresAt: invoice.expiresAt,
+      paidAt: invoice.paidAt,
+      createdAt: invoice.createdAt,
+      item: invoice.itemReservation?.item,
+    });
+  } catch (error: any) {
+    console.error('[invoices] getInvoiceDetails error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// GET /api/reservations/my-invoices — fetch all invoices for current shopper
+// Auth: Shopper (authenticated)
+export const getMyInvoices = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const invoices = await prisma.holdInvoice.findMany({
+      where: {
+        shopperId: req.user.id,
+        status: 'SESSION_CREATED', // Only show unpaid invoices
+      },
+      include: {
+        itemReservation: {
+          include: {
+            item: {
+              include: {
+                sale: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(invoices.map(inv => ({
+      id: inv.id,
+      status: inv.status,
+      itemPrice: inv.itemPrice,
+      platformFeeAmount: inv.platformFeeAmount,
+      checkoutUrl: inv.checkoutUrl,
+      expiresAt: inv.expiresAt,
+      createdAt: inv.createdAt,
+      item: inv.itemReservation?.item,
+    })));
+  } catch (error: any) {
+    console.error('[invoices] getMyInvoices error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// GET /api/items/:itemId/invoice-status — public query for item invoice status
+// Auth: None (public)
+export const getItemInvoiceStatus = async (req: Request, res: Response) => {
+  try {
+    const { itemId } = req.params;
+
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: {
+        reservation: {
+          include: {
+            holdInvoice: true,
+          },
+        },
+      },
+    });
+
+    if (!item || !item.reservation || !item.reservation.holdInvoice) {
+      return res.json({
+        invoiceExists: false,
+        invoiceStatus: null,
+        expiresAt: null,
+        checkoutUrl: null,
+      });
+    }
+
+    res.json({
+      invoiceExists: true,
+      invoiceStatus: item.reservation.holdInvoice.status,
+      expiresAt: item.reservation.holdInvoice.expiresAt,
+      checkoutUrl: item.reservation.holdInvoice.checkoutUrl,
+    });
+  } catch (error: any) {
+    console.error('[invoices] getItemInvoiceStatus error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/reservations/:id/release-invoice — organizer cancels a PENDING invoice
+// Auth: ORGANIZER only
+export const releaseInvoice = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
+
+    const { id: reservationId } = req.params;
+
+    const reservation = await prisma.itemReservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        item: {
+          include: {
+            sale: true,
+          },
+        },
+        holdInvoice: true,
+        user: { select: { id: true, email: true, name: true } },
+      },
+    });
+
+    if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
+    if (!reservation.holdInvoice) return res.status(404).json({ message: 'No invoice found for this reservation' });
+    if (reservation.holdInvoice.status !== 'PENDING') {
+      return res.status(409).json({ message: 'Only PENDING invoices can be released' });
+    }
+
+    // Verify organizer owns the sale
+    const userOrganizer2 = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (reservation.item.sale.organizerId !== userOrganizer2?.id) {
+      return res.status(403).json({ message: 'Access denied — you do not own this sale' });
+    }
+
+    const stripe = require('../utils/stripe').getStripe();
+
+    // Cancel the Stripe Checkout session
+    try {
+      await stripe.checkout.sessions.expire(reservation.holdInvoice.stripeSessionId);
+    } catch (stripeError: any) {
+      console.warn('[hold-invoice] Failed to expire Stripe session:', stripeError);
+      // Non-fatal: continue with local state update
+    }
+
+    // Update invoice status to CANCELLED
+    await prisma.$transaction(async (tx) => {
+      await tx.holdInvoice.update({
+        where: { id: reservation.holdInvoice!.id },
+        data: { status: 'CANCELLED' },
+      });
+
+      // Return item to RESERVED status
+      await tx.item.update({
+        where: { id: reservation.item.id },
+        data: { status: 'RESERVED' },
+      });
+
+      // Notify shopper
+      await tx.notification.create({
+        data: {
+          userId: reservation.user.id,
+          type: 'invoice_cancelled',
+          title: 'Invoice cancelled',
+          body: `The invoice for "${reservation.item.title}" has been cancelled. Your hold remains active.`,
+          link: `/items/${reservation.item.id}`,
+          channel: 'OPERATIONAL',
+        },
+      });
+    });
+
+    res.json({ message: 'Invoice released and hold reactivated' });
+  } catch (error: any) {
+    console.error('[hold-invoice] releaseInvoice error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
