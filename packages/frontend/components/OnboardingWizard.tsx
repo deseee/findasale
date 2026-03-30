@@ -121,13 +121,18 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 p-6">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 p-6 z-10">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Welcome to FindA.Sale!</h1>
             <button
-              onClick={handleDismiss}
-              className="text-warm-400 dark:text-gray-400 hover:text-warm-600 dark:hover:text-gray-300 font-semibold text-lg"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDismiss();
+              }}
+              className="text-warm-400 dark:text-gray-400 hover:text-warm-600 dark:hover:text-gray-300 font-semibold text-lg cursor-pointer pointer-events-auto"
               aria-label="Close wizard"
+              type="button"
             >
               ✕
             </button>
@@ -170,7 +175,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
 
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-900 dark:text-blue-200">
-                  We've sent a verification email to your address. Please check your inbox and click the link to verify your account.
+                  Check your email for a verification link. This helps us send you sale alerts and payment confirmations to the right address.
                 </p>
               </div>
 
@@ -222,6 +227,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                   Phone Number
                 </label>
                 <input
+tml
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
