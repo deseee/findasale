@@ -359,3 +359,58 @@ Only decisions that affect future sessions — not implementation details.
 **Status:** LOCKED
 **Made by:** Patrick (validated by full Advisory Board 12/12 +1)
 **Rationale:** Rank-gated, free to all logged-in shoppers. No Hunt Pass paywall, no deposit requirement. Deposit model rejected — legal risk (money-transmission regulations for held funds in some states). Hunt Pass paywall rejected — creates friction at moment of discovery, suppresses adoption. Board unanimously preferred rank-gated (earned) over pay-gated.
+
+---
+
+## 2026-03-30 (S342) — Roadmap Feature Decisions (9 items)
+
+**Status:** LOCKED (all 9 items)
+
+**1. Merge #174 + #80 — Auction Win + Persistent Purchase Confirmation**
+**Status:** LOCKED
+**Rationale:** Consolidate Auction Mechanics (#174) and Purchase Confirmation Redesign (#80) into one feature: persistent post-purchase page at `/purchases/{id}` replacing the 5-second dismissable success card. Immediate Stripe checkout at auction close (no deferred invoice window). Organizer receives payment; shopper sees persistent confirmation.
+
+**2. #174 + #80 Payment Model — Charge at Winning Bid Time**
+**Status:** LOCKED
+**Rationale:** Same as Buy It Now — charge immediately on auction close. Consolidate with existing Stripe flows. Hold-to-Pay remote path: shopper pays via consolidated checkout link, organizer receives item price minus platform fee.
+
+**3. #174 + #80 Reserve Price Not Met**
+**Status:** LOCKED
+**Rationale:** Organizer manual decision OR per-sale toggle (organizer chooses their reserve-price policy). Not automatic liquidation.
+
+**4. #200 Shopper Public Profiles — Route & Privacy**
+**Status:** LOCKED
+**Rationale:** `/shoppers/[id]` by default (numeric ID). Optional `profileSlug` as profile customization. Shoppers toggle purchase visibility (default visible). Collector title curated list (Furniture Curator, Vintage Hunter, etc.) in profile header.
+
+**5. #90 Sale Soundtrack — Defer to Organizer-Side**
+**Status:** LOCKED (deferral)
+**Rationale:** Remove from shopper-facing sale detail page. Defer to organizer POS or dashboard when proper inline player/Spotify widget can be built. Currently just an external link — not worth keeping in sidebar.
+
+**6. #188 Neighborhood Pages — Status Update**
+**Status:** RESOLVED
+**Rationale:** Pages NOT 404 as roadmap claimed. 14 Grand Rapids neighborhoods fully functional, routes working, SEO schema.org markup in place. Stale roadmap note. Status: move to Chrome QA only.
+
+**7. #49 City Heat Index — Patrick Decision Pending**
+**Status:** PENDING
+**Rationale:** Options: (a) Consolidate into `/cities` page as color/emoji indicator (~30 min), or (b) defer to post-beta backlog. Patrick decision needed — no implementation yet.
+
+**8. #64 Save/Wishlist/Hold UX — Consolidation Approved**
+**Status:** LOCKED (spec complete, no Patrick input needed)
+**Rationale:** UX agent recommendation accepted: unify Favorites + Wishlists into "My Collections" with auto-created "Saved Items" collection. Hold remains separate (location-gated, different mental model). M effort (~2–3 days frontend IA). No schema changes.
+
+**9. #149 Email Reminders — Frontend Work Only**
+**Status:** LOCKED (no Patrick input needed)
+**Rationale:** Backend 100% complete. Frontend S effort (<1 day): update button copy, add toggle-off UI, disabled states for cancelled/completed sales. No backend changes needed.
+
+**10. #69 Local-First Offline Mode — Deferred**
+**Status:** DEFERRED
+**Rationale:** Patrick directive: "Defer coming soon." No implementation. Post-beta backlog.
+
+**11. Organizer Hold Restriction Bug — Resolved**
+**Status:** RESOLVED
+**Rationale:** Was incorrectly implemented as blanket organizer gate. Organizers CAN place holds on other organizers' sales (dual shopper role). Bug fixed: HoldButton.tsx organizer gate removed; reservationController.ts now blocks organizer from holding their OWN sale items only.
+
+**12. #49 City Heat Index — CONSOLIDATE into /cities page**
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Feature may already exist in some capacity on /cities. Decision: consolidate heat index concept into the /cities page as a visual activity density indicator (color-coded or emoji badges by sale count). ~30 min effort. Do not build as a separate page. Remove "Coming soon" placeholder from /city-heat-index.tsx or redirect it to /cities.

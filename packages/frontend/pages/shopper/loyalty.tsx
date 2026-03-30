@@ -36,9 +36,18 @@ function LoyaltyPage() {
     },
   });
   const [mounted, setMounted] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
 
   useEffect(() => {
     setMounted(true);
+    // Check if user has seen onboarding (use localStorage key: guild_onboarded)
+    if (typeof window !== 'undefined') {
+      const hasSeenOnboarding = localStorage.getItem('guild_onboarded') === 'true';
+      if (!hasSeenOnboarding) {
+        setShowOnboarding(true);
+      }
+    }
   }, []);
 
   // Redirect if not authenticated
@@ -90,11 +99,88 @@ function LoyaltyPage() {
   const currentTierData = tierLevels[Math.min(Math.floor(passport.totalStamps / 100), 3)];
   const progressPercent = ((passport.stampsToNextMilestone || 0) / (currentTierData.nextStamps || 100)) * 100;
 
+  const handleOnboardingClose = () => {
+    localStorage.setItem('guild_onboarded', 'true');
+    setShowOnboarding(false);
+  };
+
+  const handleNextOnboardingStep = () => {
+    if (onboardingStep < 2) {
+      setOnboardingStep(onboardingStep + 1);
+    } else {
+      handleOnboardingClose();
+    }
+  };
+
   return (
     <>
       <Head>
         <title>Loyalty Passport - FindA.Sale</title>
       </Head>
+
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              {onboardingStep === 0 && (
+                <>
+                  <div className="text-4xl mb-4 text-center">🔍</div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-4">
+                    Explore like a pro
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    Visit sales, scan items, and win auctions to earn Guild XP
+                  </p>
+                  <button
+                    onClick={handleNextOnboardingStep}
+                    className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Next →
+                  </button>
+                </>
+              )}
+              {onboardingStep === 1 && (
+                <>
+                  <div className="text-4xl mb-4 text-center">👑</div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-4">
+                    Climb the ranks
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    🌱 Initiate → 🐦 Scout → 🧗 Ranger → 🧙 Sage → 👑 Grandmaster
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    Each rank unlocks real perks
+                  </p>
+                  <button
+                    onClick={handleNextOnboardingStep}
+                    className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Next →
+                  </button>
+                </>
+              )}
+              {onboardingStep === 2 && (
+                <>
+                  <div className="text-4xl mb-4 text-center">🎯</div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-warm-100 mb-4">
+                    Your first quest
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    Visit any sale this week to earn your first XP. Check your progress here anytime.
+                  </p>
+                  <button
+                    onClick={handleOnboardingClose}
+                    className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Got it →
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto py-8 px-4">
           {/* Header */}

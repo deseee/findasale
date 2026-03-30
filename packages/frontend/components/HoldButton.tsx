@@ -124,7 +124,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
     }
   };
 
-  if (!user || user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER') {
+  if (!user) {
     return null;
   }
 

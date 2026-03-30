@@ -77,15 +77,15 @@ These are decisions that block other work. Only Patrick can decide.
 
 | # | Feature | Tier | Decision | Impact | Blocker? |
 |-----|---------|------|----------|--------|----------|
-| 188 | Neighborhood Pages | FREE | Pages are 404 — rebuild as static content or remove from nav? | Site nav | Yes — nav links to dead pages |
-|  49 | City Heat Index | FREE | Orphaned route, not in nav — rebuild or defer? | Dashboard layout | No |
-|  90 | Sale Soundtrack (Ambient Vibes) | FREE | Spotify/Apple Music external links on sale detail — keep or remove? | Page redesign | No |
-| 200 | Shopper Public Profiles | FREE | `/shoppers/[slug]` collection showcase — build out or defer? | Shopper profile UX | No |
-|  69 | Local-First Offline Mode | PRO | Service worker sync queue + offline catalog — build or defer? | Architecture | No |
-|  64 | Save/Wishlist/Hold UX | FREE | Are Saves, Wishlists, and Holds different features or one unified feature with tabs? Patrick walkthrough showed confusion. | Nav, user mental model | Yes — dashboard redesign |
+| 188 | Neighborhood Pages | FREE | Pages are FUNCTIONAL — was stale note. 14 GR neighborhoods live. Needs Chrome QA only. | Site nav | Yes — nav links to dead pages |
+|  49 | City Heat Index | FREE | CONSOLIDATE into /cities page — heat indicator (color/emoji by activity). ~30 min. No separate page. | Dashboard layout | No |
+|  90 | Sale Soundtrack (Ambient Vibes) | FREE | DEFERRED to organizer-side — remove from sale detail. Rebuild as inline player when POS/dashboard ready. S342. | Page redesign | No |
+| 200 | Shopper Public Profiles | FREE | Spec complete S342 — /shoppers/[id], optional slug, visibility toggle, curated collector title. Dev pending M effort. | Shopper profile UX | No |
+|  69 | Local-First Offline Mode | PRO | DEFERRED — coming soon. Post-beta. | Architecture | No |
+|  64 | Save/Wishlist/Hold UX | FREE | UX spec complete S342 — Unify Favorites+Wishlists → My Collections. Hold separate. Dev pending M effort. | Nav, user mental model | Yes — dashboard redesign |
 | 122 | Explorer's Guild Phase 1 (Rebrand + Copy) | FREE | Gamification naming and narrative locked or needs revision? | Gamification naming | No |
-| 149 | Email Reminders to Shoppers | SIMPLE | Needs Chrome QA — keep or rebuild reminder flow? | Settings redesign | No |
-| 174 | Auction Mechanics + Close Flow | SIMPLE | Post-purchase UX broken — redesign checkout success flow? | Checkout redesign | Yes — blocks purchase UX |
+| 149 | Email Reminders to Shoppers | SIMPLE | Backend complete. Dev pending S effort — copy fix + toggle-off UI only. | Settings redesign | No |
+| 174 | Auction Mechanics + Close Flow | SIMPLE | MERGED WITH #80 — Unified Auction Win + Persistent Purchase Confirmation. Payment at winning bid. Spec complete S342. | Checkout redesign | Yes — blocks purchase UX |
 |  82 | Trademark — FindA.Sale | LEGAL | File USPTO trademark? ~$250–400/class + attorney fees | Legal | No |
 |  83 | Trade Secret Housekeeping | LEGAL | Document proprietary algorithms as trade secrets + NDA review | Legal | No | 
 
@@ -106,7 +106,7 @@ Features that Patrick's human QA walkthrough confirmed are broken. Use the two-s
 |   7 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "rewards shows 0 referrals despite user having one confirmed referral" | BROKEN | Shopper Referral Rewards | SHO | FREE | P1 fix: referral count query broken | Referral tracking + rewards distribution | 
 |  37 | ✅ | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "Remind Me button says 'push reminders coming soon'" | BROKEN | Sale Reminders (Remind Me) | SHO | SIMPLE | P1 fix: wire frontend to existing backend (backend built, frontend shows stale copy) | Sale alerts for shoppers — iCal confirmed but push "Remind Me" button NOT BUILT — feature gap | 
 |  46 | ✅ | ✅ | ✅ | ✅ | ⬜ | ❌ Walkthrough: "Batch classification failed" error on page | BROKEN | Treasure Typology Classifier | ORG | PRO | P1 fix: API error + dark mode text contrast issue | AI item classification; useTypology.ts, TypologyBadge.tsx | 
-|  80 | NA | NA | ✅ | 📋 | ⬜ | ❌ Walkthrough: "success card displays for ~5 sec then disappears, no way to see what was bought" | BROKEN | Purchase Confirmation Redesign | SHO | FREE | P2 fix: persist card or redirect to purchase detail page | /shopper/checkout-success — item photo hero, seller, pickup, CTAs | 
+|  80 | NA | NA | ✅ | 📋 | ⬜ | ❌ Walkthrough: "success card displays for ~5 sec then disappears, no way to see what was bought" | BROKEN | Purchase Confirmation Redesign | SHO | FREE | P2 fix: persist card or redirect to purchase detail page | MERGED WITH #174 — see #174 | 
 |  89 | NA | ✅ | ✅ | 📋 | ⬜ | ❌ Walkthrough: "prints whole page, download fails" | BROKEN | Unified Print Kit | ORG | SIMPLE | P2 fix: print CSS not targeting correct elements + download handler broken | /organizer/print-kit/[saleId] — yard sign + item price tags (6/page). Print CSS. | 
 
 

@@ -1088,3 +1088,79 @@ export const cancelSale = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error while cancelling sale' });
   }
 };
+
+/**
+ * Phase 2a: Record a visit to a sale and award 10 XP (daily cap enforced)
+ * POST /api/sales/:id/visit
+ */
+export const recordVisit = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id: saleId } = req.params;
+    const userId = req.user?.id;
+
+    if (!saleId || !userId) {
+      res.status(400).json({ message: 'saleId and authentication required.' });
+      return;
+    }
+
+    // Verify sale exists
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+    });
+
+    if (!sale) {
+      res.status(404).json({ message: 'Sale not found.' });
+      return;
+    }
+
+    // Check if user already recorded a visit to this sale today (prevent duplicate visits)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const alreadyVisitedToday = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId,
+        type: 'VISIT',
+        saleId,
+        createdAt: {
+          gte: today,
+        },
+      },
+    });
+
+    if (alreadyVisitedToday) {
+      res.status(200).json({
+        message: 'Sale already visited today.',
+        guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
+      });
+      return;
+    }
+
+    // Award 10 XP for visit
+    const { awardXp } = await import('../services/xpService');
+    const xpResult = await awardXp(userId, 'VISIT', 10, { saleId, description: `Visited sale: ${sale.title}` });
+
+    if (!xpResult) {
+      res.status(500).json({ message: 'Failed to award XP.' });
+      return;
+    }
+
+    // Update user's lastVisitDate if field exists
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { lastVisitDate: new Date() },
+      });
+    } catch {
+      // Field may not exist, continue
+    }
+
+    res.json({
+      message: 'Visit recorded. XP awarded!',
+      guildXp: xpResult.newXp,
+      explorerRank: xpResult.newRank,
+    });
+  } catch (error) {
+    console.error('Record visit error:', error);
+    res.status(500).json({ message: 'Server error while recording visit' });
+  }
+};

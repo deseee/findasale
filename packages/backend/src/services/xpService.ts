@@ -12,7 +12,7 @@ export const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   INITIATE: 0,
   SCOUT: 500,
   RANGER: 1500,
-  SAGE: 4000,
+  SAGE: 2500,
   GRANDMASTER: 10000,
 };
 
@@ -59,6 +59,11 @@ export const XP_SINKS = {
 export const MONTHLY_XP_CAPS = {
   VISIT: 150,
   AUCTION: 100,
+};
+
+// Daily XP caps (exploit prevention)
+export const DAILY_XP_CAPS = {
+  ITEM_SCANNED: 100,
 };
 
 /**
@@ -114,6 +119,46 @@ export function getRankProgress(currentXp: number) {
     nextRankXp: nextRankThreshold,
     progressPct,
   };
+}
+
+/**
+ * Check if user has reached daily XP cap for a given type
+ * Returns remaining XP that can be awarded today (0 if cap reached)
+ */
+export async function checkDailyXpCap(
+  userId: string,
+  type: string
+): Promise<number> {
+  const cap = DAILY_XP_CAPS[type as keyof typeof DAILY_XP_CAPS];
+  if (!cap) return Number.MAX_SAFE_INTEGER; // No cap for this type
+
+  try {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const todayXp = await prisma.pointsTransaction.aggregate({
+      where: {
+        userId,
+        type,
+        createdAt: {
+          gte: today,
+        },
+      },
+      _sum: {
+        points: true,
+      },
+    });
+
+    const awarded = todayXp._sum.points || 0;
+    const remaining = Math.max(0, cap - awarded);
+    return remaining;
+  } catch (error) {
+    console.error(
+      `[xpService] Failed to check daily cap for ${type}:`,
+      error
+    );
+    return cap; // Return full cap on error (fail open)
+  }
 }
 
 /**

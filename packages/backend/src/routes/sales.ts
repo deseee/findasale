@@ -21,6 +21,7 @@ import {
   updateMarkdownConfig,
   getMarkdownConfig,
   cancelSale,
+  recordVisit,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
@@ -50,6 +51,7 @@ router.get('/mine', authenticate, getMySales);
 router.get('/:id', getSale);
 router.get('/:id/activity', getSaleActivity); // Real-time activity feed (public)
 router.get('/:id/status', getSaleStatus); // Feature #14: Real-time status (public)
+router.post('/:id/visit', authenticate, recordVisit); // Phase 2a: Record visit and award XP
 router.post('/', authenticate, createSale);
 router.put('/:id', authenticate, updateSale);
 router.patch('/:id/status', authenticate, updateSaleStatus);

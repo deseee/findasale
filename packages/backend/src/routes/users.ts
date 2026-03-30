@@ -5,7 +5,8 @@ import {
   getUserProfile,
   getLeaderboard,
   getPublicShopperProfile,
-  getBadges
+  getBadges,
+  activateHuntPassTrial
 } from '../controllers/userController';
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -250,6 +251,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error while updating preferences' });
   }
 });
+
+// Phase 2a: Hunt Pass trial activation
+router.post('/hunt-pass/trial', authenticate, activateHuntPassTrial);
 
 // Brand Follow routes
 router.get('/:userId/brand-follows', authenticate, getBrandFollows);

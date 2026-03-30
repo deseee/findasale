@@ -50,8 +50,6 @@ function getEnRouteHoldLimit(rank: string): number {
 export const placeHold = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (hasOrganizerRole) return res.status(403).json({ message: 'Organizers cannot place holds' });
 
     const { itemId, note, latitude, longitude, qrScanId } = req.body;
     if (!itemId) return res.status(400).json({ message: 'itemId is required' });
@@ -75,6 +73,11 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
 
     const sale = (item.sale as any);
     const holdSettings = sale?.organizer?.holdSettings;
+
+    // Organizers cannot place holds on their own sale's items
+    if (sale?.organizerId === req.user.id) {
+      return res.status(403).json({ message: 'You cannot place a hold on your own sale.' });
+    }
 
     // Feature #121: Per-sale holdsEnabled toggle
     if (sale?.holdsEnabled === false) {
