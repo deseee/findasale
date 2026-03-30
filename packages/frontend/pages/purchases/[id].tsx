@@ -1,9 +1,9 @@
 /**
- * Purchase Confirmation / Checkout Success Page
- * Feature #80: Purchase Confirmation Redesign
+ * Persistent Purchase Confirmation Page
+ * Feature #174+#80: Auction Win / Purchase Confirmation
  *
- * Displays a designed moment after successful purchase.
- * Accessible via: checkout-success?purchaseId=XXX or from modal redirect
+ * Displays purchase confirmation details on a persistent page.
+ * Accessible via: /purchases/[purchaseId]
  */
 
 import React, { useEffect } from 'react';
@@ -15,40 +15,29 @@ import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
 
-const CheckoutSuccessPage = () => {
+const PurchaseConfirmationPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { purchaseId } = router.query;
+  const { id: purchaseId } = router.query;
 
   const { data: purchase, isLoading, isError } = useQuery({
-    queryKey: ['purchase-confirmation', purchaseId],
+    queryKey: ['purchase', purchaseId],
     queryFn: async () => {
       if (purchaseId) {
-        // If purchaseId is provided, fetch that specific purchase
         const response = await api.get(`/users/purchases/${purchaseId}`);
         return response.data;
-      } else {
-        // Otherwise, fetch the most recent purchase (first one in the list)
-        const response = await api.get('/users/purchases', { params: { sort: 'recent' } });
-        return response.data?.[0] || null;
       }
+      return null;
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !!purchaseId,
   });
 
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push(`/login?redirect=/shopper/checkout-success?purchaseId=${purchaseId || ''}`);
+      router.push(`/login?redirect=/purchases/${purchaseId || ''}`);
     }
   }, [user, authLoading, purchaseId, router]);
-
-  // Backward compat redirect: if purchaseId is provided, redirect to persistent page
-  useEffect(() => {
-    if (purchaseId && !isLoading && !isError && purchase) {
-      router.replace(`/purchases/${purchaseId}`);
-    }
-  }, [purchaseId, isLoading, isError, purchase, router]);
 
   if (authLoading || isLoading) {
     return (
@@ -77,7 +66,7 @@ const CheckoutSuccessPage = () => {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Purchase Not Found</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            We couldn't load your purchase details. The confirmation may not have been saved yet.
+            We couldn't load your purchase details.
           </p>
           <Link
             href="/shopper/purchases"
@@ -97,6 +86,34 @@ const CheckoutSuccessPage = () => {
     : null;
   const pickupAddress = sale?.address && sale?.city ? `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}` : null;
   const organizer = sale?.organizer;
+  const isAuction = item?.listingType === 'AUCTION';
+
+  // Determine status badge color
+  const getStatusBadge = () => {
+    switch (purchase.status) {
+      case 'PAID':
+        return (
+          <div className="inline-block px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full text-xs font-semibold">
+            ✓ Paid
+          </div>
+        );
+      case 'PENDING':
+        return (
+          <div className="inline-block px-3 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-full text-xs font-semibold">
+            ⏳ Pending
+          </div>
+        );
+      case 'FAILED':
+      case 'REFUNDED':
+        return (
+          <div className="inline-block px-3 py-1 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-full text-xs font-semibold">
+            ✕ {purchase.status}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <>
@@ -130,9 +147,10 @@ const CheckoutSuccessPage = () => {
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-3" style={{ fontFamily: 'Fraunces, serif' }}>
               It's yours! 🎉
             </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400">
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-3">
               Purchase confirmed
             </p>
+            {getStatusBadge()}
           </div>
 
           {/* Item Photo */}
@@ -185,6 +203,35 @@ const CheckoutSuccessPage = () => {
             </div>
           )}
 
+          {/* Auction Buyer Premium Breakdown (auction items only) */}
+          {isAuction && item?.auctionStartPrice && (
+            <div className="mb-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-4 uppercase tracking-wide">
+                🏆 Winning Bid Breakdown
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-blue-600 dark:text-blue-400">Winning Bid</span>
+                  <span className="font-medium text-blue-900 dark:text-blue-100">
+                    ${item.auctionStartPrice.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-blue-600 dark:text-blue-400">Buyer Premium (5%)</span>
+                  <span className="font-medium text-blue-900 dark:text-blue-100">
+                    ${(item.auctionStartPrice * 0.05).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-3 border-t border-blue-200 dark:border-blue-700 font-bold">
+                  <span className="text-blue-900 dark:text-blue-100">Total</span>
+                  <span className="text-blue-900 dark:text-blue-100">
+                    ${(item.auctionStartPrice * 1.05).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Order/Transaction Info */}
           <div className="mb-10 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wide">
@@ -201,7 +248,7 @@ const CheckoutSuccessPage = () => {
                 <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400 text-xs font-mono">Reference ID</span>
                   <span className="text-gray-700 dark:text-gray-300 text-xs font-mono break-all">
-                    {purchase.stripePaymentIntentId.substring(0, 12)}...
+                    {purchase.stripePaymentIntentId.substring(purchase.stripePaymentIntentId.length - 8)}
                   </span>
                 </div>
               )}
@@ -222,7 +269,7 @@ const CheckoutSuccessPage = () => {
           {/* CTAs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Link
-              href="/shopper/dashboard"
+              href="/shopper/purchases"
               className="inline-flex items-center justify-center px-6 py-4 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold rounded-lg transition shadow-md hover:shadow-lg"
             >
               View My Purchases
@@ -251,4 +298,4 @@ const CheckoutSuccessPage = () => {
   );
 };
 
-export default CheckoutSuccessPage;
+export default PurchaseConfirmationPage;

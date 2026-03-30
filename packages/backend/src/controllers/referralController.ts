@@ -23,7 +23,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json({
+    return res.json({
       totalReferrals: referrals.length,
       conversions: referrals.length, // each referral = signup conversion
       earnings: '0.00',              // monetary payouts pending payment integration
@@ -35,7 +35,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching referral dashboard:', error);
-    res.status(500).json({ message: 'Failed to fetch referral data' });
+    return res.status(500).json({ message: 'Failed to fetch referral data' });
   }
 };
 

@@ -195,7 +195,7 @@ const PrintInventoryPage = () => {
 
     setIsPrintKitLoading(true);
     try {
-      const response = await api.get(`/organizer/sales/${selectedSaleId}/print-kit`, {
+      const response = await api.get(`/organizers/${selectedSaleId}/print-kit`, {
         responseType: 'blob',
       });
 

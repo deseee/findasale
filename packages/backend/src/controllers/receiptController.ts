@@ -8,37 +8,42 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const receipts = await prisma.digitalReceipt.findMany({
+    // Query Purchase directly — DigitalReceipt records are not auto-created
+    // for all purchase types (auction wins, hold invoices). Purchase is the
+    // source of truth for what a shopper has bought.
+    const purchases = await prisma.purchase.findMany({
       where: {
-        purchase: {
-          userId: req.user.id,
-        },
+        userId: req.user.id,
+        status: 'PAID',
       },
-      include: {
-        purchase: {
+      select: {
+        id: true,
+        amount: true,
+        createdAt: true,
+        sale: {
           select: {
             id: true,
-            amount: true,
-            createdAt: true,
-            sale: {
-              select: {
-                id: true,
-                title: true,
-              },
-            },
-            item: {
-              select: {
-                id: true,
-                title: true,
-              },
-            },
+            title: true,
+          },
+        },
+        item: {
+          select: {
+            id: true,
+            title: true,
           },
         },
       },
       orderBy: {
-        issuedAt: 'desc',
+        createdAt: 'desc',
       },
     });
+
+    // Shape response to match legacy receipt format for frontend compatibility
+    const receipts = purchases.map((p) => ({
+      id: p.id,
+      issuedAt: p.createdAt,
+      purchase: p,
+    }));
 
     res.json({ receipts });
   } catch (error) {

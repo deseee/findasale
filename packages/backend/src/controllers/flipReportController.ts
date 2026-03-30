@@ -32,6 +32,9 @@ export const getFlipReportHandler = async (req: AuthRequest, res: Response) => {
     }
 
     console.error('Error fetching flip report:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({
+      message: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };

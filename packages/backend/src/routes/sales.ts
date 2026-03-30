@@ -48,27 +48,29 @@ router.get('/city/:city', getSalesByCity); // Bug fix: City page route
 // /mine must be registered before /:id so Express doesn't treat "mine" as an ID
 router.get('/mine', authenticate, getMySales);
 
-router.get('/:id', getSale);
+// Specific /:id/* routes MUST come before generic /:id to prevent catch-all matching
 router.get('/:id/activity', getSaleActivity); // Real-time activity feed (public)
 router.get('/:id/status', getSaleStatus); // Feature #14: Real-time status (public)
-router.post('/:id/visit', authenticate, recordVisit); // Phase 2a: Record visit and award XP
+router.get('/:id/calendar.ics', generateIcal); // BUG FIX #184: public, no auth needed — must be before /:id
+router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
+router.get('/:id/markdown-config', authenticate, getMarkdownConfig);
+router.put('/:id/markdown-config', authenticate, requireTier('PRO'), updateMarkdownConfig); // Feature #91: Auto-Markdown
+
 router.post('/', authenticate, createSale);
-router.put('/:id', authenticate, updateSale);
-router.patch('/:id/status', authenticate, updateSaleStatus);
-router.post('/:id/cancel', authenticate, cancelSale); // #120: Sale cancellation audit
-router.delete('/:id', authenticate, deleteSale);
-router.post('/:id/clone', authenticate, cloneSale);
+router.post('/generate-description', authenticate, generateSaleDescriptionHandler); // AI sale description generator
+router.post('/:id/visit', authenticate, recordVisit); // Phase 2a: Record visit and award XP
+router.post('/:id/track-scan', trackQrScan); // public, no auth needed
 router.post('/:id/generate-qr', authenticate, generateQRCode);
 router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);
 router.post('/:id/ala-carte-checkout', authenticate, createAlaCarteCheckout); // #132: À La Carte
-router.post('/generate-description', authenticate, generateSaleDescriptionHandler); // AI sale description generator
-router.post('/:id/track-scan', trackQrScan); // public, no auth needed
-router.get('/:id/calendar.ics', generateIcal); // public, no auth needed
-router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
+router.post('/:id/cancel', authenticate, cancelSale); // #120: Sale cancellation audit
 
-// Feature #91: Auto-Markdown (Smart Clearance) — PRO tier only
-router.put('/:id/markdown-config', authenticate, requireTier('PRO'), updateMarkdownConfig);
-router.get('/:id/markdown-config', authenticate, getMarkdownConfig);
+// Generic /:id routes (last so they don't intercept specific subroutes)
+router.get('/:id', getSale);
+router.put('/:id', authenticate, updateSale);
+router.patch('/:id/status', authenticate, updateSaleStatus);
+router.delete('/:id', authenticate, deleteSale);
+router.post('/:id/clone', authenticate, cloneSale);
 
 // Feature #84: Approach Notes — day-of notifications with parking/entrance info
 router.get('/:saleId/approach-notes', getApproachNotes); // Public read for saved sales, organizer only for unsaved

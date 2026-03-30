@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -31,11 +32,13 @@ interface PaymentFormProps {
   buyerPremium?: number;  // buyer premium amount in dollars
   buyerPremiumRate?: number; // buyer premium rate as decimal (e.g., 0.05 for 5%)
   isAuction?: boolean;    // true if item is an auction
+  purchaseId?: string;    // purchase ID for redirect after success
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, isAuction = false, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, isAuction = false, purchaseId, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
+  const router = useRouter();
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,6 +81,16 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
   const handleRetry = () => {
     setErrorMessage(null);
     setIsSubmitting(false);
+  };
+
+  const handleDone = () => {
+    // Redirect to persistent purchase confirmation page if purchaseId is available
+    if (purchaseId) {
+      router.push(`/purchases/${purchaseId}`);
+    } else {
+      // Fallback: close modal and let parent handle redirect
+      onClose();
+    }
   };
 
   if (paymentSucceeded) {
@@ -123,7 +136,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         </p>
 
         <button
-          onClick={onClose}
+          onClick={handleDone}
           className="w-full py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
         >
           Done
@@ -267,7 +280,7 @@ interface CheckoutModalProps {
   onSuccess: () => void;
 }
 
-const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, onSuccess }: CheckoutModalProps) => {
+const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, onClose, onSuccess }: CheckoutModalProps) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [itemPrice, setItemPrice] = useState(0);
   const [originalAmount, setOriginalAmount] = useState<number | undefined>(undefined);
@@ -280,9 +293,10 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
   const [saleName, setSaleName] = useState<string>('');
   const [saleAddress, setSaleAddress] = useState<string>('');
   const [saleDates, setSaleDates] = useState<string>('');
+  const [purchaseId, setPurchaseId] = useState<string | undefined>(initialPurchaseId);
 
   // Sprint 3: Coupon entry phase — shown before calling create-payment-intent
-  const [started, setStarted] = useState(!!purchaseId); // auction resumption skips coupon step
+  const [started, setStarted] = useState(!!initialPurchaseId); // auction resumption skips coupon step
   const [couponInput, setCouponInput] = useState('');
 
   useEffect(() => {
@@ -291,9 +305,9 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
     const loadIntent = async () => {
       try {
         let data: any;
-        if (purchaseId) {
+        if (initialPurchaseId) {
           // Resume an existing pending purchase (auction winners)
-          const response = await api.get(`/stripe/pending-payment/${purchaseId}`);
+          const response = await api.get(`/stripe/pending-payment/${initialPurchaseId}`);
           data = response.data;
           if (data.itemTitle) setResolvedTitle(data.itemTitle);
         } else if (itemId) {
@@ -311,6 +325,10 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
           if (data.discountApplied > 0) {
             setDiscountApplied(data.discountApplied);
             setOriginalAmount(data.originalAmount);
+          }
+          // Capture purchaseId from response (created by backend)
+          if (data.purchaseId) {
+            setPurchaseId(data.purchaseId);
           }
         } else {
           setLoadError('Invalid checkout configuration.');
@@ -331,7 +349,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
     };
 
     loadIntent();
-  }, [started, itemId, purchaseId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [started, itemId, initialPurchaseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSuccess = () => {
     onSuccess();
@@ -433,6 +451,7 @@ const CheckoutModal = ({ itemId, purchaseId, itemTitle, listingType, onClose, on
                   buyerPremium={buyerPremium}
                   buyerPremiumRate={buyerPremiumRate}
                   isAuction={listingType === 'AUCTION'}
+                  purchaseId={purchaseId}
                   saleName={saleName}
                   saleAddress={saleAddress}
                   saleDates={saleDates}
