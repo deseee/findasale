@@ -2,27 +2,34 @@
 
 ---
 
-## ✅ S348 Complete — Full nav/dashboard redesign shipped
+## ✅ S349 Complete — Nav/dashboard cleanup pass done. Design brief needed before more dev.
 
 ---
 
-## What Happened This Session (S348)
+## What Happened This Session (S349)
+
+**Nav fixes (AvatarDropdown.tsx + Layout.tsx):**
+- Shopper Dashboard now always visible for dual-role users — was hidden by `!isOrganizer` bug. Shows "As a shopper" label for context.
+- Webhooks moved out of Pro Tools → new TEAMS-gated "Developer Tools" section in both desktop and mobile nav
+- Mobile nav completely rewritten: removed 8 dead items (UGC Moderation, Typology Classifier, Fraud Signals, Offline Mode, Command Center, Appraisals, Sale Ripples, Item Library). Now matches desktop with icons, color coding, and collapsible sections for shopper links.
+
+**Dashboard cleanup (organizer/dashboard.tsx + shopper/dashboard.tsx):**
+- Community section now open by default (was collapsed)
+- "How It Works" explainer hidden for returning organizers — only shows with zero completed sales
+- Duplicate Creator Tier card removed (compact widget already shows this above)
+- "Plan a Sale — Coming Soon" card removed
+- Webhooks removed from dashboard button grid
+- Shopper nav buttons compacted, empty sections hidden, welcome banner gated to new users, duplicate stat cards removed
+
+⚠️ **Design quality is still mediocre.** Organizer dashboard is a nav menu on a page, not a real dashboard. Gamification shows state but doesn't motivate the next action. S350 must start with a proper design brief before any more dev touches dashboards.
+
+---
+
+## What Happened Last Session (S348)
 
 **Nav redesign (Layout.tsx + AvatarDropdown.tsx + TierGatedNav.tsx):**
 - Icons on every nav link — amber for organizer tools, indigo for shopper, purple for Pro, red for Admin
-- Sections renamed: "Your Sales", "Selling Tools", "Pro Tools", "My Collection", "Explore & Connect"
-- Dual-role users no longer see duplicate "My Profile" / "Shopper Dashboard" / "My Collections"
-- "Payouts" → "Earnings", "Typology Classifier" → "Item Tagger", "UGC Moderation" → "Manage Photos"
-- Coming soon badges on: Sale Hubs, Virtual Queue, Trades
-- Tooltips on 10 confusing items (hover over Holds, POS, Brand Kit, Hunt Pass, etc.)
-- Admin collapsible: all 7 sub-links, red styling, only visible to ADMIN users
-- Rank badge in desktop dropdown header (⚔️ Scout placeholder — TODO: wire to real XP)
-
-**Dashboard redesign (organizer/dashboard.tsx + shopper/dashboard.tsx):**
-- Organizer dashboard now has 5 tier-gated sections — FREE tiers see locked sections with "Upgrade" button to /pricing
-- Shopper dashboard has 5 new gamification widgets: Streak Tracker 🔥, Rank & XP bar, Recent Achievements, Hunt Pass CTA, Leaderboard Snippet
-
-⚠️ **Two TODOs flagged:** ExplorerProfile model doesn't exist in schema yet → rank/XP widget shows placeholder. Leaderboard widget shows static data until API endpoint built. Both have `// TODO` comments in code.
+- Dual-role fixes, section renames, brand voice updates, coming soon badges, tooltips, Admin collapsible
 
 ---
 

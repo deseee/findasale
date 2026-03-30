@@ -65,34 +65,66 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S349)
+**S349 Nav/Dashboard Pass COMPLETE (2026-03-30):** Continued nav audit from S348 feedback. 4 files changed. (1) **P0 dual-role regression fixed:** AvatarDropdown.tsx + Layout.tsx — Shopper Dashboard was hidden for dual-role users behind `!isOrganizer` condition. Now always shows for users with USER role + "As a shopper" label for dual-role context. (2) **P0 Webhooks regrouped:** Moved from Pro Tools to new TEAMS-gated "Developer Tools" collapsible in both AvatarDropdown.tsx + Layout.tsx. (3) **Mobile nav rewritten:** Removed 8 dead items (UGC Moderation, Typology Classifier, Fraud Signals, Offline Mode, Command Center, Appraisals, Sale Ripples, Item Library). Now matches desktop: amber/purple/indigo sections, icons on all items, MY COLLECTION + EXPLORE & CONNECT collapsible for shoppers. (4) **Organizer dashboard cleaned:** Community defaultOpen=true. "How It Works" gated to zero-sales organizers. Duplicate Creator Tier card removed. "Plan a Sale — Coming Soon" card removed. Webhooks removed from dashboard button grid. (5) **Shopper dashboard dead space removed:** Nav shortcut buttons compacted. Empty "Saved Sales Coming Up" section hidden. "Welcome to FindA.Sale!" gated to zero-purchase users. Duplicate stat cards removed. Sales Near You hides on error. ⚠️ **Design quality assessment (Patrick):** Organizer dashboard is C+ — structured as navigation-menu-on-page rather than data/job-to-be-done dashboard. Gamification is D — rank/XP shows state but not motivating next action. S350 needs ground-up dashboard design brief before any more dev. Files: AvatarDropdown.tsx, Layout.tsx, organizer/dashboard.tsx, shopper/dashboard.tsx.
 
-### S349 Priority 1: Push S347 + S348 files (Patrick action first)
-See patrick-dashboard.md for combined push block.
+---
 
-### S349 Priority 2: Hold-to-Pay QA (evening — off peak hours)
-Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets email + in-app notification → ClaimCard visible → Stripe link → payment → SOLD + organizer notified + +15 guildXP. Test accounts: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
+## Next Session (S350)
 
-### S349 Priority 3: Chrome QA — all FIXED S344+S346+S347 + new nav/dashboard
+### S350 Priority 1: Push S349 files (Patrick action first)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
+git commit -m "S349: mobile nav rewrite, dashboard dead space removal, dual-role nav fixes, webhooks to TEAMS"
+.\push.ps1
+```
+
+### S350 Priority 2: Dashboard Design Brief — Research + Spec (THE MAIN WORK)
+
+**Context:** The dashboards have been patched incrementally without a design north star. Patrick assessed organizer dashboard C+, gamification D. The fundamental problem: organizer dashboard is a nav menu on a page, not a job-to-be-done dashboard. Shopper dashboard has dead sections and disconnected gamification.
+
+**S350 task:** Dispatch UX + Game Designer + Innovation in parallel with a real design brief:
+
+**UX brief:**
+- Research existing UX specs in `claude_docs/ux-spotchecks/` for prior design decisions
+- Define the 3-second test for each dashboard: "Within 3 seconds of opening, an organizer knows ___. A shopper knows ___."
+- Produce wireframe-level content spec: what's above the fold, what's below, what's never visible unless sought
+- Organizer dashboard must be STATE-AWARE: new organizer (0 sales) vs. active organizer (sale in progress) vs. between-sales organizer show different content
+- Shopper gamification must have a MOTIVATING HOOK on every rank/XP display: not just "Initiate 0/500 XP" but "Visit a sale this week to earn 5 XP → reach Scout at 500 XP"
+
+**Game Designer brief:**
+- Audit every gamification display in the shopper dashboard
+- Every progress indicator must answer: "What is my next specific action to advance?"
+- Define the exact copy formula for rank progress: [current rank] → [next rank] at [threshold] XP. You need [gap] more XP. Earn it by: [top 3 specific actions with XP values]
+
+**Innovation brief:**
+- How do the best consumer apps (Duolingo, Strava, Airbnb host dashboard) solve the "returning user dashboard" problem?
+- What would a personalized, state-aware organizer dashboard look like at FindA.Sale?
+- What's the 10x improvement over the current nav-as-dashboard approach?
+
+### S350 Priority 3: Hold-to-Pay QA (deferred from S349)
+Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets ClaimCard → Stripe link → payment → SOLD + XP. Test: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
+
+### S350 Priority 4: Chrome QA backlog (after design brief is locked)
 S344 pending: #174+#80, #184, #41, #7, #89, #62, #37, #149.
 S346 pending: #48, #13, #157, #46, #199, #177, #58, #29.
 S347 pending: #212, #213, #131, #60, #123, #153.
-S348 new: nav icons + tier-aware dashboard + gamification widgets.
-One dispatch per feature, sequential Chrome QA.
 
-### S349 Priority 4: ExplorerProfile schema — Architect decision
-Rank/XP widget + AvatarDropdown rank badge both have TODO placeholders waiting for real XP data. Architect needs to spec ExplorerProfile model (or confirm which existing model carries rank/xp) before those can be wired.
-- #218 Shopper Trades: full feature build
+### S350 Notes
+- Do NOT dispatch more nav/dashboard dev until S350 design brief is complete and Patrick approves the spec
+- ExplorerProfile schema (Architect decision) still pending — Rank/XP widget uses placeholder data
+- Sage threshold is 2500 XP (beta only, revert post-beta)
+- Shopper profiles migration 20260330_add_shopper_profile_fields must be deployed to Railway if not done
 
-### S348 Notes
-- XP test accounts: SQL in decisions-log.md S342 section to set users to any rank for beta testing
-- Sage threshold is 2500 XP (was 4000) — beta-only, revert post-beta
-- Shopper profiles migration must be deployed (20260330_add_shopper_profile_fields)
-
-### Patrick Actions Before S348
-1. Run S347 push block below
-2. Deploy migration 20260330_add_shopper_profile_fields to Railway (from S344) if not yet done
-3. Check STRIPE_WEBHOOK_SECRET in Railway env vars (for Hold-to-Pay QA)
+### Patrick Actions Before S350
+1. Push S349 files (block above)
+2. Check STRIPE_WEBHOOK_SECRET in Railway env vars (Hold-to-Pay QA)
 
 ### S347 Complete Push Block (13 files)
 ```powershell
