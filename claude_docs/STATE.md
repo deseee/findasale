@@ -7,6 +7,8 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S347 Batch 2 COMPLETE (2026-03-30):** 3 parallel agents, 3 more files changed + roadmap updated. (1) **Roadmap updated:** 7 rows updated to reflect S347 Batch 1 completions (#212, #213, #131, #123, #153, #60, #59). (2) **#75 Tier Lapse — CONFIRMED FULLY IMPLEMENTED (no code change needed):** Audit found complete implementation — tierLapseService.ts, tierLapseJob.ts (8AM + 11PM UTC crons), stripeController.ts handles customer.subscription.deleted + invoice.payment_failed, auth.ts middleware sets req.user.subscriptionLapsed, organizer dashboard lapse banner exists. Feature is code-complete, moving to Chrome QA queue. (3) **#124 Rarity Boost XP Sink UI BUILT:** New RarityBoostModal.tsx (sale picker, 15 XP cost, disabled when insufficient XP); useXpSink.ts updated (saleId param added); loyalty.tsx "Coming Soon" placeholder replaced with functional Rarity Boost card. Backend POST /api/xp/sink/rarity-boost was already complete.
+
 **S347 Batch 1 COMPLETE (2026-03-30):** QA deferred to evening. 4 parallel agents, 8 files changed. (1) **#212 Leaderboard badges FIXED:** leaderboardController.ts now includes top-3 userBadges (id, name, iconUrl) in shopper query; leaderboard.tsx adds `> 0` guard on totalItemsSold display. (2) **#59 Streak Rewards:** StreakWidget was already wired into loyalty.tsx — confirmed no change needed (was already there per S346). (3) **#71 Reputation stray-0 on leaderboard FIXED:** `{org.totalItemsSold > 0 && ...}` guard added to leaderboard.tsx. (4) **#213 Hunt Pass CTA FIXED:** dashboard.tsx Hunt Pass card upgraded — now shows 3 benefits (2x XP, 6h early access, exclusive badge), prominent "Upgrade Now" button to /shopper/hunt-pass, pricing visible ($4.99/mo). Only shows when huntPassActive !== true. (5) **#131 Share Templates FIXED:** SharePromoteModal.tsx — Facebook uses sharer popup, Nextdoor = copy+open newsfeed with toast, Threads uses threads.net/intent/post popup, Pinterest uses pin dialog, TikTok = copy+open with toast. (6) **#60 Premium Tier Bundle IMPROVED:** organizer/pricing.tsx updated with correct prices ($49 PRO, $99 TEAMS) and full feature lists (Flip Report, AI Valuation, CSV Export, Brand Kit, Auto-Markdown, Print Kit, etc). (7) **#123 Explorer's Guild Phase 2 IMPROVED:** loyalty.tsx — XP earn tooltip (+5 visit, +10 scan, +25 purchase), rank threshold display (Initiate→Scout 500→Ranger 1500→Sage 2500→Grandmaster 5000), Hunt Pass "$4.99/month" badge. Layout.tsx — "Loyalty" nav label → "Explorer's Guild". (8) **#153 Organizer Profile IMPROVED:** settings.tsx — Facebook, Instagram, Etsy URL fields added (all exist in schema). PARTIAL items 8 of 14 now addressed.
 
 **S346 Batch 1 COMPLETE (2026-03-30):** TS build fixes + 4 BROKEN items cleared. (1) **TS fixes:** `estimatedValue` (non-existent field) → `price` in userController.ts line 442; `name` → `businessName` in routes/users.ts OrganizerSelect; added `profileSlug`, `collectorTitle`, `purchasesVisible` to AuthContext.tsx User interface (fields exist in schema, were missing from frontend type). Both Railway and Vercel unblocked. (2) **#48 Treasure Trail FIXED:** Dark mode contrast on trail/[shareToken].tsx + stale state after edit save in trails/[trailId].tsx. (3) **#13 TEAMS Workspace FIXED:** Member lookup missing workspace relations in workspaceController.ts + invite error handlers parsing wrong field (`error` vs `message`) in workspace.tsx. (4) **#157 Pickup Scheduling FIXED:** All 4 react-query mutations (PickupBookingCard, PickupSlotManager x2, MyPickupAppointments) were returning full axios response instead of `response.data` — onSuccess callbacks silently received wrong shape. (5) **#46 Typology Classifier FIXED:** Missing ANTHROPIC_API_KEY guard in typologyService.ts batchClassify() + dark mode contrast in TypologyBadge.tsx. BROKEN section now clear of all P1 code bugs.
@@ -88,11 +90,12 @@ One dispatch per feature, sequential Chrome QA.
 2. Deploy migration 20260330_add_shopper_profile_fields to Railway (from S344) if not yet done
 3. Check STRIPE_WEBHOOK_SECRET in Railway env vars (for Hold-to-Pay QA)
 
-### S347 Complete Push Block (10 files)
+### S347 Complete Push Block (13 files)
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
 git add packages/backend/src/controllers/leaderboardController.ts
 git add packages/frontend/pages/leaderboard.tsx
 git add packages/frontend/pages/shopper/dashboard.tsx
@@ -101,7 +104,9 @@ git add packages/frontend/pages/organizer/pricing.tsx
 git add packages/frontend/pages/shopper/loyalty.tsx
 git add packages/frontend/components/Layout.tsx
 git add packages/frontend/pages/organizer/settings.tsx
-git commit -m "S347: leaderboard badges, Hunt Pass CTA, share templates, tier pricing, Guild tooltips, org profile fields"
+git add packages/frontend/components/RarityBoostModal.tsx
+git add packages/frontend/hooks/useXpSink.ts
+git commit -m "S347: leaderboard badges, Hunt Pass CTA, share templates, tier pricing, Guild UX, org profile, rarity boost UI, roadmap sync"
 .\push.ps1
 ```
 
