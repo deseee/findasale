@@ -129,54 +129,54 @@ const ShopperDashboard = () => {
           <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">My Dashboard</h1>
 
           {/* Quick Links */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+          <div className="flex flex-wrap gap-2 mb-8">
             <Link
               href="/shopper/explorer-passport"
-              className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-2xl mb-2">🗺️</div>
+              <div className="text-lg mb-0.5">🗺️</div>
               <p className="text-xs font-semibold text-purple-900 dark:text-purple-300">Explorer</p>
             </Link>
             <Link
               href="/shopper/loyalty"
-              className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-2xl mb-2">✨</div>
+              <div className="text-lg mb-0.5">✨</div>
               <p className="text-xs font-semibold text-amber-900 dark:text-amber-300">Loyalty</p>
             </Link>
             <Link
               href="/shopper/wishlist"
-              className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-2xl mb-2">💕</div>
+              <div className="text-lg mb-0.5">💕</div>
               <p className="text-xs font-semibold text-blue-900 dark:text-blue-300">Collections</p>
             </Link>
             <Link
               href="/shopper/trails"
-              className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-2xl mb-2">🗺️</div>
+              <div className="text-lg mb-0.5">🗺️</div>
               <p className="text-xs font-semibold text-green-900 dark:text-green-300">Trails</p>
             </Link>
             <Link
               href="/shopper/loot-log"
-              className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-2xl mb-2">📜</div>
+              <div className="text-lg mb-0.5">📜</div>
               <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">Loot Log</p>
             </Link>
             <Link
               href="/shopper/receipts"
-              className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-900/30 dark:to-pink-900/30 border border-rose-200 dark:border-rose-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-900/30 dark:to-pink-900/30 border border-rose-200 dark:border-rose-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-2xl mb-2">🧾</div>
+              <div className="text-lg mb-0.5">🧾</div>
               <p className="text-xs font-semibold text-rose-900 dark:text-rose-300">Receipts</p>
             </Link>
             <Link
               href="/shopper/hauls"
-              className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30 border border-orange-200 dark:border-orange-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
+              className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30 border border-orange-200 dark:border-orange-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-2xl mb-2">📸</div>
+              <div className="text-lg mb-0.5">📸</div>
               <p className="text-xs font-semibold text-orange-900 dark:text-orange-300">Hauls</p>
             </Link>
           </div>
@@ -206,13 +206,6 @@ const ShopperDashboard = () => {
                 <div className="bg-indigo-600 dark:bg-indigo-500 h-full" style={{ width: '0%' }}></div>
               </div>
               {/* TODO: wire to real ExplorerProfile XP/rank data */}
-            </div>
-
-            {/* Widget 3: Recent Achievements */}
-            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
-              <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-3">🏅 Recent Achievements</p>
-              <p className="text-xs text-purple-700 dark:text-purple-300">No badges yet — start exploring sales!</p>
-              {/* TODO: wire to real Achievement/UserAchievement data */}
             </div>
 
             {/* Widget 4: Hunt Pass CTA (spans full width on mobile, 1/3 on desktop if not active) */}
@@ -267,29 +260,6 @@ const ShopperDashboard = () => {
             </div>
           </div>
 
-          {/* Calendar Widget - Saved Sales Coming Up */}
-          <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">📅 Saved Sales Coming Up</h3>
-            </div>
-            <div className="text-center py-6">
-              <p className="text-warm-600 dark:text-warm-400 mb-4">No upcoming saved sales</p>
-              <Link
-                href="/"
-                className="inline-block text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
-              >
-                Browse Sales →
-              </Link>
-            </div>
-            <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">
-              <Link
-                href="/calendar"
-                className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium"
-              >
-                View Full Calendar →
-              </Link>
-            </div>
-          </div>
 
           {/* Tabs */}
           <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
@@ -420,7 +390,7 @@ const ShopperDashboard = () => {
 
               <ActivitySummary />
 
-              {/* Welcome nudge only shown when no purchases yet — positioned after stats for discoverability */}
+              {/* Welcome nudge only shown for brand-new users with zero activity (no purchases, no saves, no streak) */}
               {purchases && purchases.length === 0 && (
                 <EmptyState
                   icon="🎉"
@@ -430,6 +400,7 @@ const ShopperDashboard = () => {
                 />
               )}
 
+              {/* SalesNearYou hides itself on error state */}
               <SalesNearYou />
 
               <RecentlyViewed />
