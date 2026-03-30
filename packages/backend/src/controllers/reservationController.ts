@@ -872,7 +872,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
 
     // LOCKED DECISION #1: Fee calculation based on organizer tier
     // Calculate total from all bundled items
-    const hasPro = organizer.user?.roleSubscriptions?.some(rs => rs.tier === 'PRO') ?? false;
+    const hasPro = organizer.user?.roleSubscriptions?.some(rs => rs.subscriptionTier === 'PRO') ?? false;
     const platformFeePercent = hasPro ? 0.08 : 0.10;
 
     let totalAmount = 0;
@@ -880,7 +880,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     const bundledItemIds: string[] = [];
 
     for (const hold of allShopperHolds) {
-      const itemPrice = hold.item.estimatedPrice || 0;
+      const itemPrice = hold.item.price || 0;
       totalAmount += itemPrice;
       const itemPlatformFee = Math.round(itemPrice * platformFeePercent * 100) / 100;
       totalPlatformFeeAmount += itemPlatformFee;
@@ -902,7 +902,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           currency: 'usd',
           product_data: {
             name: hold.item.title,
-            description: `From ${hold.item.sale.title}`,
+            description: `Estate sale item`,
             images: hold.item.photoUrls && hold.item.photoUrls.length > 0 ? [hold.item.photoUrls[0]] : [],
           },
           unit_amount_decimal: String(Math.round((hold.item.price || 0) * 100)),

@@ -1245,7 +1245,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   <p>The organizer will contact you soon about shipping or pickup details.</p>
                   <p style="color: #6b7280; font-size: 14px;">Transaction ID: ${invoiceId.slice(0, 8)}</p>
                 `,
-              }).catch(err => console.warn('[hold-invoice] Failed to send shopper email:', err));
+              }).catch((err: unknown) => console.warn('[hold-invoice] Failed to send shopper email:', err));
 
               // Email to organizer
               resend.emails.send({
@@ -1259,7 +1259,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   <p>Payout will be transferred to your Stripe Connect account within 1-2 business days.</p>
                   <p style="color: #6b7280; font-size: 14px;">Platform fee: $${platformFee} | Stripe fee: $${stripeFeeAmount.toFixed(2)}</p>
                 `,
-              }).catch(err => console.warn('[hold-invoice] Failed to send organizer email:', err));
+              }).catch((err: unknown) => console.warn('[hold-invoice] Failed to send organizer email:', err));
             }
           });
 
