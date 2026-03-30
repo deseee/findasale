@@ -231,36 +231,43 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     // Feature #14: Send organizer alert email + in-app notification (fire-and-forget)
     try {
       const sale = (item.sale as any);
-      const organizer = await prisma.organizer.findUnique({
-        where: { id: sale?.organizerId },
-        include: { user: { select: { id: true, email: true, name: true } } },
-      });
-      if (organizer?.user) {
-        // In-app notification for organizer
-        await prisma.notification.create({
-          data: {
-            userId: organizer.user.id,
-            type: 'hold_update',
-            title: 'New hold placed',
-            body: `A shopper placed a hold on "${item.title}" from ${sale?.title || 'your sale'}.`,
-            link: '/organizer/holds',
-            notificationChannel: 'IN_APP',
-            channel: 'OPERATIONAL',
-          },
+      const organizerId = sale?.organizerId;
+      if (!organizerId) {
+        console.warn('[alert] Sale missing organizerId:', { saleId: item.saleId });
+      } else {
+        const organizer = await prisma.organizer.findUnique({
+          where: { id: organizerId },
+          include: { user: { select: { id: true, email: true, name: true } } },
         });
-        // Email alert
-        setImmediate(() => {
-          sendHoldPlacedAlert({
-            organizerEmail: organizer.user.email,
-            organizerName: organizer.user.name,
-            itemTitle: item.title,
-            saleTitle: sale?.title || 'Sale',
-            saleId: item.saleId,
-          }).catch(err => console.warn('[alert] Failed to send hold placed email:', err));
-        });
+        if (!organizer) {
+          console.warn('[alert] Organizer not found for sale:', { organizerId, saleId: item.saleId });
+        } else if (organizer?.user) {
+          // In-app notification for organizer
+          await prisma.notification.create({
+            data: {
+              userId: organizer.user.id,
+              type: 'hold_update',
+              title: 'New hold placed',
+              body: `A shopper placed a hold on "${item.title}" from ${sale?.title || 'your sale'}.`,
+              link: '/organizer/holds',
+              notificationChannel: 'IN_APP',
+              channel: 'OPERATIONAL',
+            },
+          });
+          // Email alert
+          setImmediate(() => {
+            sendHoldPlacedAlert({
+              organizerEmail: organizer.user.email,
+              organizerName: organizer.user.name,
+              itemTitle: item.title,
+              saleTitle: sale?.title || 'Sale',
+              saleId: item.saleId,
+            }).catch(err => console.warn('[alert] Failed to send hold placed email:', err));
+          });
+        }
       }
     } catch (err) {
-      console.warn('[alert] Failed to fetch organizer for hold alert:', err);
+      console.error('[alert] Exception when creating organizer notification:', err);
     }
 
     res.status(201).json(reservation);
