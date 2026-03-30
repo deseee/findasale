@@ -111,8 +111,8 @@ const ShopperMessagesPage = () => {
           </div>
         ) : (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <p className="text-gray-600 dark:text-gray-400 mb-4">No messages yet</p>
-            <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+            <p className="text-gray-600 dark:text-gray-300 mb-4">No messages yet</p>
+            <p className="text-sm text-gray-500 dark:text-gray-300 mb-4">
               Start messaging organizers about their sales
             </p>
             <Link

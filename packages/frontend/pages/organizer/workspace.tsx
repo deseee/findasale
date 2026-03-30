@@ -176,7 +176,7 @@ export default function WorkspacePage() {
                 <form onSubmit={handleCreateWorkspace} className="max-w-md mx-auto">
                   <input
                     type="text"
-                    placeholder="Workspace name (e.g., 'Grand Rapids Estate Sales')"
+                    placeholder="Workspace name (e.g., 'My Workspace')"
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md mb-4 dark:bg-gray-700 dark:text-white"

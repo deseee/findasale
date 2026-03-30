@@ -254,7 +254,7 @@ const ShopperDashboard = () => {
                     <span className="text-xl">👑</span>
                     <div className="flex-1">
                       <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to flash deals, earn 2x points on every action, and receive an exclusive badge. $4.99/month.</p>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">Get early access to flash deals, earn 2x XP on every action, and receive an exclusive badge. $4.99/month.</p>
                       <div className="flex gap-2 mt-3">
                         <Link
                           href="/shopper/hunt-pass"
@@ -290,7 +290,7 @@ const ShopperDashboard = () => {
                     <span className="text-xl">✅</span>
                     <div className="flex-1">
                       <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass Active</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 2x points on every action and get early access to flash deals!</p>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 2x XP on every action and get early access to flash deals!</p>
                     </div>
                   </div>
                 </div>
@@ -377,7 +377,7 @@ const ShopperDashboard = () => {
                   <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">Nothing saved yet</h3>
                   <p className="text-warm-600 dark:text-warm-400 mb-6">
                     Tap the heart on any item you like and it will appear here.
-                    You also earn 2 Hunt Pass points for every favorite!
+                    You also earn 2 Hunt Pass XP for every favorite!
                   </p>
                   <Link
                     href="/"

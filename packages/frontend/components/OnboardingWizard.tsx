@@ -217,7 +217,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                   type="text"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="e.g., Family Estate Sales"
+                  placeholder="e.g., My Business"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
               </div>
@@ -392,3 +392,4 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
 };
 
 export default OnboardingWizard;
+

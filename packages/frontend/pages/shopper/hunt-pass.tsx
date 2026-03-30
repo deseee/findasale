@@ -76,10 +76,10 @@ const HuntPassPage = () => {
                   <div className="text-3xl flex-shrink-0">⭐</div>
                   <div>
                     <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                      2x Streak Points
+                      2x Streak XP
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Earn double points on every action — favorites, visits, purchases, and more. Build your streak twice as fast and unlock badges sooner.
+                      Earn double XP on every action — favorites, visits, purchases, and more. Build your streak twice as fast and unlock badges sooner.
                     </p>
                   </div>
                 </div>
@@ -135,19 +135,19 @@ const HuntPassPage = () => {
 
               <details className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <summary className="font-semibold text-warm-900 dark:text-warm-100 cursor-pointer">
-                  How are 2x points calculated?
+                  How is 2x XP calculated?
                 </summary>
                 <p className="text-warm-600 dark:text-warm-400 mt-3">
-                  Every action that normally earns points — visiting a sale, favoriting an item, making a purchase — is doubled. This includes all individual action points, streak multipliers, and bonus promotions.
+                  Every action that normally earns XP — visiting a sale, favoriting an item, making a purchase — is doubled. This includes all individual action XP, streak multipliers, and bonus promotions.
                 </p>
               </details>
 
               <details className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <summary className="font-semibold text-warm-900 dark:text-warm-100 cursor-pointer">
-                  What are Streak Points?
+                  What is Streak XP?
                 </summary>
                 <p className="text-warm-600 dark:text-warm-400 mt-3">
-                  Streak Points are rewards you earn for engaging with FindA.Sale. Visit sales, favorite items, make purchases, and interact with the community to build your streak. Hunt Pass holders earn points twice as fast, unlocking badges and exclusive rewards sooner.
+                  Streak XP is the reward you earn for engaging with FindA.Sale. Visit sales, favorite items, make purchases, and interact with the community to build your streak. Hunt Pass holders earn XP twice as fast, unlocking badges and exclusive rewards sooner.
                 </p>
               </details>
 

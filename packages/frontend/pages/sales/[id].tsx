@@ -36,39 +36,6 @@ import MessageComposeModal from '../../components/MessageComposeModal'; // Featu
 import HuntSummary from '../../components/HuntSummary'; // Feature #85: Treasure Hunt QR
 import { useArrivalAssistant } from '../../hooks/useArrivalAssistant'; // Feature #84: Approach Notes
 
-// Feature #90: Sale Soundtrack — Spotify & Apple Music playlist mapping by sale type
-const SALE_TYPE_PLAYLISTS: Record<string, { label: string; spotify: string; appleMusic: string }> = {
-  ESTATE: {
-    label: 'Elegant & Nostalgic',
-    spotify: 'https://open.spotify.com/playlist/37i9dQZF1DX4WYpdgoIcn6',
-    appleMusic: 'https://music.apple.com/us/playlist/a-morning-stroll/pl.5ee8333dbe944d9f9151e97240a6f8e',
-  },
-  YARD: {
-    label: 'Fun & Upbeat',
-    spotify: 'https://open.spotify.com/playlist/37i9dQZF1DXbTxeAdrVG2l',
-    appleMusic: 'https://music.apple.com/us/playlist/feel-good-friday/pl.f4d106fed2bd41149ead4b6bfb573ab',
-  },
-  GARAGE: {
-    label: 'Fun & Upbeat',
-    spotify: 'https://open.spotify.com/playlist/37i9dQZF1DXbTxeAdrVG2l',
-    appleMusic: 'https://music.apple.com/us/playlist/feel-good-friday/pl.f4d106fed2bd41149ead4b6bfb573ab',
-  },
-  AUCTION: {
-    label: 'Focused & Energized',
-    spotify: 'https://open.spotify.com/playlist/37i9dQZF1DX4sWSpwq3LiO',
-    appleMusic: 'https://music.apple.com/us/playlist/focus-flow/pl.acc464c750b94302b8a32e4f7d068226',
-  },
-  FLEA_MARKET: {
-    label: 'Soulful & Eclectic',
-    spotify: 'https://open.spotify.com/playlist/37i9dQZF1DX2sUQwD7tbmL',
-    appleMusic: 'https://music.apple.com/us/playlist/saturday-morning/pl.2b237a89dac443ddb8e57a282f1c0651',
-  },
-  CONSIGNMENT: {
-    label: 'Warm & Acoustic',
-    spotify: 'https://open.spotify.com/playlist/37i9dQZF1DWZqd5JICZI0u',
-    appleMusic: 'https://music.apple.com/us/playlist/acoustic-hits/pl.f4023d5d72964b8ea4f76b2e0d84e1d8',
-  },
-};
 
 interface Sale {
   id: string;
@@ -84,7 +51,7 @@ interface Sale {
   lng: number;
   status?: string;
   photoUrls: string[];
-  saleType?: string; // Feature #90: Sale Soundtrack — ESTATE | YARD | AUCTION | FLEA_MARKET | CONSIGNMENT
+  saleType?: string;
   organizer: {
     id: string;
     userId: string;
@@ -180,6 +147,12 @@ const SaleDetailPage = () => {
       .then((res) => { if (res.data?.awarded === true) showToast('\ud83c\udfc6 +1 pt earned!', 'points'); })
       .catch(() => { /* non-fatal */ });
   }, [id, user]);
+
+  // Award 10 XP for visiting a sale (once per sale per day, auth required)
+  useEffect(() => {
+    if (!id || !user) return;
+    api.post(`/api/sales/${id}/visit`).catch(() => { /* fire-and-forget */ });
+  }, [id, user?.id]);
 
   const { data: sale, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['sale', id],
@@ -636,44 +609,6 @@ const SaleDetailPage = () => {
                 <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-2">QR Code</h2>
                 <p className="text-xs text-warm-400 dark:text-gray-500 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
                 <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
-              </div>
-            )}
-
-            {/* Feature #90: Sale Soundtrack — Ambient Vibes */}
-            {sale.saleType && SALE_TYPE_PLAYLISTS[sale.saleType] && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-                <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-2 flex items-center gap-2">
-                  <span>🎵</span>
-                  Sale Soundtrack
-                </h2>
-                <p className="text-sm text-warm-600 dark:text-gray-400 mb-1">
-                  {SALE_TYPE_PLAYLISTS[sale.saleType].label}
-                </p>
-                <p className="text-xs text-warm-500 dark:text-gray-500 mb-4">
-                  Curated vibes for your browsing experience
-                </p>
-                <div className="flex gap-3">
-                  <a
-                    href={SALE_TYPE_PLAYLISTS[sale.saleType].spotify}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0m5.521 17.34c-.24.315-.74.42-1.14.175-3.12-1.92-7.02-2.357-11.64-1.29-.42.12-.84-.12-.96-.51-.12-.41.12-.84.51-.96 5.04-1.137 9.46-.676 12.98 1.498.41.25.48.75.25 1.14m1.44-3.3c-.301.39-.921.54-1.44.42-3.3-.602-8.34-.755-12.33.298-.525.15-1.076-.165-1.227-.66-.15-.498.165-1.045.66-1.2 4.513-1.112 9.938-.935 13.61.644.529.277.667.94.385 1.456m.126-3.403c-3.96-.7-10.717-.777-15.02.298-.533.111-1.053-.26-1.16-.795-.105-.527.26-1.067.795-1.157 4.763-.981 12.022-.899 16.22.589.524.161.853.688.692 1.226-.161.537-.688.865-1.226.705z" />
-                    </svg>
-                    ♫ Spotify
-                  </a>
-                  <a
-                    href={SALE_TYPE_PLAYLISTS[sale.saleType].appleMusic}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                  >
-                    <span className="text-lg">♫</span>
-                    Apple Music
-                  </a>
-                </div>
               </div>
             )}
 

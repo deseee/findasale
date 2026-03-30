@@ -92,7 +92,7 @@ export default function CreateTrailPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., 'Downtown Estate Sales Loop'"
+                placeholder="e.g., 'My First Trail'"
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-500 dark:placeholder-warm-400"
                 required
               />
