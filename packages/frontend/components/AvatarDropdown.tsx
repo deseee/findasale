@@ -312,6 +312,13 @@ const AvatarDropdown: React.FC = () => {
                 Shopper Dashboard
               </Link>
               <Link
+                href="/shopper/loyalty"
+                className="block px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors font-medium"
+                onClick={() => setIsOpen(false)}
+              >
+                Explorer's Guild
+              </Link>
+              <Link
                 href="/profile"
                 className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}

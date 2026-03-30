@@ -1327,11 +1327,45 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Import awardXp here to avoid circular dependency
-    const { awardXp, XP_AWARDS } = await import('../services/xpService');
+    // Import awardXp and cap check here to avoid circular dependency
+    const { awardXp, checkDailyXpCap, XP_AWARDS } = await import('../services/xpService');
 
-    // Award 25 XP for scanning item
-    const xpResult = await awardXp(userId, 'ITEM_SCANNED', 25, { itemId });
+    // Check if user has already scanned this item today (prevent duplicate scans)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const alreadyScannedToday = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId,
+        type: 'ITEM_SCANNED',
+        itemId,
+        createdAt: {
+          gte: today,
+        },
+      },
+    });
+
+    if (alreadyScannedToday) {
+      res.status(200).json({
+        message: 'Item already scanned today.',
+        guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
+      });
+      return;
+    }
+
+    // Check daily cap for ITEM_SCANNED XP
+    const dailyRemaining = await checkDailyXpCap(userId, 'ITEM_SCANNED');
+    const xpToAward = Math.min(25, dailyRemaining);
+
+    if (xpToAward === 0) {
+      res.status(200).json({
+        message: 'Daily item scan XP cap reached. Try again tomorrow.',
+        guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
+      });
+      return;
+    }
+
+    // Award XP (respecting daily cap)
+    const xpResult = await awardXp(userId, 'ITEM_SCANNED', xpToAward, { itemId });
 
     // Find or create "Item Scout" badge
     let badge = await prisma.badge.findUnique({

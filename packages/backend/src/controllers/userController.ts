@@ -485,3 +485,59 @@ export const getBadges = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error while fetching badges' });
   }
 };
+
+/**
+ * Phase 2a: Activate 7-day Hunt Pass free trial (first-time only)
+ * POST /api/hunt-pass/trial
+ */
+export const activateHuntPassTrial = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const userId = req.user.id;
+
+    // Check if user has ever had Hunt Pass (huntPassExpiry is null if never had it)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { huntPassActive: true, huntPassExpiry: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // If huntPassExpiry is set (not null), user has already used trial or had active pass
+    if (user.huntPassExpiry !== null) {
+      return res.status(409).json({
+        message: 'Hunt Pass trial already used or subscription already active',
+      });
+    }
+
+    // Grant 7-day free trial
+    const trialExpiryDate = new Date();
+    trialExpiryDate.setDate(trialExpiryDate.getDate() + 7);
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        huntPassActive: true,
+        huntPassExpiry: trialExpiryDate,
+      },
+      select: {
+        huntPassActive: true,
+        huntPassExpiry: true,
+      },
+    });
+
+    res.json({
+      message: 'Hunt Pass trial activated! Enjoy 7 days of 1.5x XP and early access.',
+      huntPassActive: updatedUser.huntPassActive,
+      huntPassExpiry: updatedUser.huntPassExpiry,
+    });
+  } catch (error) {
+    console.error('Error activating Hunt Pass trial:', error);
+    res.status(500).json({ message: 'Server error while activating trial' });
+  }
+};
