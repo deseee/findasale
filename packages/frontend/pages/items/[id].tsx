@@ -764,7 +764,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           shopperId={item.reservedBy}
           shopperName={item.reservedByName || 'Shopper'}
           shopperEmail={item.reservedByEmail || ''}
-          organizerTier={user?.organizerTier || 'SIMPLE'}
+          organizerTier={(user?.organizerTier || 'SIMPLE') as 'SIMPLE' | 'PRO' | 'TEAMS'}
           expiresAt={item.invoiceExpiresAt || ''}
           isOpen={showHoldToPayModal}
           onClose={() => setShowHoldToPayModal(false)}
