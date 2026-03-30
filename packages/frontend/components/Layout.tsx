@@ -216,7 +216,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
             {canAccess('TEAMS') && (
               <>
-                <SectionHeader icon={Wrench} label="Developer Tools" color="gray" />
+                <SectionHeader icon={Wrench} label="Developer Tools" />
                 <Link href="/organizer/webhooks" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send real-time sale events to your own systems">
                   <Webhook size={16} className="text-gray-500" />
                   <span>Webhooks</span>
