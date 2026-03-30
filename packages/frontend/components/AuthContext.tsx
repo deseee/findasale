@@ -21,6 +21,9 @@ interface User {
   onboardingComplete?: boolean;
   createdAt?: string;
   verificationStatus?: string;
+  profileSlug?: string | null;
+  collectorTitle?: string | null;
+  purchasesVisible?: boolean;
 }
 
 interface AuthContextType {

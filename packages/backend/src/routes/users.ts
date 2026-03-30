@@ -49,7 +49,7 @@ router.get('/purchases/:purchaseId', authenticate, async (req: AuthRequest, res:
             zip: true,
             organizer: {
               select: {
-                name: true,
+                businessName: true,
               },
             },
           },

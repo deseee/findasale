@@ -439,7 +439,7 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
               id: true,
               title: true,
               photoUrls: true,
-              estimatedValue: true,
+              price: true,
             }
           },
           sale: {
