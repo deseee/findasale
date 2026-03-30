@@ -15,6 +15,7 @@ import { useAuth } from '../../components/AuthContext';
 import { ItemCardSkeleton } from '../../components/SkeletonCards';
 import EmptyState from '../../components/EmptyState';
 import { useFollows } from '../../hooks/useFollows';
+import { useToast } from '../../components/ToastContext';
 
 interface FavoriteItem {
   id: string;
@@ -101,6 +102,7 @@ type TabType = 'items' | 'sellers';
 
 const WishlistPage = () => {
   const { user, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const { data: follows, isLoading: followsLoading } = useFollows();
@@ -152,7 +154,7 @@ const WishlistPage = () => {
   return (
     <>
       <Head>
-        <title>My Saves – FindA.Sale</title>
+        <title>My Collections – FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -163,7 +165,7 @@ const WishlistPage = () => {
             <Link href="/shopper/dashboard" className="text-warm-500 hover:text-warm-700 dark:text-warm-400 dark:hover:text-warm-300">
               ←
             </Link>
-            <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">My Saves</h1>
+            <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">My Collections</h1>
           </div>
 
           {/* Tab Navigation */}
@@ -189,6 +191,23 @@ const WishlistPage = () => {
               Sellers {follows && follows.length > 0 && <span className="text-xs ml-1">({follows.length})</span>}
             </button>
           </div>
+
+          {/* Collections Stub — Phase 1: "All Saves" + "New Collection" coming soon */}
+          {!isLoading && !hasError && activeTab === 'items' && (
+            <div className="flex gap-2 items-center mb-6 pb-4 border-b border-warm-100 dark:border-gray-800">
+              <div className="inline-flex items-center px-3 py-2 rounded-full bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-sm font-medium text-warm-900 dark:text-warm-100">
+                ✓ All Saves
+              </div>
+              <button
+                onClick={() => {
+                  showToast('Named collections coming soon! For now, all your saved items appear here.', 'info');
+                }}
+                className="inline-flex items-center px-3 py-2 rounded-full bg-warm-100 dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                + New Collection
+              </button>
+            </div>
+          )}
 
           {/* Loading State */}
           {isLoading && (

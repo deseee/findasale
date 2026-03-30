@@ -80,7 +80,7 @@ const WishlistsPage = () => {
     mutationFn: (data: { name: string; occasion: string; isPublic: boolean }) =>
       api.post('/wishlists', data),
     onSuccess: () => {
-      showToast('Wishlist created!', 'success');
+      showToast('Collection created!', 'success');
       setShowNewForm(false);
       setNewName('');
       setNewOccasion('');
@@ -139,23 +139,23 @@ const WishlistsPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>My Wishlists - FindA.Sale</title>
+        <title>My Collections - FindA.Sale</title>
       </Head>
 
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">My Wishlists</h1>
-          <p className="text-warm-600 dark:text-warm-400">Save items to named wishlists for moving, decorating, gifting, and more.</p>
+          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">My Collections</h1>
+          <p className="text-warm-600 dark:text-warm-400">Organize your saved items into named collections for moving, decorating, gifting, and more.</p>
         </div>
 
-        {/* New Wishlist Form */}
+        {/* New Collection Form */}
         {showNewForm && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Create New Wishlist</h2>
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Create New Collection</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Wishlist Name
+                  Collection Name
                 </label>
                 <input
                   type="text"
@@ -203,7 +203,7 @@ const WishlistsPage = () => {
                   disabled={createMutation.isPending}
                   className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {createMutation.isPending ? 'Creating...' : 'Create Wishlist'}
+                  {createMutation.isPending ? 'Creating...' : 'Create Collection'}
                 </button>
                 <button
                   onClick={() => {
@@ -226,7 +226,7 @@ const WishlistsPage = () => {
             onClick={() => setShowNewForm(true)}
             className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors mb-8"
           >
-            + New Wishlist
+            + New Collection
           </button>
         )}
 

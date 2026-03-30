@@ -162,6 +162,9 @@ model User {
   bidCancellationCount  Int      @default(0)      // Total bids cancelled by user (as buyer)
   suspendedAt           DateTime?                  // Account suspension timestamp (null = active)
   suspendReason         String?                    // Reason for suspension: SERIAL_CHARGEBACKS, BID_CANCEL_PATTERN, COLLUSION_SUSPECT
+  // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
+  sourcebookEntries    SourcebookEntry[] @relation("SourcebookAuthor")
+  organizedSourcebook  SourcebookEntry[] @relation("OrganizerSourcebook")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -387,10 +390,37 @@ model Sale {
   holdsEnabled     Boolean   @default(true)   // Feature #121: organizer can disable holds per-sale
   // Hold-to-Pay feature: invoices for held items
   holdInvoices     HoldInvoice[]
+  // Feature #106: Prelaunch Preview — restrict inventory browse to Sage+ before this time
+  prelaunchAt      DateTime?   // null = no prelaunch; before this time, only Sage+ can browse inventory
+  // Sourcebook relations
+  sourcebookEntries SourcebookEntry[] @relation("SaleSourcebookEntries")
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   @@index([deletedAt])
+  @@index([prelaunchAt])
+}
+
+// Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
+model SourcebookEntry {
+  id            String    @id @default(cuid())
+  authorId      String
+  author        User      @relation("SourcebookAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  saleId        String?
+  sale          Sale?     @relation("SaleSourcebookEntries", fields: [saleId], references: [id], onDelete: SetNull)
+  organizerId   String?
+  organizer     User?     @relation("OrganizerSourcebook", fields: [organizerId], references: [id], onDelete: SetNull)
+  title         String
+  body          String
+  upvotes       Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([saleId, authorId])
+  @@unique([organizerId, authorId])
+  @@index([authorId, createdAt])
+  @@index([saleId])
+  @@index([organizerId])
 }
 
 model Item {

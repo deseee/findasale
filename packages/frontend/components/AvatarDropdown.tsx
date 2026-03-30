@@ -173,7 +173,7 @@ const AvatarDropdown: React.FC = () => {
                   className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                   onClick={() => setIsOpen(false)}
                 >
-                  My Saves
+                  My Collections
                 </Link>
               )}
               <Link
@@ -337,7 +337,7 @@ const AvatarDropdown: React.FC = () => {
                 className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                My Saves
+                My Collections
               </Link>
               <Link
                 href="/referral-dashboard"

@@ -38,6 +38,7 @@ function LootLegendPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -64,6 +65,20 @@ function LootLegendPage() {
 
     fetchLootLegend();
   }, [mounted, authLoading, user, router, showToast]);
+
+  const handleTrialActivate = async () => {
+    try {
+      await api.post('/api/hunt-pass/trial');
+      setBannerDismissed(true);
+      showToast('Hunt Pass trial activated! Enjoy 7 days of premium access. 🎟️', 'success');
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        setBannerDismissed(true); // already used, silently hide
+      } else {
+        showToast('Error activating trial. Please try again.', 'error');
+      }
+    }
+  };
 
   // Redirect if not authenticated
   if (mounted && !authLoading && !user) {
@@ -96,6 +111,33 @@ function LootLegendPage() {
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Loot Legend</h1>
           <p className="text-gray-600 dark:text-gray-400">Your collection of legendary and epic finds</p>
         </div>
+
+        {!bannerDismissed && user && !user.huntPassActive && (
+          <div className="mx-4 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-2xl">🎟️</span>
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900 dark:text-amber-100 text-sm">
+                Try Hunt Pass FREE for 7 days
+              </p>
+              <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
+                Unlock priority holds, bonus XP, and exclusive loot.
+              </p>
+              <button
+                onClick={handleTrialActivate}
+                className="mt-2 text-xs font-semibold text-amber-900 dark:text-amber-100 underline hover:no-underline"
+              >
+                Activate free trial →
+              </button>
+            </div>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-lg leading-none flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {!hasHuntPass && (
           <div className="mb-8 bg-amber-50 border border-amber-200 rounded-lg p-6 dark:bg-amber-900 dark:border-amber-700">

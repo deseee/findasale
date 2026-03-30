@@ -153,7 +153,7 @@ const ShopperDashboard = () => {
               className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-center hover:shadow-md transition-shadow"
             >
               <div className="text-2xl mb-2">💕</div>
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-300">Wishlist</p>
+              <p className="text-xs font-semibold text-blue-900 dark:text-blue-300">Collections</p>
             </Link>
             <Link
               href="/shopper/trails"
