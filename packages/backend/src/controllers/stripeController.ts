@@ -1090,6 +1090,252 @@ export const webhookHandler = async (req: Request, res: Response) => {
           },
         }).catch(err => console.error('[ala-carte] Failed to update sale after checkout:', err));
       }
+      // Hold-to-Pay Phase 2: Handle checkout session completion for invoices
+      if (session.payment_intent) {
+        // Retrieve the payment intent to get full metadata
+        const paymentIntent = await stripe().paymentIntents.retrieve(session.payment_intent as string);
+        if (paymentIntent.metadata?.invoiceId) {
+          // This is a hold-to-pay invoice — wait for charge.succeeded for actual payment
+          console.log(`[hold-to-pay] Checkout session completed for invoice ${paymentIntent.metadata.invoiceId}`);
+        }
+      }
+      break;
+    }
+    case 'charge.succeeded': {
+      // Hold-to-Pay Phase 2: Handle successful charge for hold invoices
+      const charge = event.data.object;
+      if (charge.payment_intent) {
+        const paymentIntent = await stripe().paymentIntents.retrieve(charge.payment_intent as string);
+        if (paymentIntent.metadata?.invoiceId) {
+          const invoiceId = paymentIntent.metadata.invoiceId;
+
+          // Fetch the invoice with full context
+          const holdInvoice = await prisma.holdInvoice.findUnique({
+            where: { id: invoiceId },
+            include: {
+              shopper: { select: { id: true, email: true, name: true, guildXp: true } },
+              organizer: { select: { id: true, email: true, name: true } },
+              sale: true,
+            },
+          });
+
+          if (!holdInvoice) {
+            console.error(`[hold-invoice] Invoice not found: ${invoiceId}`);
+            break;
+          }
+
+          // Idempotency check: if already completed, skip
+          if (holdInvoice.status === 'COMPLETED') {
+            console.warn(`[hold-invoice] Invoice ${invoiceId} already completed, skipping duplicate webhook`);
+            break;
+          }
+
+          // Fetch all items and reservations bundled in this invoice
+          const bundledItems = await prisma.item.findMany({
+            where: { id: { in: holdInvoice.itemIds } },
+          });
+
+          const bundledReservations = await prisma.itemReservation.findMany({
+            where: { itemId: { in: holdInvoice.itemIds } },
+          });
+
+          // LOCKED DECISION #1: Calculate organizer payout (total amount - platform fee - Stripe fee)
+          const stripeFeeAmount = (charge.amount - (charge.amount_received || charge.amount)) / 100; // convert from cents
+          const organizerPayout = (holdInvoice.totalAmount / 100) - (holdInvoice.platformFeeAmount / 100) - stripeFeeAmount;
+
+          // Update invoice status to COMPLETED
+          await prisma.$transaction(async (tx) => {
+            await tx.holdInvoice.update({
+              where: { id: invoiceId },
+              data: {
+                status: 'COMPLETED',
+                paidAt: new Date(),
+                stripePaymentIntentId: charge.payment_intent as string,
+                stripeFeeAmount: Math.round(stripeFeeAmount * 100),
+              },
+            });
+
+            // Update ALL bundled ItemReservations to PAYMENT_COMPLETED
+            await tx.itemReservation.updateMany({
+              where: { itemId: { in: holdInvoice.itemIds } },
+              data: { status: 'PAYMENT_COMPLETED' },
+            });
+
+            // Update ALL bundled items to SOLD (LOCKED DECISION #6)
+            await tx.item.updateMany({
+              where: { id: { in: holdInvoice.itemIds } },
+              data: { status: 'SOLD' },
+            });
+
+            // LOCKED DECISION #5: Create notifications for shopper and organizer
+            const itemList = bundledItems.length > 1
+              ? `${bundledItems.length} items`
+              : `"${bundledItems[0]?.title}"`;
+
+            await tx.notification.createMany({
+              data: [
+                {
+                  userId: holdInvoice.shopperUserId,
+                  type: 'payment_completed',
+                  title: 'Payment confirmed',
+                  body: `Payment confirmed for ${itemList}. The organizer will send shipping/pickup details.`,
+                  link: `/items/${holdInvoice.itemIds[0]}`,
+                  channel: 'OPERATIONAL',
+                },
+                {
+                  userId: holdInvoice.organizerUserId,
+                  type: 'payment_received',
+                  title: 'Payment received',
+                  body: `Payment of $${organizerPayout.toFixed(2)} received for ${itemList}. Payout pending.`,
+                  link: `/organizer/sales/${holdInvoice.saleId}`,
+                  channel: 'OPERATIONAL',
+                },
+              ],
+            });
+          });
+
+          // Award XP to shopper (+15 guildXP for payment completion)
+          try {
+            const { awardXp, XP_AWARDS } = await import('../services/xpService');
+            await awardXp(holdInvoice.shopperUserId, 'PAYMENT_COMPLETED', 15, {
+              itemIds: holdInvoice.itemIds,
+              saleId: holdInvoice.saleId,
+            });
+          } catch (err) {
+            console.warn('[hold-invoice] Failed to award XP:', err);
+          }
+
+          // Emit socket event for live dashboard updates
+          try {
+            const io = getIO();
+            const itemSummary = bundledItems.length > 1
+              ? `${bundledItems.length} items`
+              : bundledItems[0]?.title;
+
+            pushEvent(io, holdInvoice.saleId, {
+              type: 'PAYMENT_COMPLETED',
+              invoiceId,
+              itemTitle: itemSummary,
+              amount: organizerPayout,
+              saleId: holdInvoice.saleId,
+              timestamp: new Date(),
+            });
+          } catch (err) {
+            console.warn('[hold-invoice] Failed to emit socket event:', err);
+          }
+
+          // Send confirmation emails (fire-and-forget)
+          setImmediate(() => {
+            const resend = getResendClient();
+            if (resend) {
+              const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
+              const itemList = bundledItems.length > 1
+                ? `${bundledItems.length} items from ${holdInvoice.sale.title}`
+                : bundledItems[0]?.title;
+              const totalPaid = (holdInvoice.totalAmount / 100).toFixed(2);
+              const platformFee = (holdInvoice.platformFeeAmount / 100).toFixed(2);
+
+              // Email to shopper
+              resend.emails.send({
+                from: fromEmail,
+                to: holdInvoice.shopper.email,
+                subject: `Payment confirmed for ${itemList}`,
+                html: `
+                  <h2>Payment Confirmed</h2>
+                  <p>Hi ${holdInvoice.shopper.name},</p>
+                  <p>Your payment of $${totalPaid} for <strong>${itemList}</strong> has been confirmed.</p>
+                  <p>The organizer will contact you soon about shipping or pickup details.</p>
+                  <p style="color: #6b7280; font-size: 14px;">Transaction ID: ${invoiceId.slice(0, 8)}</p>
+                `,
+              }).catch(err => console.warn('[hold-invoice] Failed to send shopper email:', err));
+
+              // Email to organizer
+              resend.emails.send({
+                from: fromEmail,
+                to: holdInvoice.organizer.email,
+                subject: `Payment received: ${itemList}`,
+                html: `
+                  <h2>Payment Received</h2>
+                  <p>Hi ${holdInvoice.organizer.name},</p>
+                  <p>Payment of $${organizerPayout.toFixed(2)} has been received for <strong>${itemList}</strong>.</p>
+                  <p>Payout will be transferred to your Stripe Connect account within 1-2 business days.</p>
+                  <p style="color: #6b7280; font-size: 14px;">Platform fee: $${platformFee} | Stripe fee: $${stripeFeeAmount.toFixed(2)}</p>
+                `,
+              }).catch(err => console.warn('[hold-invoice] Failed to send organizer email:', err));
+            }
+          });
+
+          console.log(`[hold-invoice] Payment completed for invoice ${invoiceId} (${bundledItems.length} items): organizer payout $${organizerPayout.toFixed(2)}`);
+        }
+      }
+      break;
+    }
+    case 'charge.failed': {
+      // Hold-to-Pay Phase 2: Handle failed charge for hold invoices
+      const charge = event.data.object;
+      if (charge.payment_intent) {
+        const paymentIntent = await stripe().paymentIntents.retrieve(charge.payment_intent as string);
+        if (paymentIntent.metadata?.invoiceId) {
+          const invoiceId = paymentIntent.metadata.invoiceId;
+
+          const holdInvoice = await prisma.holdInvoice.findUnique({
+            where: { id: invoiceId },
+          });
+
+          if (!holdInvoice) {
+            console.error(`[hold-invoice] Invoice not found for failed charge: ${invoiceId}`);
+            break;
+          }
+
+          // Fetch all bundled items and reservations
+          const bundledItems = await prisma.item.findMany({
+            where: { id: { in: holdInvoice.itemIds } },
+          });
+
+          const bundledReservations = await prisma.itemReservation.findMany({
+            where: { itemId: { in: holdInvoice.itemIds } },
+          });
+
+          // Update invoice status to FAILED
+          await prisma.$transaction(async (tx) => {
+            await tx.holdInvoice.update({
+              where: { id: invoiceId },
+              data: {
+                status: 'FAILED',
+              },
+            });
+
+            // Reactivate holds: return ALL ItemReservations to CONFIRMED and items to RESERVED
+            await tx.itemReservation.updateMany({
+              where: { itemId: { in: holdInvoice.itemIds } },
+              data: { status: 'CONFIRMED' },
+            });
+
+            await tx.item.updateMany({
+              where: { id: { in: holdInvoice.itemIds } },
+              data: { status: 'RESERVED' },
+            });
+
+            // Notify shopper of payment failure
+            const itemList = bundledItems.length > 1
+              ? `${bundledItems.length} items`
+              : `"${bundledItems[0]?.title}"`;
+
+            await tx.notification.create({
+              data: {
+                userId: holdInvoice.shopperUserId,
+                type: 'payment_failed',
+                title: 'Payment failed',
+                body: `Your payment for ${itemList} failed: ${charge.failure_message || 'Unknown error'}. Your holds remain active.`,
+                link: `/items/${holdInvoice.itemIds[0]}`,
+                channel: 'OPERATIONAL',
+              },
+            });
+          });
+
+          console.log(`[hold-invoice] Payment failed for invoice ${invoiceId} (${bundledItems.length} items): ${charge.failure_message}`);
+        }
+      }
       break;
     }
     default:
