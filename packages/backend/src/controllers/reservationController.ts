@@ -826,7 +826,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
             sale: {
               include: {
                 organizer: {
-                  include: { user: { select: { id: true, subscriptionTier: true } } },
+                  include: { user: { select: { id: true, roleSubscriptions: true } } },
                 },
               },
             },
@@ -867,20 +867,20 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     });
 
     if (existingInvoice) {
-      return res.json({ invoiceId: existingInvoice.id, checkoutUrl: existingInvoice.checkoutUrl, expiresAt: existingInvoice.expiresAt });
+      return res.json({ invoiceId: existingInvoice.id, stripeSessionId: existingInvoice.stripeSessionId, expiresAt: existingInvoice.expiresAt });
     }
 
     // LOCKED DECISION #1: Fee calculation based on organizer tier
     // Calculate total from all bundled items
-    const subscriptionTier = organizer.user?.subscriptionTier || 'SIMPLE';
-    const platformFeePercent = subscriptionTier === 'PRO' ? 0.08 : 0.10;
+    const hasPro = organizer.user?.roleSubscriptions?.some(rs => rs.tier === 'PRO') ?? false;
+    const platformFeePercent = hasPro ? 0.08 : 0.10;
 
     let totalAmount = 0;
     let totalPlatformFeeAmount = 0;
     const bundledItemIds: string[] = [];
 
     for (const hold of allShopperHolds) {
-      const itemPrice = hold.item.price || 0;
+      const itemPrice = hold.item.estimatedPrice || 0;
       totalAmount += itemPrice;
       const itemPlatformFee = Math.round(itemPrice * platformFeePercent * 100) / 100;
       totalPlatformFeeAmount += itemPlatformFee;
@@ -950,7 +950,6 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           organizerUserId: organizer.id,
           saleId: reservation.item.saleId,
           stripeSessionId: stripeSession.id,
-          checkoutUrl: stripeSession.url || '',
           totalAmount: Math.round(totalAmount * 100),
           platformFeeAmount: Math.round(totalPlatformFeeAmount * 100),
           itemIds: bundledItemIds,
@@ -964,7 +963,6 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         where: { id: { in: allShopperHolds.map(h => h.id) } },
         data: {
           invoiceId: holdInvoice.id,
-          paymentAttemptedAt: new Date(),
         },
       });
 
@@ -1047,7 +1045,7 @@ export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
     const invoice = await prisma.holdInvoice.findUnique({
       where: { id: invoiceId },
       include: {
-        itemReservation: {
+        reservation: {
           include: {
             item: {
               include: {
@@ -1062,13 +1060,13 @@ export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
     if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
 
     // Authorization: shopper or organizer
-    const isShopper = invoice.shopperId === req.user.id;
+    const isShopper = invoice.shopperUserId === req.user.id;
 
     // Get organizer's ID from request user
     const userOrganizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
     });
-    const isOrganizer = invoice.organizerId === userOrganizer?.id;
+    const isOrganizer = invoice.organizerUserId === userOrganizer?.id;
 
     if (!isShopper && !isOrganizer) {
       return res.status(403).json({ message: 'Access denied' });
@@ -1077,15 +1075,13 @@ export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
     res.json({
       id: invoice.id,
       status: invoice.status,
-      itemPrice: invoice.itemPrice,
+      totalAmount: invoice.totalAmount,
       platformFeeAmount: invoice.platformFeeAmount,
       stripeFeeAmount: invoice.stripeFeeAmount,
-      organizerPayout: invoice.organizerPayout,
-      checkoutUrl: invoice.checkoutUrl,
       expiresAt: invoice.expiresAt,
       paidAt: invoice.paidAt,
       createdAt: invoice.createdAt,
-      item: invoice.itemReservation?.item,
+      item: invoice.reservation?.item,
     });
   } catch (error: any) {
     console.error('[invoices] getInvoiceDetails error:', error);
@@ -1101,11 +1097,11 @@ export const getMyInvoices = async (req: AuthRequest, res: Response) => {
 
     const invoices = await prisma.holdInvoice.findMany({
       where: {
-        shopperId: req.user.id,
-        status: 'SESSION_CREATED', // Only show unpaid invoices
+        shopperUserId: req.user.id,
+        status: 'PENDING', // Only show unpaid invoices
       },
       include: {
-        itemReservation: {
+        reservation: {
           include: {
             item: {
               include: {
@@ -1121,12 +1117,12 @@ export const getMyInvoices = async (req: AuthRequest, res: Response) => {
     res.json(invoices.map(inv => ({
       id: inv.id,
       status: inv.status,
-      itemPrice: inv.itemPrice,
+      totalAmount: inv.totalAmount,
       platformFeeAmount: inv.platformFeeAmount,
-      checkoutUrl: inv.checkoutUrl,
+      stripeSessionId: inv.stripeSessionId,
       expiresAt: inv.expiresAt,
       createdAt: inv.createdAt,
-      item: inv.itemReservation?.item,
+      item: inv.reservation?.item,
     })));
   } catch (error: any) {
     console.error('[invoices] getMyInvoices error:', error);
@@ -1145,26 +1141,26 @@ export const getItemInvoiceStatus = async (req: Request, res: Response) => {
       include: {
         reservation: {
           include: {
-            holdInvoice: true,
+            invoice: true,
           },
         },
       },
     });
 
-    if (!item || !item.reservation || !item.reservation.holdInvoice) {
+    if (!item || !item.reservation || !item.reservation.invoice) {
       return res.json({
         invoiceExists: false,
         invoiceStatus: null,
         expiresAt: null,
-        checkoutUrl: null,
+        stripeSessionId: null,
       });
     }
 
     res.json({
       invoiceExists: true,
-      invoiceStatus: item.reservation.holdInvoice.status,
-      expiresAt: item.reservation.holdInvoice.expiresAt,
-      checkoutUrl: item.reservation.holdInvoice.checkoutUrl,
+      invoiceStatus: item.reservation.invoice.status,
+      expiresAt: item.reservation.invoice.expiresAt,
+      stripeSessionId: item.reservation.invoice.stripeSessionId,
     });
   } catch (error: any) {
     console.error('[invoices] getItemInvoiceStatus error:', error);
@@ -1190,14 +1186,14 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
             sale: true,
           },
         },
-        holdInvoice: true,
+        invoice: true,
         user: { select: { id: true, email: true, name: true } },
       },
     });
 
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
-    if (!reservation.holdInvoice) return res.status(404).json({ message: 'No invoice found for this reservation' });
-    if (reservation.holdInvoice.status !== 'PENDING') {
+    if (!reservation.invoice) return res.status(404).json({ message: 'No invoice found for this reservation' });
+    if (reservation.invoice.status !== 'PENDING') {
       return res.status(409).json({ message: 'Only PENDING invoices can be released' });
     }
 
@@ -1213,7 +1209,7 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
 
     // Cancel the Stripe Checkout session
     try {
-      await stripe.checkout.sessions.expire(reservation.holdInvoice.stripeSessionId);
+      await stripe.checkout.sessions.expire(reservation.invoice.stripeSessionId);
     } catch (stripeError: any) {
       console.warn('[hold-invoice] Failed to expire Stripe session:', stripeError);
       // Non-fatal: continue with local state update
@@ -1222,7 +1218,7 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     // Update invoice status to CANCELLED
     await prisma.$transaction(async (tx) => {
       await tx.holdInvoice.update({
-        where: { id: reservation.holdInvoice!.id },
+        where: { id: reservation.invoice!.id },
         data: { status: 'CANCELLED' },
       });
 

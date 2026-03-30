@@ -1053,7 +1053,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           try {
             await recordTierResumption(roleSubscription.id);
             console.log(`[tier-lapse] Tier resumed for subscription ${roleSubscription.id}`);
-          } catch (err) {
+          } catch (err: unknown) {
             console.error(`[tier-lapse] Failed to record tier resumption for ${roleSubscription.id}:`, err);
           }
         }
@@ -1124,9 +1124,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             break;
           }
 
-          // Idempotency check: if already completed, skip
-          if (holdInvoice.status === 'COMPLETED') {
-            console.warn(`[hold-invoice] Invoice ${invoiceId} already completed, skipping duplicate webhook`);
+          // Idempotency check: if already paid, skip
+          if (holdInvoice.status === 'PAID') {
+            console.warn(`[hold-invoice] Invoice ${invoiceId} already paid, skipping duplicate webhook`);
             break;
           }
 
@@ -1140,25 +1140,25 @@ export const webhookHandler = async (req: Request, res: Response) => {
           });
 
           // LOCKED DECISION #1: Calculate organizer payout (total amount - platform fee - Stripe fee)
-          const stripeFeeAmount = (charge.amount - (charge.amount_received || charge.amount)) / 100; // convert from cents
+          const stripeFeeAmount = (charge.amount - (charge.amount - (charge.amount_refunded || 0))) / 100; // convert from cents
           const organizerPayout = (holdInvoice.totalAmount / 100) - (holdInvoice.platformFeeAmount / 100) - stripeFeeAmount;
 
-          // Update invoice status to COMPLETED
+          // Update invoice status to PAID
           await prisma.$transaction(async (tx) => {
             await tx.holdInvoice.update({
               where: { id: invoiceId },
               data: {
-                status: 'COMPLETED',
+                status: 'PAID',
                 paidAt: new Date(),
                 stripePaymentIntentId: charge.payment_intent as string,
                 stripeFeeAmount: Math.round(stripeFeeAmount * 100),
               },
             });
 
-            // Update ALL bundled ItemReservations to PAYMENT_COMPLETED
+            // Update ALL bundled ItemReservations to CONFIRMED
             await tx.itemReservation.updateMany({
               where: { itemId: { in: holdInvoice.itemIds } },
-              data: { status: 'PAYMENT_COMPLETED' },
+              data: { status: 'CONFIRMED' },
             });
 
             // Update ALL bundled items to SOLD (LOCKED DECISION #6)
@@ -1198,7 +1198,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
           try {
             const { awardXp, XP_AWARDS } = await import('../services/xpService');
             await awardXp(holdInvoice.shopperUserId, 'PAYMENT_COMPLETED', 15, {
-              itemIds: holdInvoice.itemIds,
               saleId: holdInvoice.saleId,
             });
           } catch (err) {
@@ -1213,8 +1212,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               : bundledItems[0]?.title;
 
             pushEvent(io, holdInvoice.saleId, {
-              type: 'PAYMENT_COMPLETED',
-              invoiceId,
+              type: 'HOLD_RELEASED',
               itemTitle: itemSummary,
               amount: organizerPayout,
               saleId: holdInvoice.saleId,
@@ -1296,12 +1294,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
             where: { itemId: { in: holdInvoice.itemIds } },
           });
 
-          // Update invoice status to FAILED
+          // Update invoice status to EXPIRED
           await prisma.$transaction(async (tx) => {
             await tx.holdInvoice.update({
               where: { id: invoiceId },
               data: {
-                status: 'FAILED',
+                status: 'EXPIRED',
               },
             });
 
