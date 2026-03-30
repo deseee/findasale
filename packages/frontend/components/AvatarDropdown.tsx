@@ -108,7 +108,9 @@ const AvatarDropdown: React.FC = () => {
   const isOrganizer = user.roles?.includes('ORGANIZER');
   const isUser = user.roles?.includes('USER');
   const isAdmin = user.roles?.includes('ADMIN');
+  const isTeams = canAccess('TEAMS');
   const [explorerOpen, setExplorerOpen] = useState(false);
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
 
   return (
     <div className="relative">
@@ -471,15 +473,6 @@ const AvatarDropdown: React.FC = () => {
                     <span>Flip Report</span>
                   </Link>
                   <Link
-                    href="/organizer/webhooks"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Send real-time sale events to your own systems (TEAMS plan)"
-                  >
-                    <Webhook size={16} className="text-purple-400" />
-                    <span>Webhooks</span>
-                  </Link>
-                  <Link
                     href="/organizer/item-tagger"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -488,6 +481,36 @@ const AvatarDropdown: React.FC = () => {
                     <Tag size={16} className="text-purple-400" />
                     <span>Item Tagger</span>
                   </Link>
+                </>
+              )}
+
+              {/* Developer Tools Section — Collapsible (TEAMS tier) */}
+              {isTeams && (
+                <>
+                  <button
+                    onClick={() => setDevToolsOpen(!devToolsOpen)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Wrench size={16} />
+                      <span>Developer Tools</span>
+                    </div>
+                    <ChevronRight
+                      size={16}
+                      className={`transition-transform duration-200 ${devToolsOpen ? 'rotate-90' : ''}`}
+                    />
+                  </button>
+                  {devToolsOpen && (
+                    <Link
+                      href="/organizer/webhooks"
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      onClick={() => setIsOpen(false)}
+                      title="Send real-time sale events to your own systems"
+                    >
+                      <Webhook size={16} className="text-gray-500" />
+                      <span>Webhooks</span>
+                    </Link>
+                  )}
                 </>
               )}
 
@@ -500,17 +523,18 @@ const AvatarDropdown: React.FC = () => {
           {/* SHOPPER Menu Items — only show if USER role exists */}
           {isUser && (
             <>
-              {/* Shopper Dashboard — only if not also an organizer (dual-role dedup) */}
-              {!isOrganizer && (
-                <Link
-                  href="/shopper/dashboard"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <LayoutDashboard size={16} className="text-indigo-600" />
+              {/* Shopper Dashboard — always show for users (even dual-role) with subtle indicator */}
+              <Link
+                href="/shopper/dashboard"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <LayoutDashboard size={16} className="text-indigo-600" />
+                <div className="flex flex-col">
                   <span>Shopper Dashboard</span>
-                </Link>
-              )}
+                  {isOrganizer && <span className="text-xs text-gray-500 dark:text-gray-400">As a shopper</span>}
+                </div>
+              </Link>
 
               {/* My Collection Section */}
               <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">

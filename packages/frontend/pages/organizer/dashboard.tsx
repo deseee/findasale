@@ -328,8 +328,8 @@ const OrganizerDashboard = () => {
       <div className="min-h-screen bg-warm-50 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <Skeleton className="h-10 w-64 mb-4" />
-          <Skeleton className="h-6 w-96 mb-8" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Skeleton className="h-6 w-96 mb-4" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-32" />
             ))}
@@ -388,7 +388,7 @@ const OrganizerDashboard = () => {
 
           {/* Welcome banner for newly converted organizers */}
           {router.query.welcome === 'true' && (
-            <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-400 dark:border-green-600 p-4 mb-6 rounded">
+            <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-400 dark:border-green-600 p-4 mb-4 rounded">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
@@ -409,7 +409,7 @@ const OrganizerDashboard = () => {
 
           {/* Feature #75: Tier Lapse Banner */}
           {orgProfile?.subscriptionLapsed && (
-            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 mb-6 rounded">
+            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 mb-4 rounded">
               <div className="flex items-start justify-between">
                 <div className="flex items-start flex-1">
                   <div className="flex-shrink-0">
@@ -445,11 +445,11 @@ const OrganizerDashboard = () => {
           )}
 
           {/* Action Buttons - Grouped Sections */}
-          <div className="space-y-4 mb-8">
+          <div className="space-y-3 mb-4">
             {/* Section 1: Quick Actions (always visible) */}
             <div>
               <h3 className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Quick Actions</h3>
-              <div className="flex flex-wrap gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 <Link
                   href="/organizer/create-sale"
                   className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
@@ -527,7 +527,7 @@ const OrganizerDashboard = () => {
             </div>
 
             {/* Calendar Widget - Upcoming Sales */}
-            <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8">
+            <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">📅 Upcoming Sales</h3>
               </div>
@@ -545,9 +545,9 @@ const OrganizerDashboard = () => {
 
                     if (upcomingSales.length > 0) {
                       return (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {upcomingSales.map((sale: any) => (
-                            <div key={sale.id} className="flex justify-between items-center p-3 bg-warm-50 dark:bg-gray-700 rounded-md">
+                            <div key={sale.id} className="flex justify-between items-center p-2 bg-warm-50 dark:bg-gray-700 rounded-md">
                               <p className="font-medium text-warm-900 dark:text-warm-100">{sale.title}</p>
                               <p className="text-sm text-warm-600 dark:text-warm-400">
                                 {new Date(sale.startDate).toLocaleDateString('en-US', {
@@ -562,7 +562,7 @@ const OrganizerDashboard = () => {
                       );
                     } else {
                       return (
-                        <div className="text-center py-6">
+                        <div className="text-center py-4">
                           <p className="text-warm-600 dark:text-warm-400 mb-4">No upcoming sales</p>
                           <Link
                             href="/organizer/create-sale"
@@ -584,7 +584,7 @@ const OrganizerDashboard = () => {
                   </div>
                 </>
               ) : (
-                <div className="text-center py-6">
+                <div className="text-center py-4">
                   <p className="text-warm-600 dark:text-warm-400 mb-4">No sales yet</p>
                   <Link
                     href="/organizer/create-sale"
@@ -595,6 +595,24 @@ const OrganizerDashboard = () => {
                 </div>
               )}
             </div>
+
+            {/* Your Tier Widget - Compact Reputation Status */}
+            {tierData && (
+              <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-semibold text-warm-900 dark:text-warm-100">Your Tier</h3>
+                  <OrganizerTierBadge tier={tierData.tier} />
+                </div>
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">{tierData.benefits.label}</p>
+                <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                  <div><p className="font-semibold text-warm-900 dark:text-warm-100">{orgProfile?.followerCount ?? 0}</p><p className="text-xs text-warm-500 dark:text-warm-400">Followers</p></div>
+                  <div><p className="font-semibold text-warm-900 dark:text-warm-100">{orgProfile?.avgRating ? orgProfile.avgRating.toFixed(1) : '—'}</p><p className="text-xs text-warm-500 dark:text-warm-400">Avg Rating</p></div>
+                </div>
+                <Link href={`/organizers/${user?.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-xs font-semibold">
+                  View Reputation →
+                </Link>
+              </div>
+            )}
 
             {/* Section 2: Selling Tools (always available in SIMPLE+) */}
             <CollapsibleSection
@@ -746,13 +764,13 @@ const OrganizerDashboard = () => {
               />
             </CollapsibleSection>
 
-            {/* Community Links (collapsed by default) */}
+            {/* Community Links (open by default) */}
             <CollapsibleSection
               title="Community"
               icon="🌍"
               isLocked={false}
               lockedMessage=""
-              defaultOpen={false}
+              defaultOpen={true}
             >
               <Link
                 href="/organizer/bounties"
@@ -809,7 +827,7 @@ const OrganizerDashboard = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700">
+          <div className="flex gap-4 mb-4 border-b border-warm-200 dark:border-gray-700">
             {(['overview', 'sales'] as const).map((tab) => (
               <button
                 key={tab}
@@ -828,8 +846,8 @@ const OrganizerDashboard = () => {
           {/* Content */}
           {activeTab === 'overview' && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div className="card p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="card p-4">
                   <p className="text-warm-600 dark:text-warm-300 text-sm">Active Sales</p>
                   <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{salesData?.filter((s: any) => s.status === 'PUBLISHED').length || 0}</p>
                 </div>
@@ -873,9 +891,9 @@ const OrganizerDashboard = () => {
 
               {/* H1: How It Works card */}
               {orgProfile && !orgProfile.onboardingComplete && !showWizard && (
-                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-6">
+                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-4">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">How It Works</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="text-center">
                       <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">📋</span></div>
                       <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm mb-1">1. Create a Sale</p>
@@ -900,63 +918,9 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
-              {/* Phase 31: Tier Rewards card */}
-              {tierData && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                  <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6">
-                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Your Tier</h3>
-                    <div className="flex items-center gap-3 mb-3">
-                      <OrganizerTierBadge tier={tierData.tier} />
-                      <span className="text-sm font-semibold text-warm-800 dark:text-warm-200">{tierData.benefits.label}</span>
-                    </div>
-                    <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">{TIER_DESCRIPTIONS[tierData.tier] || ''}</p>
-                    {tierData.benefits.perks.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Perks</p>
-                        <ul className="space-y-1">
-                          {tierData.benefits.perks.map((perk) => (
-                            <li key={perk} className="flex items-center gap-2 text-sm text-warm-700 dark:text-warm-300">
-                              <span className="text-amber-600 dark:text-amber-400 flex-shrink-0">✓</span>{perk}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                  {tierData.progress.nextTier && (
-                    <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6">
-                      <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">Progress to Next Tier</h3>
-                      <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Keep completing sales to reach <strong className="dark:text-warm-300">{tierData.progress.nextTier}</strong>.</p>
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-warm-700 dark:text-warm-300">Completed Sales</span>
-                            <span className="text-sm text-warm-600 dark:text-warm-400">{tierData.progress.completedSales} / {tierData.progress.completedSales + tierData.progress.salesNeeded}</span>
-                          </div>
-                          <div className="w-full bg-warm-200 dark:bg-gray-700 rounded-full h-2">
-                            <div className="bg-amber-600 h-2 rounded-full transition-all" style={{ width: tierData.progress.salesNeeded > 0 ? `${(tierData.progress.completedSales / (tierData.progress.completedSales + tierData.progress.salesNeeded)) * 100}%` : '100%' }} />
-                          </div>
-                          {tierData.progress.salesNeeded > 0 && <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">{tierData.progress.salesNeeded} more {tierData.progress.salesNeeded === 1 ? 'sale' : 'sales'} needed</p>}
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-warm-700 dark:text-warm-300">Items Sold</span>
-                            <span className="text-sm text-warm-600 dark:text-warm-400">{tierData.progress.soldItems} / {tierData.progress.soldItems + tierData.progress.itemsNeeded}</span>
-                          </div>
-                          <div className="w-full bg-warm-200 dark:bg-gray-700 rounded-full h-2">
-                            <div className="bg-amber-600 h-2 rounded-full transition-all" style={{ width: tierData.progress.itemsNeeded > 0 ? `${(tierData.progress.soldItems / (tierData.progress.soldItems + tierData.progress.itemsNeeded)) * 100}%` : '100%' }} />
-                          </div>
-                          {tierData.progress.itemsNeeded > 0 && <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">{tierData.progress.itemsNeeded} more {tierData.progress.itemsNeeded === 1 ? 'item' : 'items'} needed</p>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Phase 22: Creator Tier card */}
               {orgProfile && (
-                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-6">
+                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-4">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">Creator Tier</h3>
                   <div className="flex flex-wrap items-center gap-3 mb-4">
                     <ReputationTier tier={orgProfile.reputationTier} size="sm" />
@@ -987,7 +951,7 @@ const OrganizerDashboard = () => {
               )}
 
               {/* Plan a Sale Coming Soon Card */}
-              <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-6 border border-warm-100 dark:border-gray-700">
+              <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-4 border border-warm-100 dark:border-gray-700">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl">📋</span>

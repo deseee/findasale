@@ -209,25 +209,32 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <TrendingUp size={16} className="text-purple-400" />
               <span>Flip Report</span>
             </Link>
-            <Link href="/organizer/webhooks" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send real-time sale events to your own systems (TEAMS plan)">
-              <Webhook size={16} className="text-purple-400" />
-              <span>Webhooks</span>
-            </Link>
             <Link href="/organizer/item-tagger" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="AI-powered item category and condition detection">
               <Tag size={16} className="text-purple-400" />
               <span>Item Tagger</span>
             </Link>
+
+            {canAccess('TEAMS') && (
+              <>
+                <SectionHeader icon={Wrench} label="Developer Tools" color="gray" />
+                <Link href="/organizer/webhooks" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send real-time sale events to your own systems">
+                  <Webhook size={16} className="text-gray-500" />
+                  <span>Webhooks</span>
+                </Link>
+              </>
+            )}
           </>
         )}
         {user?.roles?.includes('USER') && (
           <>
-            {/* Only show shopper dashboard if NOT also an organizer (dedup) */}
-            {!user?.roles?.includes('ORGANIZER') && (
-              <Link href="/shopper/dashboard" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                <LayoutDashboard size={16} className="text-indigo-600" />
+            {/* Shopper Dashboard — always show for users (even dual-role) with subtle indicator */}
+            <Link href="/shopper/dashboard" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <LayoutDashboard size={16} className="text-indigo-600" />
+              <div className="flex flex-col">
                 <span>Shopper Dashboard</span>
-              </Link>
-            )}
+                {user?.roles?.includes('ORGANIZER') && <span className="text-xs text-gray-500 dark:text-gray-400">As a shopper</span>}
+              </div>
+            </Link>
 
             <SectionHeader icon={Heart} label="My Collection" color="indigo" />
             <Link href="/shopper/wishlist" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
