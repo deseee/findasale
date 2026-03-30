@@ -261,6 +261,11 @@ export async function classifyItem(itemId: string): Promise<any> {
  * Returns summary of classifications completed and failures.
  */
 export async function batchClassify(saleId: string): Promise<{ classified: number; failed: number }> {
+  // Guard: check for required API key at batch start
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY not configured — AI classification unavailable');
+  }
+
   try {
     // Find all items in this sale without typology
     const itemsToClassify = await prisma.item.findMany({

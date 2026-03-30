@@ -7,7 +7,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-No active work. S345 roadmap re-slot complete — push block below.
+**S346 Batch 1 COMPLETE (2026-03-30):** TS build fixes + 4 BROKEN items cleared. (1) **TS fixes:** `estimatedValue` (non-existent field) → `price` in userController.ts line 442; `name` → `businessName` in routes/users.ts OrganizerSelect; added `profileSlug`, `collectorTitle`, `purchasesVisible` to AuthContext.tsx User interface (fields exist in schema, were missing from frontend type). Both Railway and Vercel unblocked. (2) **#48 Treasure Trail FIXED:** Dark mode contrast on trail/[shareToken].tsx + stale state after edit save in trails/[trailId].tsx. (3) **#13 TEAMS Workspace FIXED:** Member lookup missing workspace relations in workspaceController.ts + invite error handlers parsing wrong field (`error` vs `message`) in workspace.tsx. (4) **#157 Pickup Scheduling FIXED:** All 4 react-query mutations (PickupBookingCard, PickupSlotManager x2, MyPickupAppointments) were returning full axios response instead of `response.data` — onSuccess callbacks silently received wrong shape. (5) **#46 Typology Classifier FIXED:** Missing ANTHROPIC_API_KEY guard in typologyService.ts batchClassify() + dark mode contrast in TypologyBadge.tsx. BROKEN section now clear of all P1 code bugs.
+
+**S346 Batch 2 COMPLETE (2026-03-30):** 5 PARTIAL features improved. (1) **#199 User Profile:** Bid status was hardcoded `PARTICIPATING` in routes/users.ts — now returns real DB value (ACTIVE/WINNING/WON/LOST). Hunt Pass section added to profile.tsx. Push notification toggle moved from profile.tsx to shopper/settings.tsx. (2) **#58 Achievement Badges:** New `AchievementBadgesSection.tsx` component wired into dashboard.tsx, loyalty.tsx, explorer-passport.tsx — badges were only rendering on /shopper/achievements. (3) **#59 Streak Rewards:** Was already on loyalty page per code check — no fix needed. (4) **#29 Loyalty Passport:** Copy rewritten to Explorer's Guild narrative — XP earn guide (Scan +10, Visit +5, Purchase +25), tier names (Initiate/Scout/Ranger/Sage/Grandmaster), coupon/rarity boost explainers updated. (5) **#177 Sale Detail:** Reviews moved inside Organized By card, platform fee display gated to auction items only, item cards now aspect-square with uniform height.
 
 **S345 COMPLETE (2026-03-30):** roadmap.md Decisions Needed cleanup. Removed 9 signed-off features from ## Decisions Needed (kept #82 + #83 legal items). Re-slotted: #188, #49, #64, #122 → UNTESTED Pending Chrome QA; #149/#174/#200 were already in correct sections (no change needed). #90 Sale Soundtrack → Deferred > Advanced Organizer Features. #69 Local-First Offline Mode → Deferred > Infrastructure & Platform. QA deferred per Patrick.
 
@@ -57,22 +59,24 @@ No active work. S345 roadmap re-slot complete — push block below.
 
 **S323 COMPLETE (2026-03-28):** QA session — S322 verification + 2 bug fixes + Chrome concurrency rule. (1) Edit-sale field persist ✅ — entrance note, approach notes, treasure hunt all saved and reloaded correctly as SIMPLE user (ss_0940ajm6p/ss_2627ysx2a/ss_5529i8hqh). No PRO gate. (2) Review & Publish Publish All — UNVERIFIED (all seeded items are AVAILABLE, Publish All only shows with DRAFT items). (3) Nav menus: Organizer collapsibles ✅, shopper links ✅. P2 bug fixed: duplicate Logout in mobile nav — Layout.tsx had a bare Logout button in `authLinks` AND another in the global footer section; removed the one from `authLinks`. (4) Homepage search ✅ — FTS wired and working: "chair" returns 5 results with item cards, photos, prices, "View Sale →" links. (5) Sales Near You card ✅ — map loads, "View on Map →" links to /map. (6) Search results below-fold UX fixed: index.tsx now auto-scrolls to results heading when query ≥2 chars. (7) Chrome concurrency rule added to CLAUDE.md §10c + findasale-qa.skill packaged. Files: Layout.tsx, index.tsx, CLAUDE.md.
 
-## Next Session (S346)
+## Next Session (S347)
 
-### S346 Priority 1: Hold-to-Pay QA (evening — off peak hours)
+### S347 Priority 1: Hold-to-Pay QA (evening — off peak hours)
 Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets email + in-app notification → ClaimCard visible → Stripe link → payment → SOLD + organizer notified + +15 guildXP. Test accounts: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
 
-### S346 Priority 2: Chrome QA — all FIXED S344 items
-#174+#80, #184, #41, #7, #89, #62 all need browser verification. One dispatch per feature, sequential.
+### S347 Priority 2: Chrome QA — all FIXED S344+S346 items
+S344 pending: #174+#80, #184, #41, #7, #89, #62, #37, #149.
+S346 pending: #48, #13, #157, #46, #199, #177, #58, #29.
+One dispatch per feature, sequential Chrome QA.
 
-### S346 Notes
+### S347 Notes
 - XP test accounts: SQL in decisions-log.md S342 section to set users to any rank for beta testing
 - Sage threshold is 2500 XP (was 4000) — beta-only, revert post-beta
-- Shopper profiles migration must be deployed before S346 QA begins
+- Shopper profiles migration must be deployed (20260330_add_shopper_profile_fields)
 
-### Patrick Actions Before S346
-1. Run S345 push block below (roadmap.md + STATE.md + patrick-dashboard.md)
-2. Confirm Railway + Vercel green
+### Patrick Actions Before S347
+1. Run S346 push block below
+2. Deploy migration 20260330_add_shopper_profile_fields to Railway (from S344)
 3. Check STRIPE_WEBHOOK_SECRET in Railway env vars (for Hold-to-Pay QA)
 
 ### S344 Complete Push Block (31 files)

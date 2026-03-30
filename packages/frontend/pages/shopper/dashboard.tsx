@@ -32,6 +32,8 @@ import Skeleton from '../../components/Skeleton';
 import { useFollows } from '../../hooks/useFollows';
 import BrandFollowManager from '../../components/BrandFollowManager';
 import ClaimCard from '../../components/ClaimCard'; // Hold-to-Pay: Shopper pending payments
+import { useMyAchievements } from '../../hooks/useAchievements';
+import { AchievementBadgesSection } from '../../components/AchievementBadgesSection';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -98,6 +100,9 @@ const ShopperDashboard = () => {
     },
     enabled: !!user?.id,
   });
+
+  // Fetch achievements for badges display
+  const { data: achievementsData, isLoading: achievementsLoading } = useMyAchievements();
 
   if (isLoading) {
     return (
@@ -288,6 +293,14 @@ const ShopperDashboard = () => {
 
               {/* Streak widget — always visible when logged in */}
               <StreakWidget />
+
+              {/* Achievements Badges */}
+              {achievementsData?.achievements && achievementsData.achievements.length > 0 && !achievementsLoading && (
+                <AchievementBadgesSection
+                  achievements={achievementsData.achievements}
+                  showStats={true}
+                />
+              )}
 
               <ActivitySummary />
 

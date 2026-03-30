@@ -44,17 +44,18 @@ export default function TrailDetailPage() {
   const handleSave = async () => {
     if (!trail) return;
 
-    await updateMutation.mutateAsync({
-      trailId: trail.id,
-      name: editName,
-      description: editDescription,
-    });
+    try {
+      const updated = await updateMutation.mutateAsync({
+        trailId: trail.id,
+        name: editName,
+        description: editDescription,
+      });
 
-    setEditMode(false);
-    // Reload trail
-    const { data } = await axios.get(`/api/trails`);
-    const found = data.trails.find((t: any) => t.id === trailId);
-    if (found) setTrail(found);
+      setTrail(updated);
+      setEditMode(false);
+    } catch (error) {
+      console.error('Failed to save trail:', error);
+    }
   };
 
   const handleDelete = async () => {

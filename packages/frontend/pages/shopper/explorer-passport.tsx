@@ -14,6 +14,8 @@ import Link from 'next/link';
 import { useMyPassport, useUpdatePassport, useMyMatches, ExplorerPassport } from '@/hooks/useCollectorPassport';
 import { useAuth } from '@/components/AuthContext';
 import { RankBadge } from '@/components/RankBadge';
+import { useMyAchievements } from '@/hooks/useAchievements';
+import { AchievementBadgesSection } from '@/components/AchievementBadgesSection';
 
 const CATEGORIES = [
   'Furniture',
@@ -33,6 +35,7 @@ function ExplorerPassportPage() {
   const { passport, isLoading: passportLoading, refetch: refetchPassport } = useMyPassport();
   const { updatePassport, isUpdating } = useUpdatePassport();
   const { matches, totalMatches, isLoading: matchesLoading } = useMyMatches();
+  const { data: achievementsData, isLoading: achievementsLoading } = useMyAchievements();
 
   // Form state
   const [bio, setBio] = useState('');
@@ -335,7 +338,17 @@ function ExplorerPassportPage() {
             )}
           </div>
 
-          {/* Section 3: Notification Settings */}
+          {/* Section 3: Achievements */}
+          {achievementsData?.achievements && achievementsData.achievements.length > 0 && !achievementsLoading && (
+            <div className="mb-8">
+              <AchievementBadgesSection
+                achievements={achievementsData.achievements}
+                showStats={true}
+              />
+            </div>
+          )}
+
+          {/* Section 4: Notification Settings */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Notification Settings</h2>
 

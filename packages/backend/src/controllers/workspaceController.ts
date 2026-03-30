@@ -39,35 +39,40 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
   try {
     const organizerId = req.user?.organizerProfile?.id;
     if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
-    let workspace = await prisma.organizerWorkspace.findUnique({
-      where: { ownerId: organizerId },
-      include: {
-        owner: { select: { user: { select: { id: true } } } },
-        members: {
-          include: {
-            organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } },
-          },
+
+    // Common include pattern for workspace queries
+    const workspaceInclude = {
+      owner: {
+        select: {
+          id: true,
+          user: { select: { id: true } }
+        }
+      },
+      members: {
+        include: {
+          organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } },
         },
       },
+    };
+
+    let workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+      include: workspaceInclude,
     });
+
+    // If not owner, check if user is a member of a workspace
     if (!workspace) {
       const membership = await prisma.workspaceMember.findFirst({
         where: { organizerId },
         include: {
           workspace: {
-            include: {
-              owner: { select: { user: { select: { id: true } } } },
-              members: {
-                include: {
-                  organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } },
-                },
-              },
-            },
+            include: workspaceInclude,
           },
         },
       });
       if (membership) workspace = membership.workspace;
     }
+
     if (!workspace) return res.status(404).json({ message: 'No workspace found' });
     const response = { ...workspace, ownerUserId: workspace.owner?.user?.id || null };
     return res.json(response);

@@ -16,9 +16,9 @@ interface TypologyBadgeProps {
 }
 
 function confidenceColor(confidence: number): string {
-  if (confidence >= 0.75) return 'bg-green-100 text-green-800 border-green-200';
-  if (confidence >= 0.5) return 'bg-amber-100 text-amber-800 border-amber-200';
-  return 'bg-red-100 text-red-700 border-red-200';
+  if (confidence >= 0.75) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-200 dark:border-green-800';
+  if (confidence >= 0.5) return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 border-amber-200 dark:border-amber-800';
+  return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-100 border-red-200 dark:border-red-800';
 }
 
 export default function TypologyBadge({
@@ -43,8 +43,7 @@ export default function TypologyBadge({
       </span>
       {isReviewed && (
         <span
-          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-sage-100 text-sage-700 border border-sage-200 font-medium ${textSize}`}
-          style={{ backgroundColor: '#eef4ef', color: '#4a7c59', borderColor: '#c8deca' }}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100 border border-green-200 dark:border-green-800 font-medium ${textSize}`}
           title="Manually reviewed by organizer"
         >
           ✓ Reviewed

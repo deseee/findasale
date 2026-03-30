@@ -769,6 +769,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           isOpen={showHoldToPayModal}
           onClose={() => setShowHoldToPayModal(false)}
           onSuccess={() => refetchItem()}
+          isAuction={isAuction}
         />
       )}
 

@@ -21,6 +21,7 @@ interface HoldToPayModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  isAuction?: boolean;
 }
 
 interface InvoiceResponse {
@@ -46,6 +47,7 @@ export default function HoldToPayModal({
   isOpen,
   onClose,
   onSuccess,
+  isAuction = false,
 }: HoldToPayModalProps) {
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -120,16 +122,18 @@ export default function HoldToPayModal({
               ${itemPrice.toFixed(2)}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">
-              Platform Fee ({organizerTier === 'PRO' ? '8%' : '10%'})
-            </span>
-            <span className="font-semibold text-gray-900 dark:text-gray-100">
-              -${platformFee.toFixed(2)}
-            </span>
-          </div>
+          {isAuction && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600 dark:text-gray-400">
+                Platform Fee ({organizerTier === 'PRO' ? '8%' : '10%'})
+              </span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100">
+                -${platformFee.toFixed(2)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between text-base font-bold pt-2">
-            <span className="text-gray-900 dark:text-gray-100">You Receive (after Stripe fees)</span>
+            <span className="text-gray-900 dark:text-gray-100">{isAuction ? 'You Receive (after Stripe fees)' : 'You Receive'}</span>
             <span className="text-amber-600 dark:text-amber-400">
               ~${estimatedPayout.toFixed(2)}
             </span>
