@@ -889,8 +889,8 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
-              {/* H1: How It Works card */}
-              {orgProfile && !orgProfile.onboardingComplete && !showWizard && (
+              {/* H1: How It Works card — only for brand new organizers with zero completed sales */}
+              {orgProfile && orgProfile.completedSales === 0 && !showWizard && (
                 <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-4">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">How It Works</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -917,57 +917,6 @@ const OrganizerDashboard = () => {
                   </div>
                 </div>
               )}
-
-              {/* Phase 22: Creator Tier card */}
-              {orgProfile && (
-                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-4">
-                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">Creator Tier</h3>
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <ReputationTier tier={orgProfile.reputationTier} size="sm" />
-                    <p className="text-sm text-warm-600 dark:text-warm-400">{orgProfile.progressMessage}</p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-                    <div><p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{orgProfile.completedSales}</p><p className="text-xs text-warm-500 dark:text-warm-400">Completed Sales</p></div>
-                    <div><p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{orgProfile.followerCount}</p><p className="text-xs text-warm-500 dark:text-warm-400">Followers</p></div>
-                    <div><p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{orgProfile.avgRating ? orgProfile.avgRating.toFixed(1) : '—'}</p><p className="text-xs text-warm-500 dark:text-warm-400">Avg Rating</p></div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Your tier benefits</p>
-                    <ul className="space-y-1">
-                      {(TIER_BENEFITS[orgProfile.reputationTier] || TIER_BENEFITS.NEW).map((benefit) => (
-                        <li key={benefit} className="flex items-center gap-2 text-sm text-warm-700 dark:text-warm-300">
-                          <span className="text-green-500 dark:text-green-400 flex-shrink-0">✓</span>{benefit}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <Link
-                    href="/organizer/reputation"
-                    className="inline-block mt-4 text-sm font-semibold text-amber-600 hover:text-amber-700"
-                  >
-                    View Full Reputation Score →
-                  </Link>
-                </div>
-              )}
-
-              {/* Plan a Sale Coming Soon Card */}
-              <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-4 border border-warm-100 dark:border-gray-700">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl">📋</span>
-                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Plan a Sale</h3>
-                  </div>
-                  <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full px-3 py-1 text-xs font-semibold flex-shrink-0">
-                    Coming Soon
-                  </span>
-                </div>
-                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
-                  Get organized before your sale. Plan a Sale will help you create checklists, build timelines, and organize all your prep tasks so nothing gets missed.
-                </p>
-                <p className="text-xs text-warm-500 dark:text-warm-500 italic">
-                  This feature is coming to all organizers soon.
-                </p>
-              </div>
             </>
           )}
 

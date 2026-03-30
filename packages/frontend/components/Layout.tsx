@@ -599,12 +599,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </Link>
                 )}
 
-                {/* Organizer Tools Section — Collapsible */}
+                {/* Selling Tools Section — Collapsible */}
                 <button
                   onClick={() => setMobileOrgToolsOpen(!mobileOrgToolsOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
-                  Organizer Tools
+                  <span className="flex items-center gap-2"><Wrench size={14} className="text-amber-500" /> Selling Tools</span>
                   <ChevronRight
                     size={16}
                     className={`transition-transform duration-200 ${mobileOrgToolsOpen ? 'rotate-90' : ''}`}
@@ -612,29 +612,29 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileOrgToolsOpen && (
                   <>
-                    <Link href="/organizer/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Bounties
-                    </Link>
                     <Link href="/organizer/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Holds
+                      <Bookmark size={14} className="inline mr-2 text-amber-500" /> Holds
                     </Link>
                     <Link href="/organizer/pos" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      POS
-                    </Link>
-                    <Link href="/organizer/message-templates" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Message Templates
+                      <ShoppingCart size={14} className="inline mr-2 text-amber-500" /> POS / Checkout
                     </Link>
                     <Link href="/organizer/print-inventory" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Print Inventory
+                      <Printer size={14} className="inline mr-2 text-amber-500" /> Print Inventory
                     </Link>
-                    <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Reputation
+                    <Link href="/organizer/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Map size={14} className="inline mr-2 text-amber-500" /> Sale Map
                     </Link>
-                    <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      UGC Moderation
+                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <QrCode size={14} className="inline mr-2 text-amber-500" /> QR Codes
                     </Link>
-                    <Link href="/organizer/performance" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      Performance
+                    <Link href="/organizer/analytics" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <BarChart2 size={14} className="inline mr-2 text-amber-500" /> Analytics
+                    </Link>
+                    <Link href="/organizer/earnings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <DollarSign size={14} className="inline mr-2 text-amber-500" /> Earnings
+                    </Link>
+                    <Link href="/organizer/staff" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <UserPlus size={14} className="inline mr-2 text-amber-500" /> Staff Accounts
                     </Link>
                   </>
                 )}
@@ -644,7 +644,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
-                  Pro Tools
+                  <span className="flex items-center gap-2"><Sparkles size={14} className="text-purple-400" /> Pro Tools</span>
                   <ChevronRight
                     size={16}
                     className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
@@ -652,16 +652,51 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileProToolsOpen && (
                   <>
-                    <TierGatedNavLink href="/organizer/command-center" label="Command Center" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/typology" label="Typology Classifier" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/fraud-signals" label="Fraud Signals" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/offline" label="Offline Mode" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/appraisals" label="Appraisals" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/brand-kit" label="Brand Kit" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/flip-report" label="Flip Report" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/ripples" label="Sale Ripples" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/item-library" label="Item Library" requiredTier="PRO" />
-                    <TierGatedNavLink href="/organizer/webhooks" label="Webhooks" requiredTier="TEAMS" />
+                    <Link href="/organizer/brand-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Palette size={14} className="inline mr-2 text-purple-400" /> Brand Kit
+                    </Link>
+                    <Link href="/organizer/flip-report" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <TrendingUp size={14} className="inline mr-2 text-purple-400" /> Flip Report
+                    </Link>
+                    <Link href="/organizer/item-tagger" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Tag size={14} className="inline mr-2 text-purple-400" /> Item Tagger
+                    </Link>
+                    {canAccess('TEAMS') && (
+                      <Link href="/organizer/webhooks" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                        <Webhook size={14} className="inline mr-2 text-gray-500" /> Webhooks
+                      </Link>
+                    )}
+                  </>
+                )}
+
+                {/* Shopper Tools Section — Collapsible */}
+                <button
+                  onClick={() => setMobileExplorerOpen(!mobileExplorerOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <span className="flex items-center gap-2"><Compass size={14} className="text-indigo-500" /> My Collection</span>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileExplorerOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileExplorerOpen && (
+                  <>
+                    <Link href="/shopper/wishlist" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Bookmark size={14} className="inline mr-2 text-indigo-500" /> Saved Sales
+                    </Link>
+                    <Link href="/shopper/saved-items" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Star size={14} className="inline mr-2 text-indigo-500" /> Saved Items
+                    </Link>
+                    <Link href="/shopper/bids" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Gavel size={14} className="inline mr-2 text-indigo-500" /> My Bids
+                    </Link>
+                    <Link href="/shopper/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Clock size={14} className="inline mr-2 text-indigo-500" /> My Holds
+                    </Link>
+                    <Link href="/shopper/purchases" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Package size={14} className="inline mr-2 text-indigo-500" /> Purchases
+                    </Link>
                   </>
                 )}
               </>
