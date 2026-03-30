@@ -199,7 +199,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
             </div>
           )}
 
-          {/* Step 2: Profile Setup (was Step 1) */}
+          {/* Step 2: Profile Setup */}
           {currentStep === 2 && (
             <div className="space-y-6">
               <div>
