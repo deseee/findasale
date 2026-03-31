@@ -208,15 +208,20 @@ const PurchaseHistoryPage = () => {
                 <div className="space-y-4">
                   {purchases.map((purchase: any) => (
                     <Link key={purchase.id} href={`/shopper/loot-log/${purchase.id}`}>
-                      <div className="bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 card p-6 flex justify-between items-center hover:shadow-md transition cursor-pointer">
-                        <div>
-                          <h3 className="font-semibold text-lg text-warm-900 dark:text-warm-100 mb-1">{purchase.itemTitle}</h3>
-                          <p className="text-sm text-warm-600 dark:text-warm-400">From: {purchase.organizerName}</p>
-                          <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Purchased {purchase.purchasedDate}</p>
+                      <div className="bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 card p-4 flex items-center gap-4 hover:shadow-md transition cursor-pointer">
+                        {purchase.item?.photoUrls?.[0] ? (
+                          <img src={purchase.item.photoUrls[0]} alt={purchase.item?.title || 'Item'} className="w-16 h-16 object-cover rounded flex-shrink-0" />
+                        ) : (
+                          <div className="w-16 h-16 rounded bg-warm-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center text-xl">🏷️</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-warm-900 dark:text-warm-100 truncate">{purchase.item?.title || 'Item'}</h3>
+                          <p className="text-sm text-warm-600 dark:text-warm-400">From: {purchase.sale?.organizer?.businessName || purchase.sale?.title || 'Unknown'}</p>
+                          <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">{new Date(purchase.createdAt).toLocaleDateString()}</p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">${purchase.amount}</p>
-                          <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xl font-bold text-warm-900 dark:text-warm-100">${typeof purchase.amount === 'number' ? purchase.amount.toFixed(2) : purchase.amount}</p>
+                          <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                             purchase.status === 'completed' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300' : 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
                           }`}>
                             {purchase.status}
