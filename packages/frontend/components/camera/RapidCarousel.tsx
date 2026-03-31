@@ -235,10 +235,10 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
                       e.stopPropagation();
                       onAddPhotoToItem?.(item.id);
                     }}
-                    className={`absolute bottom-1 right-1 w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold z-10 ${
+                    className={`absolute bottom-2 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full flex items-center justify-center text-white text-xl font-bold z-10 border transition-all ${
                       addingToItemId === item.id
-                        ? 'bg-amber-500 ring-2 ring-amber-300'
-                        : 'bg-gray-800/80'
+                        ? 'bg-amber-500 border-amber-300 ring-2 ring-amber-300'
+                        : 'bg-gray-800/90 border-white/40 hover:bg-gray-900'
                     }`}
                     title="Add more photos to this item"
                   >

@@ -200,6 +200,39 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     return () => clearInterval(qualityInterval);
   }, [cameraReady]);
 
+  // Crop canvas to 4:3 aspect ratio (center crop)
+  const cropCanvasTo4x3 = (source: HTMLCanvasElement): HTMLCanvasElement => {
+    const sw = source.width;
+    const sh = source.height;
+    const targetRatio = 4 / 3;
+    const sourceRatio = sw / sh;
+
+    let cropW = sw;
+    let cropH = sh;
+    let cropX = 0;
+    let cropY = 0;
+
+    if (sourceRatio > targetRatio) {
+      // wider than 4:3 — crop sides
+      cropW = Math.floor(sh * targetRatio);
+      cropX = Math.floor((sw - cropW) / 2);
+    } else if (sourceRatio < targetRatio) {
+      // taller than 4:3 — crop top/bottom
+      cropH = Math.floor(sw / targetRatio);
+      cropY = Math.floor((sh - cropH) / 2);
+    } else {
+      return source; // already 4:3, no crop needed
+    }
+
+    const dest = document.createElement('canvas');
+    dest.width = cropW;
+    dest.height = cropH;
+    const ctx = dest.getContext('2d');
+    if (!ctx) return source;
+    ctx.drawImage(source, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    return dest;
+  };
+
   // Capture a photo from the video stream
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -226,8 +259,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     setFlashEffect(true);
     setTimeout(() => setFlashEffect(false), 150);
 
+    // Crop to 4:3 aspect ratio
+    const croppedCanvas = cropCanvasTo4x3(canvas);
+
     // Convert to blob (JPEG, 85% quality)
-    canvas.toBlob(
+    croppedCanvas.toBlob(
       (blob) => {
         if (!blob) return;
 
@@ -386,20 +422,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             ))}
           </div>
 
-          {/* Right: Review button */}
-          <button
-            onClick={() => {
-              if (!isRapidfire && photos.length > 0) {
-                setSelectedIndex(0);
-              } else {
-                onNavigateToReview();
-              }
-            }}
-            disabled={!isRapidfire && photos.length === 0}
-            className="flex-shrink-0 max-w-[80px] bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-2 py-1.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap truncate"
-          >
-            Review{readyCount > 0 && ` (${readyCount})`}
-          </button>
+          {/* Right: placeholder for visual balance */}
+          <div className="flex-shrink-0 w-10" />
         </div>
 
         {/* Mode hint text */}
@@ -717,71 +741,70 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           )}
 
           {/* Shutter row */}
-          <div className="flex items-center justify-center py-4 px-6 gap-4">
-            {/* Gallery thumbnail (left) */}
-            {lastItemThumbnail && (
+          <div className="flex items-center py-5 px-6 gap-4">
+            {/* Left: Review button (moved from top-right) */}
+            <div className="flex-1 flex justify-start">
               <button
-                onClick={() => !isRapidfire && photos.length > 0 && setSelectedIndex(photos.length - 1)}
-                disabled={isRapidfire || photos.length === 0}
-                className="w-12 h-12 rounded overflow-hidden border border-white/30 flex-shrink-0 disabled:cursor-not-allowed bg-white/10 flex items-center justify-center"
+                onClick={() => {
+                  if (!isRapidfire && photos.length > 0) {
+                    setSelectedIndex(0);
+                  } else {
+                    onNavigateToReview();
+                  }
+                }}
+                disabled={!isRapidfire && photos.length === 0}
+                className={`h-12 px-3 rounded-full font-bold text-xs transition-colors flex items-center justify-center whitespace-nowrap ${
+                  isRapidfire && readyCount === 0
+                    ? 'bg-gray-700/80 text-gray-300 cursor-default'
+                    : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+                }`}
               >
-                <img
-                  src={lastItemThumbnail}
-                  alt="Last capture"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback: replace broken image with camera icon
-                    const img = e.target as HTMLImageElement;
-                    img.style.display = 'none';
-                    img.parentElement?.classList.add('flex', 'items-center', 'justify-center');
-                    const icon = document.createElement('span');
-                    icon.textContent = '📷';
-                    icon.className = 'text-lg';
-                    img.parentElement?.appendChild(icon);
-                  }}
-                />
+                Review{readyCount > 0 && ` (${readyCount})`}
               </button>
-            )}
-            {!lastItemThumbnail && <div className="w-12" />}
+            </div>
 
-            {/* Shutter button (center) */}
-            <button
-              onClick={capturePhoto}
-              disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
-              className={`w-20 h-20 rounded-full flex items-center justify-center transition-transform active:scale-90 flex-shrink-0 ${
-                isRapidfire
-                  ? inAddMode
-                    ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
-                    : 'bg-gradient-to-br from-amber-500 to-red-500 shadow-lg shadow-amber-500/50'
-                  : 'border-4 border-white bg-white/20'
-              }`}
-              style={{
-                opacity: cameraReady && (isRapidfire ? photos.length < maxPhotos : photosThisItem < MAX_REGULAR) ? 1 : 0.5,
-              }}
-              aria-label="Capture photo"
-            >
-              {isRapidfire ? (
-                <span className="text-2xl font-bold text-white">{inAddMode ? '+' : '⚡'}</span>
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-white" />
-              )}
-            </button>
+            {/* Center: Shutter button */}
+            <div className="flex-shrink-0">
+              <button
+                onClick={capturePhoto}
+                disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
+                className={`w-20 h-20 rounded-full flex items-center justify-center transition-transform active:scale-90 flex-shrink-0 ${
+                  isRapidfire
+                    ? inAddMode
+                      ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
+                      : 'bg-gradient-to-br from-amber-500 to-red-500 shadow-lg shadow-amber-500/50'
+                    : 'border-4 border-white bg-white/20'
+                }`}
+                style={{
+                  opacity: cameraReady && (isRapidfire ? photos.length < maxPhotos : photosThisItem < MAX_REGULAR) ? 1 : 0.5,
+                }}
+                aria-label="Capture photo"
+              >
+                {isRapidfire ? (
+                  <span className="text-2xl font-bold text-white">{inAddMode ? '+' : '⚡'}</span>
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-white" />
+                )}
+              </button>
+            </div>
 
-            {/* Camera switch (right) */}
-            <button
-              onClick={switchCamera}
-              className="w-12 h-12 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center flex-shrink-0"
-              aria-label="Switch camera"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-            </button>
+            {/* Right: Camera switch */}
+            <div className="flex-1 flex justify-end">
+              <button
+                onClick={switchCamera}
+                className="w-12 h-12 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center flex-shrink-0"
+                aria-label="Switch camera"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
