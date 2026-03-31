@@ -1,64 +1,65 @@
-# Patrick's Dashboard — Week of March 31, 2026
+# Patrick's Dashboard — S358 Complete (2026-03-31)
 
 ---
 
-## ⚠️ S357 Complete — Shopper page consolidation shipped + Railway still stuck
+## ✅ S358 Done — /shopper/history fully working, Vercel + Railway green
 
 ---
 
-## What Happened This Session (S357)
+## What Happened This Session (S358)
 
-**Consolidated 3 redundant shopper pages into one:**
-- **Before:** `/shopper/purchases`, `/shopper/receipts`, `/shopper/loot-log` — all showed purchase data from slightly different angles
-- **After:** `/shopper/history` — single page, 3 view tabs (List / Gallery / Receipts), one nav entry "My History"
-- Detail page: existing `/shopper/loot-log/[purchaseId]` reused, back-link updated to "My History"
-- **Also fixed:** Layout.tsx had a truncated `export default Layou` (missing `t`) causing a TypeScript build error — fixed
+**Vercel build error fixed:** `shopper/dashboard.tsx` had a truncated JSX fragment from a prior MCP push. Restored complete closing structure. Vercel went green.
 
-**Files changed:**
-- `history.tsx` — NEW (397 lines, 3-view consolidated page)
-- `loot-log/[purchaseId].tsx` — back-link updated
-- `Layout.tsx` — 3 nav links updated + truncation fix
-- `AvatarDropdown.tsx` — 1 nav link updated
-- `dashboard.tsx` — 2 Quick Links → 1 "My History"
-- Delete: `purchases.tsx`, `receipts.tsx`, `loot-log.tsx`
+**Railway unblocked:** Pushed cache-bust to `Dockerfile.production`. Railway rebuilt and went green.
+
+**QA verified — 3 features:**
+
+- ✅ **#153 Organizer social fields** — Facebook/Instagram/Etsy inputs on `/organizer/settings` Profile tab. Save + reload confirmed.
+- ✅ **#41 Flip Report** — Carol Williams (TEAMS, user3) can access the flip report. Route is `/organizer/flip-report/[saleId]`.
+- ✅ **#80 /shopper/history** — Full fix. Cards now show item name, organizer name, real date, thumbnail. Gallery tab works. Receipts tab has dark mode. Verified in Chrome with real data.
+
+**Root bugs fixed:**
+- List view was using wrong field names (`itemTitle` → `item.title`, `organizerName` → `sale.organizer.businessName`, `purchasedDate` → `createdAt`)
+- Gallery was calling `/api/api/loot-log` (double prefix) → 404
+- `convertDecimalsToNumbers` in userController was missing Date guard → dates became `{}`
+- ReceiptCard had no dark mode classes
 
 ---
 
-## Your Action Now — Push Everything
+## Your Action Now
 
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add packages/frontend/pages/shopper/history.tsx
-git add packages/frontend/pages/shopper/loot-log/[purchaseId].tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/hooks/useLootLog.ts
+git add packages/frontend/components/ReceiptCard.tsx
 git add packages/backend/src/controllers/userController.ts
-git rm packages/frontend/pages/shopper/purchases.tsx
-git rm packages/frontend/pages/shopper/receipts.tsx
-git rm packages/frontend/pages/shopper/loot-log.tsx
-git commit -m "S357: consolidate purchases/receipts/loot-log into /shopper/history; fix #80 purchases API"
+git commit -m "S358: fix /shopper/history fields/gallery/dark-mode/dates; unblock Vercel+Railway"
 .\push.ps1
 ```
-
-Then check Railway dashboard — backend still appears stuck from S356 commits (13:11–13:59 UTC). #153 and #41 fixes are in GitHub but not live.
 
 ---
 
 ## Status Summary
 
-- **Vercel:** ✅ Deploying normally
-- **Railway:** ⚠️ Check dashboard — backend may still be stuck
-- **All migrations:** Deployed ✅
-- **Railway env vars:** All confirmed ✅
+- **Vercel:** ✅ Green
+- **Railway:** ✅ Green
+- **All migrations:** ✅ Deployed
+- **All Railway env vars:** ✅ Confirmed
+
+---
+
+## Next Up (S359)
+
+QA backlog: #37 Sale Alerts, #46 Typology Classifier, #48 Treasure Trail, #199 User Profile, #58 Badges, #29 Loyalty Passport, #213 Hunt Pass CTA, #131 Share Templates.
+
+Known gaps to fix: Business Name blank on organizer profile load, social fields on public organizer page, #177 Buy Now modal missing item name/price.
 
 ---
 
 ## Open Action Items for Patrick
 
-- [ ] **Run push block above** (S357 consolidation + S356 #80 fix)
-- [ ] **Check Railway dashboard** — look for failed build since 13:11 UTC today
+- [ ] **Run push block above**
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review

@@ -104,42 +104,56 @@ Preserved: `loot-log/[purchaseId].tsx` (reused as detail page), `loot-log/public
 
 ---
 
-## Next Session (S358)
+**S358 COMPLETE (2026-03-31):** Vercel/Railway unblocked + #153/#41/#80 fully QA verified.
 
-### S358 Priority 1: Push S357 consolidation (Patrick action first)
+(1) **Vercel build fix:** `shopper/dashboard.tsx` was truncated at line 640 from a prior MCP push — `<>` fragment at line 192 had no closing tag. Fixed by restoring complete closing structure. TS check: zero errors on that file.
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add packages/frontend/pages/shopper/history.tsx
-git add packages/frontend/pages/shopper/loot-log/[purchaseId].tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/backend/src/controllers/userController.ts
-git rm packages/frontend/pages/shopper/purchases.tsx
-git rm packages/frontend/pages/shopper/receipts.tsx
-git rm packages/frontend/pages/shopper/loot-log.tsx
-git commit -m "S357: consolidate purchases/receipts/loot-log into /shopper/history; fix #80 purchases API"
-.\push.ps1
-```
+(2) **Railway unblocked:** S357 push triggered "Dockerfile does not exist" transient error. Cache-bust comment pushed to `Dockerfile.production` → Railway went green.
 
-⚠️ Then check Railway dashboard at railway.app — backend has been stuck since multiple commits 13:11–13:59 UTC. #153 and #41 fixes are in GitHub but not live.
+(3) **QA #153 ✅ VERIFIED:** Navigated to `/organizer/settings` Profile tab as user2. Facebook/Instagram/Etsy URL fields present, typed values, saved — toast confirmed, page reload confirmed persistence.
 
-### S358 Priority 2: Verify after Railway deploys
-- ✅ Verify #153 Organizer Profile social fields — `/organizer/settings` profile tab should show facebook/instagram/etsy inputs
-- ✅ Verify #41 Flip Report — as user3 (Carol Williams, TEAMS), navigate to completed sale flip report. Should return 200 not 403.
-- ✅ Verify #80 — as user11 (Karen Anderson), `/shopper/history` → "From: [organizer name]" and "Purchased [date]" should render correctly
-- ✅ Verify /shopper/history page loads with 3 view tabs
+(4) **QA #41 ✅ VERIFIED:** Navigated to `/organizer/flip-report/[saleId]` as user3 (Carol Williams, TEAMS). Page rendered with revenue/items data — no 403. Correct route is `/organizer/flip-report/[saleId]` not `/organizer/sales/[id]/flip-report`.
 
-### S358 Priority 3: Continue QA backlog
-- #37 (Sale Alerts), #46 (Typology Classifier), #48 (Treasure Trail), #199 (User Profile), #58 (Achievement Badges), #29 (Loyalty Passport), #213 (Hunt Pass CTA), #131 (Share Templates)
-- #177 Buy Now modal ⚠️ UX gap: "Complete Purchase" modal shows no item name or price — flag to findasale-ux for spec
+(5) **QA #80 ✅ VERIFIED:** `/shopper/history` as user11 — all 3 bugs fixed and confirmed in Chrome. Cards show: "Vintage Typewriter #5 / From: Priority Estate Sales / 3/28/2026 / $430.59 / PENDING". Details:
+- **Field mapping:** `purchase.itemTitle/organizerName/purchasedDate` → `purchase.item.title`, `purchase.sale.organizer.businessName`, `purchase.createdAt`
+- **Gallery fix:** `useLootLog` was calling `/api/loot-log` (double prefix → `/api/api/loot-log` 404). Fixed to `/loot-log`.
+- **ReceiptCard dark mode:** Added `dark:` variants throughout (was hardcoded `bg-white`/`text-gray-900`).
+- **Thumbnails:** List view now shows `purchase.item.photoUrls[0]` thumbnail with 🏷️ placeholder.
+- **Root date bug:** `convertDecimalsToNumbers` in `userController.ts` was missing `instanceof Date` guard — Date objects have no enumerable keys so recursive call returned `{}`. Fixed.
+- **Null bytes:** Stripped from `userController.ts`, `useLootLog.ts`, `ReceiptCard.tsx` (pre-existing from prior MCP pushes, caused TS1127 errors).
 
-### S358 Notes
+Files changed S358:
+- `packages/frontend/pages/shopper/dashboard.tsx` — truncation fix
+- `packages/backend/Dockerfile.production` — cache bust
+- `packages/frontend/pages/shopper/history.tsx` — field names + thumbnails + card layout
+- `packages/frontend/hooks/useLootLog.ts` — double /api/ prefix fix + null bytes stripped
+- `packages/frontend/components/ReceiptCard.tsx` — dark mode + null bytes stripped
+- `packages/backend/src/controllers/userController.ts` — instanceof Date guard + null bytes stripped
+
+All pushed. Vercel ✅ Railway ✅.
+
+---
+
+## Next Session (S359)
+
+### S359 Priority 1: Continue QA backlog
+- #37 Sale Alerts — test shopper receiving alert when followed organizer publishes sale
+- #46 Typology Classifier — test AI item tagging in add-items flow
+- #48 Treasure Trail — dark mode + stale state verified, need full end-to-end trail completion test
+- #199 User Profile — verify public shopper profile renders at /shoppers/[id] with correct data
+- #58 Achievement Badges — verify badges render on /shopper/achievements + dashboard
+- #29 Loyalty Passport — verify XP earn guide + rank thresholds on /shopper/loyalty
+- #213 Hunt Pass CTA — verify shows for non-pass users, hidden for pass holders
+- #131 Share Templates — test each social share method (Facebook popup, Nextdoor copy+open, etc.)
+
+### S359 Priority 2: Known gaps not yet fixed
+- **Business Name blank on organizer settings Profile tab** — field not loading from API on page open (found in S358, not fixed)
+- **Social fields knock-on** — does `facebookUrl` etc. render on `/organizers/[id]` public profile? Not verified.
+- **#177 Buy Now modal UX gap** — "Complete Purchase" modal shows no item name or price — flag to findasale-ux for spec
+
+### S359 Notes
 - All Railway env vars confirmed ✅. All migrations deployed ✅. Sage threshold 2500 XP (beta only).
 - Railway backend URL: https://backend-production-153c9.up.railway.app
 - Test accounts: user2 = organizer (SIMPLE), user3 = Carol Williams (TEAMS), user11 = Karen Anderson (shopper), user12 = Leo Thomas (shopper). All passwords: password123
-- Login via Railway backend directly: POST https://backend-production-153c9.up.railway.app/api/auth/login
+- Null byte pattern: files pushed via MCP accumulate null bytes at end. Always strip with python3 `content.rstrip(b'\x00')` before pushing. TS1127 "Invalid character" at last line = null bytes.
 
