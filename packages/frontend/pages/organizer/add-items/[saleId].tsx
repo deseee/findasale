@@ -162,15 +162,18 @@ async function checkImageQuality(blob: Blob): Promise<ImageQualityResult> {
       let tier: LightingTier = 1;
       let reason: 'good' | 'soft' | 'overexposed' | 'dark' = 'good';
 
-      if (avgNormalized < 40) {
+      if (avgNormalized < 15) {
         tier = 3;
         reason = 'dark';
-      } else if (avgNormalized >= 65 && avgNormalized <= 95) {
+      } else if (avgNormalized > 97) {
+        tier = 2;
+        reason = 'overexposed';
+      } else if (avgNormalized >= 15 && avgNormalized < 25) {
+        tier = 2;
+        reason = 'soft';
+      } else {
         tier = 1;
         reason = 'good';
-      } else if ((avgNormalized >= 40 && avgNormalized < 65) || avgNormalized > 95) {
-        tier = 2;
-        reason = avgNormalized > 95 ? 'overexposed' : 'soft';
       }
 
       resolve({ tier, avgBrightness: avgNormalized, reason });
