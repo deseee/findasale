@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import axios from 'axios';
+import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useMyTrails, useUpdateTrail, useDeleteTrail } from '../../../hooks/useTrails';
 import EmptyState from '../../../components/EmptyState';
@@ -24,7 +24,7 @@ export default function TrailDetailPage() {
 
     const loadTrail = async () => {
       try {
-        const { data } = await axios.get(`/api/trails`);
+        const { data } = await api.get(`/api/trails`);
         const found = data.trails.find((t: any) => t.id === trailId);
         if (found) {
           setTrail(found);
