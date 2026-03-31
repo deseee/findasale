@@ -548,11 +548,11 @@ const OrganizerDashboard = () => {
                             }`}>
                               {statsData.activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
                             </span>
-                            {getUrgencyTag() && (
-                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${getUrgencyTag().color}`}>
-                                {getUrgencyTag().text}
+                            {(() => { const urgency = getUrgencyTag(); return urgency ? (
+                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${urgency.color}`}>
+                                {urgency.text}
                               </span>
-                            )}
+                            ) : null; })()}
                           </div>
                         </div>
                       </div>
