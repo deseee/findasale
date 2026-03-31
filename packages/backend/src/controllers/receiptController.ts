@@ -43,7 +43,7 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
       id: p.id,
       issuedAt: p.createdAt,
       total: p.amount,
-      items: [{ itemTitle: p.item.title, photoUrl: undefined, price: p.amount }],
+      items: [{ itemTitle: p.item?.title ?? 'Item', photoUrl: undefined, price: p.amount }],
       purchase: p,
     }));
 
