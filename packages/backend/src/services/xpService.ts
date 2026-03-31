@@ -13,7 +13,7 @@ export const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   SCOUT: 500,
   RANGER: 1500,
   SAGE: 2500,
-  GRANDMASTER: 10000,
+  GRANDMASTER: 5000,
 };
 
 // Seasonal reset floor — when resetting, users drop to this rank minimum
@@ -353,6 +353,7 @@ export async function applySeasonalReset() {
 
 /**
  * Get user's XP profile for dashboard display
+ * Returns: { guildXp, explorerRank, rankProgress: { currentXp, nextRankXp, nextRank } }
  */
 export async function getUserXpProfile(userId: string) {
   try {
@@ -363,7 +364,8 @@ export async function getUserXpProfile(userId: string) {
         name: true,
         guildXp: true,
         explorerRank: true,
-        seasonalResetAt: true,
+        huntPassActive: true,
+        huntPassExpiry: true,
       },
     });
 
@@ -372,11 +374,13 @@ export async function getUserXpProfile(userId: string) {
     const progress = getRankProgress(user.guildXp);
 
     return {
-      ...user,
+      guildXp: user.guildXp,
+      explorerRank: user.explorerRank,
+      huntPassActive: user.huntPassActive,
+      huntPassExpiry: user.huntPassExpiry,
       rankProgress: {
         currentXp: progress.currentXp,
         nextRankXp: progress.nextRankXp,
-        progressPct: progress.progressPct,
         nextRank: progress.nextRank,
       },
     };

@@ -68,6 +68,8 @@ const OrganizerDashboard = () => {
   const [cloningId, setCloningId] = useState<string | null>(null);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
 
   useEffect(() => {
     setIsClient(true);
@@ -138,6 +140,35 @@ const OrganizerDashboard = () => {
     queryFn: async () => {
       const response = await api.get('/reservations/organizer/count');
       return response.data as { count: number };
+    },
+    enabled: !!user?.id && isClient,
+    staleTime: 60_000,
+  });
+
+  // Fetch consolidated dashboard stats (revenue, items, active sale metrics)
+  const { data: statsData } = useQuery({
+    queryKey: ['organizer-stats', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/organizers/stats');
+      return response.data as {
+        revenue: {
+          totalLifetime: number;
+          currentSale: number;
+          thisMonth: number;
+        };
+        items: {
+          total: number;
+          available: number;
+          sold: number;
+          draft: number;
+        };
+        activeSale: {
+          id: string;
+          title: string;
+          viewCount: number;
+          holdCount: number;
+        } | null;
+      };
     },
     enabled: !!user?.id && isClient,
     staleTime: 60_000,
@@ -569,19 +600,19 @@ const OrganizerDashboard = () => {
               {/* Quick Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Total Revenue</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">$0.00</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">TODO: wire to API</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Current Sale Revenue</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${(statsData?.revenue.currentSale ?? 0).toFixed(2)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{statsData?.activeSale?.title || 'No active sale'}</p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                   <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Listed</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">—</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">TODO: fetch from API</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData?.items.total ?? 0}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{statsData?.items.sold ?? 0} sold</p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                   <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Active Holds</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{holdCountData?.count ?? 0}</p>
-                  {(holdCountData?.count ?? 0) > 0 && (
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData?.activeSale?.holdCount ?? 0}</p>
+                  {(statsData?.activeSale?.holdCount ?? 0) > 0 && (
                     <Link href="/organizer/holds" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 text-xs font-semibold mt-2 inline-block">
                       View holds →
                     </Link>

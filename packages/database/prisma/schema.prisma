@@ -126,6 +126,8 @@ model User {
   appraisalResponses   AppraisalResponse[] @relation("AppraisalResponses")
   appraisalAIRequests  AppraisalAIRequest[] @relation("AppraisalAIRequests")
   appraisalDisputes    AppraisalDispute[]  @relation("AppraisalDisputes")
+  // Feature #70: Consignment — pre-wire inverse relation for consigned items
+  consignedItems    Item[]   @relation("ConsignedItems")
   // Platform Safety #94: Same-IP Bidder Detection
   bidIpRecords         BidIpRecord[]       @relation("BidIpRecords")
   // Feature #51: Sale Ripples — social proof activity
@@ -512,8 +514,12 @@ model Item {
   // Feature #70: Consignment — operator-consigned items with split payout
   consignorId      String?                       // Optional: consignor user ID (nullable for future Consignor table)
   consignmentSplitPct Decimal?                   // Optional: percentage split for consignor (e.g., 0.70 = 70%)
+  consignor        User?     @relation("ConsignedItems", fields: [consignorId], references: [id])
   // Feature #81: Persistent Inventory — items that recur across sales
+  persistentInventory Boolean @default(false)    // Pre-wire: persistent inventory feature activation
   isPersistent     Boolean   @default(false)
+  // Feature #84: Master Item Library — canonical item definitions
+  masterItemLibraryId String?                    // Pre-wire: FK to future MasterItemLibrary model
   // Feature #136: QR Code Auto-Embedding in Photo Exports
   qrEmbedEnabled   Boolean   @default(true)    // Embed QR code linking to item in exported photos
   // Feature #103: Photo Retention — archive old photos, delete very old ones

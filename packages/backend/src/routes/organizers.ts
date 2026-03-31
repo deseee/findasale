@@ -82,6 +82,125 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
+// GET /organizers/stats — consolidated dashboard stats (revenue, items, active sale metrics)
+router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.json({
+        revenue: { totalLifetime: 0, currentSale: 0, thisMonth: 0 },
+        items: { total: 0, available: 0, sold: 0, draft: 0 },
+        activeSale: null,
+      });
+    }
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Fetch all sales with purchase and item data
+    const sales = await prisma.sale.findMany({
+      where: { organizerId: organizer.id },
+      include: {
+        items: {
+          select: { id: true, status: true, draftStatus: true },
+        },
+        purchases: {
+          where: { status: 'PAID' },
+          select: { amount: true, createdAt: true },
+        },
+      },
+    });
+
+    // Calculate lifetime revenue and this month's revenue
+    let totalLifetime = 0;
+    let thisMonth = 0;
+    sales.forEach((sale: any) => {
+      sale.purchases.forEach((p: any) => {
+        const amount = Number(p.amount) || 0;
+        totalLifetime += amount;
+        if (new Date(p.createdAt) >= monthStart) {
+          thisMonth += amount;
+        }
+      });
+    });
+
+    // Count items by status
+    let totalItems = 0;
+    let availableItems = 0;
+    let soldItems = 0;
+    let draftItems = 0;
+    sales.forEach((sale: any) => {
+      sale.items.forEach((item: any) => {
+        totalItems++;
+        if (item.draftStatus === 'DRAFT') {
+          draftItems++;
+        } else if (item.status === 'SOLD') {
+          soldItems++;
+        } else if (item.status === 'AVAILABLE') {
+          availableItems++;
+        }
+      });
+    });
+
+    // Find active sale (PUBLISHED status, not ended)
+    const activeSale = sales.find(
+      (s: any) => s.status === 'PUBLISHED' && new Date(s.endDate) > now
+    );
+
+    let activeSaleData = null;
+    if (activeSale) {
+      const activeItemCount = activeSale.items.filter(
+        (i: any) => i.draftStatus !== 'DRAFT' && i.status !== 'SOLD'
+      ).length;
+      const activeSaleRevenue = activeSale.purchases.reduce(
+        (sum: number, p: any) => sum + (Number(p.amount) || 0),
+        0
+      );
+      const holdCount = await prisma.itemReservation.count({
+        where: {
+          status: 'PENDING',
+          item: {
+            saleId: activeSale.id,
+          },
+        },
+      });
+
+      activeSaleData = {
+        id: activeSale.id,
+        title: activeSale.title,
+        viewCount: activeSale.qrScanCount ?? 0,
+        holdCount,
+      };
+    }
+
+    res.json({
+      revenue: {
+        totalLifetime,
+        currentSale: activeSale?.purchases.reduce((sum: any, p: any) => sum + (Number(p.amount) || 0), 0) ?? 0,
+        thisMonth,
+      },
+      items: {
+        total: totalItems,
+        available: availableItems,
+        sold: soldItems,
+        draft: draftItems,
+      },
+      activeSale: activeSaleData,
+    });
+  } catch (error) {
+    console.error('Error fetching organizer stats:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /organizers/performance?saleId=X&range=30d — seller performance dashboard metrics
 // Feature #6: Revenue, top items, conversion rate, category breakdown, hold/no-show rate
 router.get('/performance', authenticate, getPerformanceMetricsHandler);
