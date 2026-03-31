@@ -169,6 +169,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
       {/* Add Slot Form */}
       {!showForm ? (
         <button
+          type="button"
           onClick={() => setShowForm(true)}
           className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium"
         >

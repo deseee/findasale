@@ -16,7 +16,7 @@ export const getFlipReportHandler = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const organizerId = req.user.id;
+    const organizerId = req.user.organizerProfile?.id ?? req.user.id;
 
     // Get the flip report
     const flipReport = await getFlipReport(saleId, organizerId);
