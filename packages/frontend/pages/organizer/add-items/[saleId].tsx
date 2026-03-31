@@ -321,6 +321,8 @@ const AddItemsDetailPage = () => {
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [qualityResult, setQualityResult] = useState<ImageQualityResult | null>(null);
   const [pendingQualityBlob, setPendingQualityBlob] = useState<Blob | null>(null);
+  const [pendingQualityTempId, setPendingQualityTempId] = useState<string | null>(null);
+  const [pendingQualityAppendId, setPendingQualityAppendId] = useState<string | null>(null);
 
   // Phase 3-5: Bulk Operations Toolkit state
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -681,14 +683,19 @@ const AddItemsDetailPage = () => {
 
       // Handle tiered quality response
       if (quality.tier === 3) {
-        // Tier 3: Close camera first so user can see modal, then show modal
-        setCameraOpen(false);
+        // Tier 3: Show modal overlay inside camera, don't close camera
+        // Store context for resuming upload after user decision
+        setPendingQualityTempId(tempId);
+        setPendingQualityAppendId(appendToItemId);
         setQualityModalOpen(true);
         return; // Stop processing, wait for user action
       } else if (quality.tier === 2) {
-        // Tier 2: Show advisory toast via global showToast (visible over camera), auto-continue upload
-        showToast('Lighting is soft — we\'ll still identify the item. Move to brighter light for best results.', 'info');
-        // Don't return — continue with upload
+        // Tier 2: Show overlay inside camera, auto-continue upload
+        // Store context for user decision
+        setPendingQualityTempId(tempId);
+        setPendingQualityAppendId(appendToItemId);
+        setQualityModalOpen(true);
+        return; // Wait for user to decide (Use Anyway or Retake)
       }
       // Tier 1: No warning, proceed to upload
 
@@ -782,18 +789,96 @@ const AddItemsDetailPage = () => {
     setAddingToItemId(null);
   };
 
-  // Quality modal handler (Tier 3 only)
+  // Quality modal handlers
   const handleQualityRetake = () => {
     setQualityModalOpen(false);
     setPendingQualityBlob(null);
+    setPendingQualityTempId(null);
+    setPendingQualityAppendId(null);
     // Camera remains open for retake
-    setCameraOpen(true);
+  };
+
+  const handleQualityUsePhoto = async () => {
+    // User chose to use photo despite Tier 2 warning
+    // Continue upload with the pending blob
+    setQualityModalOpen(false);
+
+    if (!pendingQualityBlob || !pendingQualityTempId) {
+      console.error('Missing quality context for resuming upload');
+      return;
+    }
+
+    try {
+      // Resume upload from phase 4 (face detection and beyond)
+      const hasFace = await detectFace(pendingQualityBlob);
+
+      // 5. Upload
+      if (pendingQualityAppendId) {
+        // Append photo to existing item
+        const fd = new FormData();
+        fd.append('photos', pendingQualityBlob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        const uploadRes = await api.post('/upload/sale-photos', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
+        if (urls[0]) {
+          await api.post(`/items/${pendingQualityAppendId}/photos`, { url: urls[0] });
+          setRapidItems((prev) =>
+            prev.map((item) =>
+              item.id === pendingQualityAppendId
+                ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
+                : item
+            )
+          );
+        }
+      } else {
+        // Create new item
+        const fd = new FormData();
+        fd.append('image', pendingQualityBlob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        fd.append('autoEnhanced', 'false');
+
+        const res = await api.post('/upload/rapidfire', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const { itemId, photoUrl } = res.data;
+
+        // Swap temp id for real DB item id
+        setRapidItems((prev) =>
+          prev.map((item) =>
+            item.id === pendingQualityTempId
+              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: photoUrl ? [photoUrl] : [] }
+              : item
+          )
+        );
+
+        queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+        showToast('Analyzing item with AI...', 'info');
+        pollForAI(itemId);
+      }
+    } catch (err: any) {
+      console.error('[quality] Resume upload failed:', err);
+      showToast('Upload failed. Please try again.', 'error');
+    } finally {
+      setPendingQualityBlob(null);
+      setPendingQualityTempId(null);
+      setPendingQualityAppendId(null);
+    }
   };
 
   const handleQualitySkipItem = () => {
     setQualityModalOpen(false);
     setPendingQualityBlob(null);
-    // Camera remains open, photo is discarded
+    setPendingQualityTempId(null);
+    setPendingQualityAppendId(null);
+
+    // Remove the temp item from carousel since user skipped it
+    if (pendingQualityTempId) {
+      setRapidItems((prev) => prev.filter((item) => item.id !== pendingQualityTempId));
+    }
+    // Camera remains open for next capture
   };
 
   const showShotGuidance = (shotNumber: number) => {
@@ -1489,31 +1574,7 @@ const AddItemsDetailPage = () => {
             </div>
           )}
 
-          {/* Phase 3.5: Quality Tier 3 (Too Dark) Modal */}
-          {qualityModalOpen && qualityResult?.tier === 3 && (
-            <div className="fixed inset-0 bg-black/60 flex items-end z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full">
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Too dark to identify</h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  This photo is too dark for our AI to identify the item properly. Here's the fix: Move to a well-lit area (near a window or under a lamp) and try again. It only takes 10 seconds.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleQualityRetake}
-                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-xl text-sm font-medium"
-                  >
-                    Retake
-                  </button>
-                  <button
-                    onClick={handleQualitySkipItem}
-                    className="flex-1 bg-gray-100 text-gray-900 dark:text-gray-100 py-3 rounded-xl text-sm font-medium"
-                  >
-                    Skip This Item
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Quality overlays are now rendered inside RapidCapture via qualityOverlay prop */}
 
 
           {/* Phase 3: Face detection modal */}
@@ -1577,6 +1638,16 @@ const AddItemsDetailPage = () => {
                 // BUG 6 FIX: Show placeholder since no backend endpoint exists yet
                 showToast('AI enhancement coming soon', 'info');
               }}
+              qualityOverlay={
+                qualityModalOpen && qualityResult
+                  ? {
+                      tier: qualityResult.tier as 2 | 3,
+                      onUsePhoto: handleQualityUsePhoto,
+                      onRetake: handleQualityRetake,
+                      onSkip: handleQualitySkipItem,
+                    }
+                  : null
+              }
             />
           )}
 

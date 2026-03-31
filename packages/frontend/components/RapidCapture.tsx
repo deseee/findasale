@@ -62,6 +62,13 @@ interface RapidCaptureProps {
   onDeletePhoto?: (index: number) => void;
   /** Called when user clicks "Enhance All" button */
   onEnhanceAll?: () => void;
+  /** Quality overlay state (Tier 2 or 3 warning) — renders overlay inside camera if set */
+  qualityOverlay?: {
+    tier: 2 | 3;
+    onUsePhoto: () => void;
+    onRetake: () => void;
+    onSkip: () => void;
+  } | null;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
@@ -79,6 +86,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   onPhotoCapture,
   onDeletePhoto,
   onEnhanceAll,
+  qualityOverlay,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -483,6 +491,65 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               {preCaptureWarning && (
                 <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-amber-500/90 text-white text-sm font-medium px-4 py-2 rounded-lg z-10">
                   {preCaptureWarning}
+                </div>
+              )}
+
+              {/* Phase 3.5: Post-capture quality overlay (Tier 2 or 3) */}
+              {qualityOverlay && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-40 pointer-events-auto">
+                  {qualityOverlay.tier === 3 && (
+                    <>
+                      {/* Dark overlay */}
+                      <div className="absolute inset-0 bg-black/40" />
+                      {/* Modal dialog */}
+                      <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-xs mx-4 shadow-2xl">
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2">
+                          Too dark to identify
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                          Move to brighter light and try again. AI won't be able to identify items in dark photos.
+                        </p>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={qualityOverlay.onRetake}
+                            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Retake
+                          </button>
+                          <button
+                            onClick={qualityOverlay.onSkip}
+                            className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Skip Item
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {qualityOverlay.tier === 2 && (
+                    <>
+                      {/* Soft amber banner at bottom */}
+                      <div className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-white p-4 rounded-t-2xl">
+                        <p className="text-sm font-medium mb-3">
+                          Lighting is soft. We'll still try to identify the item.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={qualityOverlay.onUsePhoto}
+                            className="flex-1 bg-white text-amber-700 font-medium py-2 rounded-lg text-sm hover:bg-amber-50 transition-colors"
+                          >
+                            Use Anyway
+                          </button>
+                          <button
+                            onClick={qualityOverlay.onRetake}
+                            className="flex-1 bg-amber-700 hover:bg-amber-800 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                          >
+                            Retake
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
