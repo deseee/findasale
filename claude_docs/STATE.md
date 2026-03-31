@@ -7,7 +7,19 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S355 IN PROGRESS (2026-03-31):** Live Chrome QA of S344 backlog + 2 bug fixes dispatched. QA results so far: ✅ #7 Referral — renders at /referral-dashboard (note: no nav link exists yet, page only reachable via direct URL); ✅ #89 Print Kit — "Marketing kit downloaded!" toast fires correctly; ✅ #149 Remind Me by Email — fires correctly, toggles to Cancel Reminder; ✅ #62 Digital Receipts — page renders, empty state correct; ❌ #184 iCal — href uses relative /api/ path hitting Vercel 404 instead of Railway backend — FIXED inline (changed to NEXT_PUBLIC_API_URL); ⚠️ #41 Flip Report — PRO gate shows correctly for SIMPLE user, actual report UNVERIFIED (need PRO organizer); UNVERIFIED #174+#80 auction win (still pending). 2 bugs dispatched to findasale-dev + fixed: (1) Hunt Pass JWT — huntPassActive/huntPassExpiry added to all 4 jwt.sign() calls in authController.ts; (2) Organizer dashboard duplicate stats row removed from Sale Status Widget. Files changed this session: packages/frontend/pages/sales/[id].tsx (iCal href fix), packages/backend/src/controllers/authController.ts (JWT fix), packages/frontend/pages/organizer/dashboard.tsx (duplicate stats removed).
+**S356 IN PROGRESS (2026-03-31):** Continued Chrome QA from S355. 3 pre-compression fixes verified/pending + 1 new bug diagnosed + fixed.
+
+QA Results:
+- ✅ **#157 Pickup Scheduling** — Chrome-verified user2. "+ Add Pickup Slot" button has `type="button"`, stays on edit-sale page when clicked, slot form opens with 6 date/time inputs.
+- ✅ **#212 Leaderboard** — Chrome-verified user12. `/shopper/leaderboard` loads. `/api/xp/leaderboard` returns 200 empty array (no XP data in test env yet). Correct empty state shown.
+- ✅ **#177 Sale Detail Page** — Chrome-verified user12. Sale info, items, prices, SOLD/RESERVED/AVAILABLE badges all render. Item detail page navigates correctly. Buy Now → "Complete Purchase" modal opens. ⚠️ UX gap: modal missing item name/price confirmation.
+- ⏳ **#153 Organizer Profile social fields** — Fix on GitHub (commit a60e912, 13:19 UTC) but Railway not deploying. facebook/instagram/etsy absent from live API. Cache-bust pushed (commit 994ba10, 13:59 UTC). PENDING RAILWAY DEPLOY.
+- ⏳ **#41 Flip Report ownership fix** — Fix on GitHub (commit 9ec5ea1, 13:23 UTC) but Railway not deploying. PENDING RAILWAY DEPLOY (same Railway issue as above).
+- ✅ **#80 Purchase Confirmation — diagnosed + fixed.** `GET /api/users/purchases` was missing `sale.organizer.businessName` (causing "From: [blank]") and `createdAt`/`updatedAt` serializing as `{}` (causing "Purchased [blank]"). Dev dispatch complete: `packages/backend/src/controllers/userController.ts` updated — `organizer: { select: { businessName: true } }` added to sale include, dates mapped to `.toISOString()`. **NEEDS PUSH + Railway deploy.**
+
+⚠️ **Railway deploy stuck:** 4 commits pushed 13:11–13:59 UTC, backend still running old code. Patrick should check Railway dashboard for build status/failures.
+
+**S355 COMPLETE (2026-03-31):** Live Chrome QA of S344 backlog + 2 bug fixes dispatched. QA results: ✅ #7 Referral — renders at /referral-dashboard (no nav link yet); ✅ #89 Print Kit — toast fires correctly; ✅ #149 Remind Me by Email — fires, toggles to Cancel Reminder; ✅ #62 Digital Receipts — page renders, empty state correct; ❌ #184 iCal — FIXED (changed relative path to NEXT_PUBLIC_API_URL); ⚠️ #41 Flip Report — PRO gate correct for SIMPLE user, ownership bug fixed in code. Files: packages/frontend/pages/sales/[id].tsx (iCal), packages/backend/src/controllers/authController.ts (Hunt Pass JWT), packages/frontend/pages/organizer/dashboard.tsx (dedup stats).
 
 **S354 COMPLETE (2026-03-31):** UX skill rewrite + Dashboard State 2 redesign shipped. (1) **findasale-ux skill researched + rewritten:** New SKILL.md grounded in organizer job-to-be-done (JTBD) framework — 5 core organizer jobs identified, skill now produces specs tied to workflow outcomes not wireframes. (2) **Dashboard State 2 redesigned:** Sale Status Widget rebuilt — full-width, sale title + thumbnail + status badge. Next Action Zone added (single context-aware recommended action). Real-Time Metrics block wired to /api/organizers/stats (items listed, visitors today, active holds). Tier Progress card replaced with Subscription card. Revenue display added from stats API. Files: organizer/dashboard.tsx.
 
@@ -87,35 +99,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-## Next Session (S355)
+## Next Session (S357)
 
-### S355 Priority 1: Push S354 files (Patrick action first)
+### S357 Priority 1: Push S356 fix + check Railway (Patrick action first)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/dashboard.tsx
-git commit -m "S354: findasale-ux skill rewrite + Dashboard State 2 redesign (state-aware tools, Next Action Zone, real metrics)"
+git add packages/backend/src/controllers/userController.ts
+git commit -m "S356: fix #80 purchases API — add sale.organizer.businessName + fix createdAt serialization"
 .\push.ps1
 ```
 
-### S355 Priority 2: Hold-to-Pay E2E QA
-Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets ClaimCard → Stripe link → payment → SOLD + XP. Test: user12 (shopper), user6/Family Collection Sale 16 (organizer). Chrome QA — dispatch findasale-qa.
+⚠️ Then check Railway dashboard at railway.app — the backend has not redeployed after 4 commits today (13:11–13:59 UTC). Look for build failures. The #153 (social fields) and #41 (flip report ownership) fixes are in GitHub but not live.
 
-### S355 Priority 3: Chrome QA backlog
-S344 pending: #174+#80, #184, #41, #7, #89, #62, #37, #149.
-S346 pending: #48, #13, #157, #46, #199, #177, #58, #29.
-S347 pending: #212, #213, #131, #60, #123, #153.
+### S357 Priority 2: Verify after Railway deploys
+After Railway is confirmed green:
+- ✅ Verify #153 Organizer Profile social fields — `/organizer/settings` profile tab should populate facebook/instagram/etsy inputs with saved values (currently blank for all organizers)
+- ✅ Verify #41 Flip Report — as PRO organizer (user3 = Carol Williams, TEAMS tier), navigate to completed sale flip report. Should return 200 not 403.
+- ✅ Verify #80 Purchase Confirmation — as user11 (Karen Anderson), `/shopper/purchases` — "From: [organizer name]" and "Purchased [date]" should now render correctly.
 
-### S355 Notes
+### S357 Priority 3: Continue QA backlog
+Remaining from S355 queue:
+- #37 (Sale Alerts), #46 (Typology Classifier), #48 (Treasure Trail), #199 (User Profile), #58 (Achievement Badges), #29 (Loyalty Passport), #213 (Hunt Pass CTA), #131 (Share Templates)
+
+### S357 Notes
 - All Railway env vars confirmed ✅. All migrations deployed ✅. Sage threshold 2500 XP (beta only).
-- findasale-ux.skill updated — Patrick installed new version S354.
-- Dashboard State 2 pending Chrome QA after push deploys.
-- Legal: #82 USPTO trademark, #83 trade secrets — Patrick decision pending
-- findasale-ux skill path: `/sessions/*/mnt/.claude/skills/findasale-ux/SKILL.md`
-
-### Patrick Actions Before S354
-1. Push S353 files (block above)
+- Railway backend URL: https://backend-production-153c9.up.railway.app
+- Test accounts: user2 = organizer (SIMPLE), user3 = Carol Williams (TEAMS), user11 = Karen Anderson (shopper), user12 = Leo Thomas (shopper). All passwords: password123
+- Login via Railway backend directly: POST https://backend-production-153c9.up.railway.app/api/auth/login (NOT /api/auth/login on Vercel — NextAuth intercepts that)
+- #177 Buy Now modal ⚠️ UX gap: "Complete Purchase" modal shows no item name or price — flag to findasale-ux for spec
 

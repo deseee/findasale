@@ -2,52 +2,53 @@
 
 ---
 
-## ✅ S354 Complete — UX skill rebuilt + Dashboard State 2 redesigned
+## ⚠️ S356 Complete — QA + 3 fixes verified + Railway stuck
 
 ---
 
-## What Happened This Session (S354)
+## What Happened This Session (S356)
 
-**findasale-ux skill rewritten:** The old skill produced data-display specs instead of workflow specs. New version has 4 mandatory gates: Job-to-be-Done (what is the user trying to DO in 30-60s), Code-First (read API/schema before speccing data), Action-First (every section needs a user action), No-Redundancy (no nav link duplicated as a dashboard card). New .skill file installed.
+**Chrome QA completed across 4 features:**
+- ✅ **#157 Pickup Scheduling** — "+ Add Pickup Slot" button now correctly opens the form (was redirecting to dashboard). Live on Vercel.
+- ✅ **#212 Leaderboard** — Page loads correctly, correct empty state, API working.
+- ✅ **#177 Sale Detail Page** — Items, prices, statuses all render. Buy Now modal opens. ⚠️ Modal doesn't show item name or price — minor UX gap.
+- ✅ **#80 Purchase Confirmation diagnosed + fixed** — "/shopper/purchases" was showing "From: [blank]" and "Purchased [blank]". Root cause: API missing organizer name + dates serializing as `{}`. Fix written to `userController.ts`. **Needs your push (see below).**
 
-**Dashboard State 2 redesigned:**
-- Sale Status Widget: urgency tags (red <6h, orange <24h), context-aware primary button
-- Next Action Zone: 6-condition logic tree (replaces vague "recommended action")
-- Real-Time Metrics: LIVE 4-col / DRAFT 3-col, wired to real statsData
-- Selling Tools: static 6-item menu → 4 dynamic state-aware tools (different set for DRAFT vs LIVE)
-- Tier card: full card removed → compact single-line badge + link
-- Earnings alert: green banner shows only when payout is available
+**Railway appears stuck:** 4 commits were pushed today (13:11–13:59 UTC) including fixes for #153 (organizer social fields) and #41 (flip report). Vercel deployed fine. Railway has not updated. Cache-bust commit was pushed to force rebuild — check Railway dashboard if it's still not building.
 
 ---
 
 ## Your Actions Now
 
+**Step 1 — Push S356 fix:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/dashboard.tsx
-git commit -m "S354: findasale-ux skill rewrite + Dashboard State 2 redesign (state-aware tools, Next Action Zone, real metrics)"
+git add packages/backend/src/controllers/userController.ts
+git commit -m "S356: fix #80 purchases API — add sale.organizer.businessName + fix createdAt serialization"
 .\push.ps1
 ```
+
+**Step 2 — Check Railway dashboard:**
+Go to railway.app → your project → check if the backend service has any failed builds since 13:11 UTC today. If a build failed, check the logs for the error. The #153 and #41 fixes are confirmed in GitHub but not live on the backend yet.
 
 ---
 
 ## Status Summary
 
-- **Build:** Railway ✅ Vercel ✅
+- **Vercel:** ✅ Deploying normally
+- **Railway:** ⚠️ Appears stuck — check dashboard for build failures
 - **All migrations:** Deployed ✅
 - **Railway env vars:** All confirmed ✅
 - **BROKEN section:** Clear
-- **Dashboard:** State 2 redesigned — pending Chrome QA after deploy
-- **findasale-ux skill:** Rebuilt with workflow-first gates — installed S354
-- **QA queue:** Hold-to-Pay E2E + S344/S346/S347 backlog (~30 features)
+- **QA queue:** #153/#41 pending Railway deploy verification, then #37/#46/#48/#199/#58/#29/#213/#131 remaining
 
 ---
 
 ## Open Action Items for Patrick
 
-- [ ] **Run S354 push block above**
+- [ ] **Push S356 block above (userController.ts fix)**
+- [ ] **Check Railway dashboard** — look for failed build since 13:11 UTC today
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review

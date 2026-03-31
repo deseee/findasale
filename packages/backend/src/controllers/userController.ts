@@ -46,6 +46,11 @@ export const getPurchases = async (req: AuthRequest, res: Response) => {
         sale: {
           select: {
             title: true,
+            organizer: {
+              select: {
+                businessName: true,
+              },
+            },
           },
         },
       },
@@ -55,9 +60,16 @@ export const getPurchases = async (req: AuthRequest, res: Response) => {
       take: 50,
     });
 
-    // Convert Decimal values to numbers
-    const convertedPurchases = purchases.map((purchase: any) => convertDecimalsToNumbers(purchase));
-    
+    // Convert Decimal values to numbers and serialize dates to ISO strings
+    const convertedPurchases = purchases.map((purchase: any) => {
+      const converted = convertDecimalsToNumbers(purchase);
+      return {
+        ...converted,
+        createdAt: converted.createdAt instanceof Date ? converted.createdAt.toISOString() : converted.createdAt,
+        updatedAt: converted.updatedAt instanceof Date ? converted.updatedAt.toISOString() : converted.updatedAt,
+      };
+    });
+
     res.json(convertedPurchases);
   } catch (error) {
     console.error('Error fetching purchases:', error);
