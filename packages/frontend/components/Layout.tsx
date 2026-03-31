@@ -255,9 +255,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Clock size={16} className="text-indigo-500" />
               <span>My Holds</span>
             </Link>
-            <Link href="/shopper/purchases" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+            <Link href="/shopper/history" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Package size={16} className="text-indigo-500" />
-              <span>Purchases</span>
+              <span>My History</span>
             </Link>
 
             {/* Show "Host a Sale" for shoppers without organizer role */}
@@ -723,8 +723,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/shopper/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Clock size={14} className="inline mr-2 text-indigo-500" /> My Holds
                         </Link>
-                        <Link href="/shopper/purchases" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Package size={14} className="inline mr-2 text-indigo-500" /> Purchases
+                        <Link href="/shopper/history" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Package size={14} className="inline mr-2 text-indigo-500" /> My History
                         </Link>
                       </>
                     )}
@@ -804,8 +804,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/shopper/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Clock size={14} className="inline mr-2 text-indigo-500" /> My Holds
                     </Link>
-                    <Link href="/shopper/purchases" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Package size={14} className="inline mr-2 text-indigo-500" /> Purchases
+                    <Link href="/shopper/history" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Package size={14} className="inline mr-2 text-indigo-500" /> My History
                     </Link>
                   </>
                 )}
@@ -956,4 +956,4 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   );
 };
 
-export default Layout;
+export default Layou

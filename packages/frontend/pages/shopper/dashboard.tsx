@@ -289,18 +289,11 @@ const ShopperDashboard = () => {
               <p className="text-xs font-semibold text-green-900 dark:text-green-300">Trails</p>
             </Link>
             <Link
-              href="/shopper/loot-log"
+              href="/shopper/history"
               className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
-              <div className="text-lg mb-0.5">📜</div>
-              <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">Loot Log</p>
-            </Link>
-            <Link
-              href="/shopper/receipts"
-              className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-900/30 dark:to-pink-900/30 border border-rose-200 dark:border-rose-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
-            >
-              <div className="text-lg mb-0.5">🧾</div>
-              <p className="text-xs font-semibold text-rose-900 dark:text-rose-300">Receipts</p>
+              <div className="text-lg mb-0.5">📋</div>
+              <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">My History</p>
             </Link>
             <Link
               href="/shopper/hauls"
@@ -645,28 +638,4 @@ const ShopperDashboard = () => {
                   </p>
                   <Link
                     href="/"
-                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-                  >
-                    Browse Sales
-                  </Link>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Pickups Tab */}
-          {activeTab === 'pickups' && (
-            <MyPickupAppointments />
-          )}
-
-          {/* Brands Tab */}
-          {activeTab === 'brands' && (
-            <BrandFollowManager />
-          )}
-        </div>
-      </div>
-    </>
-  );
-};
-
-export default ShopperDashboard;
+                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-c

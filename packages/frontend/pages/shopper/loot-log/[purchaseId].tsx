@@ -36,10 +36,10 @@ export default function PurchaseDetailPage() {
         <div className="text-center px-4 max-w-md">
           <p className="text-xl text-warm-700 dark:text-warm-300 mb-4">Purchase not found</p>
           <Link
-            href="/shopper/loot-log"
+            href="/shopper/history"
             className="px-6 py-2 bg-[#8FB897] text-white rounded-lg"
           >
-            Back to Loot Log
+            Back to My History
           </Link>
         </div>
       </div>
@@ -55,17 +55,17 @@ export default function PurchaseDetailPage() {
   return (
     <>
       <Head>
-        <title>{purchase?.item?.title || 'Purchase'} — My Loot Log</title>
+        <title>{purchase?.item?.title || 'Purchase'} — My History</title>
       </Head>
 
       <main className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-2xl mx-auto px-4 py-12">
           {/* Back Link */}
           <Link
-            href="/shopper/loot-log"
+            href="/shopper/history"
             className="text-[#8FB897] font-semibold mb-8 inline-flex items-center"
           >
-            ← Back to Loot Log
+            ← Back to My History
           </Link>
 
           {/* Detail Card */}
