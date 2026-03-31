@@ -16,8 +16,8 @@ const convertDecimalsToNumbers = (obj: any) => {
       converted[key] = obj[key].map((item: any) => 
         typeof item === 'object' ? convertDecimalsToNumbers(item) : item
       );
-    } else if (obj[key] && typeof obj[key] === 'object') {
-      // Recursively process nested objects
+    } else if (obj[key] && typeof obj[key] === 'object' && !(obj[key] instanceof Date)) {
+      // Recursively process nested objects (skip Date — they serialize correctly as-is)
       converted[key] = convertDecimalsToNumbers(obj[key]);
     } else {
       converted[key] = obj[key];
@@ -604,3 +604,4 @@ export const activateHuntPassTrial = async (req: AuthRequest, res: Response) => 
     res.status(500).json({ message: 'Server error while activating trial' });
   }
 };
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
