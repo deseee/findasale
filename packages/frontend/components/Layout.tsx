@@ -956,4 +956,4 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   );
 };
 
-export default Layou
+export default Layout;
