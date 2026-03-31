@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import BrightnessIndicator from './camera/BrightnessIndicator';
 
 /**
  * RapidCapture — Phase 14b camera overlay (refactored)
@@ -472,6 +473,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   4:3
                 </div>
               </div>
+
+              {/* Phase 3.5: Real-time brightness indicator */}
+              {cameraReady && videoRef.current && (
+                <BrightnessIndicator videoRef={videoRef} isActive={!flashEffect} />
+              )}
 
               {/* Phase 3: Pre-capture quality warning */}
               {preCaptureWarning && (

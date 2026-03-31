@@ -129,7 +129,15 @@ async function cropTo4x3(blob: Blob): Promise<Blob> {
   });
 }
 
-async function checkImageQuality(blob: Blob): Promise<{ isDark: boolean; avgBrightness: number }> {
+type LightingTier = 1 | 2 | 3;
+
+interface ImageQualityResult {
+  tier: LightingTier;
+  avgBrightness: number; // 0-100 normalized
+  reason: 'good' | 'soft' | 'overexposed' | 'dark';
+}
+
+async function checkImageQuality(blob: Blob): Promise<ImageQualityResult> {
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
@@ -146,12 +154,30 @@ async function checkImageQuality(blob: Blob): Promise<{ isDark: boolean; avgBrig
       for (let i = 0; i < data.length; i += 4) {
         total += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
       }
-      const avg = total / (sampleSize * sampleSize);
-      resolve({ isDark: avg < 40, avgBrightness: avg });
+      const avgRaw = total / (sampleSize * sampleSize);
+      // Normalize 0-255 to 0-100
+      const avgNormalized = (avgRaw / 255) * 100;
+
+      // Determine tier and reason
+      let tier: LightingTier = 1;
+      let reason: 'good' | 'soft' | 'overexposed' | 'dark' = 'good';
+
+      if (avgNormalized < 40) {
+        tier = 3;
+        reason = 'dark';
+      } else if (avgNormalized >= 65 && avgNormalized <= 95) {
+        tier = 1;
+        reason = 'good';
+      } else if ((avgNormalized >= 40 && avgNormalized < 65) || avgNormalized > 95) {
+        tier = 2;
+        reason = avgNormalized > 95 ? 'overexposed' : 'soft';
+      }
+
+      resolve({ tier, avgBrightness: avgNormalized, reason });
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      resolve({ isDark: false, avgBrightness: 128 });
+      resolve({ tier: 1, avgBrightness: 50, reason: 'good' });
     };
     img.src = url;
   });
@@ -290,6 +316,24 @@ const AddItemsDetailPage = () => {
     previewUrl: string;
     tempId: string;
   } | null>(null);
+
+  // Phase 3.5: Tiered lighting quality system state
+  const [qualityModalOpen, setQualityModalOpen] = useState(false);
+  const [qualityResult, setQualityResult] = useState<ImageQualityResult | null>(null);
+  const [pendingQualityBlob, setPendingQualityBlob] = useState<Blob | null>(null);
+  const [pendingQualityUpload, setPendingQualityUpload] = useState<{
+    blob: Blob;
+    previewUrl: string;
+    tempId: string;
+    appendToItemId: string | null;
+  } | null>(null);
+  const [qualityToastOpen, setQualityToastOpen] = useState(false);
+  const [qualityToastTimeout, setQualityToastTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Phase 3.5: Shot sequence guidance
+  const [sessionPhotoCount, setSessionPhotoCount] = useState(0);
+  const [showShotGuide, setShowShotGuide] = useState(false);
+  const [shotGuideTimeout, setShotGuideTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Phase 3-5: Bulk Operations Toolkit state
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -643,15 +687,30 @@ const AddItemsDetailPage = () => {
       // 2. Crop to 4:3
       processedBlob = await cropTo4x3(processedBlob);
 
-      // 3. Check quality
+      // 3. Check quality with tiered system
       const quality = await checkImageQuality(processedBlob);
-      if (quality.isDark) {
-        // Show retake toast
-        setShowRetakeToast(true);
-        if (retakeToastTimeout) clearTimeout(retakeToastTimeout);
-        const timeout = setTimeout(() => setShowRetakeToast(false), 4000);
-        setRetakeToastTimeout(timeout);
+      setQualityResult(quality);
+      setPendingQualityBlob(processedBlob);
+      setPendingQualityUpload({
+        blob: processedBlob,
+        previewUrl: photo.previewUrl,
+        tempId,
+        appendToItemId,
+      });
+
+      // Handle tiered quality response
+      if (quality.tier === 3) {
+        // Tier 3: Block upload, show modal
+        setQualityModalOpen(true);
+        return; // Stop processing, wait for user action
+      } else if (quality.tier === 2) {
+        // Tier 2: Show soft warning toast, continue upload but let user decide
+        setQualityToastOpen(true);
+        if (qualityToastTimeout) clearTimeout(qualityToastTimeout);
+        // Don't auto-dismiss — user controls via buttons
+        return; // Wait for user to click "Use This Photo" or "Retake"
       }
+      // Tier 1: No warning, proceed to upload
 
       // 4. Face detection
       const hasFace = await detectFace(processedBlob);
@@ -735,6 +794,85 @@ const AddItemsDetailPage = () => {
     setCameraOpen(false);
     // Reset add-mode when closing camera
     setAddingToItemId(null);
+  };
+
+  // Quality modal and toast handlers (Tier 2 & 3)
+  const handleQualityUsePhoto = async () => {
+    if (!pendingQualityUpload || !pendingQualityBlob) return;
+    setQualityToastOpen(false);
+    setQualityModalOpen(false);
+
+    // Proceed with upload
+    try {
+      const { blob, tempId, appendToItemId } = pendingQualityUpload;
+
+      if (appendToItemId) {
+        const fd = new FormData();
+        fd.append('photos', blob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        const uploadRes = await api.post('/upload/sale-photos', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
+        if (urls[0]) {
+          await api.post(`/items/${appendToItemId}/photos`, { url: urls[0] });
+          setRapidItems((prev) =>
+            prev.map((item) =>
+              item.id === appendToItemId
+                ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
+                : item
+            )
+          );
+        }
+      } else {
+        const fd = new FormData();
+        fd.append('image', blob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        const res = await api.post('/upload/rapidfire', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const { itemId, photoUrl } = res.data;
+        setRapidItems((prev) =>
+          prev.map((item) =>
+            item.id === tempId
+              ? { ...item, id: itemId, draftStatus: 'DRAFT', thumbnailUrl: pendingQualityUpload.previewUrl, photoUrls: photoUrl ? [photoUrl] : [pendingQualityUpload.previewUrl] }
+              : item
+          )
+        );
+        queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+      }
+
+      // Update shot count for guidance
+      setSessionPhotoCount((prev) => prev + 1);
+      showShotGuidance(sessionPhotoCount + 1);
+
+      setPendingQualityBlob(null);
+      setPendingQualityUpload(null);
+    } catch (err: any) {
+      showToast('Upload failed. Please try again.', 'error');
+    }
+  };
+
+  const handleQualityRetake = () => {
+    setQualityToastOpen(false);
+    setQualityModalOpen(false);
+    setPendingQualityBlob(null);
+    setPendingQualityUpload(null);
+    // Camera remains open for retake
+  };
+
+  const handleQualitySkipItem = () => {
+    setQualityModalOpen(false);
+    setPendingQualityBlob(null);
+    setPendingQualityUpload(null);
+    // Camera remains open, photo is discarded
+  };
+
+  const showShotGuidance = (shotNumber: number) => {
+    setShowShotGuide(true);
+    if (shotGuideTimeout) clearTimeout(shotGuideTimeout);
+    const timeout = setTimeout(() => setShowShotGuide(false), 4000);
+    setShotGuideTimeout(timeout);
   };
 
   // Face modal handlers
@@ -1362,6 +1500,72 @@ const AddItemsDetailPage = () => {
               <button onClick={handleRetake} className="text-gray-400 text-sm">
                 ✕
               </button>
+            </div>
+          )}
+
+          {/* Phase 3.5: Quality Tier 3 (Too Dark) Modal */}
+          {qualityModalOpen && qualityResult?.tier === 3 && (
+            <div className="fixed inset-0 bg-black/60 flex items-end z-50">
+              <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Too dark to identify</h3>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                  This photo is too dark for our AI to identify the item properly. Here's the fix: Move to a well-lit area (near a window or under a lamp) and try again. It only takes 10 seconds.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleQualityRetake}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-xl text-sm font-medium"
+                  >
+                    Retake
+                  </button>
+                  <button
+                    onClick={handleQualitySkipItem}
+                    className="flex-1 bg-gray-100 text-gray-900 dark:text-gray-100 py-3 rounded-xl text-sm font-medium"
+                  >
+                    Skip This Item
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Phase 3.5: Quality Tier 2 (Soft Light) Toast */}
+          {qualityToastOpen && qualityResult?.tier === 2 && (
+            <div className="fixed bottom-24 left-4 right-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 z-40">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+                The light's a bit soft. We can still work with this, but a brighter spot might give you better results. Want to try again near a window or lamp?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleQualityUsePhoto}
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2 rounded-lg text-sm font-medium"
+                >
+                  Use This Photo
+                </button>
+                <button
+                  onClick={handleQualityRetake}
+                  className="flex-1 bg-gray-200 text-gray-900 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 py-2 rounded-lg text-sm font-medium"
+                >
+                  Retake in Better Light
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Phase 3.5: Shot Guidance Toast */}
+          {showShotGuide && (
+            <div className="fixed bottom-24 left-4 right-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl shadow-lg p-4 z-40">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                {sessionPhotoCount === 1
+                  ? "Great first shot! This will be your listing photo. Want to add a back view or maker's mark?"
+                  : sessionPhotoCount === 2
+                  ? "Two down! Look for any maker's marks or labels — these are the most valuable shot."
+                  : sessionPhotoCount === 3
+                  ? "You've got the minimum! Want to add a detail or damage photo, or are you ready to review?"
+                  : sessionPhotoCount === 4
+                  ? "Four photos — almost complete. Any damage to be honest about? Or scale reference?"
+                  : "⭐ Five photos is excellent! Ready to review and tag?"}
+              </p>
             </div>
           )}
 

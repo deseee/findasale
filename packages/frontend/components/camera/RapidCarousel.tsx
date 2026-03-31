@@ -21,7 +21,7 @@
  * - Real-time count label below
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 export interface RapidCarouselItem {
   id: string;
