@@ -7,7 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S360 — Continue QA backlog from S359. See ## Next Session below.**
+**S360 COMPLETE (2026-03-31):** Railway TS1127 null byte fix + #48 Treasure Trail Chrome-verified.
+
+(1) **Railway TS1127 unblocked:** Two backend files had null bytes appended from prior MCP pushes in S359. `followerNotificationService.ts` (127 null bytes) + `notificationInboxController.ts` both caused `error TS1127: Invalid character` at EOF, blocking Railway build. Fixed: fetched from GitHub, stripped null bytes, pushed clean versions (commits 1e84c0ab + ea4acf36). Railway went green.
+
+(2) **#48 Treasure Trail ✅ Chrome-verified (ss_5655xvb8r):** Vercel wasn't deploying the S359 MCP commits — Vercel Redeploy re-ran old code, and `push.ps1` returned "Everything up-to-date" (no new push event). Fix: pushed Dockerfile.production cache-bust comment as new commit `5a0eed56` → Vercel webhook fired → deployed. Hard reload confirmed: `GET /api/trails → 200` (was `/api/api/trails → 404`). Trail "Grand Rapids Saturday Run" renders with description, stops, Edit/Delete. Double /api/ prefix root cause: S359 changed `import axios` to `import api` but left path as `/api/trails`; `api` lib has `/api` in baseURL already.
+
+(3) **#37 Sale Alerts:** Backend fixes on GitHub (null bytes stripped = clean versions of followerNotificationService.ts + notificationInboxController.ts). `notifications.tsx` tab styling fix NOT YET PUSHED (local only). Full browser QA not yet done — needs browser test after notifications.tsx push.
+
+S360 commits: `1e84c0ab` (followerNotificationService clean), `ea4acf36` (notificationInboxController clean), `ba619fa7` (trail fix), `900cff4d` (trail /api/ prefix fix), `5a0eed56` (Dockerfile cache-bust)
 
 ---
 
@@ -156,42 +164,57 @@ All pushed. Vercel ✅ Railway ✅.
 
 ---
 
-## Next Session (S360)
+## Next Session (S361)
 
 ### Patrick Action Required FIRST
-Push the #37 fix files (local changes, NOT yet on GitHub):
+Push notifications.tsx (#37 styling fix — still local only):
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/services/followerNotificationService.ts
-git add packages/backend/src/controllers/notificationInboxController.ts
 git add packages/frontend/pages/shopper/notifications.tsx
-git commit -m "fix(#37): sale alerts — shopper notification on publish + organizer alerts tab filter"
+git commit -m "fix(#37): notification page tab styling"
 .\push.ps1
 ```
 
-### S360 Priority 1: Verify S359 fixes in browser
-1. **#48 detail page**: Navigate to `https://finda.sale/shopper/trails` → click any trail → confirm detail page loads (not "Trail Not Found") → test Edit flow → confirm stale-state fix (save → data updates in place without full reload)
-2. **#37 sale alerts**: Confirm organizer Alerts tab filter shows only followed-organizer alerts after push deploys
+### S361 Priority 1 — DIAGNOSTIC: AI Tagging Broken in Camera Workflow
 
-### S360 Priority 2: Continue QA backlog
-- **#199 User Profile dark mode** — `/shoppers/cmn9opa330009ij7tqwvt463c` in dark mode; `bg-warm-50` has no `dark:` variant — may be intentional for public profile pages
+Patrick confirmed: after capturing a photo in camera mode, there is NO spinning icon, NO error message, NO indication that AI tagging is occurring. It's also unknown whether the limit-reached state (if Anthropic API limits are hit) surfaces any feedback. Something changed during the S351 Photo Capture Protocol work (#224) that broke the flow.
+
+**Diagnostic steps for S361:**
+1. Load `packages/frontend/pages/organizer/add-items/[saleId].tsx` — check what triggers AI classification after photo capture
+2. Load `packages/frontend/components/camera/PreviewModal.tsx` — check loading state during AI call, where spinner/confidence display was
+3. Load `packages/frontend/components/camera/RapidCarousel.tsx` and `RapidCapture.tsx` — check if photo capture is reaching the AI call at all
+4. Load `packages/backend/src/services/cloudAIService.ts` — check error handling for API limit / failure states
+5. Load `packages/backend/src/controllers/itemController.ts` — check processRapidDraft and whether aiConfidence is passed through
+6. Specifically check: was `isLoading`/`isPending` state from the AI call wired into any spinner in PreviewModal BEFORE S351, and did the S351 changes accidentally remove or bypass it?
+7. Check `BrightnessIndicator.tsx` (new in S351) — does it interfere with the camera capture flow timing?
+
+**Known suspect:** S351 added tiered lighting checks and shot sequence guidance. These inject logic between capture and AI classification. If the lighting Tier 3 hard modal fires and the user clicks "Skip", the photo may be discarded before reaching AI. If the flow was restructured and a `useState` or `useEffect` dependency was dropped, AI call might fire but result is silently lost.
+
+**Goal:** Produce a diff showing exactly what broke and dispatch to findasale-dev to fix. The fix must restore: (a) spinner visible during AI classification, (b) confidence displayed on PreviewModal result, (c) clear error/limit-reached message if Anthropic API fails or quota exceeded.
+
+**Do not dispatch dev until root cause is confirmed via code read.**
+
+### S361 Priority 2: Continue QA backlog
+- **#37 Sale Alerts** — after notifications.tsx push deploys: navigate to notification inbox as shopper, verify Alerts tab shows only followed-organizer sale alerts (not all notifications)
+- **#199 User Profile dark mode** — `/shoppers/cmn9opa330009ij7tqwvt463c` in dark mode; `bg-warm-50` has no `dark:` variant
 - **#58 Achievement Badges** — `/shopper/achievements` page + dashboard widget showing real badge data
-- **#29 Loyalty Passport** — `/shopper/loyalty` XP earn guide + rank thresholds (Initiate/Scout/Ranger/Sage/Grandmaster)
-- **#213 Hunt Pass CTA** — shows for non-pass users (user11), hidden when `huntPassActive = true`
-- **#131 Share Templates** — test Facebook sharer popup, Nextdoor copy+open, Threads intent popup, Pinterest pin dialog, TikTok copy+open
+- **#29 Loyalty Passport** — `/shopper/loyalty` XP earn guide + rank thresholds
+- **#213 Hunt Pass CTA** — visible for non-pass users, hidden when `huntPassActive=true`
+- **#131 Share Templates** — Facebook sharer popup, Nextdoor copy+open, Threads intent, Pinterest pin, TikTok copy+open
 
-### S360 Priority 3: P2 dev dispatches
-- **CSV import broken** — backend Zod `.enum().optional()` rejects empty string `""` from app's own template. Fix: either pre-process `""` → `undefined` before Zod, or strip `status` column from the CSV template in CSVImportModal.tsx
-- **Typology classify no UI refresh** — after classify succeeds, React query cache is not invalidated → user sees stale state until manual reload. Fix: invalidate item query on classify mutation success
-- **Business Name blank on organizer settings Profile tab** — field not loading from API on page open (found S358, not fixed)
-- **Social fields on public organizer profile** — `facebookUrl` etc. in schema/settings but not verified rendering at `/organizers/[id]`
-- **#177 Buy Now modal UX gap** — "Complete Purchase" modal shows no item name or price — dispatch to `findasale-ux` for spec
+### S361 Priority 3: P2 dev dispatches (carry from S360)
+- **CSV import broken** — Zod `.enum().optional()` rejects empty string `""`. Fix: pre-process `""` → `undefined` in CSVImportModal.tsx before Zod
+- **Typology classify no UI refresh** — invalidate item query on classify mutation success
+- **Business Name blank** — organizer settings Profile tab field not loading from API on open
+- **Social fields on public organizer profile** — `facebookUrl` etc. not verified rendering at `/organizers/[id]`
+- **#177 Buy Now modal UX gap** — modal shows no item name or price; needs findasale-ux spec
 
-### S360 Notes
+### S361 Notes
 - All Railway env vars ✅. All migrations deployed ✅. Sage threshold 2500 XP (beta only).
 - Railway backend URL: https://backend-production-153c9.up.railway.app
 - Test accounts: user2 = organizer (SIMPLE), user3 = Carol Williams (TEAMS), user11 = Karen Anderson (shopper), user12 = Leo Thomas (shopper). All passwords: password123
 - Null byte pattern: MCP-pushed files accumulate null bytes at end. Strip with `content.rstrip(b'\x00')` before pushing. TS1127 = null bytes.
 - `test-import.csv` is in `FindaSale/` workspace folder (Patrick's computer) for manual CSV import testing.
+- camera workflow: add-items/[saleId].tsx → RapidCapture.tsx → PreviewModal.tsx → AI classification → confidence display. S351 added BrightnessIndicator.tsx + tiered lighting + shot sequence. Suspect: lighting gate or restructured state broke AI call feedback loop.
 
