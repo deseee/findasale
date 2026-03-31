@@ -1,28 +1,20 @@
-# Patrick's Dashboard — S358 Complete (2026-03-31)
+# Patrick's Dashboard — S359 Complete (2026-03-31)
 
 ---
 
-## ✅ S358 Done — /shopper/history fully working, Vercel + Railway green
+## ✅ S359 Done — QA backlog run + 2 bugs fixed
 
 ---
 
-## What Happened This Session (S358)
+## What Happened This Session (S359)
 
-**Vercel build error fixed:** `shopper/dashboard.tsx` had a truncated JSX fragment from a prior MCP push. Restored complete closing structure. Vercel went green.
+**#48 Treasure Trail — P1 bug fixed + pushed (commit 1c1896369):** Trail detail page was showing "Trail Not Found" immediately after creation. Root cause: the page used bare `axios` (no auth token) instead of the configured `api` instance — every trail request got a 401 redirect, JSON parse failed, trail not found. Fixed in 2 lines. Already on GitHub. Verify in browser as your first step next session.
 
-**Railway unblocked:** Pushed cache-bust to `Dockerfile.production`. Railway rebuilt and went green.
+**#37 Sale Alerts — bugs fixed (NOT YET PUSHED):** Two bugs: (1) Shoppers weren't getting in-app notifications when a followed organizer published a sale. (2) Organizer Alerts tab filter was broken. 3 files fixed and sitting in your local repo — they need the push block below.
 
-**QA verified — 3 features:**
+**#46 Typology Classifier — partial pass:** The AI classification itself works (Retro/Atomic, 88% confidence, persists). Two P2 bugs remain: (1) After you classify an item, the page doesn't refresh automatically — you have to reload to see the result. (2) CSV import shows "No valid rows found" when using the app's own template because of a Zod validation bug. Created a working test CSV at `FindaSale/test-import.csv` for you to try manually.
 
-- ✅ **#153 Organizer social fields** — Facebook/Instagram/Etsy inputs on `/organizer/settings` Profile tab. Save + reload confirmed.
-- ✅ **#41 Flip Report** — Carol Williams (TEAMS, user3) can access the flip report. Route is `/organizer/flip-report/[saleId]`.
-- ✅ **#80 /shopper/history** — Full fix. Cards now show item name, organizer name, real date, thumbnail. Gallery tab works. Receipts tab has dark mode. Verified in Chrome with real data.
-
-**Root bugs fixed:**
-- List view was using wrong field names (`itemTitle` → `item.title`, `organizerName` → `sale.organizer.businessName`, `purchasedDate` → `createdAt`)
-- Gallery was calling `/api/api/loot-log` (double prefix) → 404
-- `convertDecimalsToNumbers` in userController was missing Date guard → dates became `{}`
-- ReceiptCard had no dark mode classes
+**#199 User Profile — light mode ✅, dark mode untested:** Bob Smith's public profile loads correctly at `/shoppers/cmn9opa330009ij7tqwvt463c` — name, stats, visit streak (12 days), bio, Message button. Dark mode not checked yet.
 
 ---
 
@@ -31,11 +23,10 @@
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/pages/shopper/history.tsx
-git add packages/frontend/hooks/useLootLog.ts
-git add packages/frontend/components/ReceiptCard.tsx
-git add packages/backend/src/controllers/userController.ts
-git commit -m "S358: fix /shopper/history fields/gallery/dark-mode/dates; unblock Vercel+Railway"
+git add packages/backend/src/services/followerNotificationService.ts
+git add packages/backend/src/controllers/notificationInboxController.ts
+git add packages/frontend/pages/shopper/notifications.tsx
+git commit -m "fix(#37): sale alerts — shopper notification on publish + organizer alerts tab filter"
 .\push.ps1
 ```
 
@@ -43,23 +34,24 @@ git commit -m "S358: fix /shopper/history fields/gallery/dark-mode/dates; unbloc
 
 ## Status Summary
 
-- **Vercel:** ✅ Green
-- **Railway:** ✅ Green
+- **Vercel:** ✅ Green (was fixed S358)
+- **Railway:** ✅ Green (was fixed S358)
 - **All migrations:** ✅ Deployed
 - **All Railway env vars:** ✅ Confirmed
 
 ---
 
-## Next Up (S359)
+## Next Up (S360)
 
-QA backlog: #37 Sale Alerts, #46 Typology Classifier, #48 Treasure Trail, #199 User Profile, #58 Badges, #29 Loyalty Passport, #213 Hunt Pass CTA, #131 Share Templates.
-
-Known gaps to fix: Business Name blank on organizer profile load, social fields on public organizer page, #177 Buy Now modal missing item name/price.
+1. Verify #48 trail detail page loads in browser after the S359 MCP push deploys
+2. Verify #37 alerts after push above deploys
+3. Continue QA: #199 dark mode, #58 Achievement Badges, #29 Loyalty Passport, #213 Hunt Pass CTA, #131 Share Templates
+4. P2 dev dispatches: CSV import Zod fix, typology classify no UI refresh, Business Name blank on organizer settings
 
 ---
 
 ## Open Action Items for Patrick
 
-- [ ] **Run push block above**
+- [ ] **Run push block above** (3 files for #37 fix)
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review

@@ -71,8 +71,13 @@ export default function NotificationsPage() {
     const fetchNotifications = async () => {
       setIsLoading(true);
       try {
-        const params = channel !== 'ALL' ? `?channel=${channel}` : '';
-        const res = await api.get(`/notifications/inbox${params}`);
+        const params = new URLSearchParams();
+        if (channel !== 'ALL') params.append('channel', channel);
+        // For "Organizer Alerts" tab (OPERATIONAL), filter to only sale_alert type
+        if (channel === 'OPERATIONAL') params.append('type', 'sale_alert');
+
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
+        const res = await api.get(`/notifications/inbox${queryStr}`);
         setNotifications(res.data.notifications || []);
         setUnreadCount(res.data.unreadCount || 0);
       } catch (err) {

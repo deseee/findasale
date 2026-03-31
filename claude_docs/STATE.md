@@ -7,6 +7,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S360 — Continue QA backlog from S359. See ## Next Session below.**
+
+---
+
+**S359 COMPLETE (2026-03-31):** QA backlog run — 3 features QA'd, 2 bugs fixed.
+
+(1) **#37 Sale Alerts** ❌ BUGS FOUND + FIXED (NOT YET PUSHED): (a) No in-app notification when followed organizer publishes — followerNotificationService.ts fixed. (b) Organizer Alerts tab filter broken — notificationInboxController.ts fixed. (c) Notification page tab styling — notifications.tsx fixed. 3 files ready to push.
+
+(2) **#48 Treasure Trail** ❌ P1 BUG FIXED + PUSHED (commit 1c1896369): Trail create ✅, list ✅, dark mode ✅. Detail page showed "Trail Not Found" immediately — root cause: [trailId].tsx imported bare `axios` (no JWT token) → 401 → HTML redirect → JSON parse fail. Fixed: `import api from '../../../lib/api'` + `api.get('/api/trails')`. 2-line fix, pushed via MCP. Verify in browser as S360 first action.
+
+(3) **#46 Typology Classifier** ⚠️ PARTIAL PASS: All 4 add-items tabs ✅, tab switching ✅, Classify fires + persists ✅ (Retro/Atomic 88%). BUGS: (P2) UI doesn't refresh in-place after Classify (needs page reload). (P2) CSV import broken — Zod `.enum().optional()` doesn't accept empty string `""` from app's own template header → "No valid rows found." Fixed test CSV at `FindaSale/test-import.csv` (no status/auction cols). Backend fix needed.
+
+(4) **#199 User Profile** ⚠️ PARTIAL PASS (light mode only): `/shoppers/cmn9opa330009ij7tqwvt463c` (Bob Smith) loads — name, member since 3/27/26, 12-day visit streak, stats, bio, Message button. Dark mode NOT tested.
+
+Files changed S359 NOT YET PUSHED:
+- `packages/backend/src/services/followerNotificationService.ts` (#37 fix)
+- `packages/backend/src/controllers/notificationInboxController.ts` (#37 fix)
+- `packages/frontend/pages/shopper/notifications.tsx` (#37 fix)
+
+Already pushed via MCP:
+- `packages/frontend/pages/shopper/trails/[trailId].tsx` (#48 fix — commit 1c1896369)
+
 **S357 COMPLETE (2026-03-31):** Shopper page consolidation — purchases/receipts/loot-log → /shopper/history. Continuation from S356 context limit.
 
 Changes:
@@ -134,26 +156,42 @@ All pushed. Vercel ✅ Railway ✅.
 
 ---
 
-## Next Session (S359)
+## Next Session (S360)
 
-### S359 Priority 1: Continue QA backlog
-- #37 Sale Alerts — test shopper receiving alert when followed organizer publishes sale
-- #46 Typology Classifier — test AI item tagging in add-items flow
-- #48 Treasure Trail — dark mode + stale state verified, need full end-to-end trail completion test
-- #199 User Profile — verify public shopper profile renders at /shoppers/[id] with correct data
-- #58 Achievement Badges — verify badges render on /shopper/achievements + dashboard
-- #29 Loyalty Passport — verify XP earn guide + rank thresholds on /shopper/loyalty
-- #213 Hunt Pass CTA — verify shows for non-pass users, hidden for pass holders
-- #131 Share Templates — test each social share method (Facebook popup, Nextdoor copy+open, etc.)
+### Patrick Action Required FIRST
+Push the #37 fix files (local changes, NOT yet on GitHub):
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/backend/src/services/followerNotificationService.ts
+git add packages/backend/src/controllers/notificationInboxController.ts
+git add packages/frontend/pages/shopper/notifications.tsx
+git commit -m "fix(#37): sale alerts — shopper notification on publish + organizer alerts tab filter"
+.\push.ps1
+```
 
-### S359 Priority 2: Known gaps not yet fixed
-- **Business Name blank on organizer settings Profile tab** — field not loading from API on page open (found in S358, not fixed)
-- **Social fields knock-on** — does `facebookUrl` etc. render on `/organizers/[id]` public profile? Not verified.
-- **#177 Buy Now modal UX gap** — "Complete Purchase" modal shows no item name or price — flag to findasale-ux for spec
+### S360 Priority 1: Verify S359 fixes in browser
+1. **#48 detail page**: Navigate to `https://finda.sale/shopper/trails` → click any trail → confirm detail page loads (not "Trail Not Found") → test Edit flow → confirm stale-state fix (save → data updates in place without full reload)
+2. **#37 sale alerts**: Confirm organizer Alerts tab filter shows only followed-organizer alerts after push deploys
 
-### S359 Notes
-- All Railway env vars confirmed ✅. All migrations deployed ✅. Sage threshold 2500 XP (beta only).
+### S360 Priority 2: Continue QA backlog
+- **#199 User Profile dark mode** — `/shoppers/cmn9opa330009ij7tqwvt463c` in dark mode; `bg-warm-50` has no `dark:` variant — may be intentional for public profile pages
+- **#58 Achievement Badges** — `/shopper/achievements` page + dashboard widget showing real badge data
+- **#29 Loyalty Passport** — `/shopper/loyalty` XP earn guide + rank thresholds (Initiate/Scout/Ranger/Sage/Grandmaster)
+- **#213 Hunt Pass CTA** — shows for non-pass users (user11), hidden when `huntPassActive = true`
+- **#131 Share Templates** — test Facebook sharer popup, Nextdoor copy+open, Threads intent popup, Pinterest pin dialog, TikTok copy+open
+
+### S360 Priority 3: P2 dev dispatches
+- **CSV import broken** — backend Zod `.enum().optional()` rejects empty string `""` from app's own template. Fix: either pre-process `""` → `undefined` before Zod, or strip `status` column from the CSV template in CSVImportModal.tsx
+- **Typology classify no UI refresh** — after classify succeeds, React query cache is not invalidated → user sees stale state until manual reload. Fix: invalidate item query on classify mutation success
+- **Business Name blank on organizer settings Profile tab** — field not loading from API on page open (found S358, not fixed)
+- **Social fields on public organizer profile** — `facebookUrl` etc. in schema/settings but not verified rendering at `/organizers/[id]`
+- **#177 Buy Now modal UX gap** — "Complete Purchase" modal shows no item name or price — dispatch to `findasale-ux` for spec
+
+### S360 Notes
+- All Railway env vars ✅. All migrations deployed ✅. Sage threshold 2500 XP (beta only).
 - Railway backend URL: https://backend-production-153c9.up.railway.app
 - Test accounts: user2 = organizer (SIMPLE), user3 = Carol Williams (TEAMS), user11 = Karen Anderson (shopper), user12 = Leo Thomas (shopper). All passwords: password123
-- Null byte pattern: files pushed via MCP accumulate null bytes at end. Always strip with python3 `content.rstrip(b'\x00')` before pushing. TS1127 "Invalid character" at last line = null bytes.
+- Null byte pattern: MCP-pushed files accumulate null bytes at end. Strip with `content.rstrip(b'\x00')` before pushing. TS1127 = null bytes.
+- `test-import.csv` is in `FindaSale/` workspace folder (Patrick's computer) for manual CSV import testing.
 
