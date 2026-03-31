@@ -35,7 +35,7 @@ COPY . .
 # Generate Prisma client (writes into node_modules/.pnpm virtual store)
 RUN cd packages/database && npx prisma generate
 
-# S358 — cache bust 2026-03-31T16:00
+# S360 — cache bust 2026-03-31
 RUN cd packages/backend && npx tsc
 
 # --- runner stage ---
