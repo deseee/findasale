@@ -321,19 +321,6 @@ const AddItemsDetailPage = () => {
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [qualityResult, setQualityResult] = useState<ImageQualityResult | null>(null);
   const [pendingQualityBlob, setPendingQualityBlob] = useState<Blob | null>(null);
-  const [pendingQualityUpload, setPendingQualityUpload] = useState<{
-    blob: Blob;
-    previewUrl: string;
-    tempId: string;
-    appendToItemId: string | null;
-  } | null>(null);
-  const [qualityToastOpen, setQualityToastOpen] = useState(false);
-  const [qualityToastTimeout, setQualityToastTimeout] = useState<NodeJS.Timeout | null>(null);
-
-  // Phase 3.5: Shot sequence guidance
-  const [sessionPhotoCount, setSessionPhotoCount] = useState(0);
-  const [showShotGuide, setShowShotGuide] = useState(false);
-  const [shotGuideTimeout, setShotGuideTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Phase 3-5: Bulk Operations Toolkit state
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -691,24 +678,17 @@ const AddItemsDetailPage = () => {
       const quality = await checkImageQuality(processedBlob);
       setQualityResult(quality);
       setPendingQualityBlob(processedBlob);
-      setPendingQualityUpload({
-        blob: processedBlob,
-        previewUrl: photo.previewUrl,
-        tempId,
-        appendToItemId,
-      });
 
       // Handle tiered quality response
       if (quality.tier === 3) {
-        // Tier 3: Block upload, show modal
+        // Tier 3: Close camera first so user can see modal, then show modal
+        setCameraOpen(false);
         setQualityModalOpen(true);
         return; // Stop processing, wait for user action
       } else if (quality.tier === 2) {
-        // Tier 2: Show soft warning toast, continue upload but let user decide
-        setQualityToastOpen(true);
-        if (qualityToastTimeout) clearTimeout(qualityToastTimeout);
-        // Don't auto-dismiss — user controls via buttons
-        return; // Wait for user to click "Use This Photo" or "Retake"
+        // Tier 2: Show advisory toast via global showToast (visible over camera), auto-continue upload
+        showToast('Lighting is soft — we\'ll still identify the item. Move to brighter light for best results.', 'info');
+        // Don't return — continue with upload
       }
       // Tier 1: No warning, proceed to upload
 
@@ -765,6 +745,12 @@ const AddItemsDetailPage = () => {
 
         // Invalidate caches for item lists
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+
+        // Signal to organizer that AI analysis is starting
+        showToast('Analyzing item with AI...', 'info');
+
+        // Poll for AI completion
+        pollForAI(itemId);
       }
     } catch (err: any) {
       console.error('[rapidfire] Background upload failed:', err);
@@ -796,83 +782,80 @@ const AddItemsDetailPage = () => {
     setAddingToItemId(null);
   };
 
-  // Quality modal and toast handlers (Tier 2 & 3)
-  const handleQualityUsePhoto = async () => {
-    if (!pendingQualityUpload || !pendingQualityBlob) return;
-    setQualityToastOpen(false);
-    setQualityModalOpen(false);
-
-    // Proceed with upload
-    try {
-      const { blob, tempId, appendToItemId } = pendingQualityUpload;
-
-      if (appendToItemId) {
-        const fd = new FormData();
-        fd.append('photos', blob, 'rapidfire.jpg');
-        fd.append('saleId', saleId as string);
-        const uploadRes = await api.post('/upload/sale-photos', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
-        if (urls[0]) {
-          await api.post(`/items/${appendToItemId}/photos`, { url: urls[0] });
-          setRapidItems((prev) =>
-            prev.map((item) =>
-              item.id === appendToItemId
-                ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
-                : item
-            )
-          );
-        }
-      } else {
-        const fd = new FormData();
-        fd.append('image', blob, 'rapidfire.jpg');
-        fd.append('saleId', saleId as string);
-        const res = await api.post('/upload/rapidfire', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        const { itemId, photoUrl } = res.data;
-        setRapidItems((prev) =>
-          prev.map((item) =>
-            item.id === tempId
-              ? { ...item, id: itemId, draftStatus: 'DRAFT', thumbnailUrl: pendingQualityUpload.previewUrl, photoUrls: photoUrl ? [photoUrl] : [pendingQualityUpload.previewUrl] }
-              : item
-          )
-        );
-        queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-      }
-
-      // Update shot count for guidance
-      setSessionPhotoCount((prev) => prev + 1);
-      showShotGuidance(sessionPhotoCount + 1);
-
-      setPendingQualityBlob(null);
-      setPendingQualityUpload(null);
-    } catch (err: any) {
-      showToast('Upload failed. Please try again.', 'error');
-    }
-  };
-
+  // Quality modal handler (Tier 3 only)
   const handleQualityRetake = () => {
-    setQualityToastOpen(false);
     setQualityModalOpen(false);
     setPendingQualityBlob(null);
-    setPendingQualityUpload(null);
     // Camera remains open for retake
+    setCameraOpen(true);
   };
 
   const handleQualitySkipItem = () => {
     setQualityModalOpen(false);
     setPendingQualityBlob(null);
-    setPendingQualityUpload(null);
     // Camera remains open, photo is discarded
   };
 
   const showShotGuidance = (shotNumber: number) => {
-    setShowShotGuide(true);
-    if (shotGuideTimeout) clearTimeout(shotGuideTimeout);
-    const timeout = setTimeout(() => setShowShotGuide(false), 4000);
-    setShotGuideTimeout(timeout);
+    const messages = [
+      'Great first shot! This will be your listing photo. Want to add a back view or maker\'s mark?',
+      'Two down! Look for any maker\'s marks or labels — these are the most valuable shots.',
+      'You\'ve got the minimum! Want to add a detail or damage photo, or are you ready to review?',
+      'Four photos — almost complete. Any damage to be honest about? Or scale reference?',
+      '⭐ Five photos is excellent! Ready to review and tag?',
+    ];
+    const msg = messages[Math.min(shotNumber - 1, messages.length - 1)] || messages[messages.length - 1];
+    showToast(msg, 'info');
+  };
+
+  // Poll for AI draft analysis completion (draftStatus: DRAFT → PENDING_REVIEW)
+  const pollForAI = (itemId: string) => {
+    let attempts = 0;
+    const maxAttempts = 10; // 30 seconds (3s * 10)
+
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await api.get(`/items/${itemId}`);
+        const item = res.data;
+
+        // Success: AI identified the item
+        if (item.draftStatus === 'PENDING_REVIEW' && item.title) {
+          clearInterval(poll);
+          setRapidItems((prev) =>
+            prev.map((i) =>
+              i.id === itemId
+                ? { ...i, draftStatus: 'PENDING_REVIEW', title: item.title, category: item.category }
+                : i
+            )
+          );
+          showToast(`AI identified: "${item.title}"`, 'success');
+          return;
+        }
+
+        // Error: AI failed (aiErrorLog is set)
+        if (item.aiErrorLog && Array.isArray(item.aiErrorLog) && item.aiErrorLog.length > 0) {
+          clearInterval(poll);
+          setRapidItems((prev) =>
+            prev.map((i) =>
+              i.id === itemId ? { ...i, aiError: 'AI analysis failed — fill in manually' } : i
+            )
+          );
+          return;
+        }
+
+        // Timeout: After 30s, stop polling but don't error
+        if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          // Don't show error — just stop polling. User can manually review.
+          // The item is still in DRAFT, carousel shows amber badge.
+          return;
+        }
+      } catch (e) {
+        // Network error during poll — continue polling, don't fail
+        console.warn('[pollForAI] Network error, continuing:', e);
+      }
+    }, 3000); // Poll every 3 seconds
   };
 
   // Face modal handlers
@@ -898,6 +881,9 @@ const AddItemsDetailPage = () => {
         )
       );
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+
+      // Poll for AI completion
+      pollForAI(itemId);
     } catch (err: any) {
       console.error('[rapidfire] Face upload failed:', err);
       setRapidItems((prev) =>
@@ -1529,45 +1515,6 @@ const AddItemsDetailPage = () => {
             </div>
           )}
 
-          {/* Phase 3.5: Quality Tier 2 (Soft Light) Toast */}
-          {qualityToastOpen && qualityResult?.tier === 2 && (
-            <div className="fixed bottom-24 left-4 right-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 z-40">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-                The light's a bit soft. We can still work with this, but a brighter spot might give you better results. Want to try again near a window or lamp?
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleQualityUsePhoto}
-                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2 rounded-lg text-sm font-medium"
-                >
-                  Use This Photo
-                </button>
-                <button
-                  onClick={handleQualityRetake}
-                  className="flex-1 bg-gray-200 text-gray-900 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 py-2 rounded-lg text-sm font-medium"
-                >
-                  Retake in Better Light
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Phase 3.5: Shot Guidance Toast */}
-          {showShotGuide && (
-            <div className="fixed bottom-24 left-4 right-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl shadow-lg p-4 z-40">
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                {sessionPhotoCount === 1
-                  ? "Great first shot! This will be your listing photo. Want to add a back view or maker's mark?"
-                  : sessionPhotoCount === 2
-                  ? "Two down! Look for any maker's marks or labels — these are the most valuable shot."
-                  : sessionPhotoCount === 3
-                  ? "You've got the minimum! Want to add a detail or damage photo, or are you ready to review?"
-                  : sessionPhotoCount === 4
-                  ? "Four photos — almost complete. Any damage to be honest about? Or scale reference?"
-                  : "⭐ Five photos is excellent! Ready to review and tag?"}
-              </p>
-            </div>
-          )}
 
           {/* Phase 3: Face detection modal */}
           {showFaceModal && (
