@@ -176,6 +176,8 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       activeSaleData = {
         id: activeSale.id,
         title: activeSale.title,
+        status: activeSale.status,
+        endDate: activeSale.endDate,
         viewCount: activeSale.qrScanCount ?? 0,
         holdCount,
       };
