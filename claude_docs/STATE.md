@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S353 COMPLETE (2026-03-31):** Dashboard/nav polish + deployment verification. (1) **Dashboard dead space fixed:** Organizer dashboard stats (Items Listed, Visitors Today, Active Holds) now render real data from `statsData` — previously fetched but never mounted. (2) **Nav mirroring fixed:** Mobile hamburger now mirrors desktop AvatarDropdown exactly — Your Sales + Explore & Connect collapsibles added with all subitems + Coming Soon badges; orphaned top-level Payouts/Insights/Workspace items removed from mobile. (3) **Gamification fixed:** Hunt Pass CTA is now rank-aware (INITIATE/SCOUT = XP hook, RANGER = early access hook, SAGE/GRANDMASTER = Collector's League hook). (4) **Deployment confirmed:** All S351+S352 code on GitHub ✅. All migrations deployed to Railway (no pending migrations) ✅. STRIPE_WEBHOOK_SECRET ✅, MAILERLITE_SHOPPERS_GROUP_ID ✅, RESEND_API_KEY + RESEND_FROM_EMAIL ✅ all confirmed set in Railway. Files: Layout.tsx, organizer/dashboard.tsx, shopper/dashboard.tsx.
+**S353 COMPLETE (2026-03-31):** Dashboard/nav polish + deployment verification + UX skill gap identified. (1) **Dashboard dead space fixed:** Organizer dashboard stats (Items Listed, Visitors Today, Active Holds) now render real data from `statsData` — previously fetched but never mounted. (2) **Nav mirroring fixed:** Mobile hamburger now mirrors desktop AvatarDropdown — organizer collapsibles (YOUR SALES, SELLING TOOLS, PRO TOOLS) + shopper sections (MY COLLECTION, EXPLORE & CONNECT with all subitems + Coming Soon badges) added. Orphaned top-level Payouts/Insights/Workspace removed. (3) **Hunt Pass CTA rank-aware:** INITIATE/SCOUT = XP hook, RANGER = early access hook, SAGE/GRANDMASTER = Collector's League hook. (4) **Deployment confirmed:** All code on GitHub ✅, all migrations deployed ✅, all Railway env vars confirmed set (STRIPE_WEBHOOK_SECRET, MAILERLITE_SHOPPERS_GROUP_ID, RESEND_API_KEY, RESEND_FROM_EMAIL). (5) **UX skill gap identified:** findasale-ux produced workflow specs that still missed organizer job-to-be-done logic. S354 P1 is skill research + rewrite. Dashboard State 2 redesign (remove redundant cards, fix revenue source, replace dead tier progress with subscription card, add Next Action Zone) is ready for dev but blocked on skill fix first — UX spec from this session is in claude_docs/ux-spotchecks/ if needed. Files changed: Layout.tsx, organizer/dashboard.tsx, shopper/dashboard.tsx.
 
 **S352 COMPLETE (2026-03-30):** 4 dispatches across Architect + 3 Dev agents. (1) **#84 ExplorerProfile Architect decision RESOLVED:** Option A confirmed — all gamification fields already exist on User (guildXp, explorerRank, huntPassActive, huntPassExpiry). No schema change needed. Decision doc written to packages/database/prisma/EXPLORER_PROFILE_DECISION.md. (2) **#225 Revenue/Metrics API SHIPPED:** GET /api/organizers/stats built (revenue lifetime/current/this-month, item counts, active sale hold count). Wired into organizer dashboard State 2. Zero TS errors. Files: packages/backend/src/routes/organizers.ts, packages/frontend/pages/organizer/dashboard.tsx. (3) **#226 Pre-wire schema SHIPPED:** persistentInventory + masterItemLibraryId + consignor relation added to Item model. Migration created: 20260330_add_item_prewire_fields. ⚠️ Patrick must deploy this migration to Railway. Files: schema.prisma, migration SQL. (4) **#227 XP Profile SHIPPED:** GET /api/xp/profile already existed — service response shape corrected + GRANDMASTER threshold fixed (10000→5000). Shopper dashboard already wired via useXpProfile hook. File: packages/backend/src/services/xpService.ts. All items pending Chrome QA. Roadmap: #84 resolved, #225/#226/#227 added to Building as Shipped S352.
 
@@ -90,29 +90,35 @@ git add claude_docs/patrick-dashboard.md
 git add packages/frontend/components/Layout.tsx
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/shopper/dashboard.tsx
-git commit -m "S353: fix dashboard dead space, nav mirroring, rank-aware gamification"
+git commit -m "S353: fix dashboard dead space, nav mirroring, mobile shopper nav, rank-aware gamification"
 .\push.ps1
 ```
 
-### S354 Priority 1: Dashboard QA (Chrome)
-- Organizer State 1: log in as user with 0 sales — confirm welcome hero + onboarding modal
-- Organizer State 2: log in as Alice/user1 — confirm Sale Status Widget + real stats (Items Listed, Visitors Today, Active Holds)
-- Shopper: log in as user12 (Leo Thomas) — confirm rank-aware Hunt Pass copy, Rank Progress Card real XP, Streak explainer visible
-- Dark mode pass on both dashboards
+### S354 Priority 2: UX Skill Research + Rewrite (BEFORE any more dashboard work)
+The findasale-ux skill keeps producing specs that miss organizer workflow logic. S353 was wasted largely because UX produced data-display specs instead of job-to-be-done workflow specs.
 
-### S354 Priority 2: Hold-to-Pay E2E QA
-Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets ClaimCard → Stripe link → payment → SOLD + XP. Test: user12 (shopper), user6/Family Collection Sale 16 (organizer). STRIPE_WEBHOOK_SECRET ✅ confirmed set.
+**Task:** Use skill-creator to research what makes a good UX skill for Claude and rewrite findasale-ux SKILL.md to enforce:
+- Workflow-first thinking (jobs to be done, not features to display)
+- Mandatory: "What is the user trying to accomplish in the next 30 seconds?" before any layout decision
+- Mandatory: every section must have an action/button or be removed
+- Mandatory: no redundant cards (if a button already exists for an action, don't add a card for it)
+- Mandatory: read actual code to understand what data is available before speccing anything
 
-### S354 Priority 3: Chrome QA backlog
+### S354 Priority 3: Dashboard State 2 Redesign (after UX skill is fixed)
+UX spec from S353 is ready — remove redundant cards, fix revenue source, replace dead tier progress with subscription card, add Next Action Zone. Dev dispatch only after UX skill rewrite is confirmed.
+
+### S354 Priority 4: Hold-to-Pay E2E QA
+Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets ClaimCard → Stripe link → payment → SOLD + XP. Test: user12 (shopper), user6/Family Collection Sale 16 (organizer).
+
+### S354 Priority 5: Chrome QA backlog
 S344 pending: #174+#80, #184, #41, #7, #89, #62, #37, #149.
 S346 pending: #48, #13, #157, #46, #199, #177, #58, #29.
 S347 pending: #212, #213, #131, #60, #123, #153.
 
 ### S354 Notes
-- All Railway env vars confirmed set: STRIPE_WEBHOOK_SECRET ✅, MAILERLITE_SHOPPERS_GROUP_ID ✅, RESEND_API_KEY ✅, RESEND_FROM_EMAIL ✅
-- All migrations deployed ✅ (no pending migrations as of S353)
-- Sage threshold is 2500 XP (beta only)
-- Legal items still open: #82 USPTO trademark decision, #83 trade secrets documentation
+- All Railway env vars confirmed ✅. All migrations deployed ✅. Sage threshold 2500 XP (beta only).
+- Legal: #82 USPTO trademark, #83 trade secrets — Patrick decision pending
+- findasale-ux skill path: `/sessions/*/mnt/.claude/skills/findasale-ux/SKILL.md`
 
 ### Patrick Actions Before S354
 1. Push S353 files (block above)

@@ -2,36 +2,25 @@
 
 ---
 
-## ✅ S353 Complete — Dashboard polish, nav mirroring, env var confirmation
+## ✅ S353 Complete — Nav fixed, stats wired, UX skill gap identified
 
 ---
 
 ## What Happened This Session (S353)
 
-**Dashboard dead space fixed:** Stats (Items Listed, Visitors Today, Active Holds) were being fetched but never rendered — replaced dashes with real data bindings. Now show live numbers in the organizer State 2 view.
+**Dashboard stats:** Items Listed, Visitors Today, Active Holds now show real data. Was fetched but never rendered.
 
-**Nav mirroring fixed:** Mobile hamburger now matches the desktop dropdown exactly — Your Sales and Explore & Connect collapsibles with all subitems + Coming Soon badges. Removed orphaned top-level Payouts/Insights/Workspace items from mobile that had no desktop equivalent.
+**Mobile nav:** Now mirrors desktop. Organizer collapsibles (Your Sales, Selling Tools, Pro Tools) + shopper sections (My Collection, Explore & Connect with all subitems + Coming Soon badges) all present. Orphaned Payouts/Insights/Workspace items removed.
 
-**Gamification fixed:** Hunt Pass CTA is now rank-aware. INITIATE/SCOUT see the XP hook, RANGER sees the early access hook, SAGE/GRANDMASTER see the Collector's League upsell.
+**Gamification:** Hunt Pass CTA is rank-aware — different hook per rank instead of generic copy.
 
-**Deployment confirmed clean:**
-- All S351+S352 code on GitHub ✅
-- All migrations deployed to Railway — no pending migrations ✅
-- STRIPE_WEBHOOK_SECRET ✅
-- MAILERLITE_SHOPPERS_GROUP_ID ✅
-- RESEND_API_KEY + RESEND_FROM_EMAIL ✅
+**Deployment verified:** All code on GitHub ✅, all Railway migrations deployed ✅, all env vars confirmed set (STRIPE_WEBHOOK_SECRET, MAILERLITE_SHOPPERS_GROUP_ID, RESEND_API_KEY, RESEND_FROM_EMAIL) ✅.
 
----
-
-## What Happened Last Session (S352)
-
-Revenue/Metrics API built (GET /api/organizers/stats). XP profile API shape corrected + GRANDMASTER threshold fixed. Pre-wire schema fields added to Item model. ExplorerProfile Architect decision resolved (no new model needed — fields already on User).
+**UX skill problem identified:** The dashboard still has fundamental workflow problems (redundant cards, wrong-sale revenue, dead tier progress). Root cause is the findasale-ux skill doesn't enforce workflow-first thinking. S354 starts with a skill rewrite before any more dashboard dev.
 
 ---
 
 ## Your Actions Now
-
-1. **Run S353 push block** (STATE + dashboard + 3 code files)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -40,7 +29,7 @@ git add claude_docs/patrick-dashboard.md
 git add packages/frontend/components/Layout.tsx
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/shopper/dashboard.tsx
-git commit -m "S353: fix dashboard dead space, nav mirroring, rank-aware gamification"
+git commit -m "S353: fix dashboard dead space, nav mirroring, mobile shopper nav, rank-aware gamification"
 .\push.ps1
 ```
 
@@ -50,15 +39,15 @@ git commit -m "S353: fix dashboard dead space, nav mirroring, rank-aware gamific
 
 - **Build:** Railway ✅ Vercel ✅
 - **All migrations:** Deployed ✅
-- **Railway env vars:** All confirmed set ✅
+- **Railway env vars:** All confirmed ✅
 - **BROKEN section:** Clear
-- **Dashboard:** Dead space fixed, nav mirrored, gamification rank-aware ✅
-- **QA queue:** Dashboard Chrome QA + Hold-to-Pay E2E + S344/S346/S347 backlog (~30 features)
+- **Dashboard:** Stats real, nav mirrored — workflow redesign still needed (S354)
+- **QA queue:** Hold-to-Pay E2E + S344/S346/S347 backlog (~30 features)
 
 ---
 
 ## Open Action Items for Patrick
 
 - [ ] **Run S353 push block above**
-- [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class + attorney fees
-- [ ] **Trade secrets (#83):** Document proprietary algorithms as trade secrets + NDA review
+- [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
+- [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review
