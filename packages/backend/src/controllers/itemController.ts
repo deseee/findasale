@@ -145,7 +145,11 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
     const rowErrors: { row: number; errors: string[] }[] = [];
 
     records.forEach((record, idx) => {
-      const result = csvRowSchema.safeParse(record);
+      // Convert empty strings to undefined for optional fields before validation
+      const cleanedRecord = Object.fromEntries(
+        Object.entries(record).map(([k, v]) => [k, v === '' ? undefined : v])
+      );
+      const result = csvRowSchema.safeParse(cleanedRecord);
       if (!result.success) {
         rowErrors.push({
           row: idx + 2, // +2 for 1-indexed + header row
