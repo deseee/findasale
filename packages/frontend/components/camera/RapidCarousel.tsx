@@ -187,7 +187,7 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
               title={item.title || 'Item'}
             >
               {/* Thumbnail container */}
-              <div className={`relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-700 transition-all ${
+              <div className={`relative w-24 h-24 rounded-lg overflow-hidden border border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-700 transition-all ${
                 addingToItemId === item.id ? 'ring-2 ring-amber-400' : ''
               }`}>
                 {item.thumbnailUrl ? (
@@ -221,6 +221,13 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
                   <span className="absolute top-1 left-1 text-xs z-10">✨</span>
                 )}
 
+                {/* "Ready ✓" badge for PENDING_REVIEW items */}
+                {item.draftStatus === 'PENDING_REVIEW' && (
+                  <div className="absolute bottom-0 left-0 right-0 w-full bg-green-500/90 text-white text-[10px] text-center py-0.5 font-medium z-10">
+                    Ready ✓
+                  </div>
+                )}
+
                 {/* "+" button for adding photos to item */}
                 {item.thumbnailUrl && (
                   <button
@@ -228,7 +235,7 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
                       e.stopPropagation();
                       onAddPhotoToItem?.(item.id);
                     }}
-                    className={`absolute bottom-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold z-10 ${
+                    className={`absolute bottom-1 right-1 w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold z-10 ${
                       addingToItemId === item.id
                         ? 'bg-amber-500 ring-2 ring-amber-300'
                         : 'bg-gray-800/80'
@@ -242,10 +249,10 @@ const RapidCarousel: React.FC<RapidCarouselProps> = ({
 
               {/* Title & Category */}
               <div className="mt-1 text-left">
-                <p className="text-10px font-medium text-warm-900 dark:text-warm-100 truncate w-20 leading-tight">
+                <p className="text-10px font-medium text-warm-900 dark:text-warm-100 truncate w-24 leading-tight">
                   {item.title || '—'}
                 </p>
-                <p className="text-9px text-warm-500 dark:text-warm-400 truncate w-20">
+                <p className="text-9px text-warm-500 dark:text-warm-400 truncate w-24">
                   {item.category || ''}
                 </p>
               </div>

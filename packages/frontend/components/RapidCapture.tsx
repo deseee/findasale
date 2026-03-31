@@ -669,21 +669,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 );
               })}
 
-              {/* Publish shortcut tile — tap to open most recent item for quick review */}
-              {rapidItems.length > 0 && (
-                <button
-                  onClick={() => {
-                    // Open the most recent (last) item in PreviewModal for quick review
-                    const lastItem = rapidItems[rapidItems.length - 1];
-                    if (lastItem) {
-                      onThumbnailTap(lastItem.id);
-                    }
-                  }}
-                  className="flex-shrink-0 w-16 h-16 rounded-lg bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-sm hover:bg-amber-500/30 transition-all"
-                >
-                  → Pub
-                </button>
-              )}
             </div>
           )}
 
