@@ -38,10 +38,12 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Shape response to match legacy receipt format for frontend compatibility
+    // Shape response to match ReceiptCard component expectations
     const receipts = purchases.map((p) => ({
       id: p.id,
       issuedAt: p.createdAt,
+      total: p.amount,
+      items: [{ itemTitle: p.item.title, photoUrl: undefined, price: p.amount }],
       purchase: p,
     }));
 

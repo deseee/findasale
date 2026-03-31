@@ -229,6 +229,8 @@ export const register = async (req: Request, res: Response) => {
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: user.createdAt.toISOString(),
+        huntPassActive: user.huntPassActive,
+        huntPassExpiry: user.huntPassExpiry,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -365,6 +367,8 @@ export const oauthLogin = async (req: Request, res: Response) => {
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: user.createdAt.toISOString(),
+        huntPassActive: user.huntPassActive,
+        huntPassExpiry: user.huntPassExpiry,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -501,6 +505,8 @@ export const login = async (req: Request, res: Response) => {
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: user.createdAt.toISOString(),
+        huntPassActive: user.huntPassActive,
+        huntPassExpiry: user.huntPassExpiry,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -614,6 +620,8 @@ export const redeemInvite = async (req: Request, res: Response) => {
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: updatedUser.createdAt.toISOString(),
+        huntPassActive: updatedUser.huntPassActive,
+        huntPassExpiry: updatedUser.huntPassExpiry,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
