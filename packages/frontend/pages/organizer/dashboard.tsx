@@ -165,6 +165,8 @@ const OrganizerDashboard = () => {
         activeSale: {
           id: string;
           title: string;
+          status: string;
+          endDate: string;
           viewCount: number;
           holdCount: number;
         } | null;
@@ -316,6 +318,23 @@ const OrganizerDashboard = () => {
     const now = new Date();
     const daysDiff = (now.getTime() - updated.getTime()) / (1000 * 60 * 60 * 24);
     return daysDiff > 30;
+  };
+
+  // Helper: Get urgency tag based on hours remaining from statsData activeSale
+  const getUrgencyTag = () => {
+    if (!statsData?.activeSale?.endDate || statsData.activeSale.status !== 'PUBLISHED') return null;
+    const now = new Date();
+    const endTime = new Date(statsData.activeSale.endDate);
+    const hoursRemaining = (endTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursRemaining <= 0) return null; // Sale already ended
+    if (hoursRemaining < 6) {
+      return { text: `ENDING IN ${Math.ceil(hoursRemaining)}h`, color: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' };
+    }
+    if (hoursRemaining < 24) {
+      return { text: `ENDING IN ${Math.ceil(hoursRemaining)}h`, color: 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200' };
+    }
+    return null;
   };
 
   if (isLoading) {
@@ -506,168 +525,327 @@ const OrganizerDashboard = () => {
           {dashboardState === 'active' && activeSale && (
             // STATE 2: Active Organizer (DRAFT or PUBLISHED sale)
             <div className="space-y-6 mb-8">
-              {/* Sale Status Widget (HIGHEST PRIORITY) */}
-              <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
-                <div className="flex flex-col md:flex-row gap-6">
-                  {/* Photo Thumbnail */}
-                  {activeSale.photoUrls && activeSale.photoUrls[0] && (
-                    <div className="md:w-32 flex-shrink-0">
-                      <img src={activeSale.photoUrls[0]} alt={activeSale.title} className="w-full h-32 object-cover rounded-lg" />
-                    </div>
-                  )}
+              {/* Sale Status Widget (HIGHEST PRIORITY) — Enhanced with urgency + dynamic CTA */}
+              {statsData?.activeSale && (
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
+                  <div className="flex flex-col md:flex-row gap-6">
+                    {/* Photo Thumbnail */}
+                    {activeSale.photoUrls && activeSale.photoUrls[0] && (
+                      <div className="md:w-32 flex-shrink-0">
+                        <img src={activeSale.photoUrls[0]} alt={activeSale.title} className="w-full h-32 object-cover rounded-lg" />
+                      </div>
+                    )}
 
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-4 mb-4">
-                      <div>
-                        <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{activeSale.title}</h2>
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                          activeSale.status === 'PUBLISHED'
-                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                            : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
-                        }`}>
-                          {activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
-                          {isEndingSoon(activeSale) && ' • ENDING SOON'}
-                        </span>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-4 mb-4">
+                        <div className="flex-1">
+                          <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{statsData.activeSale.title}</h2>
+                          <div className="flex flex-wrap gap-2">
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                              statsData.activeSale.status === 'PUBLISHED'
+                                ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                                : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+                            }`}>
+                              {statsData.activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
+                            </span>
+                            {getUrgencyTag() && (
+                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${getUrgencyTag().color}`}>
+                                {getUrgencyTag().text}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Stats Row */}
-                    <div className="grid grid-cols-3 gap-4 mb-6 py-4 border-y border-warm-200 dark:border-gray-700">
-                      <div>
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Items Listed</p>
-                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData?.items.total ?? 0}</p>
+                      {/* Stats Row */}
+                      <div className="grid grid-cols-3 gap-4 mb-6 py-4 border-y border-warm-200 dark:border-gray-700">
+                        <div>
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Items Listed</p>
+                          <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.total ?? 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Visitors Today</p>
+                          <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.viewCount ?? 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Active Holds</p>
+                          <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.holdCount ?? 0}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Visitors Today</p>
-                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData?.activeSale?.viewCount ?? 0}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Active Holds</p>
-                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData?.activeSale?.holdCount ?? holdCountData?.count ?? 0}</p>
-                      </div>
-                    </div>
 
-                    {/* Status-Specific CTAs */}
-                    <div className="flex flex-wrap gap-2">
-                      {activeSale.status === 'DRAFT' && (
-                        <>
-                          <button className="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Finish Setup
-                          </button>
-                          <Link href={`/organizer/edit-sale/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                      {/* Context-Aware Primary CTA */}
+                      <div className="flex flex-wrap gap-2">
+                        {statsData.activeSale.status === 'DRAFT' && statsData.items.draft > 0 && (
+                          <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Add Photos
+                          </Link>
+                        )}
+                        {statsData.activeSale.status === 'DRAFT' && statsData.items.draft === 0 && (
+                          <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
                             Publish Sale
                           </Link>
-                        </>
-                      )}
-                      {activeSale.status === 'PUBLISHED' && (
-                        <>
-                          <Link href={`/organizer/add-items/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                        )}
+                        {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) < 1 && (
+                          <button className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Close Sale Early
+                          </button>
+                        )}
+                        {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) >= 1 && (
+                          <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
                             Manage Items
                           </Link>
-                          <Link href={`/sales/${activeSale.id}`} className="bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            View Live Sale
-                          </Link>
-                        </>
-                      )}
-                      {isEndingSoon(activeSale) && (
-                        <>
-                          <button className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Extend Sale
-                          </button>
-                          <button className="bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Mark Ended
-                          </button>
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Next Action Zone */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                <p className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
-                  {activeSale.status === 'DRAFT' && '📋 Add items to your inventory'}
-                  {activeSale.status === 'PUBLISHED' && holdCountData && holdCountData.count > 0 && `💳 You have ${holdCountData.count} pending holds`}
-                  {activeSale.status === 'PUBLISHED' && (!holdCountData || holdCountData.count === 0) && '📦 Manage your items'}
-                  {isEndingSoon(activeSale) && `⏰ Your sale ends in ${getHoursRemaining(activeSale)} hours`}
-                </p>
-                <Link href={activeSale.status === 'DRAFT' ? `/organizer/add-items/${activeSale.id}` : '/organizer/holds'} className="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-sm">
-                  Take action →
-                </Link>
-              </div>
-
-              {/* Quick Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Current Sale Revenue</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${(statsData?.revenue.currentSale ?? 0).toFixed(2)}</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{statsData?.activeSale?.title || 'No active sale'}</p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Listed</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData?.items.total ?? 0}</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{statsData?.items.sold ?? 0} sold</p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Active Holds</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData?.activeSale?.holdCount ?? 0}</p>
-                  {(statsData?.activeSale?.holdCount ?? 0) > 0 && (
-                    <Link href="/organizer/holds" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 text-xs font-semibold mt-2 inline-block">
-                      View holds →
-                    </Link>
-                  )}
-                </div>
-              </div>
-
-              {/* Tier Progress Card */}
-              {tierData && (
-                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Tier Progress</h3>
-                    <OrganizerTierBadge tier={tierData.tier} />
+              {/* Earnings/Payout Alert — conditional banner */}
+              {cashFeeBalance > 0 && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-green-900 dark:text-green-100">You have ${cashFeeBalance.toFixed(2)} ready to withdraw</p>
+                    <p className="text-sm text-green-700 dark:text-green-300">Platform fee credits available for payout.</p>
                   </div>
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">{tierData.benefits.label}</p>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                    <div className="bg-amber-600 h-2 rounded-full" style={{ width: `${Math.min((tierData.progress.completedSales / tierData.progress.salesNeeded) * 100, 100)}%` }}></div>
-                  </div>
-                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-4">{tierData.progress.completedSales}/{tierData.progress.salesNeeded} sales until next tier</p>
-                  <Link href="/organizer/pricing" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
-                    See all tiers →
+                  <Link href="/organizer/earnings" className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0">
+                    Withdraw Now
                   </Link>
                 </div>
               )}
 
-              {/* Selling Tools Grid (6 tools, tier-gated) */}
-              <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Selling Tools</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <Link href="/organizer/create-sale" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
-                    <span className="text-2xl">📋</span>
-                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Create Sale</p>
-                  </Link>
-                  <Link href={`/organizer/add-items/${activeSale.id}`} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
-                    <span className="text-2xl">📷</span>
-                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Add Items</p>
-                  </Link>
-                  <Link href="/organizer/qr" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
-                    <span className="text-2xl">📱</span>
-                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">QR Codes</p>
-                  </Link>
-                  <Link href="/organizer/pos" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
-                    <span className="text-2xl">💳</span>
-                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">POS Checkout</p>
-                  </Link>
-                  <button onClick={() => canAccess('PRO') ? router.push('/organizer/print-inventory') : router.push('/pricing')} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
-                    <span className="text-2xl">{canAccess('PRO') ? '🖨️' : '🔒'}</span>
-                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Print Inventory {!canAccess('PRO') && '(PRO)'}</p>
-                  </button>
-                  <Link href="/organizer/insights" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
-                    <span className="text-2xl">📊</span>
-                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Analytics</p>
+              {/* Next Action Zone — 6-condition logic tree */}
+              {statsData?.activeSale && (() => {
+                const { status, id, holdCount } = statsData.activeSale;
+                const { draft, available } = statsData.items;
+                const hoursUntilEnd = getHoursRemaining(activeSale);
+
+                // Condition 1: DRAFT + items.draft > 0 + no holds
+                if (status === 'DRAFT' && draft > 0 && holdCount === 0) {
+                  return (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Ready to go live? Publish your sale.</p>
+                          <p className="text-sm text-amber-700 dark:text-amber-300">You have {draft} items ready.</p>
+                        </div>
+                        <Link href={`/organizer/edit-sale/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                          Publish Sale
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Condition 2: holdCount > 5 && items.available < 5
+                if (holdCount > 5 && available < 5) {
+                  return (
+                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-orange-900 dark:text-orange-100 mb-1">You have {holdCount} holds! Add more items.</p>
+                          <p className="text-sm text-orange-700 dark:text-orange-300">Only {available} items left available.</p>
+                        </div>
+                        <Link href={`/organizer/add-items/${id}`} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                          Add Items
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Condition 3: endDate && hoursUntilEnd < 6 && status === PUBLISHED && holdCount > 0
+                if (status === 'PUBLISHED' && hoursUntilEnd < 6 && hoursUntilEnd >= 0 && holdCount > 0) {
+                  return (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-red-900 dark:text-red-100 mb-1">Sale ends in {hoursUntilEnd}h with {holdCount} active holds.</p>
+                          <p className="text-sm text-red-700 dark:text-red-300">Prepare to close and fulfill orders.</p>
+                        </div>
+                        <Link href="/organizer/holds" className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                          Review Holds
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Condition 4: items.draft > 0
+                if (draft > 0) {
+                  return (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">You have {draft} items in draft.</p>
+                          <p className="text-sm text-amber-700 dark:text-amber-300">Finish adding photos or publish when ready.</p>
+                        </div>
+                        <Link href={`/organizer/add-items/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                          Review Drafts
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Condition 5: viewCount > 10 && holdCount === 0
+                if (statsData.activeSale.viewCount > 10 && holdCount === 0) {
+                  return (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Visitors are checking out but no holds yet.</p>
+                          <p className="text-sm text-blue-700 dark:text-blue-300">Keep adding items to attract more buyers.</p>
+                        </div>
+                        <Link href={`/organizer/add-items/${id}`} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                          Add Items
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Condition 6: Default (healthy)
+                return (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-5">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-semibold text-green-900 dark:text-green-100 mb-1">Your sale is looking good!</p>
+                        <p className="text-sm text-green-700 dark:text-green-300">Keep monitoring items and holds.</p>
+                      </div>
+                      <Link href={`/sales/${id}`} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                        View Live Sale
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Real-Time Metrics Panel */}
+              {statsData?.activeSale && (
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Real-Time Metrics</h3>
+                  {statsData.activeSale.status === 'PUBLISHED' ? (
+                    // Live sale: 4-col metrics
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Listed</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.total ?? '--'}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Visitors Today</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.viewCount ?? '--'}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Active Holds</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.holdCount ?? '--'}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Sold</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.sold ?? '--'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    // Draft sale: 3-col metrics
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Drafted</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.draft ?? '--'}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items with Photos</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{(statsData.items.total - statsData.items.draft) ?? '--'}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Ready to Publish</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{Math.max(0, statsData.items.available) ?? '--'}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tier Badge + Link (compact) */}
+              {tierData && (
+                <div className="flex items-center justify-between p-4 bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <OrganizerTierBadge tier={tierData.tier} />
+                    <div>
+                      <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">{tierData.benefits.label}</p>
+                      <p className="text-xs text-warm-600 dark:text-warm-400">{tierData.progress.completedSales}/{tierData.progress.salesNeeded} sales until next tier</p>
+                    </div>
+                  </div>
+                  <Link href="/pricing" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
+                    Upgrade →
                   </Link>
                 </div>
-              </div>
+              )}
+
+              {/* Selling Tools Grid — State-Aware (4 tools) */}
+              {statsData?.activeSale && (
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Selling Tools</h3>
+                  {statsData.activeSale.status === 'DRAFT' ? (
+                    // Draft tools: Add Items, Preview, QR Codes, Edit Details
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                        <span className="text-2xl">📷</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Add Items</p>
+                      </Link>
+                      <Link href={`/sales/${statsData.activeSale.id}?preview=true`} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                        <span className="text-2xl">👁️</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Preview</p>
+                      </Link>
+                      <Link href="/organizer/qr" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                        <span className="text-2xl">📱</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">QR Codes</p>
+                      </Link>
+                      <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                        <span className="text-2xl">✏️</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Edit Details</p>
+                      </Link>
+                    </div>
+                  ) : (
+                    // Live tools: View Sale, Add Items, POS (tier-gated), Analytics (tier-gated)
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Link href={`/sales/${statsData.activeSale.id}`} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                        <span className="text-2xl">🛍️</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">View Live</p>
+                      </Link>
+                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                        <span className="text-2xl">📷</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Add Items</p>
+                      </Link>
+                      <button
+                        onClick={() => canAccess('SIMPLE') ? router.push('/organizer/pos') : router.push('/pricing')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-lg transition-colors text-center ${
+                          canAccess('SIMPLE')
+                            ? 'bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600'
+                            : 'bg-gray-100 dark:bg-gray-700 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="text-2xl">{canAccess('SIMPLE') ? '💳' : '🔒'}</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+                          POS {!canAccess('SIMPLE') && <span className="text-xs block">(SIMPLE+)</span>}
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => canAccess('SIMPLE') ? router.push('/organizer/insights') : router.push('/pricing')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-lg transition-colors text-center ${
+                          canAccess('SIMPLE')
+                            ? 'bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600'
+                            : 'bg-gray-100 dark:bg-gray-700 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="text-2xl">{canAccess('SIMPLE') ? '📊' : '🔒'}</span>
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+                          Analytics {!canAccess('SIMPLE') && <span className="text-xs block">(SIMPLE+)</span>}
+                        </p>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
