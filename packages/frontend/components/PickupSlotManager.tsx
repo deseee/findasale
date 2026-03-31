@@ -142,6 +142,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={() => deleteMutation.mutate(slot.id)}
                   disabled={slot.bookingCount > 0 || deleteMutation.isPending}
                   className="ml-4 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -162,7 +163,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
       {/* No Slots Message */}
       {slots && slots.length === 0 && !showForm && (
         <p className="text-warm-600 dark:text-gray-400 mb-6">
-          No pickup slots yet. Click "Add Slot" to create one.
+          No pickup slots yet. Click &quot;Add Slot&quot; to create one.
         </p>
       )}
 
