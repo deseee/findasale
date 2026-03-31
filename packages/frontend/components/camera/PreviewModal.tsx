@@ -26,6 +26,7 @@ export interface PreviewModalProps {
     condition?: string;
     description?: string;
     aiErrorLog?: object;
+    aiConfidence?: number;
   };
   onClose: () => void;
   onSave: (edits: {
@@ -195,6 +196,57 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             <div className="flex items-center justify-center gap-2 text-sm text-warm-600 dark:text-warm-400 bg-warm-50 dark:bg-gray-700 rounded-lg p-3">
               <div className="w-4 h-4 border-2 border-warm-400 border-t-warm-600 rounded-full animate-spin" />
               Fetching item details...
+            </div>
+          )}
+
+          {/* AI Confidence Display */}
+          {fullItem && !aiErrored && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
+              {(() => {
+                const confidence = fullItem.aiConfidence || 0.5;
+                const percentage = Math.round(confidence * 100);
+
+                if (confidence >= 0.8) {
+                  return (
+                    <div>
+                      <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                        We identified this as a <strong>{edits.title || 'item'}</strong>. Here's what we found. Does this match? Edit anything below.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-amber-200 dark:bg-amber-900/40 rounded-full h-2">
+                          <div className="bg-amber-600 dark:bg-amber-400 h-2 rounded-full" style={{ width: `${percentage}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">{percentage}% confident</span>
+                      </div>
+                    </div>
+                  );
+                } else if (confidence >= 0.5) {
+                  return (
+                    <div>
+                      <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                        We think this might be a <strong>{edits.title || 'item'}</strong>, but we're not 100% sure. Please review and confirm or correct the details below.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-amber-200 dark:bg-amber-900/40 rounded-full h-2">
+                          <div className="bg-amber-600 dark:bg-amber-400 h-2 rounded-full" style={{ width: `${percentage}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">{percentage}% — please confirm</span>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div>
+                      <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                        We couldn't quite identify this one from the photo. No problem — just tell us what it is, and we'll fill in what we can.
+                      </p>
+                      <p className="text-xs text-amber-800 dark:text-amber-200">
+                        A clearer photo (or a different angle) might help too, but no pressure.
+                      </p>
+                    </div>
+                  );
+                }
+              })()}
             </div>
           )}
 
