@@ -100,6 +100,15 @@ Features that Patrick's human QA walkthrough confirmed are broken. Use the two-s
 |  80 | NA | NA | ✅ | 📋 | ⬜ | ⬜ FIXED S344 | Purchase Confirmation Redesign | SHO | FREE | Pending Chrome QA — MERGED WITH #174. Persistent /purchases/[id].tsx page shipped: hero check, item photo, pickup info, order details, status badges, auction buyer premium breakdown. | MERGED WITH #174 — see #174 |
 |  89 | NA | ✅ | ✅ | 📋 | ⬜ | ⬜ FIXED S344 | Unified Print Kit | ORG | SIMPLE | Pending Chrome QA — frontend was calling /organizer/sales/{saleId}/print-kit (wrong prefix). Fixed to /organizers/{saleId}/print-kit. | /organizer/print-kit/[saleId] — yard sign + item price tags (6/page). Print CSS. |
 
+## Building — Active Backlog
+
+|-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
+|  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
+|-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
+| 222 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | PLANNED S350 | Dashboard Redesign (Org + Shopper) | BOTH | ALL | Dev dispatch S351 | Spec: ux-spotchecks/dashboard-redesign-brief-s350.md. State-aware layouts (3 org states, 3 shopper states), gamification copy, Rank Unlock Pathway card, Sale Momentum feed, onboarding modal, urgency color-coding. |
+| 223 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | PLANNED S350 | Organizer Guidance Layer (Tooltips + Explainers) | ORG | ALL | Dev dispatch S351 | Spec: ux-spotchecks/organizer-guidance-spec-s350.md. Tooltip/explainer copy for 20+ features, empty states, 4 critical workflows, onboarding modal (3 screens), error message rewrites. Feature names unchanged — guidance lives alongside. |
+| 224 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | PLANNED S350 | Photo Capture Protocol (Camera Flow Enhancement) | ORG | SIMPLE | Dev dispatch S351 | Spec: ux-spotchecks/photo-capture-protocol-s350.md. 9-shot sequence (hero→damage→label→scale), 3-tier lighting system, AI feedback copy, background guidance, 12 item-type guides. Replaces single-line "too dark" error. |
+
 
 ## TESTING — Active QA Queue
 
@@ -451,7 +460,7 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 | Workflow Automations (Built-in IFTTT) | ORG | PRO | Rule builder: Trigger → Condition → Action. Start with 5-10 hardcoded automations. | Hardcoded Q3 2026; custom rules 2027 |
 | Auto-Reprice (Market-Responsive Pricing) | ORG | PRO | AI adjusts prices based on real-time demand signals. Extends Auto-Markdown. Requires transaction data. | After 6+ months transaction data |
 
-*Deprecated (won't build): Co-Branded Yard Signs, Multi-Format Marketing Kit.*
+*Deprecated (won't build): Co-Branded Yard Signs*
 
 ---
 
@@ -492,4 +501,4 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 | claude_docs/architecture/ — 13 ADR files covering feature-specific technical specs (#13/#60 Teams Bundle, #17/#19 Bid Bot/Passkey, #30/#46/#69 AI/Offline, #40/#44/#48 Hubs/Trail, #52/#53/#54 Encyclopedia/Aggregator/Appraisal, #65 Tiers, #68 Command Center)
 | claude_docs/feature-decisions/ — 7 files covering architecture choices (camera workflow, cash fee collection, push coordinator, manager subagent)
 | decisions-log.md — governance/process decisions (subagent-first gate, file delivery rule, roadmap schema)
-| FindaSale\claude_docs\feature-notes.md - design decisions based on emotion and animations
+| FindaSale\claude_docs\feature-notes.md - design decisions based on emotion and animations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    

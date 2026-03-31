@@ -2,128 +2,84 @@
 
 ---
 
-## ✅ S349 Complete — Nav/dashboard cleanup pass done. Design brief needed before more dev.
+## ✅ S350 Complete — Design specs locked. Ready for dev dispatch in S351.
 
 ---
 
-## What Happened This Session (S349)
+## What Happened This Session (S350)
 
-**Nav fixes (AvatarDropdown.tsx + Layout.tsx):**
-- Shopper Dashboard now always visible for dual-role users — was hidden by `!isOrganizer` bug. Shows "As a shopper" label for context.
-- Webhooks moved out of Pro Tools → new TEAMS-gated "Developer Tools" section in both desktop and mobile nav
-- Mobile nav completely rewritten: removed 8 dead items (UGC Moderation, Typology Classifier, Fraud Signals, Offline Mode, Command Center, Appraisals, Sale Ripples, Item Library). Now matches desktop with icons, color coding, and collapsible sections for shopper links.
+Three design/spec documents created — no code changes this session. Push block below.
 
-**Dashboard cleanup (organizer/dashboard.tsx + shopper/dashboard.tsx):**
-- Community section now open by default (was collapsed)
-- "How It Works" explainer hidden for returning organizers — only shows with zero completed sales
-- Duplicate Creator Tier card removed (compact widget already shows this above)
-- "Plan a Sale — Coming Soon" card removed
-- Webhooks removed from dashboard button grid
-- Shopper nav buttons compacted, empty sections hidden, welcome banner gated to new users, duplicate stat cards removed
+**dashboard-redesign-brief-s350.md (new):**
+Ground-up dashboard spec for both organizer and shopper. Organizer gets 3 state-aware layouts (new / active sale / between sales). Each state shows a Sale Status Widget, Next Action Zone, and Quick Stats — not a nav menu. Shopper gets 3 state-aware headers (new / returning / pending payment) with gamification fully rethought. Locked decisions: revenue shown to all tiers, tier progress always visible (compact), Hunt Pass upsell one placement only with 7-day dismiss, analytics inline + PRO-gated Flip Report link. Sale Momentum feed (real-time activity) green-lit as S351 innovation add. Nav shortcuts (3–5 most-used tools) added to both dashboards.
 
-⚠️ **Design quality is still mediocre.** Organizer dashboard is a nav menu on a page, not a real dashboard. Gamification shows state but doesn't motivate the next action. S350 must start with a proper design brief before any more dev touches dashboards.
+**organizer-guidance-spec-s350.md (new):**
+Tooltip and explainer copy for every confusing part of the organizer side — 20+ features covered. Feature names stay as-is (SIMPLE, PRO, Flip Report, etc.) — plain-language explainers go in tooltips, CTAs, and onboarding modals alongside the names. 3-screen onboarding modal (shows once, localStorage gate). Error message rewrites. Explorer's Guild rank badges on holds panel — tells organizers what a Grandmaster or Initiate rank means about how likely that shopper is to follow through. First time we've made gamification useful for organizers, not just shoppers.
 
----
+**photo-capture-protocol-s350.md (new):**
+Camera flow gets a real protocol. 9-shot sequence: hero, back, left side, right side, maker's mark/label, damage closeup, detail/pattern, scale reference, inside/underside. 3-tier lighting system — good lighting proceeds silently, soft warning allows upload, hard warning strongly recommends retake. AI feedback copy for confidence levels, maker's mark detection, damage detection. 12 item-type-specific guides (furniture, ceramics, glass, silver, jewelry, books, electronics, art, textiles, tools, toys, clothing). Replaces the single-line "it's too dark" error.
 
-## What Happened Last Session (S348)
+**Roadmap updated:** #222 (Dashboard Redesign), #223 (Organizer Guidance Layer), #224 (Photo Capture Protocol) added to Building — Active Backlog.
 
-**Nav redesign (Layout.tsx + AvatarDropdown.tsx + TierGatedNav.tsx):**
-- Icons on every nav link — amber for organizer tools, indigo for shopper, purple for Pro, red for Admin
-- Dual-role fixes, section renames, brand voice updates, coming soon badges, tooltips, Admin collapsible
+⚠️ One misplaced file: `claude_docs/DASHBOARD_CONTENT_SPEC.md` was created at the root (should be in `ux-spotchecks/`). It's superseded by the new spec — will be cleaned up S351.
 
 ---
 
-## What Happened Last Session (S347)
+## What Happened Last Session (S349)
 
-**Batch 1 — 4 agents, 8 files:**
-- **#212 Leaderboard:** Badges now load on ranking cards (top 3 per user). Stray "0" salesCount removed.
-- **#213 Hunt Pass CTA:** Dashboard card shows 3 clear benefits + prominent "Upgrade Now" button for non-subscribers.
-- **#131 Share Templates:** Facebook/Threads use real web-share popups. Nextdoor/TikTok use copy+open with toast. Pinterest wired.
-- **#60 Tier Pricing:** Pricing page updated with correct prices ($49 PRO / $99 TEAMS) and full feature list.
-- **#123 Explorer's Guild:** Loyalty page has XP tooltip, rank thresholds, Hunt Pass price label. Nav "Loyalty" → "Explorer's Guild".
-- **#153 Organizer Profile:** Facebook, Instagram, Etsy URL fields added to settings form (all already in schema).
-
-**Batch 2 — 3 agents, 3 files + roadmap:**
-- **#75 Tier Lapse:** Audited — already fully implemented (cron, webhooks, middleware, frontend banner). Moved to Chrome QA queue.
-- **#124 Rarity Boost UI:** "Coming Soon" replaced with real UI. New modal for sale picker, 15 XP cost, XP gate enforced.
-- **Roadmap:** 7 rows updated to reflect S347 changes.
+**Nav/dashboard cleanup (4 files):**
+- Shopper Dashboard visible for dual-role users — was hidden by bug
+- Webhooks moved to TEAMS-gated "Developer Tools" section
+- Mobile nav rewritten — 8 dead items removed, now matches desktop with icons + color coding
+- Dashboard dead space cleaned — empty sections hidden, duplicate cards removed, welcome banner gated to new users
 
 ---
 
 ## Your Actions Now
 
-1. **Run combined push block below** (includes all S347 + S348 files — use this if you haven't pushed S347 yet)
-2. **Deploy migration** `20260330_add_shopper_profile_fields` to Railway (from S344, if not yet done)
-3. **Check STRIPE_WEBHOOK_SECRET** in Railway env vars before Hold-to-Pay QA
+1. **Run push block below** (S350 doc files — 6 files, no code)
+2. **Check STRIPE_WEBHOOK_SECRET** in Railway env vars before Hold-to-Pay QA (S351)
+3. **Deploy migration** `20260330_add_shopper_profile_fields` to Railway (if not done)
 
 ---
 
-## Combined S347 + S348 Push Block (18 files)
-
-Use this block if you have NOT yet pushed the S347 block. It covers everything.
+## S350 Push Block (6 files)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git add packages/backend/src/controllers/leaderboardController.ts
-git add packages/frontend/pages/leaderboard.tsx
-git add packages/frontend/components/SharePromoteModal.tsx
-git add packages/frontend/pages/organizer/pricing.tsx
-git add packages/frontend/pages/shopper/loyalty.tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/frontend/components/RarityBoostModal.tsx
-git add packages/frontend/hooks/useXpSink.ts
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/TierGatedNav.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git commit -m "S347+S348: nav redesign (icons, dedup, tier sections), organizer/shopper dashboards, leaderboard badges, Hunt Pass CTA, share templates, tier pricing, Guild UX, rarity boost"
+git add "claude_docs/ux-spotchecks/dashboard-redesign-brief-s350.md"
+git add "claude_docs/ux-spotchecks/organizer-guidance-spec-s350.md"
+git add "claude_docs/ux-spotchecks/photo-capture-protocol-s350.md"
+git commit -m "S350: dashboard redesign brief, organizer guidance layer, photo capture protocol, roadmap #222-224"
 .\push.ps1
 ```
 
 ---
 
-## S348-Only Push Block (use this if you already pushed S347)
+## What's Next (S351)
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/TierGatedNav.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git commit -m "S348: nav redesign — icons, dual-role dedup, tier-aware dashboard, gamification widgets"
-.\push.ps1
-```
-
----
-
-## What's Next (S349)
-
-1. **Hold-to-Pay E2E QA** — user12 (shopper) + user6/Family Collection Sale 16 (organizer)
-2. **Chrome QA** of S344/S346/S347/S348 items (sequential)
-3. **ExplorerProfile Architect spec** — needed to wire rank/XP badge in nav + dashboard
+1. **Dev dispatch — Dashboard Redesign** against `dashboard-redesign-brief-s350.md` (3 parallel agents: organizer dashboard, shopper dashboard, guidance layer)
+2. **Hold-to-Pay E2E QA** — user12 (shopper) + user6/Family Collection Sale 16 (organizer)
+3. **Chrome QA backlog** — S344/S346/S347 items still pending
+4. **ExplorerProfile Architect spec** — needed to wire real rank/XP data into nav + dashboard
 
 ---
 
 ## Status Summary
 
-- **Build:** Railway ✅ Vercel ✅ (S348 changes pending push — TypeScript clean)
+- **Build:** Railway ✅ Vercel ✅
 - **BROKEN section:** Clear
-- **Nav:** Fully redesigned with icons, dedup, brand voice, tooltips, admin collapsible
-- **Dashboards:** Tier-aware organizer sections + 5 gamification widgets on shopper
-- **QA queue:** Hold-to-Pay + all S344/S346/S347 + S348 nav/dashboard
+- **Design specs:** 3 new docs locked and ready for dev dispatch (S351)
+- **QA queue:** Hold-to-Pay + all S344/S346/S347/S349 pending items
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **Run combined push block above**
+- [ ] **Run S350 push block above**
 - [ ] **Deploy migration** to Railway: `20260330_add_shopper_profile_fields`
 - [ ] **Verify webhook secret:** Check Railway env vars for STRIPE_WEBHOOK_SECRET
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class + attorney fees

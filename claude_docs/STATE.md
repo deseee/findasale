@@ -7,6 +7,8 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S350 Design Brief COMPLETE (2026-03-30):** Ground-up dashboard redesign brief + organizer guidance layer + photo capture protocol. (1) **dashboard-redesign-brief-s350.md CREATED:** 5-part spec — state-aware organizer layouts (3 states: new/active/between-sales), state-aware shopper layouts (3 states: new/returning/pending-payment), gamification copy (exact per-rank formulas for Initiate→Grandmaster), 11 shared design rules, innovation recommendations (Sale Momentum feed green-lit). Locked decisions: revenue display on dashboard for all tiers/both, tier progress always-visible-compact, Hunt Pass one-placement/7-day-dismiss, analytics inline+PRO-Flip-Report link. Nav shortcuts added (3–5 most-used features) — not nav-as-primary-content, shortcuts only. Rank Unlock Pathway card replaces decorative leaderboard snippet. Urgency color-coding (red <6h, orange <24h, green healthy). (2) **organizer-guidance-spec-s350.md CREATED:** Feature names unchanged — tooltip/explainer copy lives alongside existing labels. Tooltip library for 20+ features, 4 critical workflow guidance flows, 3-screen onboarding modal, error message rewrites, Explorer's Guild buyer intelligence layer (rank badges on holds = Grandmaster "almost always follows through"). (3) **photo-capture-protocol-s350.md CREATED:** 9-shot sequence (hero, back, sides ×2, maker's mark/label, damage closeup, detail/pattern, scale reference, inside/underside), 3-tier lighting system (Tier 1 proceed silently, Tier 2 soft warning allow, Tier 3 hard warning recommend retake), AI feedback copy (high/medium/low confidence, maker's mark detected, damage detected), 12 item-type guides (furniture through clothing). (4) **Roadmap updated:** #222 (Dashboard Redesign), #223 (Organizer Guidance Layer), #224 (Photo Capture Protocol) added to Building — Active Backlog. ⚠️ claude_docs/DASHBOARD_CONTENT_SPEC.md misplaced (UX agent created at root instead of ux-spotchecks/); cannot delete via shell — Records cleanup needed S351. Files: ux-spotchecks/dashboard-redesign-brief-s350.md (CREATED), ux-spotchecks/organizer-guidance-spec-s350.md (CREATED), ux-spotchecks/photo-capture-protocol-s350.md (CREATED), strategy/roadmap.md (updated).
+
 **S348 Nav/Dashboard Redesign COMPLETE (2026-03-30):** 2 parallel dev agents, 5 files changed. Full nav redesign across Layout.tsx, AvatarDropdown.tsx, TierGatedNav.tsx + tier-aware dashboard sections + shopper gamification widgets. (1) **Dual-role deduplication:** Fixed — "My Profile", "Shopper Dashboard", "My Collections" no longer appear twice for organizer+shopper users. (2) **Icons on all nav items:** lucide-react icons added to every link and section header across both menus (amber for organizer, indigo for shopper, purple for Pro Tools, red for Admin). (3) **Section restructure:** "Your Sales", "Selling Tools", "Pro Tools", "My Collection", "Explore & Connect", "Admin" — consistent across mobile + desktop. (4) **Rank badge in AvatarDropdown:** Static "⚔️ Scout" placeholder with XP mini-bar in dropdown header. TODO comment for real data wire. (5) **Brand voice:** Payouts→Earnings, Typology Classifier→Item Tagger, UGC Moderation→Manage Photos, standalone Explorer's Guild link removed. (6) **Coming soon badges:** Sale Hubs, Virtual Queue, Trades. (7) **Tooltips:** 10 confusing items (Holds, POS, Print Inventory, Brand Kit, Flip Report, Webhooks, Item Tagger, Hunt Pass, Explorer Passport, League). (8) **Admin collapsible:** ShieldAlert icon, red styling, all 7 sub-links, ADMIN-only gate. (9) **Organizer dashboard tier sections:** CollapsibleSection component, 5 tier-gated sections (FREE/SIMPLE/PRO/TEAMS), locked state shows upgrade CTA linking to /pricing, placeholder tier via `// TODO: wire to real tier field`. (10) **Shopper dashboard gamification:** 5 widgets (Streak Tracker, Rank/XP Bar, Recent Achievements, Hunt Pass CTA, Leaderboard Snippet) in responsive grid below quick-links. ⚠️ ExplorerProfile model not in schema — Rank/XP widget uses placeholder with TODO. ⚠️ Leaderboard widget uses static placeholder with TODO for API. Files: Layout.tsx, AvatarDropdown.tsx, TierGatedNav.tsx, organizer/dashboard.tsx, shopper/dashboard.tsx.
 
 **S347 Batch 2 COMPLETE (2026-03-30):** 3 parallel agents, 3 more files changed + roadmap updated. (1) **Roadmap updated:** 7 rows updated to reflect S347 Batch 1 completions (#212, #213, #131, #123, #153, #60, #59). (2) **#75 Tier Lapse — CONFIRMED FULLY IMPLEMENTED (no code change needed):** Audit found complete implementation — tierLapseService.ts, tierLapseJob.ts (8AM + 11PM UTC crons), stripeController.ts handles customer.subscription.deleted + invoice.payment_failed, auth.ts middleware sets req.user.subscriptionLapsed, organizer dashboard lapse banner exists. Feature is code-complete, moving to Chrome QA queue. (3) **#124 Rarity Boost XP Sink UI BUILT:** New RarityBoostModal.tsx (sale picker, 15 XP cost, disabled when insufficient XP); useXpSink.ts updated (saleId param added); loyalty.tsx "Coming Soon" placeholder replaced with functional Rarity Boost card. Backend POST /api/xp/sink/rarity-boost was already complete.
@@ -69,62 +71,48 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-## Next Session (S350)
+## Next Session (S351)
 
-### S350 Priority 1: Push S349 files (Patrick action first)
+### S351 Priority 1: Push S350 files (Patrick action first)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git commit -m "S349: mobile nav rewrite, dashboard dead space removal, dual-role nav fixes, webhooks to TEAMS"
+git add claude_docs/strategy/roadmap.md
+git add "claude_docs/ux-spotchecks/dashboard-redesign-brief-s350.md"
+git add "claude_docs/ux-spotchecks/organizer-guidance-spec-s350.md"
+git add "claude_docs/ux-spotchecks/photo-capture-protocol-s350.md"
+git commit -m "S350: dashboard redesign brief, organizer guidance layer, photo capture protocol, roadmap #222-224"
 .\push.ps1
 ```
 
-### S350 Priority 2: Dashboard Design Brief — Research + Spec (THE MAIN WORK)
+### S351 Priority 2: Dev Dispatch — Dashboard Redesign (THE MAIN WORK)
 
-**Context:** The dashboards have been patched incrementally without a design north star. Patrick assessed organizer dashboard C+, gamification D. The fundamental problem: organizer dashboard is a nav menu on a page, not a job-to-be-done dashboard. Shopper dashboard has dead sections and disconnected gamification.
+Dispatch `findasale-dev` against `dashboard-redesign-brief-s350.md`. Three focused agents:
+- **Agent A:** Organizer dashboard — state-aware layout (all 3 states), Sale Status Widget, Next Action Zone, Quick Stats Grid, tier progress compact, revenue/cash fee alert, selling tools grid
+- **Agent B:** Shopper dashboard — state-aware header, Rank Unlock Pathway card, Hunt Pass badge/upsell, Streak Tracker, pending payments priority zone, collections/upcoming/recently-viewed sections
+- **Agent C:** Organizer guidance layer — tooltip/explainer implementation from `organizer-guidance-spec-s350.md`, onboarding modal (3 screens, localStorage gate), rank-as-buyer-intelligence badges on holds panel
 
-**S350 task:** Dispatch UX + Game Designer + Innovation in parallel with a real design brief:
+Pre-dispatch: confirm schema fields (`guildXp`, `explorerRank`, `UserStreak.currentStreak`, `reputationTier`) — use `findasale-architect` if any are missing. ExplorerProfile schema decision still pending — Dev must either wire real data or note TODO clearly.
 
-**UX brief:**
-- Research existing UX specs in `claude_docs/ux-spotchecks/` for prior design decisions
-- Define the 3-second test for each dashboard: "Within 3 seconds of opening, an organizer knows ___. A shopper knows ___."
-- Produce wireframe-level content spec: what's above the fold, what's below, what's never visible unless sought
-- Organizer dashboard must be STATE-AWARE: new organizer (0 sales) vs. active organizer (sale in progress) vs. between-sales organizer show different content
-- Shopper gamification must have a MOTIVATING HOOK on every rank/XP display: not just "Initiate 0/500 XP" but "Visit a sale this week to earn 5 XP → reach Scout at 500 XP"
-= Tooltips and desctriptive text and cta's where applicable, users skew older and less tech savvy and need guidance through the app
-
-**Game Designer brief:**
-- Audit every gamification display in the shopper dashboard
-- Every progress indicator must answer: "What is my next specific action to advance?"
-- Define the exact copy formula for rank progress: [current rank] → [next rank] at [threshold] XP. You need [gap] more XP. Earn it by: [top 3 specific actions with XP values]
-
-**Innovation brief:**
-- How do the best consumer apps (Duolingo, Strava, Airbnb host dashboard) solve the "returning user dashboard" problem?
-- What would a personalized, state-aware organizer dashboard look like at FindA.Sale?
-- What's the 10x improvement over the current nav-as-dashboard approach?
-
-### S350 Priority 3: Hold-to-Pay QA (deferred from S349)
+### S351 Priority 3: Hold-to-Pay QA (carried from S349/S350)
 Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets ClaimCard → Stripe link → payment → SOLD + XP. Test: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
 
-### S350 Priority 4: Chrome QA backlog (after design brief is locked)
+### S351 Priority 4: Chrome QA backlog
 S344 pending: #174+#80, #184, #41, #7, #89, #62, #37, #149.
 S346 pending: #48, #13, #157, #46, #199, #177, #58, #29.
 S347 pending: #212, #213, #131, #60, #123, #153.
 
-### S350 Notes
-- Do NOT dispatch more nav/dashboard dev until S350 design brief is complete and Patrick approves the spec
-- ExplorerProfile schema (Architect decision) still pending — Rank/XP widget uses placeholder data
+### S351 Notes
+- Specs locked — do NOT redesign. Dispatch dev directly against dashboard-redesign-brief-s350.md
+- ExplorerProfile schema (Architect decision) still pending — Rank/XP widget uses placeholder data until resolved
 - Sage threshold is 2500 XP (beta only, revert post-beta)
 - Shopper profiles migration 20260330_add_shopper_profile_fields must be deployed to Railway if not done
+- claude_docs/DASHBOARD_CONTENT_SPEC.md is a misplaced file at root (should be in ux-spotchecks/). Superseded by dashboard-redesign-brief-s350.md. Flag for Records cleanup.
 
-### Patrick Actions Before S350
-1. Push S349 files (block above)
+### Patrick Actions Before S351
+1. Push S350 files (block above)
 2. Check STRIPE_WEBHOOK_SECRET in Railway env vars (Hold-to-Pay QA)
 
 ### S347 Complete Push Block (13 files)
@@ -185,8 +173,4 @@ git commit -m "S347: leaderboard badges, Hunt Pass CTA, share templates, tier pr
 
 **S324 COMPLETE (2026-03-28):** Sitewide thumbnail first-load fix. SaleCard.tsx `useEffect` resets imgLoaded/imgError on URL change + `key={optimizedUrl}`; [saleId].tsx + review.tsx `key={item.photoUrls[0]}` on thumbnail imgs. Service Worker runtimeCaching updated for Cloudinary `StaleWhileRevalidate`. CSP connect-src added. Stale custom sw.js removed. Smoke tests: mobile nav ✅, homepage search ✅, sale type filters ✅, Publish All SIMPLE ✅. Files: next.config.js, SaleCard.tsx (prior session), [saleId].tsx, review.tsx, sw.js (deleted).
 
-**S319 COMPLETE (2026-03-28):** 6 fixes shipped + reseed + shopper walkthrough. (1) "All items sold or reserved" banner fixed: `ACTIVE` → `AVAILABLE` + removed non-existent `PENDING` from soldCount in sales/[id].tsx. (2) Reseeded Railway with 17 real Cloudinary photos — picsum removed from seed.ts entirely. (3) Message compose footer fixed: `_app.tsx` supports `getLayout` pattern; messages/[id].tsx uses `noFooter={true}` (Chrome-verified ss_1731k6do9). (4) Badge loading P1 fixed: `/users/me/points` endpoint was missing — added `getBadges` controller + route (Chrome-verified ss_80947s2pv). (5) Badge empty state fixed: profile.tsx was rendering 3 dashed blank placeholder boxes when badges=[] — replaced with "No badges yet / Start shopping to earn your first badge!" (QA honesty failure caught by Patrick from screenshot). (6) Shopper walkthrough QA: likes ✅, profile ✅, Loot Legend ✅, Hunt Pass ✅, messaging ✅, dark mode ✅, mobile ✅.
-
-**S318–S284 archived.** See `claude_docs/COMPLETED_PHASES.md` for full history.
-
----
+**S319 COMPLETE (2026-03-28):** 6 fixes shipped + reseed + shopper walkthrough. (1) "All items sold or reserved" banner fixed: `ACTIVE` → `AVAILABLE` + removed non-existent `PENDING` from soldCount in sales/[id].tsx. (2) Reseeded Railway with 17 real Cloudinary photos — picsum removed from seed.ts entirely. (3) Message compose footer fixed: `_app.tsx` supports `getLayout` pattern; messages/[id].tsx uses `noFooter={true}` (Chrome-verified ss_1731k6do9). (4) Badge loading P1 fixed: `/users/me/points` endpoint was missing — added `getBadges` controller + route (Chrome-verified ss_80947s2pv). (5) Badge empty state fixed: profile.tsx was rendering 3 dashed blank placeholder boxes when badges=[] — replaced with "No badges yet / Start shopping to earn your first badge!" (QA honesty failure caught by Patrick from screenshot). (6) Shopper walkthrough QA: likes ✅, profile ✅, Loot Legend ✅, Hunt Pass ✅
