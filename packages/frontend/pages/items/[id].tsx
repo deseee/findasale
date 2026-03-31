@@ -16,7 +16,7 @@ import { useToast } from '../../components/ToastContext';
 import ItemShareButton from '../../components/ItemShareButton';
 import SocialProofMessage from '../../components/SocialProofMessage'; // Feature #54
 import RarityBadge from '../../components/RarityBadge'; // Feature #57
-import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
+import { getThumbnailUrl, getOptimizedUrl, getPortrait3x4Url } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useHeartAnimation } from '../../hooks/useHeartAnimation';
 import Skeleton from '../../components/Skeleton';
@@ -417,8 +417,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer group"
               >
                 <img
-                  key={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
-                  src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
+                  key={getPortrait3x4Url(item.photoUrls[selectedPhotoIndex])}
+                  src={getPortrait3x4Url(item.photoUrls[selectedPhotoIndex])}
                   alt={item.title}
                   className="w-full h-96 object-cover group-hover:opacity-90 transition"
                 />

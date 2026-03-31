@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface RecentlyViewedItem {
   id: string;
@@ -38,8 +39,8 @@ const RecentlyViewed: React.FC = () => {
               <div className="relative w-24 h-24 bg-warm-100 rounded-lg overflow-hidden mb-2">
                 {item.photoUrl ? (
                   <img
-                    key={item.photoUrl}
-                    src={item.photoUrl}
+                    key={getThumbnailUrl(item.photoUrl)}
+                    src={getThumbnailUrl(item.photoUrl)}
                     alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   />

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface Item {
   id: string;
@@ -68,7 +69,8 @@ const ItemListWithBulkSelection: React.FC<ItemListWithBulkSelectionProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map((item) => {
           const isSelected = selectedIds.has(item.id);
-          const photoUrl = item.photoUrls?.[0];
+          const primaryPhotoUrl = item.photoUrls?.[0];
+    const photoUrl = primaryPhotoUrl ? getThumbnailUrl(primaryPhotoUrl) : undefined;
           const displayPrice = item.price || item.auctionStartPrice;
           const statusColors: Record<string, string> = {
             AVAILABLE: 'bg-green-100 text-green-800',

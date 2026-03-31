@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
+import { getOptimizedUrl, getLqipUrl, getThumbnailUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import RarityBadge from './RarityBadge';
@@ -126,8 +126,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
   if (primaryPhotoUrl) {
     if (imageOptimization === 'advanced') {
       lqipUrl_calc = getLqipUrl(primaryPhotoUrl);
-      const imageQuality = isLowBandwidth ? 40 : 75;
-      optimizedUrl = getOptimizedUrl(primaryPhotoUrl, imageQuality);
+      // Grid cards use square thumbnail transform (1:1 aspect ratio)
+      optimizedUrl = getThumbnailUrl(primaryPhotoUrl);
     } else if (imageOptimization === 'basic') {
       optimizedUrl = primaryPhotoUrl;
     }

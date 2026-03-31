@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import FavoriteButton from './FavoriteButton';
+import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface InspirationItem {
   id: string;
@@ -59,7 +60,8 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
       {items.map((item) => {
-        const photoUrl = item.photoUrls?.[0];
+        const primaryPhotoUrl = item.photoUrls?.[0];
+        const photoUrl = primaryPhotoUrl ? getThumbnailUrl(primaryPhotoUrl) : null;
         const displayPrice = item.price ? `$${item.price.toFixed(2)}` : 'No price';
 
         return (

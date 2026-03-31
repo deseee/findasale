@@ -67,3 +67,23 @@ export const getLqipUrl = (url: string): string => {
   if (!isCloudinaryUrl(url)) return url;
   return insertTransform(url, 'w_30,q_20,f_webp,e_blur:400');
 };
+
+/**
+ * Get a 4:3 landscape crop for photo reviews and specific display contexts.
+ * Uses center crop, 1200px wide, WebP.
+ */
+export const getLandscape4x3Url = (url: string): string => {
+  if (!url) return '';
+  if (!isCloudinaryUrl(url)) return url;
+  return insertTransform(url, 'c_fill,ar_4:3,w_1200,q_auto,f_webp');
+};
+
+/**
+ * Get a 3:4 portrait crop for item detail pages (suits tall estate items).
+ * Uses center crop, 800px wide, WebP.
+ */
+export const getPortrait3x4Url = (url: string): string => {
+  if (!url) return '';
+  if (!isCloudinaryUrl(url)) return url;
+  return insertTransform(url, 'c_fill,ar_3:4,w_800,q_auto,f_webp');
+};

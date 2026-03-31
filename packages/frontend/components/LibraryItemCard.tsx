@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2, Copy, Clock } from 'lucide-react';
+import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface LibraryItemCardProps {
   id: string;
@@ -40,7 +41,8 @@ const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
 }) => {
   const [showActions, setShowActions] = useState(false);
   const colors = statusColors[status] || statusColors.AVAILABLE;
-  const photoUrl = photoUrls?.[0] || '/placeholder-item.png';
+  const primaryPhotoUrl = photoUrls?.[0];
+  const photoUrl = primaryPhotoUrl ? getThumbnailUrl(primaryPhotoUrl) : '/placeholder-item.png';
 
   return (
     <div

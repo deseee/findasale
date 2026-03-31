@@ -200,39 +200,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     return () => clearInterval(qualityInterval);
   }, [cameraReady]);
 
-  // Crop canvas to 4:3 aspect ratio (center crop)
-  const cropCanvasTo4x3 = (source: HTMLCanvasElement): HTMLCanvasElement => {
-    const sw = source.width;
-    const sh = source.height;
-    const targetRatio = 4 / 3;
-    const sourceRatio = sw / sh;
-
-    let cropW = sw;
-    let cropH = sh;
-    let cropX = 0;
-    let cropY = 0;
-
-    if (sourceRatio > targetRatio) {
-      // wider than 4:3 — crop sides
-      cropW = Math.floor(sh * targetRatio);
-      cropX = Math.floor((sw - cropW) / 2);
-    } else if (sourceRatio < targetRatio) {
-      // taller than 4:3 — crop top/bottom
-      cropH = Math.floor(sw / targetRatio);
-      cropY = Math.floor((sh - cropH) / 2);
-    } else {
-      return source; // already 4:3, no crop needed
-    }
-
-    const dest = document.createElement('canvas');
-    dest.width = cropW;
-    dest.height = cropH;
-    const ctx = dest.getContext('2d');
-    if (!ctx) return source;
-    ctx.drawImage(source, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-    return dest;
-  };
-
   // Capture a photo from the video stream
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -259,11 +226,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     setFlashEffect(true);
     setTimeout(() => setFlashEffect(false), 150);
 
-    // Crop to 4:3 aspect ratio
-    const croppedCanvas = cropCanvasTo4x3(canvas);
-
     // Convert to blob (JPEG, 85% quality)
-    croppedCanvas.toBlob(
+    canvas.toBlob(
       (blob) => {
         if (!blob) return;
 
