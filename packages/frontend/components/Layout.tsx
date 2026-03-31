@@ -562,41 +562,55 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
             {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
-                {/* Dashboards — show both if dual-role user */}
+                {/* Organizer Dashboard — always first for organizers */}
                 <Link href="/organizer/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Organizer Dashboard
                 </Link>
-                {user?.roles?.includes('USER') && (
-                  <Link href="/shopper/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                    Shopper Dashboard
-                  </Link>
-                )}
                 <Link href="/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   My Profile
                 </Link>
-                {user?.roles?.includes('USER') && (
-                  <Link href="/shopper/wishlist" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                    My Collections
-                  </Link>
-                )}
                 <Link href="/plan" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Plan a Sale
                 </Link>
                 <Link href="/organizer/subscription" className="block px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
                 </Link>
-                <Link href="/organizer/payouts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  Payouts
-                </Link>
-                {canAccess('PRO') && (
-                  <Link href="/organizer/insights" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                    Insights
-                  </Link>
-                )}
-                {canAccess('TEAMS') && (
-                  <Link href="/organizer/workspace" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                    Workspace
-                  </Link>
+
+                {/* Your Sales Section — Collapsible */}
+                <button
+                  onClick={() => setMobileOrgToolsOpen(!mobileOrgToolsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Store size={14} />
+                    <span>Your Sales</span>
+                  </div>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileOrgToolsOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileOrgToolsOpen && (
+                  <>
+                    <Link href="/organizer/active-sale" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Zap size={14} className="inline mr-2 text-amber-500" /> Active Sale
+                    </Link>
+                    <Link href="/organizer/sales" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <List size={14} className="inline mr-2 text-amber-500" /> All Sales
+                    </Link>
+                    <Link href="/plan" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <PlusCircle size={14} className="inline mr-2 text-amber-500" /> Create Sale
+                    </Link>
+                    <Link href="/organizer/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Calendar size={14} className="inline mr-2 text-amber-500" /> Calendar
+                    </Link>
+                    <Link href="/organizer/hubs" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Network size={14} className="inline mr-2 text-amber-400" /> Sale Hubs <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                    <Link href="/organizer/queue" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Users size={14} className="inline mr-2 text-amber-400" /> Virtual Queue <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                  </>
                 )}
 
                 {/* Selling Tools Section — Collapsible */}
@@ -669,12 +683,23 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* Shopper Tools Section — Collapsible */}
+              </>
+            ) : isClient && user && user?.roles?.includes('USER') ? (
+              <>
+                {/* Shopper-only nav (when not organizer) */}
+                <Link href="/shopper/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <LayoutDashboard size={14} className="inline mr-2 text-indigo-600" /> Shopper Dashboard
+                </Link>
+
+                {/* My Collection Section — Collapsible */}
                 <button
                   onClick={() => setMobileExplorerOpen(!mobileExplorerOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
-                  <span className="flex items-center gap-2"><Compass size={14} className="text-indigo-500" /> My Collection</span>
+                  <div className="flex items-center gap-2">
+                    <Heart size={14} />
+                    <span>My Collection</span>
+                  </div>
                   <ChevronRight
                     size={16}
                     className={`transition-transform duration-200 ${mobileExplorerOpen ? 'rotate-90' : ''}`}
@@ -696,6 +721,43 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/shopper/purchases" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Package size={14} className="inline mr-2 text-indigo-500" /> Purchases
+                    </Link>
+                  </>
+                )}
+
+                {/* Explore & Connect Section — Collapsible */}
+                <button
+                  onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Compass size={14} />
+                    <span>Explore & Connect</span>
+                  </div>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileProToolsOpen && (
+                  <>
+                    <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
+                    </Link>
+                    <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Ticket size={14} className="inline mr-2 text-indigo-500" /> Hunt Pass <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                    <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Trophy size={14} className="inline mr-2 text-indigo-500" /> League
+                    </Link>
+                    <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties
+                    </Link>
+                    <Link href="/shopper/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation
+                    </Link>
+                    <Link href="/shopper/trades" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <ArrowLeftRight size={14} className="inline mr-2 text-indigo-400" /> Trades <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
                   </>
                 )}

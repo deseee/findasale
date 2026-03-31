@@ -535,15 +535,15 @@ const OrganizerDashboard = () => {
                     <div className="grid grid-cols-3 gap-4 mb-6 py-4 border-y border-warm-200 dark:border-gray-700">
                       <div>
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Items Listed</p>
-                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">—</p>
+                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData?.items.total ?? 0}</p>
                       </div>
                       <div>
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Visitors Today</p>
-                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">—</p>
+                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData?.activeSale?.viewCount ?? 0}</p>
                       </div>
                       <div>
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Active Holds</p>
-                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{holdCountData?.count ?? 0}</p>
+                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{statsData?.activeSale?.holdCount ?? holdCountData?.count ?? 0}</p>
                       </div>
                     </div>
 

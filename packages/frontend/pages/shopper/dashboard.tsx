@@ -378,24 +378,39 @@ const ShopperDashboard = () => {
               <Skeleton className="h-64" />
             )}
 
-            {/* Hunt Pass CTA */}
-            {user && !user.huntPassActive ? (
+            {/* Hunt Pass CTA — Rank-Aware */}
+            {user && xpProfile && !user.huntPassActive ? (
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-600 rounded-lg p-6">
                 <div className="flex items-start gap-4">
                   <span className="text-3xl">🎯</span>
                   <div className="flex-1">
                     <h3 className="font-bold text-lg text-purple-900 dark:text-purple-300 mb-2">Hunt Pass — Level Up Faster</h3>
+                    {(xpProfile.explorerRank === 'INITIATE' || xpProfile.explorerRank === 'SCOUT') && (
+                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-4">
+                        <strong>Earn 1.5x XP on every purchase</strong> and unlock exclusive perks as you explore.
+                      </p>
+                    )}
+                    {xpProfile.explorerRank === 'RANGER' && (
+                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-4">
+                        <strong>Get 6-hour early access to Legendary Items</strong> — you're almost at Sage!
+                      </p>
+                    )}
+                    {(xpProfile.explorerRank === 'SAGE' || xpProfile.explorerRank === 'GRANDMASTER') && (
+                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-4">
+                        <strong>Join the Collector's League</strong> — unlock exclusive Sage perks and premium features.
+                      </p>
+                    )}
                     <ul className="text-sm text-purple-800 dark:text-purple-200 mb-4 space-y-1">
                       <li>⭐ <strong>1.5x XP multiplier</strong> on everything you do</li>
                       <li>⚡ <strong>6-hour early access</strong> to Legendary items</li>
-                      <li>🏆 <strong>Exclusive Grandmaster badge</strong> on your profile</li>
+                      <li>🏆 <strong>Exclusive badge</strong> on your profile</li>
                     </ul>
                     <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-4">$4.99/month. Cancel anytime.</p>
                     <Link
                       href="/shopper/hunt-pass"
                       className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
                     >
-                      Unlock 1.5x XP
+                      Unlock Hunt Pass →
                     </Link>
                   </div>
                 </div>
@@ -443,7 +458,7 @@ const ShopperDashboard = () => {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Hold-to-Pay: Pending Payments Section */}
+              {/* Hold-to-Pay: Pending Payments Section — Priority #1 */}
               {pendingInvoices && pendingInvoices.length > 0 && (
                 <div>
                   <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
@@ -474,6 +489,12 @@ const ShopperDashboard = () => {
                   </div>
                 </div>
               )}
+
+              {/* Your Collections — Priority #2 (after pending payments) */}
+              <YourWishlists />
+
+              {/* Recently Viewed */}
+              <RecentlyViewed />
 
               {/* Hunt Pass Info Card */}
               {!isHuntPassDismissed && userData && !userData.huntPassActive && (
@@ -543,11 +564,7 @@ const ShopperDashboard = () => {
               {/* SalesNearYou hides itself on error state */}
               <SalesNearYou />
 
-              <RecentlyViewed />
-
               <FlashDealsBanner />
-
-              <YourWishlists />
             </div>
           )}
 
