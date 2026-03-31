@@ -223,7 +223,4 @@ export default function TrailDetailPage() {
             )}
           </div>
         )}
-      </div>
-    </>
-  );
-}
+  
