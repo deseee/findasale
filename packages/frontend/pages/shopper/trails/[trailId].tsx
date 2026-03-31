@@ -24,7 +24,7 @@ export default function TrailDetailPage() {
 
     const loadTrail = async () => {
       try {
-        const { data } = await api.get(`/api/trails`);
+        const { data } = await api.get(`/trails`);
         const found = data.trails.find((t: any) => t.id === trailId);
         if (found) {
           setTrail(found);
