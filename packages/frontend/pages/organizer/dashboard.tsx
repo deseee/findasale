@@ -754,11 +754,11 @@ const OrganizerDashboard = () => {
                       </div>
                       <div className="text-center">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items with Photos</p>
-                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{(statsData.items.total - statsData.items.draft) ?? '--'}</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.total != null && statsData.items.draft != null ? statsData.items.total - statsData.items.draft : '--'}</p>
                       </div>
                       <div className="text-center">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Ready to Publish</p>
-                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{Math.max(0, statsData.items.available) ?? '--'}</p>
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.available != null ? Math.max(0, statsData.items.available) : '--'}</p>
                       </div>
                     </div>
                   )}
