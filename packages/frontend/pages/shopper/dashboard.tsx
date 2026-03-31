@@ -638,4 +638,19 @@ const ShopperDashboard = () => {
                   </p>
                   <Link
                     href="/"
-                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-c
+                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                  >
+                    Browse Sales
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default ShopperDashboard;
