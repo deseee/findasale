@@ -66,13 +66,14 @@ const OrganizerSettingsPage = () => {
     }
   });
 
-  // Fetch full organizer profile data (phone, bio, website, facebook, instagram, etsy)
+  // Fetch full organizer profile data (phone, bio, website, facebook, instagram, etsy, businessName)
   useEffect(() => {
     const fetchOrganizerData = async () => {
       if (!user?.id) return;
       try {
         const response = await api.get('/organizers/me');
         if (response.data) {
+          setBusinessName(response.data.businessName || '');
           setPhone(response.data.phone || '');
           setBio(response.data.bio || '');
           setWebsite(response.data.website || '');
@@ -90,11 +91,6 @@ const OrganizerSettingsPage = () => {
     }
   }, [user?.id]);
 
-  useEffect(() => {
-    if (user?.businessName) {
-      setBusinessName(user.businessName);
-    }
-  }, [user?.businessName]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
