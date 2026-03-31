@@ -18,13 +18,50 @@ import FraudBadge from '../../components/FraudBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
+// Helper: Map explorer rank to badge emoji and description
+function getRankBadge(rank?: string): { emoji: string; label: string; description: string } {
+  switch (rank) {
+    case 'GRANDMASTER':
+      return {
+        emoji: '👑',
+        label: 'Grandmaster',
+        description: 'Grandmaster buyers almost always follow through.',
+      };
+    case 'SAGE':
+      return {
+        emoji: '🧙',
+        label: 'Sage',
+        description: 'One of your best potential customers. High purchase completion rate.',
+      };
+    case 'RANGER':
+      return {
+        emoji: '🧗',
+        label: 'Ranger',
+        description: 'Active buyer. Visits sales frequently and completes purchases.',
+      };
+    case 'SCOUT':
+      return {
+        emoji: '🐦',
+        label: 'Scout',
+        description: 'Has visited multiple sales. Starting to become a regular.',
+      };
+    case 'INITIATE':
+    default:
+      return {
+        emoji: '⚔️',
+        label: 'Initiate',
+        description: 'New to FindA.Sale. First hold or purchase.',
+      };
+  }
+}
+
 interface HoldItem {
   id: string;
   status: string;
   expiresAt: string;
   createdAt: string;
   note: string | null;
-  user: { id: string; name: string; email: string; fraudConfidenceScore?: number };
+  user: { id: string; name: string; email: string; fraudConfidenceScore?: number; explorerRank?: string };
   item: {
     id: string;
     title: string;
@@ -277,6 +314,20 @@ const OrganizerHoldsPage = () => {
                         <span className="text-warm-400 dark:text-warm-500 text-sm">{group.buyerEmail}</span>
                         {typeof group.holds[0].user.fraudConfidenceScore === 'number' && (
                           <FraudBadge confidenceScore={group.holds[0].user.fraudConfidenceScore} size="sm" />
+                        )}
+                        {/* Rank badge */}
+                        {group.holds[0].user.explorerRank && (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+                              {getRankBadge(group.holds[0].user.explorerRank).emoji}{' '}
+                              {getRankBadge(group.holds[0].user.explorerRank).label}
+                            </span>
+                            {group.holds[0].user.explorerRank === 'GRANDMASTER' && (
+                              <span className="text-xs text-warm-500 dark:text-warm-400">
+                                {getRankBadge(group.holds[0].user.explorerRank).description}
+                              </span>
+                            )}
+                          </div>
                         )}
                         <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                           {group.holds.length} {group.holds.length === 1 ? 'hold' : 'holds'}

@@ -398,7 +398,7 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
       prisma.itemReservation.findMany({
         where,
         include: {
-          user: { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, name: true, email: true, explorerRank: true } },
           item: {
             select: {
               id: true,

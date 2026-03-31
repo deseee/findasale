@@ -34,6 +34,9 @@ import BrandFollowManager from '../../components/BrandFollowManager';
 import ClaimCard from '../../components/ClaimCard'; // Hold-to-Pay: Shopper pending payments
 import { useMyAchievements } from '../../hooks/useAchievements';
 import { AchievementBadgesSection } from '../../components/AchievementBadgesSection';
+import useXpProfile from '../../hooks/useXpProfile';
+import RankBadge, { ExplorerRank } from '../../components/RankBadge';
+import RankProgressBar from '../../components/RankProgressBar';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -104,6 +107,68 @@ const ShopperDashboard = () => {
   // Fetch achievements for badges display
   const { data: achievementsData, isLoading: achievementsLoading } = useMyAchievements();
 
+  // Fetch XP profile for rank progress
+  const { data: xpProfile, isLoading: xpLoading } = useXpProfile(!!user?.id);
+
+  // Rank threshold configuration
+  const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
+    INITIATE: 500,
+    SCOUT: 1500,
+    RANGER: 2500,
+    SAGE: 5000,
+    GRANDMASTER: Infinity,
+  };
+
+  const getRankCopy = (rank: ExplorerRank, xp: number, nextRank: ExplorerRank | null) => {
+    const threshold = RANK_THRESHOLDS[rank];
+    const xpUntilNext = Math.max(0, threshold - xp);
+
+    const configs: Record<ExplorerRank, any> = {
+      INITIATE: {
+        progressLabel: `${xp} / 500 XP`,
+        untilNextRank: `${xpUntilNext} more XP until Scout`,
+        earnTip: 'Scan an item (+10 XP each)',
+        tipDetail: 'You can scan items from any sale on your phone.',
+        ctaText: 'Browse Sales',
+        ctaHref: '/',
+      },
+      SCOUT: {
+        progressLabel: `${xp} / 1500 XP`,
+        untilNextRank: `${xpUntilNext} more XP until Ranger`,
+        earnTip: 'Make a purchase (+25 XP each)',
+        tipDetail: "You're unlocking more perks — keep going.",
+        ctaText: 'View Your Sales',
+        ctaHref: '/sales',
+      },
+      RANGER: {
+        progressLabel: `${xp} / 2500 XP`,
+        untilNextRank: `${xpUntilNext} more XP until Sage`,
+        earnTip: 'Visit sales daily (+5 XP each, once per sale)',
+        tipDetail: "Daily visits build your streak. You're close to Sage perks.",
+        ctaText: 'See Sales Near You',
+        ctaHref: '/map',
+      },
+      SAGE: {
+        progressLabel: `${xp} / 5000 XP`,
+        untilNextRank: `${xpUntilNext} more XP until Grandmaster — the ultimate explorer rank`,
+        earnTip: 'Keep your streak going',
+        tipDetail: 'You unlock 6h Legendary-first access at Grandmaster.',
+        ctaText: 'View Exclusive Hunt Pass Benefits',
+        ctaHref: '/shopper/hunt-pass',
+      },
+      GRANDMASTER: {
+        progressLabel: `${xp} / ∞`,
+        untilNextRank: "You've reached the peak of the Explorer's Guild.",
+        earnTip: 'You earn XP infinitely',
+        tipDetail: 'You get first access to all Legendary items. Your rank badge appears on your public profile.',
+        ctaText: 'View Your Public Profile',
+        ctaHref: '/profile',
+      },
+    };
+
+    return configs[rank];
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
@@ -119,6 +184,10 @@ const ShopperDashboard = () => {
     );
   }
 
+  // Determine shopper state: new (0 purchases) vs. returning (has purchases or saves)
+  const isNewShopper = !purchases || purchases.length === 0;
+  const hasSavedItems = false; // TODO: wire to collection API when available
+
   return (
     <>
       <Head>
@@ -126,7 +195,68 @@ const ShopperDashboard = () => {
       </Head>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">My Dashboard</h1>
+          {/* Above the fold: State-aware hero section */}
+          {isNewShopper ? (
+            // State A: New shopper
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-8 mb-8 text-center">
+              <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome to treasure hunting!</h1>
+              <p className="text-lg text-warm-600 dark:text-warm-400 mb-6">Explore nearby sales, add your favorite items, and discover unique treasures.</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link
+                  href="/"
+                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                >
+                  Browse Sales
+                </Link>
+                <Link
+                  href="/map"
+                  className="inline-block border-2 border-amber-600 text-amber-600 hover:bg-amber-50 dark:hover:bg-gray-700 font-bold py-3 px-6 rounded-lg transition-colors"
+                >
+                  See What's Near You
+                </Link>
+              </div>
+            </div>
+          ) : (
+            // State B: Returning shopper
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+                Welcome back, {user?.firstName || user?.name || 'Explorer'}!
+              </h1>
+
+              {/* Personalized hook: Priority 1 - Pending payments */}
+              {pendingInvoices && pendingInvoices.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-6 rounded">
+                  <p className="text-red-900 dark:text-red-300 font-semibold">
+                    💳 You have {pendingInvoices.length} pending payment{pendingInvoices.length !== 1 ? 's' : ''} due by{' '}
+                    {pendingInvoices[0]?.expiresAt
+                      ? new Date(pendingInvoices[0].expiresAt).toLocaleDateString()
+                      : 'soon'}
+                  </p>
+                  <Link
+                    href="#overview"
+                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-semibold underline text-sm mt-2 inline-block"
+                  >
+                    Complete Payments →
+                  </Link>
+                </div>
+              )}
+
+              {/* Personalized hook: Priority 2 - Collections summary (if no pending payments) */}
+              {(!pendingInvoices || pendingInvoices.length === 0) && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 mb-6 rounded">
+                  <p className="text-blue-900 dark:text-blue-300 font-semibold">
+                    You have items saved. Ready to continue your hunt?
+                  </p>
+                  <Link
+                    href="/shopper/wishlist"
+                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold underline text-sm mt-2 inline-block"
+                  >
+                    View Your Collections →
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quick Links */}
           <div className="flex flex-wrap gap-2 mb-8">
@@ -181,83 +311,106 @@ const ShopperDashboard = () => {
             </Link>
           </div>
 
-          {/* Gamification Widgets */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            {/* Widget 1: Streak Tracker */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-300 mb-1">🔥 Streak Tracker</p>
-                  <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">0</p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">days</p>
+          {/* Gamification Section */}
+          <div className="space-y-6 mb-8">
+            {/* Streak Widget with permanent explainer */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
+              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4 italic">
+                Visit one sale per week to keep your streak alive and earn bonus XP.
+              </p>
+              <StreakWidget />
+            </div>
+
+            {/* Rank Progress Card */}
+            {xpProfile && !xpLoading ? (
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <RankBadge rank={xpProfile.explorerRank} size="md" />
+                  <div>
+                    <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">
+                      {xpProfile.explorerRank.charAt(0) + xpProfile.explorerRank.slice(1).toLowerCase()}
+                    </h3>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Explorer Rank</p>
+                  </div>
                 </div>
-              </div>
-              <p className="text-xs text-amber-700 dark:text-amber-300">Start your streak — visit a sale this week!</p>
-            </div>
 
-            {/* Widget 2: Rank & XP Bar */}
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg p-4">
-              <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-300 mb-3">⭐ Rank & XP</p>
-              <div className="mb-2">
-                <p className="text-lg font-bold text-indigo-700 dark:text-indigo-400">Initiate</p>
-                <p className="text-xs text-indigo-600 dark:text-indigo-400">0 / 500 XP</p>
-              </div>
-              <div className="w-full bg-indigo-200 dark:bg-indigo-800 rounded-full h-2 overflow-hidden">
-                <div className="bg-indigo-600 dark:bg-indigo-500 h-full" style={{ width: '0%' }}></div>
-              </div>
-              {/* TODO: wire to real ExplorerProfile XP/rank data */}
-            </div>
+                {(() => {
+                  const rankCopy = getRankCopy(
+                    xpProfile.explorerRank,
+                    xpProfile.rankProgress.currentXp,
+                    xpProfile.rankProgress.nextRank
+                  );
+                  return (
+                    <>
+                      <div className="mb-4">
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">{rankCopy.progressLabel}</p>
+                        <RankProgressBar
+                          currentXp={xpProfile.rankProgress.currentXp}
+                          nextRankXp={RANK_THRESHOLDS[xpProfile.explorerRank]}
+                          currentRank={xpProfile.explorerRank}
+                          nextRank={xpProfile.rankProgress.nextRank}
+                        />
+                      </div>
 
-            {/* Widget 4: Hunt Pass CTA (spans full width on mobile, 1/3 on desktop if not active) */}
-            {userData && !userData.huntPassActive && (
-              <div className="sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-600 rounded-lg p-4">
-                <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-2">🎟️ Hunt Pass</p>
-                <p className="text-xs text-purple-800 dark:text-purple-200 mb-3">$4.99/mo</p>
-                <ul className="text-xs text-purple-800 dark:text-purple-200 space-y-1 mb-3">
-                  <li>⭐ 2x XP multiplier</li>
-                  <li>⚡ 6h early access</li>
-                </ul>
-                <Link
-                  href="/hunt-pass"
-                  className="inline-block text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded font-medium transition-colors"
-                >
-                  Get Hunt Pass →
-                </Link>
+                      <div className="mb-4">
+                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                          {rankCopy.untilNextRank}
+                        </p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">
+                          Best way to earn right now: {rankCopy.earnTip}
+                        </p>
+                        <p className="text-xs text-warm-500 dark:text-warm-500 mt-1">
+                          {rankCopy.tipDetail}
+                        </p>
+                      </div>
+
+                      <Link
+                        href={rankCopy.ctaHref}
+                        className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                      >
+                        {rankCopy.ctaText} →
+                      </Link>
+                    </>
+                  );
+                })()}
               </div>
+            ) : (
+              <Skeleton className="h-64" />
             )}
 
-            {userData && userData.huntPassActive && (
-              <div className="sm:col-span-2 lg:col-span-1 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-600 rounded-lg p-4">
-                <p className="text-sm font-semibold text-green-900 dark:text-green-300 mb-1">✅ Hunt Pass Active</p>
-                <p className="text-xs text-green-800 dark:text-green-300">You're earning 2x XP and get early access!</p>
-              </div>
-            )}
-
-            {/* Widget 5: Leaderboard Snippet */}
-            <div className="sm:col-span-2 lg:col-span-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-              <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-3">🏆 This Week's Top Explorers</p>
-              <div className="space-y-2 text-xs text-blue-800 dark:text-blue-300 mb-3">
-                <div className="flex justify-between">
-                  <span>1. Explorer #1</span>
-                  <span className="font-semibold">5,200 XP</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>2. Explorer #2</span>
-                  <span className="font-semibold">4,850 XP</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>3. Explorer #3</span>
-                  <span className="font-semibold">4,100 XP</span>
+            {/* Hunt Pass CTA */}
+            {user && !user.huntPassActive ? (
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-600 rounded-lg p-6">
+                <div className="flex items-start gap-4">
+                  <span className="text-3xl">🎯</span>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg text-purple-900 dark:text-purple-300 mb-2">Hunt Pass — Level Up Faster</h3>
+                    <ul className="text-sm text-purple-800 dark:text-purple-200 mb-4 space-y-1">
+                      <li>⭐ <strong>1.5x XP multiplier</strong> on everything you do</li>
+                      <li>⚡ <strong>6-hour early access</strong> to Legendary items</li>
+                      <li>🏆 <strong>Exclusive Grandmaster badge</strong> on your profile</li>
+                    </ul>
+                    <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-4">$4.99/month. Cancel anytime.</p>
+                    <Link
+                      href="/shopper/hunt-pass"
+                      className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Unlock 1.5x XP
+                    </Link>
+                  </div>
                 </div>
               </div>
-              <Link
-                href="/league"
-                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-              >
-                View Full League →
-              </Link>
-              {/* TODO: wire to real leaderboard API endpoint */}
-            </div>
+            ) : user && user.huntPassActive ? (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-600 rounded-lg p-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">✅</span>
+                  <div>
+                    <h3 className="font-semibold text-green-900 dark:text-green-300">Hunt Pass Active</h3>
+                    <p className="text-sm text-green-800 dark:text-green-300">You're earning 1.5x XP and get 6-hour early access to Legendary items.</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
 
@@ -377,9 +530,6 @@ const ShopperDashboard = () => {
                 </div>
               )}
 
-              {/* Streak widget — always visible when logged in */}
-              <StreakWidget />
-
               {/* Achievements Badges */}
               {achievementsData?.achievements && achievementsData.achievements.length > 0 && !achievementsLoading && (
                 <AchievementBadgesSection
@@ -389,16 +539,6 @@ const ShopperDashboard = () => {
               )}
 
               <ActivitySummary />
-
-              {/* Welcome nudge only shown for brand-new users with zero activity (no purchases, no saves, no streak) */}
-              {purchases && purchases.length === 0 && (
-                <EmptyState
-                  icon="🎉"
-                  heading="Welcome to FindA.Sale!"
-                  subtext="Explore nearby sales, add your favorite items, and discover unique treasures. Ready to get started?"
-                  cta={{ label: 'Browse Upcoming Sales', href: '/' }}
-                />
-              )}
 
               {/* SalesNearYou hides itself on error state */}
               <SalesNearYou />

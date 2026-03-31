@@ -301,8 +301,17 @@ const PricingPage = () => {
                     <h3 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">
                       {tier.name}
                     </h3>
-                    <p className="text-warm-600 dark:text-warm-300 text-sm mb-6">
+                    <p className="text-warm-600 dark:text-warm-300 text-sm mb-1">
                       {tier.description}
+                    </p>
+                    {/* Inline explainer */}
+                    <p className="text-warm-500 dark:text-warm-500 text-xs mb-6">
+                      {tier.id === 'SIMPLE' &&
+                        'Good for getting started. No monthly cost — just 10% when items sell.'}
+                      {tier.id === 'PRO' &&
+                        'Best for active organizers. Lower fees (8%) plus tools that speed up your workflow and bring more buyers to your sales.'}
+                      {tier.id === 'TEAMS' &&
+                        'For companies or families running multiple sales at once. One account, multiple organizers.'}
                     </p>
 
                     {/* Price */}

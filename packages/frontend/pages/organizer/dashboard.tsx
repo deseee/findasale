@@ -1,8 +1,10 @@
 /**
- * Organizer Dashboard
+ * Organizer Dashboard — Redesigned S350
  *
- * Main hub for organizers to view sales, manage items,
- * and track analytics and earnings.
+ * State-aware dashboard for organizers showing:
+ * - State 1: New organizer (0 sales) — welcome hero + 3-step path + benefits
+ * - State 2: Active organizer (DRAFT or PUBLISHED sale) — sale status widget + quick actions + tier progress
+ * - State 3: Between sales (all ENDED) — congratulations + past sales archive
  */
 
 import React, { useState, useEffect } from 'react';
@@ -21,6 +23,7 @@ import SaleQRCode from '../../components/SaleQRCode';
 import FlashDealForm from '../../components/FlashDealForm';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import OnboardingWizard from '../../components/OnboardingWizard';
+import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal';
 import SimpleModePanel from '../../components/SimpleModePanel';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
 import Head from 'next/head';
@@ -29,105 +32,28 @@ import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
 import { AnimatedCounter } from '../../components/AnimatedCounter';
 
-// Phase 22: Creator Tier benefits (frontend-only display)
-const TIER_BENEFITS: Record<string, string[]> = {
-  NEW: [
-    'Basic listing on FindA.Sale',
-    'Standard search placement',
-    'Sale analytics dashboard',
-  ],
-  TRUSTED: [
-    'Verified badge on all listings',
-    'Priority placement in search results',
-    'Advanced analytics & earnings reports',
-    'Access to sale promotion tools',
-  ],
-  ESTATE_CURATOR: [
-    'Featured placement on homepage',
-    'Inclusion in the weekly curator newsletter',
-    'Custom organizer profile page',
-    'Dedicated seller support',
-  ],
-};
+// Selling Tools grid configuration (6 tools, tier-gated)
+const SELLING_TOOLS = [
+  { label: 'Create Sale', icon: '📋', href: '/organizer/create-sale', requiredTier: null },
+  { label: 'Add Items', icon: '📷', href: (saleId: string) => `/organizer/add-items/${saleId}`, requiredTier: null },
+  { label: 'QR Codes', icon: '📱', href: '/organizer/qr', requiredTier: null },
+  { label: 'POS Checkout', icon: '💳', href: '/organizer/pos', requiredTier: null },
+  { label: 'Print Inventory', icon: '🖨️', href: '/organizer/print-inventory', requiredTier: 'PRO' },
+  { label: 'Analytics', icon: '📊', href: '/organizer/insights', requiredTier: 'SIMPLE' },
+];
 
-// Phase 31: Tier descriptions shown in the Tier Rewards card
-const TIER_DESCRIPTIONS: Record<string, string> = {
-  BRONZE: 'Starting tier for all organizers. Run sales and build your reputation.',
-  SILVER: 'Awarded after consistently completing sales. Unlocks priority search placement and a verified badge.',
-  GOLD: 'Top tier for high-volume organizers. Featured placement and dedicated support.',
-};
+type DashboardState = 'new' | 'active' | 'between';
 
-// CollapsibleSection component for tier-aware dashboard sections
-interface CollapsibleSectionProps {
+interface Sale {
+  id: string;
   title: string;
-  icon?: string;
-  isLocked: boolean;
-  lockedMessage: string;
-  lockedTier?: string;
-  children?: React.ReactNode;
-  defaultOpen?: boolean;
+  status: string; // DRAFT, PUBLISHED, ENDED
+  startDate: string;
+  endDate: string;
+  photoUrls: string[];
+  city: string;
+  state: string;
 }
-
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
-  title,
-  icon,
-  isLocked,
-  lockedMessage,
-  lockedTier = 'PRO',
-  children,
-  defaultOpen = true,
-}) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen && !isLocked);
-
-  if (isLocked) {
-    return (
-      <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 opacity-75">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center justify-between text-left"
-        >
-          <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-            </svg>
-            <span className="font-medium text-gray-600 dark:text-gray-400">
-              {icon ? `${icon} ` : ''}{title}
-            </span>
-          </div>
-          <svg className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </button>
-        {isOpen && (
-          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
-            <p className="text-sm text-gray-500 dark:text-gray-400">{lockedMessage}</p>
-            <Link
-              href="/pricing"
-              className="inline-block text-sm bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-full transition-colors font-medium"
-            >
-              Upgrade to {lockedTier}
-            </Link>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 text-sm font-semibold uppercase text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 px-3 py-2 rounded transition-colors"
-      >
-        <svg className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-        </svg>
-        {icon ? `${icon} ` : ''}{title}
-      </button>
-      {isOpen && <div className="mt-3 ml-3 flex flex-wrap gap-4">{children}</div>}
-    </div>
-  );
-};
 
 const OrganizerDashboard = () => {
   const router = useRouter();
@@ -135,28 +61,28 @@ const OrganizerDashboard = () => {
   const { showToast } = useToast();
   const { isSimple, canAccess } = useOrganizerTier();
   const [isClient, setIsClient] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'sales'>('overview');
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
   const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [cloningId, setCloningId] = useState<string | null>(null);
-  const [showSaleSelector, setShowSaleSelector] = useState(false);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
-  const [showTierTools, setShowTierTools] = useState(false);
-  const [isMobileView, setIsMobileView] = useState(false);
-  const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
+    // Show onboarding modal once for new organizers
+    if (!localStorage.getItem('onboardingModalDismissed')) {
+      setShowOnboardingModal(true);
+    }
   }, []);
 
   // Fetch organizer's sales
-  const { data: salesData, isLoading: salesLoading } = useQuery({
+  const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
     queryKey: ['organizer-sales', user?.id],
     queryFn: async () => {
       const response = await api.get('/sales/mine');
-      return response.data.sales;
+      return response.data.sales || [];
     },
     enabled: !!user?.id && isClient,
   });
@@ -314,6 +240,44 @@ const OrganizerDashboard = () => {
 
   const isLoading = !isClient || authLoading || salesLoading;
 
+  // Determine dashboard state based on sales
+  const getDashboardState = (): DashboardState => {
+    if (!salesData || salesData.length === 0) return 'new';
+    const hasActiveSale = salesData.some((s: Sale) => s.status === 'DRAFT' || s.status === 'PUBLISHED');
+    if (hasActiveSale) return 'active';
+    return 'between';
+  };
+
+  const dashboardState = getDashboardState();
+
+  // Get the current active sale (for State 2)
+  const getActiveSale = (): Sale | null => {
+    if (!salesData) return null;
+    // Prefer PUBLISHED over DRAFT
+    let sale = salesData.find((s: Sale) => s.status === 'PUBLISHED');
+    if (!sale) sale = salesData.find((s: Sale) => s.status === 'DRAFT');
+    return sale || null;
+  };
+
+  const activeSale = dashboardState === 'active' ? getActiveSale() : null;
+
+  // Helper: Check if sale is ending soon (<24h)
+  const isEndingSoon = (sale: Sale): boolean => {
+    if (!sale?.endDate) return false;
+    const now = new Date();
+    const endTime = new Date(sale.endDate);
+    const hoursRemaining = (endTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return hoursRemaining > 0 && hoursRemaining < 24;
+  };
+
+  // Helper: Get hours remaining for a sale
+  const getHoursRemaining = (sale: Sale): number => {
+    if (!sale?.endDate) return 0;
+    const now = new Date();
+    const endTime = new Date(sale.endDate);
+    return Math.max(0, Math.ceil((endTime.getTime() - now.getTime()) / (1000 * 60 * 60)));
+  };
+
   // Helper: Check if cash fee is stale (> 30 days)
   const isCashFeeStale = (): boolean => {
     if (!earnings?.cashFeeBalanceUpdatedAt) return false;
@@ -325,7 +289,7 @@ const OrganizerDashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-warm-50 py-8">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
           <Skeleton className="h-10 w-64 mb-4" />
           <Skeleton className="h-6 w-96 mb-4" />
@@ -346,6 +310,11 @@ const OrganizerDashboard = () => {
       <Head>
         <title>Organizer Dashboard - FindA.Sale</title>
       </Head>
+
+      {/* Onboarding Modal — 3-screen intro for new organizers */}
+      {showOnboardingModal && dashboardState === 'new' && (
+        <OrganizerOnboardingModal onDismiss={() => setShowOnboardingModal(false)} />
+      )}
 
       {/* Onboarding Wizard */}
       {showWizard && !orgProfile?.onboardingComplete && (
@@ -376,38 +345,21 @@ const OrganizerDashboard = () => {
         />
       )}
 
-      {/* Full Dashboard */}
+      {/* Main Dashboard */}
       {!isSimpleMode && (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
-            <p className="text-warm-600 dark:text-warm-400">Manage your sales and track earnings.</p>
+            <p className="text-warm-600 dark:text-warm-400">
+              {dashboardState === 'new' && "Let's set up your first sale in 5 minutes"}
+              {dashboardState === 'active' && 'Your sale is live. Keep the momentum going.'}
+              {dashboardState === 'between' && 'Great job! Your sale has ended. Ready for the next one?'}
+            </p>
           </div>
 
-          {/* Welcome banner for newly converted organizers */}
-          {router.query.welcome === 'true' && (
-            <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-400 dark:border-green-600 p-4 mb-4 rounded">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
-                    Welcome to your organizer dashboard!
-                  </h3>
-                  <div className="mt-2 text-sm text-green-700 dark:text-green-300">
-                    <p>You can now list items for sale on FindA.Sale. Start by creating your first sale below.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Feature #75: Tier Lapse Banner */}
+          {/* Tier Lapse Banner */}
           {orgProfile?.subscriptionLapsed && (
             <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 mb-4 rounded">
               <div className="flex items-start justify-between">
@@ -444,537 +396,302 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
-          {/* Action Buttons - Grouped Sections */}
-          <div className="space-y-3 mb-4">
-            {/* Section 1: Quick Actions (always visible) */}
-            <div>
-              <h3 className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Quick Actions</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* STATE-AWARE CONTENT */}
+
+          {dashboardState === 'new' && (
+            // STATE 1: New Organizer (0 sales ever)
+            <div className="space-y-6 mb-8">
+              {/* Hero Card */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-8 text-center">
+                <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome to FindA.Sale Organizer</h2>
+                <p className="text-warm-600 dark:text-warm-400 mb-6">Let's set up your first sale in 5 minutes</p>
+
+                {/* 3-Step Path */}
+                <div className="flex justify-center gap-4 mb-8">
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold mb-2">1</div>
+                    <p className="text-xs font-semibold text-warm-700 dark:text-warm-300">Sale Details</p>
+                  </div>
+                  <div className="w-16 border-t-2 border-amber-300 dark:border-amber-600 flex-1" style={{ marginTop: '20px' }}></div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold mb-2">2</div>
+                    <p className="text-xs font-semibold text-warm-700 dark:text-warm-300">Add Items</p>
+                  </div>
+                  <div className="w-16 border-t-2 border-amber-300 dark:border-amber-600 flex-1" style={{ marginTop: '20px' }}></div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold mb-2">3</div>
+                    <p className="text-xs font-semibold text-warm-700 dark:text-warm-300">Publish</p>
+                  </div>
+                </div>
+
                 <Link
                   href="/organizer/create-sale"
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-lg transition-colors mb-4"
                 >
-                  + Create New Sale
+                  Create Your First Sale
                 </Link>
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      if (salesData && salesData.length > 0) {
-                        if (salesData.length === 1) {
-                          router.push(`/organizer/add-items/${salesData[0].id}`);
-                        } else {
-                          setShowSaleSelector(!showSaleSelector);
-                        }
-                      } else {
-                        showToast('Please create a sale first', 'error');
-                      }
-                    }}
-                    className="bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                  >
-                    📦 Add Items
-                  </button>
-                  {showSaleSelector && salesData && salesData.length > 1 && (
-                    <div className="absolute top-full left-0 mt-2 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                      {salesData.map((sale: any) => (
-                        <button
-                          key={sale.id}
-                          onClick={() => {
-                            router.push(`/organizer/add-items/${sale.id}`);
-                            setShowSaleSelector(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm border-b border-warm-100 dark:border-gray-700 last:border-b-0 transition-colors"
-                        >
-                          {sale.title}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                <p className="text-sm text-warm-600 dark:text-warm-400">
+                  <Link href="#" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 underline">Watch a quick tour</Link>
+                </p>
+              </div>
+
+              {/* Benefits Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <p className="text-4xl mb-3">📍</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 mb-2">Reach 10,000+ treasure hunters in your area</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">Connect with local shoppers searching for great deals</p>
                 </div>
-                <Link
-                  href="/organizer/holds"
-                  className="relative bg-amber-100 hover:bg-amber-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-amber-900 dark:text-amber-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  🤝 Holds
-                  {(holdCountData?.count ?? 0) > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-bold rounded-full h-5 min-w-[1.25rem] flex items-center justify-center px-1">
-                      {holdCountData!.count}
-                    </span>
-                  )}
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <p className="text-4xl mb-3">🤖</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 mb-2">List items with photos — AI tags them automatically</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">Snap photos and let AI handle the descriptions</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <p className="text-4xl mb-3">💰</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 mb-2">Track earnings and manage holds in real time</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">See exactly what's selling and who's interested</p>
+                </div>
+              </div>
+
+              {/* Quick Link Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Link href="/organizer/create-sale" className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-amber-600 dark:hover:border-amber-400 transition-colors">
+                  <p className="text-lg mb-2">📋</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Create Sale</p>
                 </Link>
-                <button
-                  onClick={() => {
-                    if (salesData && salesData.length > 0) {
-                      if (salesData.length === 1) {
-                        router.push(`/organizer/sales/${salesData[0].id}`);
-                      } else {
-                        router.push('/organizer/sales');
-                      }
-                    } else {
-                      showToast('Please create a sale first', 'error');
-                    }
-                  }}
-                  className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg border border-warm-300 dark:border-gray-600 transition-colors"
-                >
-                  📋 Manage Sales
-                </button>
-                <Link
-                  href="/organizer/pos"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  💳 POS
+                <Link href="/sales" className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-amber-600 dark:hover:border-amber-400 transition-colors">
+                  <p className="text-lg mb-2">🔍</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Browse Inspiration</p>
+                </Link>
+                <Link href="/pricing" className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-amber-600 dark:hover:border-amber-400 transition-colors">
+                  <p className="text-lg mb-2">💎</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">See Pricing</p>
                 </Link>
               </div>
             </div>
+          )}
 
-            {/* Calendar Widget - Upcoming Sales */}
-            <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 mb-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">📅 Upcoming Sales</h3>
-              </div>
-              {salesData && salesData.length > 0 ? (
-                <>
-                  {(() => {
-                    const now = new Date();
-                    const upcomingSales = salesData
-                      .filter((sale: any) => {
-                        const saleStart = new Date(sale.startDate);
-                        return saleStart > now && (sale.status === 'PUBLISHED' || sale.status === 'ACTIVE');
-                      })
-                      .sort((a: any, b: any) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-                      .slice(0, 3);
+          {dashboardState === 'active' && activeSale && (
+            // STATE 2: Active Organizer (DRAFT or PUBLISHED sale)
+            <div className="space-y-6 mb-8">
+              {/* Sale Status Widget (HIGHEST PRIORITY) */}
+              <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
+                <div className="flex flex-col md:flex-row gap-6">
+                  {/* Photo Thumbnail */}
+                  {activeSale.photoUrls && activeSale.photoUrls[0] && (
+                    <div className="md:w-32 flex-shrink-0">
+                      <img src={activeSale.photoUrls[0]} alt={activeSale.title} className="w-full h-32 object-cover rounded-lg" />
+                    </div>
+                  )}
 
-                    if (upcomingSales.length > 0) {
-                      return (
-                        <div className="space-y-2">
-                          {upcomingSales.map((sale: any) => (
-                            <div key={sale.id} className="flex justify-between items-center p-2 bg-warm-50 dark:bg-gray-700 rounded-md">
-                              <p className="font-medium text-warm-900 dark:text-warm-100">{sale.title}</p>
-                              <p className="text-sm text-warm-600 dark:text-warm-400">
-                                {new Date(sale.startDate).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: new Date(sale.startDate).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                                })}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    } else {
-                      return (
-                        <div className="text-center py-4">
-                          <p className="text-warm-600 dark:text-warm-400 mb-4">No upcoming sales</p>
-                          <Link
-                            href="/organizer/create-sale"
-                            className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                          >
-                            Create Sale →
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div>
+                        <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{activeSale.title}</h2>
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                          activeSale.status === 'PUBLISHED'
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+                        }`}>
+                          {activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
+                          {isEndingSoon(activeSale) && ' • ENDING SOON'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="grid grid-cols-3 gap-4 mb-6 py-4 border-y border-warm-200 dark:border-gray-700">
+                      <div>
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Items Listed</p>
+                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">—</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Visitors Today</p>
+                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">—</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">Active Holds</p>
+                        <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{holdCountData?.count ?? 0}</p>
+                      </div>
+                    </div>
+
+                    {/* Status-Specific CTAs */}
+                    <div className="flex flex-wrap gap-2">
+                      {activeSale.status === 'DRAFT' && (
+                        <>
+                          <button className="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Finish Setup
+                          </button>
+                          <Link href={`/organizer/edit-sale/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Publish Sale
                           </Link>
-                        </div>
-                      );
-                    }
-                  })()}
-                  <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">
-                    <Link
-                      href="/calendar"
-                      className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium"
-                    >
-                      View Full Calendar →
-                    </Link>
+                        </>
+                      )}
+                      {activeSale.status === 'PUBLISHED' && (
+                        <>
+                          <Link href={`/organizer/add-items/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Manage Items
+                          </Link>
+                          <Link href={`/sales/${activeSale.id}`} className="bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            View Live Sale
+                          </Link>
+                        </>
+                      )}
+                      {isEndingSoon(activeSale) && (
+                        <>
+                          <button className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Extend Sale
+                          </button>
+                          <button className="bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Mark Ended
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-warm-600 dark:text-warm-400 mb-4">No sales yet</p>
-                  <Link
-                    href="/organizer/create-sale"
-                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                  >
-                    Create Sale →
+                </div>
+              </div>
+
+              {/* Next Action Zone */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                <p className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
+                  {activeSale.status === 'DRAFT' && '📋 Add items to your inventory'}
+                  {activeSale.status === 'PUBLISHED' && holdCountData && holdCountData.count > 0 && `💳 You have ${holdCountData.count} pending holds`}
+                  {activeSale.status === 'PUBLISHED' && (!holdCountData || holdCountData.count === 0) && '📦 Manage your items'}
+                  {isEndingSoon(activeSale) && `⏰ Your sale ends in ${getHoursRemaining(activeSale)} hours`}
+                </p>
+                <Link href={activeSale.status === 'DRAFT' ? `/organizer/add-items/${activeSale.id}` : '/organizer/holds'} className="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-sm">
+                  Take action →
+                </Link>
+              </div>
+
+              {/* Quick Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Total Revenue</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">$0.00</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">TODO: wire to API</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Listed</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">—</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">TODO: fetch from API</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Active Holds</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{holdCountData?.count ?? 0}</p>
+                  {(holdCountData?.count ?? 0) > 0 && (
+                    <Link href="/organizer/holds" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 text-xs font-semibold mt-2 inline-block">
+                      View holds →
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              {/* Tier Progress Card */}
+              {tierData && (
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Tier Progress</h3>
+                    <OrganizerTierBadge tier={tierData.tier} />
+                  </div>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">{tierData.benefits.label}</p>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                    <div className="bg-amber-600 h-2 rounded-full" style={{ width: `${Math.min((tierData.progress.completedSales / tierData.progress.salesNeeded) * 100, 100)}%` }}></div>
+                  </div>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-4">{tierData.progress.completedSales}/{tierData.progress.salesNeeded} sales until next tier</p>
+                  <Link href="/organizer/pricing" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
+                    See all tiers →
                   </Link>
                 </div>
               )}
-            </div>
 
-            {/* Your Tier Widget - Compact Reputation Status */}
-            {tierData && (
-              <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-semibold text-warm-900 dark:text-warm-100">Your Tier</h3>
-                  <OrganizerTierBadge tier={tierData.tier} />
-                </div>
-                <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">{tierData.benefits.label}</p>
-                <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
-                  <div><p className="font-semibold text-warm-900 dark:text-warm-100">{orgProfile?.followerCount ?? 0}</p><p className="text-xs text-warm-500 dark:text-warm-400">Followers</p></div>
-                  <div><p className="font-semibold text-warm-900 dark:text-warm-100">{orgProfile?.avgRating ? orgProfile.avgRating.toFixed(1) : '—'}</p><p className="text-xs text-warm-500 dark:text-warm-400">Avg Rating</p></div>
-                </div>
-                <Link href={`/organizers/${user?.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-xs font-semibold">
-                  View Reputation →
-                </Link>
-              </div>
-            )}
-
-            {/* Section 2: Selling Tools (always available in SIMPLE+) */}
-            <CollapsibleSection
-              title="Selling Tools"
-              icon="🛠️"
-              isLocked={false}
-              lockedMessage=""
-              defaultOpen={true}
-            >
-              <Link
-                href="/organizer/holds"
-                className="relative bg-amber-100 hover:bg-amber-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-amber-900 dark:text-amber-100 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                🤝 Holds
-                {(holdCountData?.count ?? 0) > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-bold rounded-full h-5 min-w-[1.25rem] flex items-center justify-center px-1">
-                    {holdCountData!.count}
-                  </span>
-                )}
-              </Link>
-              <Link
-                href="/organizer/pos"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                💳 POS / Checkout
-              </Link>
-              <Link
-                href="/organizer/print-inventory"
-                className="bg-purple-100 hover:bg-purple-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-purple-900 dark:text-purple-100 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                🖨️ Print Inventory
-              </Link>
-              <Link
-                href="/organizer/sale-map"
-                className="bg-cyan-100 hover:bg-cyan-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-cyan-900 dark:text-cyan-100 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                🗺️ Sale Map
-              </Link>
-              <Link
-                href="/organizer/qr"
-                className="bg-blue-100 hover:bg-blue-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-blue-900 dark:text-blue-100 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                📱 QR Codes
-              </Link>
-            </CollapsibleSection>
-
-            {/* Section 3: Analytics & Performance (SIMPLE+) */}
-            <CollapsibleSection
-              title="Analytics & Performance"
-              icon="📊"
-              isLocked={!canAccess('SIMPLE')}
-              lockedMessage="Upgrade to Simple to unlock Analytics & Earnings"
-              lockedTier="SIMPLE"
-              defaultOpen={canAccess('SIMPLE')}
-            >
-              <TierGatedButton
-                href="/organizer/insights"
-                label="Analytics"
-                icon="📊"
-                requiredTier="SIMPLE"
-                className="bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100"
-              />
-              <TierGatedButton
-                href="/organizer/payouts"
-                label="Earnings"
-                icon="💰"
-                requiredTier="SIMPLE"
-                className="bg-green-100 hover:bg-green-200 dark:bg-green-900/30 text-green-900 dark:text-green-100"
-              />
-              <TierGatedButton
-                href="/organizer/ripples"
-                label="Sale Ripples"
-                icon="🌊"
-                requiredTier="SIMPLE"
-                className="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100"
-              />
-            </CollapsibleSection>
-
-            {/* Section 4: Pro Tools (PRO+) */}
-            <CollapsibleSection
-              title="Pro Tools"
-              icon="🚀"
-              isLocked={!canAccess('PRO')}
-              lockedMessage="Upgrade to Pro to unlock Brand Kit, Flip Report & more"
-              lockedTier="PRO"
-              defaultOpen={canAccess('PRO')}
-            >
-              <TierGatedButton
-                href="/organizer/brand-kit"
-                label="Brand Kit"
-                icon="🎨"
-                requiredTier="PRO"
-                className="bg-pink-100 hover:bg-pink-200 dark:bg-pink-900/30 text-pink-900 dark:text-pink-100"
-              />
-              <TierGatedButton
-                href="/organizer/flip-report"
-                label="Flip Report"
-                icon="📈"
-                requiredTier="PRO"
-                className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100"
-              />
-              <TierGatedButton
-                href="/organizer/item-tagger"
-                label="Item Tagger"
-                icon="🏷️"
-                requiredTier="PRO"
-                className="bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900/30 text-cyan-900 dark:text-cyan-100"
-              />
-              {canAccess('TEAMS') && (
-                <TierGatedButton
-                  href="/organizer/webhooks"
-                  label="Webhooks"
-                  icon="🔗"
-                  requiredTier="TEAMS"
-                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/30 text-slate-900 dark:text-slate-100"
-                />
-              )}
-            </CollapsibleSection>
-
-            {/* Section 5: Staff & Collaboration (TEAMS) */}
-            <CollapsibleSection
-              title="Staff & Collaboration"
-              icon="👥"
-              isLocked={!canAccess('TEAMS')}
-              lockedMessage="Upgrade to Teams to unlock Staff Accounts & collaboration tools"
-              lockedTier="TEAMS"
-              defaultOpen={canAccess('TEAMS')}
-            >
-              <TierGatedButton
-                href="/organizer/staff"
-                label="Staff Accounts"
-                icon="👤"
-                requiredTier="TEAMS"
-                className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100"
-              />
-              <TierGatedButton
-                href="/organizer/sale-hubs"
-                label="Sale Hubs"
-                icon="🏢"
-                requiredTier="TEAMS"
-                className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100"
-              />
-              <TierGatedButton
-                href="/organizer/virtual-queue"
-                label="Virtual Queue"
-                icon="📋"
-                requiredTier="TEAMS"
-                className="bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100"
-              />
-            </CollapsibleSection>
-
-            {/* Community Links (open by default) */}
-            <CollapsibleSection
-              title="Community"
-              icon="🌍"
-              isLocked={false}
-              lockedMessage=""
-              defaultOpen={true}
-            >
-              <Link
-                href="/organizer/bounties"
-                className="bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                🏆 Bounties
-              </Link>
-              <Link
-                href="/organizer/reputation"
-                className="bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                ⭐ Reputation
-              </Link>
-              {canAccess('PRO') && (
-                <Link
-                  href="/neighborhoods"
-                  className="bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 text-teal-900 dark:text-teal-100 font-bold py-2 px-6 rounded-lg transition-colors"
-                >
-                  🏘️ Neighborhoods
-                </Link>
-              )}
-            </CollapsibleSection>
-
-            {/* Section 5: Upgrade CTA for SIMPLE tier */}
-            {isSimple && showUpgradeCTA && (
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mt-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">🔒</span>
-                  <div className="flex-1">
-                    <p className="font-semibold text-amber-900 dark:text-amber-100">Unlock Pro Features</p>
-                    <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
-                      Save time. Understand what sells. Build a brand that brings shoppers back.
-                    </p>
-                    <Link
-                      href="/pricing?source=dashboard"
-                      className="inline-block mt-3 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
-                    >
-                      Upgrade to PRO
-                    </Link>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowUpgradeCTA(false);
-                      localStorage.setItem('organizer_upgrade_cta_dismissed', 'true');
-                    }}
-                    className="text-warm-400 hover:text-warm-600 dark:text-warm-500 dark:hover:text-warm-400 text-xl flex-shrink-0"
-                    title="Dismiss"
-                  >
-                    ✕
+              {/* Selling Tools Grid (6 tools, tier-gated) */}
+              <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Selling Tools</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <Link href="/organizer/create-sale" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                    <span className="text-2xl">📋</span>
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Create Sale</p>
+                  </Link>
+                  <Link href={`/organizer/add-items/${activeSale.id}`} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                    <span className="text-2xl">📷</span>
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Add Items</p>
+                  </Link>
+                  <Link href="/organizer/qr" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                    <span className="text-2xl">📱</span>
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">QR Codes</p>
+                  </Link>
+                  <Link href="/organizer/pos" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                    <span className="text-2xl">💳</span>
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">POS Checkout</p>
+                  </Link>
+                  <button onClick={() => canAccess('PRO') ? router.push('/organizer/print-inventory') : router.push('/pricing')} className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                    <span className="text-2xl">{canAccess('PRO') ? '🖨️' : '🔒'}</span>
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Print Inventory {!canAccess('PRO') && '(PRO)'}</p>
                   </button>
+                  <Link href="/organizer/insights" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                    <span className="text-2xl">📊</span>
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Analytics</p>
+                  </Link>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Tab Navigation */}
-          <div className="flex gap-4 mb-4 border-b border-warm-200 dark:border-gray-700">
-            {(['overview', 'sales'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`pb-2 font-medium capitalize ${
-                  activeTab === tab
-                    ? 'border-b-2 border-amber-600 text-amber-600'
-                    : 'text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Content */}
-          {activeTab === 'overview' && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="card p-4">
-                  <p className="text-warm-600 dark:text-warm-300 text-sm">Active Sales</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{salesData?.filter((s: any) => s.status === 'PUBLISHED').length || 0}</p>
-                </div>
-                <div className="card p-6">
-                  <p className="text-warm-600 dark:text-warm-300 text-sm">Total Items</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{(analyticsData?.itemsSold ?? 0) + (analyticsData?.itemsUnsold ?? 0)}</p>
-                </div>
-                <div className="card p-6">
-                  <p className="text-warm-600 dark:text-warm-300 text-sm">Total Revenue</p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">
-                    <AnimatedCounter value={analyticsData?.totalRevenue || 0} prefix="$" duration={800} decimals={2} />
-                  </p>
-                </div>
-              </div>
-
-              {/* Cash Fee Balance card */}
-              {cashFeeBalance > 0 && (
-                <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-amber-800">Cash Fee Balance</p>
-                      <p className="text-2xl font-bold text-amber-900 mt-1">${cashFeeBalance.toFixed(2)}</p>
-                      {earnings?.cashFeeBalanceUpdatedAt && (
-                        <p className="text-xs text-amber-700 mt-1">
-                          Last updated: {new Date(earnings.cashFeeBalanceUpdatedAt).toLocaleDateString()}
-                        </p>
-                      )}
-                      {isCashFeeStale() && (
-                        <p className="text-xs text-amber-700 mt-2 italic">⚠️ This balance is 30+ days old and will be deducted from your next payout.</p>
-                      )}
-                    </div>
-                    <Link
-                      href="/organizer/payouts"
-                      className="text-sm font-semibold text-amber-700 hover:text-amber-900 whitespace-nowrap ml-4"
-                    >
-                      View Payouts →
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {/* H1: How It Works card — only for brand new organizers with zero completed sales */}
-              {orgProfile && orgProfile.completedSales === 0 && !showWizard && (
-                <div className="bg-white dark:bg-gray-800 dark:shadow-gray-900/50 rounded-lg shadow-md p-6 mb-4">
-                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">How It Works</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">📋</span></div>
-                      <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm mb-1">1. Create a Sale</p>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">Set your date, location, and sale details to get started.</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">📷</span></div>
-                      <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm mb-1">2. Add Your Items</p>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">Snap photos and set prices. AI helps tag and describe items.</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">🛒</span></div>
-                      <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm mb-1">3. Attract Buyers</p>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">Your sale goes live on the map. Buyers browse, search, and save items.</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-xl">💰</span></div>
-                      <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm mb-1">4. Complete the Sale</p>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">Accept offers, process payments, and track your earnings.</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
 
-          {activeTab === 'sales' && (
-            <>
-              {salesLoading ? (
-                <p>Loading your sales...</p>
-              ) : salesData && salesData.length > 0 ? (
-                <div className="space-y-8">
-                  {salesData.map((sale: any) => (
-                    <div key={sale.id}>
-                      <div className="card overflow-hidden hover:shadow-lg transition-shadow">
-                        <div className="p-4">
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">{sale.title}</h3>
-                            {sale.status === 'PUBLISHED' ? (
-                              <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">● LIVE</span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full px-2 py-0.5 text-xs font-semibold flex-shrink-0">◌ DRAFT</span>
-                            )}
-                          </div>
-                          <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">{sale.city}, {sale.state}</p>
-                          <div className="flex gap-2 flex-wrap items-center">
-                            <Link href={`/sales/${sale.id}`} className="text-sm text-amber-600 hover:underline font-semibold">View Sale</Link>
-                            <Link href={`/organizer/edit-sale/${sale.id}`} className="text-sm text-amber-600 hover:underline">Edit</Link>
-                            <Link href={`/organizer/add-items/${sale.id}`} className="text-sm text-amber-600 hover:underline">Items</Link>
-                            <button onClick={() => setOpenQRSale(openQRSale === sale.id ? null : sale.id)} className="text-sm text-amber-600 hover:underline">{openQRSale === sale.id ? 'Hide QR' : 'QR Code'}</button>
-                            <button onClick={() => handleCloneSale(sale.id)} disabled={cloningId === sale.id} className="text-sm text-amber-600 hover:underline disabled:opacity-50">{cloningId === sale.id ? 'Cloning...' : 'Clone'}</button>
-                            {canAccess('PRO') && (
-                              <button onClick={() => setFlashDealSaleId(flashDealSaleId === sale.id ? null : sale.id)} className="text-sm text-red-600 hover:underline font-semibold">{flashDealSaleId === sale.id ? 'Cancel Deal' : '⚡ Flash Deal'}</button>
-                            )}
-                            <button onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })} className="text-sm text-sage-600 hover:underline font-semibold">📣 Share</button>
-                          </div>
-                          {openQRSale === sale.id && (
-                            <div className="mt-4 pt-4 border-t border-warm-100">
-                              <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={160} />
-                            </div>
-                          )}
-                          {flashDealSaleId === sale.id && sale.items && (
-                            <div className="mt-4 pt-4 border-t border-warm-100">
-                              <FlashDealForm saleId={sale.id} saleItems={sale.items} onSuccess={() => setFlashDealSaleId(null)} onCancel={() => setFlashDealSaleId(null)} />
-                            </div>
-                          )}
-                        </div>
+          {dashboardState === 'between' && (
+            // STATE 3: Between Sales (all ENDED)
+            <div className="space-y-6 mb-8">
+              {/* Congratulations Card */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700 rounded-lg p-8 text-center">
+                <h2 className="text-2xl font-bold text-green-900 dark:text-green-100 mb-2">Great job! Your sale has ended.</h2>
+                <p className="text-green-700 dark:text-green-300 mb-6">Check out your earnings and see what sold.</p>
+                <Link href="/organizer/create-sale" className="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors">
+                  Create Another Sale
+                </Link>
+              </div>
+
+              {/* Past Sales Archive */}
+              <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Past Sales</h3>
+                <div className="space-y-4">
+                  {salesData.map((sale: Sale) => (
+                    <div key={sale.id} className="flex items-center justify-between p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">{sale.title}</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">{sale.city}, {sale.state}</p>
                       </div>
-                      {sale.status === 'PUBLISHED' && (
-                        <div className="mt-4">
-                          <SaleStatusWidget saleId={sale.id} />
-                        </div>
-                      )}
+                      <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm ml-4">
+                        View Details →
+                      </Link>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <EmptyState icon="🏷️" heading="You haven't created any sales yet" subtext="Start by creating your first sale. Set up details, add inventory, and go live!" cta={{ label: 'Create Your First Sale', href: '/organizer/create-sale' }} />
-              )}
-            </>
+              </div>
+            </div>
           )}
+
+          {/* Quick Actions (always visible) */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            <Link href="/organizer/create-sale" className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+              + Create New Sale
+            </Link>
+            {salesData && salesData.length > 0 && (
+              <>
+                <Link href={salesData.length === 1 ? `/organizer/add-items/${salesData[0].id}` : '/organizer/sales'} className="bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg transition-colors">
+                  📦 Add Items
+                </Link>
+                <Link href="/organizer/holds" className="relative bg-amber-100 hover:bg-amber-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-amber-900 dark:text-amber-100 font-bold py-2 px-6 rounded-lg transition-colors">
+                  🤝 Holds {(holdCountData?.count ?? 0) > 0 && `(${holdCountData!.count})`}
+                </Link>
+                <Link href="/organizer/pos" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                  💳 POS
+                </Link>
+              </>
+            )}
+          </div>
+
         </div>
       </div>
       )}
