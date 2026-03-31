@@ -7,6 +7,8 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S353 COMPLETE (2026-03-31):** Dashboard/nav polish + deployment verification. (1) **Dashboard dead space fixed:** Organizer dashboard stats (Items Listed, Visitors Today, Active Holds) now render real data from `statsData` — previously fetched but never mounted. (2) **Nav mirroring fixed:** Mobile hamburger now mirrors desktop AvatarDropdown exactly — Your Sales + Explore & Connect collapsibles added with all subitems + Coming Soon badges; orphaned top-level Payouts/Insights/Workspace items removed from mobile. (3) **Gamification fixed:** Hunt Pass CTA is now rank-aware (INITIATE/SCOUT = XP hook, RANGER = early access hook, SAGE/GRANDMASTER = Collector's League hook). (4) **Deployment confirmed:** All S351+S352 code on GitHub ✅. All migrations deployed to Railway (no pending migrations) ✅. STRIPE_WEBHOOK_SECRET ✅, MAILERLITE_SHOPPERS_GROUP_ID ✅, RESEND_API_KEY + RESEND_FROM_EMAIL ✅ all confirmed set in Railway. Files: Layout.tsx, organizer/dashboard.tsx, shopper/dashboard.tsx.
+
 **S352 COMPLETE (2026-03-30):** 4 dispatches across Architect + 3 Dev agents. (1) **#84 ExplorerProfile Architect decision RESOLVED:** Option A confirmed — all gamification fields already exist on User (guildXp, explorerRank, huntPassActive, huntPassExpiry). No schema change needed. Decision doc written to packages/database/prisma/EXPLORER_PROFILE_DECISION.md. (2) **#225 Revenue/Metrics API SHIPPED:** GET /api/organizers/stats built (revenue lifetime/current/this-month, item counts, active sale hold count). Wired into organizer dashboard State 2. Zero TS errors. Files: packages/backend/src/routes/organizers.ts, packages/frontend/pages/organizer/dashboard.tsx. (3) **#226 Pre-wire schema SHIPPED:** persistentInventory + masterItemLibraryId + consignor relation added to Item model. Migration created: 20260330_add_item_prewire_fields. ⚠️ Patrick must deploy this migration to Railway. Files: schema.prisma, migration SQL. (4) **#227 XP Profile SHIPPED:** GET /api/xp/profile already existed — service response shape corrected + GRANDMASTER threshold fixed (10000→5000). Shopper dashboard already wired via useXpProfile hook. File: packages/backend/src/services/xpService.ts. All items pending Chrome QA. Roadmap: #84 resolved, #225/#226/#227 added to Building as Shipped S352.
 
 **S351 Dashboard Redesign COMPLETE (2026-03-30):** 3 parallel dev agents, 7 files changed + 2 new components. (1) **Organizer dashboard (organizer/dashboard.tsx):** Full 3-state redesign — State 1 (new organizer): welcome hero, 3-step path, benefit grid, CTAs; State 2 (active sale): Sale Status Widget (full-width, title/thumbnail/status badge/stats), Next Action Zone (single context-aware recommended action), Quick Stats Grid, Tier Progress card, 6-tool Selling Tools grid, 4 shortcuts; State 3 (between sales): congratulations card, past sales archive. State detection via getDashboardState(). Removed old CollapsibleSection nav dumps. OrganizerOnboardingModal wired: shows once to new organizers (State 1), localStorage gate. (2) **Shopper dashboard (shopper/dashboard.tsx):** State-aware hero (A: new shopper welcome, B: returning shopper with pending payments priority zone), Rank Progress Card with exact spec copy formulas per rank (INITIATE→SCOUT→RANGER→SAGE→GRANDMASTER with XP thresholds, progress bars, "best way to earn" per rank), permanent Streak explainer + StreakWidget, Hunt Pass CTA (only when huntPassActive !== true, 3 benefits, $4.99/mo). Preserved ClaimCard + AchievementBadgesSection. (3) **Guidance layer (5 files):** TooltipHelper.tsx (new — ❓ icon, floating tooltip, dark mode, accessible); OrganizerOnboardingModal.tsx (new — 3-screen: Welcome, Photos matter, You're in control, localStorage gate); pricing.tsx tier inline explainers (SIMPLE/PRO/TEAMS plain-English below names); holds.tsx rank badges (⚔️/🐦/🧗/🧙/👑 per rank, Grandmaster "almost always follows through" copy); reservationController.ts adds explorerRank to organizer holds query. ⚠️ TODO placeholders: revenue API, items count, visitor metrics (not in existing API), ExplorerProfile (not in schema). Roadmap updated: #222 + #223 + #224 → Shipped S351 Pending Chrome QA. Deleted misplaced claude_docs/DASHBOARD_CONTENT_SPEC.md. Files: organizer/dashboard.tsx, shopper/dashboard.tsx, TooltipHelper.tsx (NEW), OrganizerOnboardingModal.tsx (NEW), reservationController.ts, pricing.tsx, holds.tsx, strategy/roadmap.md.
@@ -77,63 +79,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-## Next Session (S352)
+## Next Session (S354)
 
-### S352 Priority 1: Push S351 + S352 files (Patrick action first)
+### S354 Priority 1: Push S353 files (Patrick action first)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
+git add packages/frontend/components/Layout.tsx
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/frontend/components/TooltipHelper.tsx
-git add packages/frontend/components/OrganizerOnboardingModal.tsx
-git add packages/backend/src/controllers/reservationController.ts
-git add packages/frontend/pages/organizer/pricing.tsx
-git add packages/frontend/pages/organizer/holds.tsx
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git add packages/frontend/components/camera/PreviewModal.tsx
-git add packages/frontend/components/camera/RapidCarousel.tsx
-git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/camera/BrightnessIndicator.tsx
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/src/services/xpService.ts
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260330_add_item_prewire_fields/migration.sql
-git add packages/database/prisma/EXPLORER_PROFILE_DECISION.md
-git rm -f claude_docs/DASHBOARD_CONTENT_SPEC.md
-git commit -m "S351+S352: dashboards, guidance layer, photo capture, revenue API, XP profile fix, pre-wire schema (#222-227)"
+git commit -m "S353: fix dashboard dead space, nav mirroring, rank-aware gamification"
 .\push.ps1
 ```
 
-### S352 Priority 2: Dashboard QA
-
-After push, Chrome QA the two dashboards:
-- Organizer State 1: log in as user with 0 sales — confirm welcome hero shows, onboarding modal appears once
-- Organizer State 2: log in as Alice/user1 — confirm Sale Status Widget shows with real data
-- Shopper: log in as user12 (Leo Thomas) — confirm Rank Progress Card shows real XP, Streak explainer visible
+### S354 Priority 1: Dashboard QA (Chrome)
+- Organizer State 1: log in as user with 0 sales — confirm welcome hero + onboarding modal
+- Organizer State 2: log in as Alice/user1 — confirm Sale Status Widget + real stats (Items Listed, Visitors Today, Active Holds)
+- Shopper: log in as user12 (Leo Thomas) — confirm rank-aware Hunt Pass copy, Rank Progress Card real XP, Streak explainer visible
 - Dark mode pass on both dashboards
 
-### S352 Priority 3: Hold-to-Pay QA (carried from S349/S350/S351)
-Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets ClaimCard → Stripe link → payment → SOLD + XP. Test: user12 (shopper), user6/Family Collection Sale 16 (organizer). Verify STRIPE_WEBHOOK_SECRET in Railway env vars first.
+### S354 Priority 2: Hold-to-Pay E2E QA
+Full E2E: organizer marks sold on held item → modal → invoice sent → shopper gets ClaimCard → Stripe link → payment → SOLD + XP. Test: user12 (shopper), user6/Family Collection Sale 16 (organizer). STRIPE_WEBHOOK_SECRET ✅ confirmed set.
 
-### S352 Priority 4: Chrome QA backlog
+### S354 Priority 3: Chrome QA backlog
 S344 pending: #174+#80, #184, #41, #7, #89, #62, #37, #149.
 S346 pending: #48, #13, #157, #46, #199, #177, #58, #29.
 S347 pending: #212, #213, #131, #60, #123, #153.
 
-### S352 Notes
-- ExplorerProfile schema (Architect decision) still pending — Rank/XP uses User.guildXp + User.explorerRank (both in schema) ✅. ExplorerProfile-specific TODO placeholders in dashboard.
-- Revenue/items count/visitor metrics on organizer dashboard are TODO — need API endpoints
-- DASHBOARD_CONTENT_SPEC.md at claude_docs root is stale/misplaced — Records should delete it (superseded by ux-spotchecks/dashboard-redesign-brief-s350.md)
+### S354 Notes
+- All Railway env vars confirmed set: STRIPE_WEBHOOK_SECRET ✅, MAILERLITE_SHOPPERS_GROUP_ID ✅, RESEND_API_KEY ✅, RESEND_FROM_EMAIL ✅
+- All migrations deployed ✅ (no pending migrations as of S353)
 - Sage threshold is 2500 XP (beta only)
+- Legal items still open: #82 USPTO trademark decision, #83 trade secrets documentation
 
-### Patrick Actions Before S352
-1. Push S351 files (block above)
-2. Check STRIPE_WEBHOOK_SECRET in Railway env vars (Hold-to-Pay QA)
-3. Deploy migration `20260330_add_shopper_profile_fields` to Railway (if not done)
+### Patrick Actions Before S354
+1. Push S353 files (block above)
 
 ## Next Session (S351 — COMPLETED)
 
