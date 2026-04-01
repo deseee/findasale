@@ -370,8 +370,21 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             ))}
           </div>
 
-          {/* Right: placeholder for visual balance */}
-          <div className="flex-shrink-0 w-10" />
+          {/* Right: Camera switch (moved from bottom bar) */}
+          <button
+            onClick={switchCamera}
+            className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center"
+            aria-label="Switch camera"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
         </div>
 
         {/* Mode hint text */}
@@ -590,6 +603,14 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   Enhance
                 </button>
               )}
+              {readyCount > 0 && (
+                <button
+                  onClick={onNavigateToReview}
+                  className="text-xs text-amber-300 font-semibold underline underline-offset-2 hover:text-amber-200 transition-colors"
+                >
+                  Review &amp; Publish ({readyCount}) →
+                </button>
+              )}
             </div>
           )}
 
@@ -619,13 +640,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Single shutter row: thumbnails (left) + shutter (center) + camera switch (right) */}
-          <div className="flex items-center py-4 px-3 gap-3 min-h-20">
-            {/* Left: Thumbnail carousel (rapidfire only, small) */}
+          {/* Bottom control strip: thumbnails + shutter embedded in scroll row */}
+          <div className="flex items-center py-4 px-3 gap-3 overflow-x-auto scrollbar-hide min-h-20">
+            {/* Thumbnail carousel (rapidfire only) — scrolls left of shutter */}
             {isRapidfire && rapidItems.length > 0 && (
               <div
                 ref={carouselRef}
-                className="flex gap-1.5 overflow-x-auto scrollbar-hide flex-shrink-0 max-w-24"
+                className="flex gap-1.5 flex-shrink-0"
                 style={{ WebkitOverflowScrolling: 'touch' }}
               >
                 {rapidItems.slice(0, 3).map((item) => {
@@ -692,15 +713,15 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         <div className="absolute -top-0.5 -left-0.5 text-xs">✨</div>
                       )}
 
-                      {/* "+" button (outline only, transparent background) */}
+                      {/* "+" button — small corner badge, does NOT cover the thumbnail tap area */}
                       {item.thumbnailUrl && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             onAddToItem(item.id);
                           }}
-                          className={`absolute inset-0 w-full h-full flex items-center justify-center text-sm font-bold text-white transition-all rounded-lg ${
-                            isAddingTo ? 'bg-amber-500' : 'border-2 border-white/70 bg-transparent hover:bg-white/10'
+                          className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white transition-all ${
+                            isAddingTo ? 'bg-amber-500' : 'bg-black/60 border border-white/50 hover:bg-black/80'
                           }`}
                           aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
                         >
@@ -734,48 +755,28 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               </button>
             )}
 
-            {/* Center: Shutter button */}
-            <div className="flex-shrink-0 flex-1 flex justify-center">
-              <button
-                onClick={capturePhoto}
-                disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
-                className={`w-16 h-16 rounded-full flex items-center justify-center transition-transform active:scale-90 flex-shrink-0 ${
-                  isRapidfire
-                    ? inAddMode
-                      ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
-                      : 'bg-gradient-to-br from-amber-500 to-red-500 shadow-lg shadow-amber-500/50'
-                    : 'border-4 border-white bg-white/20'
-                }`}
-                style={{
-                  opacity: cameraReady && (isRapidfire ? photos.length < maxPhotos : photosThisItem < MAX_REGULAR) ? 1 : 0.5,
-                }}
-                aria-label="Capture photo"
-              >
-                {isRapidfire ? (
-                  <span className="text-2xl font-bold text-white">{inAddMode ? '+' : '⚡'}</span>
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-white" />
-                )}
-              </button>
-            </div>
-
-            {/* Right: Camera switch */}
-            <div className="flex-shrink-0">
-              <button
-                onClick={switchCamera}
-                className="w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center flex-shrink-0"
-                aria-label="Switch camera"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-              </button>
-            </div>
+            {/* Shutter button — flex-shrink-0, always visible, embedded in strip */}
+            <button
+              onClick={capturePhoto}
+              disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
+              className={`flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center transition-transform active:scale-90 ${
+                isRapidfire
+                  ? inAddMode
+                    ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
+                    : 'bg-gradient-to-br from-amber-500 to-red-500 shadow-lg shadow-amber-500/50'
+                  : 'border-4 border-white bg-white/20'
+              }`}
+              style={{
+                opacity: cameraReady && (isRapidfire ? photos.length < maxPhotos : photosThisItem < MAX_REGULAR) ? 1 : 0.5,
+              }}
+              aria-label="Capture photo"
+            >
+              {isRapidfire ? (
+                <span className="text-2xl font-bold text-white">{inAddMode ? '+' : '⚡'}</span>
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-white" />
+              )}
+            </button>
           </div>
         </div>
 

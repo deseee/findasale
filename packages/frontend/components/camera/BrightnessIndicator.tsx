@@ -88,10 +88,12 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
       {/* Hidden canvas for sampling */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Brightness indicator display */}
-      <div className={`absolute top-4 left-1/2 -translate-x-1/2 ${tierInfo.bg} backdrop-blur-sm rounded-full px-3 py-2 z-10 flex items-center gap-2 text-xs font-medium`}>
-        <span className={`${tierInfo.color} text-sm`}>{tierInfo.dots}</span>
-        <span className="text-white text-xs">{tierInfo.text}</span>
+      {/* Brightness indicator — one line, semi-transparent, below top bar */}
+      <div className={`absolute top-16 left-1/2 -translate-x-1/2 backdrop-blur-sm rounded-full px-3 py-1 z-10 flex items-center gap-1.5 text-xs font-medium pointer-events-none`}
+        style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+      >
+        <span className={tierInfo.color}>{tierInfo.dots}</span>
+        <span className="text-white">{tierInfo.text}</span>
       </div>
     </>
   );
