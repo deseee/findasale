@@ -1,3 +1,4 @@
+// cache-bust: 2026-04-01
 const { withSentryConfig } = require('@sentry/nextjs');
 
 const withPWA = require('next-pwa')({
