@@ -32,6 +32,8 @@ export enum SaleType {
   YARD = 'YARD',
   AUCTION = 'AUCTION',
   FLEA_MARKET = 'FLEA_MARKET',
+  CONSIGNMENT = 'CONSIGNMENT',
+  OTHER = 'OTHER',
 }
 
 // B1 ADR: Item listing/transaction types
@@ -105,3 +107,29 @@ export type RegisterCredentials = {
   name: string;
   role: 'USER' | 'ORGANIZER' | 'ADMIN';
 };
+
+// Feature #228: Settlement Hub + Dashboard Widgets
+export type {
+  LifecycleStage,
+  ExpenseCategory,
+  PayoutStatus,
+  PayoutMethod,
+  TransactionPaymentMethod,
+  TransactionSource,
+  TransactionStatus,
+  HighValueItemStatus,
+  SaleExpenseInput,
+  SaleExpenseDTO,
+  ClientPayoutRequest,
+  ClientPayoutDTO,
+  SettlementWithDetails,
+  SettlementUpdateInput,
+  SalePulseData,
+  OrganizerEfficiencyStats,
+  SmartBuyerEntry,
+  HighValueItemAlert,
+  WeatherForecast,
+  PostSaleMomentumData,
+  SettlementType,
+  DashboardSaleTypeConfig,
+} from './types/settlement';

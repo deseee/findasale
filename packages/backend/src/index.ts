@@ -152,6 +152,7 @@ import bidsRoutes from './routes/bids';                         // Shopper bids 
 import xpController from './controllers/xpController';          // Phase 2a: Explorer's Guild XP system
 import supportRoutes from './routes/support';                  // #128: Automated Support Stack
 import posTiersRoutes from './routes/posTiers';               // POS Tier Status tracking
+import settlementRoutes from './routes/settlement';           // Feature #228: Settlement Hub
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -469,6 +470,7 @@ app.use('/api/feedback', feedbackRoutes);                              // User F
 app.use('/api/bids', bidsRoutes);                                      // Shopper bids page
 app.use('/api/xp', xpController);                                      // Phase 2a: Explorer's Guild XP system
 app.use('/api/support', supportRoutes);                                 // #128: Automated Support Stack
+app.use('/api/sales', settlementRoutes);                                   // Feature #228: Settlement Hub
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

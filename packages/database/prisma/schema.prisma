@@ -143,6 +143,8 @@ model User {
   // Hold-to-Pay feature: invoices (shopper and organizer sides)
   shopperInvoices HoldInvoice[] @relation("ShopperInvoices")
   organizerInvoices HoldInvoice[] @relation("OrganizerInvoices")
+  // Feature #228: Settlement Hub — buyer transaction history
+  saleTransactions SaleTransaction[]
 
   // Phase 2a: Explorer's Guild — XP Economy
   guildXp         Int           @default(0)         // Phase 2a: Cumulative XP, never resets, used for rank calculation
@@ -247,6 +249,8 @@ model Organizer {
   isEnterpriseAccount Boolean @default(false)
   // Feature #121: Hold system settings
   holdSettings    OrganizerHoldSettings?
+  // Feature #228: Settlement Hub — default commission rate for estate/consignment/auction
+  defaultCommissionRate Decimal?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -401,11 +405,18 @@ model Sale {
   prelaunchAt      DateTime?   // null = no prelaunch; before this time, only Sage+ can browse inventory
   // Sourcebook relations
   sourcebookEntries SourcebookEntry[] @relation("SaleSourcebookEntries")
+  // Feature #228: Settlement Hub — lifecycle + commission + settlement
+  lifecycleStage   String    @default("LEAD")   // LEAD|CONTRACTED|PREP|LIVE|POST_SALE|CLOSED
+  commissionRate   Decimal?                      // organizer's % for estate/consignment/auction
+  settlementNotes  String?
+  settlement       SaleSettlement?
+  transactions     SaleTransaction[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   @@index([deletedAt])
   @@index([prelaunchAt])
+  @@index([lifecycleStage])
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
@@ -531,6 +542,12 @@ model Item {
   // Feature #91: Auto-Markdown (Smart Clearance)
   priceBeforeMarkdown Float?                   // Original price before markdown applied
   markdownApplied  Boolean   @default(false)   // Whether auto-markdown has been applied
+  // Feature #228: Settlement Hub — high-value item tracking + AI comp
+  isHighValue        Boolean   @default(false)
+  highValueThreshold Decimal?
+  estimatedValue     Decimal?
+  aiSuggestedPrice   Decimal?
+  saleTransactions   SaleTransaction[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -539,6 +556,7 @@ model Item {
   @@index([saleId, draftStatus])
   @@index([libraryId])
   @@index([organizerId, inLibrary])
+  @@index([isHighValue])
 }
 
 // Camera Workflow v2: Photo model for multi-photo support (forward-looking schema)
@@ -2310,4 +2328,104 @@ model PushNotificationLog {
 
   @@index([userId])
   @@index([sentAt])
+}
+
+// Feature #228: Settlement Hub — settlement record per sale
+model SaleSettlement {
+  id                        String    @id @default(cuid())
+  saleId                    String    @unique
+  sale                      Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  lifecycleStage            String    @default("LEAD") // LEAD|CONTRACTED|PREP|LIVE|POST_SALE|CLOSED
+  settledAt                 DateTime?
+  totalRevenue              Decimal   @default(0)
+  platformFeeAmount         Decimal   @default(0)
+  totalExpenses             Decimal   @default(0)
+  netProceeds               Decimal   @default(0)
+  clientPayoutRequested     DateTime?
+  clientPayoutStatus        String?
+  clientPayoutAmount        Decimal?
+  clientPayoutMethod        String?
+  clientPayoutStripeTransferId String?
+  clientPayoutFailureReason String?
+  commissionRate            Decimal?
+  buyerPremiumRate          Decimal?
+  buyerPremiumCollected     Decimal?
+  notes                     String?
+  settlementNotes           String?
+  internalNotes             String?
+  deletedAt                 DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @default(now())
+  expenses                  SaleExpense[]
+  clientPayout              ClientPayout?
+
+  @@index([saleId])
+  @@index([lifecycleStage])
+  @@index([clientPayoutStatus])
+}
+
+// Feature #228: Settlement Hub — expense line items
+model SaleExpense {
+  id            String    @id @default(cuid())
+  settlementId  String
+  settlement    SaleSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  category      String    // HAULING|ADVERTISING|STAFF|SUPPLIES|VENUE|OTHER
+  description   String
+  amount        Decimal
+  vendorName    String?
+  receiptUrl    String?
+  receiptDate   DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now())
+
+  @@index([settlementId])
+  @@index([category])
+}
+
+// Feature #228: Settlement Hub — Stripe Connect client payout record
+model ClientPayout {
+  id                String    @id @default(cuid())
+  settlementId      String    @unique
+  settlement        SaleSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  clientName        String
+  clientEmail       String?
+  clientPhone       String?
+  amount            Decimal
+  status            String    @default("PENDING") // PENDING|PROCESSING|COMPLETED|FAILED
+  method            String    // STRIPE_CONNECT|MANUAL
+  stripeTransferId  String?   @unique
+  stripeAccountId   String?
+  bankAccountLast4  String?
+  bankRoutingNumber String?
+  failureReason     String?
+  processedAt       DateTime?
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now())
+
+  @@index([settlementId])
+  @@index([status])
+}
+
+// Feature #228: Sale Pulse — analytics read model for transaction tracking
+model SaleTransaction {
+  id            String    @id @default(cuid())
+  saleId        String
+  sale          Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  buyerId       String?
+  buyer         User?     @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  itemId        String?
+  item          Item?     @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  amount        Decimal
+  currency      String    @default("USD")
+  paymentMethod String    // STRIPE|CASH|INVOICE|OTHER
+  source        String    @default("ONLINE") // ONLINE|IN_PERSON|POS
+  status        String    @default("COMPLETED") // COMPLETED|REFUNDED|PENDING
+  timestamp     DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  @@index([saleId, timestamp])
+  @@index([buyerId])
+  @@index([status])
 }

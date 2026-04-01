@@ -425,6 +425,14 @@ const EditSalePage = () => {
                 >
                   {isTogglingStatus ? 'Updating...' : (sale.status === 'PUBLISHED' ? 'Close Early' : sale.status === 'ENDED' ? 'Reopen' : 'Publish')}
                 </button>
+                {sale.status === 'ENDED' && (
+                  <a
+                    href={`/organizer/settlement/${sale.id}`}
+                    className="text-sm bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded font-medium"
+                  >
+                    Settle This Sale
+                  </a>
+                )}
               </div>
             )}
           </div>

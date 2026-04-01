@@ -32,6 +32,13 @@ import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
 import { AnimatedCounter } from '../../components/AnimatedCounter';
+import SalePulseWidget from '../../components/SalePulseWidget';
+import SmartBuyerWidget from '../../components/SmartBuyerWidget';
+import HighValueTrackerWidget from '../../components/HighValueTrackerWidget';
+import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget';
+import WeatherStrip from '../../components/WeatherStrip';
+import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
+import { isWidgetVisible } from '../../lib/dashboard-sale-type-config';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -896,6 +903,30 @@ const OrganizerDashboard = () => {
                   </div>
                 </div>
               )}
+
+              {/* Feature #228: Dashboard Widgets — State 2 (active sale) */}
+              {activeSale && (
+                <>
+                  {/* Weather Strip */}
+                  <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} />
+
+                  {/* Widget Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'SalePulse') && (
+                      <SalePulseWidget saleId={activeSale.id} />
+                    )}
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'SmartBuyer') && (
+                      <SmartBuyerWidget saleId={activeSale.id} />
+                    )}
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'HighValueTracker') && (
+                      <HighValueTrackerWidget saleId={activeSale.id} />
+                    )}
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'EfficiencyCoaching') && (
+                      <EfficiencyCoachingWidget />
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -910,6 +941,29 @@ const OrganizerDashboard = () => {
                   Create Another Sale
                 </Link>
               </div>
+
+              {/* Feature #228: Post-Sale Momentum + Efficiency Coaching — State 3 */}
+              {salesData && salesData.length > 0 && (() => {
+                const mostRecentEnded = salesData
+                  .filter((s: Sale) => s.status === 'ENDED')
+                  .sort((a: Sale, b: Sale) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
+                if (!mostRecentEnded) return null;
+                const revenue = statsData?.revenue?.totalLifetime ?? 0;
+                const soldItems = statsData?.items?.sold ?? 0;
+                const totalItems = statsData?.items?.total ?? 0;
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <PostSaleMomentumCard
+                      saleId={mostRecentEnded.id}
+                      saleTitle={mostRecentEnded.title}
+                      totalRevenue={revenue}
+                      itemsSold={soldItems}
+                      totalItems={totalItems}
+                    />
+                    <EfficiencyCoachingWidget />
+                  </div>
+                );
+              })()}
 
               {/* Past Sales Archive */}
               <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">

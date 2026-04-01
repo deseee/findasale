@@ -24,6 +24,7 @@ import {
   closeAuctionEndpoint,
 } from '../controllers/itemController';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { prisma } from '../lib/prisma';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
 import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account age gate
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
@@ -796,5 +797,35 @@ router.get('/:itemId/qr', getQrCode);
 
 // GET /api/items/:itemId/qr/scan — Record QR scan and award badge + XP (authenticated)
 router.get('/:itemId/qr/scan', authenticate, recordQrScan);
+
+// Feature #228: High-Value Item Tracker
+// PATCH /api/items/:itemId/high-value — toggle high-value flag
+router.patch('/:itemId/high-value', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { itemId } = req.params;
+    const { isHighValue, threshold } = req.body;
+
+    // Verify organizer owns this item
+    const item = await prisma.item.findFirst({
+      where: { id: itemId, sale: { organizer: { userId: req.user?.id } } },
+      select: { id: true },
+    });
+    if (!item) return res.status(404).json({ message: 'Item not found or access denied.' });
+
+    const updated = await prisma.item.update({
+      where: { id: itemId },
+      data: {
+        isHighValue: isHighValue ?? false,
+        highValueThreshold: threshold != null ? threshold : undefined,
+      },
+      select: { id: true, isHighValue: true, highValueThreshold: true },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('high-value toggle error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 export default router;

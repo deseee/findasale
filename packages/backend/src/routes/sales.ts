@@ -31,8 +31,9 @@ import photoOpsRoutes from './photoOps'; // Feature #39: Photo Op Stations
 import treasureHuntQRRoutes from './treasureHuntQR'; // Feature #85: Treasure Hunt QR
 import { createAlaCarteCheckout } from '../controllers/stripeController'; // #132: À La Carte
 import { getApproachNotes, updateApproachNotes, sendApproachNotification } from '../controllers/arrivalController'; // Feature #84: Approach Notes
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
+import { prisma } from '../lib/prisma';
 import { requireTier } from '../middleware/requireTier'; // Feature #91: PRO tier gate
 
 const router = Router();
@@ -85,5 +86,42 @@ router.use('/:saleId/photo-ops', photoOpsRoutes);
 
 // Feature #85: Treasure Hunt QR — per-sale scavenger hunt
 router.use('/:saleId/treasure-hunt-qr', treasureHuntQRRoutes);
+
+// Feature #228: Lifecycle stage management
+// PATCH /api/sales/:saleId/lifecycle — update sale lifecycle stage
+router.patch('/:saleId/lifecycle', authenticate, requireOrganizer, async (req: AuthRequest, res) => {
+  try {
+    const { saleId } = req.params;
+    const { stage } = req.body;
+    const validStages = ['LEAD', 'CONTRACTED', 'PREP', 'LIVE', 'POST_SALE', 'CLOSED'];
+
+    if (!stage || !validStages.includes(stage)) {
+      return res.status(400).json({ message: `Invalid stage. Must be one of: ${validStages.join(', ')}` });
+    }
+
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, organizer: { userId: req.user?.id } },
+      select: { id: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found or access denied.' });
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: { lifecycleStage: stage },
+      select: { id: true, lifecycleStage: true },
+    });
+
+    // Also update settlement if it exists
+    await prisma.saleSettlement.updateMany({
+      where: { saleId },
+      data: { lifecycleStage: stage },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('lifecycle update error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 export default router;

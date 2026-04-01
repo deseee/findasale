@@ -177,6 +177,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
         id: activeSale.id,
         title: activeSale.title,
         status: activeSale.status,
+        saleType: activeSale.saleType ?? 'ESTATE',
         endDate: activeSale.endDate,
         viewCount: activeSale.qrScanCount ?? 0,
         holdCount,
@@ -837,5 +838,207 @@ router.get('/pos-tiers', authenticate, getPosTierStatus);
 // GET /organizers/export/csv?saleId=X&format=ebay|amazon|facebook — CSV Export (Roadmap #125)
 // Export inventory items for a sale in platform-specific CSV formats (PRO tier required)
 router.get('/export/csv', authenticate, getCsvExportHandler);
+
+// ---- Feature #228: Dashboard Widget Endpoints ----
+
+// GET /organizers/sale-pulse/:saleId — Sale Pulse engagement score
+router.get('/sale-pulse/:saleId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { saleId } = req.params;
+    const userId = req.user?.id;
+
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, organizer: { userId } },
+      select: { id: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found or access denied.' });
+
+    // Count page views (qrScanCount as proxy), item saves (favorites), shopper questions (conversations)
+    const saleData = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: {
+        qrScanCount: true,
+        _count: {
+          select: {
+            favorites: true,
+            conversations: true,
+            subscribers: true,
+          },
+        },
+      },
+    });
+
+    const pageViews = saleData?.qrScanCount ?? 0;
+    const itemSaves = saleData?._count?.favorites ?? 0;
+    const shopperQuestions = saleData?._count?.conversations ?? 0;
+    const shopperCount = saleData?._count?.subscribers ?? 0;
+
+    // Buzz score: views×0.3 + saves×0.4 + questions×0.3, normalized 0-100
+    const rawScore = pageViews * 0.3 + itemSaves * 0.4 + shopperQuestions * 0.3;
+    const buzzscore = Math.min(100, Math.round(rawScore));
+
+    res.json({
+      saleId,
+      pageViews,
+      itemSaves,
+      shopperQuestions,
+      buzzscore,
+      shopperCount,
+    });
+  } catch (error) {
+    console.error('sale-pulse error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /organizers/efficiency-stats — Organizer benchmarks vs. cohort
+router.get('/efficiency-stats', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      select: { id: true, totalSales: true },
+    });
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found.' });
+
+    // Fetch this organizer's sales with items
+    const sales = await prisma.sale.findMany({
+      where: { organizerId: organizer.id, status: 'ENDED' },
+      select: {
+        createdAt: true,
+        items: {
+          select: { status: true, createdAt: true, draftStatus: true },
+        },
+      },
+    });
+
+    // Average photo-to-publish time (approximation: item createdAt to sale publish)
+    let totalPublishMinutes = 0;
+    let publishCount = 0;
+    let totalItems = 0;
+    let soldItems = 0;
+
+    sales.forEach((sale: any) => {
+      sale.items.forEach((item: any) => {
+        totalItems++;
+        if (item.status === 'SOLD') soldItems++;
+        if (item.draftStatus === 'PUBLISHED') {
+          const diff = (new Date(item.createdAt).getTime() - new Date(sale.createdAt).getTime()) / 60000;
+          if (diff > 0 && diff < 10080) { // Cap at 7 days
+            totalPublishMinutes += diff;
+            publishCount++;
+          }
+        }
+      });
+    });
+
+    const avgPhotoToPublishMinutes = publishCount > 0 ? Math.round(totalPublishMinutes / publishCount) : 0;
+    const sellThroughRate = totalItems > 0 ? soldItems / totalItems : 0;
+
+    // Simple percentile rank (based on sell-through rate vs all organizers)
+    const allOrganizers = await prisma.organizer.count();
+    const betterOrganizers = await prisma.organizer.count({
+      where: { totalSales: { lt: organizer.totalSales } },
+    });
+    const percentileRank = allOrganizers > 0 ? Math.round((betterOrganizers / allOrganizers) * 100) : 50;
+
+    // Generate tips
+    const tips: string[] = [];
+    if (avgPhotoToPublishMinutes > 30) tips.push('Try batch-uploading photos to reduce your listing time.');
+    if (sellThroughRate < 0.5) tips.push('Consider lowering prices on slow-moving items or using Auto-Markdown.');
+    if (sellThroughRate >= 0.8) tips.push('Great sell-through rate! You could try higher starting prices.');
+    if (tips.length === 0) tips.push('You\'re performing well. Keep up the great work!');
+
+    res.json({
+      avgPhotoToPublishMinutes,
+      sellThroughRate: Math.round(sellThroughRate * 100) / 100,
+      percentileRank,
+      cohortSize: allOrganizers,
+      tips,
+    });
+  } catch (error) {
+    console.error('efficiency-stats error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /organizers/smart-buyers/:saleId — Upcoming shoppers with tier + XP
+router.get('/smart-buyers/:saleId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { saleId } = req.params;
+    const userId = req.user?.id;
+
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, organizer: { userId } },
+      select: { id: true, organizerId: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found or access denied.' });
+
+    // Get subscribers + favorites users for this sale, ranked by XP
+    const subscribers = await prisma.saleSubscriber.findMany({
+      where: { saleId },
+      select: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            guildXp: true,
+            explorerRank: true,
+            huntPassActive: true,
+          },
+        },
+      },
+    });
+
+    const favoriteUsers = await prisma.favorite.findMany({
+      where: { saleId },
+      select: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            guildXp: true,
+            explorerRank: true,
+            huntPassActive: true,
+          },
+        },
+      },
+    });
+
+    // Deduplicate and merge
+    const userMap = new Map<string, any>();
+    [...subscribers, ...favoriteUsers].forEach((entry: any) => {
+      if (entry.user && !userMap.has(entry.user.id)) {
+        userMap.set(entry.user.id, entry.user);
+      }
+    });
+
+    // Check which users follow this organizer
+    const followerIds = await prisma.follow.findMany({
+      where: { organizerId: sale.organizerId },
+      select: { followerId: true },
+    });
+    const followerSet = new Set(followerIds.map((f: any) => f.followerId));
+
+    const buyers = Array.from(userMap.values())
+      .sort((a: any, b: any) => (b.guildXp || 0) - (a.guildXp || 0))
+      .slice(0, 20)
+      .map((user: any) => ({
+        userId: user.id,
+        displayName: user.name || 'Anonymous',
+        avatarUrl: null,
+        tier: user.huntPassActive ? 'HUNT_PASS' : 'FREE',
+        xp: user.guildXp || 0,
+        rank: user.explorerRank || 'INITIATE',
+        isFollowing: followerSet.has(user.id),
+      }));
+
+    res.json(buyers);
+  } catch (error) {
+    console.error('smart-buyers error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 export default router;
