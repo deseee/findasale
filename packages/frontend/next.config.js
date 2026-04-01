@@ -1,3 +1,4 @@
+// cache-bust: 2026-04-01
 const { withSentryConfig } = require('@sentry/nextjs');
 
 const withPWA = require('next-pwa')({
@@ -82,7 +83,7 @@ const withPWA = require('next-pwa')({
     // unpkg.com CDN — cache first; versioned URLs are immutable.
     // Without this explicit rule, unpkg falls through to the pages catch-all
     // (NetworkFirst), which emits "no-response" when the fetch fails and
-    // nothing is cached yet (first load, offline, etc.).
+    // nothing is cached yet (first load, offline, offline, etc.).
     {
       urlPattern: /^https:\/\/unpkg\.com\/.*/i,
       handler: 'CacheFirst',
