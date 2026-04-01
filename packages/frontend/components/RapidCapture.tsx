@@ -456,7 +456,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
               {/* Phase 3.5: Real-time brightness indicator */}
               {cameraReady && videoRef.current && (
-                <BrightnessIndicator videoRef={videoRef} isActive={!flashEffect} />
+                <BrightnessIndicator videoRef={videoRef} isActive={cameraReady} />
               )}
 
 
@@ -573,113 +573,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           )}
         </div>
 
-        {/* Bottom section: carousel (rapidfire only) + adding-to banner + shutter row */}
-        <div className="bg-black/90 pb-safe">
-          {/* Rapidfire carousel (above shutter) */}
+        {/* Bottom section: compact single row with stats line above */}
+        <div className="bg-black/90 pb-safe flex flex-col">
+          {/* Stats line (compact, text-xs) */}
           {isRapidfire && rapidItems.length > 0 && (
-            <div
-              ref={carouselRef}
-              className="flex gap-2 px-4 py-3 pr-20 overflow-x-auto scrollbar-hide"
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
-              {rapidItems.map((item) => {
-                const isAddingTo = addingToItemId === item.id;
-                const status = !item.thumbnailUrl
-                  ? { icon: '📷', bgColor: 'bg-gray-200' }
-                  : item.draftStatus === 'DRAFT' && !item.aiError
-                  ? { icon: '◐', bgColor: 'bg-amber-100' }
-                  : item.draftStatus === 'DRAFT' && item.aiError
-                  ? { icon: '⚠', bgColor: 'bg-red-100' }
-                  : { icon: '✓', bgColor: 'bg-green-100' };
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`flex-shrink-0 relative cursor-pointer transition-all w-16 h-auto ${
-                      isAddingTo ? 'ring-2 ring-amber-400 rounded-lg shadow-lg shadow-amber-400/50' : ''
-                    }`}
-                    onClick={() => onThumbnailTap(item.id)}
-                    title={item.title || 'Item'}
-                  >
-                    {/* Thumbnail */}
-                    <div
-                      className={`w-16 h-16 rounded-lg overflow-hidden border border-white/30 flex items-center justify-center flex-shrink-0 ${
-                        isAddingTo ? 'bg-amber-900/30' : 'bg-white/10'
-                      }`}
-                    >
-                      {item.thumbnailUrl ? (
-                        <img
-                          key={item.thumbnailUrl}
-                          src={item.thumbnailUrl}
-                          alt={item.title || 'Item'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const img = e.currentTarget;
-                            img.style.display = 'none';
-                            const icon = document.createElement('span');
-                            icon.textContent = '📷';
-                            icon.className = 'text-xl';
-                            img.parentElement?.appendChild(icon);
-                          }}
-                        />
-                      ) : (
-                        <span className="text-xl">📷</span>
-                      )}
-                    </div>
-
-                    {/* Loading spinner overlay (while DRAFT with no error, real items only) */}
-                    {!item.id.startsWith('temp-') && item.draftStatus === 'DRAFT' && !item.aiError && item.thumbnailUrl && (
-                      <div className="absolute inset-0 rounded-lg bg-black/20 flex items-center justify-center">
-                        <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                      </div>
-                    )}
-
-                    {/* Status badge (top-right) */}
-                    {item.thumbnailUrl && (
-                      <div
-                        className={`absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${status.bgColor}`}
-                      >
-                        {status.icon}
-                      </div>
-                    )}
-
-                    {/* Auto-enhance badge (top-left) */}
-                    {item.autoEnhanced && (
-                      <div className="absolute top-0.5 left-0.5 text-sm">✨</div>
-                    )}
-
-                    {/* Photo count badge (bottom-center) */}
-                    {item.photoUrls && item.photoUrls.length > 1 && (
-                      <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-1.5 rounded-full">
-                        ×{item.photoUrls.length}
-                      </span>
-                    )}
-
-                    {/* "+" button (bottom-center, 48px) — toggles to "×" when adding */}
-                    {item.thumbnailUrl && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddToItem(item.id);
-                        }}
-                        className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white transition-all border ${
-                          isAddingTo ? 'bg-amber-500 border-amber-300 ring-2 ring-amber-300' : 'bg-gray-800/90 border-white/40 hover:bg-gray-900'
-                        }`}
-                        aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
-                      >
-                        {isAddingTo ? '×' : '+'}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-
-            </div>
-          )}
-
-          {/* Carousel stats line with Enhance All button (rapidfire only) */}
-          {isRapidfire && rapidItems.length > 0 && (
-            <div className="text-center text-xs text-white/50 px-4 pb-2 flex items-center justify-center gap-2">
+            <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
               <span>
                 {rapidItems.length} captured · {rapidItems.filter((i) => i.autoEnhanced).length} auto-enhanced ✨
               </span>
@@ -697,23 +595,23 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
           {/* Adding-to banner (shown when in add-mode) */}
           {isRapidfire && inAddMode && addingItem && (
-            <div className="bg-amber-500/20 border-t border-b border-amber-500/30 px-4 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="bg-amber-500/20 border-t border-amber-500/30 px-4 py-1 flex items-center justify-between text-xs h-8">
+              <div className="flex items-center gap-1.5">
                 {addingItem.thumbnailUrl && (
                   <img
                     key={addingItem.thumbnailUrl}
                     src={addingItem.thumbnailUrl}
                     alt={addingItem.title}
-                    className="w-8 h-8 rounded object-cover"
+                    className="w-6 h-6 rounded object-cover"
                   />
                 )}
-                <span className="text-sm text-white font-medium">
-                  Next shot adds to: {addingItem.title || 'item'}
+                <span className="text-white font-medium">
+                  Adding to: {addingItem.title || 'item'}
                 </span>
               </div>
               <button
                 onClick={() => onAddToItem(addingToItemId)}
-                className="text-white/60 hover:text-white text-lg"
+                className="text-white/60 hover:text-white text-sm"
                 aria-label="Cancel add mode"
               >
                 ✕
@@ -721,10 +619,102 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Shutter row */}
-          <div className="flex items-center py-5 px-6 gap-4">
-            {/* Left: Review button (moved from top-right) */}
-            <div className="flex-1 flex justify-start">
+          {/* Single shutter row: thumbnails (left) + shutter (center) + camera switch (right) */}
+          <div className="flex items-center py-4 px-3 gap-3 min-h-20">
+            {/* Left: Thumbnail carousel (rapidfire only, small) */}
+            {isRapidfire && rapidItems.length > 0 && (
+              <div
+                ref={carouselRef}
+                className="flex gap-1.5 overflow-x-auto scrollbar-hide flex-shrink-0 max-w-24"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                {rapidItems.slice(0, 3).map((item) => {
+                  const isAddingTo = addingToItemId === item.id;
+                  const status = !item.thumbnailUrl
+                    ? { icon: '📷', bgColor: 'bg-gray-200' }
+                    : item.draftStatus === 'DRAFT' && !item.aiError
+                    ? { icon: '◐', bgColor: 'bg-amber-100' }
+                    : item.draftStatus === 'DRAFT' && item.aiError
+                    ? { icon: '⚠', bgColor: 'bg-red-100' }
+                    : { icon: '✓', bgColor: 'bg-green-100' };
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex-shrink-0 relative cursor-pointer transition-all w-14 h-14 rounded-lg overflow-hidden border ${
+                        isAddingTo ? 'ring-2 ring-amber-400 border-amber-400' : 'border-white/40'
+                      }`}
+                      onClick={() => onThumbnailTap(item.id)}
+                      title={item.title || 'Item'}
+                    >
+                      {/* Thumbnail image */}
+                      <div className={`w-full h-full flex items-center justify-center flex-shrink-0 ${
+                        isAddingTo ? 'bg-amber-900/30' : 'bg-white/10'
+                      }`}>
+                        {item.thumbnailUrl ? (
+                          <img
+                            key={item.thumbnailUrl}
+                            src={item.thumbnailUrl}
+                            alt={item.title || 'Item'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              img.style.display = 'none';
+                              const icon = document.createElement('span');
+                              icon.textContent = '📷';
+                              icon.className = 'text-sm';
+                              img.parentElement?.appendChild(icon);
+                            }}
+                          />
+                        ) : (
+                          <span className="text-sm">📷</span>
+                        )}
+                      </div>
+
+                      {/* Loading spinner overlay */}
+                      {!item.id.startsWith('temp-') && item.draftStatus === 'DRAFT' && !item.aiError && item.thumbnailUrl && (
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                          <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                        </div>
+                      )}
+
+                      {/* Status badge (top-right) */}
+                      {item.thumbnailUrl && (
+                        <div
+                          className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold ${status.bgColor}`}
+                        >
+                          {status.icon}
+                        </div>
+                      )}
+
+                      {/* Auto-enhance badge (top-left) */}
+                      {item.autoEnhanced && (
+                        <div className="absolute -top-0.5 -left-0.5 text-xs">✨</div>
+                      )}
+
+                      {/* "+" button (outline only, transparent background) */}
+                      {item.thumbnailUrl && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAddToItem(item.id);
+                          }}
+                          className={`absolute inset-0 w-full h-full flex items-center justify-center text-sm font-bold text-white transition-all rounded-lg ${
+                            isAddingTo ? 'bg-amber-500' : 'border-2 border-white/70 bg-transparent hover:bg-white/10'
+                          }`}
+                          aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
+                        >
+                          {isAddingTo ? '×' : '+'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Left fallback: Review button (if not rapidfire or no carousel) */}
+            {(!isRapidfire || rapidItems.length === 0) && (
               <button
                 onClick={() => {
                   if (!isRapidfire && photos.length > 0) {
@@ -734,7 +724,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   }
                 }}
                 disabled={!isRapidfire && photos.length === 0}
-                className={`h-12 px-3 rounded-full font-bold text-xs transition-colors flex items-center justify-center whitespace-nowrap ${
+                className={`flex-shrink-0 h-10 px-2 rounded-full font-bold text-xs transition-colors flex items-center justify-center whitespace-nowrap ${
                   isRapidfire && readyCount === 0
                     ? 'bg-gray-700/80 text-gray-300 cursor-default'
                     : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed'
@@ -742,14 +732,14 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               >
                 Review{readyCount > 0 && ` (${readyCount})`}
               </button>
-            </div>
+            )}
 
             {/* Center: Shutter button */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 flex-1 flex justify-center">
               <button
                 onClick={capturePhoto}
                 disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
-                className={`w-20 h-20 rounded-full flex items-center justify-center transition-transform active:scale-90 flex-shrink-0 ${
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-transform active:scale-90 flex-shrink-0 ${
                   isRapidfire
                     ? inAddMode
                       ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
@@ -764,19 +754,19 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 {isRapidfire ? (
                   <span className="text-2xl font-bold text-white">{inAddMode ? '+' : '⚡'}</span>
                 ) : (
-                  <div className="w-14 h-14 rounded-full bg-white" />
+                  <div className="w-12 h-12 rounded-full bg-white" />
                 )}
               </button>
             </div>
 
             {/* Right: Camera switch */}
-            <div className="flex-1 flex justify-end">
+            <div className="flex-shrink-0">
               <button
                 onClick={switchCamera}
-                className="w-12 h-12 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center flex-shrink-0"
+                className="w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center flex-shrink-0"
                 aria-label="Switch camera"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
