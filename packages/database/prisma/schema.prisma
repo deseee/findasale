@@ -411,6 +411,9 @@ model Sale {
   settlementNotes  String?
   settlement       SaleSettlement?
   transactions     SaleTransaction[]
+  // Feature #371: Auto High-Value Item Flagging
+  highValueThresholdUSD Decimal @default(500)
+  autoFlagHighValue     Boolean @default(true)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -547,6 +550,10 @@ model Item {
   highValueThreshold Decimal?
   estimatedValue     Decimal?
   aiSuggestedPrice   Decimal?
+  // Feature #371: Auto High-Value Item Flagging
+  highValueSource    String?   @default("MANUAL")   // "AUTO" | "MANUAL"
+  highValueFlaggedAt DateTime?
+  isHighValueLocked  Boolean   @default(false)      // Organizer locked decision, respect it
   saleTransactions   SaleTransaction[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
