@@ -592,7 +592,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           {isRapidfire && rapidItems.length > 0 && (
             <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
               <span>
-                {rapidItems.length} captured · {rapidItems.filter((i) => i.autoEnhanced).length} auto-enhanced ✨
+                {rapidItems.length} taken · {rapidItems.filter((i) => i.autoEnhanced).length} enhanced ✨
               </span>
               {onEnhanceAll && (
                 <button
