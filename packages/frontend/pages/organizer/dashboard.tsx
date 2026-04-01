@@ -38,7 +38,7 @@ import HighValueTrackerWidget from '../../components/HighValueTrackerWidget';
 import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget';
 import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
-import { isWidgetVisible } from '../../lib/dashboard-sale-type-config';
+import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -413,7 +413,7 @@ const OrganizerDashboard = () => {
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
             <p className="text-warm-600 dark:text-warm-400">
               {dashboardState === 'new' && "Let's set up your first sale in 5 minutes"}
-              {dashboardState === 'active' && 'Your sale is live. Keep the momentum going.'}
+              {dashboardState === 'active' && activeSale && getSaleTypeConfig(activeSale.saleType).greeting}
               {dashboardState === 'between' && 'Great job! Your sale has ended. Ready for the next one?'}
             </p>
           </div>
@@ -800,9 +800,11 @@ const OrganizerDashboard = () => {
                       <p className="text-xs text-warm-600 dark:text-warm-400">{tierData.progress.completedSales}/{tierData.progress.salesNeeded} sales until next tier</p>
                     </div>
                   </div>
-                  <Link href="/pricing" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
-                    Upgrade →
-                  </Link>
+                  {tierData.progress.nextTier !== null && (
+                    <Link href="/pricing" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
+                      Upgrade →
+                    </Link>
+                  )}
                 </div>
               )}
 
@@ -899,6 +901,14 @@ const OrganizerDashboard = () => {
                         >
                           Reopen
                         </button>
+                        {sale.status === 'ENDED' && (
+                          <Link href={`/organizer/settlement/${sale.id}`} className="text-green-600 hover:text-green-700 dark:text-green-400 font-semibold text-xs ml-2">
+                            Settle →
+                          </Link>
+                        )}
+                        <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs ml-2">
+                          View Details →
+                        </Link>
                       </div>
                     ))}
                   </div>
@@ -978,25 +988,30 @@ const OrganizerDashboard = () => {
                       </div>
                       <div className="flex items-center gap-2 ml-4">
                         {sale.status === 'ENDED' && (
-                          <button
-                            onClick={async () => {
-                              const confirmed = window.confirm('Reopen this sale? It will become visible to shoppers again.');
-                              if (!confirmed) return;
-                              try {
-                                await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
-                                showToast('Sale reopened', 'success');
-                                setTimeout(() => window.location.reload(), 1000);
-                              } catch (error: any) {
-                                console.error('Failed to reopen sale:', error);
-                                showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
-                              }
-                            }}
-                            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
-                          >
-                            Reopen
-                          </button>
+                          <>
+                            <button
+                              onClick={async () => {
+                                const confirmed = window.confirm('Reopen this sale? It will become visible to shoppers again.');
+                                if (!confirmed) return;
+                                try {
+                                  await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
+                                  showToast('Sale reopened', 'success');
+                                  setTimeout(() => window.location.reload(), 1000);
+                                } catch (error: any) {
+                                  console.error('Failed to reopen sale:', error);
+                                  showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
+                                }
+                              }}
+                              className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+                            >
+                              Reopen
+                            </button>
+                            <Link href={`/organizer/settlement/${sale.id}`} className="text-green-600 hover:text-green-700 dark:text-green-400 font-semibold text-sm">
+                              Settle →
+                            </Link>
+                          </>
                         )}
-                        <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm ml-2">
+                        <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
                           View Details →
                         </Link>
                       </div>

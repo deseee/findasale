@@ -32,6 +32,15 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
   const config = getSaleTypeConfig(saleType);
   const isSimple = config.settlementType === 'SIMPLE_CARD';
 
+  // Fetch organizer data for default commission rate
+  const { data: organizer } = useQuery({
+    queryKey: ['organizer-me'],
+    queryFn: async () => {
+      const res = await api.get('/organizers/me');
+      return res.data as { commissionRate?: number | null };
+    },
+  });
+
   // Fetch or create settlement
   const { data: settlement, isLoading, isError, error } = useQuery({
     queryKey: ['settlement', saleId],
@@ -149,13 +158,13 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Review Sale Summary</h3>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-gray-50 dark:bg-gray-750 rounded-lg p-3">
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Revenue</p>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">
                   ${(settlement?.totalRevenue ?? 0).toFixed(2)}
                 </p>
               </div>
-              <div className="bg-gray-50 dark:bg-gray-750 rounded-lg p-3">
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Sale Type</p>
                 <p className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
                   {(settlement?.saleType || saleType || 'estate').toLowerCase().replace('_', ' ')}
@@ -182,7 +191,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
             saleId={saleId}
             totalRevenue={settlement?.totalRevenue ?? 0}
             totalExpenses={settlement?.totalExpenses ?? 0}
-            currentRate={settlement?.commissionRate ?? null}
+            currentRate={settlement?.commissionRate ?? organizer?.commissionRate ?? null}
             clientLabel={config.clientLabel}
           />
         )}
@@ -201,7 +210,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
         {currentStep.key === 'receipt' && (
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Settlement Receipt</h3>
-            <div className="bg-gray-50 dark:bg-gray-750 rounded-lg p-4 space-y-2 mb-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-2 mb-4">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Revenue</span>
                 <span className="text-gray-900 dark:text-white">${(settlement?.totalRevenue ?? 0).toFixed(2)}</span>
@@ -242,13 +251,21 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
 
         {/* Navigation */}
         <div className="flex justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={() => setStep(Math.max(0, step - 1))}
-            disabled={step === 0}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30"
-          >
-            ← Back
-          </button>
+          {step === 0 ? (
+            <Link
+              href="/organizer/dashboard"
+              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              ← Back to Dashboard
+            </Link>
+          ) : (
+            <button
+              onClick={() => setStep(Math.max(0, step - 1))}
+              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              ← Back
+            </button>
+          )}
           {step < WIZARD_STEPS.length - 1 && (
             <button
               onClick={() => setStep(step + 1)}
