@@ -1580,7 +1580,18 @@ const AddItemsDetailPage = () => {
               onModeChange={setCaptureMode}
               rapidItems={rapidItems}
               addingToItemId={addingToItemId}
-              onAddToItem={(id) => setAddingToItemId((prev) => (prev === id ? null : id))}
+              onAddToItem={(id) => {
+                setAddingToItemId((prev) => {
+                  if (prev === id) {
+                    // exiting add-mode — restart the 4.5s timer
+                    api.post(`/items/${id}/release-analysis`).catch(() => {});
+                    return null;
+                  }
+                  // entering add-mode — cancel the timer entirely while repositioning
+                  api.post(`/items/${id}/hold-analysis`).catch(() => {});
+                  return id;
+                });
+              }}
               onThumbnailTap={(id) => {
                 // BUG 4 FIX: Keep camera open, open preview modal on top
                 setPreviewItemId(id);

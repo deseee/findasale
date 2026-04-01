@@ -16,6 +16,8 @@ import {
   getItemDraftStatus,
   getDraftItemsBySaleId,
   publishItem,
+  holdAnalysis,
+  releaseAnalysis,
   getInspirationItems,
   getQrCode,
   recordQrScan,
@@ -60,6 +62,8 @@ router.get('/drafts', authenticate, getDraftItemsBySaleId); // GET /api/items/dr
 // Declared before /:id to prevent param capture
 router.get('/:itemId/draft-status', authenticate, getItemDraftStatus);
 router.post('/:itemId/publish', authenticate, publishItem);
+router.post('/:id/hold-analysis', authenticate, holdAnalysis);
+router.post('/:id/release-analysis', authenticate, releaseAnalysis);
 
 // Phase 1: Batch Operations Toolkit — Status-safe validation + dry-run + tags operation
 // Declared before /:id to prevent 'bulk' being captured as an item ID.
