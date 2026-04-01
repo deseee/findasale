@@ -305,6 +305,8 @@ const EditSalePage = () => {
 
       const confirmMessage = sale.status === 'PUBLISHED'
         ? 'Close this sale early? You can reopen it later from your dashboard.'
+        : sale.status === 'ENDED'
+        ? 'Reopen this sale? It will become visible to shoppers again.'
         : 'Make this sale visible to shoppers on the map?';
 
       if (!window.confirm(confirmMessage)) {
@@ -398,7 +400,7 @@ const EditSalePage = () => {
 
           <div className="flex items-center justify-between gap-4 mb-8">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">
-              Edit Sale {sale?.status === 'PUBLISHED' ? '(Live)' : '(Draft)'}
+              Edit Sale {sale?.status === 'PUBLISHED' ? '(Live)' : sale?.status === 'ENDED' ? '(Ended)' : '(Draft)'}
             </h1>
             {sale && (
               <div className="flex items-center gap-3">
@@ -406,9 +408,13 @@ const EditSalePage = () => {
                   <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-3 py-1 text-sm font-semibold">
                     ● LIVE
                   </span>
+                ) : sale.status === 'ENDED' ? (
+                  <span className="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold">
+                    ✓ ENDED
+                  </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold">
-                    \u25cc DRAFT
+                    ◌ DRAFT
                   </span>
                 )}
                 <button
@@ -417,7 +423,7 @@ const EditSalePage = () => {
                   disabled={isTogglingStatus}
                   className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50 font-medium"
                 >
-                  {isTogglingStatus ? 'Updating...' : (sale.status === 'PUBLISHED' ? 'Unpublish' : 'Publish')}
+                  {isTogglingStatus ? 'Updating...' : (sale.status === 'PUBLISHED' ? 'Close Early' : sale.status === 'ENDED' ? 'Reopen' : 'Publish')}
                 </button>
               </div>
             )}
