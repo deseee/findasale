@@ -648,18 +648,18 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             <div
               ref={carouselRef}
               className="absolute inset-0 flex items-center gap-2 overflow-x-auto scrollbar-hide px-3"
-              style={{ WebkitOverflowScrolling: 'touch', paddingRight: 'calc(50% - 80px)' }}
+              style={{ WebkitOverflowScrolling: 'touch', paddingRight: 'calc(50% + 40px)' }}
             >
               {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
               {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
                   const isAddingTo = addingToItemId === item.id;
                   const status = !item.thumbnailUrl
-                    ? { icon: '📷', bgColor: 'bg-gray-200' }
+                    ? { icon: '📷', bgColor: 'bg-gray-200', iconColor: 'text-gray-600' }
                     : item.draftStatus === 'DRAFT' && !item.aiError
-                    ? { icon: '◐', bgColor: 'bg-amber-100' }
+                    ? { icon: '◐', bgColor: 'bg-amber-100', iconColor: 'text-amber-700' }
                     : item.draftStatus === 'DRAFT' && item.aiError
-                    ? { icon: '⚠', bgColor: 'bg-red-100' }
-                    : { icon: '✓', bgColor: 'bg-green-100' };
+                    ? { icon: '⚠', bgColor: 'bg-red-100', iconColor: 'text-red-700' }
+                    : { icon: '✓', bgColor: 'bg-emerald-500', iconColor: 'text-white' };
 
                   return (
                     <div
@@ -704,7 +704,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       {/* Status badge (top-right) */}
                       {item.thumbnailUrl && (
                         <div
-                          className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold ${status.bgColor}`}
+                          className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold ${status.bgColor} ${status.iconColor}`}
                         >
                           {status.icon}
                         </div>
