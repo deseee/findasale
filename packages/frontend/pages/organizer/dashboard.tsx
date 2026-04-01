@@ -670,7 +670,7 @@ const OrganizerDashboard = () => {
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex-1">
                             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{statsData.activeSale.title}</h2>
-                            <div className="flex flex-wrap gap-2 mb-3">
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
                               <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
                                 statsData.activeSale.status === 'PUBLISHED'
                                   ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
@@ -683,9 +683,11 @@ const OrganizerDashboard = () => {
                                   {urgency.text}
                                 </span>
                               ) : null; })()}
+                              {/* Weather Strip inline with status badge */}
+                              <div className="flex-shrink-0">
+                                <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={statsData?.activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
+                              </div>
                             </div>
-                            {/* Weather Strip inline in card header */}
-                            <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={statsData?.activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
                           </div>
                         </div>
                       </div>
@@ -706,7 +708,7 @@ const OrganizerDashboard = () => {
                     )}
                     {statsData.activeSale.status === 'PUBLISHED' && (
                       <>
-                        <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                        <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm" title="Add, edit, or remove items from this sale">
                           Manage Items
                         </Link>
                         <button
@@ -723,6 +725,7 @@ const OrganizerDashboard = () => {
                             }
                           }}
                           className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                          title="End your sale before the scheduled end date"
                         >
                           Close Sale Early
                         </button>
@@ -732,13 +735,13 @@ const OrganizerDashboard = () => {
 
                   {/* Quick Action Buttons */}
                   <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
-                    <Link href={`/sales/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors">
+                    <Link href={`/sales/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="See your sale as shoppers see it">
                       View Live
                     </Link>
-                    <Link href={`/organizer/holds?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors">
+                    <Link href={`/organizer/holds?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors" title="View and manage shopper holds for this sale">
                       Holds
                     </Link>
-                    <Link href={`/organizer/pos?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors">
+                    <Link href={`/organizer/pos?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="Open Point of Sale to process in-person transactions">
                       POS
                     </Link>
                   </div>
@@ -927,17 +930,22 @@ const OrganizerDashboard = () => {
                 return (
                   <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg">
                     {/* Collapsible Header */}
-                    <button
-                      onClick={() => setOtherSalesExpanded(!otherSalesExpanded)}
-                      className="w-full flex justify-between items-center p-4 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">
-                        Other Active Sales ({sortedOtherSales.length})
-                      </h3>
-                      <span className={`transition-transform ${otherSalesExpanded ? 'rotate-180' : ''}`}>
-                        ▼
-                      </span>
-                    </button>
+                    <div className="flex justify-between items-center p-4 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
+                      <button
+                        onClick={() => setOtherSalesExpanded(!otherSalesExpanded)}
+                        className="flex-1 flex justify-between items-center text-left"
+                      >
+                        <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+                          Other Active Sales ({sortedOtherSales.length})
+                        </h3>
+                        <span className={`transition-transform ${otherSalesExpanded ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
+                      </button>
+                      <Link href="/organizer/command-center" className="text-xs text-blue-500 hover:text-blue-400 underline ml-2 whitespace-nowrap">
+                        → Command Center
+                      </Link>
+                    </div>
 
                     {/* Expanded Content */}
                     {otherSalesExpanded && (
