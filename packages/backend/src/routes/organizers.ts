@@ -476,6 +476,79 @@ router.get('/export', authenticate, exportOrganizer);
 // Must be registered BEFORE /:id wildcard
 router.get('/:saleId/print-kit', authenticate, getPrintKit);
 
+// GET /organizers/efficiency-stats — Organizer benchmarks vs. cohort
+// Must be registered BEFORE /:id to avoid Express matching 'efficiency-stats' as an id param
+router.get('/efficiency-stats', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      select: { id: true, totalSales: true },
+    });
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found.' });
+
+    // Fetch this organizer's sales with items
+    const sales = await prisma.sale.findMany({
+      where: { organizerId: organizer.id, status: 'ENDED' },
+      select: {
+        createdAt: true,
+        items: {
+          select: { status: true, createdAt: true, draftStatus: true },
+        },
+      },
+    });
+
+    // Average photo-to-publish time (approximation: item createdAt to sale publish)
+    let totalPublishMinutes = 0;
+    let publishCount = 0;
+    let totalItems = 0;
+    let soldItems = 0;
+
+    sales.forEach((sale: any) => {
+      sale.items.forEach((item: any) => {
+        totalItems++;
+        if (item.status === 'SOLD') soldItems++;
+        if (item.draftStatus === 'PUBLISHED') {
+          const diff = (new Date(item.createdAt).getTime() - new Date(sale.createdAt).getTime()) / 60000;
+          if (diff > 0 && diff < 10080) { // Cap at 7 days
+            totalPublishMinutes += diff;
+            publishCount++;
+          }
+        }
+      });
+    });
+
+    const avgPhotoToPublishMinutes = publishCount > 0 ? Math.round(totalPublishMinutes / publishCount) : 0;
+    const sellThroughRate = totalItems > 0 ? soldItems / totalItems : 0;
+
+    // Simple percentile rank (based on sell-through rate vs all organizers)
+    const allOrganizers = await prisma.organizer.count();
+    const betterOrganizers = await prisma.organizer.count({
+      where: { totalSales: { lt: organizer.totalSales } },
+    });
+    const percentileRank = allOrganizers > 0 ? Math.round((betterOrganizers / allOrganizers) * 100) : 50;
+
+    // Generate tips
+    const tips: string[] = [];
+    if (avgPhotoToPublishMinutes > 30) tips.push('Try batch-uploading photos to reduce your listing time.');
+    if (sellThroughRate < 0.5) tips.push('Consider lowering prices on slow-moving items or using Auto-Markdown.');
+    if (sellThroughRate >= 0.8) tips.push('Great sell-through rate! You could try higher starting prices.');
+    if (tips.length === 0) tips.push('You\'re performing well. Keep up the great work!');
+
+    res.json({
+      avgPhotoToPublishMinutes,
+      sellThroughRate: Math.round(sellThroughRate * 100) / 100,
+      percentileRank,
+      cohortSize: allOrganizers,
+      tips,
+    });
+  } catch (error) {
+    console.error('efficiency-stats error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 // Supports lookup by ID (CUID) or by customStorefrontSlug (user-friendly slug)
 router.get('/:id', async (req: Request, res: Response) => {
@@ -887,78 +960,6 @@ router.get('/sale-pulse/:saleId', authenticate, async (req: AuthRequest, res: Re
     });
   } catch (error) {
     console.error('sale-pulse error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// GET /organizers/efficiency-stats — Organizer benchmarks vs. cohort
-router.get('/efficiency-stats', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId },
-      select: { id: true, totalSales: true },
-    });
-    if (!organizer) return res.status(404).json({ message: 'Organizer not found.' });
-
-    // Fetch this organizer's sales with items
-    const sales = await prisma.sale.findMany({
-      where: { organizerId: organizer.id, status: 'ENDED' },
-      select: {
-        createdAt: true,
-        items: {
-          select: { status: true, createdAt: true, draftStatus: true },
-        },
-      },
-    });
-
-    // Average photo-to-publish time (approximation: item createdAt to sale publish)
-    let totalPublishMinutes = 0;
-    let publishCount = 0;
-    let totalItems = 0;
-    let soldItems = 0;
-
-    sales.forEach((sale: any) => {
-      sale.items.forEach((item: any) => {
-        totalItems++;
-        if (item.status === 'SOLD') soldItems++;
-        if (item.draftStatus === 'PUBLISHED') {
-          const diff = (new Date(item.createdAt).getTime() - new Date(sale.createdAt).getTime()) / 60000;
-          if (diff > 0 && diff < 10080) { // Cap at 7 days
-            totalPublishMinutes += diff;
-            publishCount++;
-          }
-        }
-      });
-    });
-
-    const avgPhotoToPublishMinutes = publishCount > 0 ? Math.round(totalPublishMinutes / publishCount) : 0;
-    const sellThroughRate = totalItems > 0 ? soldItems / totalItems : 0;
-
-    // Simple percentile rank (based on sell-through rate vs all organizers)
-    const allOrganizers = await prisma.organizer.count();
-    const betterOrganizers = await prisma.organizer.count({
-      where: { totalSales: { lt: organizer.totalSales } },
-    });
-    const percentileRank = allOrganizers > 0 ? Math.round((betterOrganizers / allOrganizers) * 100) : 50;
-
-    // Generate tips
-    const tips: string[] = [];
-    if (avgPhotoToPublishMinutes > 30) tips.push('Try batch-uploading photos to reduce your listing time.');
-    if (sellThroughRate < 0.5) tips.push('Consider lowering prices on slow-moving items or using Auto-Markdown.');
-    if (sellThroughRate >= 0.8) tips.push('Great sell-through rate! You could try higher starting prices.');
-    if (tips.length === 0) tips.push('You\'re performing well. Keep up the great work!');
-
-    res.json({
-      avgPhotoToPublishMinutes,
-      sellThroughRate: Math.round(sellThroughRate * 100) / 100,
-      percentileRank,
-      cohortSize: allOrganizers,
-      tips,
-    });
-  } catch (error) {
-    console.error('efficiency-stats error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
