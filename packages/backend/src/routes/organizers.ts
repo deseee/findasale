@@ -150,9 +150,9 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       });
     });
 
-    // Find active sale (PUBLISHED status, not ended)
+    // Find active sale (DRAFT or PUBLISHED — match getDashboardState logic on frontend)
     const activeSale = sales.find(
-      (s: any) => s.status === 'PUBLISHED' && new Date(s.endDate) > now
+      (s: any) => s.status === 'PUBLISHED' || s.status === 'DRAFT'
     );
 
     let activeSaleData = null;

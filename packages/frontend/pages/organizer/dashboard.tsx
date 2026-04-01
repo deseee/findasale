@@ -527,7 +527,7 @@ const OrganizerDashboard = () => {
             // STATE 2: Active Organizer (DRAFT or PUBLISHED sale)
             <div className="space-y-6 mb-8">
               {/* Sale Status Widget (HIGHEST PRIORITY) — Enhanced with urgency + dynamic CTA */}
-              {statsData?.activeSale && (
+              {(statsData?.activeSale || activeSale) && (
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
                   <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="block">
                     <div className="flex flex-col md:flex-row gap-6 cursor-pointer hover:opacity-80 transition-opacity">
