@@ -603,16 +603,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   Enhance
                 </button>
               )}
-              <span
-                onClick={readyCount > 0 ? onNavigateToReview : undefined}
-                className={`text-xs whitespace-nowrap transition-colors ${
-                  readyCount > 0
-                    ? 'text-amber-300 underline underline-offset-2 cursor-pointer hover:text-amber-200'
-                    : 'text-white/30'
-                }`}
-              >
-                Review ({readyCount})
-              </span>
             </div>
           )}
 
@@ -648,7 +638,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             <div
               ref={carouselRef}
               className="absolute inset-0 flex items-center gap-2 overflow-x-auto scrollbar-hide px-3"
-              style={{ WebkitOverflowScrolling: 'touch', paddingRight: 'calc(50% - 40px)' }}
+              style={{ WebkitOverflowScrolling: 'touch', paddingRight: 'calc(50% - 80px)' }}
             >
               {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
               {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {

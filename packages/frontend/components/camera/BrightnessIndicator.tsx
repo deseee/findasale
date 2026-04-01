@@ -89,7 +89,7 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
       {/* Brightness indicator — single line, just below the mode hint */}
-      <div className="absolute top-[76px] left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-medium">
+      <div className="absolute top-[79px] left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-medium">
         <span className={tierInfo.color}>{tierInfo.dots}</span>
         <span className="text-white">{tierInfo.text}</span>
       </div>
