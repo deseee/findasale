@@ -603,14 +603,17 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   Enhance
                 </button>
               )}
-              {readyCount > 0 && (
-                <button
-                  onClick={onNavigateToReview}
-                  className="text-xs text-amber-300 font-semibold underline underline-offset-2 hover:text-amber-200 transition-colors"
-                >
-                  Review &amp; Publish ({readyCount}) →
-                </button>
-              )}
+              <button
+                onClick={onNavigateToReview}
+                disabled={readyCount === 0}
+                className={`text-xs font-semibold transition-colors whitespace-nowrap ${
+                  readyCount > 0
+                    ? 'text-amber-300 underline underline-offset-2 hover:text-amber-200'
+                    : 'text-white/30 cursor-default'
+                }`}
+              >
+                Review ({readyCount})
+              </button>
             </div>
           )}
 
@@ -642,11 +645,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
           {/* Bottom control: shutter floats above a scrollable thumbnail strip */}
           <div className="relative min-h-[88px]">
-            {/* Scroll strip — spans full width, thumbnails scroll behind the shutter */}
+            {/* Scroll strip — full width, paddingRight keeps latest thumbnail adjacent to shutter */}
             <div
               ref={carouselRef}
               className="absolute inset-0 flex items-center gap-2 overflow-x-auto scrollbar-hide px-3"
-              style={{ WebkitOverflowScrolling: 'touch' }}
+              style={{ WebkitOverflowScrolling: 'touch', paddingRight: 'calc(50% - 40px)' }}
             >
               {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
               {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
@@ -753,9 +756,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 </button>
               )}
 
-              {/* Trailing spacer: keeps thumbnails from going fully under the shutter.
-                  calc(50% + 40px) = shutter center offset + shutter radius + 8px gap */}
-              <div className="flex-shrink-0" style={{ width: 'calc(50% + 40px)' }} />
             </div>
 
             {/* Shutter: floats above the scroll strip, always centered */}
