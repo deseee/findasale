@@ -19,21 +19,21 @@ const TIER_CONFIG: Record<string, {
     bg: 'bg-amber-100',
     text: 'text-amber-800',
     icon: '🥉',
-    nextLevelMessage: 'Reach Silver at 5 sales — unlock lower platform fees and priority support',
+    nextLevelMessage: 'Reach Silver at 5 sales — get priority search placement and access to advanced analytics',
   },
   SILVER: {
     label: 'Silver Organizer',
     bg: 'bg-slate-200',
     text: 'text-slate-700',
     icon: '🥈',
-    nextLevelMessage: 'Reach Gold at 15 sales — unlock the lowest fees and a Gold organizer badge',
+    nextLevelMessage: 'Reach Gold at 15 sales — get featured on the homepage and early access to new features',
   },
   GOLD: {
     label: 'Gold Organizer',
     bg: 'bg-yellow-100',
     text: 'text-yellow-800',
     icon: '🥇',
-    nextLevelMessage: "You're at the top tier — enjoy our lowest fees and Gold status",
+    nextLevelMessage: "You've reached Gold — your sales are featured on the homepage with dedicated seller support",
   },
 };
 
@@ -50,7 +50,7 @@ const OrganizerTierBadge: React.FC<OrganizerTierBadgeProps> = ({ tier, showLevel
           <span>{config.icon}</span>
           <span>{config.label}</span>
         </span>
-        <Tooltip content="Organizer tier based on number of completed sales. Higher tiers earn lower platform fees." />
+        <Tooltip content="Earned by completing sales. Silver unlocks priority search placement. Gold unlocks homepage featuring." />
       </div>
       {showLevelUpCopy && config.nextLevelMessage && (
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
