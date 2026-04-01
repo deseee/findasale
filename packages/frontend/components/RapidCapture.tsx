@@ -182,29 +182,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   }, [facingMode]);
 
   // Phase 3: Pre-capture quality check — sample video brightness every 2 seconds
-  useEffect(() => {
-    if (!cameraReady || !videoRef.current) return;
-
-    const qualityInterval = setInterval(() => {
-      if (videoRef.current && cameraReady) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(videoRef.current, 0, 0, 64, 64);
-        const data = ctx.getImageData(0, 0, 64, 64).data;
-        let total = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          total += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        }
-        const avg = total / (64 * 64);
-        setPreCaptureWarning(avg < 40 ? 'Too dark — adjust lighting' : null);
-      }
-    }, 2000);
-
-    return () => clearInterval(qualityInterval);
-  }, [cameraReady]);
+  // Brightness sampling handled by BrightnessIndicator component
 
   // Capture a photo from the video stream
   const capturePhoto = useCallback(() => {
