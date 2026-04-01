@@ -75,10 +75,10 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
   }, [videoRef, isActive]);
 
   const getTierInfo = (b: number | null) => {
-    if (b === null) return { dots: '●●●●●', color: 'text-gray-400', bg: 'bg-gray-800/60', text: 'Checking light...' };
-    if (b >= 65) return { dots: '●●●●●', color: 'text-green-400', bg: 'bg-green-600', text: 'Good lighting—ready to capture' };
-    if (b >= 40) return { dots: '●●●○○', color: 'text-yellow-400', bg: 'bg-yellow-600', text: 'Soft lighting—might work, but brighter is better' };
-    return { dots: '●○○○○', color: 'text-red-400', bg: 'bg-red-600', text: 'Too dark—move near a window or lamp' };
+    if (b === null) return { dots: '●●●●●', color: 'text-gray-400', text: 'Checking light...' };
+    if (b >= 65) return { dots: '●●●●●', color: 'text-green-400', text: 'Good lighting' };
+    if (b >= 40) return { dots: '●●●○○', color: 'text-yellow-400', text: 'Soft light—try brighter' };
+    return { dots: '●○○○○', color: 'text-red-400', text: 'Too dark—find better light' };
   };
 
   const tierInfo = getTierInfo(brightness);
@@ -88,10 +88,8 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
       {/* Hidden canvas for sampling */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Brightness indicator — one line, semi-transparent, below top bar */}
-      <div className={`absolute top-16 left-1/2 -translate-x-1/2 backdrop-blur-sm rounded-full px-3 py-1 z-10 flex items-center gap-1.5 text-xs font-medium pointer-events-none`}
-        style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-      >
+      {/* Brightness indicator — single line, semi-transparent, below top bar */}
+      <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-medium">
         <span className={tierInfo.color}>{tierInfo.dots}</span>
         <span className="text-white">{tierInfo.text}</span>
       </div>

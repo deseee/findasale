@@ -640,16 +640,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Bottom control strip: thumbnails + shutter embedded in scroll row */}
-          <div className="flex items-center py-4 px-3 gap-3 overflow-x-auto scrollbar-hide min-h-20">
-            {/* Thumbnail carousel (rapidfire only) — scrolls left of shutter */}
-            {isRapidfire && rapidItems.length > 0 && (
-              <div
-                ref={carouselRef}
-                className="flex gap-1.5 flex-shrink-0"
-                style={{ WebkitOverflowScrolling: 'touch' }}
-              >
-                {rapidItems.slice(0, 3).map((item) => {
+          {/* Bottom control: shutter floats above a scrollable thumbnail strip */}
+          <div className="relative min-h-[88px]">
+            {/* Scroll strip — spans full width, thumbnails scroll behind the shutter */}
+            <div
+              ref={carouselRef}
+              className="absolute inset-0 flex items-center gap-2 overflow-x-auto scrollbar-hide px-3"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
+              {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
                   const isAddingTo = addingToItemId === item.id;
                   const status = !item.thumbnailUrl
                     ? { icon: '📷', bgColor: 'bg-gray-200' }
@@ -731,35 +731,38 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     </div>
                   );
                 })}
-              </div>
-            )}
 
-            {/* Left fallback: Review button (if not rapidfire or no carousel) */}
-            {(!isRapidfire || rapidItems.length === 0) && (
-              <button
-                onClick={() => {
-                  if (!isRapidfire && photos.length > 0) {
-                    setSelectedIndex(0);
-                  } else {
-                    onNavigateToReview();
-                  }
-                }}
-                disabled={!isRapidfire && photos.length === 0}
-                className={`flex-shrink-0 h-10 px-2 rounded-full font-bold text-xs transition-colors flex items-center justify-center whitespace-nowrap ${
-                  isRapidfire && readyCount === 0
-                    ? 'bg-gray-700/80 text-gray-300 cursor-default'
-                    : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed'
-                }`}
-              >
-                Review{readyCount > 0 && ` (${readyCount})`}
-              </button>
-            )}
+              {/* Fallback: Review button (non-rapidfire or no items yet) */}
+              {(!isRapidfire || rapidItems.length === 0) && (
+                <button
+                  onClick={() => {
+                    if (!isRapidfire && photos.length > 0) {
+                      setSelectedIndex(0);
+                    } else {
+                      onNavigateToReview();
+                    }
+                  }}
+                  disabled={!isRapidfire && photos.length === 0}
+                  className={`flex-shrink-0 h-10 px-3 rounded-full font-bold text-xs transition-colors flex items-center justify-center whitespace-nowrap ${
+                    isRapidfire && readyCount === 0
+                      ? 'bg-gray-700/80 text-gray-300 cursor-default'
+                      : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  Review{readyCount > 0 && ` (${readyCount})`}
+                </button>
+              )}
 
-            {/* Shutter button — flex-shrink-0, always visible, embedded in strip */}
+              {/* Trailing spacer: keeps thumbnails from going fully under the shutter.
+                  calc(50% + 40px) = shutter center offset + shutter radius + 8px gap */}
+              <div className="flex-shrink-0" style={{ width: 'calc(50% + 40px)' }} />
+            </div>
+
+            {/* Shutter: floats above the scroll strip, always centered */}
             <button
               onClick={capturePhoto}
               disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
-              className={`flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center transition-transform active:scale-90 ${
+              className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 w-16 h-16 rounded-full flex items-center justify-center transition-transform active:scale-90 ${
                 isRapidfire
                   ? inAddMode
                     ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
