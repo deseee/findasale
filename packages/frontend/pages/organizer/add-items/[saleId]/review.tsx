@@ -631,7 +631,7 @@ const ReviewPage = () => {
                       <span className="w-16 flex-shrink-0">Photo</span>
                       <span className="flex-1">Item · Health Score</span>
                       <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className="w-20 text-right">AI Confidence</span>
+                        <span className="w-20 text-right hidden sm:inline">AI Confidence</span>
                         <span className="w-16 text-center">Status</span>
                         <span className="w-4" />
                       </div>
@@ -704,9 +704,15 @@ const ReviewPage = () => {
                                   )}
                                 </div>
                               )}
+                              {/* Mobile-only AI confidence — hidden on sm+ (shown in right column there) */}
+                              {item.isAiTagged && (
+                                <p className={`text-xs font-semibold mt-1 sm:hidden ${conf.color}`}>
+                                  {conf.text}{item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
+                                </p>
+                              )}
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0">
-                              <div className={`text-xs font-semibold ${conf.color}`}>
+                              <div className={`text-xs font-semibold hidden sm:block ${conf.color}`}>
                                 {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
                               </div>
                               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
