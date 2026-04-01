@@ -643,7 +643,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           )}
 
           {/* Bottom control: shutter floats above a scrollable thumbnail strip */}
-          <div className="relative min-h-[88px]">
+          <div className="relative min-h-[76px]">
             {/* Scroll strip — full width, paddingRight keeps latest thumbnail adjacent to shutter */}
             <div
               ref={carouselRef}
