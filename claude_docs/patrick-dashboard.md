@@ -1,46 +1,43 @@
-# Patrick's Dashboard — S362 Complete (2026-03-31)
+# Patrick's Dashboard — S363 Complete (2026-03-31)
 
 ---
 
-## ⚠️ S362 — Repo wipe recovered. Push block ready.
+## ⚠️ S363 — Camera consolidation done. Push block ready.
 
 ---
 
-## What Happened This Session (S362)
+## What Happened This Session (S363)
 
-**Camera QA (desktop) ✅ verified:** Rapidfire opens, Tier 2 brightness fires the soft "Lighting is soft. We'll still try." warning, photo captures, AI spinner → green badge cycle works end-to-end, Review(1) button updates. Tier 3 only fires in near-darkness. "→ Pub" button gone, thumbnails noticeably bigger, mobile layout looks good.
+**"+" button fix pushed (commit 5a83d03):** S362 edited the wrong component (RapidCarousel instead of RapidCapture). This session found the root cause via DOM inspection and fixed RapidCapture — the one users actually see. 20px → 40px, centered bottom. Already on GitHub.
 
-**Smart crop architecture locked:** When you capture a photo, we upload the full original. Cloudinary then delivers the right crop for each context: square (1:1) for item grid cards, portrait (3:4) for the item detail page main photo, landscape (4:3) for previews. This means one upload, three different looks — and you never lose the original. Canvas crop before upload was considered and rejected.
+**Full camera audit (UX + Architect):** Audited every camera component. Found 512 lines of dead code, invisible features, and overlapping systems built up across S351–S362. Two agents ran in parallel and produced a consolidation plan.
 
-**Camera UI improvements in this push:**
-- Review button moved to bottom-left of camera (same zone as thumbnails — easier to hit one-handed)
-- The useless left thumbnail in Rapidfire removed (was just visual noise)
-- "+" button is now 48×48px, centered at the bottom of the thumbnail strip, always visible
-- All item grid cards (ItemCard, LibraryItemCard, SearchResults, BulkSelection, RecentlyViewed, InspirationGrid) now use 1:1 square Cloudinary crops
-- Item detail page (`/items/[id]`) now uses 3:4 portrait Cloudinary crop for the main photo
+**Camera consolidation (2 dev batches, local only):**
+- BrightnessIndicator now has solid backgrounds (was 20% opacity = invisible on black camera feed)
+- Removed redundant amber "low light" banner (BrightnessIndicator replaces it)
+- Deleted 3 orphan component files nobody was using (RapidCarousel, CaptureButton, ModeToggle)
+- Cleaned dead state variables from the Add Items page that were rendering behind the camera overlay
+- Face detection modal now shows inside the camera (was hidden behind it)
+- Zero TypeScript errors
 
-**Repo wipe (second time) — recovered.** Commit `3ceae665` wiped 1,483 files. Cause: subagent ran git commands in the VM; VM git state was desynced from your Windows repo. When you ran `.\push.ps1`, git saw the delta as 1,483 deletions. Fixed: `git reset --hard cadddf6e` + `git push origin main --force` from your PowerShell — repo is restored. The 10 S362 files were saved before the reset and are back on your disk. CLAUDE.md now has a hard rule: **subagents are banned from all git commands, permanently.** No more git from the VM.
+**⚠️ These changes are LOCAL ONLY — not pushed yet.** Next session verifies everything, then you push.
 
 ---
 
 ## Your Action Now
 
+Push block for S364 (after verification):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add CLAUDE.md
 git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/camera/RapidCarousel.tsx
-git add packages/frontend/lib/imageUtils.ts
-git add packages/frontend/components/ItemCard.tsx
-git add packages/frontend/components/LibraryItemCard.tsx
-git add packages/frontend/components/ItemSearchResults.tsx
-git add packages/frontend/components/ItemListWithBulkSelection.tsx
-git add packages/frontend/components/RecentlyViewed.tsx
-git add packages/frontend/components/InspirationGrid.tsx
-git add "packages/frontend/pages/items/[id].tsx"
-git commit -m "feat(camera): Review to bottom-left, + button accessible; feat(images): Cloudinary per-context transforms (square grid, portrait detail); docs: subagent git ban rule"
+git add packages/frontend/components/camera/BrightnessIndicator.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git rm packages/frontend/components/camera/RapidCarousel.tsx
+git rm packages/frontend/components/camera/CaptureButton.tsx
+git rm packages/frontend/components/camera/ModeToggle.tsx
+git commit -m "refactor(camera): consolidate camera workflow — delete dead code, fix BrightnessIndicator visibility, move face detection into overlay"
 .\push.ps1
 ```
 
@@ -55,22 +52,17 @@ git commit -m "feat(camera): Review to bottom-left, + button accessible; feat(im
 
 ---
 
-## Next Up (S363)
+## Next Up (S364)
 
-**QA camera on mobile** — desktop is verified, mobile viewport still needs a full capture→AI→ready cycle test.
-
-**Continue QA backlog:**
-- #37 Sale Alerts
-- #199 User Profile dark mode
-- #58 Achievement Badges
-- #29 Loyalty Passport
-- #213 Hunt Pass CTA
-- #131 Share Templates
+1. **Verify S363 batches** — read modified files, run TS check, confirm deleted files are gone
+2. **Push camera consolidation** — use block above after verification passes
+3. **Chrome QA camera** — BrightnessIndicator visible? Face modal inside camera? Full capture→AI→review cycle?
+4. **QA backlog** — #37 Sale Alerts, #199 User Profile dark mode, #58 Achievements, #29 Loyalty, #213 Hunt Pass, #131 Share Templates
 
 ---
 
 ## Open Action Items for Patrick
 
-- [ ] **Run push block above** (S362 camera/images + wrap docs + git ban rule)
+- [ ] **Push S363 camera consolidation** (after S364 verifies — block above)
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review

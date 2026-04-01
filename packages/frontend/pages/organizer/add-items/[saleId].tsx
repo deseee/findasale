@@ -38,7 +38,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 import RapidCapture from '../../../components/RapidCapture';
-import RapidCarousel from '../../../components/camera/RapidCarousel';
 import PreviewModal from '../../../components/camera/PreviewModal';
 import { useUploadQueue } from '../../../hooks/useUploadQueue';
 import { useVoiceInput } from '../../../hooks/useVoiceInput';
@@ -304,21 +303,9 @@ const AddItemsDetailPage = () => {
   const [captureMode, setCaptureMode] = useState<'rapidfire' | 'regular'>('rapidfire');
   const [rapidItems, setRapidItems] = useState<RapidItem[]>([]);
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
-  const [carouselCollapsed, setCarouselCollapsed] = useState(true);
   const [aiPaused, setAiPaused] = useState(false);
   const [addingToItemId, setAddingToItemId] = useState<string | null>(null);
   const { queue, enqueue, uploadingCount } = useUploadQueue(saleId as string);
-
-  // Phase 3: Quality control state
-  const [showRetakeToast, setShowRetakeToast] = useState(false);
-  const [retakeToastTimeout, setRetakeToastTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [showFaceModal, setShowFaceModal] = useState(false);
-  const [pendingFaceBlob, setPendingFaceBlob] = useState<Blob | null>(null);
-  const [pendingFaceUpload, setPendingFaceUpload] = useState<{
-    blob: Blob;
-    previewUrl: string;
-    tempId: string;
-  } | null>(null);
 
   // Phase 3.5: Tiered lighting quality system state
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
@@ -326,6 +313,12 @@ const AddItemsDetailPage = () => {
   const [pendingQualityBlob, setPendingQualityBlob] = useState<Blob | null>(null);
   const [pendingQualityTempId, setPendingQualityTempId] = useState<string | null>(null);
   const [pendingQualityAppendId, setPendingQualityAppendId] = useState<string | null>(null);
+
+  // Face detection modal state
+  const [faceDetectionOpen, setFaceDetectionOpen] = useState(false);
+  const [pendingFaceBlob, setPendingFaceBlob] = useState<Blob | null>(null);
+  const [pendingFaceTempId, setPendingFaceTempId] = useState<string | null>(null);
+  const [pendingFaceAppendId, setPendingFaceAppendId] = useState<string | null>(null);
 
   // Phase 3-5: Bulk Operations Toolkit state
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -705,8 +698,12 @@ const AddItemsDetailPage = () => {
       // 4. Face detection
       const hasFace = await detectFace(processedBlob);
       if (hasFace) {
-        // Face detected — mark with warning but don't block; show face modal for next upload if needed
-        // For now, continue upload (face detection is optional in rapidfire)
+        // Face detected — show modal overlay inside camera
+        setPendingFaceBlob(processedBlob);
+        setPendingFaceTempId(tempId);
+        setPendingFaceAppendId(appendToItemId);
+        setFaceDetectionOpen(true);
+        return; // Stop processing, wait for user decision
       }
 
       // 5. Upload
@@ -884,6 +881,82 @@ const AddItemsDetailPage = () => {
     // Camera remains open for next capture
   };
 
+  // Face detection modal handlers
+  const handleFaceDetectionRetake = () => {
+    setFaceDetectionOpen(false);
+    setPendingFaceBlob(null);
+    setPendingFaceTempId(null);
+    setPendingFaceAppendId(null);
+    // Camera remains open for retake
+  };
+
+  const handleFaceDetectionUploadAnyway = async () => {
+    // User chose to upload despite face detection warning
+    setFaceDetectionOpen(false);
+
+    if (!pendingFaceBlob || !pendingFaceTempId) {
+      console.error('Missing face detection context for resuming upload');
+      return;
+    }
+
+    try {
+      // Resume upload from phase 5 (face detection passed)
+      // 5. Upload
+      if (pendingFaceAppendId) {
+        // Append photo to existing item
+        const fd = new FormData();
+        fd.append('photos', pendingFaceBlob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        const uploadRes = await api.post('/upload/sale-photos', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
+        if (urls[0]) {
+          await api.post(`/items/${pendingFaceAppendId}/photos`, { url: urls[0] });
+          setRapidItems((prev) =>
+            prev.map((item) =>
+              item.id === pendingFaceAppendId
+                ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
+                : item
+            )
+          );
+        }
+      } else {
+        // Create new item
+        const fd = new FormData();
+        fd.append('image', pendingFaceBlob, 'rapidfire.jpg');
+        fd.append('saleId', saleId as string);
+        fd.append('autoEnhanced', 'false');
+
+        const res = await api.post('/upload/rapidfire', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const { itemId, photoUrl } = res.data;
+
+        // Swap temp id for real DB item id
+        setRapidItems((prev) =>
+          prev.map((item) =>
+            item.id === pendingFaceTempId
+              ? { ...item, id: itemId, draftStatus: 'DRAFT', photoUrls: photoUrl ? [photoUrl] : [] }
+              : item
+          )
+        );
+
+        queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+        showToast('Analyzing item with AI...', 'info');
+        pollForAI(itemId);
+      }
+    } catch (err: any) {
+      console.error('[face detection] Resume upload failed:', err);
+      showToast('Upload failed. Please try again.', 'error');
+    } finally {
+      setPendingFaceBlob(null);
+      setPendingFaceTempId(null);
+      setPendingFaceAppendId(null);
+    }
+  };
+
   const showShotGuidance = (shotNumber: number) => {
     const messages = [
       'Great first shot! This will be your listing photo. Want to add a back view or maker\'s mark?',
@@ -947,62 +1020,6 @@ const AddItemsDetailPage = () => {
   };
 
   // Face modal handlers
-  const handleFaceUploadAnyway = async () => {
-    if (!pendingFaceUpload) return;
-    setShowFaceModal(false);
-    try {
-      const fd = new FormData();
-      fd.append('image', pendingFaceUpload.blob, 'rapidfire.jpg');
-      fd.append('saleId', saleId as string);
-      fd.append('faceDetected', 'true');
-
-      const res = await api.post('/upload/rapidfire', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      const { itemId, photoUrl } = res.data;
-      setRapidItems((prev) =>
-        prev.map((item) =>
-          item.id === pendingFaceUpload.tempId
-            ? { ...item, id: itemId, draftStatus: 'DRAFT', thumbnailUrl: pendingFaceUpload.previewUrl, photoUrls: photoUrl ? [photoUrl] : [pendingFaceUpload.previewUrl] }
-            : item
-        )
-      );
-      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-
-      // Poll for AI completion
-      pollForAI(itemId);
-    } catch (err: any) {
-      console.error('[rapidfire] Face upload failed:', err);
-      setRapidItems((prev) =>
-        prev.map((item) =>
-          item.id === pendingFaceUpload.tempId
-            ? { ...item, aiError: 'Upload failed' }
-            : item
-        )
-      );
-      showToast('Photo upload failed', 'error');
-    } finally {
-      setPendingFaceUpload(null);
-    }
-  };
-
-  const handleFaceRetake = () => {
-    setShowFaceModal(false);
-    // Remove the temp item from carousel
-    if (pendingFaceUpload) {
-      setRapidItems((prev) =>
-        prev.filter((item) => item.id !== pendingFaceUpload.tempId)
-      );
-    }
-    setPendingFaceUpload(null);
-  };
-
-  const handleRetake = () => {
-    setShowRetakeToast(false);
-    // Toast dismissed; photo stays in carousel for organizer to accept or delete
-  };
-
   const handleCategoryChange = (newCategory: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -1493,25 +1510,6 @@ const AddItemsDetailPage = () => {
                     </button>
                   </div>
 
-                  {/* RapidCarousel - only shown when there are items or mode is rapidfire */}
-                  {rapidItems.length > 0 && (
-                    <RapidCarousel
-                      items={rapidItems}
-                      onThumbnailTap={(id) => setPreviewItemId(id)}
-                      onDeleteRequest={handleDeleteDraft}
-                      onAddPhotoToItem={(id) => {
-                        setAddingToItemId((prev) => (prev === id ? null : id));
-                        setCameraOpen(true);
-                      }}
-                      collapsed={carouselCollapsed}
-                      onToggleCollapse={() => setCarouselCollapsed(!carouselCollapsed)}
-                      aiPaused={aiPaused}
-                      onTogglePause={() => setAiPaused(!aiPaused)}
-                      addingToItemId={addingToItemId}
-                      enhancedCount={rapidItems.filter((i) => i.autoEnhanced).length}
-                    />
-                  )}
-
                   {/* Review & Publish button */}
                   {rapidItems.some((i) => i.draftStatus === 'PENDING_REVIEW') && (
                     <button
@@ -1564,47 +1562,7 @@ const AddItemsDetailPage = () => {
             </div>
           )}
 
-          {/* Phase 3: Retake toast */}
-          {showRetakeToast && (
-            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-3 rounded-xl flex items-center gap-3 shadow-lg z-50">
-              <span className="text-sm">Image looks dark — retake?</span>
-              <button onClick={handleRetake} className="text-amber-400 text-sm font-medium">
-                Keep
-              </button>
-              <button onClick={handleRetake} className="text-gray-400 text-sm">
-                ✕
-              </button>
-            </div>
-          )}
-
           {/* Quality overlays are now rendered inside RapidCapture via qualityOverlay prop */}
-
-
-          {/* Phase 3: Face detection modal */}
-          {showFaceModal && (
-            <div className="fixed inset-0 bg-black/60 flex items-end z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full">
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Privacy check</h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  This photo may contain a person. Upload anyway?
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleFaceUploadAnyway}
-                    className="flex-1 bg-gray-900 text-white py-3 rounded-xl text-sm font-medium"
-                  >
-                    Upload anyway
-                  </button>
-                  <button
-                    onClick={handleFaceRetake}
-                    className="flex-1 bg-gray-100 text-gray-900 dark:text-gray-100 py-3 rounded-xl text-sm font-medium"
-                  >
-                    Retake
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* RapidCapture fullscreen overlay */}
           {cameraOpen && (
@@ -1648,6 +1606,18 @@ const AddItemsDetailPage = () => {
                       onUsePhoto: handleQualityUsePhoto,
                       onRetake: handleQualityRetake,
                       onSkip: handleQualitySkipItem,
+                    }
+                  : null
+              }
+              faceDetectionOverlay={
+                faceDetectionOpen && pendingFaceBlob
+                  ? {
+                      onUploadAnyway: handleFaceDetectionUploadAnyway,
+                      onRetake: handleFaceDetectionRetake,
+                      pendingPhoto: {
+                        blob: pendingFaceBlob,
+                        previewUrl: URL.createObjectURL(pendingFaceBlob),
+                      },
                     }
                   : null
               }

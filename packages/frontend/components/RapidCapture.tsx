@@ -69,6 +69,12 @@ interface RapidCaptureProps {
     onRetake: () => void;
     onSkip: () => void;
   } | null;
+  /** Face detection overlay state — renders modal inside camera if set */
+  faceDetectionOverlay?: {
+    onUploadAnyway: () => void;
+    onRetake: () => void;
+    pendingPhoto?: { blob: Blob; previewUrl: string };
+  } | null;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
@@ -87,6 +93,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   onDeletePhoto,
   onEnhanceAll,
   qualityOverlay,
+  faceDetectionOverlay,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -101,7 +108,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [preCaptureWarning, setPreCaptureWarning] = useState<string | null>(null);
   const [photosThisItem, setPhotosThisItem] = useState(0);
 
   const isRapidfire = mode === 'rapidfire';
@@ -475,12 +481,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 <BrightnessIndicator videoRef={videoRef} isActive={!flashEffect} />
               )}
 
-              {/* Phase 3: Pre-capture quality warning */}
-              {preCaptureWarning && (
-                <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-amber-500/90 text-white text-sm font-medium px-4 py-2 rounded-lg z-10">
-                  {preCaptureWarning}
-                </div>
-              )}
 
               {/* Phase 3.5: Post-capture quality overlay (Tier 2 or 3) */}
               {qualityOverlay && (
@@ -538,6 +538,45 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       </div>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* Face detection warning modal */}
+              {faceDetectionOverlay && faceDetectionOverlay.pendingPhoto && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-40 pointer-events-auto">
+                  {/* Dark overlay */}
+                  <div className="absolute inset-0 bg-black/40" />
+                  {/* Modal dialog */}
+                  <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl flex flex-col items-center">
+                    {/* Thumbnail of captured image */}
+                    <div className="mb-4 w-24 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                      <img
+                        src={faceDetectionOverlay.pendingPhoto.previewUrl}
+                        alt="Captured photo"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2 text-center">
+                      Photo may contain a person
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 text-center">
+                      This photo may contain a person's face. Do you want to upload it anyway?
+                    </p>
+                    <div className="flex gap-3 w-full">
+                      <button
+                        onClick={faceDetectionOverlay.onRetake}
+                        className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Retake
+                      </button>
+                      <button
+                        onClick={faceDetectionOverlay.onUploadAnyway}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Upload Anyway
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -7,6 +7,31 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S363 COMPLETE (2026-03-31):** Camera workflow audit + consolidation. UX + Architect audit → 2 Dev batches.
+
+(1) **"+" button fix pushed (commit 5a83d03):** RapidCapture.tsx — enlarged from 20px (w-5) to 40px (w-10), repositioned from bottom-right to bottom-center of thumbnails. S362 had mistakenly edited RapidCarousel (wrong component). This session identified the root cause via DOM inspection and fixed the correct component.
+
+(2) **Full camera audit dispatched (UX + Architect in parallel):** Identified 512 lines of dead code, overlapping features across S351–S362, and features rendering behind z-50 camera overlay. Key findings: RapidCarousel dead code (never visible), BrightnessIndicator invisible (20% opacity on black), face detection modal behind overlay, retake toast behind overlay, orphaned CaptureButton.tsx and ModeToggle.tsx.
+
+(3) **Batch 1 — Dead code cleanup + BrightnessIndicator fix (local, NOT pushed):**
+- BrightnessIndicator.tsx: bg-green-500/20 → bg-green-600 (solid), same for yellow/red tiers
+- RapidCapture.tsx: removed preCaptureWarning amber banner (redundant with BrightnessIndicator)
+- [saleId].tsx: removed dead showRetakeToast, showFaceModal, pendingFaceUpload state + JSX
+- DELETED: RapidCarousel.tsx, CaptureButton.tsx, ModeToggle.tsx (zero imports)
+- TS check: zero errors
+
+(4) **Batch 2 — Face modal + retake toast moved into RapidCapture (local, NOT pushed):**
+- Face detection modal now renders inside RapidCapture overlay (visible to users)
+- Retake suggestion already handled by existing qualityOverlay (verified — no new code needed)
+- [saleId].tsx: state + handlers added for face detection prop passing to RapidCapture
+- TS check: zero errors
+
+⚠️ **Batches 1+2 are LOCAL ONLY — not yet pushed.** S364 must verify all changes compiled correctly, then push.
+
+Patrick decisions locked: keep face detection (moved into camera), keep retake suggestion (already in camera via qualityOverlay), keep BrightnessIndicator thresholds (65%/40%).
+
+---
+
 **S360 COMPLETE (2026-03-31):** Railway TS1127 null byte fix + #48 Treasure Trail Chrome-verified.
 
 (1) **Railway TS1127 unblocked:** Two backend files had null bytes appended from prior MCP pushes in S359. `followerNotificationService.ts` (127 null bytes) + `notificationInboxController.ts` both caused `error TS1127: Invalid character` at EOF, blocking Railway build. Fixed: fetched from GitHub, stripped null bytes, pushed clean versions (commits 1e84c0ab + ea4acf36). Railway went green.
@@ -225,55 +250,51 @@ Files changed S362 (in push block — NOT YET COMMITTED):
 
 ---
 
-## Next Session (S363)
+## Next Session (S364)
 
-### Patrick Action Required — Push S362 changes
+### Patrick Action Required — Push S363 camera consolidation
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add CLAUDE.md
 git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/camera/RapidCarousel.tsx
-git add packages/frontend/lib/imageUtils.ts
-git add packages/frontend/components/ItemCard.tsx
-git add packages/frontend/components/LibraryItemCard.tsx
-git add packages/frontend/components/ItemSearchResults.tsx
-git add packages/frontend/components/ItemListWithBulkSelection.tsx
-git add packages/frontend/components/RecentlyViewed.tsx
-git add packages/frontend/components/InspirationGrid.tsx
-git add "packages/frontend/pages/items/[id].tsx"
-git commit -m "feat(camera): Review to bottom-left, + button accessible; feat(images): Cloudinary per-context transforms (square grid, portrait detail); docs: subagent git ban rule"
+git add packages/frontend/components/camera/BrightnessIndicator.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git rm packages/frontend/components/camera/RapidCarousel.tsx
+git rm packages/frontend/components/camera/CaptureButton.tsx
+git rm packages/frontend/components/camera/ModeToggle.tsx
+git commit -m "refactor(camera): consolidate camera workflow — delete dead code, fix BrightnessIndicator visibility, move face detection into overlay"
 .\push.ps1
 ```
 
-### S363 Priority 1 — QA camera workflow (mobile)
-Desktop camera QA is done. Mobile still needed:
-- Switch Chrome to mobile viewport (375px), open Rapidfire, capture a photo
-- Verify Tier 2/3 brightness detection fires correctly
-- Verify capture→AI spinner→green badge cycle completes end-to-end
-- `upload_image` MCP tool is available — use it if physical camera is too dark in VM
+### S364 Priority 1 — Verify S363 batches
+Both dev batches reported zero TS errors, but session was interrupted before main-session verification. S364 must:
+1. Read all 3 modified files (RapidCapture.tsx, BrightnessIndicator.tsx, [saleId].tsx) and confirm changes look correct
+2. Run `npx tsc --noEmit --skipLibCheck` in frontend — confirm zero errors
+3. Verify deleted files (RapidCarousel, CaptureButton, ModeToggle) are gone and no broken imports remain
+4. Confirm face detection modal renders inside RapidCapture (props wired from [saleId].tsx)
+5. If all good → Patrick pushes via block above → Vercel/Railway deploy → Chrome QA
 
-### S363 Priority 2 — QA backlog
+### S364 Priority 2 — Chrome QA camera workflow
+After push deploys:
+- Open camera on mobile viewport, verify BrightnessIndicator is now VISIBLE (solid green/yellow/red backgrounds)
+- Verify face detection modal appears inside camera overlay (not behind it)
+- Verify retake suggestion works via qualityOverlay (dim lighting → "Use Anyway" / "Retake")
+- Full capture→AI→review cycle end-to-end
+
+### S364 Priority 3 — QA backlog
 - **#37 Sale Alerts** — verify Alerts tab filtering + in-app notification on publish
-- **#199 User Profile dark mode** — `/shoppers/...` in dark mode
-- **#58 Achievement Badges** — `/shopper/achievements` + dashboard widget
-- **#29 Loyalty Passport** — `/shopper/loyalty`
-- **#213 Hunt Pass CTA** — visible for non-pass users only
-- **#131 Share Templates** — Facebook, Nextdoor, Threads, Pinterest, TikTok
+- **#199 User Profile dark mode**
+- **#58 Achievement Badges**
+- **#29 Loyalty Passport**
+- **#213 Hunt Pass CTA**
+- **#131 Share Templates**
 
-### S363 Notes
+### S364 Notes
 - All Railway env vars ✅. All migrations deployed ✅.
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Test accounts: user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper), user12 Leo Thomas (shopper). All passwords: password123
-- CLAUDE.md updated: §5 now has **Subagent git ban** (hard rule, survives compression) — subagents banned from ALL git commands. Two wipes documented, root cause locked.
-- Phase 2 smart crop (AI bounding box in Haiku call) is backlogged — not urgent.
-
-**Known suspect:** S351 added tiered lighting checks and shot sequence guidance. These inject logic between capture and AI classification. If the lighting Tier 3 hard modal fires and the user clicks "Skip", the photo may be discarded before reaching AI. If the flow was restructured and a `useState` or `useEffect` dependency was dropped, AI call might fire but result is silently lost.
-
-**Goal:** Produce a diff showing exactly what broke and dispatch to findasale-dev to fix. The fix must restore: (a) spinner visible during AI classification, (b) confidence displayed on PreviewModal result, (c) clear error/limit-reached message if Anthropic API fails or quota exceeded.
-
-**Do not dispatch dev until root cause is confirmed via code read.**
+- Camera architecture after S363: RapidCapture owns everything visible during capture. Only 2 sub-components remain: BrightnessIndicator.tsx, PreviewModal.tsx. Feature placement rule: if visible while viewfinder is open → must be inside RapidCapture or z-index > 50.
 
 ### S361 Priority 2: Continue QA backlog
 - **#37 Sale Alerts** — after notifications.tsx push deploys: navigate to notification inbox as shopper, verify Alerts tab shows only followed-organizer sale alerts (not all notifications)
