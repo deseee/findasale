@@ -93,7 +93,7 @@ export const createSettlement = async (req: AuthRequest, res: Response) => {
       where: { id: saleId, organizer: { userId } },
       include: {
         organizer: { select: { defaultCommissionRate: true } },
-        purchases: { select: { totalPrice: true } },
+        purchases: { select: { amount: true } },
       },
     });
     if (!sale) return res.status(404).json({ message: 'Sale not found or access denied.' });
@@ -103,7 +103,7 @@ export const createSettlement = async (req: AuthRequest, res: Response) => {
     if (existing) return res.status(409).json({ message: 'Settlement already exists for this sale.' });
 
     // Calculate revenue from purchases
-    const totalRevenue = sale.purchases.reduce((sum, p) => sum + (p.totalPrice || 0), 0);
+    const totalRevenue = sale.purchases.reduce((sum: number, p: { amount: number }) => sum + (p.amount || 0), 0);
     const defaultRate = sale.organizer?.defaultCommissionRate
       ? Number(sale.organizer.defaultCommissionRate)
       : null;

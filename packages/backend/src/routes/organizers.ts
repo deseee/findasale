@@ -1017,9 +1017,9 @@ router.get('/smart-buyers/:saleId', authenticate, async (req: AuthRequest, res: 
     // Check which users follow this organizer
     const followerIds = await prisma.follow.findMany({
       where: { organizerId: sale.organizerId },
-      select: { followerId: true },
+      select: { userId: true },
     });
-    const followerSet = new Set(followerIds.map((f: any) => f.followerId));
+    const followerSet = new Set(followerIds.map((f: any) => f.userId));
 
     const buyers = Array.from(userMap.values())
       .sort((a: any, b: any) => (b.guildXp || 0) - (a.guildXp || 0))
