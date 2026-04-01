@@ -662,8 +662,8 @@ const ReviewPage = () => {
                               className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500"
                               onClick={(e) => e.stopPropagation()}
                             />
-                            {/* Photo with mobile status badge overlaid on bottom */}
-                            <div className="relative flex-shrink-0 w-16 h-16">
+                            {/* Photo with mobile status badge below */}
+                            <div className="flex-shrink-0 w-16 flex flex-col items-stretch">
                               {item.photoUrls[0] ? (
                                 <img
                                   key={item.photoUrls[0]}
@@ -678,8 +678,8 @@ const ReviewPage = () => {
                               ) : (
                                 <div className="w-16 h-16 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl">📷</div>
                               )}
-                              {/* Status badge — mobile only, overlaid on bottom of thumbnail */}
-                              <span className={`sm:hidden absolute bottom-0 left-0 right-0 text-center text-[10px] font-bold py-0.5 rounded-b ${
+                              {/* Status badge — mobile only, sits below thumbnail */}
+                              <span className={`sm:hidden text-center text-[10px] font-bold py-0.5 rounded-b ${
                                 item.draftStatus === 'PUBLISHED' ? 'bg-green-500/80 text-white' :
                                 item.draftStatus === 'PENDING_REVIEW' ? 'bg-amber-500/80 text-white' :
                                 'bg-gray-500/80 text-white'
