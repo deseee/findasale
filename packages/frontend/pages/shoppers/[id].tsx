@@ -79,7 +79,7 @@ const ShopperProfilePage = () => {
   });
 
   return (
-    <div className="min-h-screen bg-warm-50">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{profile.name} – Shopper Profile – FindA.Sale</title>
         <meta name="description" content={`${profile.name}'s shopper profile on FindA.Sale`} />
@@ -94,16 +94,16 @@ const ShopperProfilePage = () => {
         </Link>
 
         {/* Profile header */}
-        <div className="bg-white rounded-lg shadow-md p-8 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
           <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
-              <h1 className="text-4xl font-bold text-warm-900 mb-2">{profile.name}</h1>
+              <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-2">{profile.name}</h1>
               {profile.collectorTitle && (
-                <p className="text-amber-600 font-medium text-sm mb-2 inline-block bg-amber-50 px-3 py-1 rounded-full">
+                <p className="text-amber-600 dark:text-amber-400 font-medium text-sm mb-2 inline-block bg-amber-50 dark:bg-amber-900 px-3 py-1 rounded-full">
                   {profile.collectorTitle}
                 </p>
               )}
-              <p className="text-warm-600 text-sm">Member since {memberSince}</p>
+              <p className="text-warm-600 dark:text-gray-400 text-sm">Member since {memberSince}</p>
             </div>
             <div className="text-right">
               <Link
@@ -118,7 +118,7 @@ const ShopperProfilePage = () => {
           {/* Badges section */}
           {profile.badges && profile.badges.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-lg font-semibold text-warm-900 mb-3">Badges & Recognition</h2>
+              <h2 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-3">Badges & Recognition</h2>
               <BadgeDisplay badges={profile.badges} size="lg" />
             </div>
           )}
@@ -133,15 +133,15 @@ const ShopperProfilePage = () => {
 
           {/* Reputation score */}
           {profile.reputationScore !== undefined && (
-            <div className="mt-8 pt-6 border-t border-warm-200">
+            <div className="mt-8 pt-6 border-t border-warm-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-warm-600">Reputation Score</p>
-                  <p className="text-3xl font-bold text-warm-900">{profile.reputationScore}</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">Reputation Score</p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-gray-100">{profile.reputationScore}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-warm-600">Total Reviews Left</p>
-                  <p className="text-3xl font-bold text-amber-600">{profile.totalReviews}</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">Total Reviews Left</p>
+                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{profile.totalReviews}</p>
                 </div>
               </div>
             </div>
@@ -150,22 +150,22 @@ const ShopperProfilePage = () => {
 
         {/* Recent Purchases Section */}
         {!profile.purchasesVisible ? (
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <p className="text-warm-600 text-center italic">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <p className="text-warm-600 dark:text-gray-400 text-center italic">
               This shopper prefers to keep their purchase history private.
             </p>
           </div>
         ) : profile.purchases && profile.purchases.length > 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-            <h2 className="text-2xl font-bold text-warm-900 mb-6">Recent Finds</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-6">Recent Finds</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {profile.purchases.map((purchase) => (
                 <Link
                   key={purchase.id}
                   href={`/items/${purchase.item.id}`}
-                  className="group block bg-warm-50 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                  className="group block bg-warm-50 dark:bg-gray-700 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
                 >
-                  <div className="relative aspect-square overflow-hidden bg-gray-200">
+                  <div className="relative aspect-square overflow-hidden bg-gray-200 dark:bg-gray-600">
                     {purchase.item.photoUrls && purchase.item.photoUrls.length > 0 ? (
                       <img
                         src={purchase.item.photoUrls[0]}
@@ -173,18 +173,18 @@ const ShopperProfilePage = () => {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-warm-200 text-warm-600">
+                      <div className="w-full h-full flex items-center justify-center bg-warm-200 dark:bg-gray-600 text-warm-600 dark:text-gray-400">
                         No Image
                       </div>
                     )}
                   </div>
                   <div className="p-3">
-                    <h3 className="font-semibold text-warm-900 text-sm line-clamp-2 group-hover:text-amber-600 transition-colors">
+                    <h3 className="font-semibold text-warm-900 dark:text-gray-100 text-sm line-clamp-2 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
                       {purchase.item.title}
                     </h3>
-                    <p className="text-xs text-warm-600 mt-1">{purchase.sale.title}</p>
+                    <p className="text-xs text-warm-600 dark:text-gray-400 mt-1">{purchase.sale.title}</p>
                     {purchase.item.estimatedValue && (
-                      <p className="text-sm font-semibold text-amber-600 mt-2">
+                      <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 mt-2">
                         ${purchase.item.estimatedValue.toFixed(2)}
                       </p>
                     )}
@@ -196,15 +196,15 @@ const ShopperProfilePage = () => {
         ) : null}
 
         {/* Info section */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-warm-900 mb-4">About This Shopper</h2>
-          <p className="text-warm-600">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">About This Shopper</h2>
+          <p className="text-warm-600 dark:text-gray-400">
             {profile.name} has been an active member of the FindA.Sale community since {memberSince}.
             With {profile.totalPurchases} purchase{profile.totalPurchases !== 1 ? 's' : ''} and {profile.totalReviews} review{profile.totalReviews !== 1 ? 's' : ''} left,
             they're a valued member of our community.
           </p>
           {profile.streakDays > 0 && (
-            <p className="text-warm-600 mt-4">
+            <p className="text-warm-600 dark:text-gray-400 mt-4">
               Currently on a {profile.streakDays}-day visit streak! 🔥
             </p>
           )}
@@ -215,9 +215,9 @@ const ShopperProfilePage = () => {
 };
 
 const StatCard = ({ label, value }: { label: string; value: string | number }) => (
-  <div className="bg-warm-50 rounded-lg p-4 text-center">
-    <p className="text-sm text-warm-600 mb-2">{label}</p>
-    <p className="text-2xl font-bold text-warm-900">{value}</p>
+  <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4 text-center">
+    <p className="text-sm text-warm-600 dark:text-gray-400 mb-2">{label}</p>
+    <p className="text-2xl font-bold text-warm-900 dark:text-gray-100">{value}</p>
   </div>
 );
 

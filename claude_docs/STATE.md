@@ -7,7 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S369 COMPLETE (2026-04-01):** Dashboard QA fixes shipped. Vercel green. QA not yet run — S370 P1.
+**S370 COMPLETE (2026-04-01):** QA all S369 fixes + 4 bugs fixed. 4 files changed, NOT YET PUSHED.
+
+**S370 QA Results:**
+- Dashboard greeting ✅ (ss_4723mliw1, ss_9241d0vbz, ss_7467gghly)
+- Settle → dashboard ✅ (ss_4723mliw1, ss_7467gghly, ss_9241d0vbz)
+- Settle button /organizer/sales ✅ (ss_0317vf3pv, ss_5667rz7te)
+- Settlement wizard + dark mode ✅ (ss_64290amld, ss_4500erofx)
+- Holds page dark mode ✅ (ss_5909fjyqw)
+- Upgrade guard ⚠️ P1 → FIXED (see below)
+- #37 Sale Alerts tab filter ✅ (ss_7662vnzuw, ss_1684z25na, ss_48788fik0); trigger UNVERIFIED (needs organizer publish)
+- #29 Loyalty Passport ✅ (ss_4536dwars, ss_1469q7jsn, ss_7611iil7t, ss_84910ix70)
+- #213 Hunt Pass CTA ✅ hidden for active user (ss_0386yjbib); CTA state UNVERIFIED (user11 has active pass)
+
+**S370 Bugs Fixed:**
+1. **Upgrade guard P1** — `organizer/dashboard.tsx` line 804: changed `tierData.progress.nextTier !== null` → `user?.organizerTier !== 'TEAMS'`. Fix was comparing activity tier (BRONZE/SILVER/GOLD) instead of subscription tier. Now hides "Upgrade →" correctly for TEAMS users.
+2. **#199 Profile dark mode P2** — `shoppers/[id].tsx`: 36 lines, added `dark:` variants to all profile cards (`bg-white dark:bg-gray-800`), stat cards (`bg-warm-50 dark:bg-gray-700`), text (`text-warm-600 dark:text-gray-400`), borders, container.
+3. **#58 Achievements 401 P1** — `hooks/useAchievements.ts`: replaced bare `fetch()` (no auth headers) with authenticated `api` lib. Root cause: same `fetch` vs `api` pattern that caused other 401s.
+4. **#131 Share Templates ❌→FIXED** — QA found SaleShareButton.tsx only had Copy Link + Facebook + Twitter. Added Nextdoor (copy+toast+newsfeed), Threads (intent popup), Pinterest (pin dialog), TikTok (copy+toast+TikTok). `SaleShareButton.tsx` is the component on sale pages (not SharePromoteModal.tsx).
+
+**S370 Files Changed (NOT YET PUSHED):**
+- `packages/frontend/pages/organizer/dashboard.tsx` — upgrade guard fix
+- `packages/frontend/pages/shoppers/[id].tsx` — dark mode variants
+- `packages/frontend/hooks/useAchievements.ts` — auth fix
+- `packages/frontend/components/SaleShareButton.tsx` — 4 missing share platforms added
+
+**S369 COMPLETE (2026-04-01):** Dashboard QA fixes shipped. Vercel green. QA done S370.
 
 **S369 Implementation Summary:**
 - Greeting: dashboard now shows saleType-aware greeting via `getSaleTypeConfig(activeSale.saleType).greeting` (State 2 active sale)
@@ -327,32 +352,25 @@ Files changed S362 (in push block — NOT YET COMMITTED):
 
 ---
 
-## Next Session (S370)
+## Next Session (S371)
 
-### S370 Priority 1 — QA all S369 fixes (Chrome, mandatory first action)
-Per §10 post-fix live verification rule. Read "S369 Implementation Summary" above and verify each in Chrome:
+### S371 Priority 1 — Push S370 fixes + smoke verify (mandatory)
+Patrick must push S370 first (push block below). After push and Vercel deploys:
 
-1. **Dashboard greeting (State 2 active sale)** — Log in as an organizer with a DRAFT or PUBLISHED sale. Verify greeting line below "Welcome, [name]" shows saleType-aware text (not static "Your sale is live…"). Test with an ESTATE sale organizer.
-2. **Upgrade guard** — Log in as an organizer on the highest tier. Verify "Upgrade →" link is absent from Tier Progress card.
-3. **Settle → link on dashboard (State 3)** — Log in as organizer whose most recent sale is ENDED. Verify "Settle →" link appears next to the sale in the Past Sales section, and it navigates to `/organizer/settlement/[saleId]`.
-4. **Settle → link on /organizer/sales** — Same organizer, go to /organizer/sales. Verify ENDED sales show "Settle" button in the action row. DRAFT/PUBLISHED sales should NOT show it.
-5. **Settlement wizard page** — Click a Settle link, verify the 5-step settlement wizard renders (or simple card for appropriate sale type). Dark mode.
-6. **OrganizerHoldsPanel dark mode** — Navigate to Holds page, toggle dark mode, verify cards and table have correct contrast (not washed out).
+1. **Upgrade guard** — Log in as user3@example.com (TEAMS). Verify "Upgrade →" link is GONE. (Fixed: now checks `user?.organizerTier !== 'TEAMS'`)
+2. **#199 Profile dark mode** — Navigate to `/shoppers/cmn9opa330009ij7tqwvt463c` in dark mode. Verify no white cards or washed-out stat labels.
+3. **#58 Achievements** — Log in as user11@example.com, navigate to `/shopper/achievements`. Verify page loads (was 401).
+4. **#131 Share Templates** — Navigate to any published sale, click Share button. Verify Nextdoor, Threads, Pinterest, TikTok options now appear.
 
-Use user7@example.com (has ENDED sales) and user2/Bob (YARD sale type — HighValueTracker should be absent).
-
-### S370 Priority 2 — QA backlog (after S369 verified)
-- **#37 Sale Alerts** — verify Alerts tab filtering + in-app notification on publish
-- **#199 User Profile dark mode**
-- **#58 Achievement Badges**
-- **#29 Loyalty Passport**
-- **#213 Hunt Pass CTA**
-- **#131 Share Templates**
+### S371 Priority 2 — Unverified queue
+- **#37 Sale Alerts trigger** — Need organizer to publish a sale while user11 is logged in. Test: log in as user11, then in a separate tab as user2 and publish a sale — check user11's notification inbox for in-app alert.
+- **#213 Hunt Pass CTA** — Find/use a shopper with `huntPassActive = false` to verify CTA card shows 3 benefits + "Upgrade Now" button. (user11 has active pass, couldn't test CTA state.)
 
 ### Standing Notes
 - All Railway env vars ✅. All migrations deployed ✅.
 - Railway backend: https://backend-production-153c9.up.railway.app
-- Test accounts: user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper), user12 Leo Thomas (shopper). All passwords: password123
+- Test accounts: user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
+- S366 push block still PENDING (see S366 entry above)
 
 ### S361 Priority 2: Continue QA backlog
 - **#37 Sale Alerts** — after notifications.tsx push deploys: navigate to notification inbox as shopper, verify Alerts tab shows only followed-organizer sale alerts (not all notifications)

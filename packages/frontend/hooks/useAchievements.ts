@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../components/AuthContext';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import api from '../lib/api';
 
 export interface Achievement {
   id: string;
@@ -36,19 +35,8 @@ export const useMyAchievements = () => {
   return useQuery({
     queryKey: ['achievements', 'me', user?.id],
     queryFn: async (): Promise<AchievementsResponse> => {
-      const res = await fetch(`${API_BASE}/achievements/me`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to fetch achievements');
-      }
-
-      return res.json();
+      const response = await api.get('/achievements/me');
+      return response.data;
     },
     enabled: !!user,
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -64,19 +52,8 @@ export const useRecordWeekendVisit = () => {
 
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/achievements/visit`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to record visit');
-      }
-
-      return res.json();
+      const response = await api.post('/achievements/visit');
+      return response.data;
     },
     onSuccess: () => {
       // Invalidate and refetch achievements

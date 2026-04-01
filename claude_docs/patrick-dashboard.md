@@ -1,60 +1,67 @@
-# Patrick's Dashboard — S369 Complete (2026-04-01)
+# Patrick's Dashboard — S370 Complete (2026-04-01)
 
 ---
 
 ## Status
 
-- **Vercel:** ✅ Green (deployed)
-- **Railway:** ✅ Green (deployed)
+- **Vercel:** ✅ Green (S369 code deployed, S370 fixes NOT YET PUSHED)
+- **Railway:** ✅ Green
 - **DB:** ✅ No migration this session (schema unchanged)
 
 ---
 
-## What Happened This Session (S369)
+## What Happened This Session (S370)
 
-Dashboard QA fixes from S368 screenshot review — shipped and deployed. Two Vercel build failures encountered and resolved.
+Full QA pass on S369 fixes + 4 bugs found and fixed in code. Push block below.
 
-**Fixes shipped:**
-- Dashboard greeting now saleType-aware (e.g., "You're in yard sale mode — let's clear it out!" instead of static "Your sale is live.")
-- "Upgrade →" link now hidden for organizers already on the highest tier (null check on nextTier)
-- "Settle →" link added to ENDED sales in the dashboard Past Sales list
-- "Settle →" link added to ENDED sales in /organizer/sales card actions
-- OrganizerHoldsPanel dark mode contrast fixed
+**S369 QA results:**
+- ✅ Dashboard greeting (saleType-aware text working)
+- ✅ Settle → link on dashboard Past Sales (ENDED sales only)
+- ✅ Settle button on /organizer/sales (ENDED only, not DRAFT/PUBLISHED)
+- ✅ Settlement wizard renders (5-step, dark mode OK)
+- ✅ Holds page dark mode (good contrast)
+- ⚠️ Upgrade guard was broken → **FIXED** (see below)
 
-**Build fixes required two rounds:**
-1. `SettlementWizard.tsx` — missing `import Link from 'next/link'` (dev agent fix)
-2. `dashboard.tsx` — `Sale` interface missing `saleType?: string`, which TypeScript strict mode caught during Vercel build but not local tsc (found this session via git diff)
+**Backlog QA results:**
+- ✅ #37 Sale Alerts tab filter works
+- ✅ #29 Loyalty Passport — XP guide, rank thresholds, real data
+- ✅ #213 Hunt Pass CTA — correctly hidden for active pass user
 
-**QA NOT done yet** — S370 P1 is Chrome verification of all six fixes above.
-
----
-
-## S370 — What's Next
-
-**P1 — Chrome QA of S369 fixes** (mandatory first action per §10 rule):
-- Log in as user7@example.com (has ENDED sales) — verify Settle links on dashboard + /organizer/sales
-- Log in as an organizer on highest tier — verify Upgrade link is gone
-- Log in as active ESTATE organizer — verify saleType-aware greeting
-- Toggle dark mode on Holds page — verify OrganizerHoldsPanel contrast
-
-**P2 — QA backlog after S369 verified:**
-- #37 Sale Alerts (Alerts tab filtering + in-app notification on publish)
-- #199 User Profile dark mode
-- #58 Achievement Badges
-- #29 Loyalty Passport
-- #213 Hunt Pass CTA
+**Bugs fixed this session (4 files, in code, need your push):**
+1. **Upgrade guard** — Was comparing activity tier (BRONZE/SILVER/GOLD) instead of subscription tier. TEAMS users still saw "Upgrade →". Fixed to check `user?.organizerTier !== 'TEAMS'`.
+2. **#199 Profile page dark mode** — White cards showing on dark background. Added `dark:` variants throughout `shoppers/[id].tsx`.
+3. **#58 Achievements page 401** — Page was crashing with "unauthorized" for logged-in users. Root cause: bare `fetch()` without auth headers. Fixed to use authenticated `api` lib.
+4. **#131 Share Templates** — Nextdoor, Threads, Pinterest, TikTok were completely missing from the share button. Added all 4 platform handlers to `SaleShareButton.tsx`.
 
 ---
 
-## Wrap Push
+## Push Block (S370 fixes)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs(S369): session wrap — dashboard QA fixes shipped, Vercel green"
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/shoppers/[id].tsx
+git add packages/frontend/hooks/useAchievements.ts
+git add packages/frontend/components/SaleShareButton.tsx
+git commit -m "fix: upgrade guard tier logic, profile dark mode, achievements auth, share templates"
 .\push.ps1
 ```
+
+---
+
+## S371 — What's Next
+
+**P1 — Verify S370 fixes after push deploys:**
+- Upgrade guard gone for user3 (TEAMS)
+- Profile `/shoppers/[id]` no longer white cards in dark mode
+- Achievements page loads for user11 (was 401)
+- Share button shows Nextdoor/Threads/Pinterest/TikTok
+
+**P2 — Finish unverified queue:**
+- #37 trigger test (need organizer to publish while user11 is watching)
+- #213 Hunt Pass CTA with inactive user (user11 has active pass — couldn't test)
 
 ---
 
@@ -63,3 +70,4 @@ git commit -m "docs(S369): session wrap — dashboard QA fixes shipped, Vercel g
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review
 - [ ] **Brand Voice Session:** Overdue — real beta users forming impressions without documented voice
+- [ ] **S366 push block** — Still pending from S366 (8 files including dashboard/Layout/OrganizerHoldsPanel/saleController/review changes)
