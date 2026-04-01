@@ -139,6 +139,8 @@ Never use `&&` (bash only). Never use placeholders.
 
 **Subagent push ban:** Subagents are NOT authorized to push to GitHub via MCP `push_files`. Only the main session may execute `push_files` calls. Subagents return output with file changes listed; main session batches into consolidated MCP pushes (≤3 files per call). This applies even when a subagent's batch would technically fit within 3-file/25k-token limits — the rule is absolute. Main session provides Patrick a single comprehensive push block when MCP isn't used.
 
+**Subagent git ban (HARD RULE — survives compression):** Subagents are BANNED from running ANY git commands — including `git status`, `git add`, `git commit`, `git reset`, `git clean`, `git checkout`, `git rm`, `git stash`, or any other git operation. Two complete repo wipes occurred (S362 confirmed, prior occurrence also confirmed) from subagent git commands running in the VM whose index state was desynced from Patrick's Windows repo. When Patrick ran `.\push.ps1` the delta was catastrophic (1,483 files deleted both times). Subagents may ONLY: read files, write files, run TypeScript/build checks (`npx tsc --noEmit`), run npm/pnpm commands, and return an explicit list of changed file paths to the main session. All git staging, committing, and pushing is Patrick-only via PowerShell. Main session provides the complete pushblock with explicit `git add [file]` lines per file.
+
 Repo: `deseee/findasale` — Branch: `main`
 
 ---

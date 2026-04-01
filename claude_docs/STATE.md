@@ -196,61 +196,78 @@ Files changed S361:
 
 ---
 
-## Next Session (S362)
+**S362 COMPLETE (2026-03-31):** Camera QA (partial) + smart crop architecture + repo wipe recovery.
 
-### Patrick Action Required — Push S361 changes
-Run `git diff --name-only` first to see everything that changed (null byte sweep may have touched more files). Then:
+(1) **Camera QA (desktop) ✅ Chrome-verified:** Rapidfire opens, Tier 2 brightness soft warning fires ("Lighting is soft. We'll still try."), photo captures, "Analyzing item with AI…" toast appears, counter updates 0→1, green badge on thumbnail, Review(1) updates. "→ Pub" button confirmed absent. Mobile layout responsive. Thumbnails noticeably larger. Tier 2 = soft continue, Tier 3 = hard block. All core AI flow verified on desktop.
+
+(2) **Smart crop architecture decided:** Upload original always, Cloudinary delivers per context: `c_fill,ar_1:1` for grid (square), `c_fill,ar_3:4` for item detail (portrait), `c_fill,ar_4:3` for preview (landscape). Phase 2: add bounding box request to Haiku AI call for crop centering. Canvas crop approach rejected — would lose original.
+
+(3) **Camera UI improvements shipped (in push block):**
+- RapidCapture.tsx: Review button → bottom-left 3-zone flex layout, useless left thumbnail removed from Rapidfire
+- RapidCarousel.tsx: "+" button 32px→48px, centered bottom of strip, always visible
+- imageUtils.ts: `getLandscape4x3Url()` and `getPortrait3x4Url()` added alongside existing `getThumbnailUrl()`
+- ItemCard, LibraryItemCard, ItemSearchResults, ItemListWithBulkSelection, RecentlyViewed, InspirationGrid: applied `getThumbnailUrl()` for 1:1 square grid context
+- `pages/items/[id].tsx`: applied `getPortrait3x4Url()` for item detail main photo
+
+(4) **CRITICAL: Repo wipe recovered.** `3ceae665` deleted 1,483 files on push (second occurrence this project). Recovery: `git reset --hard cadddf6e` + `git push origin main --force` via Patrick's PowerShell. 10 S362 files saved to VM temp before reset, restored to disk. Pushblock provided — Patrick must run it. Root cause locked in CLAUDE.md §5: subagent git ban (hard rule).
+
+Files changed S362 (in push block — NOT YET COMMITTED):
+- `packages/frontend/components/RapidCapture.tsx`
+- `packages/frontend/components/camera/RapidCarousel.tsx`
+- `packages/frontend/lib/imageUtils.ts`
+- `packages/frontend/components/ItemCard.tsx`
+- `packages/frontend/components/LibraryItemCard.tsx`
+- `packages/frontend/components/ItemSearchResults.tsx`
+- `packages/frontend/components/ItemListWithBulkSelection.tsx`
+- `packages/frontend/components/RecentlyViewed.tsx`
+- `packages/frontend/components/InspirationGrid.tsx`
+- `packages/frontend/pages/items/[id].tsx`
+
+---
+
+## Next Session (S363)
+
+### Patrick Action Required — Push S362 changes
 ```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add CLAUDE.md
 git add packages/frontend/components/RapidCapture.tsx
 git add packages/frontend/components/camera/RapidCarousel.tsx
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/frontend/components/ActivityFeed.tsx
-git add packages/frontend/tsconfig.json
-git add packages/shared/src/constants/tagVocabulary.ts
-git add packages/frontend/pages/shopper/notifications.tsx
-REM Also: git add any other files shown by git diff --name-only
-git commit -m "fix(camera): UX polish, brightness threshold, → Pub removed, thumbnails enlarged; fix(p3): CSV Zod empty string, biz name, typology refresh; fix: null byte sweep frontend/shared"
+git add packages/frontend/lib/imageUtils.ts
+git add packages/frontend/components/ItemCard.tsx
+git add packages/frontend/components/LibraryItemCard.tsx
+git add packages/frontend/components/ItemSearchResults.tsx
+git add packages/frontend/components/ItemListWithBulkSelection.tsx
+git add packages/frontend/components/RecentlyViewed.tsx
+git add packages/frontend/components/InspirationGrid.tsx
+git add "packages/frontend/pages/items/[id].tsx"
+git commit -m "feat(camera): Review to bottom-left, + button accessible; feat(images): Cloudinary per-context transforms (square grid, portrait detail); docs: subagent git ban rule"
 .\push.ps1
 ```
 
-### S362 Priority 1 — QA camera workflow live
-After the push deploys:
-- Open Rapidfire mode, capture photos, verify: spinning ◐ amber badge during AI, green "Ready ✓" strip on completion
-- Verify "→ Pub" button is gone
-- Verify thumbnails are noticeably bigger
-- Test brightness detection: shoot something bright vs dark, confirm Tier 3 only fires in pitch black
+### S363 Priority 1 — QA camera workflow (mobile)
+Desktop camera QA is done. Mobile still needed:
+- Switch Chrome to mobile viewport (375px), open Rapidfire, capture a photo
+- Verify Tier 2/3 brightness detection fires correctly
+- Verify capture→AI spinner→green badge cycle completes end-to-end
+- `upload_image` MCP tool is available — use it if physical camera is too dark in VM
 
-### S362 Priority 2 — QA backlog
-- **#37 Sale Alerts** — after notifications.tsx push deploys: verify Alerts tab
+### S363 Priority 2 — QA backlog
+- **#37 Sale Alerts** — verify Alerts tab filtering + in-app notification on publish
 - **#199 User Profile dark mode** — `/shoppers/...` in dark mode
 - **#58 Achievement Badges** — `/shopper/achievements` + dashboard widget
 - **#29 Loyalty Passport** — `/shopper/loyalty`
 - **#213 Hunt Pass CTA** — visible for non-pass users only
 - **#131 Share Templates** — Facebook, Nextdoor, Threads, Pinterest, TikTok
 
-### S362 Notes
+### S363 Notes
 - All Railway env vars ✅. All migrations deployed ✅.
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Test accounts: user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper), user12 Leo Thomas (shopper). All passwords: password123
-- trailId.tsx JSX closing tag mismatch is a pre-existing issue (unrelated to null byte fix)
-- Auto-enhance in camera applies brightness(1.15) saturate(1.1) — subtle by design
-
-### S361 Priority 1 — DIAGNOSTIC: AI Tagging Broken in Camera Workflow
-
-Patrick confirmed: after capturing a photo in camera mode, there is NO spinning icon, NO error message, NO indication that AI tagging is occurring. It's also unknown whether the limit-reached state (if Anthropic API limits are hit) surfaces any feedback. Something changed during the S351 Photo Capture Protocol work (#224) that broke the flow.
-
-**Diagnostic steps for S361:**
-1. Load `packages/frontend/pages/organizer/add-items/[saleId].tsx` — check what triggers AI classification after photo capture
-2. Load `packages/frontend/components/camera/PreviewModal.tsx` — check loading state during AI call, where spinner/confidence display was
-3. Load `packages/frontend/components/camera/RapidCarousel.tsx` and `RapidCapture.tsx` — check if photo capture is reaching the AI call at all
-4. Load `packages/backend/src/services/cloudAIService.ts` — check error handling for API limit / failure states
-5. Load `packages/backend/src/controllers/itemController.ts` — check processRapidDraft and whether aiConfidence is passed through
-6. Specifically check: was `isLoading`/`isPending` state from the AI call wired into any spinner in PreviewModal BEFORE S351, and did the S351 changes accidentally remove or bypass it?
-7. Check `BrightnessIndicator.tsx` (new in S351) — does it interfere with the camera capture flow timing?
+- CLAUDE.md updated: §5 now has **Subagent git ban** (hard rule, survives compression) — subagents banned from ALL git commands. Two wipes documented, root cause locked.
+- Phase 2 smart crop (AI bounding box in Haiku call) is backlogged — not urgent.
 
 **Known suspect:** S351 added tiered lighting checks and shot sequence guidance. These inject logic between capture and AI classification. If the lighting Tier 3 hard modal fires and the user clicks "Skip", the photo may be discarded before reaching AI. If the flow was restructured and a `useState` or `useEffect` dependency was dropped, AI call might fire but result is silently lost.
 

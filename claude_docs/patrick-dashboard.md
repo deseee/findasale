@@ -1,50 +1,46 @@
-# Patrick's Dashboard — S361 Complete (2026-03-31)
+# Patrick's Dashboard — S362 Complete (2026-03-31)
 
 ---
 
-## ✅ S361 Done — Camera UX polished + P3 fixes + null byte sweep
+## ⚠️ S362 — Repo wipe recovered. Push block ready.
 
 ---
 
-## What Happened This Session (S361)
+## What Happened This Session (S362)
 
-**Camera AI feedback loop fixed:** After capturing a photo in Rapidfire mode, the AI status was completely invisible. Root cause: the quality overlays (too dark, overexposed warnings) were rendering in page JSX, hidden behind the full-screen camera overlay. Fixed: overlays now render inside the camera via a `qualityOverlay` prop. Added polling logic that watches for the item's DRAFT→PENDING_REVIEW transition every 3 seconds, updating the carousel badge in real time.
+**Camera QA (desktop) ✅ verified:** Rapidfire opens, Tier 2 brightness fires the soft "Lighting is soft. We'll still try." warning, photo captures, AI spinner → green badge cycle works end-to-end, Review(1) button updates. Tier 3 only fires in near-darkness. "→ Pub" button gone, thumbnails noticeably bigger, mobile layout looks good.
 
-**Brightness threshold fixed:** The "too dark" warning was firing on normal indoor photos. The threshold was set at 40 (normalized 0–100) — way too aggressive. Lowered to 15, which means it only fires on genuinely pitch-black scenes. You should barely see it trigger in normal conditions.
+**Smart crop architecture locked:** When you capture a photo, we upload the full original. Cloudinary then delivers the right crop for each context: square (1:1) for item grid cards, portrait (3:4) for the item detail page main photo, landscape (4:3) for previews. This means one upload, three different looks — and you never lose the original. Canvas crop before upload was considered and rejected.
 
-**Camera UX improvements:**
-- "→ Pub" button removed from the in-camera thumbnail strip — it was doing the same thing as tapping a thumbnail (opening the review screen), and there's already a Review button at the top of the camera view
-- Thumbnails are now 96×96px (was 80×80px) — bigger, easier to see what's in each shot
-- The "+" button to add more photos to an item is now larger (32×32px, larger tap target)
-- PENDING_REVIEW items now show a green "Ready ✓" strip at the bottom of the thumbnail — much clearer than the small green circle
-- Auto-enhance is working correctly: applies brightness +15% and saturation +10%. The ✨ badge shows when it ran. The effect is intentionally subtle.
+**Camera UI improvements in this push:**
+- Review button moved to bottom-left of camera (same zone as thumbnails — easier to hit one-handed)
+- The useless left thumbnail in Rapidfire removed (was just visual noise)
+- "+" button is now 48×48px, centered at the bottom of the thumbnail strip, always visible
+- All item grid cards (ItemCard, LibraryItemCard, SearchResults, BulkSelection, RecentlyViewed, InspirationGrid) now use 1:1 square Cloudinary crops
+- Item detail page (`/items/[id]`) now uses 3:4 portrait Cloudinary crop for the main photo
 
-**P3 fixes completed:**
-- CSV import: was rejecting all rows when status/category columns were blank. Now converts empty strings to "not provided" before validation.
-- Organizer settings: Business Name field was blank every time you opened the page. Now loads correctly from the API.
-
-**Null byte sweep:** Found that many frontend TypeScript files had null bytes appended at the end (a recurring side effect of how files get written). Did a full sweep across all frontend and shared files. TypeScript compiler is now clean — zero TS1127 errors across the codebase (except one unrelated pre-existing issue in a trails page).
+**Repo wipe (second time) — recovered.** Commit `3ceae665` wiped 1,483 files. Cause: subagent ran git commands in the VM; VM git state was desynced from your Windows repo. When you ran `.\push.ps1`, git saw the delta as 1,483 deletions. Fixed: `git reset --hard cadddf6e` + `git push origin main --force` from your PowerShell — repo is restored. The 10 S362 files were saved before the reset and are back on your disk. CLAUDE.md now has a hard rule: **subagents are banned from all git commands, permanently.** No more git from the VM.
 
 ---
 
 ## Your Action Now
 
-First run `git diff --name-only` to see all changed files, then:
-
 ```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add CLAUDE.md
 git add packages/frontend/components/RapidCapture.tsx
 git add packages/frontend/components/camera/RapidCarousel.tsx
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/frontend/components/ActivityFeed.tsx
-git add packages/frontend/tsconfig.json
-git add packages/shared/src/constants/tagVocabulary.ts
-git add packages/frontend/pages/shopper/notifications.tsx
-REM Also add any other files shown by git diff --name-only
-git commit -m "fix(camera): UX polish, brightness threshold, Pub button removed, thumbnails enlarged; fix(p3): CSV Zod, biz name, typology refresh; fix: null byte sweep"
+git add packages/frontend/lib/imageUtils.ts
+git add packages/frontend/components/ItemCard.tsx
+git add packages/frontend/components/LibraryItemCard.tsx
+git add packages/frontend/components/ItemSearchResults.tsx
+git add packages/frontend/components/ItemListWithBulkSelection.tsx
+git add packages/frontend/components/RecentlyViewed.tsx
+git add packages/frontend/components/InspirationGrid.tsx
+git add "packages/frontend/pages/items/[id].tsx"
+git commit -m "feat(camera): Review to bottom-left, + button accessible; feat(images): Cloudinary per-context transforms (square grid, portrait detail); docs: subagent git ban rule"
 .\push.ps1
 ```
 
@@ -52,19 +48,19 @@ git commit -m "fix(camera): UX polish, brightness threshold, Pub button removed,
 
 ## Status Summary
 
-- **Vercel:** ✅ Green (last known)
+- **Vercel:** ✅ Green
 - **Railway:** ✅ Green
 - **All migrations:** ✅ Deployed
 - **All Railway env vars:** ✅ Confirmed
 
 ---
 
-## Next Up (S362)
+## Next Up (S363)
 
-**QA camera flow after push deploys** — verify: amber spinner during AI, green "Ready ✓" on completion, → Pub button gone, bigger thumbnails visible.
+**QA camera on mobile** — desktop is verified, mobile viewport still needs a full capture→AI→ready cycle test.
 
 **Continue QA backlog:**
-- #37 Sale Alerts — after notifications.tsx deploys
+- #37 Sale Alerts
 - #199 User Profile dark mode
 - #58 Achievement Badges
 - #29 Loyalty Passport
@@ -75,6 +71,6 @@ git commit -m "fix(camera): UX polish, brightness threshold, Pub button removed,
 
 ## Open Action Items for Patrick
 
-- [ ] **Run push block above** (camera UX + P3 + wrap docs)
+- [ ] **Run push block above** (S362 camera/images + wrap docs + git ban rule)
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review
