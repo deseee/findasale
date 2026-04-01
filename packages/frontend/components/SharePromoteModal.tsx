@@ -24,6 +24,7 @@ interface Sale {
   startDate: string;
   endDate: string;
   tags?: string[];
+  saleType?: string; // e.g., 'ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', etc.
 }
 
 interface SharePromoteModalProps {
@@ -42,6 +43,23 @@ interface TemplateContent {
   description: string;
 }
 
+// Helper: convert saleType enum to human-readable label
+const getSaleTypeLabel = (saleType?: string): string => {
+  if (!saleType) return 'estate sale';
+
+  const labels: Record<string, string> = {
+    'ESTATE': 'estate sale',
+    'YARD': 'yard sale',
+    'AUCTION': 'auction',
+    'FLEA_MARKET': 'flea market',
+    'CONSIGNMENT': 'consignment sale',
+    'CHARITY': 'charity sale',
+    'BUSINESS_CORPORATE': 'corporate sale',
+  };
+
+  return labels[saleType] || 'sale';
+};
+
 const SharePromoteModal: React.FC<SharePromoteModalProps> = ({
   sale,
   itemCount = 0,
@@ -53,6 +71,8 @@ const SharePromoteModal: React.FC<SharePromoteModalProps> = ({
   const [copiedTab, setCopiedTab] = useState<TemplateType | null>(null);
 
   if (!isOpen) return null;
+
+  const saleTypeLabel = getSaleTypeLabel(sale.saleType);
 
   // Format dates for display
   const startDate = format(parseISO(sale.startDate), 'MMM d');
@@ -165,26 +185,26 @@ See you there! 🛍️`,
       title: 'TikTok',
       icon: '🎬',
       description: 'Short, punchy caption with trending hashtags',
-      content: `Estate sale haul alert 🏷️ ${sale.title} in ${sale.city} — furniture, collectibles, vintage finds and more
+      content: `${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} haul alert 🏷️ ${sale.title} in ${sale.city} — furniture, collectibles, vintage finds and more
 
 📍 ${address}
 🗓️ ${startDate} - ${endDate}
 🔗 Link in bio → finda.sale
 
-#estatesale #thrifting #vintagefinds #${sale.city}thrift #secondhand #estatefinds #thrifthaul`,
+#${saleTypeLabel.replace(/\s+/g, '')} #thrifting #vintagefinds #${sale.city}thrift #secondhand #estatefinds #thrifthaul`,
     },
     pinterest: {
       title: 'Pinterest',
       icon: '📌',
       description: 'Keyword-rich discovery-oriented description',
-      content: `${sale.title} — Estate Sale in ${sale.city}
+      content: `${sale.title} — ${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} in ${sale.city}
 
-Discover unique vintage furniture, antiques, collectibles, and one-of-a-kind finds at this ${sale.city} estate sale. Browse curated items from ${startDate} - ${endDate}. Shop in person or browse the full inventory online at FindA.Sale.
+Discover unique vintage furniture, antiques, collectibles, and one-of-a-kind finds at this ${sale.city} ${saleTypeLabel}. Browse curated items from ${startDate} - ${endDate}. Shop in person or browse the full inventory online at FindA.Sale.
 
 📍 ${address}
 🗓️ ${startDate} - ${endDate}
 
-Find more estate sales near you → finda.sale`,
+Find more ${saleTypeLabel}s near you → finda.sale`,
     },
     threads: {
       title: 'Threads',

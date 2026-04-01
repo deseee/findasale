@@ -327,6 +327,7 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
 
     const items = await prisma.item.findMany({
       where: filterWhere,
+      take: 500,
       select: {
         id: true,
         saleId: true,

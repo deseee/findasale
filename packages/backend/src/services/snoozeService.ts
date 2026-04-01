@@ -92,10 +92,9 @@ export async function checkAndReactivateSnoozes(): Promise<void> {
     return;
   }
 
-  console.log('[snooze] checkAndReactivateSnoozes: querying local audit table for expired snoozes...');
   // TODO: Query Prisma for a snooze audit table (if implemented) to find expired snoozed subscribers
   // For now, this is a no-op placeholder that logs the intent.
-  console.log('[snooze] Reactivation check complete — no local audit table configured');
+  console.log('[snoozeService] checkAndReactivateSnoozes: not yet implemented — skipping');
 }
 
 /**

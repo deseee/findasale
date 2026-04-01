@@ -423,9 +423,30 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
       }
     });
 
-    // TODO: Send email with reset link (non-blocking)
-    // const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    // await sendPasswordResetEmail(user.email, user.name, resetLink);
+    // Send password reset email (non-blocking)
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+
+      await resend.emails.send({
+        from: fromEmail,
+        to: user.email,
+        subject: 'Reset Your FindA.Sale Password',
+        html: `
+          <p>Hi ${user.name},</p>
+          <p>We received a request to reset your password. Click the link below to create a new password:</p>
+          <p><a href="${process.env.FRONTEND_URL}/reset-password?token=${resetToken}" style="display: inline-block; padding: 10px 20px; background-color: #b45309; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a></p>
+          <p>This link will expire in 1 hour.</p>
+          <p>If you didn't request a password reset, you can ignore this email.</p>
+          <p>— FindA.Sale Team</p>
+        `,
+      });
+    } catch (emailError) {
+      // Non-blocking: log error but don't fail the request
+      console.error('[passwordReset] Failed to send reset email:', emailError);
+    }
 
     // Return generic response regardless of success
     res.status(200).json(genericResponse);
