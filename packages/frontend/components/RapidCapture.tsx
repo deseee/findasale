@@ -753,7 +753,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             >
             <div
               className="flex items-center gap-2 pl-3"
-              style={{ direction: 'ltr', paddingRight: 'calc(50% + 40px)', minWidth: '100%', justifyContent: 'flex-end' }}
+              style={{ direction: 'ltr', paddingRight: 'calc(50% - 28px)', minWidth: '100%', justifyContent: 'flex-end' }}
             >
               {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
               {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
@@ -838,6 +838,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     </div>
                   );
                 })}
+              {/* Shutter position anchor — visual ring centered under the shutter button */}
+              <div
+                className="flex-shrink-0 w-14 h-14 rounded-full border-2 border-white/20 bg-white/5 pointer-events-none"
+                aria-hidden="true"
+              />
             </div>{/* end inner LTR flex */}
             </div>{/* end outer RTL scroll */}
 
