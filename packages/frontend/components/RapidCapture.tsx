@@ -124,6 +124,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const MAX_REGULAR = 5;
 
   // Start camera on mount and when facingMode changes
+  // Auto-scroll carousel to show newest thumbnail (rightmost) on each capture
+  useEffect(() => {
+    if (carouselRef.current && rapidItems.length > 0) {
+      carouselRef.current.scrollLeft = carouselRef.current.scrollWidth;
+    }
+  }, [rapidItems.length]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -744,16 +751,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
           {/* Bottom control: shutter floats above a scrollable thumbnail strip */}
           <div className="relative min-h-[76px]">
-            {/* Scroll strip — RTL outer anchors newest items flush-left of shutter automatically.
-                No JS scrolling needed: RTL scrollLeft=0 always shows the right end (newest items). */}
+            {/* Scroll strip — photos start to the right of the shutter and grow leftward.
+                paddingLeft pushes content past the shutter. Auto-scroll keeps newest visible. */}
             <div
               ref={carouselRef}
               className="absolute inset-0 overflow-x-auto scrollbar-hide flex items-center"
-              style={{ direction: 'rtl', WebkitOverflowScrolling: 'touch' }}
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
             <div
-              className="flex items-center gap-2 pl-3"
-              style={{ direction: 'ltr', paddingRight: 'calc(50% - 28px)', minWidth: '100%', justifyContent: 'flex-end' }}
+              className="flex items-center gap-2"
+              style={{ paddingLeft: 'calc(50% + 40px)', paddingRight: '16px' }}
             >
               {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
               {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
@@ -838,12 +845,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     </div>
                   );
                 })}
-              {/* Shutter position anchor — visual ring centered under the shutter button */}
-              <div
-                className="flex-shrink-0 w-14 h-14 rounded-full border-2 border-white/20 bg-white/5 pointer-events-none"
-                aria-hidden="true"
-              />
-            </div>{/* end inner LTR flex */}
+            </div>{/* end inner flex */}
             </div>{/* end outer RTL scroll */}
 
             {/* Shutter: floats above the scroll strip, always centered */}
