@@ -7,19 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S368 COMPLETE (2026-04-01):** Dashboard Makeover Phase 1 built — 8 roadmap items (#228, #230-234, #236-237). Migration deployed to Railway. All TypeScript checks pass. Pending push + Chrome QA.
+**S368 COMPLETE (2026-04-01):** Dashboard Makeover Phase 1 built + deployed. 8 roadmap items (#228, #230-234, #236-237). Migration deployed to Railway. Code pushed — both Vercel and Railway green.
 
-**S368 Dashboard Makeover Phase 1 — Implementation:**
+**S368 Implementation Summary:**
 - Schema: 4 new models (SaleSettlement, SaleExpense, ClientPayout, SaleTransaction) + field additions to Sale, Item, Organizer
 - Migration: `20260401_settlement_hub_dashboard_widgets` deployed to Railway ✅
 - Backend: settlementController (7 functions), settlement routes, 3 widget endpoints on organizer routes, high-value toggle on items, lifecycle endpoint on sales
 - Shared: settlement.ts types + CONSIGNMENT/OTHER added to SaleType enum
 - Frontend: 6 dashboard widgets (SalePulse, SmartBuyer, HighValueTracker, EfficiencyCoaching, WeatherStrip, PostSaleMomentum), settlement wizard (5-step + simple card), 3 wizard sub-components, settlement page, dashboard integration, edit-sale "Settle" button
-- Knock-ons: saleType now in stats API activeSale response
-- TS: Zero errors across frontend, backend, shared
+- Deploy fixes: Purchase.amount (not totalPrice), Follow.userId (not followerId), WeatherStrip type keys, dashboard saleType type, efficiency-stats route ordering (was caught by /:id catch-all)
 
-**Pending push — S368 full batch (23 files):**
-See pushblock in patrick-dashboard.md
+**S368 Dashboard QA Issues (from Patrick screenshot — S369 P1):**
+- Past Sales card: shows sale but only Reopen button, no link to the sale itself, no other sales/drafts card visible
+- Manage Holds card: dark mode styling broken (looks washed out / wrong background)
+- Organizer Tier card: still shows "Upgrade →" link, no meaningful tier info displayed
+- Widget grid (SalePulse, Who's Coming, High-Value, Efficiency Coach): rendering in "between sales" state when they should only show during active sale — need to verify dashboard state logic
+- WeatherStrip: not visible (may be correct — no sale within 10 days)
+- PostSaleMomentum: not visible in screenshot — need to check if it renders in State 3
+- Nav menus: need full audit against spec to verify all items present
+- Sale-type adaptive layout: untested — only ESTATE type exists in current data
 
 **S367 COMPLETE (2026-04-01):** Dashboard bug fixes (5 P1s) + Dashboard Makeover architecture + spec. All pushes confirmed on GitHub.
 
