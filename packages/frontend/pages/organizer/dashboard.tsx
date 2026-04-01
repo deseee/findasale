@@ -577,6 +577,8 @@ const OrganizerDashboard = () => {
                     {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) < 1 && (
                       <button
                         onClick={async () => {
+                          const confirmed = window.confirm('Are you sure you want to close this sale early? This cannot be undone.');
+                          if (!confirmed) return;
                           try {
                             await api.patch(`/sales/${statsData.activeSale!.id}/status`, { status: 'ENDED' });
                             showToast('Sale closed successfully', 'success');
@@ -905,9 +907,30 @@ const OrganizerDashboard = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">{sale.title}</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">{sale.city}, {sale.state}</p>
                       </div>
-                      <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm ml-4">
-                        View Details →
-                      </Link>
+                      <div className="flex items-center gap-2 ml-4">
+                        {sale.status === 'ENDED' && (
+                          <button
+                            onClick={async () => {
+                              const confirmed = window.confirm('Reopen this sale? It will become visible to shoppers again.');
+                              if (!confirmed) return;
+                              try {
+                                await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
+                                showToast('Sale reopened', 'success');
+                                setTimeout(() => window.location.reload(), 1000);
+                              } catch (error: any) {
+                                console.error('Failed to reopen sale:', error);
+                                showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
+                              }
+                            }}
+                            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+                          >
+                            Reopen
+                          </button>
+                        )}
+                        <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm ml-2">
+                          View Details →
+                        </Link>
+                      </div>
                     </div>
                   ))}
                 </div>

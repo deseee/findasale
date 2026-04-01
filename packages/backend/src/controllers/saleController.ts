@@ -441,7 +441,7 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     const transitions: Record<string, string[]> = {
       DRAFT: ['PUBLISHED'],
       PUBLISHED: ['ENDED'],
-      ENDED: [],
+      ENDED: ['PUBLISHED'],
     };
     const allowed = transitions[existingSale.status] || [];
     if (!allowed.includes(status)) {
