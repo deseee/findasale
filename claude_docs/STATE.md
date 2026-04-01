@@ -15,9 +15,10 @@ Camera UI changes pushed this session (all in `RapidCapture.tsx` + `BrightnessIn
 - Brightness indicator: single line, semi-transparent, softer wording, positioned below mode hint
 - Thumbnail `+` badge: small corner badge, no longer covers full thumbnail (tap-to-preview restored)
 - Stats line: "X taken · X enhanced ✨" + greyed Review(0) link
-- Scroll strip: `paddingRight: calc(50% + 40px)` ensures thumbnails never rest under shutter
-- AI-analyzed badge: bright `bg-emerald-500` (was too-similar `bg-green-100`)
+- Scroll strip: LTR, paddingLeft pushes first photo right of shutter, auto-scroll to newest on capture
+- AI-analyzed badge: bright `bg-green-600`
 - Shutter row height reduced to `min-h-[76px]`
+- **`+` add-mode bug fixed:** `+` button now hidden on temp-* items (prevented stale-id API calls); orphan temp entry removed from carousel after successful append upload
 
 Dispatched: zoom + continuous autofocus + tap-to-focus to findasale-dev.
 

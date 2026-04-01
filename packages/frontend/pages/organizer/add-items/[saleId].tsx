@@ -719,13 +719,15 @@ const AddItemsDetailPage = () => {
         if (urls[0]) {
           // Append URL to existing item
           await api.post(`/items/${appendToItemId}/photos`, { url: urls[0] });
-          // Update local state to append photo
+          // Update target item's photo count and remove the orphan temp entry
           setRapidItems((prev) =>
-            prev.map((item) =>
-              item.id === appendToItemId
-                ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
-                : item
-            )
+            prev
+              .filter((item) => item.id !== tempId)
+              .map((item) =>
+                item.id === appendToItemId
+                  ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
+                  : item
+              )
           );
         }
       } else {

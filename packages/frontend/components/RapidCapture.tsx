@@ -827,8 +827,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         <div className="absolute -top-0.5 -left-0.5 text-xs">✨</div>
                       )}
 
-                      {/* "+" button — small corner badge, does NOT cover the thumbnail tap area */}
-                      {item.thumbnailUrl && (
+                      {/* "+" button — only shown once item has a real DB id (never on temp-* items) */}
+                      {item.thumbnailUrl && !item.id.startsWith('temp-') && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
