@@ -753,7 +753,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             >
             <div
               className="flex items-center gap-2 pl-3"
-              style={{ direction: 'ltr', paddingRight: 'calc(50% - 40px)', minWidth: 'max-content' }}
+              style={{ direction: 'ltr', paddingRight: 'calc(50% - 40px)', minWidth: '100%', justifyContent: 'flex-end' }}
             >
               {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
               {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
