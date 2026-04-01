@@ -206,6 +206,18 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     };
   }, [facingMode]);
 
+  // Auto-scroll carousel whenever rapidItems grows (handles async thumbnail additions from parent)
+  useEffect(() => {
+    if (rapidItems.length > 0) {
+      requestAnimationFrame(() => {
+        carouselRef.current?.scrollTo({
+          left: carouselRef.current.scrollWidth,
+          behavior: 'smooth',
+        });
+      });
+    }
+  }, [rapidItems.length]);
+
   // Phase 3: Pre-capture quality check — sample video brightness every 2 seconds
   // Brightness sampling handled by BrightnessIndicator component
 
@@ -774,7 +786,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     ? { icon: '◐', bgColor: 'bg-amber-100', iconColor: 'text-amber-700' }
                     : item.draftStatus === 'DRAFT' && item.aiError
                     ? { icon: '⚠', bgColor: 'bg-red-100', iconColor: 'text-red-700' }
-                    : { icon: '✓', bgColor: 'bg-emerald-500', iconColor: 'text-white' };
+                    : { icon: '✓', bgColor: 'bg-green-600', iconColor: 'text-white' };
 
                   return (
                     <div

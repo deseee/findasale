@@ -792,6 +792,10 @@ const AddItemsDetailPage = () => {
   // Quality modal handlers
   const handleQualityRetake = () => {
     setQualityModalOpen(false);
+    // Remove the bad temp item from carousel so the user starts fresh
+    if (pendingQualityTempId) {
+      setRapidItems((prev) => prev.filter((item) => item.id !== pendingQualityTempId));
+    }
     setPendingQualityBlob(null);
     setPendingQualityTempId(null);
     setPendingQualityAppendId(null);
