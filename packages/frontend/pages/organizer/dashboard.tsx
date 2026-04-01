@@ -27,6 +27,7 @@ import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal'
 import SimpleModePanel from '../../components/SimpleModePanel';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
 import OrganizerHoldsPanel from '../../components/OrganizerHoldsPanel';
+import SecondarySaleCard from '../../components/SecondarySaleCard';
 import Head from 'next/head';
 import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
@@ -79,6 +80,8 @@ const OrganizerDashboard = () => {
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
+  const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(null);
+  const [dismissedMultiSaleBanner, setDismissedMultiSaleBanner] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -296,7 +299,14 @@ const OrganizerDashboard = () => {
   // Get the current active sale (for State 2)
   const getActiveSale = (): Sale | null => {
     if (!salesData) return null;
-    // Prefer PUBLISHED over DRAFT
+    // If manually overridden, return that sale
+    if (manualPrimaryId) {
+      const manual = salesData.find((s: Sale) => s.id === manualPrimaryId);
+      if (manual && (manual.status === 'DRAFT' || manual.status === 'PUBLISHED')) {
+        return manual;
+      }
+    }
+    // Otherwise: prefer most recent PUBLISHED, then most recent DRAFT
     let sale = salesData.find((s: Sale) => s.status === 'PUBLISHED');
     if (!sale) sale = salesData.find((s: Sale) => s.status === 'DRAFT');
     return sale || null;
@@ -1017,6 +1027,115 @@ const OrganizerDashboard = () => {
                   </div>
                 </>
               )}
+
+              {/* Multi-Sale Section — Secondary cards for PRO/TEAMS organizers */}
+              {(() => {
+                // Filter other active/draft sales (not the primary)
+                const otherActiveSales = salesData?.filter(
+                  (s: Sale) =>
+                    s.id !== activeSale?.id &&
+                    ['DRAFT', 'PUBLISHED', 'SCHEDULED'].includes(s.status)
+                ) ?? [];
+
+                // Sort by startDate descending (most recently started first)
+                const sortedOtherSales = otherActiveSales.sort(
+                  (a: Sale, b: Sale) =>
+                    new Date(b.startDate ?? 0).getTime() -
+                    new Date(a.startDate ?? 0).getTime()
+                );
+
+                // Check if organizer is PRO or TEAMS tier
+                const tierAboveSimple =
+                  user?.organizerTier === 'PRO' ||
+                  user?.organizerTier === 'TEAMS';
+
+                // Only show multi-sale UI if there are other active sales
+                if (sortedOtherSales.length === 0) return null;
+
+                return (
+                  <>
+                    {/* Multi-Sale Command Center Banner (dismissible) */}
+                    {tierAboveSimple && !dismissedMultiSaleBanner && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-600 p-4 rounded mb-6 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">📊</span>
+                          <p className="text-blue-800 dark:text-blue-200 font-medium">
+                            Managing {sortedOtherSales.length} active sale
+                            {sortedOtherSales.length !== 1 ? 's' : ''} — Go to{' '}
+                            <Link
+                              href="/organizer/command-center"
+                              className="font-semibold hover:underline"
+                            >
+                              Command Center
+                            </Link>{' '}
+                            to manage all at once →
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setDismissedMultiSaleBanner(true)}
+                          className="text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+                          aria-label="Dismiss"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Upgrade nudge for FREE/SIMPLE tier */}
+                    {!tierAboveSimple && (
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
+                        <p className="text-amber-900 dark:text-amber-100 text-sm">
+                          <span className="font-semibold">Running multiple sales at once?</span>{' '}
+                          Upgrade to PRO to manage them all from your dashboard.{' '}
+                          <Link
+                            href="/pricing"
+                            className="text-amber-700 dark:text-amber-400 font-semibold hover:underline"
+                          >
+                            See pricing →
+                          </Link>
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Secondary Sale Cards (only for PRO/TEAMS) */}
+                    {tierAboveSimple && (
+                      <div className="space-y-3 mb-6">
+                        <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+                          Other Active Sales
+                        </h3>
+                        {sortedOtherSales.slice(0, 2).map((sale: Sale) => (
+                          <SecondarySaleCard
+                            key={sale.id}
+                            sale={sale}
+                            stats={{
+                              itemCount: 0, // Not available in current dashboard query; secondary sales show placeholder
+                              holdCount: holdCountData?.count ?? 0,
+                              visitorCount: 0, // Would need per-sale QR scan count from API
+                            }}
+                            onMakePrimary={(saleId) => {
+                              setManualPrimaryId(saleId);
+                            }}
+                          />
+                        ))}
+
+                        {/* "More sales" link */}
+                        {sortedOtherSales.length > 2 && (
+                          <p className="text-sm text-warm-600 dark:text-warm-400 pt-2">
+                            +{sortedOtherSales.length - 2} more sale
+                            {sortedOtherSales.length - 2 !== 1 ? 's' : ''} in{' '}
+                            <Link
+                              href="/organizer/command-center"
+                              className="text-amber-600 dark:text-amber-400 font-semibold hover:underline"
+                            >
+                              Command Center →
+                            </Link>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 

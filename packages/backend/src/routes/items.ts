@@ -800,6 +800,7 @@ router.get('/:itemId/qr/scan', authenticate, recordQrScan);
 
 // Feature #228: High-Value Item Tracker
 // PATCH /api/items/:itemId/high-value — toggle high-value flag
+// Feature #371: Updated to handle auto-flag locking and source tracking
 router.patch('/:itemId/high-value', authenticate, async (req: AuthRequest, res) => {
   try {
     const { itemId } = req.params;
@@ -808,17 +809,39 @@ router.patch('/:itemId/high-value', authenticate, async (req: AuthRequest, res) 
     // Verify organizer owns this item
     const item = await prisma.item.findFirst({
       where: { id: itemId, sale: { organizer: { userId: req.user?.id } } },
-      select: { id: true },
+      select: { id: true, isHighValue: true, highValueSource: true },
     });
     if (!item) return res.status(404).json({ message: 'Item not found or access denied.' });
 
+    const updateData: any = {
+      isHighValue: isHighValue ?? false,
+      highValueThreshold: threshold != null ? threshold : undefined,
+    };
+
+    // Feature #371: Handle manual override logic
+    if (isHighValue === false) {
+      // Organizer said "no" — lock it to prevent auto-flagging
+      updateData.isHighValueLocked = true;
+      updateData.highValueSource = 'MANUAL';
+      updateData.highValueFlaggedAt = null;
+    } else if (isHighValue === true) {
+      // Organizer manually flagged it
+      updateData.highValueSource = 'MANUAL';
+      updateData.highValueFlaggedAt = new Date();
+      updateData.isHighValueLocked = false;
+    }
+
     const updated = await prisma.item.update({
       where: { id: itemId },
-      data: {
-        isHighValue: isHighValue ?? false,
-        highValueThreshold: threshold != null ? threshold : undefined,
+      data: updateData,
+      select: {
+        id: true,
+        isHighValue: true,
+        highValueThreshold: true,
+        highValueSource: true,
+        highValueFlaggedAt: true,
+        isHighValueLocked: true,
       },
-      select: { id: true, isHighValue: true, highValueThreshold: true },
     });
 
     res.json(updated);

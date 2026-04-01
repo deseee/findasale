@@ -19,6 +19,7 @@ import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
 import { closeAuction } from '../services/auctionService'; // Auction close flow
 import { resetRapidDraftDebounce, rapidfireAIDebounce } from './uploadController'; // Rapidfire Mode: AI analysis debounce
+import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -531,7 +532,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -618,6 +619,29 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (isAiTagged !== undefined) updateData.isAiTagged = isAiTagged === true || isAiTagged === 'true';
     if (qrEmbedEnabled !== undefined) updateData.qrEmbedEnabled = qrEmbedEnabled === true || qrEmbedEnabled === 'true';
     if (draftStatus !== undefined) updateData.draftStatus = draftStatus; // Allow publish/unpublish via generic update
+
+    // Feature #371: Handle high-value flag and AI analysis fields
+    if (estimatedValue !== undefined) updateData.estimatedValue = estimatedValue ? parseFloat(estimatedValue) : null;
+    if (aiSuggestedPrice !== undefined) updateData.aiSuggestedPrice = aiSuggestedPrice ? parseFloat(aiSuggestedPrice) : null;
+
+    // Feature #371: Handle isHighValue toggle with auto-flag lock logic
+    if (isHighValue !== undefined) {
+      const newIsHighValue = isHighValue === true || isHighValue === 'true';
+      updateData.isHighValue = newIsHighValue;
+
+      // When organizer explicitly toggles isHighValue, lock the decision
+      if (newIsHighValue === false) {
+        // Organizer said "no" — lock it
+        updateData.isHighValueLocked = true;
+        updateData.highValueSource = 'MANUAL';
+        updateData.highValueFlaggedAt = null;
+      } else if (newIsHighValue === true) {
+        // Organizer manually flagged it
+        updateData.isHighValueLocked = false;
+        updateData.highValueSource = 'MANUAL';
+        updateData.highValueFlaggedAt = new Date();
+      }
+    }
 
     const updatedItem = await prisma.item.update({
       where: { id },

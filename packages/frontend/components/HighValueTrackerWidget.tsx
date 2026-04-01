@@ -19,6 +19,8 @@ interface HighValueItem {
   status: string;
   isHighValue: boolean;
   highValueThreshold: number | null;
+  highValueSource?: string;
+  isHighValueLocked?: boolean;
 }
 
 export default function HighValueTrackerWidget({ saleId }: HighValueTrackerWidgetProps) {
@@ -99,7 +101,20 @@ export default function HighValueTrackerWidget({ saleId }: HighValueTrackerWidge
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
+              <div className="flex items-center gap-1 mb-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
+                {/* Feature #371: Auto-flag source indicator */}
+                {item.highValueSource === 'AUTO' && (
+                  <span title="Auto-flagged by AI" className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 whitespace-nowrap">
+                    Auto
+                  </span>
+                )}
+                {item.isHighValueLocked && !item.isHighValue && (
+                  <span title="Auto-flag locked off by organizer" className="text-xs text-gray-400">
+                    🔒
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}
                 {item.highValueThreshold != null && (
