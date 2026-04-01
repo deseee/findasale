@@ -529,59 +529,90 @@ const OrganizerDashboard = () => {
               {/* Sale Status Widget (HIGHEST PRIORITY) — Enhanced with urgency + dynamic CTA */}
               {statsData?.activeSale && (
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
-                  <div className="flex flex-col md:flex-row gap-6">
-                    {/* Photo Thumbnail */}
-                    {activeSale.photoUrls && activeSale.photoUrls[0] && (
-                      <div className="md:w-32 flex-shrink-0">
-                        <img src={activeSale.photoUrls[0]} alt={activeSale.title} className="w-full h-32 object-cover rounded-lg" />
-                      </div>
-                    )}
+                  <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="block">
+                    <div className="flex flex-col md:flex-row gap-6 cursor-pointer hover:opacity-80 transition-opacity">
+                      {/* Photo Thumbnail */}
+                      {activeSale.photoUrls && activeSale.photoUrls[0] && (
+                        <div className="md:w-32 flex-shrink-0">
+                          <img src={activeSale.photoUrls[0]} alt={activeSale.title} className="w-full h-32 object-cover rounded-lg" />
+                        </div>
+                      )}
 
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div className="flex-1">
-                          <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{statsData.activeSale.title}</h2>
-                          <div className="flex flex-wrap gap-2">
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                              statsData.activeSale.status === 'PUBLISHED'
-                                ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                                : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
-                            }`}>
-                              {statsData.activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
-                            </span>
-                            {(() => { const urgency = getUrgencyTag(); return urgency ? (
-                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${urgency.color}`}>
-                                {urgency.text}
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <div className="flex-1">
+                            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{statsData.activeSale.title}</h2>
+                            <div className="flex flex-wrap gap-2">
+                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                                statsData.activeSale.status === 'PUBLISHED'
+                                  ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                                  : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+                              }`}>
+                                {statsData.activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
                               </span>
-                            ) : null; })()}
+                              {(() => { const urgency = getUrgencyTag(); return urgency ? (
+                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${urgency.color}`}>
+                                  {urgency.text}
+                                </span>
+                              ) : null; })()}
+                            </div>
                           </div>
                         </div>
                       </div>
-
-                      {/* Context-Aware Primary CTA */}
-                      <div className="flex flex-wrap gap-2">
-                        {statsData.activeSale.status === 'DRAFT' && statsData.items.draft > 0 && (
-                          <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Add Photos
-                          </Link>
-                        )}
-                        {statsData.activeSale.status === 'DRAFT' && statsData.items.draft === 0 && (
-                          <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Publish Sale
-                          </Link>
-                        )}
-                        {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) < 1 && (
-                          <button className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Close Sale Early
-                          </button>
-                        )}
-                        {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) >= 1 && (
-                          <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Manage Items
-                          </Link>
-                        )}
-                      </div>
                     </div>
+                  </Link>
+
+                  {/* Context-Aware Primary CTA */}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {statsData.activeSale.status === 'DRAFT' && statsData.items.draft > 0 && (
+                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                        Add Photos
+                      </Link>
+                    )}
+                    {statsData.activeSale.status === 'DRAFT' && statsData.items.draft === 0 && (
+                      <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                        Publish Sale
+                      </Link>
+                    )}
+                    {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) < 1 && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.patch(`/sales/${statsData.activeSale!.id}/status`, { status: 'ENDED' });
+                            showToast('Sale closed successfully', 'success');
+                            // Refetch sales data
+                            setTimeout(() => window.location.reload(), 1000);
+                          } catch (error: any) {
+                            console.error('Failed to close sale:', error);
+                            showToast(error.response?.data?.message || 'Failed to close sale', 'error');
+                          }
+                        }}
+                        className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                      >
+                        Close Sale Early
+                      </button>
+                    )}
+                    {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) >= 1 && (
+                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                        Manage Items
+                      </Link>
+                    )}
+                  </div>
+
+                  {/* Quick Action Buttons */}
+                  <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
+                    <Link href={`/sales/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors">
+                      View Live
+                    </Link>
+                    <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors">
+                      Add Items
+                    </Link>
+                    <Link href="/organizer/holds" className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors">
+                      Holds
+                    </Link>
+                    <Link href="/organizer/pos" className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors">
+                      POS
+                    </Link>
                   </div>
                 </div>
               )}
@@ -713,19 +744,19 @@ const OrganizerDashboard = () => {
                   {statsData.activeSale.status === 'PUBLISHED' ? (
                     // Live sale: 4-col metrics
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="text-center">
+                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Listed</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.total ?? '--'}</p>
-                      </div>
-                      <div className="text-center">
+                      </Link>
+                      <div className="text-center p-3 rounded-lg">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Visitors Today</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.viewCount ?? '--'}</p>
                       </div>
-                      <div className="text-center">
+                      <Link href="/organizer/holds" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Active Holds</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.holdCount ?? '--'}</p>
-                      </div>
-                      <div className="text-center">
+                      </Link>
+                      <div className="text-center p-3 rounded-lg">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Sold</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.sold ?? '--'}</p>
                       </div>
@@ -781,7 +812,7 @@ const OrganizerDashboard = () => {
                         <span className="text-2xl">👁️</span>
                         <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">Preview</p>
                       </Link>
-                      <Link href="/organizer/qr" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
+                      <Link href="/organizer/qr-codes" className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center">
                         <span className="text-2xl">📱</span>
                         <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">QR Codes</p>
                       </Link>
@@ -815,20 +846,38 @@ const OrganizerDashboard = () => {
                         </p>
                       </button>
                       <button
-                        onClick={() => canAccess('SIMPLE') ? router.push('/organizer/insights') : router.push('/pricing')}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-lg transition-colors text-center ${
-                          canAccess('SIMPLE')
-                            ? 'bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600'
-                            : 'bg-gray-100 dark:bg-gray-700 opacity-60 cursor-not-allowed'
-                        }`}
+                        onClick={() => router.push('/organizer/ripples')}
+                        className="flex flex-col items-center gap-2 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-center"
                       >
-                        <span className="text-2xl">{canAccess('SIMPLE') ? '📊' : '🔒'}</span>
+                        <span className="text-2xl">📊</span>
                         <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">
-                          Analytics {!canAccess('SIMPLE') && <span className="text-xs block">(SIMPLE+)</span>}
+                          Analytics
                         </p>
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Your Sales List — Compact view */}
+              {salesData && salesData.length > 1 && (
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Your Sales</h3>
+                    <Link href="/organizer/sales" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 text-sm font-semibold">
+                      View all →
+                    </Link>
+                  </div>
+                  <div className="space-y-2">
+                    {salesData.slice(0, 5).map((sale: Sale) => (
+                      <Link key={sale.id} href={`/organizer/edit-sale/${sale.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
+                        <div className="flex-1">
+                          <p className="font-medium text-warm-900 dark:text-warm-100 text-sm">{sale.title}</p>
+                          <p className="text-xs text-warm-600 dark:text-warm-400">{sale.city}, {sale.state} • {sale.status === 'PUBLISHED' ? '🟢 Live' : sale.status === 'DRAFT' ? '⚠️ Draft' : '✓ Ended'}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

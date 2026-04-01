@@ -6,7 +6,7 @@ interface OrganizerTierBadgeProps {
 
 const TIER_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string }> = {
   BRONZE: {
-    label: 'Verified Organizer',
+    label: 'Bronze Organizer',
     bg: 'bg-amber-100',
     text: 'text-amber-800',
     icon: '🥉',
