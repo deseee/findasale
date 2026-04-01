@@ -177,6 +177,7 @@ const OrganizerDashboard = () => {
           endDate: string;
           viewCount: number;
           holdCount: number;
+          saleType: string;
         } | null;
       };
     },
