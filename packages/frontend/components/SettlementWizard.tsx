@@ -4,6 +4,7 @@
  * Steps: SummaryReview → ExpenseEntry → CommissionCalc → ClientPayout → ReceiptClose
  */
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
