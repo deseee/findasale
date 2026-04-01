@@ -76,9 +76,9 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
 
   const getTierInfo = (b: number | null) => {
     if (b === null) return { dots: '●●●●●', color: 'text-gray-400', text: 'Checking light...' };
-    if (b >= 65) return { dots: '●●●●●', color: 'text-green-400', text: 'Good lighting' };
-    if (b >= 40) return { dots: '●●●○○', color: 'text-yellow-400', text: 'Soft light—try brighter' };
-    return { dots: '●○○○○', color: 'text-red-400', text: 'Too dark—find better light' };
+    if (b >= 65) return { dots: '●●●●●', color: 'text-green-400', text: 'Lighting looks good' };
+    if (b >= 40) return { dots: '●●●○○', color: 'text-yellow-400', text: 'Soft light — brighter helps' };
+    return { dots: '●○○○○', color: 'text-red-400', text: 'Move toward better light' };
   };
 
   const tierInfo = getTierInfo(brightness);
@@ -88,8 +88,8 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
       {/* Hidden canvas for sampling */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Brightness indicator — single line, semi-transparent, below top bar */}
-      <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-medium">
+      {/* Brightness indicator — single line, below both top bar and mode hint */}
+      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-medium">
         <span className={tierInfo.color}>{tierInfo.dots}</span>
         <span className="text-white">{tierInfo.text}</span>
       </div>
