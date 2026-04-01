@@ -109,6 +109,14 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [torchSupported, setTorchSupported] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [photosThisItem, setPhotosThisItem] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState<{ min: number; max: number }>({ min: 1, max: 5 });
+  const [showZoomHint, setShowZoomHint] = useState(false);
+  const [focusRing, setFocusRing] = useState<{ x: number; y: number } | null>(null);
+  const zoomHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusRingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPinchDistance = useRef<number | null>(null);
 
   const isRapidfire = mode === 'rapidfire';
   const inAddMode = addingToItemId !== null;
@@ -150,6 +158,21 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         if (videoTrack) {
           const capabilities = videoTrack.getCapabilities?.() as any;
           setTorchSupported(!!capabilities?.torch);
+
+          // Feature 1: Attempt continuous autofocus
+          try {
+            if (capabilities?.focusMode?.includes?.('continuous')) {
+              await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] });
+            }
+          } catch {
+            // Silently fail — not supported on this device/browser
+          }
+
+          // Feature 2: Detect zoom support
+          if (capabilities?.zoom) {
+            setZoomSupported(true);
+            setZoomRange({ min: capabilities.zoom.min ?? 1, max: Math.min(capabilities.zoom.max ?? 5, 5) });
+          }
         } else {
           setTorchSupported(false);
         }
@@ -178,6 +201,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
+      if (zoomHintTimer.current) clearTimeout(zoomHintTimer.current);
+      if (focusRingTimer.current) clearTimeout(focusRingTimer.current);
     };
   }, [facingMode]);
 
@@ -272,8 +297,34 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
   // Switch front/back camera
   const switchCamera = useCallback(() => {
+    setZoomLevel(1);
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   }, []);
+
+  // Feature 2: Apply zoom level (hardware or CSS fallback)
+  const applyZoom = useCallback(async (newZoom: number) => {
+    if (!streamRef.current) return;
+    const videoTrack = streamRef.current.getVideoTracks()[0];
+    if (!videoTrack) return;
+    const clamped = Math.max(zoomRange.min, Math.min(zoomRange.max, newZoom));
+    setZoomLevel(clamped);
+    // Show zoom hint briefly
+    setShowZoomHint(true);
+    if (zoomHintTimer.current) clearTimeout(zoomHintTimer.current);
+    zoomHintTimer.current = setTimeout(() => setShowZoomHint(false), 1500);
+    try {
+      if (zoomSupported) {
+        await videoTrack.applyConstraints({ advanced: [{ zoom: clamped } as any] });
+      } else {
+        // CSS digital zoom fallback
+        if (videoRef.current) {
+          videoRef.current.style.transform = clamped > 1 ? `scale(${clamped})` : '';
+        }
+      }
+    } catch {
+      // Silently fail
+    }
+  }, [zoomRange, zoomSupported]);
 
   // Done — stop camera, return photos
   const handleDone = useCallback(() => {
@@ -418,7 +469,53 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         )}
 
         {/* Camera viewfinder */}
-        <div className="flex-1 relative overflow-hidden">
+        <div
+          className="flex-1 relative overflow-hidden"
+          onTouchStart={(e) => {
+            if (e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX;
+              const dy = e.touches[0].clientY - e.touches[1].clientY;
+              lastPinchDistance.current = Math.sqrt(dx * dx + dy * dy);
+            }
+          }}
+          onTouchMove={(e) => {
+            if (e.touches.length === 2 && lastPinchDistance.current !== null) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX;
+              const dy = e.touches[0].clientY - e.touches[1].clientY;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              const delta = distance / lastPinchDistance.current;
+              lastPinchDistance.current = distance;
+              applyZoom(zoomLevel * delta);
+            }
+          }}
+          onTouchEnd={(e) => {
+            if (e.changedTouches.length === 1 && lastPinchDistance.current === null) {
+              // Single tap — attempt tap-to-focus
+              const touch = e.changedTouches[0];
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const x = (touch.clientX - rect.left) / rect.width;
+              const y = (touch.clientY - rect.top) / rect.height;
+              // Show focus ring at tap point
+              setFocusRing({ x: touch.clientX - rect.left, y: touch.clientY - rect.top });
+              if (focusRingTimer.current) clearTimeout(focusRingTimer.current);
+              focusRingTimer.current = setTimeout(() => setFocusRing(null), 800);
+              // Attempt hardware tap-to-focus (Android only, silent fail on iOS)
+              if (streamRef.current) {
+                const videoTrack = streamRef.current.getVideoTracks()[0];
+                if (videoTrack) {
+                  try {
+                    videoTrack.applyConstraints({
+                      advanced: [{ focusMode: 'manual', pointOfInterest: { x, y } } as any],
+                    }).catch(() => {});
+                  } catch {}
+                }
+              }
+            }
+            if (e.touches.length < 2) {
+              lastPinchDistance.current = null;
+            }
+          }}
+        >
           {cameraError ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
               <svg className="w-16 h-16 text-warm-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -466,6 +563,24 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   4:3
                 </div>
               </div>
+
+              {/* Feature 2: Zoom level indicator */}
+              {showZoomHint && zoomLevel !== 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1 text-white text-xs font-medium pointer-events-none z-10">
+                  {zoomLevel.toFixed(1)}×
+                </div>
+              )}
+
+              {/* Feature 3: Focus ring with tap visual */}
+              {focusRing && (
+                <div
+                  className="absolute pointer-events-none z-10 w-12 h-12 border-2 border-white rounded-sm animate-ping"
+                  style={{
+                    left: focusRing.x - 24,
+                    top: focusRing.y - 24,
+                  }}
+                />
+              )}
 
               {/* Phase 3.5: Real-time brightness indicator */}
               {cameraReady && videoRef.current && (
