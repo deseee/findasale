@@ -136,16 +136,16 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}>
       {/* Header */}
-      <div className="border-b border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-900">Manage Holds</h2>
-        <p className="text-gray-600 mt-1">Feature #121: Track and manage item holds from shoppers</p>
+      <div className="border-b border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Manage Holds</h2>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">Feature #121: Track and manage item holds from shoppers</p>
       </div>
 
       {/* Toolbar */}
-      <div className="border-b border-gray-200 p-4 bg-gray-50 flex flex-wrap gap-3 items-center">
+      <div className="border-b border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-700 flex flex-wrap gap-3 items-center">
         {/* Sort */}
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Sort:</label>
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Sort:</label>
           <select
             value={sortBy}
             onChange={(e) => {
@@ -162,7 +162,7 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
         {/* Batch actions */}
         {selectedHolds.size > 0 && (
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-sm text-gray-600">{selectedHolds.size} selected</span>
+            <span className="text-sm text-gray-600 dark:text-gray-300">{selectedHolds.size} selected</span>
             <button
               onClick={() => handleBatchAction('extend')}
               disabled={batchLoading}
@@ -191,12 +191,12 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
       {/* Holds List */}
       <div className="overflow-x-auto">
         {loading ? (
-          <div className="p-6 text-center text-gray-500">Loading holds...</div>
+          <div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading holds...</div>
         ) : holds.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">No active holds</div>
+          <div className="p-6 text-center text-gray-500 dark:text-gray-400">No active holds</div>
         ) : (
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
               <tr>
                 <th className="px-4 py-3 text-left">
                   <input
@@ -206,16 +206,16 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
                     className="rounded"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Item</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Shopper</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Expires</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Fraud Score</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Item</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Shopper</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Expires</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Fraud Score</th>
               </tr>
             </thead>
             <tbody>
               {holds.map((hold) => (
-                <tr key={hold.id} className="border-b border-gray-200 hover:bg-gray-50">
+                <tr key={hold.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -226,16 +226,16 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
                   </td>
                   <td className="px-4 py-3">
                     <div>
-                      <div className="font-medium text-gray-900">{hold.item.title}</div>
-                      <div className="text-sm text-gray-600">{hold.item.sale.title}</div>
+                      <div className="font-medium text-gray-900 dark:text-white">{hold.item.title}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">{hold.item.sale.title}</div>
                       {hold.item.price && (
-                        <div className="text-sm font-semibold text-gray-900">${hold.item.price}</div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">${hold.item.price}</div>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-sm text-gray-900">{hold.user.name}</div>
-                    <div className="text-xs text-gray-600">{hold.user.email}</div>
+                    <div className="text-sm text-gray-900 dark:text-white">{hold.user.name}</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">{hold.user.email}</div>
                   </td>
                   <td className="px-4 py-3">
                     <HoldTimer expiresAt={hold.expiresAt} />
@@ -244,10 +244,10 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
                     <span
                       className={`px-2 py-1 text-xs font-semibold rounded-full ${
                         hold.status === 'PENDING'
-                          ? 'bg-yellow-100 text-yellow-800'
+                          ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
                           : hold.status === 'CONFIRMED'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                       }`}
                     >
                       {hold.status}
@@ -261,12 +261,12 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
                             hold.fraudScore > 0.7 ? 'bg-red-500' : 'bg-yellow-500'
                           }`}
                         />
-                        <span className="text-sm font-semibold">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
                           {(hold.fraudScore * 100).toFixed(0)}%
                         </span>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-500">-</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">-</span>
                     )}
                   </td>
                 </tr>
@@ -278,7 +278,7 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="border-t border-gray-200 p-4 flex justify-center gap-2">
+        <div className="border-t border-gray-200 dark:border-gray-700 p-4 flex justify-center gap-2">
           <button
             onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}

@@ -171,6 +171,14 @@ const OrganizerSalesPage = () => {
                     >
                       Items
                     </Link>
+                    {sale.status === 'ENDED' && (
+                      <Link
+                        href={`/organizer/settlement/${sale.id}`}
+                        className="flex-1 text-center bg-green-100 dark:bg-green-900 hover:bg-green-200 dark:hover:bg-green-800 text-green-900 dark:text-green-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                      >
+                        Settle
+                      </Link>
+                    )}
                   </div>
                 </div>
               ))}
