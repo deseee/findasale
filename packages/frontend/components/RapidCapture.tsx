@@ -638,15 +638,15 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       </span>
                     )}
 
-                    {/* "+" button (bottom-right) — toggles to "×" when adding */}
+                    {/* "+" button (bottom-center, 48px) — toggles to "×" when adding */}
                     {item.thumbnailUrl && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onAddToItem(item.id);
                         }}
-                        className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white transition-all ${
-                          isAddingTo ? 'bg-amber-500' : 'bg-gray-700/80 hover:bg-gray-600'
+                        className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white transition-all border ${
+                          isAddingTo ? 'bg-amber-500 border-amber-300 ring-2 ring-amber-300' : 'bg-gray-800/90 border-white/40 hover:bg-gray-900'
                         }`}
                         aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
                       >
