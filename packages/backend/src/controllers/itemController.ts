@@ -18,7 +18,7 @@ import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tie
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
 import { closeAuction } from '../services/auctionService'; // Auction close flow
-import { resetRapidDraftDebounce } from './uploadController'; // Rapidfire Mode: AI analysis debounce
+import { resetRapidDraftDebounce, rapidfireAIDebounce } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -1144,6 +1144,85 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error publishing item:', error);
     res.status(500).json({ message: 'Server error while publishing item' });
+  }
+};
+
+// Phase 2B: Rapidfire Mode — Hold AI analysis debounce when entering add-mode
+// Resets the 4.5s debounce timer so organizer has full window to reposition/relight before next photo
+export const holdAnalysis = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    // Fetch item with ownership verification
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        draftStatus: true,
+        sale: {
+          select: {
+            organizer: {
+              select: { userId: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Auth: only the organizer who owns the sale can hold analysis
+    if (item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // Only DRAFT items can hold analysis (rapidfire adds-in-progress)
+    if (item.draftStatus !== 'DRAFT') {
+      return res.status(400).json({
+        message: 'Item must be in DRAFT status to hold analysis.'
+      });
+    }
+
+    // Cancel the AI analysis timer entirely — organizer is repositioning/relighting
+    const existing = rapidfireAIDebounce.get(id);
+    if (existing) clearTimeout(existing);
+    rapidfireAIDebounce.delete(id);
+
+    res.json({ held: true });
+  } catch (error) {
+    console.error('Error holding analysis:', error);
+    res.status(500).json({ message: 'Server error while holding analysis' });
+  }
+};
+
+// Phase 2B: Rapidfire Mode — Release AI analysis hold when exiting add-mode
+// Starts a fresh 4.5s debounce so AI fires after the organizer is done adding photos
+export const releaseAnalysis = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+    const { id } = req.params;
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: { id: true, draftStatus: true, sale: { select: { organizer: { select: { userId: true } } } } }
+    });
+    if (!item) return res.status(404).json({ message: 'Item not found' });
+    if (item.sale.organizer.userId !== req.user.id) return res.status(403).json({ message: 'Access denied.' });
+    if (item.draftStatus !== 'DRAFT') return res.status(400).json({ message: 'Item is not in DRAFT status.' });
+    resetRapidDraftDebounce(id);
+    res.json({ released: true });
+  } catch (error) {
+    console.error('Error releasing analysis hold:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
