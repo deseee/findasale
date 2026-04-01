@@ -72,6 +72,46 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
     setIsOpen(false);
   };
 
+  const handleNextdoorShare = async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      showToast('Link copied for Nextdoor!', 'success');
+      setTimeout(() => {
+        window.open('https://nextdoor.com/news_feed/', 'nextdoor-share');
+      }, 300);
+      setIsOpen(false);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      showToast('Failed to copy link', 'error');
+    }
+  };
+
+  const handleThreadsShare = () => {
+    const threadsUrl = `https://www.threads.net/intent/post?text=${encodeURIComponent(`Check out this sale: ${saleTitle} - ${referralUrl}`)}`;
+    window.open(threadsUrl, 'threads-share', 'width=600,height=400');
+    setIsOpen(false);
+  };
+
+  const handlePinterestShare = () => {
+    const pinterestUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(referralUrl)}&description=${encodeURIComponent(saleTitle)}`;
+    window.open(pinterestUrl, 'pinterest-share', 'width=600,height=400');
+    setIsOpen(false);
+  };
+
+  const handleTikTokShare = async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      showToast('Link copied for TikTok!', 'success');
+      setTimeout(() => {
+        window.open('https://www.tiktok.com/', 'tiktok-share');
+      }, 300);
+      setIsOpen(false);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      showToast('Failed to copy link', 'error');
+    }
+  };
+
   return (
     <div className="relative" ref={popoverRef}>
       <button
@@ -120,9 +160,33 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
               </button>
               <button
                 onClick={handleTwitterShare}
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-700 font-medium transition-colors"
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-700 font-medium transition-colors mb-1"
               >
                 X/Twitter
+              </button>
+              <button
+                onClick={handleThreadsShare}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-700 font-medium transition-colors mb-1"
+              >
+                Threads
+              </button>
+              <button
+                onClick={handlePinterestShare}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-700 font-medium transition-colors mb-1"
+              >
+                Pinterest
+              </button>
+              <button
+                onClick={handleNextdoorShare}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-700 font-medium transition-colors mb-1"
+              >
+                Nextdoor
+              </button>
+              <button
+                onClick={handleTikTokShare}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-700 font-medium transition-colors"
+              >
+                TikTok
               </button>
             </div>
           </div>

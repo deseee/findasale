@@ -801,7 +801,7 @@ const OrganizerDashboard = () => {
                       <p className="text-xs text-warm-600 dark:text-warm-400">{tierData.progress.completedSales}/{tierData.progress.salesNeeded} sales until next tier</p>
                     </div>
                   </div>
-                  {tierData.progress.nextTier !== null && (
+                  {user?.organizerTier !== 'TEAMS' && (
                     <Link href="/pricing" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
                       Upgrade →
                     </Link>
