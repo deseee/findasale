@@ -603,17 +603,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   Enhance
                 </button>
               )}
-              <button
-                onClick={onNavigateToReview}
-                disabled={readyCount === 0}
-                className={`text-xs font-semibold transition-colors whitespace-nowrap ${
+              <span
+                onClick={readyCount > 0 ? onNavigateToReview : undefined}
+                className={`text-xs whitespace-nowrap transition-colors ${
                   readyCount > 0
-                    ? 'text-amber-300 underline underline-offset-2 hover:text-amber-200'
-                    : 'text-white/30 cursor-default'
+                    ? 'text-amber-300 underline underline-offset-2 cursor-pointer hover:text-amber-200'
+                    : 'text-white/30'
                 }`}
               >
                 Review ({readyCount})
-              </button>
+              </span>
             </div>
           )}
 
