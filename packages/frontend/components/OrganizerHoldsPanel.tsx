@@ -1,6 +1,6 @@
 /**
  * OrganizerHoldsPanel Component
- * Feature #121: Dashboard for organizers to manage holds on their sales.
+ * Dashboard for organizers to manage holds on their sales.
  * Displays holds with filters, batch actions (release/extend/markSold), and settings.
  */
 
@@ -138,7 +138,7 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Manage Holds</h2>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">Feature #121: Track and manage item holds from shoppers</p>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">Track and manage item holds from shoppers</p>
       </div>
 
       {/* Toolbar */}

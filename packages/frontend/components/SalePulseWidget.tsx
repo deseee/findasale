@@ -84,7 +84,7 @@ export default function SalePulseWidget({ saleId }: SalePulseWidgetProps) {
       </div>
 
       <Link
-        href={`/organizer/social-post?saleId=${saleId}`}
+        href={`/organizer/ripples?saleId=${saleId}`}
         className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
       >
         Boost visibility →
