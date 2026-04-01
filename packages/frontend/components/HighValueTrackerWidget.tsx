@@ -6,6 +6,7 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import Tooltip from './Tooltip';
 
 interface HighValueTrackerWidgetProps {
   saleId: string;
@@ -83,9 +84,12 @@ export default function HighValueTrackerWidget({ saleId }: HighValueTrackerWidge
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
-        High-Value Items ({items.length})
-      </h3>
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+          High-Value Items ({items.length})
+        </h3>
+        <Tooltip content="Items flagged as high-value based on category or estimated price. These attract serious buyers and deserve priority photos." position="top" />
+      </div>
 
       <div className="space-y-2 max-h-48 overflow-y-auto">
         {items.slice(0, 5).map((item) => (

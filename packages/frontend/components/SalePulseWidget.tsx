@@ -6,6 +6,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import Link from 'next/link';
+import Tooltip from './Tooltip';
 
 interface SalePulseWidgetProps {
   saleId: string;
@@ -49,7 +50,10 @@ export default function SalePulseWidget({ saleId }: SalePulseWidgetProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Sale Pulse</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Sale Pulse</h3>
+          <Tooltip content="Your sale's visibility score based on views, saves, and shopper engagement. Higher = more discovery." position="top" />
+        </div>
         <span className="text-xs text-gray-400 dark:text-gray-500">{data.shopperCount} shoppers</span>
       </div>
 

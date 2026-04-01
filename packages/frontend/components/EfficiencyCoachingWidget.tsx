@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
+import Tooltip from './Tooltip';
 
 export default function EfficiencyCoachingWidget() {
   const [showTips, setShowTips] = useState(false);
@@ -55,7 +56,10 @@ export default function EfficiencyCoachingWidget() {
       <div className="space-y-3 mb-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Photo → Published</p>
+            <div className="flex items-center gap-1 mb-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Photo → Published</p>
+              <Tooltip content="Average time from adding an item to publishing it. Faster = more items live sooner." position="top" />
+            </div>
             <p className="text-lg font-semibold text-gray-900 dark:text-white">
               {data.avgPhotoToPublishMinutes < 60
                 ? `${data.avgPhotoToPublishMinutes}m`
@@ -63,7 +67,10 @@ export default function EfficiencyCoachingWidget() {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Sell-Through</p>
+            <div className="flex items-center justify-end gap-1 mb-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Sell-Through</p>
+              <Tooltip content="Percentage of your listed items that have sold. Industry average is 60–80% for estate sales." position="top" />
+            </div>
             <p className="text-lg font-semibold text-gray-900 dark:text-white">
               {Math.round(data.sellThroughRate * 100)}%
             </p>

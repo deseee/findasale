@@ -19,6 +19,7 @@ import { TierGatedButton } from '../../components/TierGatedNav';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge';
+import Tooltip from '../../components/Tooltip';
 import SaleQRCode from '../../components/SaleQRCode';
 import FlashDealForm from '../../components/FlashDealForm';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
@@ -26,7 +27,6 @@ import OnboardingWizard from '../../components/OnboardingWizard';
 import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal';
 import SimpleModePanel from '../../components/SimpleModePanel';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
-import OrganizerHoldsPanel from '../../components/OrganizerHoldsPanel';
 import SecondarySaleCard from '../../components/SecondarySaleCard';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -85,6 +85,7 @@ const OrganizerDashboard = () => {
   const [dismissedMultiSaleBanner, setDismissedMultiSaleBanner] = useState(false);
   const [addItemsDropdownOpen, setAddItemsDropdownOpen] = useState(false);
   const [posDropdownOpen, setPosDropdownOpen] = useState(false);
+  const [otherSalesExpanded, setOtherSalesExpanded] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -669,7 +670,7 @@ const OrganizerDashboard = () => {
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex-1">
                             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{statsData.activeSale.title}</h2>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 mb-3">
                               <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
                                 statsData.activeSale.status === 'PUBLISHED'
                                   ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
@@ -683,6 +684,8 @@ const OrganizerDashboard = () => {
                                 </span>
                               ) : null; })()}
                             </div>
+                            {/* Weather Strip inline in card header */}
+                            <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={statsData?.activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
                           </div>
                         </div>
                       </div>
@@ -739,13 +742,22 @@ const OrganizerDashboard = () => {
                       POS
                     </Link>
                   </div>
-                </div>
-              )}
 
-              {/* Manage Holds Panel — moved to live sale section */}
-              {dashboardState === 'active' && (
-                <div className="mb-8">
-                  <OrganizerHoldsPanel />
+                  {/* Compact Holds Summary */}
+                  <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
+                    {statsData.activeSale.holdCount === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No active holds</p>
+                    ) : (
+                      <div className="text-sm">
+                        <p className="font-medium text-warm-900 dark:text-warm-100 mb-2">
+                          {statsData.activeSale.holdCount} active hold{statsData.activeSale.holdCount !== 1 ? 's' : ''}
+                        </p>
+                        <Link href={`/organizer/holds?saleId=${statsData.activeSale.id}`} className="text-amber-600 dark:text-amber-400 font-semibold hover:underline">
+                          Manage holds →
+                        </Link>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -888,6 +900,82 @@ const OrganizerDashboard = () => {
                 );
               })()}
 
+              {/* Other Active Sales — Collapsible Section (positioned before Real-Time Metrics) */}
+              {(() => {
+                const otherActiveSales = salesData?.filter(
+                  (s: Sale) =>
+                    s.id !== activeSale?.id &&
+                    ['DRAFT', 'PUBLISHED', 'SCHEDULED'].includes(s.status)
+                ) ?? [];
+
+                const sortedOtherSales = otherActiveSales.sort(
+                  (a: Sale, b: Sale) =>
+                    new Date(b.startDate ?? 0).getTime() -
+                    new Date(a.startDate ?? 0).getTime()
+                );
+
+                // Only show if there are other active sales
+                if (sortedOtherSales.length === 0) return null;
+
+                // Set default expanded state: true if exactly 1, false if 2+
+                const shouldDefaultExpand = sortedOtherSales.length === 1;
+                if (!otherSalesExpanded && shouldDefaultExpand) {
+                  // Auto-expand on first render if exactly 1 sale
+                  setOtherSalesExpanded(true);
+                }
+
+                return (
+                  <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg">
+                    {/* Collapsible Header */}
+                    <button
+                      onClick={() => setOtherSalesExpanded(!otherSalesExpanded)}
+                      className="w-full flex justify-between items-center p-4 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+                        Other Active Sales ({sortedOtherSales.length})
+                      </h3>
+                      <span className={`transition-transform ${otherSalesExpanded ? 'rotate-180' : ''}`}>
+                        ▼
+                      </span>
+                    </button>
+
+                    {/* Expanded Content */}
+                    {otherSalesExpanded && (
+                      <div className="border-t border-warm-200 dark:border-gray-700 p-4 space-y-3">
+                        {sortedOtherSales.slice(0, 2).map((sale: Sale) => (
+                          <SecondarySaleCard
+                            key={sale.id}
+                            sale={sale}
+                            stats={{
+                              itemCount: 0,
+                              holdCount: holdCountData?.count ?? 0,
+                              visitorCount: 0,
+                            }}
+                            onMakePrimary={(saleId) => {
+                              setManualPrimaryId(saleId);
+                            }}
+                          />
+                        ))}
+
+                        {/* "More sales" link */}
+                        {sortedOtherSales.length > 2 && (
+                          <p className="text-sm text-warm-600 dark:text-warm-400 pt-2">
+                            +{sortedOtherSales.length - 2} more sale
+                            {sortedOtherSales.length - 2 !== 1 ? 's' : ''} in{' '}
+                            <Link
+                              href="/organizer/command-center"
+                              className="text-amber-600 dark:text-amber-400 font-semibold hover:underline"
+                            >
+                              Command Center →
+                            </Link>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Real-Time Metrics Panel */}
               {statsData?.activeSale && (
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
@@ -896,19 +984,31 @@ const OrganizerDashboard = () => {
                     // Live sale: 4-col metrics
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Listed</p>
+                        <div className="flex items-center justify-center gap-1 mb-2">
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Items Listed</p>
+                          <Tooltip content="Total items you've added to this sale" position="top" />
+                        </div>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.total ?? '--'}</p>
                       </Link>
                       <Link href="/organizer/ripples" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Visitors Today</p>
+                        <div className="flex items-center justify-center gap-1 mb-2">
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Visitors Today</p>
+                          <Tooltip content="Unique shoppers who viewed your sale today" position="top" />
+                        </div>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.viewCount ?? '--'}</p>
                       </Link>
                       <Link href="/organizer/holds" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Active Holds</p>
+                        <div className="flex items-center justify-center gap-1 mb-2">
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Active Holds</p>
+                          <Tooltip content="Items shoppers are currently holding — these are reserved temporarily" position="top" />
+                        </div>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.holdCount ?? '--'}</p>
                       </Link>
                       <Link href="/organizer/pos" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Sold</p>
+                        <div className="flex items-center justify-center gap-1 mb-2">
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Items Sold</p>
+                          <Tooltip content="Items marked as sold in this sale" position="top" />
+                        </div>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.sold ?? '--'}</p>
                       </Link>
                     </div>
@@ -936,10 +1036,9 @@ const OrganizerDashboard = () => {
               {tierData && (
                 <div className="flex items-center justify-between p-4 bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <OrganizerTierBadge tier={tierData.tier} />
                     <div>
-                      <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">{tierData.benefits.label}</p>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">{tierData.progress.completedSales}/{tierData.progress.salesNeeded} sales until next tier</p>
+                      <OrganizerTierBadge tier={tierData.tier} showLevelUpCopy={true} completedSales={tierData.progress.completedSales} />
+                      <p className="text-xs text-warm-600 dark:text-warm-400 mt-2">{tierData.progress.completedSales}/{tierData.progress.salesNeeded} sales until next tier</p>
                     </div>
                   </div>
                   {user?.organizerTier !== 'TEAMS' && (
@@ -999,9 +1098,6 @@ const OrganizerDashboard = () => {
               {/* Feature #228: Dashboard Widgets — State 2 (active sale) */}
               {activeSale && (
                 <>
-                  {/* Weather Strip */}
-                  <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={statsData?.activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
-
                   {/* Widget Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {isWidgetVisible(statsData?.activeSale?.saleType, 'SalePulse') && (
@@ -1020,114 +1116,6 @@ const OrganizerDashboard = () => {
                 </>
               )}
 
-              {/* Multi-Sale Section — Secondary cards for PRO/TEAMS organizers */}
-              {(() => {
-                // Filter other active/draft sales (not the primary)
-                const otherActiveSales = salesData?.filter(
-                  (s: Sale) =>
-                    s.id !== activeSale?.id &&
-                    ['DRAFT', 'PUBLISHED', 'SCHEDULED'].includes(s.status)
-                ) ?? [];
-
-                // Sort by startDate descending (most recently started first)
-                const sortedOtherSales = otherActiveSales.sort(
-                  (a: Sale, b: Sale) =>
-                    new Date(b.startDate ?? 0).getTime() -
-                    new Date(a.startDate ?? 0).getTime()
-                );
-
-                // Check if organizer is PRO or TEAMS tier
-                const tierAboveSimple =
-                  user?.organizerTier === 'PRO' ||
-                  user?.organizerTier === 'TEAMS';
-
-                // Only show multi-sale UI if there are other active sales
-                if (sortedOtherSales.length === 0) return null;
-
-                return (
-                  <>
-                    {/* Multi-Sale Command Center Banner (dismissible) */}
-                    {tierAboveSimple && !dismissedMultiSaleBanner && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-600 p-4 rounded mb-6 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">📊</span>
-                          <p className="text-blue-800 dark:text-blue-200 font-medium">
-                            Managing {sortedOtherSales.length} active sale
-                            {sortedOtherSales.length !== 1 ? 's' : ''} — Go to{' '}
-                            <Link
-                              href="/organizer/command-center"
-                              className="font-semibold hover:underline"
-                            >
-                              Command Center
-                            </Link>{' '}
-                            to manage all at once →
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => setDismissedMultiSaleBanner(true)}
-                          className="text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
-                          aria-label="Dismiss"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Upgrade nudge for FREE/SIMPLE tier */}
-                    {!tierAboveSimple && (
-                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
-                        <p className="text-amber-900 dark:text-amber-100 text-sm">
-                          <span className="font-semibold">Running multiple sales at once?</span>{' '}
-                          Upgrade to PRO to manage them all from your dashboard.{' '}
-                          <Link
-                            href="/pricing"
-                            className="text-amber-700 dark:text-amber-400 font-semibold hover:underline"
-                          >
-                            See pricing →
-                          </Link>
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Secondary Sale Cards (only for PRO/TEAMS) */}
-                    {tierAboveSimple && (
-                      <div className="space-y-3 mb-6">
-                        <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">
-                          Other Active Sales
-                        </h3>
-                        {sortedOtherSales.slice(0, 2).map((sale: Sale) => (
-                          <SecondarySaleCard
-                            key={sale.id}
-                            sale={sale}
-                            stats={{
-                              itemCount: 0, // Not available in current dashboard query; secondary sales show placeholder
-                              holdCount: holdCountData?.count ?? 0,
-                              visitorCount: 0, // Would need per-sale QR scan count from API
-                            }}
-                            onMakePrimary={(saleId) => {
-                              setManualPrimaryId(saleId);
-                            }}
-                          />
-                        ))}
-
-                        {/* "More sales" link */}
-                        {sortedOtherSales.length > 2 && (
-                          <p className="text-sm text-warm-600 dark:text-warm-400 pt-2">
-                            +{sortedOtherSales.length - 2} more sale
-                            {sortedOtherSales.length - 2 !== 1 ? 's' : ''} in{' '}
-                            <Link
-                              href="/organizer/command-center"
-                              className="text-amber-600 dark:text-amber-400 font-semibold hover:underline"
-                            >
-                              Command Center →
-                            </Link>
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
             </div>
           )}
 
