@@ -268,7 +268,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       'image/jpeg',
       0.85
     );
-  }, [isRapidfire, photos.length, maxPhotos, photosThisItem]);
+  }, [isRapidfire, photos.length, maxPhotos, photosThisItem, onPhotoCapture]);
 
   // Delete a captured photo
   const deletePhoto = useCallback((index: number) => {
