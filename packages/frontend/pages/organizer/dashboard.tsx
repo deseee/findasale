@@ -574,30 +574,29 @@ const OrganizerDashboard = () => {
                         Publish Sale
                       </Link>
                     )}
-                    {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) < 1 && (
-                      <button
-                        onClick={async () => {
-                          const confirmed = window.confirm('Are you sure you want to close this sale early? This cannot be undone.');
-                          if (!confirmed) return;
-                          try {
-                            await api.patch(`/sales/${statsData.activeSale!.id}/status`, { status: 'ENDED' });
-                            showToast('Sale closed successfully', 'success');
-                            // Refetch sales data
-                            setTimeout(() => window.location.reload(), 1000);
-                          } catch (error: any) {
-                            console.error('Failed to close sale:', error);
-                            showToast(error.response?.data?.message || 'Failed to close sale', 'error');
-                          }
-                        }}
-                        className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                      >
-                        Close Sale Early
-                      </button>
-                    )}
-                    {statsData.activeSale.status === 'PUBLISHED' && getHoursRemaining(activeSale) >= 1 && (
-                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                        Manage Items
-                      </Link>
+                    {statsData.activeSale.status === 'PUBLISHED' && (
+                      <>
+                        <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                          Manage Items
+                        </Link>
+                        <button
+                          onClick={async () => {
+                            const confirmed = window.confirm('Close this sale early? You can reopen it later from your dashboard.');
+                            if (!confirmed) return;
+                            try {
+                              await api.patch(`/sales/${statsData.activeSale!.id}/status`, { status: 'ENDED' });
+                              showToast('Sale closed successfully', 'success');
+                              setTimeout(() => window.location.reload(), 1000);
+                            } catch (error: any) {
+                              console.error('Failed to close sale:', error);
+                              showToast(error.response?.data?.message || 'Failed to close sale', 'error');
+                            }
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                        >
+                          Close Sale Early
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -861,23 +860,38 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
-              {/* Your Sales List — Compact view */}
-              {salesData && salesData.length > 1 && (
+              {/* Past Sales List */}
+              {salesData && salesData.filter((s: Sale) => s.status === 'ENDED').length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Your Sales</h3>
+                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Past Sales</h3>
                     <Link href="/organizer/sales" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 text-sm font-semibold">
                       View all →
                     </Link>
                   </div>
                   <div className="space-y-2">
-                    {salesData.slice(0, 5).map((sale: Sale) => (
-                      <Link key={sale.id} href={`/organizer/edit-sale/${sale.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
+                    {salesData.filter((s: Sale) => s.status === 'ENDED').slice(0, 5).map((sale: Sale) => (
+                      <div key={sale.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
                         <div className="flex-1">
                           <p className="font-medium text-warm-900 dark:text-warm-100 text-sm">{sale.title}</p>
-                          <p className="text-xs text-warm-600 dark:text-warm-400">{sale.city}, {sale.state} • {sale.status === 'PUBLISHED' ? '🟢 Live' : sale.status === 'DRAFT' ? '⚠️ Draft' : '✓ Ended'}</p>
+                          <p className="text-xs text-warm-600 dark:text-warm-400">{sale.city}, {sale.state}</p>
                         </div>
-                      </Link>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm('Reopen this sale? It will become visible to shoppers again.')) return;
+                            try {
+                              await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
+                              showToast('Sale reopened', 'success');
+                              setTimeout(() => window.location.reload(), 1000);
+                            } catch (error: any) {
+                              showToast(error.response?.data?.message || 'Failed to reopen', 'error');
+                            }
+                          }}
+                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors ml-4"
+                        >
+                          Reopen
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>

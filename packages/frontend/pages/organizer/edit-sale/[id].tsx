@@ -304,7 +304,7 @@ const EditSalePage = () => {
       }
 
       const confirmMessage = sale.status === 'PUBLISHED'
-        ? 'Hide this sale from shoppers? They won\'t be able to find it anymore.'
+        ? 'Close this sale early? You can reopen it later from your dashboard.'
         : 'Make this sale visible to shoppers on the map?';
 
       if (!window.confirm(confirmMessage)) {
