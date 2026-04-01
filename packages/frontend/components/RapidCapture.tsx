@@ -603,6 +603,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   Enhance
                 </button>
               )}
+              <span
+                onClick={readyCount > 0 ? onNavigateToReview : undefined}
+                className={`text-xs whitespace-nowrap transition-colors ${
+                  readyCount > 0
+                    ? 'text-amber-300 underline underline-offset-2 cursor-pointer hover:text-amber-200'
+                    : 'text-white/30'
+                }`}
+              >
+                Review ({readyCount})
+              </span>
             </div>
           )}
 
@@ -724,26 +734,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   );
                 })}
 
-              {/* Fallback: Review button (non-rapidfire or no items yet) */}
-              {(!isRapidfire || rapidItems.length === 0) && (
-                <button
-                  onClick={() => {
-                    if (!isRapidfire && photos.length > 0) {
-                      setSelectedIndex(0);
-                    } else {
-                      onNavigateToReview();
-                    }
-                  }}
-                  disabled={!isRapidfire && photos.length === 0}
-                  className={`flex-shrink-0 h-10 px-3 rounded-full font-bold text-xs transition-colors flex items-center justify-center whitespace-nowrap ${
-                    isRapidfire && readyCount === 0
-                      ? 'bg-gray-700/80 text-gray-300 cursor-default'
-                      : 'bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed'
-                  }`}
-                >
-                  Review{readyCount > 0 && ` (${readyCount})`}
-                </button>
-              )}
 
             </div>
 
