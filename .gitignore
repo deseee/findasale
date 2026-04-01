@@ -53,6 +53,11 @@ pnpm-debug.log*
 Thumbs.db
 
 # =========================
+# FUSE filesystem artifacts (Linux VM temp files — never commit)
+# =========================
+.fuse_hidden*
+
+# =========================
 # IDE
 # =========================
 .vscode/
@@ -88,6 +93,11 @@ packages/database/package-lock.json
 
 # Session tracking (VM-local, not for git)
 .checkpoint-manifest.json
+
+# Root-level temp/dev files (never commit)
+query.sql
+test-import.csv
+frontend-pages-inventory-S294.html
 
 # =========================
 # Cowork / Claude session artifacts (VM-local, never commit)
