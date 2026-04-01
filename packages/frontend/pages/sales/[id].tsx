@@ -36,6 +36,7 @@ import MessageComposeModal from '../../components/MessageComposeModal'; // Featu
 import HuntSummary from '../../components/HuntSummary'; // Feature #85: Treasure Hunt QR
 import { useArrivalAssistant } from '../../hooks/useArrivalAssistant'; // Feature #84: Approach Notes
 import RemindMeButton from '../../components/RemindMeButton';
+import LeaveSaleWarning from '../../components/LeaveSaleWarning'; // Feature #121: Warn on leave
 
 
 interface Sale {
@@ -120,6 +121,8 @@ const SaleDetailPage = () => {
   const [downloadingKit, setDownloadingKit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const [showLeaveWarning, setShowLeaveWarning] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
@@ -154,6 +157,44 @@ const SaleDetailPage = () => {
     if (!id || !user) return;
     api.post(`/api/sales/${id}/visit`).catch(() => { /* fire-and-forget */ });
   }, [id, user?.id]);
+
+  // Feature #121: Detect navigation away from sale with active holds
+  useEffect(() => {
+    if (!id || !user) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Check if user has active holds at this sale — if so, warn before leaving
+      api.get('/reservations/shopper').then((res) => {
+        const userHoldsAtSale = res.data.holds?.filter((h: any) => h.item.sale.id === id);
+        if (userHoldsAtSale && userHoldsAtSale.length > 0) {
+          e.preventDefault();
+          e.returnValue = '';
+        }
+      }).catch(() => { /* non-fatal */ });
+    };
+
+    // Use Next.js router beforePopState for SPA navigation
+    const handleRouteChange = (url: string) => {
+      // Only warn if navigating to a different page
+      if (!url.includes(`/sales/${id}`)) {
+        api.get('/reservations/shopper').then((res) => {
+          const userHoldsAtSale = res.data.holds?.filter((h: any) => h.item.sale.id === id);
+          if (userHoldsAtSale && userHoldsAtSale.length > 0) {
+            setShowLeaveWarning(true);
+            setPendingNavigation(url);
+            router.events.emit('routeChangeError');
+            throw 'Navigation cancelled by leave warning';
+          }
+        }).catch(() => { /* non-fatal */ });
+      }
+    };
+
+    router.events.on('beforeHistoryChange', handleRouteChange);
+
+    return () => {
+      router.events.off('beforeHistoryChange', handleRouteChange);
+    };
+  }, [id, user]);
 
   const { data: sale, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['sale', id],
@@ -255,6 +296,18 @@ const SaleDetailPage = () => {
     router.push(`/messages/${conversationId}`);
   };
 
+  const handleConfirmLeave = () => {
+    setShowLeaveWarning(false);
+    if (pendingNavigation) {
+      router.push(pendingNavigation);
+    }
+  };
+
+  const handleCloseLeaveWarning = () => {
+    setShowLeaveWarning(false);
+    setPendingNavigation(null);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -315,6 +368,14 @@ const SaleDetailPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <SaleOGMeta sale={saleForOGMeta} />
+
+      {/* Feature #121: Leave Sale Warning Modal */}
+      <LeaveSaleWarning
+        saleId={id as string}
+        isOpen={showLeaveWarning}
+        onClose={handleCloseLeaveWarning}
+        onConfirmLeave={handleConfirmLeave}
+      />
 
       <main className="container mx-auto px-4 py-8">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">

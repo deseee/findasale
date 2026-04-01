@@ -26,6 +26,7 @@ import OnboardingWizard from '../../components/OnboardingWizard';
 import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal';
 import SimpleModePanel from '../../components/SimpleModePanel';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
+import OrganizerHoldsPanel from '../../components/OrganizerHoldsPanel';
 import Head from 'next/head';
 import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
@@ -862,6 +863,13 @@ const OrganizerDashboard = () => {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Active Holds Widget — Feature #121 */}
+          {dashboardState === 'active' && (
+            <div className="mb-8">
+              <OrganizerHoldsPanel />
             </div>
           )}
 
