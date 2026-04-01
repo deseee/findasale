@@ -626,13 +626,13 @@ const ReviewPage = () => {
                       </div>
                     )}
                     {/* Column headers */}
-                    <div className="px-4 py-2 flex items-center gap-4 text-xs font-medium text-warm-400 dark:text-warm-500 border-b border-warm-100 dark:border-gray-700 mb-1">
+                    <div className="px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-4 text-xs font-medium text-warm-400 dark:text-warm-500 border-b border-warm-100 dark:border-gray-700 mb-1">
                       <span className="w-4 flex-shrink-0" />
                       <span className="w-16 flex-shrink-0">Photo</span>
                       <span className="flex-1">Item · Health Score</span>
-                      <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
                         <span className="w-20 text-right hidden sm:inline">AI Confidence</span>
-                        <span className="w-16 text-center">Status</span>
+                        <span className="w-16 text-center hidden sm:inline">Status</span>
                         <span className="w-4" />
                       </div>
                     </div>
@@ -646,7 +646,7 @@ const ReviewPage = () => {
                         >
                           {/* Collapsed row — always visible */}
                           <div
-                            className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged).split(' ').slice(1).join(' ')}`}
+                            className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged).split(' ').slice(1).join(' ')}`}
                             onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
                           >
                             <input
@@ -675,7 +675,17 @@ const ReviewPage = () => {
                               />
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
+                              <div className="flex items-start justify-between gap-1 sm:block">
+                                <p className="font-semibold text-warm-900 dark:text-warm-100 truncate flex-1 sm:flex-none">{item.title}</p>
+                                {/* Status badge — mobile only, sits next to title so right column can shrink to arrow-only */}
+                                <span className={`sm:hidden flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                                  item.draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700' :
+                                  item.draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-warm-400'
+                                }`}>
+                                  {item.draftStatus === 'PUBLISHED' ? 'Published' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
+                                </span>
+                              </div>
                               <p className="text-sm text-warm-600 dark:text-warm-400">
                                 {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
                               </p>
@@ -711,11 +721,11 @@ const ReviewPage = () => {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 flex-shrink-0">
+                            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
                               <div className={`text-xs font-semibold hidden sm:block ${conf.color}`}>
                                 {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
                               </div>
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              <span className={`hidden sm:inline-flex text-xs font-semibold px-2 py-0.5 rounded-full ${
                                 item.draftStatus === 'PUBLISHED'
                                   ? 'bg-green-100 text-green-700'
                                   : item.draftStatus === 'PENDING_REVIEW'
