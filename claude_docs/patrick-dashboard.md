@@ -1,68 +1,74 @@
-# Patrick's Dashboard — S363 Complete (2026-03-31)
+# Patrick's Dashboard — S364 Complete (2026-03-31)
 
 ---
 
-## ⚠️ S363 — Camera consolidation done. Push block ready.
+## ⚠️ Two pushes still needed before you're done
 
 ---
 
-## What Happened This Session (S363)
+## Push 1 — Feature #121 wiring (OrganizerHoldsPanel + LeaveSaleWarning)
 
-**"+" button fix pushed (commit 5a83d03):** S362 edited the wrong component (RapidCarousel instead of RapidCapture). This session found the root cause via DOM inspection and fixed RapidCapture — the one users actually see. 20px → 40px, centered bottom. Already on GitHub.
-
-**Full camera audit (UX + Architect):** Audited every camera component. Found 512 lines of dead code, invisible features, and overlapping systems built up across S351–S362. Two agents ran in parallel and produced a consolidation plan.
-
-**Camera consolidation (2 dev batches, local only):**
-- BrightnessIndicator now has solid backgrounds (was 20% opacity = invisible on black camera feed)
-- Removed redundant amber "low light" banner (BrightnessIndicator replaces it)
-- Deleted 3 orphan component files nobody was using (RapidCarousel, CaptureButton, ModeToggle)
-- Cleaned dead state variables from the Add Items page that were rendering behind the camera overlay
-- Face detection modal now shows inside the camera (was hidden behind it)
-- Zero TypeScript errors
-
-**⚠️ These changes are LOCAL ONLY — not pushed yet.** Next session verifies everything, then you push.
-
----
-
-## Your Action Now
-
-Push block for S364 (after verification):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/LeaveSaleWarning.tsx
+git add packages/frontend/components/OrganizerHoldsPanel.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add "packages/frontend/pages/sales/[id].tsx"
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/camera/BrightnessIndicator.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git rm packages/frontend/components/camera/RapidCarousel.tsx
-git rm packages/frontend/components/camera/CaptureButton.tsx
-git rm packages/frontend/components/camera/ModeToggle.tsx
-git commit -m "refactor(camera): consolidate camera workflow — delete dead code, fix BrightnessIndicator visibility, move face detection into overlay"
+git add claude_docs/strategy/roadmap.md
+git commit -m "feat(#121): wire OrganizerHoldsPanel into dashboard, LeaveSaleWarning into sale detail page"
+.\push.ps1
+```
+
+## Push 2 — #37 notifications.tsx (carried over from S359)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/shopper/notifications.tsx
+git commit -m "fix(#37): notifications tab styling"
 .\push.ps1
 ```
 
 ---
 
-## Status Summary
+## What Happened This Session (S364)
 
-- **Vercel:** ✅ Green
-- **Railway:** ✅ Green
-- **All migrations:** ✅ Deployed
-- **All Railway env vars:** ✅ Confirmed
+**S363 verification + push:** Confirmed all 3 deleted camera files gone, TS clean, then caught an orphaned `setPreCaptureWarning` call that the S363 dev missed — fixed inline before pushing.
+
+**Camera mobile refactor:** You showed a Pixel 6a screenshot where the viewfinder was only ~60% of screen height because the thumbnail carousel was its own full-width row. Now everything below the viewfinder fits in one ~80px band — thumbnails sit left of the shutter button, stats are a tiny text-xs line above. Plus button is now transparent outlined (no dark circle obscuring the thumbnail photo). BrightnessIndicator now shows "Checking light..." immediately instead of being blank for the first 500ms.
+
+**Scheduled task backlog:** Reviewed all findings from health scout + friction audits this week (full P0–P3 synthesis). Dispatched 6 independent fixes in one batch: password reset email now fires, SharePromoteModal uses actual sale type instead of hardcoded "estate sale", item query has pagination cap, snooze service has honest log, .env.example updated.
+
+**Housekeeping:** .fuse_hidden* (Linux VM temp files) added to .gitignore so they stop polluting git status. 28 accumulated doc files committed. query.sql + test-import.csv added to .gitignore.
+
+**Feature #121 discovered + wired:** Two orphaned components found sitting untracked — OrganizerHoldsPanel (holds dashboard widget for organizers) and LeaveSaleWarning (modal warning shoppers they have active holds when navigating away from a sale). Both fully implemented, just never wired in. Now live on organizer dashboard and sale detail page.
 
 ---
 
-## Next Up (S364)
+## Status
 
-1. **Verify S363 batches** — read modified files, run TS check, confirm deleted files are gone
-2. **Push camera consolidation** — use block above after verification passes
-3. **Chrome QA camera** — BrightnessIndicator visible? Face modal inside camera? Full capture→AI→review cycle?
-4. **QA backlog** — #37 Sale Alerts, #199 User Profile dark mode, #58 Achievements, #29 Loyalty, #213 Hunt Pass, #131 Share Templates
+- **Vercel:** ✅ Green
+- **Railway:** ✅ Green
+- **Pending push:** Feature #121 + notifications.tsx (see blocks above)
+
+---
+
+## Next Session (S365)
+
+1. Chrome QA camera on mobile — does single-row bottom work? BrightnessIndicator visible?
+2. Chrome QA S364 fixes — password reset email arrives? SharePromoteModal shows correct sale type?
+3. QA backlog: #37 Sale Alerts, #199 User Profile dark mode, #46 Typology Classifier refresh bug
 
 ---
 
 ## Open Action Items for Patrick
 
-- [ ] **Push S363 camera consolidation** (after S364 verifies — block above)
+- [ ] **Push Feature #121 wiring** (block above — top priority)
+- [ ] **Push #37 notifications.tsx** (block above)
+- [ ] **Delete .fuse_hidden files from disk** (optional cleanup):
+  `Get-ChildItem -Path C:\Users\desee\ClaudeProjects\FindaSale -Filter ".fuse_hidden*" -Recurse | Remove-Item -Force`
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review
+- [ ] **Brand Voice Session:** Overdue — real beta users forming impressions without documented voice
+- [ ] **Evaluate Cowork Dispatch:** New feature — trigger Claude from your phone while at an estate sale

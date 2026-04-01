@@ -7,20 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S364 IN PROGRESS (2026-03-31):** S363 verification + push, camera UI mobile refactor, scheduled task backlog dispatch. Orphaned components discovered & wired: OrganizerHoldsPanel.tsx (holds dashboard summary) + LeaveSaleWarning.tsx (shopper GPS navigation guard) wired into organizer dashboard + sale detail page.
+**S364 COMPLETE (2026-03-31):** S363 verification + camera mobile refactor + scheduled task backlog + orphaned component wiring.
 
-(1) **S363 batches verified + pushed (commit 18235d33):** All 3 deleted files confirmed absent, BrightnessIndicator solid colors confirmed, [saleId].tsx clean, zero TS errors. Then caught orphaned `setPreCaptureWarning` call in sampling interval — fixed inline and pushed (separate commit).
+(1) **S363 verified + pushed (commit 18235d33):** Dead files confirmed gone, TS clean. Caught orphaned `setPreCaptureWarning` call from Batch 1 removal — fixed inline.
 
-(2) **Camera UI mobile refactor — pushed:** Real Pixel 6a test showed viewfinder at ~60% height due to multi-row bottom bar. UX spec produced, dev dispatched:
-- RapidCapture.tsx: collapsed 3-row bottom (carousel row + stats row + shutter row) into single ~80px band. Thumbnails now sit LEFT of shutter button in same row. Stats line shrunk to text-xs above row. + button changed from dark filled circle → transparent outline-only (thumbnail photo now visible through it).
-- BrightnessIndicator.tsx: 500ms startup delay added, null state now renders "Checking light..." placeholder instead of blank, isActive changed from `!flashEffect` → `cameraReady`.
-- Files: RapidCapture.tsx, BrightnessIndicator.tsx
+(2) **Camera UI mobile refactor (pushed):** Pixel 6a showed viewfinder at ~60% height. Collapsed 3-row bottom into single ~80px band: thumbnails LEFT of shutter, stats shrunk to text-xs, + button transparent outline. BrightnessIndicator: 500ms init delay, null → "Checking light..." placeholder, isActive=cameraReady.
 
-(3) **Scheduled task backlog — dispatching:** Small independent fixes from health scout + friction audits. See dispatch below.
+(3) **Scheduled task backlog fixes (pushed commit 63e879ce):** 6 independent fixes — password reset email (authController.ts), SharePromoteModal dynamic sale types, item query pagination cap (take:500), snooze log clarity, .env.example Neon comment.
 
-⚠️ **Camera refactor push block still needed** — Patrick has not yet pushed the camera UI changes (RapidCapture.tsx + BrightnessIndicator.tsx from step 2).
+(4) **.gitignore + doc commit (commit 1a2b5552):** .fuse_hidden* + temp root files gitignored. 28 accumulated doc files committed (audits, health reports, friction audits, competitor intel, UX specs, improvement memos).
 
-⚠️ **Scheduled task backlog patch — in flight** — dev dispatch in progress.
+(5) **Feature #121 wiring (push block ready — NOT YET PUSHED):** OrganizerHoldsPanel.tsx wired into organizer dashboard (holds summary widget). LeaveSaleWarning.tsx wired into sale detail page (shopper navigation guard). Roadmap updated under Features #146 + #24.
+
+⚠️ **Patrick must push Feature #121 wiring:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/LeaveSaleWarning.tsx
+git add packages/frontend/components/OrganizerHoldsPanel.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add "packages/frontend/pages/sales/[id].tsx"
+git add claude_docs/STATE.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "feat(#121): wire OrganizerHoldsPanel into dashboard, LeaveSaleWarning into sale detail page"
+.\push.ps1
+```
+
+⚠️ **#37 notifications.tsx still not pushed** (local only since S359).
 
 ---
 
@@ -242,32 +254,30 @@ Files changed S362 (in push block — NOT YET COMMITTED):
 
 ---
 
-## Next Session (S364)
+## Next Session (S365)
 
-### Patrick Action Required — Push S363 camera consolidation
+### Patrick Action Required First
+1. Push Feature #121 wiring (block in Current Work above)
+2. Push #37 notifications.tsx:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/camera/BrightnessIndicator.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git rm packages/frontend/components/camera/RapidCarousel.tsx
-git rm packages/frontend/components/camera/CaptureButton.tsx
-git rm packages/frontend/components/camera/ModeToggle.tsx
-git commit -m "refactor(camera): consolidate camera workflow — delete dead code, fix BrightnessIndicator visibility, move face detection into overlay"
+git add packages/frontend/pages/shopper/notifications.tsx
+git commit -m "fix(#37): notifications tab styling"
 .\push.ps1
 ```
 
-### S364 Priority 1 — Verify S363 batches
-Both dev batches reported zero TS errors, but session was interrupted before main-session verification. S364 must:
-1. Read all 3 modified files (RapidCapture.tsx, BrightnessIndicator.tsx, [saleId].tsx) and confirm changes look correct
-2. Run `npx tsc --noEmit --skipLibCheck` in frontend — confirm zero errors
-3. Verify deleted files (RapidCarousel, CaptureButton, ModeToggle) are gone and no broken imports remain
-4. Confirm face detection modal renders inside RapidCapture (props wired from [saleId].tsx)
-5. If all good → Patrick pushes via block above → Vercel/Railway deploy → Chrome QA
+### S365 Priority 1 — Chrome QA: camera mobile layout
+Open finda.sale on Pixel 6a (or Chrome DevTools mobile simulation). Verify:
+- Viewfinder takes ≥80% of screen height (single-row bottom)
+- BrightnessIndicator shows "Checking light..." immediately, then updates within 1s
+- + button outline visible over thumbnail photo
+- Thumbnail scrolls horizontally in same row as shutter
 
-### S364 Priority 2 — Chrome QA camera workflow
+### S365 Priority 2 — Chrome QA: verify S364 fixes live
+- Password reset email: trigger forgot-password → confirm email arrives
+- SharePromoteModal: open share modal for a garage sale → confirm copy doesn't say "estate sale"
+
+### S365 Priority 3 — QA backlog
 After push deploys:
 - Open camera on mobile viewport, verify BrightnessIndicator is now VISIBLE (solid green/yellow/red backgrounds)
 - Verify face detection modal appears inside camera overlay (not behind it)
