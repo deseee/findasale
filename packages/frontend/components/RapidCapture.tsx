@@ -206,17 +206,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     };
   }, [facingMode]);
 
-  // Auto-scroll carousel whenever rapidItems grows (handles async thumbnail additions from parent)
-  useEffect(() => {
-    if (rapidItems.length > 0) {
-      requestAnimationFrame(() => {
-        carouselRef.current?.scrollTo({
-          left: carouselRef.current.scrollWidth,
-          behavior: 'smooth',
-        });
-      });
-    }
-  }, [rapidItems.length]);
 
   // Phase 3: Pre-capture quality check — sample video brightness every 2 seconds
   // Brightness sampling handled by BrightnessIndicator component
@@ -266,17 +255,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           setPhotosThisItem((prev) => prev + 1);
         } else {
           // Rapidfire mode
-          setPhotos((prev) => {
-            const next = [...prev, photo];
-            // Auto-scroll carousel to end
-            requestAnimationFrame(() => {
-              carouselRef.current?.scrollTo({
-                left: carouselRef.current.scrollWidth,
-                behavior: 'smooth',
-              });
-            });
-            return next;
-          });
+          setPhotos((prev) => [...prev, photo]);
         }
       },
       'image/jpeg',
@@ -622,12 +601,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                           >
                             Retake
                           </button>
-                          <button
-                            onClick={qualityOverlay.onSkip}
-                            className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
-                          >
-                            Skip Item
-                          </button>
                         </div>
                       </div>
                     </>
@@ -771,11 +744,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
           {/* Bottom control: shutter floats above a scrollable thumbnail strip */}
           <div className="relative min-h-[76px]">
-            {/* Scroll strip — full width, paddingRight keeps latest thumbnail adjacent to shutter */}
+            {/* Scroll strip — RTL outer anchors newest items flush-left of shutter automatically.
+                No JS scrolling needed: RTL scrollLeft=0 always shows the right end (newest items). */}
             <div
               ref={carouselRef}
-              className="absolute inset-0 flex items-center gap-2 overflow-x-auto scrollbar-hide px-3"
-              style={{ WebkitOverflowScrolling: 'touch', paddingRight: 'calc(50% + 40px)' }}
+              className="absolute inset-0 overflow-x-auto scrollbar-hide flex items-center"
+              style={{ direction: 'rtl', WebkitOverflowScrolling: 'touch' }}
+            >
+            <div
+              className="flex items-center gap-2 pl-3"
+              style={{ direction: 'ltr', paddingRight: 'calc(50% - 40px)', minWidth: 'max-content' }}
             >
               {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
               {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
@@ -860,9 +838,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     </div>
                   );
                 })}
-
-
-            </div>
+            </div>{/* end inner LTR flex */}
+            </div>{/* end outer RTL scroll */}
 
             {/* Shutter: floats above the scroll strip, always centered */}
             <button
