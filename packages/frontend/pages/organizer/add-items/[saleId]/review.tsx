@@ -662,30 +662,33 @@ const ReviewPage = () => {
                               className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500"
                               onClick={(e) => e.stopPropagation()}
                             />
-                            {item.photoUrls[0] && (
-                              <img
-                                key={item.photoUrls[0]}
-                                src={item.photoUrls[0]}
-                                alt={item.title}
-                                className="w-16 h-16 object-cover rounded flex-shrink-0"
-                                referrerPolicy="no-referrer-when-downgrade"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" font-size="24" text-anchor="middle" dy=".3em" fill="%239ca3af"%3E📷%3C/text%3E%3C/svg%3E';
-                                }}
-                              />
-                            )}
+                            {/* Photo with mobile status badge overlaid on bottom */}
+                            <div className="relative flex-shrink-0 w-16 h-16">
+                              {item.photoUrls[0] ? (
+                                <img
+                                  key={item.photoUrls[0]}
+                                  src={item.photoUrls[0]}
+                                  alt={item.title}
+                                  className="w-16 h-16 object-cover rounded"
+                                  referrerPolicy="no-referrer-when-downgrade"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" font-size="24" text-anchor="middle" dy=".3em" fill="%239ca3af"%3E📷%3C/text%3E%3C/svg%3E';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl">📷</div>
+                              )}
+                              {/* Status badge — mobile only, overlaid on bottom of thumbnail */}
+                              <span className={`sm:hidden absolute bottom-0 left-0 right-0 text-center text-[10px] font-bold py-0.5 rounded-b ${
+                                item.draftStatus === 'PUBLISHED' ? 'bg-green-500/80 text-white' :
+                                item.draftStatus === 'PENDING_REVIEW' ? 'bg-amber-500/80 text-white' :
+                                'bg-gray-500/80 text-white'
+                              }`}>
+                                {item.draftStatus === 'PUBLISHED' ? 'Live' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
+                              </span>
+                            </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-1 sm:block">
-                                <p className="font-semibold text-warm-900 dark:text-warm-100 truncate flex-1 sm:flex-none">{item.title}</p>
-                                {/* Status badge — mobile only, sits next to title so right column can shrink to arrow-only */}
-                                <span className={`sm:hidden flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                                  item.draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700' :
-                                  item.draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700' :
-                                  'bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-warm-400'
-                                }`}>
-                                  {item.draftStatus === 'PUBLISHED' ? 'Published' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
-                                </span>
-                              </div>
+                              <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
                               <p className="text-sm text-warm-600 dark:text-warm-400">
                                 {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
                               </p>
