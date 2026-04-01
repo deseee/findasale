@@ -152,7 +152,7 @@ const OrganizerHoldsPanel: React.FC<OrganizerHoldsPanelProps> = ({ className = '
               setSortBy(e.target.value as 'expiry' | 'created');
               setPage(1);
             }}
-            className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-gray-600"
           >
             <option value="expiry">Expiring Soon</option>
             <option value="created">Recently Added</option>

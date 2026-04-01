@@ -8,6 +8,7 @@ import React, { useMemo } from 'react';
 interface WeatherStripProps {
   saleStartDate: string;
   saleCity?: string;
+  status?: string; // Sale status for condition to also render on LIVE sales
 }
 
 // Simple weather approximation based on month + region (no external API in Phase 1)
@@ -34,14 +35,15 @@ function getApproxWeather(dateStr: string): { tempHigh: number; tempLow: number;
   return monthData[month] || null;
 }
 
-export default function WeatherStrip({ saleStartDate, saleCity }: WeatherStripProps) {
+export default function WeatherStrip({ saleStartDate, saleCity, status }: WeatherStripProps) {
   const shouldShow = useMemo(() => {
     if (!saleStartDate) return false;
     const saleDate = new Date(saleStartDate);
     const now = new Date();
     const diffDays = (saleDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays >= 0 && diffDays <= 10;
-  }, [saleStartDate]);
+    // Show if sale is within 10 days OR if status is LIVE
+    return status === 'LIVE' || (diffDays >= 0 && diffDays <= 10);
+  }, [saleStartDate, status]);
 
   const weather = useMemo(() => getApproxWeather(saleStartDate), [saleStartDate]);
 

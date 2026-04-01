@@ -419,6 +419,25 @@ const OrganizerDashboard = () => {
             </p>
           </div>
 
+          {/* Consolidated Action Bar — always visible */}
+          <div className="flex flex-wrap gap-2 mb-8">
+            <Link href="/organizer/create-sale" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
+              + New Sale
+            </Link>
+            <Link href={activeSale ? `/organizer/add-items/${activeSale.id}` : '/organizer/sales'} className="rounded-full px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors">
+              Add Items
+            </Link>
+            <Link href="/organizer/holds" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors">
+              Holds
+            </Link>
+            <Link href="/organizer/pos" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors">
+              POS
+            </Link>
+            <Link href="/organizer/ripples" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 transition-colors">
+              Ripples
+            </Link>
+          </div>
+
           {/* Tier Lapse Banner */}
           {orgProfile?.subscriptionLapsed && (
             <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 mb-4 rounded">
@@ -627,6 +646,46 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
+              {/* Other Sales — compact section */}
+              {(() => {
+                const otherSales = salesData?.filter((s: Sale) => s.id !== statsData?.activeSale?.id && ['LIVE', 'PUBLISHED', 'DRAFT'].includes(s.status)) || [];
+                if (otherSales.length === 0) return null;
+                return (
+                  <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">Other Sales</h3>
+                      <Link href="/organizer/sales" className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline">
+                        View all →
+                      </Link>
+                    </div>
+                    <div className="space-y-2">
+                      {otherSales.slice(0, 3).map((sale: Sale) => (
+                        <div key={sale.id} className="flex items-center justify-between p-2 rounded hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors text-sm">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-warm-900 dark:text-warm-100 truncate">{sale.title}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                sale.status === 'PUBLISHED'
+                                  ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                                  : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+                              }`}>
+                                {sale.status === 'PUBLISHED' ? 'LIVE' : 'DRAFT'}
+                              </span>
+                              <span className="text-xs text-warm-600 dark:text-warm-400">
+                                {statsData?.items?.total ?? 0} items
+                              </span>
+                            </div>
+                          </div>
+                          <Link href={`/organizer/sales/${sale.id}`} className="ml-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-semibold text-xs">
+                            Manage →
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Earnings/Payout Alert — conditional banner */}
               {cashFeeBalance > 0 && (
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 flex items-center justify-between">
@@ -731,18 +790,37 @@ const OrganizerDashboard = () => {
                   );
                 }
 
-                // Condition 6: Default (healthy)
-                return (
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-5">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-semibold text-green-900 dark:text-green-100 mb-1">Your sale is looking good!</p>
-                        <p className="text-sm text-green-700 dark:text-green-300">Keep monitoring items and holds.</p>
-                      </div>
-                      <Link href={`/sales/${id}`} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
-                        View Live Sale
-                      </Link>
+                // Condition 6: Default (healthy) — smart contextual nudge
+                // Check item count first (use draft count if available)
+                const itemCount = available || (statsData.items.total - statsData.items.draft) || 0;
+
+                if (itemCount === 0 || (status === 'DRAFT' && statsData.items.draft === 0)) {
+                  return (
+                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
+                      Add your first items to go live
                     </div>
+                  );
+                }
+
+                if (statsData.activeSale.viewCount > 10) {
+                  return (
+                    <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 text-sm text-blue-800 dark:text-blue-200">
+                      X shoppers have questions — answer them
+                    </div>
+                  );
+                }
+
+                if (!activeSale?.description) {
+                  return (
+                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-800 dark:text-amber-200">
+                      Add a sale description to attract more shoppers
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-sm text-green-800 dark:text-green-200">
+                    Your sale is live — keep it up!
                   </div>
                 );
               })()}
@@ -758,18 +836,18 @@ const OrganizerDashboard = () => {
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Listed</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.total ?? '--'}</p>
                       </Link>
-                      <div className="text-center p-3 rounded-lg">
+                      <Link href="/organizer/ripples" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Visitors Today</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.viewCount ?? '--'}</p>
-                      </div>
+                      </Link>
                       <Link href="/organizer/holds" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Active Holds</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.holdCount ?? '--'}</p>
                       </Link>
-                      <div className="text-center p-3 rounded-lg">
+                      <Link href="/organizer/pos" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">Items Sold</p>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.sold ?? '--'}</p>
-                      </div>
+                      </Link>
                     </div>
                   ) : (
                     // Draft sale: 3-col metrics
@@ -920,7 +998,7 @@ const OrganizerDashboard = () => {
               {activeSale && (
                 <>
                   {/* Weather Strip */}
-                  <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} />
+                  <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={statsData?.activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
 
                   {/* Widget Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1029,26 +1107,6 @@ const OrganizerDashboard = () => {
               <OrganizerHoldsPanel />
             </div>
           )}
-
-          {/* Quick Actions (always visible) */}
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Link href="/organizer/create-sale" className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
-              + Create New Sale
-            </Link>
-            {salesData && salesData.length > 0 && (
-              <>
-                <Link href={salesData.length === 1 ? `/organizer/add-items/${salesData[0].id}` : '/organizer/sales'} className="bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg transition-colors">
-                  📦 Add Items
-                </Link>
-                <Link href="/organizer/holds" className="relative bg-amber-100 hover:bg-amber-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-amber-900 dark:text-amber-100 font-bold py-2 px-6 rounded-lg transition-colors">
-                  🤝 Holds {(holdCountData?.count ?? 0) > 0 && `(${holdCountData!.count})`}
-                </Link>
-                <Link href="/organizer/pos" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
-                  💳 POS
-                </Link>
-              </>
-            )}
-          </div>
 
         </div>
       </div>
