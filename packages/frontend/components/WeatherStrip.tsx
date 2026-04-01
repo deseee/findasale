@@ -16,19 +16,19 @@ function getApproxWeather(dateStr: string): { tempHigh: number; tempLow: number;
   const month = date.getMonth(); // 0-11
 
   // Grand Rapids, MI approximate temps by month
-  const monthData: Record<number, { high: number; low: number; condition: string; icon: string }> = {
-    0: { high: 31, low: 17, condition: 'Cold & snowy', icon: '❄️' },
-    1: { high: 34, low: 19, condition: 'Cold & snowy', icon: '❄️' },
-    2: { high: 45, low: 28, condition: 'Chilly', icon: '🌥️' },
-    3: { high: 58, low: 37, condition: 'Cool & breezy', icon: '🌤️' },
-    4: { high: 70, low: 48, condition: 'Mild & pleasant', icon: '☀️' },
-    5: { high: 79, low: 58, condition: 'Warm', icon: '☀️' },
-    6: { high: 83, low: 63, condition: 'Hot & sunny', icon: '☀️' },
-    7: { high: 81, low: 61, condition: 'Warm & humid', icon: '⛅' },
-    8: { high: 74, low: 53, condition: 'Pleasant', icon: '🌤️' },
-    9: { high: 61, low: 42, condition: 'Cool & crisp', icon: '🍂' },
-    10: { high: 47, low: 33, condition: 'Chilly', icon: '🌥️' },
-    11: { high: 34, low: 22, condition: 'Cold', icon: '❄️' },
+  const monthData: Record<number, { tempHigh: number; tempLow: number; condition: string; icon: string }> = {
+    0: { tempHigh: 31, tempLow: 17, condition: 'Cold & snowy', icon: '❄️' },
+    1: { tempHigh: 34, tempLow: 19, condition: 'Cold & snowy', icon: '❄️' },
+    2: { tempHigh: 45, tempLow: 28, condition: 'Chilly', icon: '🌥️' },
+    3: { tempHigh: 58, tempLow: 37, condition: 'Cool & breezy', icon: '🌤️' },
+    4: { tempHigh: 70, tempLow: 48, condition: 'Mild & pleasant', icon: '☀️' },
+    5: { tempHigh: 79, tempLow: 58, condition: 'Warm', icon: '☀️' },
+    6: { tempHigh: 83, tempLow: 63, condition: 'Hot & sunny', icon: '☀️' },
+    7: { tempHigh: 81, tempLow: 61, condition: 'Warm & humid', icon: '⛅' },
+    8: { tempHigh: 74, tempLow: 53, condition: 'Pleasant', icon: '🌤️' },
+    9: { tempHigh: 61, tempLow: 42, condition: 'Cool & crisp', icon: '🍂' },
+    10: { tempHigh: 47, tempLow: 33, condition: 'Chilly', icon: '🌥️' },
+    11: { tempHigh: 34, tempLow: 22, condition: 'Cold', icon: '❄️' },
   };
 
   return monthData[month] || null;
