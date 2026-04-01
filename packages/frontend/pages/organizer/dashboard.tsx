@@ -63,6 +63,7 @@ interface Sale {
   photoUrls: string[];
   city: string;
   state: string;
+  description?: string;
 }
 
 const OrganizerDashboard = () => {
