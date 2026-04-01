@@ -56,6 +56,7 @@ interface Sale {
   id: string;
   title: string;
   status: string; // DRAFT, PUBLISHED, ENDED
+  saleType?: string;
   startDate: string;
   endDate: string;
   photoUrls: string[];
