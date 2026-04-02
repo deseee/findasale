@@ -151,9 +151,19 @@ organizer and admin can't place holds on other sales
 +Notifications, another place where it says push notifications are enabled?
 Profile is super basic only business name?  can we automate most of it for people who already have licensed business's?
 
-organizer/dashboard: wasn't this whole thing supposed to be fully reorganized and neighborhoods and appraisals used for shoppers as well?
+organizer/dashboard: 
+All sales a organizer has should be visible, maybe some part of the calendar widget under the sale card?   
 no tooltips on hover
-Quick Actions
+sales card doesn't link to the sale, view live sale button, add items, holds, pos should be in the sales card, 
+analytics button for free organizer doesn't work, should it be ripples? sales ripples not in the menu at all? did we get rid of that or just missing in nav?
+close sale early button does nothing?
+real time metrics don't link to anything
+What is verified organizer card?  is it part of gamification?, it links to upgrade but is that all it's for?  what are the tiers it references?  do we have a document with all the organizer and shopper gamification and xp stuff ready for the public yet?
+manage holds card is white in dark mode
+no qr codes or print stuff?
+any other at a glance stuff that should be on the dashboard but isn't?
+
+buttons on the bottom of the nav should be up near the welcome text. 
 + Create New Sale🤝 Holds💳 POS
 ▼Essential Tools🖨️ Print Inventory📝 Message Templates
 ▼Pro Features📊Insights⚙️Command Center⚠️Fraud Signals💎Appraisals📈Flip Report🔗Webhooks
