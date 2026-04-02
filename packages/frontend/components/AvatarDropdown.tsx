@@ -181,9 +181,17 @@ const AvatarDropdown: React.FC = () => {
             </div>
           </div>
 
-          {/* ADMIN Menu Items — Collapsible */}
+          {/* ADMIN Menu Items — Admin Dashboard standalone link + collapsible */}
           {isAdmin && (
             <>
+              <Link
+                href="/admin"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors font-medium"
+                onClick={() => setIsOpen(false)}
+              >
+                <LayoutDashboard size={16} className="text-red-500" />
+                <span>Admin Dashboard</span>
+              </Link>
               <button
                 onClick={() => setAdminOpen(!adminOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -200,14 +208,6 @@ const AvatarDropdown: React.FC = () => {
               {adminOpen && (
                 <>
                   <Link
-                    href="/admin"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <LayoutDashboard size={14} className="text-red-400" />
-                    <span>Admin Dashboard</span>
-                  </Link>
-                  <Link
                     href="/admin/users"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -222,38 +222,6 @@ const AvatarDropdown: React.FC = () => {
                   >
                     <Store size={14} className="text-red-400" />
                     <span>Manage Sales</span>
-                  </Link>
-                  <Link
-                    href="/admin/items"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <List size={14} className="text-red-400" />
-                    <span>Manage Items</span>
-                  </Link>
-                  <Link
-                    href="/admin/reports"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <BarChart2 size={14} className="text-red-400" />
-                    <span>Reports</span>
-                  </Link>
-                  <Link
-                    href="/admin/feature-flags"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Zap size={14} className="text-red-400" />
-                    <span>Feature Flags</span>
-                  </Link>
-                  <Link
-                    href="/admin/broadcast"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <MessageSquare size={14} className="text-red-400" />
-                    <span>Broadcast Message</span>
                   </Link>
                 </>
               )}
@@ -334,7 +302,7 @@ const AvatarDropdown: React.FC = () => {
                     <span>All Sales</span>
                   </Link>
                   <Link
-                    href="/plan"
+                    href="/organizer/create-sale"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
@@ -342,28 +310,20 @@ const AvatarDropdown: React.FC = () => {
                     <span>Create Sale</span>
                   </Link>
                   <Link
-                    href="/organizer/calendar"
+                    href="/organizer/hubs"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <Calendar size={16} className="text-amber-500" />
-                    <span>Calendar</span>
+                    <Network size={16} className="text-amber-500" />
+                    <span>Sale Hubs</span>
                   </Link>
                   <Link
-                    href="/organizer/hubs"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    href="/organizer/line-queue"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <Network size={16} className="text-amber-400" />
-                    <span>Sale Hubs <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
-                  </Link>
-                  <Link
-                    href="/organizer/queue"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Users size={16} className="text-amber-400" />
-                    <span>Virtual Queue <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <Users size={16} className="text-amber-500" />
+                    <span>Virtual Queue</span>
                   </Link>
                 </>
               )}
@@ -403,53 +363,76 @@ const AvatarDropdown: React.FC = () => {
                     <span>POS / Checkout</span>
                   </Link>
                   <Link
-                    href="/organizer/print-inventory"
+                    href="/organizer/print-kit"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Generate printable item sheets for your sale table"
+                    title="Generate printable item sheets and labels for your sale"
                   >
                     <Printer size={16} className="text-amber-500" />
-                    <span>Print Inventory</span>
+                    <span>Print & Labels</span>
                   </Link>
                   <Link
-                    href="/organizer/map"
+                    href="/organizer/ripples"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Sale performance analytics"
                   >
-                    <Map size={16} className="text-amber-500" />
-                    <span>Sale Map</span>
+                    <Activity size={16} className="text-amber-500" />
+                    <span>Ripples</span>
                   </Link>
                   <Link
-                    href="/organizer/qr-codes"
+                    href="/organizer/payouts"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Stripe payout schedule and transfers"
                   >
-                    <QrCode size={16} className="text-amber-500" />
-                    <span>QR Codes</span>
+                    <Wallet size={16} className="text-amber-500" />
+                    <span>Payouts</span>
                   </Link>
                   <Link
-                    href="/organizer/analytics"
+                    href="/organizer/item-library"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Reuse items across multiple sales"
                   >
-                    <BarChart2 size={16} className="text-amber-500" />
-                    <span>Analytics</span>
+                    <BookOpen size={16} className="text-amber-500" />
+                    <span>Item Library</span>
                   </Link>
                   <Link
-                    href="/organizer/earnings"
+                    href="/organizer/inventory"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Persistent inventory across sales"
                   >
-                    <DollarSign size={16} className="text-amber-500" />
-                    <span>Earnings</span>
+                    <Package size={16} className="text-amber-500" />
+                    <span>Inventory</span>
                   </Link>
                   <Link
-                    href="/organizer/staff"
+                    href="/organizer/reputation"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Your organizer rating and trust score"
                   >
-                    <UserPlus size={16} className="text-amber-500" />
-                    <span>Staff Accounts</span>
+                    <Star size={16} className="text-amber-500" />
+                    <span>Reputation</span>
+                  </Link>
+                  <Link
+                    href="/organizer/message-templates"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Saved buyer communication templates"
+                  >
+                    <FileText size={16} className="text-amber-500" />
+                    <span>Message Templates</span>
+                  </Link>
+                  <Link
+                    href="/organizer/ugc-moderation"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Approve or reject buyer-submitted photos"
+                  >
+                    <Image size={16} className="text-amber-500" />
+                    <span>Manage Photos</span>
                   </Link>
                 </>
               )}
@@ -480,6 +463,15 @@ const AvatarDropdown: React.FC = () => {
                     <span>Brand Kit</span>
                   </Link>
                   <Link
+                    href="/organizer/insights"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Sale performance analytics"
+                  >
+                    <BarChart2 size={16} className="text-purple-400" />
+                    <span>Insights</span>
+                  </Link>
+                  <Link
                     href="/organizer/flip-report"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -489,13 +481,40 @@ const AvatarDropdown: React.FC = () => {
                     <span>Flip Report</span>
                   </Link>
                   <Link
-                    href="/organizer/item-tagger"
+                    href="/organizer/appraisals"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="AI-powered item category and condition detection"
+                    title="Crowdsourced item appraisals — PRO"
+                  >
+                    <Scale size={16} className="text-purple-400" />
+                    <span>Appraisals</span>
+                  </Link>
+                  <Link
+                    href="/organizer/command-center"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Multi-sale overview dashboard — PRO"
+                  >
+                    <LayoutDashboard size={16} className="text-purple-400" />
+                    <span>Command Center</span>
+                  </Link>
+                  <Link
+                    href="/organizer/typology"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="AI item type and category classifier — PRO"
                   >
                     <Tag size={16} className="text-purple-400" />
-                    <span>Item Tagger</span>
+                    <span>Typology</span>
+                  </Link>
+                  <Link
+                    href="/organizer/fraud-signals"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="AI bid bot and fraud detection — PRO"
+                  >
+                    <ShieldAlert size={16} className="text-purple-400" />
+                    <span>Fraud Signals</span>
                   </Link>
                 </>
               )}
@@ -527,6 +546,15 @@ const AvatarDropdown: React.FC = () => {
                       <span>Webhooks</span>
                     </Link>
                   )}
+                  <Link
+                    href="/organizer/workspace"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Team and staff management — TEAMS"
+                  >
+                    <Users size={16} className="text-gray-500" />
+                    <span>Workspace</span>
+                  </Link>
                 </>
               )}
 
@@ -574,15 +602,15 @@ const AvatarDropdown: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                   >
                     <Bookmark size={16} className="text-indigo-500" />
-                    <span>Saved Sales</span>
+                    <span>Wishlist</span>
                   </Link>
                   <Link
-                    href="/shopper/saved-items"
+                    href="/shopper/wishlist?tab=sellers"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <Star size={16} className="text-indigo-500" />
-                    <span>Saved Items</span>
+                    <span>Saved Sellers</span>
                   </Link>
                   <Link
                     href="/shopper/bids"
@@ -656,7 +684,7 @@ const AvatarDropdown: React.FC = () => {
                     title="2x XP, early access to sales, and exclusive badges — $4.99/mo"
                   >
                     <Ticket size={16} className="text-indigo-500" />
-                    <span>Hunt Pass <span className="text-xs text-gray-400">(Soon)</span></span>
+                    <span>Hunt Pass</span>
                   </Link>
                   <Link
                     href="/shopper/league"
@@ -666,30 +694,6 @@ const AvatarDropdown: React.FC = () => {
                   >
                     <Trophy size={16} className="text-indigo-500" />
                     <span>League</span>
-                  </Link>
-                  <Link
-                    href="/shopper/bounties"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Target size={16} className="text-indigo-500" />
-                    <span>Bounties</span>
-                  </Link>
-                  <Link
-                    href="/shopper/reputation"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Shield size={16} className="text-indigo-500" />
-                    <span>Reputation</span>
-                  </Link>
-                  <Link
-                    href="/shopper/trades"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <ArrowLeftRight size={16} className="text-indigo-400" />
-                    <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
                   </Link>
                 </>
               )}
@@ -714,7 +718,7 @@ const AvatarDropdown: React.FC = () => {
             className="w-full text-left px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             role="menuitem"
           >
-            Sign Out
+            Logout
           </button>
         </div>
       )}
