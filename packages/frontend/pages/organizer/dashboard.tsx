@@ -670,9 +670,9 @@ const OrganizerDashboard = () => {
             // STATE 2: Active Organizer (DRAFT or PUBLISHED sale)
             <div className="space-y-6 mb-8">
               {/* Sale Status Widget (HIGHEST PRIORITY) — Enhanced with urgency + dynamic CTA */}
-              {statsData?.activeSale && (
+              {activeSale && (
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
-                  <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="block">
+                  <Link href={`/organizer/edit-sale/${activeSale.id}`} className="block">
                     <div className="flex flex-col md:flex-row gap-6 cursor-pointer hover:opacity-80 transition-opacity">
                       {/* Photo Thumbnail */}
                       {activeSale.photoUrls && activeSale.photoUrls[0] && (
@@ -684,14 +684,14 @@ const OrganizerDashboard = () => {
                       <div className="flex-1">
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex-1">
-                            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{statsData.activeSale.title}</h2>
+                            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{activeSale.title}</h2>
                             <div className="flex flex-wrap items-center gap-2 mb-3">
                               <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                                statsData.activeSale.status === 'PUBLISHED'
+                                activeSale.status === 'PUBLISHED'
                                   ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
                                   : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
                               }`}>
-                                {statsData.activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
+                                {activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
                               </span>
                               {(() => { const urgency = getUrgencyTag(); return urgency ? (
                                 <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${urgency.color}`}>
@@ -700,7 +700,7 @@ const OrganizerDashboard = () => {
                               ) : null; })()}
                               {/* Weather Strip inline with status badge */}
                               <div className="flex-shrink-0">
-                                <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={statsData?.activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
+                                <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
                               </div>
                             </div>
                           </div>
@@ -711,13 +711,13 @@ const OrganizerDashboard = () => {
 
                   {/* Context-Aware Primary CTA */}
                   <div className="flex flex-wrap gap-2 mt-4">
-                    {statsData.activeSale.status === 'DRAFT' && statsData.items.draft > 0 && (
-                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                    {activeSale.status === 'DRAFT' && statsData?.items.draft > 0 && (
+                      <Link href={`/organizer/add-items/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
                         Add Photos
                       </Link>
                     )}
-                    {statsData.activeSale.status === 'DRAFT' && statsData.items.draft === 0 && (
-                      <Link href={`/organizer/edit-sale/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                    {activeSale.status === 'DRAFT' && statsData?.items.draft === 0 && (
+                      <Link href={`/organizer/edit-sale/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
                         Publish Sale
                       </Link>
                     )}
@@ -725,27 +725,27 @@ const OrganizerDashboard = () => {
 
                   {/* Consolidated Action Buttons Row */}
                   <div className="flex flex-wrap gap-2 mt-2 border-t border-warm-200 dark:border-gray-700">
-                    <Link href={`/sales/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="See your sale as shoppers see it">
+                    <Link href={`/sales/${activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="See your sale as shoppers see it">
                       View Live
                     </Link>
-                    {statsData.activeSale.status === 'PUBLISHED' && (
-                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
+                    {activeSale.status === 'PUBLISHED' && (
+                      <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
                         Items
                       </Link>
                     )}
-                    <Link href={`/organizer/holds?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors" title="View and manage shopper holds for this sale">
+                    <Link href={`/organizer/holds?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors" title="View and manage shopper holds for this sale">
                       Holds
                     </Link>
-                    <Link href={`/organizer/pos?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="Open Point of Sale to process in-person transactions">
+                    <Link href={`/organizer/pos?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="Open Point of Sale to process in-person transactions">
                       POS
                     </Link>
-                    {statsData.activeSale.status === 'PUBLISHED' && (
+                    {activeSale.status === 'PUBLISHED' && (
                       <button
                         onClick={async () => {
                           const confirmed = window.confirm('Close this sale early? You can reopen it later from your dashboard.');
                           if (!confirmed) return;
                           try {
-                            await api.patch(`/sales/${statsData.activeSale!.id}/status`, { status: 'ENDED' });
+                            await api.patch(`/sales/${activeSale!.id}/status`, { status: 'ENDED' });
                             showToast('Sale closed successfully', 'success');
                             setTimeout(() => window.location.reload(), 1000);
                           } catch (error: any) {

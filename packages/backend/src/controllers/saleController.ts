@@ -197,12 +197,37 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: { organizerId: organizer.id },
       orderBy: { startDate: 'asc' },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        address: true,
+        city: true,
+        state: true,
+        zip: true,
+        photoUrls: true,
+        tags: true,
+        saleType: true,
+        createdAt: true,
+        updatedAt: true,
+        organizerId: true,
+        lat: true,
+        lng: true,
+        qrScanCount: true,
+        endingSoonNotified: true,
+        entranceLat: true,
+        entranceLng: true,
+        entranceNote: true,
+        notes: true,
+        treasureHuntEnabled: true,
+        treasureHuntCompletionBadge: true,
+        holdsEnabled: true,
+        isAuctionSale: true,
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
-        // title + price required by FlashDealForm dropdown on organizer dashboard.
-        // status kept for item count badges. Avoiding full item select — too heavy for list view.
         items: { select: { id: true, title: true, price: true, status: true } },
-        // Per-sale counts for SecondarySaleCard stats display
         _count: { select: { items: true } }
       },
       take: 50
