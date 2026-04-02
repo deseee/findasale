@@ -7,6 +7,7 @@ import { exportOrganizer } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
 import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getHangTagKit, getFullSignKitPDF } from '../controllers/printKitController';
+import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 
 const router = Router();
 
@@ -1087,5 +1088,15 @@ router.get('/smart-buyers/:saleId', authenticate, async (req: AuthRequest, res: 
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Feature #235: Charity Close + Tax Receipt PDF
+// POST /api/organizer/sales/:saleId/donate — create charity donation
+router.post('/sales/:saleId/donate', authenticate, createDonation);
+
+// GET /api/organizer/sales/:saleId/donations — list donations for a sale
+router.get('/sales/:saleId/donations', authenticate, getDonations);
+
+// GET /api/organizer/donations/:donationId/receipt — generate tax receipt PDF
+router.get('/donations/:donationId/receipt', authenticate, generateReceipt);
 
 export default router;

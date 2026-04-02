@@ -11,6 +11,7 @@ import { useToast } from './ToastContext';
 import ExpenseLineItemList from './ExpenseLineItemList';
 import CommissionCalculator from './CommissionCalculator';
 import ClientPayoutPanel from './ClientPayoutPanel';
+import DonationModal from './DonationModal';
 import { getSaleTypeConfig } from '../lib/dashboard-sale-type-config';
 
 interface SettlementWizardProps {
@@ -28,6 +29,7 @@ const WIZARD_STEPS = [
 
 export default function SettlementWizard({ saleId, saleType }: SettlementWizardProps) {
   const [step, setStep] = useState(0);
+  const [showDonationModal, setShowDonationModal] = useState(false);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const config = getSaleTypeConfig(saleType);
@@ -58,6 +60,21 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
         throw err;
       }
     },
+    enabled: !!saleId,
+  });
+
+  // Fetch unsold items for donation modal
+  const { data: availableItems = [] } = useQuery({
+    queryKey: ['sale-available-items', saleId],
+    queryFn: () =>
+      api.get(`/sales/${saleId}/items?status=AVAILABLE`).then((r) =>
+        (r.data.items || []).map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          condition: item.condition,
+        }))
+      ),
     enabled: !!saleId,
   });
 
@@ -230,6 +247,23 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
               </div>
             </div>
 
+            {/* Donation section */}
+            {availableItems.length > 0 && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">Unsold Items</h4>
+                <p className="text-sm text-blue-800 dark:text-blue-300 mb-3">
+                  You have {availableItems.length} unsold item{availableItems.length !== 1 ? 's' : ''} available for donation.
+                  Donating to charity can provide a tax deduction.
+                </p>
+                <button
+                  onClick={() => setShowDonationModal(true)}
+                  className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm"
+                >
+                  Donate Items & Get Tax Receipt
+                </button>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <a
                 href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/sales/${saleId}/settlement/receipt`}
@@ -277,6 +311,18 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
           )}
         </div>
       </div>
+
+      {/* Donation Modal */}
+      {showDonationModal && (
+        <DonationModal
+          saleId={saleId}
+          availableItems={availableItems}
+          onClose={() => setShowDonationModal(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['sale-available-items', saleId] });
+          }}
+        />
+      )}
     </div>
   );
 }

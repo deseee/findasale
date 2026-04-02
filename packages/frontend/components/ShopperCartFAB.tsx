@@ -22,7 +22,7 @@ const ShopperCartFAB: React.FC<ShopperCartFABProps> = ({ onClick }) => {
   return (
     <button
       onClick={onClick}
-      className="fixed bottom-20 right-4 inline-flex items-center justify-center p-4 bg-amber-600 hover:bg-amber-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all z-40"
+      className="fixed bottom-24 right-4 inline-flex items-center justify-center p-4 bg-amber-600 hover:bg-amber-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all z-50 md:bottom-8"
       aria-label={`Shopping cart with ${cart.cartCount} items`}
       title={`${cart.cartCount} item${cart.cartCount !== 1 ? 's' : ''} in cart`}
     >

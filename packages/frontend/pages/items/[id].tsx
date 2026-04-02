@@ -26,6 +26,9 @@ import HoldButton from '../../components/HoldButton'; // Feature #121: Hold Butt
 import HoldTimer from '../../components/HoldTimer'; // Feature #121: Hold Timer
 import HoldToPayModal from '../../components/HoldToPayModal'; // Hold-to-Pay: Organizer invoice modal
 import HoldInvoiceStatusCard from '../../components/HoldInvoiceStatusCard'; // Hold-to-Pay: Shopper payment status
+import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart Cart
+import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: Smart Cart
+import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
 
 interface Item {
   id: string;
@@ -120,6 +123,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const shopperCart = useShopperCart(); // Phase 1: Smart Cart
 
   // State
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -138,6 +142,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [buyersPremium, setBuyersPremium] = useState(0);
   const [showQrModal, setShowQrModal] = useState(false); // Feature #85: Treasure Hunt QR
   const [showHoldToPayModal, setShowHoldToPayModal] = useState(false); // Hold-to-Pay: organizer invoice
+  const [isShopperCartOpen, setIsShopperCartOpen] = useState(false); // Phase 1: Smart Cart
+  const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false); // Phase 1: Smart Cart — cross-sale confirmation
+  const [pendingCartItem, setPendingCartItem] = useState<any>(null); // Phase 1: Smart Cart
   const socketRef = useRef<Socket | null>(null);
 
   // Queries
@@ -298,7 +305,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     placeBidMutation.mutate(bidAmount);
   };
 
-  const handleAddToCart = async () => {
+  const handleBuyNow = async () => {
     if (!user) {
       showToast('Please log in to purchase items', 'warning');
       router.push('/login');
@@ -306,6 +313,44 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     }
     // Open checkout directly (no cart endpoint needed)
     setShowCheckoutModal(true);
+  };
+
+  // Phase 1: Smart Cart — add to browsing cart
+  const handleAddToSmartCart = (item: Item) => {
+    if (!user) {
+      showToast('Please log in to add items to cart', 'warning');
+      router.push('/login');
+      return;
+    }
+
+    const newCartItem = {
+      id: item.id,
+      title: item.title,
+      price: item.price ? Math.round(item.price * 100) : null, // Convert to cents
+      photoUrl: item.photoUrls?.[0],
+      saleId: item.sale.id,
+    };
+
+    // Check if switching sales
+    if (!shopperCart.canAddFromDifferentSale(item.sale.id)) {
+      setPendingCartItem(newCartItem);
+      setShowSwitchSaleModal(true);
+      return;
+    }
+
+    shopperCart.addItem(newCartItem);
+    showToast('Added to cart', 'success');
+  };
+
+  // Phase 1: Smart Cart — confirm sale switch
+  const handleConfirmSwitchSale = () => {
+    if (pendingCartItem) {
+      shopperCart.switchSale(pendingCartItem.saleId);
+      shopperCart.addItem(pendingCartItem);
+      showToast('Cart cleared and item added', 'success');
+    }
+    setShowSwitchSaleModal(false);
+    setPendingCartItem(null);
   };
 
   const handleLike = () => {
@@ -647,7 +692,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   ) : (
                     <div className="space-y-2">
                       <button
-                        onClick={handleAddToCart}
+                        onClick={handleBuyNow}
                         disabled={!user}
                         title={!user ? 'Sign in to purchase' : ''}
                         className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
@@ -658,13 +703,32 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                       >
                         {user ? 'Buy It Now' : 'Sign in to buy'}
                       </button>
+
+                      {/* Phase 1: Smart Cart — Add to cart button */}
+                      {item.status === 'AVAILABLE' && (
+                        <button
+                          onClick={() => handleAddToSmartCart(item)}
+                          disabled={!user}
+                          title={!user ? 'Sign in to add to cart' : ''}
+                          className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
+                            shopperCart.items.some((i) => i.id === item.id)
+                              ? 'bg-amber-200 text-amber-900 hover:bg-amber-300 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800'
+                              : user
+                                ? 'bg-amber-600 text-white hover:bg-amber-700'
+                                : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-700 cursor-not-allowed'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {shopperCart.items.some((i) => i.id === item.id) ? '✓ In Cart' : '+ Cart'}
+                        </button>
+                      )}
+
                       {/* Feature #121: Hold Button — AVAILABLE items only */}
                       {item.status === 'AVAILABLE' && (
                         <HoldButton
                           item={{ id: item.id, title: item.title, sale: item.sale ? { id: item.sale.id, title: item.sale.title } : undefined }}
                           onHoldPlaced={() => queryClient.invalidateQueries({ queryKey: ['item', item.id] })}
                           variant="default"
-                          className="bg-amber-500 hover:bg-amber-600"
+                          className="bg-blue-500 hover:bg-blue-600"
                         />
                       )}
                     </div>
@@ -779,6 +843,46 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           initialIndex={currentLightboxIndex}
           onClose={() => setIsLightboxOpen(false)}
         />
+      )}
+
+      {/* Phase 1: Smart Cart — browsing cart drawer */}
+      {item && (
+        <ShopperCartDrawer
+          isOpen={isShopperCartOpen}
+          onClose={() => setIsShopperCartOpen(false)}
+          saleName={item.sale?.title}
+        />
+      )}
+
+      {/* Phase 1: Smart Cart — floating action button */}
+      {item && <ShopperCartFAB onClick={() => setIsShopperCartOpen(true)} />}
+
+      {/* Phase 1: Smart Cart — switch sale confirmation modal */}
+      {showSwitchSaleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm p-6">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-gray-50 mb-4">
+              Switch Sale?
+            </h3>
+            <p className="text-warm-700 dark:text-gray-300 mb-6">
+              Your cart has items from a different sale. Would you like to clear your cart and start with this sale?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowSwitchSaleModal(false)}
+                className="px-4 py-2 rounded border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                Keep Current Cart
+              </button>
+              <button
+                onClick={handleConfirmSwitchSale}
+                className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
+              >
+                Start New Cart
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div id="heart-container" className="fixed bottom-10 right-10 pointer-events-none" />

@@ -251,6 +251,8 @@ model Organizer {
   holdSettings    OrganizerHoldSettings?
   // Feature #228: Settlement Hub — default commission rate for estate/consignment/auction
   defaultCommissionRate Decimal?
+  // Feature #235: Charity Close + Tax Receipt PDF
+  donations       SaleDonation[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -411,6 +413,8 @@ model Sale {
   settlementNotes  String?
   settlement       SaleSettlement?
   transactions     SaleTransaction[]
+  // Feature #235: Charity Close + Tax Receipt PDF
+  donations        SaleDonation[]
   // Feature #371: Auto High-Value Item Flagging
   highValueThresholdUSD Decimal @default(500)
   autoFlagHighValue     Boolean @default(true)
@@ -456,7 +460,7 @@ model Item {
   bidIncrement     Float?    @default(1)
   auctionEndTime   DateTime?
   auctionClosed    Boolean   @default(false)
-  status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED
+  status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
   category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
   condition        String?   // mint, excellent, good, fair, poor
   conditionGrade   String?   // S | A | B | C | D — null for items not yet graded
@@ -523,6 +527,8 @@ model Item {
   trailHighlights  TrailHighlight[]
   // Feature #30: AI Item Valuation — comparable sales valuation
   valuation        ItemValuation?
+  // Feature #235: Charity Close + Tax Receipt PDF
+  donatedItems     DonatedItem[]
   // Feature #46: Treasure Typology Classifier — collector category classification
   typology         ItemTypology?
   // Feature #70: Consignment — operator-consigned items with split payout
@@ -2435,4 +2441,40 @@ model SaleTransaction {
   @@index([saleId, timestamp])
   @@index([buyerId])
   @@index([status])
+}
+
+// Feature #235: Charity Close + Tax Receipt PDF — donate unsold items for tax deduction
+model SaleDonation {
+  id              String   @id @default(cuid())
+  saleId          String
+  sale            Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  organizerId     String
+  organizer       Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  charityName     String   // Name of the charity receiving donation
+  charityEin      String?  // Tax ID / EIN for the charity
+  charityAddress  String?  // Charity address for receipt
+  donationDate    DateTime @default(now())
+  totalEstimatedValue Decimal @default(0) @db.Decimal(10,2)  // Sum of all donated item values
+  receiptUrl      String?  // URL to generated PDF receipt
+  notes           String?  // Optional notes about donation
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  items           DonatedItem[]
+
+  @@index([saleId])
+  @@index([organizerId])
+}
+
+// Feature #235: Line items in a donation — tracks individual items donated
+model DonatedItem {
+  id              String   @id @default(cuid())
+  donationId      String
+  donation        SaleDonation @relation(fields: [donationId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  estimatedValue  Decimal  @db.Decimal(10,2)  // Estimated value for this item at time of donation
+  createdAt       DateTime @default(now())
+
+  @@index([donationId])
+  @@index([itemId])
 }
