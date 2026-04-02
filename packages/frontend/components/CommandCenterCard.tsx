@@ -25,7 +25,7 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
   if (totalPending > 3) pendingBadgeColor = 'bg-red-500';
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow relative">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow relative">
       {totalPending > 0 && (
         <div className={`absolute top-3 right-3 ${pendingBadgeColor} text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center`}>
           {totalPending}
@@ -34,7 +34,9 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
 
       <div className="p-6">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-warm-900 mb-2">{sale.title}</h3>
+          <Link href={`/organizer/add-items/${sale.id}`}>
+            <h3 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-2 hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer">{sale.title}</h3>
+          </Link>
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${statusBg}`}>
             {sale.status === 'PUBLISHED' && '● LIVE'}
             {sale.status === 'DRAFT' && '◌ DRAFT'}
@@ -42,41 +44,41 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
           </span>
         </div>
 
-        <p className="text-sm text-warm-600 mb-4">
+        <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
           {formatDate(startDate)} – {formatDate(endDate)}
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
-            <p className="text-xs text-warm-500 uppercase font-semibold mb-1">Listed</p>
-            <p className="text-2xl font-bold text-warm-900">{sale.itemsListed}</p>
+            <p className="text-xs text-warm-500 dark:text-gray-400 uppercase font-semibold mb-1">Listed</p>
+            <p className="text-2xl font-bold text-warm-900 dark:text-gray-100">{sale.itemsListed}</p>
           </div>
           <div>
-            <p className="text-xs text-warm-500 uppercase font-semibold mb-1">Sold</p>
-            <p className="text-2xl font-bold text-green-600">{sale.itemsSold}</p>
+            <p className="text-xs text-warm-500 dark:text-gray-400 uppercase font-semibold mb-1">Sold</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{sale.itemsSold}</p>
           </div>
           <div>
-            <p className="text-xs text-warm-500 uppercase font-semibold mb-1">Revenue</p>
-            <p className="text-2xl font-bold text-green-700">${sale.revenue.toFixed(0)}</p>
+            <p className="text-xs text-warm-500 dark:text-gray-400 uppercase font-semibold mb-1">Revenue</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-400">${sale.revenue.toFixed(0)}</p>
           </div>
           <div>
-            <p className="text-xs text-warm-500 uppercase font-semibold mb-1">Conv. Rate</p>
-            <p className="text-2xl font-bold text-indigo-600">{sale.conversionRate.toFixed(1)}%</p>
+            <p className="text-xs text-warm-500 dark:text-gray-400 uppercase font-semibold mb-1">Conv. Rate</p>
+            <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{sale.conversionRate.toFixed(1)}%</p>
           </div>
         </div>
 
         {totalPending > 0 && (
-          <div className="mb-4 p-3 bg-amber-50 rounded-md border border-amber-200">
-            <p className="text-xs font-semibold text-amber-800 mb-2">Pending Actions</p>
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2">Pending Actions</p>
             <div className="space-y-1">
               {sale.pendingActions.itemsNeedingPhotos > 0 && (
-                <p className="text-xs text-amber-700">📷 {sale.pendingActions.itemsNeedingPhotos} items need photos</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">📷 {sale.pendingActions.itemsNeedingPhotos} items need photos</p>
               )}
               {sale.pendingActions.pendingHolds > 0 && (
-                <p className="text-xs text-amber-700">🤝 {sale.pendingActions.pendingHolds} pending holds</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">🤝 {sale.pendingActions.pendingHolds} pending holds</p>
               )}
               {sale.pendingActions.unpaidPurchases > 0 && (
-                <p className="text-xs text-amber-700">💰 {sale.pendingActions.unpaidPurchases} unpaid purchases</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">💰 {sale.pendingActions.unpaidPurchases} unpaid purchases</p>
               )}
             </div>
           </div>

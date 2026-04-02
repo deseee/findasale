@@ -15,8 +15,14 @@ export async function getCommandCenterSummary(
   organizerId: string,
   filters?: CommandCenterFilters
 ): Promise<CommandCenterResponse> {
+  // Validate status filter before creating cache key
+  const validStatuses = ['active', 'upcoming', 'recent', 'all'];
+  const status = validStatuses.includes((filters?.status ?? 'active').toLowerCase())
+    ? (filters?.status ?? 'active').toLowerCase()
+    : 'active';
+
   // Check Redis cache first
-  const cacheKey = `command-center:${organizerId}`;
+  const cacheKey = `command-center:${organizerId}:${status}`;
   try {
     const cached = await redis.get(cacheKey);
     if (cached) {
@@ -28,11 +34,6 @@ export async function getCommandCenterSummary(
   }
 
   const now = new Date();
-  // P2-1: Validate status filter, default to 'active' if invalid
-  const validStatuses = ['active', 'upcoming', 'recent', 'all'];
-  const status = validStatuses.includes((filters?.status ?? 'active').toLowerCase())
-    ? (filters?.status ?? 'active').toLowerCase()
-    : 'active';
 
   // Build where clause based on status filter
   let whereClause: any = { organizerId };
