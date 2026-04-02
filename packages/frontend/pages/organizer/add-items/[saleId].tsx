@@ -1782,21 +1782,17 @@ const AddItemsDetailPage = () => {
                       </button>
                     </div>
 
-                    {/* More Actions dropdown - styled for sticky toolbar */}
-                    <div className="relative inline-block">
-                      <button
-                        className="text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
-                        disabled={bulkUpdateMutation.isPending}
-                        onClick={() => {
-                          const button = document.activeElement as HTMLButtonElement;
-                          const rect = button.getBoundingClientRect();
-                          const availableSpace = window.innerHeight - rect.bottom;
-                          // Note: dropdown items style themselves; this just controls visibility
-                        }}
-                      >
-                        ⋮ More Actions
-                      </button>
-                    </div>
+                    {/* Print Labels button */}
+                    <button
+                      onClick={() => {
+                        if (saleId) {
+                          window.open(`/organizer/print-kit/${saleId}`, '_blank');
+                        }
+                      }}
+                      className="text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                    >
+                      🖨️ Print Kit
+                    </button>
 
                     {/* Delete button */}
                     <div className="ml-auto">

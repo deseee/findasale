@@ -315,9 +315,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Camera size={16} className="text-amber-400" />
               <span>Photo Ops <span className="text-xs text-gray-400">(In Sale)</span></span>
             </Link>
-            <Link href="/organizer/print-kit" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed" title="Signage and table cards (accessed from your sale)">
-              <Printer size={16} className="text-amber-400" />
-              <span>Print Kit <span className="text-xs text-gray-400">(In Sale)</span></span>
+            <Link href="/organizer/print-inventory" className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Print labels and signage for your items">
+              <Printer size={16} className="text-amber-600 dark:text-amber-400" />
+              <span>Print & Labels</span>
             </Link>
             <Link href="/organizer/line-queue" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed" title="Virtual line management — coming soon">
               <List size={16} className="text-amber-400" />
@@ -868,8 +868,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/photo-ops" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                       <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops <span className="text-xs text-gray-400">(In Sale)</span>
                     </Link>
-                    <Link href="/organizer/print-kit" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Printer size={14} className="inline mr-2 text-amber-400" /> Print Kit <span className="text-xs text-gray-400">(In Sale)</span>
+                    <Link href="/organizer/print-inventory" className="block px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Printer size={14} className="inline mr-2 text-amber-600 dark:text-amber-400" /> Print & Labels
                     </Link>
                     <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                       <List size={14} className="inline mr-2 text-amber-400" /> Line Queue <span className="text-xs text-gray-400">(Coming Soon)</span>

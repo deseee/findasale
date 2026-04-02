@@ -266,7 +266,11 @@ export const getComps = async (req: AuthRequest, res: Response) => {
     }
 
     // Verify organizer owns this item
-    if (item.sale.organizerId !== userId) {
+    // userId is User.id, but item.sale.organizerId is Organizer.id, so we need to look up the organizer first
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+    if (!organizer || item.sale.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to access this item' });
     }
 
@@ -441,18 +445,18 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
     }
 
     // Verify organizer owns this sale
-    if (sale.organizerId !== userId) {
+    // userId is User.id, but sale.organizerId is Organizer.id, so we need to look up the organizer first
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      select: { id: true, tier: true },
+    });
+    if (!organizer || sale.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to export this sale' });
     }
 
     // Check tier for clean photo export (PRO only)
     if (photoMode === 'clean') {
-      const organizer = await prisma.organizer.findUnique({
-        where: { userId },
-        select: { tier: true },
-      });
-
-      if (organizer?.tier !== 'PRO') {
+      if (organizer.tier !== 'PRO') {
         return res.status(403).json({
           message: 'Clean photo export requires PRO tier',
         });
