@@ -350,6 +350,13 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 |  53 | -— | -— | -— | NA | -— | — | -— | NA | NA | -— | Legal review required — ToS risk with EstateSales.NET/Facebook scraping. ADR written. | 
 
 ## Deferred & Long-Term Hold
+## Next Up
+| Print-to-QR Sign Kit | ORG | SIMPLE | Downloadable PDF toolkit: yard signs, directional signs, table tents, hang tags, car magnets with QR codes.
+| Organizer Brand Kit Expansion | ORG | PRO | Custom fonts, branded email signature, printable business cards, letterhead, social headers, yard sign PDFs with QR codes. | After Brand Kit v1 proves user adoption |
+| QR/Barcode Item Labels | ORG | SIMPLE | Print scannable labels during intake → POS scan for instant lookup. High potential from retail experience. Pairs with POS v2. | Strong candidate when POS sees real usage |
+| Smart Cart (Running Total) | SHO | SIMPLE | Only works for items with digital prices. Requires organizer adoption of digital pricing + QR/NFC. | After QR Labels + POS established |
+
+
 
 ### Infrastructure & Platform
 
@@ -387,10 +394,8 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 |---------|------|------|--------|-----------------|
 | Shopper Referral + Affiliate Mechanics | SHO/ORG | FREE | Shoppers earn 5% store credit on referrals; organizers earn 2-3% override. Leaderboard + badges. Needs financial model clarity first. | After pricing + financial model validated |
 | Community Challenge / "Hunt Week" Viral Events | SHO | FREE | Weekly themed hunts with prizes, featured placement. Drives virality but needs organizer volume first. | After 50+ concurrent active sales |
-| Organizer Brand Kit Expansion | ORG | PRO | Custom fonts, branded email signature, printable business cards, letterhead, social headers, yard sign PDFs with QR codes. | After Brand Kit v1 proves user adoption |
 | Organizer Hall of Fame Leaderboard | ORG | SIMPLE | Top organizers by items sold/revenue/ratings. Monthly featured spotlight + badges. Community gamification. | After 100+ organizers + 6 months data |
 | Community "Feature Your Sale" Request Form | SHO | FREE | Shoppers nominate sales for featured homepage placement. Moderation queue. Low complexity. | After homepage design stabilizes |
-| Print-to-QR Sign Kit | ORG | SIMPLE | Downloadable PDF toolkit: yard signs, directional signs, table tents, hang tags, car magnets with QR codes. | When organizers request print collateral |
 | AI Content Generation for Organizers (S3) | ORG | PRO | Claude Haiku auto-writes 10 social post variants per sale. Organizer picks + posts. Defer until templates prove demand. | After Social Templates adoption tracked |
 | TikTok / Reels Auto-Generation (S3) | ORG | PRO | 15-second video from photos. Needs video generation, music licensing. Defer until social templates validate demand. | After Social Templates uptake proven |
 
@@ -408,7 +413,6 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 
 | Feature | Role | Tier | Reason | Revisit Trigger |
 |---------|------|------|--------|-----------------|
-| QR/Barcode Item Labels | ORG | SIMPLE | Print scannable labels during intake → POS scan for instant lookup. High potential from retail experience. Pairs with POS v2. | Strong candidate when POS sees real usage |
 | Featured Listings (Feature Boost) | ORG | PAID_ADDON | Paid homepage placement ($50–100/sale). Zero value pre-scale — needs 500+ daily shoppers. | After 500+ organizer accounts + 10+ active sales |
 | Crowd-Sourced Corrections (Community Intel) | SHO | FREE | Shoppers report "still available?" status + correct entrance locations. Vote-based ranking. | After 500+ concurrent shoppers exist |
 | Fast Pass for Sales (Priority Entry) | SHO | PAID_ADDON | $5–15 per pass, 30-min early access, capped at 20–50 passes. Revenue stream for organizers. | After beta proves high-demand sales |
@@ -464,7 +468,6 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 | Instant Appraisal Token ($0.99) | SHO | PAID_ADDON | Needs sold-item data to be credible. Overlaps with AI Valuations. Requires 1,000+ sold items per category. | After AI Valuations + 6 months transaction data |
 | Priority Checkout Pass ($2.99) | SHO | PAID_ADDON | Requires in-person QR validation + POS integration + organizer opt-in. Only viable at high-traffic sales. | After POS v2 sees real usage |
 | Scan-to-Know (NFC Item Tags) | BOTH | SIMPLE | NFC tags add $0.05-$0.15/item cost. Start with QR labels first. Evolution of QR/Barcode Labels. | After QR labels prove demand |
-| Smart Cart (Running Total) | SHO | SIMPLE | Only works for items with digital prices. Requires organizer adoption of digital pricing + QR/NFC. | After QR Labels + POS established |
 | Agentic AI Assistant ("Scout") | SHO | PRO | Requires Wishlist Alerts + Collector Passport + sold-item data. XL complexity. Overlaps with AI Buying Agent Scout. | After Wishlist + Collector Passport + 6 months data — **pre-wire: add `tasteProfile` JSONB field to User schema now; preference data accrues passively from wishlist/save behavior before feature ships** |
 | Voice Search + Navigation | SHO | SIMPLE | Web Speech API browser-native. Nice-to-have, not a retention driver. | After core search polished |
 | RaaS for Organizers (Resale-as-a-Service) | ORG | TEAMS | Long-term platform vision: full business management suite. Japan/EU circular economy model. | After individual features prove themselves — 2027+ |
