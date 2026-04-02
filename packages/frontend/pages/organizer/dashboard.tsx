@@ -711,7 +711,7 @@ const OrganizerDashboard = () => {
 
                   {/* Context-Aware Primary CTA */}
                   <div className="flex flex-wrap gap-2 mt-4">
-                    {activeSale.status === 'DRAFT' && statsData?.items.draft > 0 && (
+                    {activeSale.status === 'DRAFT' && (statsData?.items?.draft ?? 0) > 0 && (
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
                         Add Photos
                       </Link>
