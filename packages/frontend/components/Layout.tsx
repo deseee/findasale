@@ -671,7 +671,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
         {/* Drawer nav links */}
         <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-1" aria-label="Mobile menu">
-          {staticNavLinks.filter(({ href }) => !['/feed', '/inspiration', '/trending'].includes(href)).map(({ href, label }) => (
+          {staticNavLinks.filter(({ href }) => !['/map', '/calendar', '/feed', '/inspiration', '/trending', '/pricing'].includes(href)).map(({ href, label }) => (
             <Link
               key={href}
               href={href}
@@ -973,7 +973,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <Heart size={14} />
+                        <Package size={14} />
                         <span>My Collection</span>
                       </div>
                       <ChevronRight
@@ -984,7 +984,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     {mobileShopperCollectionOpen && (
                       <>
                         <Link href="/shopper/wishlist" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Bookmark size={14} className="inline mr-2 text-indigo-500" /> Wishlist
+                          <Heart size={14} className="inline mr-2 text-indigo-500" /> Wishlist
                         </Link>
                         <Link href="/shopper/wishlist?tab=sellers" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Star size={14} className="inline mr-2 text-indigo-500" /> Following
@@ -1017,6 +1017,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileShopperExploreOpen && (
                       <>
+                        <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Map size={14} className="inline mr-2 text-indigo-500" /> Map
+                        </Link>
+                        <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
+                        </Link>
                         <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Zap size={14} className="inline mr-2 text-indigo-500" /> Feed
                         </Link>
@@ -1025,12 +1031,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
-                        </Link>
-                        <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Map size={14} className="inline mr-2 text-indigo-500" /> Map
-                        </Link>
-                        <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
                         </Link>
                         <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
@@ -1129,6 +1129,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileProToolsOpen && (
                   <>
+                    <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Map size={14} className="inline mr-2 text-indigo-500" /> Map
+                    </Link>
+                    <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
+                    </Link>
                     <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Zap size={14} className="inline mr-2 text-indigo-500" /> Feed
                     </Link>
@@ -1137,12 +1143,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
-                    </Link>
-                    <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Map size={14} className="inline mr-2 text-indigo-500" /> Map
-                    </Link>
-                    <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
                     </Link>
                     <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
