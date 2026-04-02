@@ -5,7 +5,7 @@
  * Route: /shopper/wishlist
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -106,6 +106,12 @@ const WishlistPage = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const { data: follows, isLoading: followsLoading } = useFollows();
+
+  useEffect(() => {
+    if (router.query.tab === 'sellers') {
+      setActiveTab('sellers');
+    }
+  }, [router.query.tab]);
 
   if (!authLoading && !user) {
     router.push('/login');
