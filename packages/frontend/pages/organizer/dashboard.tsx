@@ -81,11 +81,17 @@ const OrganizerDashboard = () => {
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
-  const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(null);
+  const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('dashboard_primarySaleId');
+  });
   const [dismissedMultiSaleBanner, setDismissedMultiSaleBanner] = useState(false);
   const [addItemsDropdownOpen, setAddItemsDropdownOpen] = useState(false);
   const [posDropdownOpen, setPosDropdownOpen] = useState(false);
-  const [otherSalesExpanded, setOtherSalesExpanded] = useState(false);
+  const [otherSalesExpanded, setOtherSalesExpanded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('dashboard_otherSalesExpanded') === 'true';
+  });
   const hasAutoExpandedOtherSales = useRef(false);
 
   useEffect(() => {
@@ -937,7 +943,11 @@ const OrganizerDashboard = () => {
                     {/* Collapsible Header */}
                     <div className="flex justify-between items-center p-4 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
                       <button
-                        onClick={() => setOtherSalesExpanded(!otherSalesExpanded)}
+                        onClick={() => {
+                          const next = !otherSalesExpanded;
+                          setOtherSalesExpanded(next);
+                          localStorage.setItem('dashboard_otherSalesExpanded', String(next));
+                        }}
                         className="flex-1 flex justify-between items-center text-left"
                       >
                         <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">
@@ -966,6 +976,7 @@ const OrganizerDashboard = () => {
                             }}
                             onMakePrimary={(saleId) => {
                               setManualPrimaryId(saleId);
+                              localStorage.setItem('dashboard_primarySaleId', saleId);
                             }}
                           />
                         ))}
