@@ -7,7 +7,7 @@
  * - State 3: Between sales (all ENDED) — congratulations + past sales archive
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -86,6 +86,7 @@ const OrganizerDashboard = () => {
   const [addItemsDropdownOpen, setAddItemsDropdownOpen] = useState(false);
   const [posDropdownOpen, setPosDropdownOpen] = useState(false);
   const [otherSalesExpanded, setOtherSalesExpanded] = useState(false);
+  const hasAutoExpandedOtherSales = useRef(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -94,6 +95,20 @@ const OrganizerDashboard = () => {
       setShowOnboardingModal(true);
     }
   }, []);
+
+  // Auto-expand Other Sales section only on initial data load when exactly 1 other sale
+  useEffect(() => {
+    if (!salesData || hasAutoExpandedOtherSales.current) return;
+    const activeSale = salesData.find((s: Sale) => s.status === 'DRAFT' || s.status === 'PUBLISHED');
+    if (!activeSale) return;
+    const otherSales = salesData.filter(
+      (s: Sale) => (s.status === 'DRAFT' || s.status === 'PUBLISHED') && s.id !== activeSale.id
+    );
+    if (otherSales.length === 1) {
+      setOtherSalesExpanded(true);
+    }
+    hasAutoExpandedOtherSales.current = true;
+  }, [salesData]);
 
   // Fetch organizer's sales
   const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
@@ -709,12 +724,12 @@ const OrganizerDashboard = () => {
                   </div>
 
                   {/* Consolidated Action Buttons Row */}
-                  <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
+                  <div className="flex flex-wrap gap-2 mt-2 border-t border-warm-200 dark:border-gray-700">
                     <Link href={`/sales/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="See your sale as shoppers see it">
                       View Live
                     </Link>
                     {statsData.activeSale.status === 'PUBLISHED' && (
-                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-full hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors" title="Add, edit, or remove items from this sale">
+                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
                         Items
                       </Link>
                     )}
@@ -920,12 +935,6 @@ const OrganizerDashboard = () => {
                 // Only show if there are other active sales
                 if (sortedOtherSales.length === 0) return null;
 
-                // Set default expanded state: true if exactly 1, false if 2+
-                const shouldDefaultExpand = sortedOtherSales.length === 1;
-                if (!otherSalesExpanded && shouldDefaultExpand) {
-                  // Auto-expand on first render if exactly 1 sale
-                  setOtherSalesExpanded(true);
-                }
 
                 return (
                   <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg">
@@ -936,7 +945,7 @@ const OrganizerDashboard = () => {
                         className="flex-1 flex justify-between items-center text-left"
                       >
                         <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100">
-                          Other Active Sales ({sortedOtherSales.length})
+                          Other Sales ({sortedOtherSales.length})
                         </h3>
                         <span className={`transition-transform ${otherSalesExpanded ? 'rotate-180' : ''}`}>
                           ▼
