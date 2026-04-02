@@ -96,6 +96,16 @@ const OrganizerDashboard = () => {
     }
   }, []);
 
+  // Fetch organizer's sales
+  const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
+    queryKey: ['organizer-sales', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/sales/mine');
+      return response.data.sales || [];
+    },
+    enabled: !!user?.id && isClient,
+  });
+
   // Auto-expand Other Sales section only on initial data load when exactly 1 other sale
   useEffect(() => {
     if (!salesData || hasAutoExpandedOtherSales.current) return;
@@ -109,16 +119,6 @@ const OrganizerDashboard = () => {
     }
     hasAutoExpandedOtherSales.current = true;
   }, [salesData]);
-
-  // Fetch organizer's sales
-  const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
-    queryKey: ['organizer-sales', user?.id],
-    queryFn: async () => {
-      const response = await api.get('/sales/mine');
-      return response.data.sales || [];
-    },
-    enabled: !!user?.id && isClient,
-  });
 
   // Fetch organizer analytics (total items, revenue)
   const { data: analyticsData } = useQuery({
