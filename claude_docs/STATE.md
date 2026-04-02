@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S376 COMPLETE (2026-04-02):** S375 smoke test + Smart Cart fixes + #235 Charity Close. All pushed. Migration deployed.
+**S376 COMPLETE (2026-04-02):** S375 smoke test + Smart Cart fixes + #235 Charity Close + Print Kit bug fixes. All pushed. Migration deployed.
 
 **S376 Summary:**
 - Smoke tested all 7 S375 features on finda.sale — all deployed and rendering correctly
@@ -16,11 +16,13 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Smart Cart on item detail page:** Full integration added to `items/[id].tsx` — useShopperCart hook, "+ Cart" / "✓ In Cart" button next to Buy It Now, ShopperCartDrawer + ShopperCartFAB rendered, cross-sale switch modal. HoldButton recolored blue to avoid amber conflict.
 - **#235 Charity Close + Tax Receipt PDF:** SaleDonation + DonatedItem schema models, migration deployed, donationController (POST donate, GET list, GET receipt PDF via PDFKit), 3 routes wired, DonationModal (3-step: charity info → item select → confirm), PRO-gated with upgrade CTA, integrated into SettlementWizard receipt step.
 - **P0 Price Comps auth fix:** `ebayController.ts` — `getComps` and `exportSaleToEbay` both compared `sale.organizerId` (Organizer ID) against `req.user.id` (User ID) — always mismatched. Fixed to look up Organizer record by userId first, then compare IDs. Same root cause as S373 Command Center/Ripples auth bugs.
-- **P1 Print Kit nav wiring (4 surfaces):** Dashboard live sale card now has "🖨️ Print Kit" button linking to `/organizer/print-kit/${saleId}`. Layout.tsx nav links changed from disabled stubs to enabled "Print & Labels" → `/organizer/print-inventory`. Add-items bulk toolbar gets "Print Kit" button (opens print-kit in new window). BulkActionDropdown updated with onPrintLabels prop.
+- **P1 Print Kit nav wiring (4 surfaces):** Dashboard live sale card now has "🖨️ Print Kit" button. Layout.tsx nav links enabled (were disabled stubs). Add-items bulk toolbar gets Print Kit button. BulkActionDropdown updated with onPrintLabels prop.
+- **P1 Print Kit buttons 404 fix:** All 7 `window.open('/api/...')` calls in `print-kit/[saleId].tsx` were routing to Vercel instead of Railway. Fixed by introducing `apiBase = process.env.NEXT_PUBLIC_API_URL` and using it in all calls.
 
 **S376 Files Changed (all pushed):**
 Push 1: `ShopperCartFAB.tsx`, `items/[id].tsx`, `schema.prisma`, `organizers.ts` (routes), `SettlementWizard.tsx`, `donationController.ts` (NEW), `DonationModal.tsx` (NEW), `migrations/20260402_add_charity_donation/migration.sql` (NEW)
 Push 2: `ebayController.ts`, `dashboard.tsx`, `Layout.tsx`, `BulkActionDropdown.tsx`, `add-items/[saleId].tsx`
+Push 3: `print-kit/[saleId].tsx` (window.open URL fix)
 
 **S375 COMPLETE (2026-04-01):** Session A — 4 parallel dev agents built 7 features. All pushed S376.
 

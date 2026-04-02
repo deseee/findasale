@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S376 Complete (2026-04-02)
+# Patrick's Dashboard — S376 Complete (2026-04-02, final wrap)
 
 ---
 
@@ -25,6 +25,8 @@ All 7 features verified live: Print-to-QR Sign Kit ✅, Brand Kit Expansion ✅,
 
 **P1 Print Kit nav wiring:** Print Kit button added to dashboard live sale card. Nav links enabled (were disabled stubs). Print Kit added to add-items bulk toolbar.
 
+**P1 Print Kit buttons 404 fixed:** All 7 template buttons (Yard Sign, Directional, Table Tents, Hang Tags, Full Kit, 4×3" Labels, Avery 5160) were calling `window.open('/api/...')` which hit Vercel instead of Railway. Fixed to route through `NEXT_PUBLIC_API_URL` — PDFs will now generate correctly.
+
 ## What Happened Last Session (S375)
 
 4 parallel dev agents built 7 features: Print-to-QR Sign Kit, QR/Barcode Item Labels, Brand Kit Expansion, AI Comp Tool, eBay CSV Export, Smart Cart. All pushed S376.
@@ -33,7 +35,7 @@ All 7 features verified live: Print-to-QR Sign Kit ✅, Brand Kit Expansion ✅,
 
 ## Next Session (S377)
 
-**Smoke test:** Verify Smart Cart FAB visibility + #235 Charity Close flow (Settlement Wizard → Donate → PDF).
+**Smoke test:** Verify Print Kit template buttons now generate PDFs. Verify Smart Cart FAB visibility + #235 Charity Close flow (Settlement Wizard → Donate → PDF).
 
 **Chrome QA:** Full walkthrough of S375+S376 features with real data.
 
