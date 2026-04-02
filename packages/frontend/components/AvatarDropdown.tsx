@@ -852,6 +852,26 @@ const AvatarDropdown: React.FC = () => {
               </button>
               {exploreConnectOpen && (
                 <>
+                  <Link href="/feed" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
+                    <Zap size={16} className="text-indigo-500" />
+                    <span>Feed</span>
+                  </Link>
+                  <Link href="/inspiration" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
+                    <Lightbulb size={16} className="text-indigo-500" />
+                    <span>Inspiration</span>
+                  </Link>
+                  <Link href="/trending" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
+                    <TrendingUp size={16} className="text-indigo-500" />
+                    <span>Trending</span>
+                  </Link>
+                  <Link href="/map" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
+                    <Map size={16} className="text-indigo-500" />
+                    <span>Map</span>
+                  </Link>
+                  <Link href="/calendar" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
+                    <Calendar size={16} className="text-indigo-500" />
+                    <span>Calendar</span>
+                  </Link>
                   <Link
                     href="/shopper/explorer-passport"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -910,8 +930,16 @@ const AvatarDropdown: React.FC = () => {
             </>
           )}
 
-          {/* Footer: My Profile, Settings, Logout */}
+          {/* Footer: Pricing, My Profile, Settings, Logout */}
           <hr className="my-2 border-warm-200 dark:border-gray-700" />
+          <Link
+            href="/pricing"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            onClick={() => setIsOpen(false)}
+          >
+            <Tag size={16} className="text-warm-500" />
+            <span>Pricing</span>
+          </Link>
           <Link
             href="/organizer/profile"
             className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
