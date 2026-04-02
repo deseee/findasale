@@ -58,6 +58,8 @@ import {
   Settings,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
+import { useShopperCart } from '../hooks/useShopperCart';
+import ShopperCartDrawer from './ShopperCartDrawer';
 
 const AvatarDropdown: React.FC = () => {
   const { user, logout } = useAuth();
@@ -126,6 +128,7 @@ const AvatarDropdown: React.FC = () => {
   const isUser = user.roles?.includes('USER');
   const isAdmin = user.roles?.includes('ADMIN');
   const isTeams = canAccess('TEAMS');
+  const { items: cartItems } = useShopperCart();
 
   return (
     <div className="relative">
@@ -412,7 +415,7 @@ const AvatarDropdown: React.FC = () => {
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <DollarSign size={16} className="text-amber-500" />
+                    <Wallet size={16} className="text-amber-500" />
                     <span>Payouts</span>
                   </Link>
                   <Link
@@ -420,7 +423,7 @@ const AvatarDropdown: React.FC = () => {
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <List size={16} className="text-amber-500" />
+                    <BookOpen size={16} className="text-amber-500" />
                     <span>Item Library</span>
                   </Link>
                   <Link
@@ -452,7 +455,7 @@ const AvatarDropdown: React.FC = () => {
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <ShoppingCart size={16} className="text-amber-500" />
+                    <Image size={16} className="text-amber-500" />
                     <span>Manage Photos</span>
                   </Link>
                 </>
@@ -612,7 +615,7 @@ const AvatarDropdown: React.FC = () => {
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <ShoppingCart size={16} className="text-purple-400" />
+                    <Image size={16} className="text-purple-400" />
                     <span>UGC Moderation</span>
                   </Link>
                 </>
@@ -688,7 +691,7 @@ const AvatarDropdown: React.FC = () => {
                       className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                       onClick={() => setIsOpen(false)}
                     >
-                      <Users size={16} className="text-gray-500" />
+                      <Network size={16} className="text-gray-500" />
                       <span>Workspace</span>
                     </Link>
                   )}
@@ -723,7 +726,14 @@ const AvatarDropdown: React.FC = () => {
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors w-full text-left"
               >
                 <ShoppingCart size={16} className="text-indigo-500" />
-                <span>Shopping Cart</span>
+                <span>
+                  Shopping Cart
+                  {cartItems.length > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-indigo-600 dark:bg-indigo-500 rounded-full">
+                      {cartItems.length}
+                    </span>
+                  )}
+                </span>
               </button>
 
               {/* My Collection Section — Collapsible */}
@@ -902,7 +912,7 @@ const AvatarDropdown: React.FC = () => {
       )}
 
       {/* Shopping Cart Drawer */}
-      {/* ShopperCartDrawer component will be added here after checking import path */}
+      <ShopperCartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} />
     </div>
   );
 };
