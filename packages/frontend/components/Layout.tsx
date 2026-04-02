@@ -88,6 +88,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [mobileYourSalesOpen, setMobileYourSalesOpen] = useState(false);
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const [mobileSellingToolsOpen, setMobileSellingToolsOpen] = useState(false);
+  const [mobilePostSalesOpen, setMobilePostSalesOpen] = useState(false);
   const [mobileProToolsOpen, setMobileProToolsOpen] = useState(false);
   const [mobileSaleContextOpen, setMobileSaleContextOpen] = useState(false);
   const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
@@ -680,6 +681,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 {/* ADMIN Section — Collapsible (ADMIN role) */}
                 {isAdmin && (
                   <>
+                    <Link href="/admin" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium">
+                      <LayoutDashboard size={14} className="inline mr-2" /> Admin Dashboard
+                    </Link>
                     <button
                       onClick={() => setMobileAdminOpen(!mobileAdminOpen)}
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -692,9 +696,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileAdminOpen && (
                       <>
-                        <Link href="/admin" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <LayoutDashboard size={14} className="inline mr-2" /> Admin Dashboard
-                        </Link>
                         <Link href="/admin/users" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Users size={14} className="inline mr-2" /> Manage Users
                         </Link>
@@ -724,12 +725,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link href="/organizer/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   <LayoutDashboard size={14} className="inline mr-2 text-amber-600" /> Organizer Dashboard
                 </Link>
-                <Link href="/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <Shield size={14} className="inline mr-2 text-amber-500" /> My Profile
-                </Link>
-                <Link href="/plan" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <PlusCircle size={14} className="inline mr-2 text-amber-500" /> Plan a Sale
-                </Link>
+
                 <Link href="/organizer/subscription" className="block px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   <Zap size={14} className="inline mr-2" /> {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
                 </Link>
@@ -758,6 +754,18 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/create-sale" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <PlusCircle size={14} className="inline mr-2 text-amber-500" /> Create Sale
                     </Link>
+                    <Link href="/plan" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Calendar size={14} className="inline mr-2 text-amber-500" /> Plan a Sale
+                    </Link>
+                    <Link href="/organizer/add-items" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Add items to any sale or your inventory">
+                      <PlusCircle size={14} className="inline mr-2 text-amber-500" /> Add Items
+                    </Link>
+                    <Link href="/organizer/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Bookmark size={14} className="inline mr-2 text-amber-500" /> Holds
+                    </Link>
+                    <Link href="/organizer/pos" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <ShoppingCart size={14} className="inline mr-2 text-amber-500" /> POS / Checkout
+                    </Link>
                   </>
                 )}
 
@@ -774,17 +782,39 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileSellingToolsOpen && (
                   <>
-                    <Link href="/organizer/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Bookmark size={14} className="inline mr-2 text-amber-500" /> Holds
+                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <QrCode size={14} className="inline mr-2 text-amber-500" /> QR Codes
                     </Link>
-                    <Link href="/organizer/pos" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <ShoppingCart size={14} className="inline mr-2 text-amber-500" /> POS / Checkout
+                    <Link href="/organizer/analytics" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <BarChart2 size={14} className="inline mr-2 text-amber-500" /> Analytics
                     </Link>
+                    <Link href="/organizer/staff" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <UserPlus size={14} className="inline mr-2 text-amber-500" /> Staff Accounts
+                    </Link>
+                    <Link href="/organizer/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Map size={14} className="inline mr-2 text-amber-500" /> Sale Map
+                    </Link>
+                    <Link href="/organizer/inventory" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Package size={14} className="inline mr-2 text-amber-400" /> Inventory <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                  </>
+                )}
+
+                {/* Post Sales Section — Collapsible */}
+                <button
+                  onClick={() => setMobilePostSalesOpen(!mobilePostSalesOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <span className="flex items-center gap-2"><Activity size={14} className="text-amber-500" /> Post Sales</span>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobilePostSalesOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobilePostSalesOpen && (
+                  <>
                     <Link href="/organizer/print-inventory" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Printer size={14} className="inline mr-2 text-amber-500" /> Print & Labels
-                    </Link>
-                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <QrCode size={14} className="inline mr-2 text-amber-500" /> Price Tags <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
                     <Link href="/organizer/earnings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <DollarSign size={14} className="inline mr-2 text-amber-500" /> Earnings <span className="text-xs text-gray-400">(Soon)</span>
@@ -792,72 +822,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/payouts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Wallet size={14} className="inline mr-2 text-amber-500" /> Payouts
                     </Link>
-                    <Link href="/organizer/item-library" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <BookOpen size={14} className="inline mr-2 text-amber-500" /> Item Library
+                    <Link href="/organizer/ripples" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Activity size={14} className="inline mr-2 text-amber-500" /> Sale Ripples
                     </Link>
-                    <Link href="/organizer/inventory" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Package size={14} className="inline mr-2 text-amber-400" /> Inventory <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                    <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Star size={14} className="inline mr-2 text-amber-500" /> Reputation
-                    </Link>
-                    <Link href="/organizer/message-templates" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <FileText size={14} className="inline mr-2 text-amber-500" /> Message Templates
-                    </Link>
-                    <Link href="/organizer/manage-photos" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                    <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Image size={14} className="inline mr-2 text-amber-500" /> Manage Photos
-                    </Link>
-                  </>
-                )}
-
-                {/* Pro Tools Section — Collapsible */}
-                <button
-                  onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <span className="flex items-center gap-2"><Sparkles size={14} className="text-purple-400" /> Pro Tools</span>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {mobileProToolsOpen && (
-                  <>
-                    <Link href="/organizer/brand-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Palette size={14} className="inline mr-2 text-purple-400" /> Brand Kit
-                    </Link>
-                    <Link href="/organizer/ripples" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Activity size={14} className="inline mr-2 text-purple-400" /> Sale Ripples
-                    </Link>
-                    <Link href="/organizer/flip-report" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <TrendingUp size={14} className="inline mr-2 text-purple-400" /> Flip Report
-                    </Link>
-                    <Link href="/organizer/item-tagger" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Tag size={14} className="inline mr-2 text-purple-400" /> Item Tagger
-                    </Link>
-                    <Link href="/organizer/virtual-queue" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Clock size={14} className="inline mr-2 text-purple-400" /> Virtual Queue <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                    <Link href="/organizer/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Scale size={14} className="inline mr-2 text-purple-400" /> Appraisals
-                    </Link>
-                    <Link href="/organizer/command-center" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <LayoutDashboard size={14} className="inline mr-2 text-purple-400" /> Command Center
-                    </Link>
-                    <Link href="/organizer/typology" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Tag size={14} className="inline mr-2 text-purple-400" /> Typology
-                    </Link>
-                    <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <ShieldAlert size={14} className="inline mr-2 text-purple-400" /> Fraud Signals
-                    </Link>
-                    <Link href="/organizer/insights" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <TrendingUp size={14} className="inline mr-2 text-purple-400" /> Insights
-                    </Link>
-                    <Link href="/organizer/sale-hubs" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Map size={14} className="inline mr-2 text-purple-400" /> Sale Hubs <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                    <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Image size={14} className="inline mr-2 text-purple-400" /> UGC Moderation
                     </Link>
                   </>
                 )}
@@ -876,13 +845,16 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 {mobileInSaleToolsOpen && (
                   <>
                     <Link href="/organizer/promote" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Share2 size={14} className="inline mr-2 text-amber-400" /> Share & Promote <span className="text-xs text-gray-400">(In Sale)</span>
+                      <Share2 size={14} className="inline mr-2 text-amber-400" /> Share & Promote <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
                     <Link href="/organizer/send-update" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Send size={14} className="inline mr-2 text-amber-400" /> Send Update <span className="text-xs text-gray-400">(In Sale)</span>
+                      <Send size={14} className="inline mr-2 text-amber-400" /> Send Update <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
                     <Link href="/organizer/photo-ops" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops <span className="text-xs text-gray-400">(In Sale)</span>
+                      <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Tag size={14} className="inline mr-2 text-amber-400" /> Price Tags <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
                     <Link href="/organizer/print-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Printer size={14} className="inline mr-2 text-amber-500" /> Print Kit
@@ -890,8 +862,57 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
+                {/* Pro Tools Section — Collapsible */}
+                <button
+                  onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <span className="flex items-center gap-2"><Sparkles size={14} className="text-purple-400" /> Pro Tools</span>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileProToolsOpen && (
+                  <>
+                    <Link href="/organizer/command-center" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <LayoutDashboard size={14} className="inline mr-2 text-purple-400" /> Command Center
+                    </Link>
+                    <Link href="/organizer/brand-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Palette size={14} className="inline mr-2 text-purple-400" /> Brand Kit
+                    </Link>
+                    <Link href="/organizer/insights" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <BarChart2 size={14} className="inline mr-2 text-purple-400" /> Insights
+                    </Link>
+                    <Link href="/organizer/flip-report" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <TrendingUp size={14} className="inline mr-2 text-purple-400" /> Flip Report
+                    </Link>
+                    <Link href="/organizer/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Scale size={14} className="inline mr-2 text-purple-400" /> Appraisals
+                    </Link>
+                    <Link href="/organizer/item-library" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <BookOpen size={14} className="inline mr-2 text-purple-400" /> Item Library
+                    </Link>
+                    <Link href="/organizer/message-templates" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <FileText size={14} className="inline mr-2 text-purple-400" /> Message Templates
+                    </Link>
+                    <Link href="/organizer/typology" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Tag size={14} className="inline mr-2 text-purple-400" /> Typology
+                    </Link>
+                    <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <ShieldAlert size={14} className="inline mr-2 text-purple-400" /> Fraud Signals
+                    </Link>
+                    <Link href="/organizer/sale-hubs" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Network size={14} className="inline mr-2 text-purple-400" /> Sale Hubs <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                    <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Users size={14} className="inline mr-2 text-purple-400" /> Virtual Queue <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                  </>
+                )}
+
                 {/* TEAMS Section — Collapsible (TEAMS tier) */}
-                {isTeams && (
+                {(isTeams || isAdmin) && (
                   <>
                     <button
                       onClick={() => setMobileTeamsOpen(!mobileTeamsOpen)}
@@ -914,31 +935,26 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/organizer/webhooks" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Webhook size={14} className="inline mr-2 text-gray-500" /> Webhooks
                         </Link>
+                        <Link href="/organizer/workspace" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Network size={14} className="inline mr-2 text-gray-500" /> Workspace
+                        </Link>
                       </>
                     )}
                   </>
                 )}
 
-                {/* DEVELOPER TOOLS Section — Collapsible (TEAMS tier) */}
-                {isTeams && (
-                  <>
-                    <button
-                      onClick={() => setMobileDevToolsOpen(!mobileDevToolsOpen)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <span className="flex items-center gap-2"><Wrench size={14} /> Developer Tools</span>
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform duration-200 ${mobileDevToolsOpen ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-                    {mobileDevToolsOpen && (
-                      <Link href="/organizer/workspace" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                        <Network size={14} className="inline mr-2 text-gray-500" /> Workspace
-                      </Link>
-                    )}
-                  </>
-                )}
+                <hr className="my-2 border-warm-200 dark:border-gray-700" />
+
+                {/* Bottom Account Links */}
+                <Link href="/organizer/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <UserCircle size={14} className="inline mr-2 text-amber-600" /> My Profile
+                </Link>
+                <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Star size={14} className="inline mr-2 text-amber-600" /> Reputation
+                </Link>
+                <Link href="/organizer/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Settings size={14} className="inline mr-2 text-amber-600" /> Settings
+                </Link>
 
                 {/* Shopper sections for dual-role organizers */}
                 {isClient && user?.roles?.includes('USER') && (

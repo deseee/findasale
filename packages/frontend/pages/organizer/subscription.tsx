@@ -29,6 +29,11 @@ export default function SubscriptionPage() {
   }, []);
 
   const fetchSubscription = async () => {
+    // Admin users don't have billing accounts — skip the API call
+    if (user?.roles?.includes('ADMIN')) {
+      setLoading(false);
+      return;
+    }
     try {
       const response = await fetch('/api/billing/subscription', {
         headers: { 'Content-Type': 'application/json' },
