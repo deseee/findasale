@@ -77,12 +77,19 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [headerSearch, setHeaderSearch] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showBecomeOrganizerModal, setShowBecomeOrganizerModal] = useState(false);
-  const [mobileOrgToolsOpen, setMobileOrgToolsOpen] = useState(false);
+  const [mobileYourSalesOpen, setMobileYourSalesOpen] = useState(false);
+  const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
+  const [mobileSellingToolsOpen, setMobileSellingToolsOpen] = useState(false);
   const [mobileProToolsOpen, setMobileProToolsOpen] = useState(false);
   const [mobileSaleContextOpen, setMobileSaleContextOpen] = useState(false);
+  const [mobileAdminOpen, setMobileAdminOpen] = useState(false);
   const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const [mobileShopperCollectionOpen, setMobileShopperCollectionOpen] = useState(false);
   const [mobileShopperExploreOpen, setMobileShopperExploreOpen] = useState(false);
+  const [desktopAdminOpen, setDesktopAdminOpen] = useState(false);
+  const [desktopCollectionOpen, setDesktopCollectionOpen] = useState(false);
+  const [desktopExploreOpen, setDesktopExploreOpen] = useState(false);
+  const [desktopConnectOpen, setDesktopConnectOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,31 +162,47 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         </span>
         {user?.roles?.includes('ORGANIZER') && (
           <>
-            <SectionHeader icon={Store} label="Your Sales" color="amber" />
-            <Link href="/organizer/dashboard" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Zap size={16} className="text-amber-500" />
-              <span>Active Sale</span>
-            </Link>
-            <Link href="/organizer/sales" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <List size={16} className="text-amber-500" />
-              <span>All Sales</span>
-            </Link>
-            <Link href="/plan" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <PlusCircle size={16} className="text-amber-500" />
-              <span>Create Sale</span>
-            </Link>
-            <Link href="/organizer/calendar" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Calendar size={16} className="text-amber-500" />
-              <span>Calendar</span>
-            </Link>
-            <Link href="/profile" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Shield size={16} className="text-amber-500" />
-              <span>My Profile</span>
-            </Link>
-            <Link href="/organizer/subscription" className="flex items-center gap-2 px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Sparkles size={16} />
-              <span>{canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}</span>
-            </Link>
+            <button
+              onClick={() => setDesktopCollectionOpen(!desktopCollectionOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Store size={14} />
+                <span>Your Sales</span>
+              </div>
+              <ChevronRight
+                size={16}
+                className={`transition-transform duration-200 ${desktopCollectionOpen ? 'rotate-90' : ''}`}
+              />
+            </button>
+            {desktopCollectionOpen && (
+              <>
+                <Link href="/organizer/dashboard" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Zap size={16} className="text-amber-500" />
+                  <span>Active Sale</span>
+                </Link>
+                <Link href="/organizer/sales" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <List size={16} className="text-amber-500" />
+                  <span>All Sales</span>
+                </Link>
+                <Link href="/plan" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <PlusCircle size={16} className="text-amber-500" />
+                  <span>Create Sale</span>
+                </Link>
+                <Link href="/organizer/calendar" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Calendar size={16} className="text-amber-500" />
+                  <span>Calendar</span>
+                </Link>
+                <Link href="/profile" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Shield size={16} className="text-amber-500" />
+                  <span>My Profile</span>
+                </Link>
+                <Link href="/organizer/subscription" className="flex items-center gap-2 px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Sparkles size={16} />
+                  <span>{canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}</span>
+                </Link>
+              </>
+            )}
 
             <SectionHeader icon={Wrench} label="Account & Profile" color="amber" />
             <Link href="/organizer/messages" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Buyer and organizer messaging">
@@ -336,27 +359,43 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </div>
             </Link>
 
-            <SectionHeader icon={Heart} label="My Collection" color="indigo" />
-            <Link href="/shopper/wishlist" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Bookmark size={16} className="text-indigo-500" />
-              <span>Saved Sales</span>
-            </Link>
-            <Link href="/shopper/saved-items" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Star size={16} className="text-indigo-500" />
-              <span>Saved Items</span>
-            </Link>
-            <Link href="/shopper/bids" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Gavel size={16} className="text-indigo-500" />
-              <span>My Bids</span>
-            </Link>
-            <Link href="/shopper/holds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Clock size={16} className="text-indigo-500" />
-              <span>My Holds</span>
-            </Link>
-            <Link href="/shopper/history" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Package size={16} className="text-indigo-500" />
-              <span>My History</span>
-            </Link>
+            <button
+              onClick={() => setDesktopExploreOpen(!desktopExploreOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Heart size={14} />
+                <span>My Collection</span>
+              </div>
+              <ChevronRight
+                size={16}
+                className={`transition-transform duration-200 ${desktopExploreOpen ? 'rotate-90' : ''}`}
+              />
+            </button>
+            {desktopExploreOpen && (
+              <>
+                <Link href="/shopper/wishlist" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Bookmark size={16} className="text-indigo-500" />
+                  <span>Saved Sales</span>
+                </Link>
+                <Link href="/shopper/saved-items" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Star size={16} className="text-indigo-500" />
+                  <span>Saved Items</span>
+                </Link>
+                <Link href="/shopper/bids" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Gavel size={16} className="text-indigo-500" />
+                  <span>My Bids</span>
+                </Link>
+                <Link href="/shopper/holds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Clock size={16} className="text-indigo-500" />
+                  <span>My Holds</span>
+                </Link>
+                <Link href="/shopper/history" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Package size={16} className="text-indigo-500" />
+                  <span>My History</span>
+                </Link>
+              </>
+            )}
 
             {/* Show "Host a Sale" for shoppers without organizer role */}
             {!user?.roles?.includes('ORGANIZER') && (
@@ -372,65 +411,97 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </>
             )}
 
-            <SectionHeader icon={Compass} label="Explore & Connect" color="indigo" />
-            <Link href="/shopper/explorer-passport" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your full shopper profile, badges, and history">
-              <Award size={16} className="text-indigo-500" />
-              <span>Explorer Passport</span>
-            </Link>
-            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
-              <Ticket size={16} className="text-indigo-500" />
-              <span>Hunt Pass <span className="text-xs text-gray-400">(Soon)</span></span>
-            </Link>
-            <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
-              <Trophy size={16} className="text-indigo-500" />
-              <span>League</span>
-            </Link>
-            <Link href="/shopper/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Target size={16} className="text-indigo-500" />
-              <span>Bounties</span>
-            </Link>
-            <Link href="/shopper/reputation" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Shield size={16} className="text-indigo-500" />
-              <span>Reputation</span>
-            </Link>
-            <Link href="/shopper/trades" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-              <ArrowLeftRight size={16} className="text-indigo-400" />
-              <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
-            </Link>
+            <button
+              onClick={() => setDesktopConnectOpen(!desktopConnectOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Compass size={14} />
+                <span>Explore & Connect</span>
+              </div>
+              <ChevronRight
+                size={16}
+                className={`transition-transform duration-200 ${desktopConnectOpen ? 'rotate-90' : ''}`}
+              />
+            </button>
+            {desktopConnectOpen && (
+              <>
+                <Link href="/shopper/explorer-passport" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your full shopper profile, badges, and history">
+                  <Award size={16} className="text-indigo-500" />
+                  <span>Explorer Passport</span>
+                </Link>
+                <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
+                  <Ticket size={16} className="text-indigo-500" />
+                  <span>Hunt Pass <span className="text-xs text-gray-400">(Soon)</span></span>
+                </Link>
+                <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
+                  <Trophy size={16} className="text-indigo-500" />
+                  <span>League</span>
+                </Link>
+                <Link href="/shopper/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Target size={16} className="text-indigo-500" />
+                  <span>Bounties</span>
+                </Link>
+                <Link href="/shopper/reputation" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Shield size={16} className="text-indigo-500" />
+                  <span>Reputation</span>
+                </Link>
+                <Link href="/shopper/trades" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                  <ArrowLeftRight size={16} className="text-indigo-400" />
+                  <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
+                </Link>
+              </>
+            )}
           </>
         )}
         {user?.roles?.includes('ADMIN') && (
           <>
             <hr className="my-2 border-warm-200 dark:border-gray-700" />
-            <SectionHeader icon={ShieldAlert} label="Admin" color="red" />
-            <Link href="/admin" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium">
-              <LayoutDashboard size={16} className="text-red-500" />
-              <span>Admin Dashboard</span>
-            </Link>
-            <Link href="/admin/users" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Users size={16} className="text-red-500" />
-              <span>Manage Users</span>
-            </Link>
-            <Link href="/admin/sales" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Store size={16} className="text-red-500" />
-              <span>Manage Sales</span>
-            </Link>
-            <Link href="/admin/items" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <List size={16} className="text-red-500" />
-              <span>Manage Items</span>
-            </Link>
-            <Link href="/admin/reports" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <BarChart2 size={16} className="text-red-500" />
-              <span>Reports</span>
-            </Link>
-            <Link href="/admin/feature-flags" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Zap size={16} className="text-red-500" />
-              <span>Feature Flags</span>
-            </Link>
-            <Link href="/admin/broadcast" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <MessageSquare size={16} className="text-red-500" />
-              <span>Broadcast Message</span>
-            </Link>
+            <button
+              onClick={() => setDesktopAdminOpen(!desktopAdminOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ShieldAlert size={14} />
+                <span>Admin</span>
+              </div>
+              <ChevronRight
+                size={16}
+                className={`transition-transform duration-200 ${desktopAdminOpen ? 'rotate-90' : ''}`}
+              />
+            </button>
+            {desktopAdminOpen && (
+              <>
+                <Link href="/admin" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium">
+                  <LayoutDashboard size={16} className="text-red-500" />
+                  <span>Admin Dashboard</span>
+                </Link>
+                <Link href="/admin/users" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Users size={16} className="text-red-500" />
+                  <span>Manage Users</span>
+                </Link>
+                <Link href="/admin/sales" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Store size={16} className="text-red-500" />
+                  <span>Manage Sales</span>
+                </Link>
+                <Link href="/admin/items" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <List size={16} className="text-red-500" />
+                  <span>Manage Items</span>
+                </Link>
+                <Link href="/admin/reports" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <BarChart2 size={16} className="text-red-500" />
+                  <span>Reports</span>
+                </Link>
+                <Link href="/admin/feature-flags" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Zap size={16} className="text-red-500" />
+                  <span>Feature Flags</span>
+                </Link>
+                <Link href="/admin/broadcast" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <MessageSquare size={16} className="text-red-500" />
+                  <span>Broadcast Message</span>
+                </Link>
+              </>
+            )}
           </>
         )}
       </>
@@ -678,7 +749,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
                 {/* Your Sales Section — Collapsible */}
                 <button
-                  onClick={() => setMobileOrgToolsOpen(!mobileOrgToolsOpen)}
+                  onClick={() => setMobileYourSalesOpen(!mobileYourSalesOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
                   <div className="flex items-center gap-2">
@@ -687,10 +758,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </div>
                   <ChevronRight
                     size={16}
-                    className={`transition-transform duration-200 ${mobileOrgToolsOpen ? 'rotate-90' : ''}`}
+                    className={`transition-transform duration-200 ${mobileYourSalesOpen ? 'rotate-90' : ''}`}
                   />
                 </button>
-                {mobileOrgToolsOpen && (
+                {mobileYourSalesOpen && (
                   <>
                     <Link href="/organizer/active-sale" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Zap size={14} className="inline mr-2 text-amber-500" /> Active Sale
@@ -715,16 +786,16 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
                 {/* Account & Profile Section — Collapsible */}
                 <button
-                  onClick={() => setMobileOrgToolsOpen(!mobileOrgToolsOpen)}
+                  onClick={() => setMobileAccountOpen(!mobileAccountOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
                   <span className="flex items-center gap-2"><Wrench size={14} className="text-amber-500" /> Account & Profile</span>
                   <ChevronRight
                     size={16}
-                    className={`transition-transform duration-200 ${mobileOrgToolsOpen ? 'rotate-90' : ''}`}
+                    className={`transition-transform duration-200 ${mobileAccountOpen ? 'rotate-90' : ''}`}
                   />
                 </button>
-                {mobileOrgToolsOpen && (
+                {mobileAccountOpen && (
                   <>
                     <Link href="/organizer/messages" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <MessageSquare size={14} className="inline mr-2 text-amber-500" /> Messages
@@ -740,16 +811,16 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
                 {/* Selling Tools Section — Collapsible */}
                 <button
-                  onClick={() => setMobileOrgToolsOpen(!mobileOrgToolsOpen)}
+                  onClick={() => setMobileSellingToolsOpen(!mobileSellingToolsOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
                   <span className="flex items-center gap-2"><Wrench size={14} className="text-amber-500" /> Selling Tools</span>
                   <ChevronRight
                     size={16}
-                    className={`transition-transform duration-200 ${mobileOrgToolsOpen ? 'rotate-90' : ''}`}
+                    className={`transition-transform duration-200 ${mobileSellingToolsOpen ? 'rotate-90' : ''}`}
                   />
                 </button>
-                {mobileOrgToolsOpen && (
+                {mobileSellingToolsOpen && (
                   <>
                     <Link href="/organizer/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Bookmark size={14} className="inline mr-2 text-amber-500" /> Holds
@@ -874,6 +945,48 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                       <List size={14} className="inline mr-2 text-amber-400" /> Line Queue <span className="text-xs text-gray-400">(Coming Soon)</span>
                     </Link>
+                  </>
+                )}
+
+                {/* Admin Section — Collapsible */}
+                {isClient && user?.roles?.includes('ADMIN') && (
+                  <>
+                    <hr className="my-2 border-warm-200 dark:border-gray-700" />
+                    <button
+                      onClick={() => setMobileAdminOpen(!mobileAdminOpen)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <span className="flex items-center gap-2"><ShieldAlert size={14} className="text-red-500" /> Admin</span>
+                      <ChevronRight
+                        size={16}
+                        className={`transition-transform duration-200 ${mobileAdminOpen ? 'rotate-90' : ''}`}
+                      />
+                    </button>
+                    {mobileAdminOpen && (
+                      <>
+                        <Link href="/admin" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium">
+                          <LayoutDashboard size={14} className="inline mr-2 text-red-500" /> Admin Dashboard
+                        </Link>
+                        <Link href="/admin/users" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Users size={14} className="inline mr-2 text-red-500" /> Manage Users
+                        </Link>
+                        <Link href="/admin/sales" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Store size={14} className="inline mr-2 text-red-500" /> Manage Sales
+                        </Link>
+                        <Link href="/admin/items" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <List size={14} className="inline mr-2 text-red-500" /> Manage Items
+                        </Link>
+                        <Link href="/admin/reports" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <BarChart2 size={14} className="inline mr-2 text-red-500" /> Reports
+                        </Link>
+                        <Link href="/admin/feature-flags" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Zap size={14} className="inline mr-2 text-red-500" /> Feature Flags
+                        </Link>
+                        <Link href="/admin/broadcast" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <MessageSquare size={14} className="inline mr-2 text-red-500" /> Broadcast Message
+                        </Link>
+                      </>
+                    )}
                   </>
                 )}
 
