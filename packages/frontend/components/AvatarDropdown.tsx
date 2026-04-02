@@ -46,6 +46,12 @@ import {
   MapPin,
   Lightbulb,
   MessageSquare,
+  Activity,
+  Wallet,
+  BookOpen,
+  FileText,
+  Image,
+  Scale,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 
