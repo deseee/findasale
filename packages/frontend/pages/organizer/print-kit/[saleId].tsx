@@ -366,7 +366,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Yard Sign */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizer/sales/${saleId}/signs/yard`, '_blank')}
+                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/yard`, '_blank')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📋 Yard Sign
@@ -377,7 +377,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Directional Signs */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizer/sales/${saleId}/signs/directional`, '_blank')}
+                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/directional`, '_blank')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       ➡️ Directional
@@ -388,7 +388,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Table Tents */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizer/sales/${saleId}/signs/table-tent`, '_blank')}
+                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/table-tent`, '_blank')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       🏕️ Table Tents
@@ -399,7 +399,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Hang Tags */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizer/sales/${saleId}/signs/hang-tag`, '_blank')}
+                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/hang-tag`, '_blank')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       🏷️ Hang Tags
@@ -410,7 +410,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Full Kit */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizer/sales/${saleId}/signs/full-kit`, '_blank')}
+                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/full-kit`, '_blank')}
                       className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📦 Full Kit
@@ -438,7 +438,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Avery 5160 Stickers */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizer/sales/${saleId}/print-kit`, '_blank')}
+                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/print-kit`, '_blank')}
                       className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📌 Avery 5160 Stickers
