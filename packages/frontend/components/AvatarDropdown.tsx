@@ -730,23 +730,6 @@ const AvatarDropdown: React.FC = () => {
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
 
-              {/* Bottom Account Links */}
-              <Link
-                href="/organizer/profile"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                <UserCircle size={16} className="text-amber-600" />
-                <span>My Profile</span>
-              </Link>
-              <Link
-                href="/organizer/settings"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                <Settings size={16} className="text-amber-600 dark:text-amber-400" />
-                <span>Settings</span>
-              </Link>
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>
@@ -927,22 +910,22 @@ const AvatarDropdown: React.FC = () => {
             </>
           )}
 
-          {/* Help & Settings */}
+          {/* Footer: My Profile, Settings, Logout */}
           <hr className="my-2 border-warm-200 dark:border-gray-700" />
           <Link
-            href="/messages"
+            href="/organizer/profile"
             className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
-            <MessageSquare size={16} className="text-warm-600" />
-            <span>Messages</span>
+            <UserCircle size={16} className="text-amber-600" />
+            <span>My Profile</span>
           </Link>
           <Link
-            href="/settings"
+            href="/organizer/settings"
             className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
-            <Shield size={16} className="text-warm-600" />
+            <Settings size={16} className="text-amber-600" />
             <span>Settings</span>
           </Link>
 
