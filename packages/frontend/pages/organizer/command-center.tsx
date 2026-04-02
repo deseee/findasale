@@ -169,7 +169,11 @@ const CommandCenterPage = () => {
                   <div className="mb-4">
                     <CommandCenterCard sale={sale} />
                   </div>
-                  <SaleStatusWidget saleId={sale.id} />
+                  {sale.status === 'PUBLISHED' &&
+                    new Date(sale.startDate) <= new Date() &&
+                    new Date(sale.endDate) >= new Date() && (
+                      <SaleStatusWidget saleId={sale.id} />
+                    )}
                 </div>
               ))}
             </div>

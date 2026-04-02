@@ -11,13 +11,27 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
   const endDate = new Date(sale.endDate);
   const formatDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
+  // Compute date-aware display status
+  const now = new Date();
+  let displayStatus: 'LIVE' | 'UPCOMING' | 'DRAFT' | 'ENDED';
+  if (sale.status === 'DRAFT') {
+    displayStatus = 'DRAFT';
+  } else if (sale.status === 'PUBLISHED' && now < startDate) {
+    displayStatus = 'UPCOMING';
+  } else if (sale.status === 'PUBLISHED' && now >= startDate && now <= endDate) {
+    displayStatus = 'LIVE';
+  } else {
+    displayStatus = 'ENDED';
+  }
+
   const statusStyles = {
-    PUBLISHED: 'bg-green-100 text-green-800',
-    DRAFT: 'bg-gray-100 text-gray-800',
-    ENDED: 'bg-blue-100 text-blue-800',
+    LIVE: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    UPCOMING: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    DRAFT: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+    ENDED: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
   };
 
-  const statusBg = statusStyles[sale.status as keyof typeof statusStyles] || statusStyles.DRAFT;
+  const statusBg = statusStyles[displayStatus];
 
   const totalPending = sale.pendingActions.total;
   let pendingBadgeColor = 'bg-green-500';
@@ -35,12 +49,13 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
       <div className="p-6">
         <div className="mb-4">
           <Link href={`/organizer/add-items/${sale.id}`}>
-            <h3 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-2 hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer">{sale.title}</h3>
+            <h3 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-2 hover:text-amber-600 dark:hover:text-amber-400 hover:underline transition-colors cursor-pointer">{sale.title}</h3>
           </Link>
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${statusBg}`}>
-            {sale.status === 'PUBLISHED' && '● LIVE'}
-            {sale.status === 'DRAFT' && '◌ DRAFT'}
-            {sale.status === 'ENDED' && '◉ ENDED'}
+            {displayStatus === 'LIVE' && '● LIVE'}
+            {displayStatus === 'UPCOMING' && '◷ UPCOMING'}
+            {displayStatus === 'DRAFT' && '◌ DRAFT'}
+            {displayStatus === 'ENDED' && '◉ ENDED'}
           </span>
         </div>
 
@@ -84,12 +99,20 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
           </div>
         )}
 
-        <Link
-          href={`/organizer/add-items/${sale.id}`}
-          className="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
-        >
-          Manage <span>→</span>
-        </Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link
+            href={`/organizer/add-items/${sale.id}`}
+            className="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+          >
+            Manage <span>→</span>
+          </Link>
+          <Link
+            href={`/sales/${sale.id}`}
+            className="inline-flex items-center gap-1 border border-gray-600 hover:border-gray-400 text-gray-300 hover:text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+          >
+            View Sale <span>↗</span>
+          </Link>
+        </div>
       </div>
     </div>
   );

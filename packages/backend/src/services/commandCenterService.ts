@@ -55,7 +55,7 @@ export async function getCommandCenterSummary(
     whereClause = {
       ...whereClause,
       endDate: { lt: now },
-      status: 'ENDED',
+      status: { in: ['PUBLISHED', 'ENDED'] },
     };
   }
 
