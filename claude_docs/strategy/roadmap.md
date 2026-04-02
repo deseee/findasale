@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale v2
 
-**Last Updated:** 2026-04-01 (v89 — S368: Dashboard Makeover Phase 1 built. #228 Settlement Hub + #230-234 + #236-237 all implemented. Migration deployed to Railway. Pending Chrome QA.)
+**Last Updated:** 2026-04-01 (v90 — S374: #240-244 slotted into Building — Active Backlog. #240 Print-to-QR Sign Kit, #241 Organizer Brand Kit Expansion, #242 QR/Barcode Item Labels, #243 Smart Cart, #244 eBay Quick List. ## Next Up section removed from Deferred. Spec created for #244.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
@@ -124,6 +124,11 @@ Features that Patrick's human QA walkthrough confirmed are broken. Use the two-s
 | 237 | NA | NA | ✅ | NA | ⬜ | ⬜ | Built S368 — Pending Chrome QA | Sale-Type Adaptive Dashboard (Command Center) | ORG | ALL | Chrome QA: verify widget visibility changes per sale type (estate vs yard) | dashboard-sale-type-config.ts. CONSIGNMENT + OTHER added to SaleType enum. Per-type widget visibility, settlement type (FULL_WIZARD vs SIMPLE_CARD), clientLabel. |
 | 238 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | Needs Scoping — Deferred | Flea Market Vendor Management + Settlement | ORG | SIMPLE | Requires separate scoping session — different model from other sale types (booth fees + per-vendor splits, recurring events). Do not bundle with #228 Settlement Hub. | Organizer collects booth fees, optional % of vendor sales. Per-vendor per-event settlement. Export to CSV. Recurring event model. Scope as standalone PWA module. |
 | 239 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | Needs Scoping — Deferred | Multi-Consignor Estate Settlement (Per-Consignor Stripe Payouts) | ORG | PRO | Requires separate scoping session — complex Stripe Connect topology (one organizer → many payees). | Multiple consignors contributing items to a single estate sale. Each consignor gets their own Stripe payout after settlement. Distinct from #228 which is single executor payout. |
+| 240 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | Ready to Build | Print-to-QR Sign Kit | ORG | SIMPLE | Template-first approach (board rec S236). Spec: feature-decisions/advisory-board-S236-print-kit-etsy.md | Downloadable PDF toolkit: yard signs, directional signs, table tents, hang tags, car magnets with QR codes. Templates auto-populate sale name + date + FindA.Sale QR per sale. Export to print-ready PDF. Phase 1 free templates; Phase 2 PRO bulk-download zip; Phase 3 TEAMS print partner (Vistaprint affiliate / local GR shop). |
+| 241 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | Ready to Build | Organizer Brand Kit Expansion | ORG | PRO | Builds on #31 Brand Kit (existing). After Brand Kit v1 proves adoption. | Custom fonts, branded email signature, printable business cards, letterhead, social media headers, yard sign PDFs with QR codes. Extends #31 Brand Kit with print-ready exports and additional asset types. |
+| 242 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | Ready to Build | QR/Barcode Item Labels | ORG | SIMPLE | Pairs with POS (#162) and #240 Print-to-QR Sign Kit. High ROI from retail-background organizer segment. | Print scannable QR/barcode labels during intake → POS scan for instant item lookup. 6-up or 10-up Avery-style print layout. Label includes item name, price, condition, QR linking to item page. Strong candidate when POS sees real usage. |
+| 243 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | Ready to Build | Smart Cart (Running Total) | SHO | SIMPLE | Requires digital pricing + QR/NFC adoption from organizers. Build after #242 QR Labels + POS established. | Shopper running total as they browse and scan items. Add-to-cart via QR scan or item page. Works only on digitally-priced items. Checkout via POS or Hold-to-Pay. Requires organizer to use digital pricing — adoption blocker pre-scale. |
+| 244 | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | Spec Complete S374 | eBay Quick List (AI-Assisted eBay Export) | ORG | SIMPLE | Spec: feature-decisions/ebay-quick-list-spec.md. Overlaps with #229 AI Comp Tool — price suggestion feeds eBay price field. Phase 1 CSV (no OAuth). Phase 2 PRO direct API push (eBay OAuth). | AI tag data + Cloudinary watermarked photos pre-fill eBay listing fields. Title, description, condition, category, item specifics, price, and photos all auto-populated from AI intake. Phase 1: export eBay-compatible CSV for Seller Hub bulk upload. Phase 2: direct eBay Inventory API push with organizer review + approval step (TOS required). No competitor offers this. |
 
 
 ## TESTING — Active QA Queue
@@ -350,13 +355,6 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 |  53 | -— | -— | -— | NA | -— | — | -— | NA | NA | -— | Legal review required — ToS risk with EstateSales.NET/Facebook scraping. ADR written. | 
 
 ## Deferred & Long-Term Hold
-## Next Up
-| Print-to-QR Sign Kit | ORG | SIMPLE | Downloadable PDF toolkit: yard signs, directional signs, table tents, hang tags, car magnets with QR codes.
-| Organizer Brand Kit Expansion | ORG | PRO | Custom fonts, branded email signature, printable business cards, letterhead, social headers, yard sign PDFs with QR codes. | After Brand Kit v1 proves user adoption |
-| QR/Barcode Item Labels | ORG | SIMPLE | Print scannable labels during intake → POS scan for instant lookup. High potential from retail experience. Pairs with POS v2. | Strong candidate when POS sees real usage |
-| Smart Cart (Running Total) | SHO | SIMPLE | Only works for items with digital prices. Requires organizer adoption of digital pricing + QR/NFC. | After QR Labels + POS established |
-
-
 
 ### Infrastructure & Platform
 
@@ -520,4 +518,4 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 | claude_docs/architecture/ — 13 ADR files covering feature-specific technical specs (#13/#60 Teams Bundle, #17/#19 Bid Bot/Passkey, #30/#46/#69 AI/Offline, #40/#44/#48 Hubs/Trail, #52/#53/#54 Encyclopedia/Aggregator/Appraisal, #65 Tiers, #68 Command Center)
 | claude_docs/feature-decisions/ — 7 files covering architecture choices (camera workflow, cash fee collection, push coordinator, manager subagent)
 | decisions-log.md — governance/process decisions (subagent-first gate, file delivery rule, roadmap schema)
-| FindaSale\claude_docs\feature-notes.md - design decisions based on emotion and animations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+| FindaSale\claude_docs\feature-notes.md - design decisions based on emotion and animations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
