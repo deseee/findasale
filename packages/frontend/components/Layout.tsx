@@ -684,7 +684,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               {label}
             </Link>
           ))}
-          <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
+          <div className="space-y-1" role="navigation" aria-label="Authenticated navigation">
             {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
                 {/* User info — name, email, rank badge, XP bar */}
@@ -748,12 +748,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link href="/organizer/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   <LayoutDashboard size={14} className="inline mr-2 text-amber-600" /> Organizer Dashboard
                 </Link>
-
-                <Link href="/organizer/subscription" className="block px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <Zap size={14} className="inline mr-2" /> {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
-                </Link>
-
-                <hr className="my-2 border-warm-200 dark:border-gray-700" />
 
                 {/* Your Sales Section — Collapsible */}
                 <button
@@ -857,6 +851,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
+
+                <Link href="/organizer/subscription" className="block px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Zap size={14} className="inline mr-2" /> {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
+                </Link>
 
                 {/* Pro Tools Section — Collapsible */}
                 <button

@@ -483,65 +483,6 @@ const AvatarDropdown: React.FC = () => {
                 </>
               )}
 
-              {/* In-Sale Tools Section — Collapsible */}
-              <button
-                onClick={() => setInSaleToolsOpen(!inSaleToolsOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Share2 size={16} />
-                  <span>In-Sale Tools</span>
-                </div>
-                <ChevronRight
-                  size={16}
-                  className={`transition-transform duration-200 ${inSaleToolsOpen ? 'rotate-90' : ''}`}
-                />
-              </button>
-              {inSaleToolsOpen && (
-                <>
-                  <Link
-                    href="/organizer/promote"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Share2 size={16} className="text-amber-400" />
-                    <span>Share & Promote <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
-                  </Link>
-                  <Link
-                    href="/organizer/send-update"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <MessageSquare size={16} className="text-amber-400" />
-                    <span>Send Update <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
-                  </Link>
-                  <Link
-                    href="/organizer/photo-ops"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Camera size={16} className="text-amber-400" />
-                    <span>Photo Ops <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
-                  </Link>
-                  <Link
-                    href="/organizer/qr-codes"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Tag size={16} className="text-amber-400" />
-                    <span>Price Tags <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
-                  </Link>
-                  <Link
-                    href="/organizer/print-kit"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Printer size={16} className="text-amber-500" />
-                    <span>Print Kit</span>
-                  </Link>
-                </>
-              )}
-
               {/* Upgrade/Subscription link — before Pro Tools */}
               <Link
                 href="/organizer/subscription"
