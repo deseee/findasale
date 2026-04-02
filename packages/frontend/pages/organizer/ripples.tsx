@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
+import api from '../../lib/api';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import {
@@ -17,7 +17,6 @@ import {
 } from 'recharts';
 import { Eye, Share2, Save, TrendingUp } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 /**
  * DTO for ripple summary (counts by type)
@@ -68,14 +67,14 @@ export default function RipplesPage() {
   } = useQuery<SaleWithRipples[], Error>({
     queryKey: ['organizer', 'sales', 'ripples'],
     queryFn: async () => {
-      const res = await axios.get(`${API_BASE}/organizers/me/sales`);
+      const res = await api.get('/organizers/me/sales');
       const sales = res.data;
 
       // Fetch ripple summary for each sale
       const withRipples = await Promise.all(
         sales.map(async (sale: any) => {
           try {
-            const rippleRes = await axios.get(`${API_BASE}/sales/${sale.id}/ripples/summary`);
+            const rippleRes = await api.get(`/sales/${sale.id}/ripples/summary`);
             return {
               ...rippleRes.data,
               saleTitle: sale.title,
@@ -108,7 +107,7 @@ export default function RipplesPage() {
     queryKey: ['ripples', 'trend', selectedSaleId, trendHours],
     queryFn: async () => {
       if (!selectedSaleId) throw new Error('No sale selected');
-      const res = await axios.get(`${API_BASE}/sales/${selectedSaleId}/ripples/trend`, {
+      const res = await api.get(`/sales/${selectedSaleId}/ripples/trend`, {
         params: { hours: trendHours },
       });
       return res.data;

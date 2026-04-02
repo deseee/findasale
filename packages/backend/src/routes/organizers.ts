@@ -399,6 +399,44 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// GET /api/organizers/me/sales — Get all sales for the current organizer
+// Returns array of sales with basic info (id, title, status, etc.)
+router.get('/me/sales', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // Fetch all sales for this organizer
+    const sales = await prisma.sale.findMany({
+      where: { organizerId: organizer.id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        saleType: true,
+      },
+      orderBy: { startDate: 'desc' },
+    });
+
+    res.json(sales);
+  } catch (error) {
+    console.error('Error fetching organizer sales:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Phase 32: CSV export — GET /api/organizers/me/export/items/:saleId
 // Streams a CSV of all items in the given sale (organizer-owned sales only)
 router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, res: Response) => {
