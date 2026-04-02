@@ -93,7 +93,6 @@ export function getTierBenefits(tier: OrganizerTier): TierBenefits {
         'Standard platform fee (10% flat)',
         'Premium organizer profile page',
         'Early access to new features',
-        'Dedicated seller support',
       ],
     },
   };

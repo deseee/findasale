@@ -33,7 +33,7 @@ const TIER_CONFIG: Record<string, {
     bg: 'bg-yellow-100',
     text: 'text-yellow-800',
     icon: '🥇',
-    nextLevelMessage: "You've reached Gold — your sales are featured on the homepage with dedicated seller support",
+    nextLevelMessage: "You've reached Gold — your sales are featured on the homepage and you get early access to new features",
   },
 };
 
