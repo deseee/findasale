@@ -735,6 +735,9 @@ const OrganizerDashboard = () => {
                         Publish Sale
                       </Link>
                     )}
+                    <Link href={`/organizer/print-kit/${activeSale.id}`} className="text-sm px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors" title="Generate and print labels for your items">
+                      🖨️ Print Kit
+                    </Link>
                     <Link href={`/organizer/holds?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors" title="View and manage shopper holds for this sale">
                       Holds
                     </Link>

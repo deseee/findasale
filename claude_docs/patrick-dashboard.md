@@ -21,6 +21,10 @@ All 7 features verified live: Print-to-QR Sign Kit ✅, Brand Kit Expansion ✅,
 
 **#235 Charity Close + Tax Receipt PDF:** New schema (SaleDonation + DonatedItem), backend endpoints (create donation, list donations, generate PDF receipt), 3-step DonationModal (charity info → item selection → confirm + download receipt), PRO-gated with upgrade CTA, integrated into Settlement Wizard.
 
+**P0 Price Comps auth fix:** "Get Price Comps" was returning 403 — organizer ID vs user ID mismatch in ebayController.ts. Both getComps and exportSaleToEbay fixed.
+
+**P1 Print Kit nav wiring:** Print Kit button added to dashboard live sale card. Nav links enabled (were disabled stubs). Print Kit added to add-items bulk toolbar.
+
 ## What Happened Last Session (S375)
 
 4 parallel dev agents built 7 features: Print-to-QR Sign Kit, QR/Barcode Item Labels, Brand Kit Expansion, AI Comp Tool, eBay CSV Export, Smart Cart. All pushed S376.
