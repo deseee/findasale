@@ -57,6 +57,7 @@ import {
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
+import useUnreadMessages from '../hooks/useUnreadMessages';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
@@ -76,6 +77,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const { isLowBandwidth } = useNetworkQuality();
   const { items: cartItems } = useShopperCart();
   const [isClient, setIsClient] = useState(false);
+  const { data: unreadMessages } = useUnreadMessages(!!user);
   // Derived role flags — must be after isClient declaration
   const isOrganizer = isClient && user?.roles?.includes('ORGANIZER');
   const isUser = isClient && user?.roles?.includes('USER');
@@ -156,8 +158,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
   const staticNavLinks = [
     { href: '/feed', label: 'Feed' },
-    { href: '/map', label: 'Map' },
-    { href: '/calendar', label: 'Calendar' },
     { href: '/inspiration', label: 'Inspiration' },
     { href: '/trending', label: 'Trending' },
     { href: '/pricing', label: 'Pricing' },
@@ -554,11 +554,18 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                     </svg>
                   </Link>
-                  <Link href="/messages" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400" title="Messages">
-                    <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                  </Link>
+                  <div className="relative">
+                    <Link href="/messages" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400" title="Messages">
+                      <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </Link>
+                    {unreadMessages && unreadMessages.unread > 0 && (
+                      <span className="absolute -top-1 -right-1.5 w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                        {unreadMessages.unread > 9 ? '9+' : unreadMessages.unread}
+                      </span>
+                    )}
+                  </div>
                   <div className="border-l border-warm-300 dark:border-gray-700 pl-4 flex items-center gap-2">
                     <NotificationBell />
                     <ThemeToggle compact={true} />
@@ -666,7 +673,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link
               key={href}
               href={href}
-              className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+              className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                 router.pathname === href
                   ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600'
                   : 'text-warm-900 dark:text-gray-200 hover:text-amber-600 hover:bg-warm-100 dark:hover:bg-gray-800'
@@ -766,36 +773,39 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/pos" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <ShoppingCart size={14} className="inline mr-2 text-amber-500" /> POS / Checkout
                     </Link>
+                    <Link href="/organizer/ripples" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Activity size={14} className="inline mr-2 text-amber-500" /> Sale Ripples
+                    </Link>
                   </>
                 )}
 
-                {/* Selling Tools Section — Collapsible */}
+                {/* In-Sale Tools Section — Collapsible */}
                 <button
-                  onClick={() => setMobileSellingToolsOpen(!mobileSellingToolsOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  onClick={() => setMobileInSaleToolsOpen(!mobileInSaleToolsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
-                  <span className="flex items-center gap-2"><Wrench size={14} className="text-amber-500" /> Selling Tools</span>
+                  <span className="flex items-center gap-2"><Share2 size={14} className="text-amber-500" /> In-Sale Tools</span>
                   <ChevronRight
                     size={16}
-                    className={`transition-transform duration-200 ${mobileSellingToolsOpen ? 'rotate-90' : ''}`}
+                    className={`transition-transform duration-200 ${mobileInSaleToolsOpen ? 'rotate-90' : ''}`}
                   />
                 </button>
-                {mobileSellingToolsOpen && (
+                {mobileInSaleToolsOpen && (
                   <>
-                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <QrCode size={14} className="inline mr-2 text-amber-500" /> QR Codes
+                    <Link href="/organizer/promote" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Share2 size={14} className="inline mr-2 text-amber-400" /> Share & Promote <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
-                    <Link href="/organizer/analytics" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <BarChart2 size={14} className="inline mr-2 text-amber-500" /> Analytics
+                    <Link href="/organizer/send-update" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Send size={14} className="inline mr-2 text-amber-400" /> Send Update <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
-                    <Link href="/organizer/staff" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <UserPlus size={14} className="inline mr-2 text-amber-500" /> Staff Accounts
+                    <Link href="/organizer/photo-ops" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
-                    <Link href="/organizer/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Map size={14} className="inline mr-2 text-amber-500" /> Sale Map
+                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+                      <Tag size={14} className="inline mr-2 text-amber-400" /> Price Tags <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
-                    <Link href="/organizer/inventory" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Package size={14} className="inline mr-2 text-amber-400" /> Inventory <span className="text-xs text-gray-400">(Soon)</span>
+                    <Link href="/organizer/print-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Printer size={14} className="inline mr-2 text-amber-500" /> Print Kit
                     </Link>
                   </>
                 )}
@@ -822,45 +832,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/payouts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Wallet size={14} className="inline mr-2 text-amber-500" /> Payouts
                     </Link>
-                    <Link href="/organizer/ripples" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Activity size={14} className="inline mr-2 text-amber-500" /> Sale Ripples
-                    </Link>
                     <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Image size={14} className="inline mr-2 text-amber-500" /> Manage Photos
+                    </Link>
+                    <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Star size={14} className="inline mr-2 text-amber-500" /> Reputation
                     </Link>
                   </>
                 )}
 
-                {/* Sale Context Section — Collapsible */}
-                <button
-                  onClick={() => setMobileInSaleToolsOpen(!mobileInSaleToolsOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <span className="flex items-center gap-2"><Share2 size={14} className="text-amber-500" /> IN-SALE TOOLS</span>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform duration-200 ${mobileInSaleToolsOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {mobileInSaleToolsOpen && (
-                  <>
-                    <Link href="/organizer/promote" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Share2 size={14} className="inline mr-2 text-amber-400" /> Share & Promote <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                    <Link href="/organizer/send-update" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Send size={14} className="inline mr-2 text-amber-400" /> Send Update <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                    <Link href="/organizer/photo-ops" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Tag size={14} className="inline mr-2 text-amber-400" /> Price Tags <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                    <Link href="/organizer/print-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Printer size={14} className="inline mr-2 text-amber-500" /> Print Kit
-                    </Link>
-                  </>
-                )}
 
                 {/* Pro Tools Section — Collapsible */}
                 <button
@@ -944,17 +924,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 )}
 
                 <hr className="my-2 border-warm-200 dark:border-gray-700" />
-
-                {/* Bottom Account Links */}
-                <Link href="/organizer/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <UserCircle size={14} className="inline mr-2 text-amber-600" /> My Profile
-                </Link>
-                <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <Star size={14} className="inline mr-2 text-amber-600" /> Reputation
-                </Link>
-                <Link href="/organizer/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <Settings size={14} className="inline mr-2 text-amber-600" /> Settings
-                </Link>
 
                 {/* Shopper sections for dual-role organizers */}
                 {isClient && user?.roles?.includes('USER') && (
@@ -1156,9 +1125,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             {isClient && user && (
               <>
                 <div className="border-t border-warm-200 dark:border-gray-700 pt-3 mt-2 space-y-1">
-                  <Link href="/organizer/messages" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                    <MessageSquare size={14} className="inline mr-2 text-amber-500" /> Messages
-                  </Link>
+                  {user?.roles?.includes('ORGANIZER') && (
+                    <Link href="/organizer/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <UserCircle size={14} className="inline mr-2 text-amber-600" /> My Profile
+                    </Link>
+                  )}
                   <Link href="/organizer/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                     <Settings size={14} className="inline mr-2 text-amber-500" /> Settings
                   </Link>

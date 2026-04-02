@@ -1,26 +1,17 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { Calendar } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 
 /**
  * BottomTabNav — Phase 25 mobile bottom navigation
- * 5 primary tabs: Browse, Map, Saved, Messages, Profile/Dashboard
+ * 5 primary tabs: Map, Calendar, Wishlist, Messages, Profile/Dashboard
  * Hidden on desktop (md+). Fixed to bottom with safe-area padding.
  */
 
 // SVG icon components — inline to avoid dependency
-const BrowseIcon = ({ active }: { active: boolean }) => (
-  <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5}
-      d={active
-        ? 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z'
-        : 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z'
-      }
-    />
-  </svg>
-);
 
 const MapIcon = ({ active }: { active: boolean }) => (
   <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -78,13 +69,11 @@ const BottomTabNav = () => {
       : '/login';
   const profileLabel = isOrganizer ? 'Dashboard' : 'Profile';
 
+  const CalendarIcon = ({ active }: { active: boolean }) => (
+    <Calendar className="w-6 h-6" fill={active ? 'currentColor' : 'none'} />
+  );
+
   const tabs: Tab[] = [
-    {
-      href: '/',
-      label: 'Browse',
-      icon: BrowseIcon,
-      matchPaths: ['/', '/city', '/sales/zip'],
-    },
     {
       href: '/map',
       label: 'Map',
@@ -92,8 +81,14 @@ const BottomTabNav = () => {
       matchPaths: ['/map'],
     },
     {
+      href: '/calendar',
+      label: 'Calendar',
+      icon: CalendarIcon,
+      matchPaths: ['/calendar', '/organizer/calendar'],
+    },
+    {
       href: '/shopper/wishlist',
-      label: 'Saved',
+      label: 'Wishlist',
       icon: HeartIcon,
       matchPaths: ['/shopper/wishlist'],
     },
