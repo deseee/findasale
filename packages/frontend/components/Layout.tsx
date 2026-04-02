@@ -86,6 +86,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const [mobileShopperCollectionOpen, setMobileShopperCollectionOpen] = useState(false);
   const [mobileShopperExploreOpen, setMobileShopperExploreOpen] = useState(false);
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
   const [desktopAdminOpen, setDesktopAdminOpen] = useState(false);
   const [desktopCollectionOpen, setDesktopCollectionOpen] = useState(false);
   const [desktopExploreOpen, setDesktopExploreOpen] = useState(false);
