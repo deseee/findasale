@@ -157,6 +157,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   };
 
   const staticNavLinks = [
+    { href: '/map', label: 'Map' },
+    { href: '/calendar', label: 'Calendar' },
     { href: '/feed', label: 'Feed' },
     { href: '/inspiration', label: 'Inspiration' },
     { href: '/trending', label: 'Trending' },
@@ -669,7 +671,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
         {/* Drawer nav links */}
         <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-1" aria-label="Mobile menu">
-          {staticNavLinks.map(({ href, label }) => (
+          {staticNavLinks.filter(({ href }) => !['/feed', '/inspiration', '/trending'].includes(href)).map(({ href, label }) => (
             <Link
               key={href}
               href={href}
@@ -1015,6 +1017,21 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileShopperExploreOpen && (
                       <>
+                        <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Zap size={14} className="inline mr-2 text-indigo-500" /> Feed
+                        </Link>
+                        <Link href="/inspiration" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Lightbulb size={14} className="inline mr-2 text-indigo-500" /> Inspiration
+                        </Link>
+                        <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
+                        </Link>
+                        <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Map size={14} className="inline mr-2 text-indigo-500" /> Map
+                        </Link>
+                        <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
+                        </Link>
                         <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
                         </Link>
@@ -1112,6 +1129,21 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileProToolsOpen && (
                   <>
+                    <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Zap size={14} className="inline mr-2 text-indigo-500" /> Feed
+                    </Link>
+                    <Link href="/inspiration" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Lightbulb size={14} className="inline mr-2 text-indigo-500" /> Inspiration
+                    </Link>
+                    <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
+                    </Link>
+                    <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Map size={14} className="inline mr-2 text-indigo-500" /> Map
+                    </Link>
+                    <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
+                    </Link>
                     <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
                     </Link>
@@ -1139,6 +1171,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             {isClient && user && (
               <>
                 <div className="border-t border-warm-200 dark:border-gray-700 pt-3 mt-2 space-y-1">
+                  <Link href="/pricing" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                    <Tag size={14} className="inline mr-2 text-warm-500" /> Pricing
+                  </Link>
                   {user?.roles?.includes('ORGANIZER') && (
                     <Link href="/organizer/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <UserCircle size={14} className="inline mr-2 text-amber-600" /> My Profile
