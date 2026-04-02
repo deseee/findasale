@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useToast } from './ToastContext';
+import api from '../lib/api';
 
 interface SaleShareButtonProps {
   saleId: string;
@@ -25,6 +26,11 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
     ? `${window.location.origin}/sales/${saleId}?ref=${userId}`
     : `${window.location.origin}/sales/${saleId}`;
 
+  // Fire SHARE ripple event
+  const fireShareRipple = () => {
+    api.post(`/sales/${saleId}/ripples`, { type: 'SHARE' }).catch(() => { /* fire-and-forget */ });
+  };
+
   // Close popover on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -45,6 +51,7 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
     try {
       await navigator.clipboard.writeText(referralUrl);
       showToast('Link copied!', 'success');
+      fireShareRipple();
       setIsOpen(false);
     } catch (err) {
       console.error('Failed to copy:', err);
@@ -56,18 +63,21 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
       document.execCommand('copy');
       document.body.removeChild(textArea);
       showToast('Link copied!', 'success');
+      fireShareRipple();
       setIsOpen(false);
     }
   };
 
   const handleFacebookShare = () => {
     const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralUrl)}`;
+    fireShareRipple();
     window.open(facebookUrl, 'facebook-share', 'width=600,height=400');
     setIsOpen(false);
   };
 
   const handleTwitterShare = () => {
     const twitterUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(`Check out this sale: ${saleTitle}`)}`;
+    fireShareRipple();
     window.open(twitterUrl, 'twitter-share', 'width=600,height=400');
     setIsOpen(false);
   };
@@ -76,6 +86,7 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
     try {
       await navigator.clipboard.writeText(referralUrl);
       showToast('Link copied for Nextdoor!', 'success');
+      fireShareRipple();
       setTimeout(() => {
         window.open('https://nextdoor.com/news_feed/', 'nextdoor-share');
       }, 300);
@@ -88,12 +99,14 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
 
   const handleThreadsShare = () => {
     const threadsUrl = `https://www.threads.net/intent/post?text=${encodeURIComponent(`Check out this sale: ${saleTitle} - ${referralUrl}`)}`;
+    fireShareRipple();
     window.open(threadsUrl, 'threads-share', 'width=600,height=400');
     setIsOpen(false);
   };
 
   const handlePinterestShare = () => {
     const pinterestUrl = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(referralUrl)}&description=${encodeURIComponent(saleTitle)}`;
+    fireShareRipple();
     window.open(pinterestUrl, 'pinterest-share', 'width=600,height=400');
     setIsOpen(false);
   };
@@ -102,6 +115,7 @@ const SaleShareButton: React.FC<SaleShareButtonProps> = ({
     try {
       await navigator.clipboard.writeText(referralUrl);
       showToast('Link copied for TikTok!', 'success');
+      fireShareRipple();
       setTimeout(() => {
         window.open('https://www.tiktok.com/', 'tiktok-share');
       }, 300);

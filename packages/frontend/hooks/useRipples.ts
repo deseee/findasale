@@ -1,7 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+import api from '../lib/api';
 
 /**
  * DTO for ripple summary (counts by type)
@@ -42,7 +40,7 @@ export const useRippleSummary = (saleId: string | null, enabled: boolean = true)
     queryKey: ['ripples', 'summary', saleId],
     queryFn: async () => {
       if (!saleId) throw new Error('saleId is required');
-      const res = await axios.get(`${API_BASE}/sales/${saleId}/ripples/summary`);
+      const res = await api.get(`/sales/${saleId}/ripples/summary`);
       return res.data;
     },
     enabled: enabled && !!saleId,
@@ -66,7 +64,7 @@ export const useRippleTrend = (
     queryKey: ['ripples', 'trend', saleId, hours],
     queryFn: async () => {
       if (!saleId) throw new Error('saleId is required');
-      const res = await axios.get(`${API_BASE}/sales/${saleId}/ripples/trend`, {
+      const res = await api.get(`/sales/${saleId}/ripples/trend`, {
         params: { hours },
       });
       return res.data;
@@ -93,7 +91,7 @@ export const useRecordRipple = () => {
       type: 'VIEW' | 'SHARE' | 'SAVE' | 'BID';
       metadata?: Record<string, any>;
     }) => {
-      const res = await axios.post(`${API_BASE}/sales/${saleId}/ripples`, {
+      const res = await api.post(`/sales/${saleId}/ripples`, {
         type,
         metadata,
       });

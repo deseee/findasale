@@ -158,6 +158,12 @@ const SaleDetailPage = () => {
     api.post(`/api/sales/${id}/visit`).catch(() => { /* fire-and-forget */ });
   }, [id, user?.id]);
 
+  // Feature #51: Record VIEW ripple for analytics
+  useEffect(() => {
+    if (!id) return;
+    api.post(`/sales/${id}/ripples`, { type: 'VIEW' }).catch(() => { /* fire-and-forget */ });
+  }, [id]);
+
   // Feature #121: Detect navigation away from sale with active holds
   useEffect(() => {
     if (!id || !user) return;
@@ -887,7 +893,7 @@ const SaleDetailPage = () => {
                       )}
                     </Link>
                     <div className="absolute top-2 right-2">
-                      <FavoriteButton itemId={item.id} variant="icon" size="md" />
+                      <FavoriteButton itemId={item.id} saleId={id as string} variant="icon" size="md" />
                     </div>
                   </div>
                   <div className="p-4 flex flex-col flex-grow">

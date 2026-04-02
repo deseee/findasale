@@ -21,6 +21,7 @@ import api from '../lib/api';
 
 interface FavoriteButtonProps {
   itemId: string;
+  saleId?: string; // Optional: for recording SAVE ripples
   label?: string;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'icon' | 'button';
@@ -28,6 +29,7 @@ interface FavoriteButtonProps {
 
 const FavoriteButton: React.FC<FavoriteButtonProps> = ({
   itemId,
+  saleId,
   label = 'Save',
   size = 'md',
   variant = 'icon',
@@ -90,6 +92,11 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
       // Show success toast
       const message = res.data.isFavorited ? '❤️ Saved!' : '✓ Removed from saves';
       showToast(message, 'success');
+
+      // Record SAVE ripple if item was favorited (only fire on add, not remove)
+      if (res.data.isFavorited && saleId) {
+        api.post(`/sales/${saleId}/ripples`, { type: 'SAVE' }).catch(() => { /* fire-and-forget */ });
+      }
     } catch (err) {
       // Revert optimistic update on error
       setIsFavorited(previousState);
