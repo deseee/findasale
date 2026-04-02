@@ -685,6 +685,20 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
             {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
+                {/* User info — name, email, rank badge, XP bar */}
+                {isClient && user && (
+                  <div className="px-3 py-2 mb-1 border-b border-warm-200 dark:border-gray-700">
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">{user.name || user.email}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">⚔️ Scout</span>
+                      <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full max-w-[100px] overflow-hidden">
+                        <div className="h-full bg-indigo-500" style={{ width: '40%' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* ADMIN Section — Collapsible (ADMIN role) */}
                 {isAdmin && (
                   <>
@@ -845,7 +859,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 {/* Pro Tools Section — Collapsible */}
                 <button
                   onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
                   <span className="flex items-center gap-2"><Sparkles size={14} className="text-purple-400" /> Pro Tools</span>
                   <ChevronRight
