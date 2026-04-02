@@ -81,6 +81,13 @@ const OrganizerHoldsPage = () => {
   const [sortBy, setSortBy] = useState<'expiry' | 'created'>('expiry');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Initialize saleFilter from query param on mount
+  React.useEffect(() => {
+    if (router.isReady && router.query.saleId) {
+      setSaleFilter(router.query.saleId as string);
+    }
+  }, [router.isReady, router.query.saleId]);
+
   if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;

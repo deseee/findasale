@@ -201,12 +201,55 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
         // title + price required by FlashDealForm dropdown on organizer dashboard.
         // status kept for item count badges. Avoiding full item select — too heavy for list view.
-        items: { select: { id: true, title: true, price: true, status: true } }
+        items: { select: { id: true, title: true, price: true, status: true } },
+        // Per-sale counts for SecondarySaleCard stats display
+        _count: { select: { items: true } }
       },
       take: 50
     });
 
-    res.json({ sales: sales.map((s: any) => convertDecimalsToNumbers(s)) });
+    // Fetch active hold counts per sale
+    const saleIds = sales.map(s => s.id);
+    const holdCountsMap = new Map<string, number>();
+
+    if (saleIds.length > 0) {
+      const holdCounts = await prisma.itemReservation.groupBy({
+        by: ['itemId'],
+        where: {
+          item: {
+            saleId: { in: saleIds }
+          },
+          status: { in: ['PENDING', 'CONFIRMED'] }
+        }
+      });
+
+      // Map holds to sales by joining on items
+      const itemToSaleMap = new Map<string, string>();
+      sales.forEach(sale => {
+        sale.items.forEach(item => {
+          itemToSaleMap.set(item.id, sale.id);
+        });
+      });
+
+      holdCounts.forEach(holdCount => {
+        const saleId = itemToSaleMap.get(holdCount.itemId);
+        if (saleId) {
+          holdCountsMap.set(saleId, (holdCountsMap.get(saleId) ?? 0) + 1);
+        }
+      });
+    }
+
+    // Enrich sales with stats
+    const enrichedSales = sales.map((s: any) => ({
+      ...s,
+      stats: {
+        itemCount: s._count.items,
+        holdCount: holdCountsMap.get(s.id) ?? 0,
+        visitorCount: s.qrScanCount
+      }
+    }));
+
+    res.json({ sales: enrichedSales.map((s: any) => convertDecimalsToNumbers(s)) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while fetching your sales' });

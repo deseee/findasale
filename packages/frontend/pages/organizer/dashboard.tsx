@@ -706,44 +706,44 @@ const OrganizerDashboard = () => {
                         Publish Sale
                       </Link>
                     )}
-                    {statsData.activeSale.status === 'PUBLISHED' && (
-                      <>
-                        <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm" title="Add, edit, or remove items from this sale">
-                          Manage Items
-                        </Link>
-                        <button
-                          onClick={async () => {
-                            const confirmed = window.confirm('Close this sale early? You can reopen it later from your dashboard.');
-                            if (!confirmed) return;
-                            try {
-                              await api.patch(`/sales/${statsData.activeSale!.id}/status`, { status: 'ENDED' });
-                              showToast('Sale closed successfully', 'success');
-                              setTimeout(() => window.location.reload(), 1000);
-                            } catch (error: any) {
-                              console.error('Failed to close sale:', error);
-                              showToast(error.response?.data?.message || 'Failed to close sale', 'error');
-                            }
-                          }}
-                          className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                          title="End your sale before the scheduled end date"
-                        >
-                          Close Sale Early
-                        </button>
-                      </>
-                    )}
                   </div>
 
-                  {/* Quick Action Buttons */}
+                  {/* Consolidated Action Buttons Row */}
                   <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
                     <Link href={`/sales/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="See your sale as shoppers see it">
                       View Live
                     </Link>
+                    {statsData.activeSale.status === 'PUBLISHED' && (
+                      <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-full hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors" title="Add, edit, or remove items from this sale">
+                        Items
+                      </Link>
+                    )}
                     <Link href={`/organizer/holds?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors" title="View and manage shopper holds for this sale">
                       Holds
                     </Link>
                     <Link href={`/organizer/pos?saleId=${statsData.activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="Open Point of Sale to process in-person transactions">
                       POS
                     </Link>
+                    {statsData.activeSale.status === 'PUBLISHED' && (
+                      <button
+                        onClick={async () => {
+                          const confirmed = window.confirm('Close this sale early? You can reopen it later from your dashboard.');
+                          if (!confirmed) return;
+                          try {
+                            await api.patch(`/sales/${statsData.activeSale!.id}/status`, { status: 'ENDED' });
+                            showToast('Sale closed successfully', 'success');
+                            setTimeout(() => window.location.reload(), 1000);
+                          } catch (error: any) {
+                            console.error('Failed to close sale:', error);
+                            showToast(error.response?.data?.message || 'Failed to close sale', 'error');
+                          }
+                        }}
+                        className="text-sm px-3 py-1 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-full hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                        title="End your sale before the scheduled end date"
+                      >
+                        Close Sale
+                      </button>
+                    )}
                   </div>
 
                   {/* Compact Holds Summary */}
@@ -950,13 +950,13 @@ const OrganizerDashboard = () => {
                     {/* Expanded Content */}
                     {otherSalesExpanded && (
                       <div className="border-t border-warm-200 dark:border-gray-700 p-4 space-y-3">
-                        {sortedOtherSales.slice(0, 2).map((sale: Sale) => (
+                        {sortedOtherSales.slice(0, 2).map((sale: any) => (
                           <SecondarySaleCard
                             key={sale.id}
                             sale={sale}
-                            stats={{
+                            stats={sale.stats || {
                               itemCount: 0,
-                              holdCount: holdCountData?.count ?? 0,
+                              holdCount: 0,
                               visitorCount: 0,
                             }}
                             onMakePrimary={(saleId) => {

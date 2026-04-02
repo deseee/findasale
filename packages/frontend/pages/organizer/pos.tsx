@@ -132,6 +132,14 @@ export default function POSPage() {
       .catch(err => console.error('[pos] Failed to load sales:', err));
   }, [user]);
 
+  // ─── Pre-select sale from query param ────────────────────────────────────────────
+
+  useEffect(() => {
+    if (router.isReady && router.query.saleId) {
+      setSelectedSaleId(router.query.saleId as string);
+    }
+  }, [router.isReady, router.query.saleId]);
+
   // ─── Initialize Stripe Terminal SDK ───────────────────────────────────────────────────────
 
   const initTerminal = useCallback(async () => {

@@ -532,7 +532,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -623,6 +623,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Feature #371: Handle high-value flag and AI analysis fields
     if (estimatedValue !== undefined) updateData.estimatedValue = estimatedValue ? parseFloat(estimatedValue) : null;
     if (aiSuggestedPrice !== undefined) updateData.aiSuggestedPrice = aiSuggestedPrice ? parseFloat(aiSuggestedPrice) : null;
+    if (aiConfidence !== undefined) updateData.aiConfidence = aiConfidence ? parseFloat(aiConfidence) : null;
 
     // Feature #371: Handle isHighValue toggle with auto-flag lock logic
     if (isHighValue !== undefined) {
@@ -647,6 +648,39 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: updateData
     });
+
+    // Feature #372: Wire auto high-value flagging after AI analysis
+    // If aiConfidence or estimatedValue was just updated, re-evaluate auto-flagging
+    if ((aiConfidence !== undefined || estimatedValue !== undefined) && !updatedItem.isHighValueLocked) {
+      try {
+        const sale = await prisma.sale.findUnique({
+          where: { id: updatedItem.saleId },
+          select: { autoFlagHighValue: true, highValueThresholdUSD: true }
+        });
+
+        if (sale) {
+          const shouldFlag = evaluateAutoHighValueFlag(
+            updatedItem,
+            sale.highValueThresholdUSD?.toNumber() || 500,
+            sale.autoFlagHighValue
+          );
+
+          // If auto-flagging logic says it should be flagged, update it
+          if (shouldFlag && !updatedItem.isHighValue) {
+            await prisma.item.update({
+              where: { id },
+              data: {
+                isHighValue: true,
+                highValueSource: 'AUTO',
+                highValueFlaggedAt: new Date()
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`[auto-flag] failed to evaluate item "${id}" for auto-flagging:`, err);
+      }
+    }
 
     // Feature #70: Emit price drop event if price was reduced
     if (price !== undefined && item.price && updateData.price !== undefined && updateData.price < item.price) {
