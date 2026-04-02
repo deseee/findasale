@@ -733,7 +733,49 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           <div className="border-t border-warm-200 pt-3 mt-2 space-y-1" role="navigation" aria-label="Authenticated navigation">
             {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
-                {/* Organizer Dashboard — always first for organizers */}
+                {/* Admin Section — appears first if user is admin */}
+                {isClient && user?.roles?.includes('ADMIN') && (
+                  <>
+                    <button
+                      onClick={() => setMobileAdminOpen(!mobileAdminOpen)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <span className="flex items-center gap-2"><ShieldAlert size={14} className="text-red-500" /> Admin</span>
+                      <ChevronRight
+                        size={16}
+                        className={`transition-transform duration-200 ${mobileAdminOpen ? 'rotate-90' : ''}`}
+                      />
+                    </button>
+                    {mobileAdminOpen && (
+                      <>
+                        <Link href="/admin" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium">
+                          <LayoutDashboard size={14} className="inline mr-2 text-red-500" /> Admin Dashboard
+                        </Link>
+                        <Link href="/admin/users" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Users size={14} className="inline mr-2 text-red-500" /> Manage Users
+                        </Link>
+                        <Link href="/admin/sales" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Store size={14} className="inline mr-2 text-red-500" /> Manage Sales
+                        </Link>
+                        <Link href="/admin/items" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <List size={14} className="inline mr-2 text-red-500" /> Manage Items
+                        </Link>
+                        <Link href="/admin/reports" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <BarChart2 size={14} className="inline mr-2 text-red-500" /> Reports
+                        </Link>
+                        <Link href="/admin/feature-flags" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Zap size={14} className="inline mr-2 text-red-500" /> Feature Flags
+                        </Link>
+                        <Link href="/admin/broadcast" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <MessageSquare size={14} className="inline mr-2 text-red-500" /> Broadcast Message
+                        </Link>
+                      </>
+                    )}
+                    <hr className="my-2 border-warm-200 dark:border-gray-700" />
+                  </>
+                )}
+
+                {/* Organizer Dashboard */}
                 <Link href="/organizer/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   Organizer Dashboard
                 </Link>
@@ -945,48 +987,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                       <List size={14} className="inline mr-2 text-amber-400" /> Line Queue <span className="text-xs text-gray-400">(Coming Soon)</span>
                     </Link>
-                  </>
-                )}
-
-                {/* Admin Section — Collapsible */}
-                {isClient && user?.roles?.includes('ADMIN') && (
-                  <>
-                    <hr className="my-2 border-warm-200 dark:border-gray-700" />
-                    <button
-                      onClick={() => setMobileAdminOpen(!mobileAdminOpen)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <span className="flex items-center gap-2"><ShieldAlert size={14} className="text-red-500" /> Admin</span>
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform duration-200 ${mobileAdminOpen ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-                    {mobileAdminOpen && (
-                      <>
-                        <Link href="/admin" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium">
-                          <LayoutDashboard size={14} className="inline mr-2 text-red-500" /> Admin Dashboard
-                        </Link>
-                        <Link href="/admin/users" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Users size={14} className="inline mr-2 text-red-500" /> Manage Users
-                        </Link>
-                        <Link href="/admin/sales" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Store size={14} className="inline mr-2 text-red-500" /> Manage Sales
-                        </Link>
-                        <Link href="/admin/items" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <List size={14} className="inline mr-2 text-red-500" /> Manage Items
-                        </Link>
-                        <Link href="/admin/reports" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <BarChart2 size={14} className="inline mr-2 text-red-500" /> Reports
-                        </Link>
-                        <Link href="/admin/feature-flags" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Zap size={14} className="inline mr-2 text-red-500" /> Feature Flags
-                        </Link>
-                        <Link href="/admin/broadcast" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <MessageSquare size={14} className="inline mr-2 text-red-500" /> Broadcast Message
-                        </Link>
-                      </>
-                    )}
                   </>
                 )}
 
