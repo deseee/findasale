@@ -709,20 +709,6 @@ const OrganizerDashboard = () => {
                     </div>
                   </Link>
 
-                  {/* Context-Aware Primary CTA */}
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    {activeSale.status === 'DRAFT' && (statsData?.items?.draft ?? 0) > 0 && (
-                      <Link href={`/organizer/add-items/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                        Add Photos
-                      </Link>
-                    )}
-                    {activeSale.status === 'DRAFT' && statsData?.items.draft === 0 && (
-                      <Link href={`/organizer/edit-sale/${activeSale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
-                        Publish Sale
-                      </Link>
-                    )}
-                  </div>
-
                   {/* Consolidated Action Buttons Row */}
                   <div className="flex flex-wrap gap-2 mt-2 border-t border-warm-200 dark:border-gray-700">
                     <Link href={`/sales/${activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="See your sale as shoppers see it">
@@ -731,6 +717,16 @@ const OrganizerDashboard = () => {
                     {activeSale.status === 'PUBLISHED' && (
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
                         Items
+                      </Link>
+                    )}
+                    {activeSale.status === 'DRAFT' && (
+                      <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add items to this draft sale">
+                        Items
+                      </Link>
+                    )}
+                    {activeSale.status === 'DRAFT' && (
+                      <Link href={`/organizer/edit-sale/${activeSale.id}`} className="text-sm px-3 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-full hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors" title="Review and publish this sale">
+                        Publish Sale
                       </Link>
                     )}
                     <Link href={`/organizer/holds?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors" title="View and manage shopper holds for this sale">
