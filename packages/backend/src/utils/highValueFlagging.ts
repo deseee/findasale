@@ -10,7 +10,7 @@
 
 export interface ItemForHighValueCheck {
   isHighValueLocked?: boolean;
-  category?: string;
+  category?: string | null;
   estimatedValue?: number | string | any;
   aiConfidence?: number;
 }
