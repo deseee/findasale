@@ -354,64 +354,72 @@ const AvatarDropdown: React.FC = () => {
                     <ShoppingCart size={16} className="text-amber-500" />
                     <span>POS / Checkout</span>
                   </Link>
+                  <Link
+                    href="/organizer/ripples"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Activity size={16} className="text-amber-500" />
+                    <span>Sale Ripples</span>
+                  </Link>
                 </>
               )}
 
-              {/* Selling Tools Section — Collapsible */}
+              {/* In-Sale Tools Section — Collapsible */}
               <button
-                onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
+                onClick={() => setInSaleToolsOpen(!inSaleToolsOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <Wrench size={16} />
-                  <span>Selling Tools</span>
+                  <Share2 size={16} />
+                  <span>In-Sale Tools</span>
                 </div>
                 <ChevronRight
                   size={16}
-                  className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
+                  className={`transition-transform duration-200 ${inSaleToolsOpen ? 'rotate-90' : ''}`}
                 />
               </button>
-              {mobileProToolsOpen && (
+              {inSaleToolsOpen && (
                 <>
                   <Link
-                    href="/organizer/qr-codes"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <QrCode size={16} className="text-amber-500" />
-                    <span>QR Codes</span>
-                  </Link>
-                  <Link
-                    href="/organizer/analytics"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <BarChart2 size={16} className="text-amber-500" />
-                    <span>Analytics</span>
-                  </Link>
-                  <Link
-                    href="/organizer/staff"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <UserPlus size={16} className="text-amber-500" />
-                    <span>Staff Accounts</span>
-                  </Link>
-                  <Link
-                    href="/organizer/map"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Map size={16} className="text-amber-500" />
-                    <span>Sale Map</span>
-                  </Link>
-                  <Link
-                    href="/organizer/inventory"
+                    href="/organizer/promote"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
                     onClick={() => setIsOpen(false)}
                   >
-                    <Package size={16} className="text-amber-400" />
-                    <span>Inventory <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <Share2 size={16} className="text-amber-400" />
+                    <span>Share & Promote <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                  </Link>
+                  <Link
+                    href="/organizer/send-update"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <MessageSquare size={16} className="text-amber-400" />
+                    <span>Send Update <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                  </Link>
+                  <Link
+                    href="/organizer/photo-ops"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Camera size={16} className="text-amber-400" />
+                    <span>Photo Ops <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                  </Link>
+                  <Link
+                    href="/organizer/qr-codes"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Tag size={16} className="text-amber-400" />
+                    <span>Price Tags <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                  </Link>
+                  <Link
+                    href="/organizer/print-kit"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Printer size={16} className="text-amber-500" />
+                    <span>Print Kit</span>
                   </Link>
                 </>
               )}
@@ -457,20 +465,20 @@ const AvatarDropdown: React.FC = () => {
                     <span>Payouts</span>
                   </Link>
                   <Link
-                    href="/organizer/ripples"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Activity size={16} className="text-amber-500" />
-                    <span>Sale Ripples</span>
-                  </Link>
-                  <Link
                     href="/organizer/ugc-moderation"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <Image size={16} className="text-amber-500" />
                     <span>Manage Photos</span>
+                  </Link>
+                  <Link
+                    href="/organizer/reputation"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Star size={16} className="text-amber-500" />
+                    <span>Reputation</span>
                   </Link>
                 </>
               )}
@@ -732,19 +740,11 @@ const AvatarDropdown: React.FC = () => {
                 <span>My Profile</span>
               </Link>
               <Link
-                href="/organizer/reputation"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                <Star size={16} className="text-amber-600" />
-                <span>Reputation</span>
-              </Link>
-              <Link
                 href="/organizer/settings"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                <Settings size={16} className="text-amber-600" />
+                <Settings size={16} className="text-amber-600 dark:text-amber-400" />
                 <span>Settings</span>
               </Link>
 
@@ -762,10 +762,7 @@ const AvatarDropdown: React.FC = () => {
                 onClick={() => setIsOpen(false)}
               >
                 <LayoutDashboard size={16} className="text-indigo-600" />
-                <div className="flex flex-col">
-                  <span>Shopper Dashboard</span>
-                  {isOrganizer && <span className="text-xs text-gray-500 dark:text-gray-400">As a shopper</span>}
-                </div>
+                <span>Shopper Dashboard</span>
               </Link>
 
               {/* Shopping Cart Button */}
