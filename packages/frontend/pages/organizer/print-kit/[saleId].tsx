@@ -357,6 +357,104 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               </button>
             </div>
           ) : (
+            <div className="space-y-8 no-print">
+              {/* Sign Templates Section */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Sign Templates</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  {/* Yard Sign */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => window.open(`/api/organizer/sales/${saleId}/signs/yard`, '_blank')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      📋 Yard Sign
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Full-page sign with large QR code</p>
+                  </div>
+
+                  {/* Directional Signs */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => window.open(`/api/organizer/sales/${saleId}/signs/directional`, '_blank')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      ➡️ Directional
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Half-page signs for street corners</p>
+                  </div>
+
+                  {/* Table Tents */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => window.open(`/api/organizer/sales/${saleId}/signs/table-tent`, '_blank')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      🏕️ Table Tents
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Folded cards for tables and counters</p>
+                  </div>
+
+                  {/* Hang Tags */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => window.open(`/api/organizer/sales/${saleId}/signs/hang-tag`, '_blank')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      🏷️ Hang Tags
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">8 perforated tags per page</p>
+                  </div>
+
+                  {/* Full Kit */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => window.open(`/api/organizer/sales/${saleId}/signs/full-kit`, '_blank')}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      📦 Full Kit
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">All sign templates combined</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Item Labels Section */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">QR Item Labels</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 6-up Labels */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => window.open(`/api/sales/${saleId}/labels`, '_blank')}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      🏷️ 4×3" Labels (6-up)
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">One label per page with QR code</p>
+                  </div>
+
+                  {/* Avery 5160 Stickers */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => window.open(`/api/organizer/sales/${saleId}/print-kit`, '_blank')}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      📌 Avery 5160 Stickers
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Price tags & item stickers (12 per page)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Legacy Print Preview */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Print Preview</h2>
+              </div>
+            </div>
+          )}
+
+          {!isLoading && !saleError && !itemsError && sale && (
             <div className="print-container space-y-0">
               {/* Yard Sign */}
               <div className="yard-sign bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">

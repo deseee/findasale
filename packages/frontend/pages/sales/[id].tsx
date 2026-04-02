@@ -37,6 +37,9 @@ import HuntSummary from '../../components/HuntSummary'; // Feature #85: Treasure
 import { useArrivalAssistant } from '../../hooks/useArrivalAssistant'; // Feature #84: Approach Notes
 import RemindMeButton from '../../components/RemindMeButton';
 import LeaveSaleWarning from '../../components/LeaveSaleWarning'; // Feature #121: Warn on leave
+import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart Cart
+import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: Smart Cart
+import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
 
 
 interface Sale {
@@ -110,6 +113,7 @@ const SaleDetailPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const shopperCart = useShopperCart();
 
   const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
   const [bidAmounts, setBidAmounts] = useState<{ [itemId: string]: string }>({});
@@ -123,6 +127,9 @@ const SaleDetailPage = () => {
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const [showLeaveWarning, setShowLeaveWarning] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [isShopperCartOpen, setIsShopperCartOpen] = useState(false);
+  const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false);
+  const [pendingCartItem, setPendingCartItem] = useState<any>(null);
 
   // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
@@ -259,6 +266,37 @@ const SaleDetailPage = () => {
 
   const handleBidAmountChange = (itemId: string, value: string) => {
     setBidAmounts(prev => ({ ...prev, [itemId]: value }));
+  };
+
+  const handleAddToCart = (item: any) => {
+    // Phase 1: Smart Cart — add item to localStorage cart
+    const newCartItem = {
+      id: item.id,
+      title: item.title,
+      price: item.price ? Math.round(item.price * 100) : null, // Convert to cents
+      photoUrl: item.photoUrls?.[0],
+      saleId: id as string,
+    };
+
+    // Check if switching sales
+    if (!shopperCart.canAddFromDifferentSale(id as string)) {
+      setPendingCartItem(newCartItem);
+      setShowSwitchSaleModal(true);
+      return;
+    }
+
+    shopperCart.addItem(newCartItem);
+    showToast('Added to cart', 'success');
+  };
+
+  const handleConfirmSwitchSale = () => {
+    if (pendingCartItem) {
+      shopperCart.switchSale(pendingCartItem.saleId);
+      shopperCart.addItem(pendingCartItem);
+      showToast('Cart cleared and item added', 'success');
+    }
+    setShowSwitchSaleModal(false);
+    setPendingCartItem(null);
   };
 
   const handleImportComplete = () => {
@@ -1043,14 +1081,30 @@ const SaleDetailPage = () => {
                         </div>
                       )}
                       {!isOrganizer && user && item.status === 'AVAILABLE' && (
-                        <>
+                        <div className="flex gap-2">
                           {!sale.isAuctionSale && (
-                            <button
-                              onClick={() => handleBuyNow(item.id, item.title)}
-                              className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
-                            >
-                              Buy Now
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleBuyNow(item.id, item.title)}
+                                className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
+                              >
+                                Buy Now
+                              </button>
+                              {item.price !== null && (
+                                <button
+                                  onClick={() => handleAddToCart(item)}
+                                  className={`text-sm px-3 py-1 rounded font-medium transition-colors ${
+                                    shopperCart.items.some((ci) => ci.id === item.id)
+                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 cursor-default'
+                                      : 'border border-amber-600 dark:border-amber-500 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                                  }`}
+                                  disabled={shopperCart.items.some((ci) => ci.id === item.id)}
+                                  title={shopperCart.items.some((ci) => ci.id === item.id) ? 'Item already in cart' : 'Add to shopping cart'}
+                                >
+                                  {shopperCart.items.some((ci) => ci.id === item.id) ? '✓ In Cart' : '+ Cart'}
+                                </button>
+                              )}
+                            </>
                           )}
                           {sale.isAuctionSale && item.auctionEndTime && (
                             <button
@@ -1060,7 +1114,7 @@ const SaleDetailPage = () => {
                               Place Bid
                             </button>
                           )}
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1140,6 +1194,44 @@ const SaleDetailPage = () => {
         saleId={sale.id}
         onSuccess={handleMessageSuccess}
       />
+
+      {/* Phase 1: Smart Cart — browsing cart drawer */}
+      <ShopperCartDrawer
+        isOpen={isShopperCartOpen}
+        onClose={() => setIsShopperCartOpen(false)}
+        saleName={sale?.title}
+      />
+
+      {/* Phase 1: Smart Cart — floating action button */}
+      <ShopperCartFAB onClick={() => setIsShopperCartOpen(true)} />
+
+      {/* Phase 1: Smart Cart — switch sale confirmation modal */}
+      {showSwitchSaleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm p-6">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-gray-50 mb-4">
+              Switch Sale?
+            </h3>
+            <p className="text-warm-700 dark:text-gray-300 mb-6">
+              Your cart has items from a different sale. Would you like to clear your cart and start with this sale?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowSwitchSaleModal(false)}
+                className="px-4 py-2 rounded border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                Keep Current Cart
+              </button>
+              <button
+                onClick={handleConfirmSwitchSale}
+                className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
+              >
+                Start New Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

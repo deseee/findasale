@@ -138,6 +138,693 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * GET /api/organizer/sales/:saleId/signs/yard
+ * Improved yard sign: Large QR (5 inches), sale title, date range, address
+ * Single page, centered, letter size.
+ */
+export const getYardSignKit = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_yard_sign`;
+
+    const qrBuffer = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 500,
+      margin: 2,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+
+    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="yard-sign-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    const qrSize = 360; // 5 inches
+    const qrX = (PAGE_W - qrSize) / 2;
+    const qrY = 80;
+
+    // Title
+    doc
+      .fontSize(24)
+      .fillColor('#1a1a2e')
+      .font('Helvetica-Bold')
+      .text(sale.title, PAGE_MARGIN, 20, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+
+    // QR Code
+    doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+
+    // Date range
+    const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const endDate = new Date(sale.endDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    doc
+      .fontSize(16)
+      .fillColor('#666666')
+      .font('Helvetica-Bold')
+      .text(`${startDate} – ${endDate}`, PAGE_MARGIN, qrY + qrSize + 20, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // Address
+    doc
+      .fontSize(12)
+      .fillColor('#333333')
+      .font('Helvetica')
+      .text(`${sale.address}`, PAGE_MARGIN, doc.y + 8, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc
+      .fontSize(11)
+      .text(`${sale.city}, ${sale.state} ${sale.zip}`, PAGE_MARGIN, doc.y + 2, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // Footer
+    doc
+      .fontSize(10)
+      .fillColor('#666666')
+      .text('Scan to browse & buy online', PAGE_MARGIN, doc.y + 12, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc.end();
+  } catch (error) {
+    console.error('getYardSignKit error:', error);
+    res.status(500).json({ message: 'Failed to generate yard sign.' });
+  }
+};
+
+/**
+ * GET /api/organizer/sales/:saleId/signs/directional
+ * Half-page landscape (5.5"×8.5") with arrow + "Estate Sale →" text + QR
+ * Two per page (or one if only one sign needed).
+ */
+export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_directional_sign`;
+
+    const qrBuffer = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 300,
+      margin: 1,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+
+    // Landscape half-page: 8.5" wide, 5.5" tall
+    const doc = new PDFDocument({ size: [612, 396], margins: 0 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="directional-signs-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    const saleType = sale.saleType || 'ESTATE_SALE';
+    const saleTypeText =
+      saleType === 'ESTATE_SALE'
+        ? 'Estate Sale'
+        : saleType === 'YARD_SALE'
+          ? 'Yard Sale'
+          : 'Sale';
+
+    // Draw two directional signs per page
+    for (let i = 0; i < 2; i++) {
+      const yOffset = i * 198; // Half-page height = 396 / 2 = 198
+
+      // Border
+      doc
+        .rect(12, yOffset + 12, 588, 174)
+        .lineWidth(1)
+        .stroke('#1a1a2e');
+
+      // Arrow and text (left side)
+      doc
+        .fontSize(32)
+        .fillColor('#1a1a2e')
+        .font('Helvetica-Bold')
+        .text('▶', 30, yOffset + 40, { width: 40, align: 'center' });
+
+      doc
+        .fontSize(18)
+        .fillColor('#1a1a2e')
+        .font('Helvetica-Bold')
+        .text(saleTypeText, 90, yOffset + 50, { width: 300, align: 'left' });
+
+      doc
+        .fontSize(14)
+        .fillColor('#666666')
+        .font('Helvetica')
+        .text('→ This Way', 90, yOffset + 75, { width: 300, align: 'left' });
+
+      // QR (right side)
+      doc.image(qrBuffer, 430, yOffset + 40, { width: 140, height: 140 });
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('getDirectionalSignKit error:', error);
+    res.status(500).json({ message: 'Failed to generate directional signs.' });
+  }
+};
+
+/**
+ * GET /api/organizer/sales/:saleId/signs/table-tent
+ * 4"×6" folded tent card, landscape. Front: sale name + date/time + QR. Back: FindA.Sale URL.
+ * Two per page.
+ */
+export const getTableTentKit = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_table_tent`;
+
+    const qrBuffer = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 250,
+      margin: 1,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+
+    // 4" × 6" landscape
+    const doc = new PDFDocument({ size: [576, 288], margins: 0 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="table-tents-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+    const endDate = new Date(sale.endDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+
+    // Draw two table tents per page
+    for (let i = 0; i < 2; i++) {
+      const yOffset = i * 144; // Half page
+
+      // Border (fold line in middle)
+      doc
+        .rect(12, yOffset + 12, 552, 120)
+        .lineWidth(1)
+        .stroke('#1a1a2e');
+
+      // Fold line indicator (dashed)
+      doc
+        .moveTo(300, yOffset + 12)
+        .lineTo(300, yOffset + 132)
+        .lineWidth(0.5)
+        .dash(2, { space: 2 })
+        .stroke('#cccccc')
+        .undash();
+
+      // Front (left half): Sale title, date, QR
+      doc
+        .fontSize(14)
+        .fillColor('#1a1a2e')
+        .font('Helvetica-Bold')
+        .text(sale.title, 25, yOffset + 25, { width: 260, align: 'center' });
+
+      doc
+        .fontSize(10)
+        .fillColor('#666666')
+        .font('Helvetica')
+        .text(`${startDate} – ${endDate}`, 25, yOffset + 50, { width: 260, align: 'center' });
+
+      doc.image(qrBuffer, 100, yOffset + 65, { width: 100, height: 100 });
+
+      // Back (right half): FindA.Sale URL
+      doc
+        .fontSize(10)
+        .fillColor('#1a1a2e')
+        .font('Helvetica')
+        .text('finda.sale', 325, yOffset + 60, { width: 250, align: 'center' });
+
+      doc
+        .fontSize(8)
+        .fillColor('#666666')
+        .text('Browse items before you arrive', 325, yOffset + 75, { width: 250, align: 'center' });
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('getTableTentKit error:', error);
+    res.status(500).json({ message: 'Failed to generate table tents.' });
+  }
+};
+
+/**
+ * GET /api/organizer/sales/:saleId/signs/hang-tag
+ * 3"×2" hang tags, 4×2 grid (8 per page). Each tag: sale name (small) + QR.
+ * Perforated-style dashed border.
+ */
+export const getHangTagKit = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_hang_tag`;
+
+    const qrBuffer = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 150,
+      margin: 1,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+
+    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="hang-tags-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    // 3" × 2" tags = 216 × 144 points
+    const TAG_W = 216;
+    const TAG_H = 144;
+    const COLS = 4;
+    const ROWS = 2;
+    const START_X = 36;
+    const START_Y = 36;
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const x = START_X + col * TAG_W;
+        const y = START_Y + row * TAG_H;
+
+        // Perforated border (dashed)
+        doc
+          .rect(x + 6, y + 6, TAG_W - 12, TAG_H - 12)
+          .lineWidth(0.5)
+          .dash(3, { space: 2 })
+          .stroke('#cccccc')
+          .undash();
+
+        // Sale name (small)
+        doc
+          .fontSize(8)
+          .fillColor('#1a1a2e')
+          .font('Helvetica-Bold')
+          .text(sale.title, x + 10, y + 15, {
+            width: TAG_W - 20,
+            align: 'center',
+            ellipsis: true,
+          });
+
+        // QR code (centered)
+        const qrX = x + (TAG_W - 100) / 2;
+        const qrY = y + 35;
+        doc.image(qrBuffer, qrX, qrY, { width: 100, height: 100 });
+      }
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('getHangTagKit error:', error);
+    res.status(500).json({ message: 'Failed to generate hang tags.' });
+  }
+};
+
+/**
+ * GET /api/organizer/sales/:saleId/signs/full-kit
+ * Combined multi-section PDF: page 1 = yard sign, page 2 = directional signs,
+ * page 3 = table tents, page 4 = hang tags. All in one download.
+ */
+export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_full_kit`;
+
+    // Generate all QR codes upfront
+    const qrYardSign = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 500,
+      margin: 2,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    const qrDirectional = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 300,
+      margin: 1,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    const qrTableTent = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 250,
+      margin: 1,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    const qrHangTag = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 150,
+      margin: 1,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+
+    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="full-sign-kit-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const endDate = new Date(sale.endDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    // PAGE 1: Yard Sign
+    const qrSize = 360;
+    const qrX = (PAGE_W - qrSize) / 2;
+    const qrY = 80;
+
+    doc
+      .fontSize(24)
+      .fillColor('#1a1a2e')
+      .font('Helvetica-Bold')
+      .text(sale.title, PAGE_MARGIN, 20, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+
+    doc.image(qrYardSign, qrX, qrY, { width: qrSize, height: qrSize });
+
+    doc
+      .fontSize(16)
+      .fillColor('#666666')
+      .font('Helvetica-Bold')
+      .text(`${startDate} – ${endDate}`, PAGE_MARGIN, qrY + qrSize + 20, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc
+      .fontSize(12)
+      .fillColor('#333333')
+      .font('Helvetica')
+      .text(`${sale.address}`, PAGE_MARGIN, doc.y + 8, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc
+      .fontSize(11)
+      .text(`${sale.city}, ${sale.state} ${sale.zip}`, PAGE_MARGIN, doc.y + 2, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc
+      .fontSize(10)
+      .fillColor('#666666')
+      .text('Scan to browse & buy online', PAGE_MARGIN, doc.y + 12, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // PAGE 2: Directional Signs
+    doc.addPage();
+    const saleType = sale.saleType || 'ESTATE_SALE';
+    const saleTypeText =
+      saleType === 'ESTATE_SALE'
+        ? 'Estate Sale'
+        : saleType === 'YARD_SALE'
+          ? 'Yard Sale'
+          : 'Sale';
+
+    // Title
+    doc
+      .fontSize(20)
+      .fillColor('#1a1a2e')
+      .font('Helvetica-Bold')
+      .text('Directional Signs', PAGE_MARGIN, 20, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+
+    for (let i = 0; i < 2; i++) {
+      const yOffset = 100 + i * 300;
+
+      doc
+        .rect(PAGE_MARGIN, yOffset, PAGE_W - PAGE_MARGIN * 2, 250)
+        .lineWidth(1)
+        .stroke('#1a1a2e');
+
+      doc
+        .fontSize(32)
+        .fillColor('#1a1a2e')
+        .font('Helvetica-Bold')
+        .text('▶', PAGE_MARGIN + 20, yOffset + 30, { width: 40, align: 'center' });
+
+      doc
+        .fontSize(18)
+        .fillColor('#1a1a2e')
+        .font('Helvetica-Bold')
+        .text(saleTypeText, PAGE_MARGIN + 80, yOffset + 40, { width: 300, align: 'left' });
+
+      doc
+        .fontSize(14)
+        .fillColor('#666666')
+        .font('Helvetica')
+        .text('→ This Way', PAGE_MARGIN + 80, yOffset + 65, { width: 300, align: 'left' });
+
+      doc.image(qrDirectional, PAGE_W - PAGE_MARGIN - 150, yOffset + 30, {
+        width: 120,
+        height: 120,
+      });
+    }
+
+    // PAGE 3: Table Tents
+    doc.addPage();
+    doc
+      .fontSize(20)
+      .fillColor('#1a1a2e')
+      .font('Helvetica-Bold')
+      .text('Table Tents (Fold in Half)', PAGE_MARGIN, 20, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    for (let i = 0; i < 2; i++) {
+      const yOffset = 100 + i * 300;
+
+      doc
+        .rect(PAGE_MARGIN, yOffset, PAGE_W - PAGE_MARGIN * 2, 250)
+        .lineWidth(1)
+        .stroke('#1a1a2e');
+
+      // Fold line
+      const foldX = PAGE_MARGIN + (PAGE_W - PAGE_MARGIN * 2) / 2;
+      doc
+        .moveTo(foldX, yOffset)
+        .lineTo(foldX, yOffset + 250)
+        .lineWidth(0.5)
+        .dash(2, { space: 2 })
+        .stroke('#cccccc')
+        .undash();
+
+      // Front
+      doc
+        .fontSize(14)
+        .fillColor('#1a1a2e')
+        .font('Helvetica-Bold')
+        .text(sale.title, PAGE_MARGIN + 20, yOffset + 30, {
+          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
+          align: 'center',
+        });
+
+      doc
+        .fontSize(10)
+        .fillColor('#666666')
+        .font('Helvetica')
+        .text(`${startDate} – ${endDate}`, PAGE_MARGIN + 20, yOffset + 60, {
+          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
+          align: 'center',
+        });
+
+      doc.image(qrTableTent, PAGE_MARGIN + 40, yOffset + 80, { width: 100, height: 100 });
+
+      // Back
+      doc
+        .fontSize(10)
+        .fillColor('#1a1a2e')
+        .font('Helvetica')
+        .text('finda.sale', PAGE_MARGIN + (PAGE_W - PAGE_MARGIN * 2) / 2 + 20, yOffset + 50, {
+          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
+          align: 'center',
+        });
+
+      doc
+        .fontSize(8)
+        .fillColor('#666666')
+        .text('Browse items before you arrive', PAGE_MARGIN + (PAGE_W - PAGE_MARGIN * 2) / 2 + 20, yOffset + 70, {
+          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
+          align: 'center',
+        });
+    }
+
+    // PAGE 4: Hang Tags
+    doc.addPage();
+    doc
+      .fontSize(20)
+      .fillColor('#1a1a2e')
+      .font('Helvetica-Bold')
+      .text('Hang Tags (Cut Along Dashed Lines)', PAGE_MARGIN, 20, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    const TAG_W = 216;
+    const TAG_H = 144;
+    const COLS = 4;
+    const ROWS = 2;
+    const START_X = 36;
+    const START_Y = 100;
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const x = START_X + col * TAG_W;
+        const y = START_Y + row * TAG_H;
+
+        doc
+          .rect(x + 6, y + 6, TAG_W - 12, TAG_H - 12)
+          .lineWidth(0.5)
+          .dash(3, { space: 2 })
+          .stroke('#cccccc')
+          .undash();
+
+        doc
+          .fontSize(8)
+          .fillColor('#1a1a2e')
+          .font('Helvetica-Bold')
+          .text(sale.title, x + 10, y + 15, {
+            width: TAG_W - 20,
+            align: 'center',
+            ellipsis: true,
+          });
+
+        const qrX = x + (TAG_W - 100) / 2;
+        const qrY = y + 35;
+        doc.image(qrHangTag, qrX, qrY, { width: 100, height: 100 });
+      }
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('getFullSignKitPDF error:', error);
+    res.status(500).json({ message: 'Failed to generate full sign kit.' });
+  }
+};
+
+/**
  * Draw a single item sticker at position (x, y)
  * Format: item title + price + barcode (Code128-style ID)
  */

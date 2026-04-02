@@ -23,6 +23,7 @@ import {
   recordQrScan,
   closeAuctionEndpoint,
 } from '../controllers/itemController';
+import { getComps } from '../controllers/ebayController'; // Feature #229: eBay price comps
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
@@ -65,6 +66,10 @@ router.get('/:itemId/draft-status', authenticate, getItemDraftStatus);
 router.post('/:itemId/publish', authenticate, publishItem);
 router.post('/:id/hold-analysis', authenticate, holdAnalysis);
 router.post('/:id/release-analysis', authenticate, releaseAnalysis);
+
+// Feature #229: eBay price comps
+// Declared before /:id to prevent param capture
+router.post('/:id/comps', authenticate, getComps);
 
 // Phase 1: Batch Operations Toolkit — Status-safe validation + dry-run + tags operation
 // Declared before /:id to prevent 'bulk' being captured as an item ID.

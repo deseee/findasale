@@ -6,7 +6,7 @@ import { getPerformanceMetricsHandler } from '../controllers/performanceControll
 import { exportOrganizer } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
-import { getPrintKit } from '../controllers/printKitController';
+import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getHangTagKit, getFullSignKitPDF } from '../controllers/printKitController';
 
 const router = Router();
 
@@ -513,6 +513,14 @@ router.get('/export', authenticate, exportOrganizer);
 // Download unified print kit PDF (QR code + item barcode stickers)
 // Must be registered BEFORE /:id wildcard
 router.get('/:saleId/print-kit', authenticate, getPrintKit);
+
+// Feature #240: GET /api/organizer/sales/:saleId/signs/[type]
+// Download sign templates: yard | directional | table-tent | hang-tag | full-kit
+router.get('/:saleId/signs/yard', authenticate, getYardSignKit);
+router.get('/:saleId/signs/directional', authenticate, getDirectionalSignKit);
+router.get('/:saleId/signs/table-tent', authenticate, getTableTentKit);
+router.get('/:saleId/signs/hang-tag', authenticate, getHangTagKit);
+router.get('/:saleId/signs/full-kit', authenticate, getFullSignKitPDF);
 
 // GET /organizers/efficiency-stats — Organizer benchmarks vs. cohort
 // Must be registered BEFORE /:id to avoid Express matching 'efficiency-stats' as an id param

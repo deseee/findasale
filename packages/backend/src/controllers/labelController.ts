@@ -4,6 +4,7 @@
 
 import { Request, Response } from 'express';
 import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 
@@ -11,10 +12,11 @@ const LABEL_W = 288; // 4 inches @ 72 dpi
 const LABEL_H = 216; // 3 inches @ 72 dpi
 const MARGIN  = 16;
 
-function drawLabel(
+async function drawLabel(
   doc: PDFKit.PDFDocument,
   item: { title: string; price: number | null; category: string | null; condition: string | null; id: string },
   saleTitle: string,
+  qrBuffer: Buffer,
 ) {
   const x = MARGIN;
   const y = doc.y;
@@ -30,14 +32,14 @@ function drawLabel(
     .fontSize(14)
     .fillColor('#111111')
     .font('Helvetica-Bold')
-    .text(item.title, x, doc.y + 4, { width: LABEL_W - MARGIN * 2, align: 'left' });
+    .text(item.title, x, doc.y + 4, { width: LABEL_W - MARGIN * 2 - 50, align: 'left' });
 
   // Price
   const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'Price on request';
   doc
     .fontSize(20)
     .fillColor(item.price != null ? '#16a34a' : '#999999')
-    .text(priceText, x, doc.y + 8, { width: LABEL_W - MARGIN * 2, align: 'left' });
+    .text(priceText, x, doc.y + 8, { width: LABEL_W - MARGIN * 2 - 50, align: 'left' });
 
   // Category + condition chips
   const chips = [item.category, item.condition].filter(Boolean).join('  \u00b7  ');
@@ -46,15 +48,20 @@ function drawLabel(
       .fontSize(8)
       .fillColor('#555555')
       .font('Helvetica')
-      .text(chips, x, doc.y + 6, { width: LABEL_W - MARGIN * 2 });
+      .text(chips, x, doc.y + 6, { width: LABEL_W - MARGIN * 2 - 50 });
   }
 
-  // Item ID (small, bottom — useful for checkout scanning)
+  // Item ID (small, bottom-left — useful for checkout scanning)
   doc
     .fontSize(6)
     .fillColor('#aaaaaa')
     .font('Helvetica')
-    .text(`ID: ${item.id}`, x, doc.y + 10, { width: LABEL_W - MARGIN * 2 });
+    .text(`ID: ${item.id}`, x, doc.y + 10, { width: LABEL_W - MARGIN * 2 - 50 });
+
+  // QR code in bottom-right corner (40×40 pixels)
+  const qrX = LABEL_W - MARGIN - 40;
+  const qrY = y + LABEL_H - MARGIN - 40;
+  doc.image(qrBuffer, qrX, qrY, { width: 40, height: 40 });
 
   // Border around label
   const labelH = doc.y - y + 12;
@@ -66,7 +73,7 @@ function drawLabel(
 
 /**
  * GET /api/items/:id/label
- * Returns a single-item 4×3" PDF label. Auth required.
+ * Returns a single-item 4×3" PDF label with QR code. Auth required.
  */
 export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
   try {
@@ -83,13 +90,23 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your item.' });
     }
 
+    // Generate QR code for item URL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const itemUrl = `${frontendUrl}/items/${id}`;
+    const qrBuffer = await QRCode.toBuffer(itemUrl, {
+      type: 'png',
+      width: 200,
+      margin: 1,
+      color: { dark: '#1a1a2e', light: '#ffffff' },
+    });
+
     const doc = new PDFDocument({ size: [LABEL_W, LABEL_H], margin: 0, autoFirstPage: true });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="label-${id}.pdf"`);
     doc.pipe(res);
 
     doc.moveDown(0.5);
-    drawLabel(doc, item, item.sale.title);
+    await drawLabel(doc, item, item.sale.title, qrBuffer);
 
     doc.end();
   } catch (error) {
@@ -100,7 +117,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
 
 /**
  * GET /api/sales/:saleId/labels
- * Returns a multi-page PDF — one 4×3" label per item. Auth required.
+ * Returns a multi-page PDF — one 4×3" label per item, each with QR code. Auth required.
  */
 export const getSaleLabels = async (req: AuthRequest, res: Response) => {
   try {
@@ -125,15 +142,27 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No available items in this sale to label.' });
     }
 
+    // Generate all QR codes upfront (avoid async issues in render loop)
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const qrPromises = sale.items.map((item) =>
+      QRCode.toBuffer(`${frontendUrl}/items/${item.id}`, {
+        type: 'png',
+        width: 200,
+        margin: 1,
+        color: { dark: '#1a1a2e', light: '#ffffff' },
+      }),
+    );
+    const qrBuffers = await Promise.all(qrPromises);
+
     const doc = new PDFDocument({ size: [LABEL_W, LABEL_H], margin: 0, autoFirstPage: false });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="labels-${saleId}.pdf"`);
     doc.pipe(res);
 
-    for (const item of sale.items) {
+    for (let i = 0; i < sale.items.length; i++) {
       doc.addPage({ size: [LABEL_W, LABEL_H], margin: 0 });
       doc.moveDown(0.5);
-      drawLabel(doc, item, sale.title);
+      await drawLabel(doc, sale.items[i], sale.title, qrBuffers[i]);
     }
 
     doc.end();

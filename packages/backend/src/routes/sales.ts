@@ -31,6 +31,7 @@ import photoOpsRoutes from './photoOps'; // Feature #39: Photo Op Stations
 import treasureHuntQRRoutes from './treasureHuntQR'; // Feature #85: Treasure Hunt QR
 import { createAlaCarteCheckout } from '../controllers/stripeController'; // #132: À La Carte
 import { getApproachNotes, updateApproachNotes, sendApproachNotification } from '../controllers/arrivalController'; // Feature #84: Approach Notes
+import { exportSaleToEbay } from '../controllers/ebayController'; // Feature #244: eBay CSV export
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -77,6 +78,9 @@ router.post('/:id/clone', authenticate, cloneSale);
 router.get('/:saleId/approach-notes', getApproachNotes); // Public read for saved sales, organizer only for unsaved
 router.post('/:saleId/approach-notes', authenticate, requireOrganizer, updateApproachNotes); // Organizer only
 router.post('/:saleId/send-approach-notification', authenticate, requireOrganizer, sendApproachNotification); // Organizer triggers notification
+
+// Feature #244: eBay CSV export
+router.get('/:saleId/ebay-export', authenticate, requireOrganizer, exportSaleToEbay);
 
 // Feature #51: Sale Ripples — social proof activity tracking
 router.use('/:saleId/ripples', rippleRoutes);

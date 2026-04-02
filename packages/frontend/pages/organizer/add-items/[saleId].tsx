@@ -327,6 +327,11 @@ const AddItemsDetailPage = () => {
     value?: any;
   } | null>(null);
   const [bulkPhotoModalOpen, setBulkPhotoModalOpen] = useState(false);
+
+  // Feature #244: eBay CSV export state
+  const [ebayExportOpen, setEbayExportOpen] = useState(false);
+  const [ebayPhotoMode, setEbayPhotoMode] = useState<'watermarked' | 'clean'>('watermarked');
+  const [ebayExporting, setEbayExporting] = useState(false);
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
   const [bulkCategoryModalOpen, setBulkCategoryModalOpen] = useState(false);
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
@@ -579,6 +584,33 @@ const AddItemsDetailPage = () => {
       operation: 'status',
       value: status,
     });
+  };
+
+  const handleEbayExport = async () => {
+    try {
+      setEbayExporting(true);
+      const response = await api.get(`/sales/${saleId}/ebay-export?photoMode=${ebayPhotoMode}`, {
+        responseType: 'blob',
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `ebay-export-${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      showToast('CSV ready. Upload to eBay Seller Hub → Bulk Listings.', 'success');
+      setEbayExportOpen(false);
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to export to eBay';
+      showToast(message, 'error');
+    } finally {
+      setEbayExporting(false);
+    }
   };
 
   const handleCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
@@ -1660,6 +1692,12 @@ const AddItemsDetailPage = () => {
                   )}
                 </h2>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEbayExportOpen(true)}
+                    className="text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline px-3 py-1.5 border border-blue-300 rounded-lg hover:bg-blue-50"
+                  >
+                    📦 Export to eBay
+                  </button>
                   <Link
                     href={`/organizer/add-items/${saleId}/review?preview=true`}
                     className="text-sm font-medium text-warm-700 dark:text-warm-300 hover:text-warm-900 dark:text-warm-100 hover:underline px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
@@ -2058,6 +2096,71 @@ const AddItemsDetailPage = () => {
           setBulkErrorData(null);
         }}
       />
+
+      {/* Feature #244: eBay CSV Export Modal */}
+      {ebayExportOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Export to eBay</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
+              Export {items.filter((i: any) => i.status === 'AVAILABLE').length} available items as eBay CSV
+            </p>
+
+            <div className="mb-4 space-y-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="photoMode"
+                  value="watermarked"
+                  checked={ebayPhotoMode === 'watermarked'}
+                  onChange={() => setEbayPhotoMode('watermarked')}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium text-warm-700 dark:text-warm-300">
+                  Include FindA.Sale watermark (recommended)
+                </span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="photoMode"
+                  value="clean"
+                  checked={ebayPhotoMode === 'clean'}
+                  onChange={() => setEbayPhotoMode('clean')}
+                  className="w-4 h-4"
+                  disabled={true}
+                />
+                <span className="text-sm font-medium text-warm-700 dark:text-warm-300">
+                  Remove watermark
+                </span>
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  PRO only
+                </span>
+              </label>
+            </div>
+
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-6">
+              Upload this CSV to eBay Seller Hub → Listings → Bulk Create
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEbayExportOpen(false)}
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-warm-700 dark:text-warm-300 font-medium hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEbayExport}
+                disabled={ebayExporting}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {ebayExporting ? 'Generating...' : 'Download CSV'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

@@ -41,6 +41,10 @@ const EditItemPage = () => {
     qrEmbedEnabled: true,
   });
 
+  const [compsLoading, setCompsLoading] = useState(false);
+  const [compsData, setCompsData] = useState<any>(null);
+  const [showCompsPanel, setShowCompsPanel] = useState(false);
+
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
@@ -205,6 +209,20 @@ const EditItemPage = () => {
     }
   };
 
+  const handleGetPriceComps = async () => {
+    try {
+      setCompsLoading(true);
+      const response = await api.post(`/items/${id}/comps`);
+      setCompsData(response.data);
+      setShowCompsPanel(true);
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to fetch eBay price comps';
+      showToast(message, 'error');
+    } finally {
+      setCompsLoading(false);
+    }
+  };
+
   return (
     <>
       <Head>
@@ -212,11 +230,24 @@ const EditItemPage = () => {
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-2xl mx-auto px-4 py-8">
-          <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
-            Back to dashboard
-          </Link>
+          <div className="flex items-center justify-between mb-8">
+            <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium inline-block">
+              Back to dashboard
+            </Link>
+          </div>
 
-          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">Edit Item</h1>
+          <div className="flex items-center justify-between mb-8">
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">Edit Item</h1>
+            {id && (
+              <button
+                type="button"
+                onClick={() => window.open(`/api/items/${id}/label`, '_blank')}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+              >
+                🏷️ Print Label
+              </button>
+            )}
+          </div>
 
           <form onSubmit={(e) => {
             e.preventDefault();
@@ -411,6 +442,66 @@ const EditItemPage = () => {
                     })
                   }
                 />
+              </div>
+
+              {/* Feature #229: eBay Price Comps */}
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleGetPriceComps}
+                  disabled={compsLoading}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <span>💰</span>
+                  {compsLoading ? 'Searching eBay sold listings...' : 'Get Price Comps'}
+                </button>
+
+                {showCompsPanel && compsData && (
+                  <div className={`mt-2 p-3 rounded-lg border ${
+                    compsData.isMockData
+                      ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
+                      : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
+                  }`}>
+                    <div className="text-sm">
+                      <p className="font-semibold text-warm-800 dark:text-warm-200">
+                        {compsData.isMockData ? '⚠️ Demo data' : `✓ Found ${compsData.count || 0} sold listings`}
+                      </p>
+                      {compsData.isMockData && (
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                          eBay credentials not configured — showing sample data
+                        </p>
+                      )}
+                      {compsData.count > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-warm-700 dark:text-warm-300">
+                            <span className="font-medium">Range:</span> ${compsData.min.toFixed(2)} – ${compsData.max.toFixed(2)} |{' '}
+                            <span className="font-medium">Suggested:</span> ${compsData.median.toFixed(2)}
+                          </p>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData({ ...formData, price: compsData.median.toString() });
+                                showToast(`Price set to $${compsData.median.toFixed(2)}`, 'success');
+                              }}
+                              className="flex-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition-colors"
+                            >
+                              Apply Suggested Price
+                            </button>
+                            <a
+                              href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(formData.title)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded transition-colors text-center"
+                            >
+                              View on eBay ↗
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

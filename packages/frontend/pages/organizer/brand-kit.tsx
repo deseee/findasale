@@ -464,6 +464,69 @@ const BrandKitPage = () => {
                   {isSaving ? 'Saving...' : 'Save Brand Kit'}
                 </button>
               </div>
+
+              {/* Downloadable Brand Assets Section — Feature #241, PRO tier only */}
+              <div className="border-t border-warm-200 dark:border-gray-700 pt-8">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Downloadable Brand Assets</h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-6">
+                  Generate print-ready PDFs personalized with your brand colors and logo.
+                </p>
+
+                {!formData.brandLogoUrl && (
+                  <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <p className="text-sm text-amber-900 dark:text-amber-100">
+                      Add your logo above to personalize these assets.
+                    </p>
+                  </div>
+                )}
+
+                {tier === 'SIMPLE' ? (
+                  /* Upgrade upsell card */
+                  <div className="p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-center">
+                    <p className="text-blue-900 dark:text-blue-100 font-semibold mb-3">
+                      Upgrade to PRO to download branded print assets
+                    </p>
+                    <Link
+                      href="/pricing"
+                      className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                    >
+                      Upgrade to PRO →
+                    </Link>
+                  </div>
+                ) : (
+                  /* Download buttons grid */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <a
+                      href="/api/brand-kit/organizer/business-card"
+                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
+                    >
+                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Business Cards</h3>
+                      <p className="text-xs text-warm-600 dark:text-warm-400">10 cards per page (3.5" × 2")</p>
+                    </a>
+                    <a
+                      href="/api/brand-kit/organizer/letterhead"
+                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
+                    >
+                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Letterhead Template</h3>
+                      <p className="text-xs text-warm-600 dark:text-warm-400">Blank page ready for printing</p>
+                    </a>
+                    <a
+                      href="/api/brand-kit/organizer/social-headers"
+                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
+                    >
+                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Social Headers</h3>
+                      <p className="text-xs text-warm-600 dark:text-warm-400">Facebook, Instagram, Twitter templates</p>
+                    </a>
+                    <a
+                      href="/api/brand-kit/organizer/yard-sign"
+                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
+                    >
+                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Branded Yard Sign</h3>
+                      <p className="text-xs text-warm-600 dark:text-warm-400">Print-ready sign for your sale</p>
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
