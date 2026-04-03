@@ -10,15 +10,15 @@ import RSVPAttendeesModal from './RSVPAttendeesModal';
 interface Sale {
   id: string;
   title: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-  photoUrls: string[];
-  organizer: {
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  photoUrls?: string[];
+  organizer?: {
     id: string;
     businessName: string;
   };
