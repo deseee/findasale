@@ -49,7 +49,7 @@ const CartIcon: React.FC = () => {
   return (
     <button
       onClick={handleClick}
-      className="relative p-2 rounded-md text-warm-600 hover:text-amber-600 hover:bg-warm-100 transition-colors"
+      className="relative p-2 rounded-md text-warm-600 dark:text-warm-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
       aria-label={`Shopping cart with ${holds.length} items`}
       title={`${holds.length} item${holds.length !== 1 ? 's' : ''} on hold`}
     >
@@ -65,7 +65,7 @@ const CartIcon: React.FC = () => {
 
       {/* Hold count badge — only show if > 0 */}
       {holds.length > 0 && (
-        <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+        <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white dark:text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 dark:bg-red-700 rounded-full">
           {holds.length > 99 ? '99+' : holds.length}
         </span>
       )}

@@ -18,6 +18,7 @@ import { useAuth } from '../../components/AuthContext';
 import BecomeOrganizerModal from '../../components/BecomeOrganizerModal';
 import PremiumCTA from '../../components/PremiumCTA';
 import TierComparisonTable from '../../components/TierComparisonTable';
+import TooltipHelper from '../../components/TooltipHelper';
 import api from '../../lib/api';
 
 interface PricingTier {
@@ -300,9 +301,21 @@ const PricingPage = () => {
                   {/* Tier content */}
                   <div className="p-8">
                     {/* Tier name & description */}
-                    <h3 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">
-                      {tier.name}
-                    </h3>
+                    <div className="flex items-start gap-2 mb-2">
+                      <h3 className="text-2xl font-bold text-warm-900 dark:text-warm-100">
+                        {tier.name}
+                      </h3>
+                      <TooltipHelper
+                        text={
+                          tier.id === 'SIMPLE'
+                            ? 'Free plan with a 10% fee per item sold. Perfect for trying out FindA.Sale.'
+                            : tier.id === 'PRO'
+                              ? 'Best for active organizers. Monthly subscription with 8% fees and advanced tools like analytics and batch operations.'
+                              : 'Enterprise plan for teams and high-volume sellers. Supports multiple team members and white-label options.'
+                        }
+                        position="right"
+                      />
+                    </div>
                     <p className="text-warm-600 dark:text-warm-300 text-sm mb-1">
                       {tier.description}
                     </p>

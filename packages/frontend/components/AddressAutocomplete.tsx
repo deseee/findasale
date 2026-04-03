@@ -118,7 +118,7 @@ const AddressAutocomplete = ({
         placeholder={placeholder}
         required={required}
         disabled={disabled}
-        className="w-full px-4 py-2 border border-warm-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent disabled:bg-warm-100"
+        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent disabled:bg-warm-100 dark:disabled:bg-gray-700"
         autoComplete="off"
       />
 
@@ -129,15 +129,15 @@ const AddressAutocomplete = ({
       )}
 
       {isOpen && suggestions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-warm-300 rounded-lg shadow-lg z-10">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-10">
           {suggestions.map((suggestion, idx) => (
             <button
               key={idx}
               onClick={() => handleSelectSuggestion(suggestion)}
-              className="w-full text-left px-4 py-3 hover:bg-warm-50 border-b border-warm-100 last:border-b-0 transition"
+              className="w-full text-left px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 border-b border-warm-100 dark:border-gray-700 last:border-b-0 transition"
             >
-              <div className="font-medium text-sm text-warm-900">{suggestion.displayName.split(',')[0]}</div>
-              <div className="text-xs text-warm-600 truncate">
+              <div className="font-medium text-sm text-warm-900 dark:text-warm-100">{suggestion.displayName.split(',')[0]}</div>
+              <div className="text-xs text-warm-600 dark:text-warm-400 truncate">
                 {suggestion.displayName.split(',').slice(1).join(',').trim()}
               </div>
             </button>
@@ -146,8 +146,8 @@ const AddressAutocomplete = ({
       )}
 
       {isOpen && value.length >= 3 && !isLoading && suggestions.length === 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-warm-300 rounded-lg shadow-lg z-10">
-          <div className="px-4 py-3 text-sm text-warm-600">No addresses found. Try a different search.</div>
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-lg z-10">
+          <div className="px-4 py-3 text-sm text-warm-600 dark:text-warm-400">No addresses found. Try a different search.</div>
         </div>
       )}
     </div>

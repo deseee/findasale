@@ -214,6 +214,8 @@ const OrganizerDashboard = () => {
           viewCount: number;
           holdCount: number;
           saleType: string;
+          itemCount: number;
+          itemsSold: number;
         } | null;
       };
     },

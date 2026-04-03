@@ -161,6 +161,12 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       const activeItemCount = activeSale.items.filter(
         (i: any) => i.draftStatus !== 'DRAFT' && i.status !== 'SOLD'
       ).length;
+      const itemCount = activeSale.items.filter(
+        (i: any) => i.draftStatus !== 'DRAFT'
+      ).length;
+      const itemsSold = activeSale.items.filter(
+        (i: any) => i.status === 'SOLD'
+      ).length;
       const activeSaleRevenue = activeSale.purchases.reduce(
         (sum: number, p: any) => sum + (Number(p.amount) || 0),
         0
@@ -182,6 +188,8 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
         endDate: activeSale.endDate,
         viewCount: activeSale.qrScanCount ?? 0,
         holdCount,
+        itemCount,
+        itemsSold,
       };
     }
 
