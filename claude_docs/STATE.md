@@ -7,6 +7,90 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S389 COMPLETE (2026-04-03):** P2/P3 sprint + gamification wave + TS fix + comprehensive alignment analysis.
+
+**S389 Summary:**
+
+Two parallel dev waves shipped, one blocking TS error fixed, and a comprehensive product alignment document produced.
+
+**Wave 1 — P2/P3 features (18 files):**
+- **Price Research Panel:** NEW `PriceResearchPanel.tsx` — consolidates AI estimate + PriceSuggestion + eBay comps + ValuationWidget into collapsible panel. Wired to add-items, review, and edit-item pages.
+- **Reverse Auction:** Listing type dropdown option added to `add-items/[saleId].tsx`.
+- **Flash Deal button:** ⚡ button wired in `dashboard.tsx` with `useQuery` for sale items + FlashDealForm props fixed (onClose→onCancel, added saleItems + onSuccess).
+- **TierComparisonTable fix:** SIMPLE limits corrected (3→5 photos, 100→200 items to match tierLimits.ts).
+- **Verified Purchase badge:** `ReviewsSection.tsx` now shows ✓ Verified Purchase on eligible reviews. `reviewController.ts` returns `verifiedPurchase` on all 4 query endpoints.
+- **SettlementWizard:** Transfer ID + failure reason banner added to receipt step.
+- **priceBeforeMarkdown:** Crossed-out original price added to `ItemCard.tsx`, `LibraryItemCard.tsx`, `items/[id].tsx`. Backend `itemController.ts` now returns `priceBeforeMarkdown` + `markdownApplied` on item queries.
+- **Concurrent sales gate (#249):** `tierLimits.ts` — `maxConcurrentSales` (SIMPLE=1, PRO=3, TEAMS=Infinity). `saleController.ts` — gate in `createSale()` + `updateSaleStatus()`. Frontend 409 handling with upgrade CTA in `create-sale.tsx` + `edit-sale/[id].tsx`. Schema index added to `schema.prisma`.
+
+**Wave 2 — Gamification (6 files):**
+- **Scout hold bug fixed:** `reservationController.ts` — SCOUT now returns 45 min (was 30, same as INITIATE).
+- **Visit XP cap:** `saleController.ts` — daily cap (max 2 unique sales/day earn XP) + monthly cap (100 XP from visits). Visit XP confirmed 10→5 (S388).
+- **Hunt Pass 1.5x multiplier wired:** `stripeController.ts` + `auctionJob.ts` — 1.5x applied before purchase XP and auction win XP awards.
+- **Referral first-purchase trigger:** `stripeController.ts` — awards 30 XP to referrer when referred user's first purchase completes.
+- **Rank-up notifications:** `xpService.ts` — `awardXp()` now calls `createNotification()` when rank changes.
+- **Referral signup wiring:** `authController.ts` — `processReferral()` called at signup + 20 XP to referrer.
+
+**TS fix (Railway unblocked):**
+- `saleController.ts` TS2451 duplicate `const today` — removed redundant declaration at line 1271. Railway rebuilt green.
+
+**Comprehensive Alignment Analysis:**
+- `claude_docs/strategy/S389-comprehensive-alignment.md` — full product alignment document covering all roadmap features × gamification × virality × nav × dashboards.
+
+**S389 Key Findings (from alignment agent):**
+1. Hunt Pass page says "2x XP" — code enforces 1.5x. Trust issue. Fix immediately.
+2. À la carte $9.99 is invisible on pricing page. Revenue leak.
+3. Rank is cosmetic — Sage/Grandmaster users discover only a badge after 5k+ XP. Need quick rank-gated wins.
+4. Referral system now has routes wired (S389) but still needs `/shopper/referrals` UI page.
+5. PRO→TEAMS has no solo organizer story — same features, just adds multi-user. Needs a differentiator.
+
+**S389 Files Changed:**
+- `packages/frontend/components/PriceResearchPanel.tsx` — NEW
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — Price Research panel + Reverse Auction type
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Price Research panel + priceBeforeMarkdown
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — Price Research panel (expanded)
+- `packages/frontend/pages/organizer/dashboard.tsx` — Flash Deal button + FlashDealForm wiring
+- `packages/frontend/components/TierComparisonTable.tsx` — SIMPLE limits corrected
+- `packages/frontend/components/ReviewsSection.tsx` — Verified Purchase badge
+- `packages/backend/src/controllers/reviewController.ts` — verifiedPurchase on queries
+- `packages/frontend/components/SettlementWizard.tsx` — transfer ID + failure banner
+- `packages/backend/src/controllers/itemController.ts` — priceBeforeMarkdown + markdownApplied
+- `packages/frontend/components/ItemCard.tsx` — crossed-out price
+- `packages/frontend/components/LibraryItemCard.tsx` — crossed-out price
+- `packages/frontend/pages/items/[id].tsx` — crossed-out price
+- `packages/backend/src/constants/tierLimits.ts` — maxConcurrentSales added
+- `packages/backend/src/controllers/saleController.ts` — concurrent gate + visit XP cap + TS2451 fix
+- `packages/frontend/pages/organizer/create-sale.tsx` — 409 handling
+- `packages/frontend/pages/organizer/edit-sale/[id].tsx` — 409 handling
+- `packages/database/prisma/schema.prisma` — @@index on Sale model
+- `packages/database/prisma/migrations/20260403_concurrent_sales_gate_index/migration.sql` — NEW
+- `packages/backend/src/controllers/reservationController.ts` — Scout 45min fix
+- `packages/backend/src/controllers/stripeController.ts` — Hunt Pass 1.5x + referral first-purchase
+- `packages/backend/src/jobs/auctionJob.ts` — Hunt Pass 1.5x
+- `packages/backend/src/services/xpService.ts` — rank-up notifications
+- `packages/backend/src/controllers/authController.ts` — referral signup wiring
+- `claude_docs/strategy/S389-comprehensive-alignment.md` — NEW
+
+**S389 Deferred / Next Session:**
+- Hunt Pass page: fix "2x XP" → "1.5x XP" + add XP earning matrix table (15 min fix, HIGH priority)
+- Pricing page: add à la carte $9.99 option + make it visible (revenue leak)
+- Rank gates: implement first rank-gated benefit to make rank non-cosmetic (Ranger+ suggestion: +5 XP bonus on treasure hunt scans)
+- Shopper referrals UI: `/shopper/referrals` page — routes wired in S389, frontend page missing
+- PRO→TEAMS solo differentiator: decide what feature elevates TEAMS for solo organizers
+- Tier rearrangement implementation: batch ops + seller badge + link click stats → SIMPLE (board approved)
+- Concurrent sales migration: run `prisma migrate deploy` + `prisma generate` against Railway
+- Roadmap update: 20+ entries need Chrome QA status updates
+
+**S389 Pending Patrick Actions:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
 **S388 COMPLETE (2026-04-03):** Documentation & Coaching Overhaul — research sprint + implementation across 5 focus areas.
 
 **S388 Summary:**
