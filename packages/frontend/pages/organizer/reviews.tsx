@@ -104,7 +104,7 @@ export default function OrganizerReviews() {
     );
   }
 
-  if (!user?.organizerId) {
+  if (!user?.roles?.includes('ORGANIZER')) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <p className="text-center text-gray-600 dark:text-gray-400">Not authorized</p>
