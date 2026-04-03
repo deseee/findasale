@@ -8,6 +8,7 @@ import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/ToastContext';
 import EmptyState from '../components/EmptyState';
 import { getThumbnailUrl } from '../lib/imageUtils';
+import WishlistShareButton from '../components/WishlistShareButton';
 
 interface WishlistItem {
   id: string;
@@ -105,18 +106,6 @@ const WishlistsPage = () => {
     },
   });
 
-  // Share link mutation
-  const shareMutation = useMutation({
-    mutationFn: (wishlistId: string) =>
-      api.post(`/wishlists/${wishlistId}/share`, {}),
-    onSuccess: (response: any) => {
-      showToast('Share link copied!', 'success');
-      navigator.clipboard.writeText(response.data.shareUrl);
-    },
-    onError: (err: any) => {
-      showToast(err.response?.data?.message || 'Failed to generate share link', 'error');
-    },
-  });
 
   const handleCreateWishlist = () => {
     if (!newName.trim()) {
@@ -281,15 +270,11 @@ const WishlistsPage = () => {
                         </p>
                       )}
                     </div>
-                    {selectedWishlist.isPublic && (
-                      <button
-                        onClick={() => shareMutation.mutate(selectedWishlist.id)}
-                        disabled={shareMutation.isPending}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors disabled:opacity-50"
-                      >
-                        {shareMutation.isPending ? 'Generating...' : 'Share'}
-                      </button>
-                    )}
+                    <WishlistShareButton
+                      wishlistId={selectedWishlist.id}
+                      isPublic={selectedWishlist.isPublic}
+                      shareSlug={selectedWishlist.shareSlug}
+                    />
                   </div>
 
                   {selectedWishlist.items.length === 0 ? (

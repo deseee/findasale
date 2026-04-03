@@ -15,6 +15,7 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
+import ItemPriceHistoryChart from '../../../components/ItemPriceHistoryChart';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
@@ -463,6 +464,9 @@ const EditItemPage = () => {
                   }
                 />
               </div>
+
+              {/* Price History Chart */}
+              {id && <ItemPriceHistoryChart itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
 
               {/* Feature #229: eBay Price Comps */}
               <div className="mt-3 space-y-2">

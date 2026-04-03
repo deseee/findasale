@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import OrganizerSaleCard from '../../components/OrganizerSaleCard';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../components/Skeleton';
@@ -22,6 +23,16 @@ interface Sale {
   createdAt: string;
   startDate?: string;
   endDate?: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  photoUrls?: string[];
+  organizer?: {
+    id: string;
+    businessName: string;
+  };
 }
 
 const OrganizerSalesPage = () => {
@@ -135,30 +146,10 @@ const OrganizerSalesPage = () => {
           {!salesError && sales.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sales.map((sale: Sale) => (
-                <div
-                  key={sale.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-md p-6 hover:shadow-lg dark:hover:shadow-lg transition-shadow border border-warm-100 dark:border-gray-700"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 flex-1">
-                      {sale.title}
-                    </h2>
-                    <span
-                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ml-2 ${getStatusColor(
-                        sale.status
-                      )}`}
-                    >
-                      {sale.status}
-                    </span>
-                  </div>
-
-                  {sale.startDate && (
-                    <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">
-                      Start: {new Date(sale.startDate).toLocaleDateString()}
-                    </p>
-                  )}
-
-                  <div className="flex gap-3 mt-6">
+                <div key={sale.id} className="flex flex-col">
+                  <OrganizerSaleCard sale={sale} />
+                  {/* Action buttons below card */}
+                  <div className="flex gap-3 mt-3">
                     <Link
                       href={`/organizer/edit-sale/${sale.id}`}
                       className="flex-1 text-center bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"

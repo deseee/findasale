@@ -37,6 +37,7 @@ import { AchievementBadgesSection } from '../../components/AchievementBadgesSect
 import useXpProfile from '../../hooks/useXpProfile';
 import RankBadge, { ExplorerRank } from '../../components/RankBadge';
 import RankProgressBar from '../../components/RankProgressBar';
+import PointsBadge from '../../components/PointsBadge';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -317,14 +318,17 @@ const ShopperDashboard = () => {
             {/* Rank Progress Card */}
             {xpProfile && !xpLoading ? (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <RankBadge rank={xpProfile.explorerRank} size="md" />
-                  <div>
-                    <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">
-                      {xpProfile.explorerRank.charAt(0) + xpProfile.explorerRank.slice(1).toLowerCase()}
-                    </h3>
-                    <p className="text-sm text-warm-600 dark:text-warm-400">Explorer Rank</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <RankBadge rank={xpProfile.explorerRank} size="md" />
+                    <div>
+                      <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">
+                        {xpProfile.explorerRank.charAt(0) + xpProfile.explorerRank.slice(1).toLowerCase()}
+                      </h3>
+                      <p className="text-sm text-warm-600 dark:text-warm-400">Explorer Rank</p>
+                    </div>
                   </div>
+                  <PointsBadge points={user?.streakPoints ?? 0} />
                 </div>
 
                 {(() => {

@@ -25,9 +25,11 @@ import FlashDealForm from '../../components/FlashDealForm';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import OnboardingWizard from '../../components/OnboardingWizard';
 import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal';
+import TeamsOnboardingWizard from '../../components/TeamsOnboardingWizard';
 import SimpleModePanel from '../../components/SimpleModePanel';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
 import SecondarySaleCard from '../../components/SecondarySaleCard';
+import SalePerformanceBadge from '../../components/SalePerformanceBadge';
 import Head from 'next/head';
 import Link from 'next/link';
 import EmptyState from '../../components/EmptyState';
@@ -79,6 +81,7 @@ const OrganizerDashboard = () => {
   const [cloningId, setCloningId] = useState<string | null>(null);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [showTeamsOnboardingWizard, setShowTeamsOnboardingWizard] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
   const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(() => {
@@ -100,7 +103,11 @@ const OrganizerDashboard = () => {
     if (!localStorage.getItem('onboardingModalDismissed')) {
       setShowOnboardingModal(true);
     }
-  }, []);
+    // Show TEAMS onboarding wizard for new TEAMS-tier organizers
+    if (user?.organizerTier === 'TEAMS' && !user?.teamsOnboardingComplete) {
+      setShowTeamsOnboardingWizard(true);
+    }
+  }, [user?.organizerTier, user?.teamsOnboardingComplete]);
 
   // Fetch organizer's sales
   const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
@@ -411,6 +418,14 @@ const OrganizerDashboard = () => {
         <OrganizerOnboardingModal onDismiss={() => setShowOnboardingModal(false)} />
       )}
 
+      {/* TEAMS Onboarding Wizard — for new TEAMS-tier organizers */}
+      {showTeamsOnboardingWizard && (
+        <TeamsOnboardingWizard
+          onComplete={() => setShowTeamsOnboardingWizard(false)}
+          onClose={() => setShowTeamsOnboardingWizard(false)}
+        />
+      )}
+
       {/* Onboarding Wizard */}
       {showWizard && !orgProfile?.onboardingComplete && (
         <OnboardingWizard
@@ -699,6 +714,14 @@ const OrganizerDashboard = () => {
                               }`}>
                                 {activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
                               </span>
+                              {statsData?.activeSale && (
+                                <SalePerformanceBadge
+                                  itemCount={statsData.activeSale.itemCount ?? 0}
+                                  itemsSold={statsData.activeSale.itemsSold ?? 0}
+                                  saleStatus={activeSale.status}
+                                  endDate={activeSale.endDate}
+                                />
+                              )}
                               {(() => { const urgency = getUrgencyTag(); return urgency ? (
                                 <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${urgency.color}`}>
                                   {urgency.text}

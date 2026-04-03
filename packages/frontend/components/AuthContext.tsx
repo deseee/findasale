@@ -19,6 +19,7 @@ interface User {
   subscriptionStatus?: string | null;
   notificationPrefs?: Record<string, boolean>;
   onboardingComplete?: boolean;
+  teamsOnboardingComplete?: boolean;
   createdAt?: string;
   verificationStatus?: string;
   profileSlug?: string | null;
@@ -66,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           organizerTier: payload.subscriptionTier || 'SIMPLE',
           subscriptionStatus: payload.subscriptionStatus ?? null,
           onboardingComplete: payload.onboardingComplete ?? false,
+          teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
           createdAt: payload.createdAt
         });
       } catch (e) {
@@ -97,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         organizerTier: payload.subscriptionTier || 'SIMPLE',
         subscriptionStatus: payload.subscriptionStatus ?? null,
         onboardingComplete: payload.onboardingComplete ?? false,
+        teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
         createdAt: payload.createdAt
       });
     } catch (e) {

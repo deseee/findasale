@@ -94,7 +94,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
 
       // Step 2: Invite members
       for (const invitee of invitees) {
-        await api.post('/api/workspace/members/invite', {
+        await api.post('/api/workspace/invite', {
           email: invitee.email,
           role: invitee.role,
         });

@@ -19,6 +19,8 @@ import DisputeForm from '../../components/DisputeForm';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useLootLog, useLootLogStats } from '../../hooks/useLootLog';
+import HaulPostCard from '../../components/HaulPostCard';
+import UGCPhotoSubmitButton from '../../components/UGCPhotoSubmitButton';
 
 type ViewType = 'list' | 'gallery' | 'receipts' | 'disputes';
 
@@ -29,6 +31,7 @@ const PurchaseHistoryPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [tab, setTab] = useState<'receipts' | 'returns'>('receipts');
   const [disputeFormOpen, setDisputeFormOpen] = useState<string | null>(null);
+  const [likedHaulPosts, setLikedHaulPosts] = useState<Set<number>>(new Set());
 
   // Determine view from URL query param or default to 'list'
   const view = (router.query.view as ViewType) || 'list';
@@ -105,6 +108,37 @@ const PurchaseHistoryPage = () => {
 
   const handleLoadMore = () => {
     setCurrentPage((prev) => prev + 1);
+  };
+
+  const handleHaulPostLike = async (postId: number) => {
+    try {
+      // Toggle like state optimistically
+      const newLikedSet = new Set(likedHaulPosts);
+      if (newLikedSet.has(postId)) {
+        newLikedSet.delete(postId);
+      } else {
+        newLikedSet.add(postId);
+      }
+      setLikedHaulPosts(newLikedSet);
+
+      // API call to like/unlike the haul post
+      await api.post(`/ugc-photos/${postId}/like`);
+    } catch (error) {
+      console.error('Error toggling haul post like:', error);
+      // Revert optimistic update on error
+      const revertedSet = new Set(likedHaulPosts);
+      if (revertedSet.has(postId)) {
+        revertedSet.delete(postId);
+      } else {
+        revertedSet.add(postId);
+      }
+      setLikedHaulPosts(revertedSet);
+    }
+  };
+
+  const handlePhotoSubmitSuccess = () => {
+    // Refetch gallery data after new photo is submitted
+    window.location.reload();
   };
 
   if (authLoading || !user) {
@@ -291,6 +325,11 @@ const PurchaseHistoryPage = () => {
           {/* GALLERY VIEW */}
           {view === 'gallery' && (
             <>
+              {/* Upload Button */}
+              <div className="mb-8 flex justify-center">
+                <UGCPhotoSubmitButton onSuccess={handlePhotoSubmitSuccess} />
+              </div>
+
               {/* Stats Bar */}
               {!statsLoading && statsData && (
                 <div className="grid grid-cols-4 gap-4 mb-12">
@@ -317,22 +356,46 @@ const PurchaseHistoryPage = () => {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-3 gap-6 mb-12">
-                    {lootLogData?.purchases.map((purchase) => (
-                      <Link key={purchase.id} href={`/shopper/loot-log/${purchase.id}`} className="group cursor-pointer">
-                        <div className="relative w-full h-48 bg-slate-200 dark:bg-gray-700 rounded-lg overflow-hidden mb-3">
-                          {purchase.item.imageUrl ? (
-                            <Image src={purchase.item.imageUrl} alt={purchase.item.title} layout="fill" objectFit="cover" className="group-hover:scale-105 transition" />
-                          ) : (
-                            <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 text-white text-sm">No image</div>
-                          )}
-                        </div>
-                        <h3 className="font-semibold text-slate-900 dark:text-gray-100 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">{purchase.item.title}</h3>
-                        <p className="text-sm text-slate-600 dark:text-gray-400 mb-1">{purchase.item.category}</p>
-                        <p className="text-lg font-bold text-[#8FB897] mb-1">${purchase.amount.toFixed(2)}</p>
-                        <p className="text-xs text-slate-500 dark:text-gray-400">{purchase.sale.title}</p>
-                      </Link>
-                    ))}
+                  {/* Haul Posts Section — if available */}
+                  {lootLogData?.hauls && lootLogData.hauls.length > 0 && (
+                    <div className="mb-12">
+                      <h2 className="text-2xl font-bold text-slate-900 dark:text-gray-100 mb-6">My Haul Posts</h2>
+                      <div className="grid grid-cols-3 gap-6">
+                        {lootLogData.hauls.map((haul) => (
+                          <HaulPostCard
+                            key={haul.id}
+                            haul={haul}
+                            onLike={handleHaulPostLike}
+                            isLiked={likedHaulPosts.has(haul.id)}
+                            isLoadingLike={false}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Purchase History Section */}
+                  <div className="mb-12">
+                    {lootLogData?.hauls && lootLogData.hauls.length > 0 && (
+                      <h2 className="text-2xl font-bold text-slate-900 dark:text-gray-100 mb-6">My Finds</h2>
+                    )}
+                    <div className="grid grid-cols-3 gap-6">
+                      {lootLogData?.purchases.map((purchase) => (
+                        <Link key={purchase.id} href={`/shopper/loot-log/${purchase.id}`} className="group cursor-pointer">
+                          <div className="relative w-full h-48 bg-slate-200 dark:bg-gray-700 rounded-lg overflow-hidden mb-3">
+                            {purchase.item.imageUrl ? (
+                              <Image src={purchase.item.imageUrl} alt={purchase.item.title} layout="fill" objectFit="cover" className="group-hover:scale-105 transition" />
+                            ) : (
+                              <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 text-white text-sm">No image</div>
+                            )}
+                          </div>
+                          <h3 className="font-semibold text-slate-900 dark:text-gray-100 line-clamp-2 group-hover:text-[#8FB897] transition mb-1">{purchase.item.title}</h3>
+                          <p className="text-sm text-slate-600 dark:text-gray-400 mb-1">{purchase.item.category}</p>
+                          <p className="text-lg font-bold text-[#8FB897] mb-1">${purchase.amount.toFixed(2)}</p>
+                          <p className="text-xs text-slate-500 dark:text-gray-400">{purchase.sale.title}</p>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
 
                   {lootLogData && lootLogData.totalPages > currentPage && (

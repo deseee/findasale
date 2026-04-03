@@ -16,6 +16,7 @@ import { ItemCardSkeleton } from '../../components/SkeletonCards';
 import EmptyState from '../../components/EmptyState';
 import { useFollows } from '../../hooks/useFollows';
 import { useToast } from '../../components/ToastContext';
+import WishlistAlertForm from '../../components/WishlistAlertForm';
 
 interface FavoriteItem {
   id: string;
@@ -105,6 +106,7 @@ const WishlistPage = () => {
   const { showToast } = useToast();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('items');
+  const [showAlertForm, setShowAlertForm] = useState(false);
   const { data: follows, isLoading: followsLoading } = useFollows();
 
   useEffect(() => {
@@ -358,13 +360,16 @@ const WishlistPage = () => {
               )}
 
               {/* Watching Section */}
-              {watching.length > 0 && (
+              {watching.length > 0 || true && (
                 <div id="watching">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Watching</h2>
-                    <Link href="/shopper/wishlist#watching" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium">
-                      Manage →
-                    </Link>
+                    <button
+                      onClick={() => setShowAlertForm(true)}
+                      className="inline-flex items-center px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white text-sm font-medium transition-colors"
+                    >
+                      + New Alert
+                    </button>
                   </div>
                   <div className="space-y-4">
                     {watching.map(alert => (
@@ -469,6 +474,9 @@ const WishlistPage = () => {
 
         </div>
       </div>
+
+      {/* Wishlist Alert Form Modal */}
+      <WishlistAlertForm isOpen={showAlertForm} onClose={() => setShowAlertForm(false)} />
     </>
   );
 };

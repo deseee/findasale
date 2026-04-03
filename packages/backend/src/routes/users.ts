@@ -256,7 +256,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { notificationPrefs, profileSlug, purchasesVisible, collectorTitle } = req.body;
+    const { notificationPrefs, profileSlug, purchasesVisible, collectorTitle, teamsOnboardingComplete } = req.body;
 
     // Validate notification preferences if provided
     if (notificationPrefs && typeof notificationPrefs !== 'object') {
@@ -290,6 +290,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     if (collectorTitle !== undefined) {
       updateData.collectorTitle = collectorTitle || null;
     }
+    if (teamsOnboardingComplete !== undefined) {
+      updateData.teamsOnboardingComplete = teamsOnboardingComplete;
+    }
 
     const updated = await prisma.user.update({
       where: { id: req.user.id },
@@ -303,6 +306,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         profileSlug: true,
         purchasesVisible: true,
         collectorTitle: true,
+        teamsOnboardingComplete: true,
       }
     });
 

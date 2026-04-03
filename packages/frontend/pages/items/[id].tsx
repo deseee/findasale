@@ -29,6 +29,7 @@ import HoldInvoiceStatusCard from '../../components/HoldInvoiceStatusCard'; // H
 import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart Cart
 import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: Smart Cart
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
+import BidModal from '../../components/BidModal';
 
 interface Item {
   id: string;
@@ -145,6 +146,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [isShopperCartOpen, setIsShopperCartOpen] = useState(false); // Phase 1: Smart Cart
   const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false); // Phase 1: Smart Cart — cross-sale confirmation
   const [pendingCartItem, setPendingCartItem] = useState<any>(null); // Phase 1: Smart Cart
+  const [bidModalOpen, setBidModalOpen] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   // Queries
@@ -722,6 +724,22 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                         </button>
                       )}
 
+                      {/* Auction Item — Place Bid Button */}
+                      {isAuction && item.status === 'AVAILABLE' && item.auctionEndTime && new Date(item.auctionEndTime) > new Date() && (
+                        <button
+                          onClick={() => setBidModalOpen(true)}
+                          disabled={!user}
+                          title={!user ? 'Sign in to place a bid' : ''}
+                          className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
+                            user
+                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700 cursor-not-allowed'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {user ? '🏷️ Place a Bid' : 'Sign in to bid'}
+                        </button>
+                      )}
+
                       {/* Feature #121: Hold Button — AVAILABLE items only */}
                       {item.status === 'AVAILABLE' && (
                         <HoldButton
@@ -842,6 +860,24 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           photos={item.photoUrls}
           initialIndex={currentLightboxIndex}
           onClose={() => setIsLightboxOpen(false)}
+        />
+      )}
+
+      {/* Bid Modal — Place Auction Bid */}
+      {bidModalOpen && item && (
+        <BidModal
+          item={{
+            id: item.id,
+            title: item.title,
+            currentBid: item.currentBid || null,
+            auctionStartPrice: item.auctionStartPrice || null,
+            bidIncrement: item.bidIncrement || null,
+          }}
+          onClose={() => setBidModalOpen(false)}
+          onBidPlaced={() => {
+            setBidModalOpen(false);
+            refetchItem();
+          }}
         />
       )}
 

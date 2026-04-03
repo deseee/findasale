@@ -16,6 +16,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import BecomeOrganizerModal from '../../components/BecomeOrganizerModal';
+import PremiumCTA from '../../components/PremiumCTA';
+import TierComparisonTable from '../../components/TierComparisonTable';
 import api from '../../lib/api';
 
 interface PricingTier {
@@ -375,6 +377,35 @@ const PricingPage = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Premium CTA for SIMPLE tier users */}
+          {user?.organizerTier === 'SIMPLE' && (
+            <div className="mb-12">
+              <PremiumCTA
+                tier="SIMPLE"
+                title="Ready to Scale Your Sales?"
+                description="Upgrade to PRO to unlock powerful tools, lower fees, and expert support."
+                benefits={[
+                  'Reduce fees from 10% to 8%',
+                  'Unlimited photos per item',
+                  'Advanced analytics & insights',
+                  'Command Center for multi-sale management',
+                  'Priority support (24-hour response)',
+                ]}
+                ctaText="Upgrade to PRO"
+                ctaHref="/organizer/pricing"
+                compact={false}
+              />
+            </div>
+          )}
+
+          {/* Feature Comparison Table */}
+          <div className="mt-12 mb-12">
+            <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 text-center mb-8">
+              Detailed Feature Comparison
+            </h2>
+            <TierComparisonTable currentTier={user?.organizerTier as 'SIMPLE' | 'PRO' | 'TEAMS' | undefined} />
           </div>
 
           {/* D-007: Enterprise CTA Section */}

@@ -42,6 +42,15 @@ import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: 
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
 import ActivityFeed from '../../components/ActivityFeed'; // Feature #51: Activity Feed + HypeMeter
 import HypeMeter from '../../components/HypeMeter'; // Feature #51: Hype Meter (viewer count)
+import SaleRSVPButton from '../../components/SaleRSVPButton';
+import RSVPBadge from '../../components/RSVPBadge';
+import SaleWaitlistButton from '../../components/SaleWaitlistButton';
+import SimilarItems from '../../components/SimilarItems';
+import AddToCalendarButton from '../../components/AddToCalendarButton';
+import LocationMap from '../../components/LocationMap';
+import SocialProofBadge from '../../components/SocialProofBadge';
+import { useSocialProof } from '../../hooks/useSocialProof';
+import BountyModal from '../../components/BountyModal';
 
 
 interface Sale {
@@ -231,6 +240,9 @@ const SaleDetailPage = () => {
 
   // Feature #84: Fetch approach notes for this sale (if user has saved it)
   const { data: approachNotes, isLoading: approachNotesLoading } = useArrivalAssistant(id as string);
+
+  // Feature #67: Fetch social proof metrics for this sale
+  const { data: saleSocialProof, isLoading: socialProofLoading } = useSocialProof(id as string, 'sale');
 
   const handleBuyNow = (itemId: string, itemTitle: string) => {
     setCheckoutItem({ id: itemId, title: itemTitle });
@@ -454,13 +466,22 @@ const SaleDetailPage = () => {
             </div>
             <div className="flex flex-col gap-2">
               <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
-              <a
-                href={`${process.env.NEXT_PUBLIC_API_URL}/sales/${sale.id}/calendar.ics`}
-                download={`${sale.title.replace(/[^a-z0-9]/gi, '_')}.ics`}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-900 dark:text-blue-100 text-sm font-medium transition-colors"
-              >
-                📅 Add to Calendar
-              </a>
+              <AddToCalendarButton
+                saleId={sale.id}
+                title={sale.title}
+                startDate={sale.startDate}
+                endDate={sale.endDate}
+                address={sale.address}
+                city={sale.city}
+                state={sale.state}
+                description={sale.description}
+              />
+              {user && (
+                <SaleRSVPButton saleId={sale.id} />
+              )}
+              {user && sale.items.length > 0 && (
+                <SaleWaitlistButton saleId={sale.id} />
+              )}
               <RemindMeButton
                 saleId={sale.id}
                 saleName={sale.title}
@@ -503,6 +524,10 @@ const SaleDetailPage = () => {
                 </div>
               )}
               <BadgeDisplay badges={sale.organizer.badges || []} />
+              {/* RSVP Count Badge */}
+              <div className="mt-4">
+                <RSVPBadge saleId={sale.id} saleTitle={sale.title} />
+              </div>
             </div>
             {!isOrganizer && (
               <div className="ml-4 flex-shrink-0 flex flex-col gap-2">
@@ -608,11 +633,34 @@ const SaleDetailPage = () => {
                 </button>
               </div>
             )}
+            {/* Location Map */}
+            {sale.lat && sale.lng && (
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">Location</h2>
+                <LocationMap
+                  lat={sale.lat}
+                  lng={sale.lng}
+                  address={sale.address}
+                  city={sale.city}
+                  state={sale.state}
+                  title={sale.title}
+                  height="300px"
+                />
+              </div>
+            )}
+
             {/* About This Sale */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mt-8">
               <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">About</h2>
               <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
             </div>
+
+            {/* Social Proof Badge */}
+            {saleSocialProof && (
+              <div className="mt-8">
+                <SocialProofBadge socialProof={saleSocialProof} loading={socialProofLoading} variant="full" />
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -1131,6 +1179,11 @@ const SaleDetailPage = () => {
           )}
         </div>
 
+        {/* Bounty Modal — Request Missing Items */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          <BountyModal saleId={sale.id} saleStatus={sale.status} />
+        </div>
+
         {/* Feature #47: UGC Photo Gallery */}
         {ugcPhotos.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
@@ -1167,6 +1220,13 @@ const SaleDetailPage = () => {
                 <p className="text-warm-600 dark:text-gray-400">{approachNotes.address}</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Similar Items — Show other items in the same category */}
+        {sale.items.length > 0 && sale.items[0] && (
+          <div className="mt-12 bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+            <SimilarItems itemId={sale.items[0].id} category={sale.items[0].category || 'general'} />
           </div>
         )}
 
