@@ -15,6 +15,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import Tooltip from '../../components/Tooltip';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -257,16 +258,22 @@ const CreateSalePage = () => {
                 <label htmlFor="address" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Address</label>
                 <Tooltip content="Your exact address is shown to shoppers after the sale is published. It's used to show your sale on the map." />
               </div>
-              <input
+              <AddressAutocomplete
                 id="address"
-                type="text"
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
-                onBlur={handleBlur}
-                required
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                onSuggestionSelected={(suggestion) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    address: suggestion.address,
+                    city: suggestion.city,
+                    state: suggestion.state,
+                    zip: suggestion.zip,
+                  }));
+                }}
                 placeholder="123 Main St"
+                required
               />
             </div>
 

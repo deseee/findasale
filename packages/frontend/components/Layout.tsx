@@ -69,6 +69,7 @@ import AvatarDropdown from './AvatarDropdown';
 import BecomeOrganizerModal from './BecomeOrganizerModal';
 import { useShopperCart } from '../hooks/useShopperCart';
 import ShopperCartDrawer from './ShopperCartDrawer';
+import CartIcon from './CartIcon';
 
 const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: boolean }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -630,6 +631,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     )}
                   </div>
                   <div className="border-l border-warm-300 dark:border-gray-700 pl-4 flex items-center gap-2">
+                    <CartIcon />
                     <NotificationBell />
                     <ThemeToggle compact={true} />
                     {isLowBandwidth && (
