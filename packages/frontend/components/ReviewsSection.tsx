@@ -11,6 +11,8 @@ interface Review {
   rating: number;
   comment: string | null;
   createdAt: string;
+  response?: string | null;
+  respondedAt?: string | null;
   user: { name: string };
   sale?: { id: string; title: string };
 }
@@ -172,6 +174,15 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
               <StarRating value={review.rating} size="sm" className="mb-1" />
               {review.comment && (
                 <p className="text-sm text-warm-700 dark:text-gray-300 mt-1">{review.comment}</p>
+              )}
+              {review.respondedAt && review.response && (
+                <div className="mt-3 pl-4 border-l-2 border-amber-400 dark:border-amber-500">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Organizer response:</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{review.response}</p>
+                  <p className="text-xs text-warm-400 dark:text-gray-500 mt-1">
+                    {format(new Date(review.respondedAt), 'MMM d, yyyy')}
+                  </p>
+                </div>
               )}
             </div>
           ))}

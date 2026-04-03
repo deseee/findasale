@@ -61,6 +61,7 @@ export const getSimpleReputation = async (req: any, res: Response) => {
       responseTimeAvg: reputation.responseTimeAvg,
       saleCount: reputation.saleCount,
       photoQualityAvg: reputation.photoQualityAvg,
+      shopperRating: reputation.shopperRating,
     });
   } catch (error) {
     console.error('Error fetching simple reputation:', error);
@@ -107,6 +108,7 @@ export const recalculateReputation = async (req: AuthRequest, res: Response) => 
         isNew: reputation?.isNew,
         saleCount: reputation?.saleCount,
         photoQualityAvg: reputation?.photoQualityAvg,
+        shopperRating: reputation?.shopperRating,
       },
     });
   } catch (error) {

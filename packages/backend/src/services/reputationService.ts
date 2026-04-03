@@ -184,6 +184,56 @@ export async function computeReputationScore(organizerId: string): Promise<Reput
 }
 
 /**
+ * Wave 2B: Recalculate shopperRating from Review.rating
+ * Averages all APPROVED reviews for an organizer's sales
+ * Stores result in OrganizerReputation.shopperRating (0–5 scale, null if no reviews)
+ */
+export async function recalculateShopperRating(organizerId: string): Promise<void> {
+  try {
+    // Get all APPROVED reviews for this organizer's sales
+    const reviews = await prisma.review.findMany({
+      where: {
+        sale: { organizerId },
+        moderationStatus: 'APPROVED',
+      },
+      select: { rating: true },
+    });
+
+    if (reviews.length === 0) {
+      // No reviews yet — clear the field
+      await prisma.organizerReputation.updateMany({
+        where: { organizerId },
+        data: { shopperRating: null },
+      });
+      return;
+    }
+
+    const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+    const shopperRating = Math.round(avg * 10) / 10; // round to 1 decimal
+
+    // Update or create the OrganizerReputation record
+    await prisma.organizerReputation.upsert({
+      where: { organizerId },
+      create: {
+        organizerId,
+        shopperRating,
+      },
+      update: {
+        shopperRating,
+      },
+    });
+
+    console.log(
+      `[reputationService] shopperRating updated for organizer ${organizerId}: ` +
+      `${shopperRating} (${reviews.length} approved reviews)`
+    );
+  } catch (err) {
+    console.error(`[reputationService] Error recalculating shopperRating for ${organizerId}:`, err);
+    throw err;
+  }
+}
+
+/**
  * Feature #71: Calculate and store organizer reputation score in OrganizerReputation model
  * Simplified calculation: saleCount (30% weight) + photoQualityAvg (70% weight)
  *

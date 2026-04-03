@@ -12,6 +12,7 @@ interface BulkActionDropdownProps {
   onSetStatus: () => void;
   onManageTags: () => void;
   onManagePhotos: () => void;
+  onSetPrice?: () => void;
   onPrintLabels?: () => void;
   disabled?: boolean;
 }
@@ -21,6 +22,7 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
   onSetStatus,
   onManageTags,
   onManagePhotos,
+  onSetPrice,
   onPrintLabels,
   disabled = false,
 }) => {
@@ -90,6 +92,14 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
           >
             Manage Photos
           </button>
+          {onSetPrice && (
+            <button
+              onClick={() => handleAction(onSetPrice)}
+              className="block w-full text-left px-4 py-2 text-sm text-warm-700 hover:bg-warm-50 transition-colors border-b border-warm-100"
+            >
+              Set Bulk Price
+            </button>
+          )}
           {onPrintLabels && (
             <button
               onClick={() => handleAction(onPrintLabels)}

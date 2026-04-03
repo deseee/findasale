@@ -894,8 +894,6 @@ model SaleCheckin {
   longitude      Float
   qrScanned      Boolean  @default(false)  // did user scan QR to verify?
   qrScanId       String?  // links to future TreasureHuntQRScan or equivalent QR record
-  // Shopper rank in arrival line (derived from createdAt order at checkout)
-  arrivalRank    Int?                      // calculated rank (1=first, 2=second, etc.)
   checkinAt      DateTime @default(now())
   createdAt      DateTime @default(now())
 
