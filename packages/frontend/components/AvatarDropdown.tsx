@@ -58,6 +58,7 @@ import {
   Settings,
   Gift,
   Mail,
+  Smartphone,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { useShopperCart } from '../hooks/useShopperCart';
@@ -77,6 +78,8 @@ const AvatarDropdown: React.FC = () => {
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const [mobileProToolsOpen, setMobileProToolsOpen] = useState(false);
   const [myCollectionOpen, setMyCollectionOpen] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showIOSTooltip, setShowIOSTooltip] = useState(false);
   const [exploreConnectOpen, setExploreConnectOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -106,7 +109,26 @@ const AvatarDropdown: React.FC = () => {
     setIsOpen(false);
   }, [router.pathname]);
 
+  // Check if app is in standalone/installed mode
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+    }
+  }, []);
+
   if (!user) return null;
+
+  const handleInstallApp = () => {
+    localStorage.removeItem('findasale_install_dismissed_until');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    if (isIOS) {
+      setShowIOSTooltip(true);
+    } else {
+      // Android/Chrome: reload to trigger beforeinstallprompt
+      window.location.reload();
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -961,6 +983,24 @@ const AvatarDropdown: React.FC = () => {
             <Settings size={16} className="text-amber-600" />
             <span>Settings</span>
           </Link>
+
+          {!isStandalone && (
+            <div>
+              <button
+                onClick={handleInstallApp}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                role="menuitem"
+              >
+                <Smartphone size={16} className="text-amber-600" />
+                <span>📲 Install App</span>
+              </button>
+              {showIOSTooltip && (
+                <div className="px-3 py-2 text-xs text-warm-700 dark:text-warm-300 bg-warm-50 dark:bg-gray-800 rounded-md mx-2 mt-1">
+                  Tap the Share button (↑) below, then select "Add to Home Screen"
+                </div>
+              )}
+            </div>
+          )}
 
           <button
             onClick={handleLogout}

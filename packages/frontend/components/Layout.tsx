@@ -54,6 +54,7 @@ import {
   Camera,
   Scale,
   Gift,
+  Smartphone,
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
@@ -102,11 +103,20 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [mobileDevToolsOpen, setMobileDevToolsOpen] = useState(false);
   const [mobileInSaleToolsOpen, setMobileInSaleToolsOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showIOSTooltip, setShowIOSTooltip] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  // Check if app is in standalone/installed mode
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+    }
   }, []);
 
   // Close drawer on route change
@@ -142,6 +152,18 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const handleSearchBlur = () => {
     if (!headerSearch.trim()) {
       setIsSearchOpen(false);
+    }
+  };
+
+  const handleInstallApp = () => {
+    localStorage.removeItem('findasale_install_dismissed_until');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    if (isIOS) {
+      setShowIOSTooltip(true);
+    } else {
+      // Android/Chrome: reload to trigger beforeinstallprompt
+      window.location.reload();
     }
   };
 
@@ -213,6 +235,23 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Settings size={16} className="text-amber-500" />
               <span>Settings</span>
             </Link>
+
+            {!isStandalone && (
+              <div>
+                <button
+                  onClick={handleInstallApp}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+                >
+                  <Smartphone size={16} className="text-amber-500" />
+                  <span>📲 Install App</span>
+                </button>
+                {showIOSTooltip && (
+                  <div className="px-3 py-2 text-xs text-warm-700 dark:text-warm-300 bg-warm-50 dark:bg-gray-800 rounded-md mx-2 mt-1">
+                    Tap the Share button (↑) below, then select "Add to Home Screen"
+                  </div>
+                )}
+              </div>
+            )}
 
             <SectionHeader icon={Wrench} label="Selling Tools" color="amber" />
             <Link href="/organizer/holds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Reserve items for buyers before the sale starts">
@@ -372,6 +411,23 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Settings size={16} className="text-indigo-500" />
               <span>Settings</span>
             </Link>
+
+            {!isStandalone && (
+              <div>
+                <button
+                  onClick={handleInstallApp}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+                >
+                  <Smartphone size={16} className="text-indigo-500" />
+                  <span>📲 Install App</span>
+                </button>
+                {showIOSTooltip && (
+                  <div className="px-3 py-2 text-xs text-warm-700 dark:text-warm-300 bg-warm-50 dark:bg-gray-800 rounded-md mx-2 mt-1">
+                    Tap the Share button (↑) below, then select "Add to Home Screen"
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Show "Host a Sale" for shoppers without organizer role */}
             {!user?.roles?.includes('ORGANIZER') && (
