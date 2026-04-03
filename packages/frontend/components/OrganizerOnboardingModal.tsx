@@ -64,12 +64,11 @@ const OrganizerOnboardingModal: React.FC<OrganizerOnboardingModalProps> = ({ onD
 
   const handleNext = () => {
     if (step === STEPS.length - 1) {
-      // Complete onboarding — set localStorage and navigate
+      // Complete onboarding — dismiss modal, stay on dashboard
       if (typeof window !== 'undefined') {
         localStorage.setItem('onboardingModalDismissed', 'true');
       }
-      // Navigate to /organizer/create-sale
-      window.location.href = '/organizer/create-sale';
+      onDismiss();
       return;
     }
     setStep(step + 1);
