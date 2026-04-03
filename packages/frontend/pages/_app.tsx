@@ -8,6 +8,7 @@ import api from '../lib/api';
 import Layout from '../components/Layout';
 import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
+import { CartProvider } from '../context/CartContext';
 import FeedbackWidget from '../components/FeedbackWidget';
 import InstallPrompt from '../components/InstallPrompt';
 import { usePushSubscription } from '../hooks/usePushSubscription';
@@ -246,9 +247,11 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
             <LowBandwidthProvider>
               <QueryClientProvider client={queryClient}>
               <ThemeInitializer />
+              <CartProvider>
               <ErrorBoundary key={router.asPath}>
                 {getLayout(<Component {...pageProps} />)}
               </ErrorBoundary>
+              </CartProvider>
               {/* PWA helpers */}
               <ServiceWorkerUpdateNotifier />
               <PushSubscriber />
