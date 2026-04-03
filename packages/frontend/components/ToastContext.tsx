@@ -28,6 +28,10 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  const dismiss = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = Math.random().toString(36).substr(2, 9);
     const toast: Toast = { id, message, type };
@@ -58,9 +62,16 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         {standardToasts.map((toast) => (
           <div
             key={toast.id}
-            className={`px-4 py-3 rounded shadow-lg font-medium max-w-xs dark:shadow-2xl ${typeClasses[toast.type]}`}
+            className={`flex items-start gap-2 px-4 py-3 rounded shadow-lg font-medium max-w-xs dark:shadow-2xl ${typeClasses[toast.type]}`}
           >
-            {toast.message}
+            <span className="flex-1 text-sm">{toast.message}</span>
+            <button
+              onClick={() => dismiss(toast.id)}
+              className="flex-shrink-0 opacity-75 hover:opacity-100 leading-none text-lg font-bold ml-1"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
           </div>
         ))}
       </div>
@@ -70,9 +81,16 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         {pointsToasts.map((toast) => (
           <div
             key={toast.id}
-            className={`px-3 py-2 rounded-lg shadow-lg font-semibold text-sm max-w-xs dark:shadow-2xl ${typeClasses.points}`}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg font-semibold text-sm max-w-xs dark:shadow-2xl ${typeClasses.points}`}
           >
-            {toast.message}
+            <span className="flex-1">{toast.message}</span>
+            <button
+              onClick={() => dismiss(toast.id)}
+              className="flex-shrink-0 opacity-75 hover:opacity-100 leading-none text-base font-bold"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
           </div>
         ))}
       </div>
