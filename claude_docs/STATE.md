@@ -53,11 +53,27 @@ Implementation phase (3 dev batches, all zero TS errors):
 - `claude_docs/research/S388-documentation-coaching-research.md` — research synthesis
 - `claude_docs/feature-notes/gamedesign-shopper-rank-matrix-S388.md` — game design matrix
 
+**S388 Additional Work (post-compaction):**
+- Teams member count fixed: pricing.tsx 5→12 per D-007
+- Stripe audit: price IDs confirmed correct (subscription uses Stripe price objects, not hardcoded amounts). À la carte = $9.99 (999 cents). No Stripe changes needed.
+- Concurrent sales gate: architect spec complete at `claude_docs/specs/concurrent-sales-gate-spec.md` (SIMPLE=1, PRO=3, TEAMS/ENT=unlimited)
+- Tier + rank matrices: formal code-verified deliverable at `claude_docs/feature-notes/S388-tier-rank-matrices.md`
+  - Key finding: TierComparisonTable understates limits (shows 3 photos/100 items but code enforces 5/200)
+  - Key finding: Rank is cosmetic today — no rank-gated gameplay advantages are live yet
+  - Key finding: Referral system has schema + XP values but no routes wired
+
+**Additional S388 Files Changed:**
+- `packages/frontend/pages/organizer/pricing.tsx` — Teams 5→12 members
+- `claude_docs/specs/concurrent-sales-gate-spec.md` — NEW (architect spec)
+- `claude_docs/feature-notes/S388-tier-rank-matrices.md` — NEW (organizer tier + shopper rank matrices)
+- `claude_docs/strategy/roadmap.md` — v93, 5 entries added/updated
+
 **S388 Deferred / Next Session:**
-- Concurrent sales gate for SIMPLE: architect spec needed (maxConcurrentSales field + enforcement)
+- Concurrent sales gate implementation: spec ready, needs dev dispatch (#249)
+- TierComparisonTable limit discrepancy: shows 3 photos/100 items, code enforces 5/200 — fix the table
 - Organizer tier rearrangement: Patrick open to moving features between tiers — needs formal proposal
-- Stripe price objects: may need recreation to match $29/$79 (check stripeController.ts L1125-1127)
-- Gamification Phase 1 completion: ~45-50% ready. Seasonal infrastructure, notifications, dynamic pricing all missing. Full checklist at DEV_HANDOFF_CHECKLIST-S259.md.
+- Referral system wiring: schema + XP values exist, routes not mounted
+- Gamification Phase 1 completion: ~45-50% ready. Seasonal infrastructure, notifications, XP wiring to purchase/visit/auction flows, dynamic pricing all missing. Full checklist at DEV_HANDOFF_CHECKLIST-S259.md.
 
 ---
 
