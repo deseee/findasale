@@ -1031,6 +1031,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
                         </Link>
+                        <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Compass size={14} className="inline mr-2 text-indigo-500" /> My Trails
+                        </Link>
                         <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
                         </Link>
@@ -1039,6 +1042,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Trophy size={14} className="inline mr-2 text-indigo-500" /> League
+                        </Link>
+                        <Link href="/shopper/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Trophy size={14} className="inline mr-2 text-indigo-500" /> Explorer Leaderboard
+                        </Link>
+                        <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Award size={14} className="inline mr-2 text-indigo-500" /> Achievements
                         </Link>
                         <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties <span className="text-xs text-gray-400">(Soon)</span>
