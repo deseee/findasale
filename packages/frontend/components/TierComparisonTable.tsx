@@ -27,13 +27,13 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Item uploads per sale',
-    simple: '100',
+    simple: '200',
     pro: '500',
     teams: 'Unlimited',
   },
   {
     name: 'Photos per item',
-    simple: '3',
+    simple: '5',
     pro: '10',
     teams: 'Unlimited',
   },

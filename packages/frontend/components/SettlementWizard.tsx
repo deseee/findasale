@@ -247,6 +247,20 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
               </div>
             </div>
 
+            {/* Payout details */}
+            {settlement?.clientPayoutStripeTransferId && (
+              <div className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 rounded p-2 mb-4 break-all font-mono">
+                Transfer ID: {settlement.clientPayoutStripeTransferId}
+              </div>
+            )}
+
+            {settlement?.clientPayoutFailureReason && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4">
+                <p className="text-sm font-semibold text-red-800 dark:text-red-300">Payout Failed</p>
+                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{settlement.clientPayoutFailureReason}</p>
+              </div>
+            )}
+
             {/* Donation section */}
             {availableItems.length > 0 && (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">

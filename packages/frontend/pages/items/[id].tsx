@@ -94,6 +94,8 @@ interface Item {
   invoiceCheckoutUrl?: string;
   invoiceExpiresAt?: string;
   variantSku?: string; // V4: Multi-variant support
+  priceBeforeMarkdown?: number; // Feature #91: Auto-Markdown
+  markdownApplied?: boolean; // Feature #91: Auto-Markdown
 }
 
 interface BidHistory {
@@ -520,8 +522,22 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                   {isAuction ? 'Current Bid' : 'Price'}
                 </div>
-                <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                  ${currentPrice.toFixed(2)}
+                <div className="flex items-center gap-2 mb-2">
+                  {item.markdownApplied && item.priceBeforeMarkdown ? (
+                    <>
+                      <span className="text-2xl line-through text-gray-400 dark:text-gray-500">
+                        ${item.priceBeforeMarkdown.toFixed(2)}
+                      </span>
+                      <span className="text-4xl font-bold text-green-600 dark:text-green-400">
+                        ${currentPrice.toFixed(2)}
+                      </span>
+                      <span className="text-xs font-semibold text-green-600 dark:text-green-400">Sale</span>
+                    </>
+                  ) : (
+                    <div className="text-4xl font-bold text-gray-900 dark:text-gray-100">
+                      ${currentPrice.toFixed(2)}
+                    </div>
+                  )}
                 </div>
                 {isAuction && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">

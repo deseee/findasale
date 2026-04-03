@@ -22,6 +22,7 @@ import Skeleton from '../../../../components/Skeleton';
 import NearMissNudge from '../../../../components/NearMissNudge'; // Feature 61
 import ItemPhotoManager from '../../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Phase 3
+import PriceResearchPanel from '../../../../components/PriceResearchPanel';
 import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
@@ -76,6 +77,8 @@ interface Item {
   suggestedTags?: string[];
   suggestedConditionGrade?: string; // #64: AI-suggested condition grade
   healthScore?: HealthScore;
+  priceBeforeMarkdown?: number; // Feature #91: Auto-Markdown
+  markdownApplied?: boolean; // Feature #91: Auto-Markdown
 }
 
 const CATEGORIES = [
@@ -523,9 +526,24 @@ const ReviewPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm truncate">
                           {item.title}
                         </p>
-                        <p className="text-amber-700 font-bold text-sm mt-1">
-                          {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}
-                        </p>
+                        <div className="text-amber-700 font-bold text-sm mt-1 flex items-center gap-1">
+                          {item.price != null ? (
+                            item.markdownApplied && item.priceBeforeMarkdown ? (
+                              <>
+                                <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
+                                  ${item.priceBeforeMarkdown.toFixed(2)}
+                                </span>
+                                <span className="text-green-600 dark:text-green-400">
+                                  ${item.price.toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              `$${item.price.toFixed(2)}`
+                            )
+                          ) : (
+                            'No price'
+                          )}
+                        </div>
                         <p className="text-warm-600 dark:text-warm-400 text-xs mt-1">{item.category || 'Uncategorized'}</p>
                       </div>
                     </div>
@@ -733,7 +751,25 @@ const ReviewPage = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
                               <p className="text-sm text-warm-600 dark:text-warm-400">
-                                {item.price != null ? `$${item.price.toFixed(2)}` : 'No price'}{' · '}{item.category || 'Uncategorized'}
+                                <span className="flex items-center gap-1">
+                                  {item.price != null ? (
+                                    item.markdownApplied && item.priceBeforeMarkdown ? (
+                                      <>
+                                        <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
+                                          ${item.priceBeforeMarkdown.toFixed(2)}
+                                        </span>
+                                        <span className="text-green-600 dark:text-green-400">
+                                          ${item.price.toFixed(2)}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      `$${item.price.toFixed(2)}`
+                                    )
+                                  ) : (
+                                    'No price'
+                                  )}
+                                </span>
+                                {' · '}{item.category || 'Uncategorized'}
                               </p>
                               {/* Sprint 1: Health score bar */}
                               {item.healthScore && (
@@ -846,12 +882,15 @@ const ReviewPage = () => {
                                     onChange={(e) => handleEditChange(item.id, 'price', parseFloat(e.target.value) || 0)}
                                     className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                   />
-                                  <div className="mt-2">
-                                    <PriceSuggestion
-                                      title={editState.title}
+                                  <div className="mt-3">
+                                    <PriceResearchPanel
+                                      itemId={item.id}
+                                      itemTitle={editState.title}
                                       category={editState.category}
                                       condition={editState.condition}
-                                      onApplyPrice={(price) => handleEditChange(item.id, 'price', price)}
+                                      currentPrice={editState.price}
+                                      collapsed={true}
+                                      onPriceSelect={(price) => handleEditChange(item.id, 'price', price)}
                                     />
                                   </div>
                                 </div>

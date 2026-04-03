@@ -39,6 +39,7 @@ const EditSalePage = () => {
   const [isSendingApproachNotification, setIsSendingApproachNotification] = useState(false); // Feature #84: Approach Notes notification
   const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
   const [isAutoGeocodingOnLoad, setIsAutoGeocodingOnLoad] = useState(false); // Track auto-geocoding in progress
+  const [tierLimitError, setTierLimitError] = useState<any>(null); // Feature #249: Concurrent Sales Gate
   const formInitialized = useRef(false); // prevent background refetches from resetting form
   const formDataRef = useRef<any>(null); // Capture current formData to avoid stale closure in mutations
 
@@ -326,7 +327,13 @@ const EditSalePage = () => {
         router.push(`/organizer/edit-sale/${id}`);
       }
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
+      // Feature #249: Handle concurrent sales tier limit (409)
+      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+        setTierLimitError(error.response.data);
+        showToast(error.response.data.message, 'error');
+      } else {
+        showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
+      }
     } finally {
       setIsTogglingStatus(false);
     }
@@ -348,7 +355,13 @@ const EditSalePage = () => {
       setShowAlaCarteModal(false);
       setShowPublishCelebration(true);
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Failed to publish sale', 'error');
+      // Feature #249: Handle concurrent sales tier limit (409)
+      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+        setTierLimitError(error.response.data);
+        showToast(error.response.data.message, 'error');
+      } else {
+        showToast(error.response?.data?.message || 'Failed to publish sale', 'error');
+      }
     }
   };
 
@@ -394,6 +407,31 @@ const EditSalePage = () => {
 
       <div className="min-h-screen bg-white dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 py-8">
+          {/* Feature #249: Tier limit error modal */}
+          {tierLimitError && (
+            <div className="mb-8 p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+              <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100 mb-2">
+                Concurrent Sales Limit Reached
+              </h3>
+              <p className="text-amber-800 dark:text-amber-200 mb-4">
+                You're currently running <strong>{tierLimitError.current}</strong> active sale{tierLimitError.current !== 1 ? 's' : ''}.
+                Your <strong>{tierLimitError.tier}</strong> tier allows <strong>{tierLimitError.limit}</strong> concurrent sale{tierLimitError.limit !== 1 ? 's' : ''} at a time.
+              </p>
+              <Link
+                href={tierLimitError.upgradeUrl}
+                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                Upgrade to PRO
+              </Link>
+              <button
+                onClick={() => setTierLimitError(null)}
+                className="ml-4 text-amber-700 dark:text-amber-300 font-semibold underline hover:no-underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium mb-4 inline-block">
             Back to dashboard
           </Link>

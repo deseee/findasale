@@ -128,7 +128,18 @@ export const getSaleReviews = async (req: Request, res: Response) => {
           saleId,
           moderationStatus: 'APPROVED' // Only show approved reviews to public
         },
-        include: { user: { select: { name: true } } },
+        select: {
+          id: true,
+          userId: true,
+          saleId: true,
+          rating: true,
+          comment: true,
+          response: true,
+          respondedAt: true,
+          verifiedPurchase: true,
+          createdAt: true,
+          user: { select: { name: true } },
+        },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -163,7 +174,16 @@ export const getOrganizerReviews = async (req: Request, res: Response) => {
           sale: { organizerId },
           moderationStatus: 'APPROVED' // Only show approved reviews to public
         },
-        include: {
+        select: {
+          id: true,
+          userId: true,
+          saleId: true,
+          rating: true,
+          comment: true,
+          response: true,
+          respondedAt: true,
+          verifiedPurchase: true,
+          createdAt: true,
           user: { select: { name: true } },
           sale: { select: { id: true, title: true } },
         },
@@ -208,7 +228,16 @@ export const getOrganizerAllReviews = async (req: AuthRequest, res: Response) =>
         where: {
           sale: { organizerId }
         },
-        include: {
+        select: {
+          id: true,
+          userId: true,
+          saleId: true,
+          rating: true,
+          comment: true,
+          response: true,
+          respondedAt: true,
+          verifiedPurchase: true,
+          createdAt: true,
           user: { select: { name: true, id: true } },
           sale: { select: { id: true, title: true } },
         },
@@ -243,7 +272,16 @@ export const getMyOrganizerReviews = async (req: AuthRequest, res: Response) => 
     const [reviews, total] = await Promise.all([
       prisma.review.findMany({
         where: { sale: { organizerId: organizer.id } },
-        include: {
+        select: {
+          id: true,
+          userId: true,
+          saleId: true,
+          rating: true,
+          comment: true,
+          response: true,
+          respondedAt: true,
+          verifiedPurchase: true,
+          createdAt: true,
           user: { select: { name: true, id: true } },
           sale: { select: { id: true, title: true } },
         },

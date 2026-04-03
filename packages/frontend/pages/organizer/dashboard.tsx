@@ -447,6 +447,14 @@ const OrganizerDashboard = () => {
         />
       )}
 
+      {/* Flash Deal Form modal */}
+      {flashDealSaleId && (
+        <FlashDealForm
+          saleId={flashDealSaleId}
+          onClose={() => setFlashDealSaleId(null)}
+        />
+      )}
+
       {/* Simple Mode View */}
       {isSimpleMode && (
         <SimpleModePanel
@@ -769,6 +777,15 @@ const OrganizerDashboard = () => {
                     <Link href={`/organizer/pos?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="Open Point of Sale to process in-person transactions">
                       POS
                     </Link>
+                    {activeSale.status === 'PUBLISHED' && (
+                      <button
+                        onClick={() => setFlashDealSaleId(activeSale.id)}
+                        className="text-sm px-3 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-800 transition-colors"
+                        title="Create a flash deal to boost sales for specific items"
+                      >
+                        ⚡ Flash Deal
+                      </button>
+                    )}
                     {activeSale.status === 'PUBLISHED' && (
                       <button
                         onClick={async () => {
@@ -1126,7 +1143,16 @@ const OrganizerDashboard = () => {
                               showToast('Sale reopened', 'success');
                               setTimeout(() => window.location.reload(), 1000);
                             } catch (error: any) {
-                              showToast(error.response?.data?.message || 'Failed to reopen', 'error');
+                              // Feature #249: Handle concurrent sales tier limit (409)
+                              if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+                                const tierErr = error.response.data;
+                                showToast(
+                                  `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
+                                  'error'
+                                );
+                              } else {
+                                showToast(error.response?.data?.message || 'Failed to reopen', 'error');
+                              }
                             }
                           }}
                           className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors ml-4"
@@ -1229,7 +1255,16 @@ const OrganizerDashboard = () => {
                                   setTimeout(() => window.location.reload(), 1000);
                                 } catch (error: any) {
                                   console.error('Failed to reopen sale:', error);
-                                  showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
+                                  // Feature #249: Handle concurrent sales tier limit (409)
+                                  if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+                                    const tierErr = error.response.data;
+                                    showToast(
+                                      `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
+                                      'error'
+                                    );
+                                  } else {
+                                    showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
+                                  }
                                 }
                               }}
                               className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
