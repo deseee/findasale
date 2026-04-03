@@ -65,7 +65,7 @@ interface Sale {
   zip: string;
   lat: number;
   lng: number;
-  status?: string;
+  status: string;
   photoUrls: string[];
   saleType?: string;
   organizer: {
