@@ -31,11 +31,22 @@ export interface LootLogPurchase {
   };
 }
 
+export interface LootLogHaulPost {
+  id: number;
+  photoUrl: string;
+  caption: string | null;
+  likesCount: number;
+  createdAt: string;
+  user?: { id: string; name: string | null };
+  sale?: { id: string; title: string } | null;
+}
+
 export interface LootLogResponse {
   purchases: LootLogPurchase[];
   total: number;
   page: number;
   totalPages: number;
+  hauls?: LootLogHaulPost[];
 }
 
 export interface PublicLootLogResponse extends LootLogResponse {
