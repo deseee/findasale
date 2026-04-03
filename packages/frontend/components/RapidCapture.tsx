@@ -449,18 +449,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               ? inAddMode
                 ? `Adding photo → ${addingItem?.title || 'item'}`
                 : '1 photo = 1 item · tap + on any thumbnail to add more'
-              : `Up to ${MAX_REGULAR} photos per item`}
+              : `${photosThisItem}/${MAX_REGULAR} · tap shutter to add`}
           </span>
         </div>
 
-        {/* Regular mode photo counter (live X/5 display) */}
-        {!isRapidfire && (
-          <div className="absolute top-24 left-0 right-0 z-10 flex justify-center items-center">
-            <span className="text-white text-lg font-semibold bg-black/40 backdrop-blur-sm rounded-full px-4 py-2">
-              {photosThisItem}/{MAX_REGULAR}
-            </span>
-          </div>
-        )}
 
         {/* Camera viewfinder */}
         <div
@@ -906,65 +898,29 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </div>
         </div>
 
-        {/* Control buttons: Analyze (regular) / Done (rapidfire) */}
-        <div className="absolute bottom-4 left-0 right-0 z-30 flex justify-center gap-3 px-4">
-          {!isRapidfire && (
-            <>
-              {/* Analyze button (regular mode) */}
-              {photosThisItem > 0 && (
-                <button
-                  onClick={() => onAnalyze?.(
-                    photos.map(({ blob, previewUrl }) => ({ blob, previewUrl }))
-                  )}
-                  disabled={isAnalyzing}
-                  className="flex-1 max-w-xs bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold py-3 rounded-lg transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
-                  aria-label="Analyze photos"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                      <span>Analyzing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>✨</span>
-                      <span>Analyze {photosThisItem}</span>
-                    </>
-                  )}
-                </button>
+        {/* Analyze button (regular mode only) — appears below thumbnail strip when photos captured */}
+        {!isRapidfire && photosThisItem > 0 && (
+          <div className="bg-black/90 px-4 pb-3 pt-1 flex justify-center">
+            <button
+              onClick={() => onAnalyze?.(photos.map(({ blob, previewUrl }) => ({ blob, previewUrl })))}
+              disabled={isAnalyzing}
+              className="w-full max-w-xs bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-semibold py-2.5 rounded-lg transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2 text-sm"
+              aria-label="Analyze photos"
+            >
+              {isAnalyzing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                  <span>Analyzing...</span>
+                </>
+              ) : (
+                <>
+                  <span>✨</span>
+                  <span>Analyze {photosThisItem} {photosThisItem === 1 ? 'photo' : 'photos'}</span>
+                </>
               )}
-              {/* Cancel button for regular mode */}
-              <button
-                onClick={handleCancel}
-                className="flex-1 max-w-xs bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition-all active:scale-95"
-                aria-label="Cancel camera"
-              >
-                Cancel
-              </button>
-            </>
-          )}
-          {isRapidfire && (
-            <>
-              {/* Done button (rapidfire mode) */}
-              <button
-                onClick={handleDone}
-                className="flex-1 max-w-xs bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-600 hover:to-red-600 text-white font-semibold py-3 rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-                aria-label="Done capturing"
-              >
-                <span>✓</span>
-                <span>Done</span>
-              </button>
-              {/* Cancel button for rapidfire mode */}
-              <button
-                onClick={handleCancel}
-                className="flex-1 max-w-xs bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition-all active:scale-95"
-                aria-label="Cancel camera"
-              >
-                Cancel
-              </button>
-            </>
-          )}
-        </div>
+            </button>
+          </div>
+        )}
 
         {/* Full-screen preview overlay when a photo is tapped (regular mode filmstrip or carousel tap) */}
         {selectedIndex !== null && photos[selectedIndex] && (
