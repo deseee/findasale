@@ -5,6 +5,8 @@ import { prisma } from '../index';
 import { randomUUID } from 'crypto';
 import { handleReferralBadge } from './userController';
 import { addShopperSubscriber } from '../services/mailerliteService';
+import { processReferral } from '../services/referralService';
+import { awardXp, XP_AWARDS } from '../services/xpService';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
 const ALLOWED_REDIRECT_URIS = () => {
@@ -146,6 +148,16 @@ export const register = async (req: Request, res: Response) => {
             referredUserId: user.id
           }
         });
+
+        // Award XP to referrer for signup (non-blocking)
+        awardXp(referrer.id, 'REFERRAL_SIGNUP', XP_AWARDS.REFERRAL_SIGNUP).catch((err) =>
+          console.error('[referral] Failed to award signup XP to referrer:', err)
+        );
+
+        // Process referral reward (creates ReferralReward record)
+        processReferral(referrer.id, user.id).catch((err) =>
+          console.error('[referral] Failed to process referral reward:', err)
+        );
 
         // Check for referral badge
         await handleReferralBadge(referrer.id);
