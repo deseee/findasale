@@ -176,7 +176,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                     className="bg-black/60 hover:bg-black/80 text-white rounded w-6 h-6 flex items-center justify-center text-xs focus:opacity-100"
                     aria-label="Move photo left"
                   >
-                    \u2190
+                    ←
                   </button>
                 )}
                 {i < photos.length - 1 && (
@@ -186,7 +186,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                     className="bg-black/60 hover:bg-black/80 text-white rounded w-6 h-6 flex items-center justify-center text-xs focus:opacity-100"
                     aria-label="Move photo right"
                   >
-                    \u2192
+                    →
                   </button>
                 )}
               </div>
