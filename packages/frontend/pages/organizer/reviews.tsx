@@ -74,7 +74,7 @@ export default function OrganizerReviews() {
         return newState;
       });
       queryClient.invalidateQueries({
-        queryKey: ['reviews', 'organizer', 'all', user?.organizerId]
+        queryKey: ['reviews', 'organizer', 'me', user?.id]
       });
     },
     onError: (err: any) => {
