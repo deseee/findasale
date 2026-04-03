@@ -800,9 +800,6 @@ const AddItemsDetailPage = () => {
         // Invalidate caches for item lists
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
 
-        // Signal to organizer that AI analysis is starting
-        showToast('Analyzing item with AI...', 'info');
-
         // Poll for AI completion
         pollForAI(itemId);
 
@@ -931,7 +928,6 @@ const AddItemsDetailPage = () => {
         );
 
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-        showToast('Analyzing item with AI...', 'info');
         pollForAI(itemId);
       }
     } catch (err: any) {
@@ -1020,7 +1016,6 @@ const AddItemsDetailPage = () => {
         );
 
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-        showToast('Analyzing item with AI...', 'info');
         pollForAI(itemId);
       }
     } catch (err: any) {
@@ -1066,7 +1061,7 @@ const AddItemsDetailPage = () => {
                 : i
             )
           );
-          showToast(`AI identified: "${item.title}"`, 'success');
+          showToast(`Tagged: "${item.title}"`, 'success');
           return;
         }
 
@@ -1661,7 +1656,7 @@ const AddItemsDetailPage = () => {
               }}
               onEnhanceAll={() => {
                 // BUG 6 FIX: Show placeholder since no backend endpoint exists yet
-                showToast('AI enhancement coming soon', 'info');
+                showToast('Enhancement coming soon', 'info');
               }}
               onAnalyze={captureMode === 'regular' ? handleRegularAnalyze : undefined}
               isAnalyzing={regularAnalyzing}
