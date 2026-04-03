@@ -1,107 +1,47 @@
-# Patrick's Dashboard — S385 Complete (2026-04-03)
+# Patrick's Dashboard — S386 Complete (2026-04-03)
 
 ---
 
 ## Status
 
-- **Vercel:** ✅ Green (pending S383+S385 pushes)
+- **Vercel:** ✅ Green
 - **Railway:** ✅ Green
-- **DB:** ✅ Migration pending (arrivalRank removal — run after S385 push)
+- **DB:** ✅ Migration complete (arrivalRank removed)
 
 ---
 
-## What Happened This Session (S385)
+## What Happened This Session (S386)
 
-**Largest single-session wiring sprint. 12 agents dispatched in parallel across 2 waves. 28 files changed, 24 components surfaced.**
+**TS repair sprint + 3 deferred components wired + full roadmap audit.**
 
-**Wave 1 (wire):** FeedbackWidget now floats globally. emailSentAt tracked on receipts. ActivityFeed + HypeMeter live on sale pages. DisputeForm on purchase history. BulkPriceModal in bulk actions.
+Fixed 5 sequential Vercel TS errors from S385 wave agents: itemCount missing on activeSale (fixed backend query), OrganizerSaleCard type conflicts, useSocialProof wrong export name, Sale.status optionality, hauls missing from LootLogResponse.
 
-**Wave 2 (build):** Organizers can now respond to reviews — new /organizer/reviews page, inline form, responses show on public sale page. shopperRating now calculated from real Review.rating data (was always null before).
+Wired 3 deferred S385 components: CartIcon now in header (live hold count badge). AddressAutocomplete on create-sale address field (free Nominatim API, auto-fills city/state/zip). TooltipHelper on pricing tier labels.
 
-**Wave 3 (wire 24 more):** Sale detail page now has RSVP, waitlist, calendar, map, social proof, similar items, bounty modal. Wishlists got alert form + share button. Organizer pricing/dashboard got performance badges + tier comparison. Gamification components wired (points badge, haul posts, referral card, bid modal). Teams onboarding wizard triggers automatically for Teams-tier organizers. Reviews link added to organizer nav (Post Sales section).
+Full roadmap audit — v92 — 20+ entries corrected. S375 features (#229, #240–244) were still showing "Ready to Build" despite being shipped weeks ago. All fixed.
 
-## What Happened Last Session (S384)
+## What Happened Last Session (S385)
 
-Full orphan audit — 4-layer scan of backend routes, components, schema fields, and feature conditions. All 35 orphaned components classified. This was the research session that planned everything S385 executed.
+Largest wiring sprint. 24 components surfaced across sale detail, wishlists, organizer tools, gamification, and Teams. Organizer review response built end-to-end. shopperRating aggregated from real review data. Reviews nav link added.
 
 ---
 
 ## Push Required
 
-### Push 1 — S383 (toast + onboarding + Install App) — PENDING
+### S386 Wrap Docs (push now)
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/ToastContext.tsx
-git add packages/frontend/components/OrganizerOnboardingModal.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/Layout.tsx
-git commit -m "fix: toast dismiss button, onboarding completion stays on dashboard, Install App in nav"
-.\push.ps1
-```
-
-### Push 2 — S385 (28 files — wire sprint + review responses + shopperRating)
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260403_remove_arrival_rank/migration.sql
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/controllers/reviewController.ts
-git add packages/backend/src/controllers/reputationController.ts
-git add packages/backend/src/routes/reviews.ts
-git add packages/backend/src/routes/users.ts
-git add packages/backend/src/services/reputationService.ts
-git add packages/backend/src/jobs/reputationJob.ts
-git add packages/frontend/pages/_app.tsx
-git add "packages/frontend/pages/sales/[id].tsx"
-git add "packages/frontend/pages/items/[id].tsx"
-git add packages/frontend/pages/shopper/history.tsx
-git add packages/frontend/pages/shopper/wishlist.tsx
-git add packages/frontend/pages/shopper/reputation.tsx
-git add packages/frontend/pages/wishlists.tsx
-git add packages/frontend/pages/organizer/reviews.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/organizer/sales.tsx
-git add packages/frontend/pages/organizer/pricing.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add packages/frontend/components/AuthContext.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/BulkActionDropdown.tsx
-git add packages/frontend/components/ReviewsSection.tsx
-git add packages/frontend/components/TeamsOnboardingWizard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S385: wire sprint — FeedbackWidget, ActivityFeed/HypeMeter, DisputeForm, BulkPriceModal, review responses, shopperRating live, RSVP/waitlist/calendar/map/social proof on sale pages, wishlist alerts/share, gamification wiring, Teams wizard, Reviews nav link"
+git commit -m "docs: S386 session wrap"
 .\push.ps1
-```
-
-**After Push 2 — run migration:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**After Push 2 — delete orphaned files:**
-```powershell
-Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\packages\frontend\components\Layout_current_github.tsx"
-Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\packages\frontend\components\BulkItemToolbar.tsx"
-Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\packages\frontend\components\ItemListWithBulkSelection.tsx"
-Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\packages\backend\src\templates.ts"
 ```
 
 ---
 
-## Next Session (S386)
+## Next Session (S387)
 
-Start with smoke test of S385 features on finda.sale (FeedbackWidget float, HypeMeter/ActivityFeed on sale pages, Reviews page, Teams wizard auto-trigger, Reviews nav link).
-
-**Pending wiring (deferred — context was tight):** TooltipHelper, CartIcon, AddressAutocomplete — placement decisions needed.
-**New features to build:** priceBeforeMarkdown crossed-out display on item cards, Review.verifiedPurchase badge on review cards, SaleSettlement client payout status in SettlementWizard.
-**Pricing consolidation:** 4 price suggestion tools → unified panel (dispatch to Architect first).
-**Audit fixes still open:** Items buried below map on sale detail (CRITICAL D-006), trending/inspiration/feed image quality (3 HIGH).
+Start with smoke test of S385+S386 features on finda.sale. Then dispatch remaining S384 audit items: priceBeforeMarkdown crossed-out price on item cards, Review.verifiedPurchase badge, SaleSettlement payout display. Then pricing consolidation (4 tools → unified panel, dispatch Architect first).
 
 ---
 
@@ -120,9 +60,6 @@ Start with smoke test of S385 features on finda.sale (FeedbackWidget float, Hype
 
 ## Open Action Items for Patrick
 
-- [ ] **⚠️ Push S383 (block 0 above) — toast/onboarding/Install App**
-- [ ] **⚠️ Push S380 (block 1 above)**
-- [ ] **⚠️ Push S381+S382 (block 2 above)**
 - [ ] **⚠️ eBay Developer App (enables real comps for #229/#244):** Create app at https://developer.ebay.com → get `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET` → set as Railway env vars.
 - [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
 - [ ] **Trade secrets (#83):** Document proprietary algorithms + NDA review

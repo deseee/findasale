@@ -7,16 +7,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S385 COMPLETE (2026-04-03):** Largest single-session wiring sprint to date. 6 Wave 1+2 agents + 6 Wave 3 agents dispatched in parallel. 28 files changed, 24 components wired, 2 new features built from scratch.
+**S386 COMPLETE (2026-04-03):** TS error repair sprint + 3 deferred component wirings + full roadmap audit (S373–S386).
 
-**S385 Summary:**
-- **Cleanup:** `arrivalRank` removed from SaleCheckin schema + migration SQL created. 4 orphaned files approved for deletion via PowerShell (Layout_current_github.tsx, BulkItemToolbar.tsx, ItemListWithBulkSelection.tsx, templates.ts).
-- **Wave 1 — Wired:** FeedbackWidget global floating button (_app.tsx). emailSentAt stamped on CheckoutEvidence when Stripe receipt fires. ActivityFeed + HypeMeter on sales/[id].tsx. DisputeForm "Report Issue" button on shopper/history.tsx. BulkPriceModal in BulkActionDropdown on add-items/[saleId].tsx.
-- **Wave 2 — Built:** Full organizer review response feature — PATCH endpoint, new /organizer/reviews management page, inline response form, responses display on public sale page. shopperRating aggregation — real-time trigger on review create + weekly batch job recalculation.
-- **Wave 3 — Wired (24 components):** sales/[id].tsx: SaleRSVPButton, RSVPBadge, SaleWaitlistButton, AddToCalendarButton, LocationMap, SocialProofBadge, SimilarItems, BountyModal. Wishlists: WishlistAlertForm, WishlistShareButton. Organizer: ItemPriceHistoryChart (edit-item), SalePerformanceBadge (dashboard), OrganizerSaleCard (sales), PremiumCTA + TierComparisonTable (pricing). Gamification: PointsBadge (shopper dashboard), HaulPostCard + UGCPhotoSubmitButton (history), ShopperReferralCard (reputation), BidModal (items/[id]). Teams: TeamsOnboardingWizard auto-triggers on dashboard for Teams-tier organizers. Nav: Reviews link added to AvatarDropdown + Layout Post Sales section.
-- **TreasureHuntQR:** Already mounted in sales.ts — was a false alarm from S384 audit.
-- **Deferred:** TooltipHelper, CartIcon, AddressAutocomplete (need more context for correct placement — S386).
-- **S383 push block still pending Patrick action.**
+**S386 Summary:**
+- **itemCount fix:** `organizers.ts` now returns `itemCount` (non-draft items) + `itemsSold` (SOLD items) on activeSale. Frontend type updated. Fixes SalePerformanceBadge TS error on dashboard.
+- **3 deferred components wired:** CartIcon → Layout.tsx header (hold count badge, polls /api/reservations/my-holds-full). AddressAutocomplete → create-sale.tsx address field (OpenStreetMap Nominatim, free, auto-fills city/state/zip). TooltipHelper → pricing.tsx tier section (SIMPLE/PRO/TEAMS explainers).
+- **TS repair chain (5 errors fixed sequentially):** OrganizerSaleCard Sale interface fields made optional → photoUrls optional chaining → useSocialProof→useSaleSocialProof import fix → Sale.status made required → LootLogResponse.hauls field added.
+- **Full roadmap audit:** v92 — 20+ entries updated. S375 features (#229, #240, #241, #242, #243, #244) correctly marked shipped. S376 #235 Charity Close marked shipped. S373 #51/#68 fixes noted. All S385 wirings documented.
+
+**S386 Files Changed (all pushed):**
+- `packages/backend/src/routes/organizers.ts` — itemCount/itemsSold on activeSale
+- `packages/frontend/pages/organizer/dashboard.tsx` — activeSale type update
+- `packages/frontend/components/Layout.tsx` — CartIcon in header
+- `packages/frontend/components/CartIcon.tsx` — dark mode classes
+- `packages/frontend/components/AddressAutocomplete.tsx` — dark mode classes
+- `packages/frontend/pages/organizer/create-sale.tsx` — AddressAutocomplete wired
+- `packages/frontend/pages/organizer/pricing.tsx` — TooltipHelper wired
+- `packages/frontend/components/OrganizerSaleCard.tsx` — all fields optional + photoUrls optional chaining
+- `packages/frontend/pages/sales/[id].tsx` — useSaleSocialProof import fix + Sale.status required
+- `packages/frontend/hooks/useLootLog.ts` — LootLogHaulPost type + hauls field on LootLogResponse
+- `claude_docs/strategy/roadmap.md` — v92 full audit
 
 **S385 Files Changed (push block provided):**
 - `packages/database/prisma/schema.prisma` — arrivalRank removed
@@ -705,36 +715,18 @@ Files changed S361:
 
 ---
 
-## Next Session (S386)
+## Next Session (S387)
 
-### S386 Priority 0 — Patrick actions required before S386 starts
-1. Push S383 block (still pending):
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/frontend/components/ToastContext.tsx
-   git add packages/frontend/components/OrganizerOnboardingModal.tsx
-   git add packages/frontend/components/AvatarDropdown.tsx
-   git add packages/frontend/components/Layout.tsx
-   git commit -m "fix: toast dismiss button, onboarding completion stays on dashboard, Install App in nav"
-   .\push.ps1
-   ```
-2. Push S385 block (28 files — full block in S385 section above)
-3. Run schema migration after S385 push (arrivalRank removal)
-4. Run orphan file deletions via PowerShell (4 files)
-
-### S386 Priority 1 — Smoke test S385 on finda.sale
-After Patrick pushes, verify on finda.sale:
+### S387 Priority 0 — Smoke test S385+S386 on finda.sale
+Verify deployed features:
 - FeedbackWidget floating button visible when logged in
-- Sale detail page shows HypeMeter viewer count + ActivityFeed
-- Review page at /organizer/reviews loads for Carol (user3)
-- Teams onboarding wizard triggers on dashboard for user1 (TEAMS tier)
-- Reviews nav link appears under Post Sales in both mobile + desktop nav
+- Sale detail page shows HypeMeter viewer count + ActivityFeed, RSVP/waitlist buttons
+- /organizer/reviews loads for Carol (user3)
+- CartIcon in header shows hold count badge
+- AddressAutocomplete on create-sale address field
+- TooltipHelper on pricing tier section
 
-### S386 Priority 2 — Deferred UX components
-Wire 3 components that need more context: TooltipHelper, CartIcon, AddressAutocomplete.
-Dispatch findasale-dev with explicit placement guidance.
-
-### S386 Priority 3 — Remaining S384 audit items not yet addressed
+### S387 Priority 1 — Remaining S384 audit items not yet addressed
 From S384 Layer 3 schema fields:
 - `priceBeforeMarkdown` + `markdownApplied` — frontend should show crossed-out original price on item cards/detail
 - `Review.verifiedPurchase` — backend sets it, badge missing from review cards (add to ReviewsSection)
