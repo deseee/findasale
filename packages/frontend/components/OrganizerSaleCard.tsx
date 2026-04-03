@@ -52,8 +52,8 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
   }, [sale.id]);
 
   // Calculate image URLs
-  const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
-  const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
+  const photoUrl = sale.photoUrls?.[0] ?? null;
+  const hasPhoto = !!photoUrl;
   const lqipUrl_calc = photoUrl ? getLqipUrl(photoUrl) : null;
   const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl) : null;
 
