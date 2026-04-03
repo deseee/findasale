@@ -230,6 +230,37 @@ export const getOrganizerAllReviews = async (req: AuthRequest, res: Response) =>
   }
 };
 
+// GET /api/reviews/organizer/me — authenticated organizer, reviews for their own sales (no organizerId param needed)
+export const getMyOrganizerReviews = async (req: AuthRequest, res: Response) => {
+  try {
+    const page = Math.max(1, parseInt(String(req.query.page || '1')));
+    const limit = Math.min(50, parseInt(String(req.query.limit || '10')));
+    const skip = (page - 1) * limit;
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user!.id } });
+    if (!organizer) return res.status(403).json({ error: 'Not an organizer' });
+
+    const [reviews, total] = await Promise.all([
+      prisma.review.findMany({
+        where: { sale: { organizerId: organizer.id } },
+        include: {
+          user: { select: { name: true, id: true } },
+          sale: { select: { id: true, title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.review.count({ where: { sale: { organizerId: organizer.id } } }),
+    ]);
+
+    return res.json({ reviews, total, page, pages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('Get my organizer reviews error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
 // PATCH /api/reviews/:reviewId/respond — Organizer responds to a review
 export const respondToReview = async (req: AuthRequest, res: Response) => {
   try {
