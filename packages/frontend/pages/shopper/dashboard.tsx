@@ -45,6 +45,7 @@ const ShopperDashboard = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
   const [isReferralDismissed, setIsReferralDismissed] = useState(false);
+  const [isGuildOnboardingDismissed, setIsGuildOnboardingDismissed] = useState(false);
   const [referralLink, setReferralLink] = useState<string | null>(null);
 
   // Handle hash-based tab navigation on mount and when hash changes
@@ -70,6 +71,14 @@ const ShopperDashboard = () => {
     const dismissed = localStorage.getItem('referral_cta_dismissed');
     if (dismissed) {
       setIsReferralDismissed(true);
+    }
+  }, []);
+
+  // Load Guild Onboarding dismissal state from localStorage
+  useEffect(() => {
+    const dismissed = localStorage.getItem('guild_onboarding_dismissed');
+    if (dismissed) {
+      setIsGuildOnboardingDismissed(true);
     }
   }, []);
 
@@ -99,6 +108,11 @@ const ShopperDashboard = () => {
   const handleDismissReferral = () => {
     localStorage.setItem('referral_cta_dismissed', 'true');
     setIsReferralDismissed(true);
+  };
+
+  const handleDismissGuildOnboarding = () => {
+    localStorage.setItem('guild_onboarding_dismissed', 'true');
+    setIsGuildOnboardingDismissed(true);
   };
 
   const handleCopyReferralLink = () => {
@@ -348,6 +362,44 @@ const ShopperDashboard = () => {
 
           {/* Gamification Section */}
           <div className="space-y-6 mb-8">
+            {/* Guild Onboarding Card - Show only for new/low-XP shoppers */}
+            {xpProfile && !xpLoading && !isGuildOnboardingDismissed && (xpProfile.guildXp < 50 || xpProfile.explorerRank === 'INITIATE') && (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-6 relative">
+                <button
+                  onClick={handleDismissGuildOnboarding}
+                  className="absolute top-3 right-3 text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100"
+                  aria-label="Dismiss onboarding"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100 mb-2">
+                  Welcome to the Explorer's Guild!
+                </h3>
+                <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                  Earn XP as you explore sales. Climb from <strong>Initiate → Scout → Ranger → Sage → Grandmaster</strong>.
+                </p>
+                <div className="bg-white dark:bg-gray-800 rounded-md p-3 mb-4 border border-amber-100 dark:border-amber-800">
+                  <p className="text-xs text-warm-700 dark:text-warm-300 font-semibold mb-2">XP Actions:</p>
+                  <ul className="text-xs text-warm-600 dark:text-warm-400 space-y-1">
+                    <li>• <strong>Visit a sale</strong> +5 XP</li>
+                    <li>• <strong>Scan a Treasure Hunt QR</strong> +25 XP</li>
+                    <li>• <strong>Purchase an item</strong> +1 XP per $</li>
+                  </ul>
+                </div>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mb-4 italic">
+                  Longer holds, early access, and exclusive perks await higher ranks.
+                </p>
+                <Link
+                  href="/shopper/explore"
+                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm mb-2"
+                >
+                  Start Exploring →
+                </Link>
+              </div>
+            )}
+
             {/* Streak Widget with permanent explainer */}
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
               <p className="text-sm text-warm-600 dark:text-warm-400 mb-4 italic">
@@ -751,6 +803,13 @@ const ShopperDashboard = () => {
                   </Link>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Brands Tab */}
+          {activeTab === 'brands' && (
+            <div>
+              <BrandFollowManager />
             </div>
           )}
 

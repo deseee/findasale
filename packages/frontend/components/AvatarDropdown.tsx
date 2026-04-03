@@ -167,7 +167,9 @@ const AvatarDropdown: React.FC = () => {
         aria-label={`User menu for ${user.name || user.email}`}
       >
         {/* Avatar Circle — initials only (no profile photo field on User model yet) */}
-        <div className="w-8 h-8 rounded-full bg-amber-500 dark:bg-amber-600 flex items-center justify-center text-xs font-bold text-white select-none">
+        <div className={`w-8 h-8 rounded-full bg-amber-500 dark:bg-amber-600 flex items-center justify-center text-xs font-bold text-white select-none ${
+          user.huntPassActive ? 'ring-2 ring-amber-400 dark:ring-amber-300 ring-offset-1' : ''
+        }`}>
           {getInitials()}
         </div>
 

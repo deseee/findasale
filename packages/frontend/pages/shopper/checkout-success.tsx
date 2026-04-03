@@ -12,12 +12,14 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
 
 const CheckoutSuccessPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const { purchaseId } = router.query;
 
   const { data: purchase, isLoading, isError } = useQuery({
@@ -215,6 +217,53 @@ const CheckoutSuccessPage = () => {
                     year: 'numeric',
                   })}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Share Your Haul Section */}
+          <div className="mb-10 p-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+            <div className="flex items-start gap-4">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Share your find on social media
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                  Tell your friends about this awesome item you found!
+                </p>
+                <button
+                  onClick={async () => {
+                    const itemUrl = typeof window !== 'undefined'
+                      ? `${window.location.origin}/items/${item?.id}`
+                      : '';
+                    const shareText = `Just scored ${item?.title} at ${sale?.title} on FindA.Sale! 🎉 Check it out at ${itemUrl}`;
+
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({
+                          title: `Found on FindA.Sale`,
+                          text: shareText,
+                          url: itemUrl,
+                        });
+                      } else {
+                        await navigator.clipboard.writeText(shareText + '\n\n' + itemUrl);
+                        showToast('Share text copied to clipboard!', 'success');
+                      }
+                    } catch (err) {
+                      console.error('Share error:', err);
+                      // Fallback to clipboard
+                      try {
+                        await navigator.clipboard.writeText(shareText + '\n\n' + itemUrl);
+                        showToast('Share text copied to clipboard!', 'success');
+                      } catch (clipErr) {
+                        console.error('Clipboard error:', clipErr);
+                      }
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold rounded-lg transition"
+                >
+                  📣 Share your haul
+                </button>
               </div>
             </div>
           </div>

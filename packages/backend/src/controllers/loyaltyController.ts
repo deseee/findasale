@@ -92,7 +92,8 @@ export async function getCollectorLeague(req: Request, res: Response) {
         id: true,
         name: true,
         explorerRank: true,
-        guildXp: true
+        guildXp: true,
+        huntPassActive: true
       },
       orderBy: {
         guildXp: 'desc'

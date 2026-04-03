@@ -4,12 +4,14 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
+import { useToast } from '../../../components/ToastContext';
 import { useMyTrails, useUpdateTrail, useDeleteTrail } from '../../../hooks/useTrails';
 import EmptyState from '../../../components/EmptyState';
 import Skeleton from '../../../components/Skeleton';
 
 export default function TrailDetailPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const { trailId } = router.query;
   const [trail, setTrail] = useState<any>(null);
@@ -199,6 +201,55 @@ export default function TrailDetailPage() {
                     Completed on {new Date(trail.completedAt).toLocaleDateString()}
                   </p>
                 )}
+              </div>
+            )}
+
+            {trail.isCompleted && (
+              <div className="p-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 mb-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                      🎉 Share your achievement
+                    </p>
+                    <p className="text-xs text-blue-800 dark:text-blue-200 mb-3">
+                      Tell your friends you completed this treasure hunt!
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const trailName = trail.name;
+                      const numStops = trail.stops?.length || 0;
+                      const shareText = `Just completed the ${trailName} treasure hunt on FindA.Sale! Found all ${numStops} treasures! 🗺️ finda.sale`;
+
+                      try {
+                        if (navigator.share) {
+                          await navigator.share({
+                            title: 'Trail Completed!',
+                            text: shareText,
+                            url: typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale',
+                          });
+                        } else {
+                          await navigator.clipboard.writeText(shareText);
+                          showToast('Achievement text copied to clipboard!', 'success');
+                        }
+                      } catch (err) {
+                        if ((err as Error).name !== 'AbortError') {
+                          console.error('Share error:', err);
+                          // Fallback to clipboard
+                          try {
+                            await navigator.clipboard.writeText(shareText);
+                            showToast('Achievement text copied to clipboard!', 'success');
+                          } catch (clipErr) {
+                            console.error('Clipboard error:', clipErr);
+                          }
+                        }
+                      }
+                    }}
+                    className="flex-shrink-0 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition text-sm"
+                  >
+                    Share
+                  </button>
+                </div>
               </div>
             )}
 

@@ -21,6 +21,7 @@ interface LeaderboardUser {
   name: string;
   explorerRank: string;
   guildXp: number;
+  huntPassActive: boolean;
   isCurrentUser: boolean;
 }
 
@@ -168,8 +169,13 @@ function LeaguePage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 dark:text-white">{entry.name}</span>
+                          {entry.huntPassActive && (
+                            <span className="inline-block px-2 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold rounded flex items-center gap-1">
+                              🏆 Hunt Pass
+                            </span>
+                          )}
                           {entry.isCurrentUser && (
-                            <span className="inline-block px-2 py-1 bg-amber-200 dark:bg-amber-700 text-amber-900 dark:text-amber-100 text-xs font-bold rounded">
+                            <span className="inline-block px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded">
                               YOU
                             </span>
                           )}

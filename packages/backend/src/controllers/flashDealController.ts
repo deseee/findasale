@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
+import { ExplorerRank } from '@prisma/client';
 
 const flashDealCreateSchema = z.object({
   itemId: z.string().min(1),
@@ -100,13 +101,15 @@ export const createFlashDeal = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const getActiveFlashDeals = async (req: Request, res: Response) => {
+export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Response) => {
   try {
     const now = new Date();
+    const sixHoursFromNow = new Date(now.getTime() + 6 * 60 * 60 * 1000);
 
+    // Fetch all active and upcoming flash deals (within 6 hours)
     const flashDeals = await prisma.flashDeal.findMany({
       where: {
-        startsAt: { lte: now },
+        startsAt: { lte: sixHoursFromNow },
         endsAt: { gte: now },
       },
       include: {
@@ -131,7 +134,48 @@ export const getActiveFlashDeals = async (req: Request, res: Response) => {
       orderBy: { endsAt: 'asc' },
     });
 
-    const enriched = flashDeals.map((deal) => ({
+    // Get user's rank and Hunt Pass status if authenticated
+    let userRank: ExplorerRank | null = null;
+    let hasHuntPass = false;
+
+    const authReq = req as AuthRequest;
+    if (authReq.user) {
+      const user = await prisma.user.findUnique({
+        where: { id: authReq.user.id },
+        select: {
+          explorerRank: true,
+          huntPassActive: true,
+          huntPassExpiry: true,
+        },
+      });
+
+      if (user) {
+        userRank = user.explorerRank;
+        // Check if Hunt Pass is active and not expired
+        hasHuntPass = user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > now;
+      }
+    }
+
+    // Filter deals based on legendary-first access gating
+    // Deals starting within 6 hours are only shown to: Sage+ rank OR Hunt Pass holders
+    const filtered = flashDeals.filter((deal) => {
+      const isStartingSoon = deal.startsAt > now; // Starts in the future
+      const isSageOrAbove = userRank === 'SAGE' || userRank === 'GRANDMASTER';
+
+      // If deal is active now, show to everyone
+      if (!isStartingSoon) {
+        return true;
+      }
+
+      // If deal starts soon, only show to Sage+ or Hunt Pass holders
+      if (isStartingSoon) {
+        return isSageOrAbove || hasHuntPass;
+      }
+
+      return true;
+    });
+
+    const enriched = filtered.map((deal) => ({
       id: deal.id,
       discountPct: deal.discountPct,
       startsAt: deal.startsAt,

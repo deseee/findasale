@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
@@ -52,6 +53,7 @@ const getTypeIcon = (type: string): string => {
 export default function NotificationsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -232,26 +234,82 @@ export default function NotificationsPage() {
                       {timeAgo(notification.createdAt)}
                     </p>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(notification.id);
-                    }}
-                    className="flex-shrink-0 text-warm-300 dark:text-gray-600 hover:text-warm-500 dark:hover:text-gray-400 transition-colors p-1"
-                    aria-label="Delete notification"
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
+                  <div className="flex-shrink-0 flex items-center gap-1">
+                    {notification.type.toLowerCase().includes('rank') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const shareText = `I just reached ${notification.title} on FindA.Sale's Explorer's Guild! 🏆 Join me at finda.sale`;
+
+                          try {
+                            if (navigator.share) {
+                              navigator.share({
+                                title: 'FindA.Sale Achievement',
+                                text: shareText,
+                                url: typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale',
+                              }).catch((err) => {
+                                if (err.name !== 'AbortError') {
+                                  console.error('Share error:', err);
+                                  fallbackCopy();
+                                }
+                              });
+                            } else {
+                              fallbackCopy();
+                            }
+                          } catch (err) {
+                            console.error('Share error:', err);
+                            fallbackCopy();
+                          }
+
+                          function fallbackCopy() {
+                            const shareText = `I just reached ${notification.title} on FindA.Sale's Explorer's Guild! 🏆 Join me at finda.sale`;
+                            navigator.clipboard.writeText(shareText).then(() => {
+                              showToast('Achievement text copied to clipboard!', 'success');
+                            }).catch((err) => {
+                              console.error('Clipboard error:', err);
+                            });
+                          }
+                        }}
+                        className="text-warm-300 dark:text-gray-600 hover:text-amber-500 dark:hover:text-amber-400 transition-colors p-1"
+                        title="Share this achievement"
+                        aria-label="Share achievement"
+                      >
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8.684 13.342C9.589 12.881 10.647 12.5 12 12.5c1.353 0 2.411.381 3.316.842M9 16.5v-3.568m6 3.568v-3.568M9 20.064A9.01 9.01 0 0012 20c2.716 0 5.226-.584 7.514-1.64m-9.514 0h.008v.008H12v-.008z"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(notification.id);
+                      }}
+                      className="text-warm-300 dark:text-gray-600 hover:text-warm-500 dark:hover:text-gray-400 transition-colors p-1"
+                      aria-label="Delete notification"
                     >
-                      <path
-                        fillRule="evenodd"
-                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
+                      <svg
+                        className="h-5 w-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
