@@ -10,6 +10,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/router';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 
@@ -60,6 +61,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
 }) => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<WizardStep>('upload');
@@ -144,16 +146,13 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       return created;
     },
     onSuccess: (created) => {
-      showToast(
-        `✓ ${created.length} items added to your sale!`,
-        'success'
-      );
+      showToast(`✓ ${created.length} item${created.length !== 1 ? 's' : ''} added!`, 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
       setSaveProgress(0);
-      setStep('complete');
       setPhotoFiles([]);
       setAnalyses([]);
       onComplete?.();
+      router.push(`/organizer/add-items/${saleId}/review`);
     },
     onError: () => {
       showToast('Some items failed to save', 'error');
@@ -191,7 +190,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     setPhotoFiles(files);
   };
 
-  // Analyze selected photos
+  // Analyze selected photos — skip review step, auto-save and navigate to review page
   const handleAnalyzePhotos = async () => {
     if (photoFiles.length === 0) {
       showToast('Select at least one photo', 'error');
@@ -208,17 +207,36 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     const aiResults = await batchAnalyzeMutation.mutateAsync(uploadedUrls);
     setUploadProgress(75);
 
-    // Combine with photo files
-    const itemsToReview = aiResults.map((analysis: AIAnalysis, idx: number) => ({
-      ...analysis,
-      include: true,
-      photoFile: photoFiles[idx],
-    }));
+    // Step 3: Auto-save all successfully analyzed items
+    const failedCount = aiResults.filter((a: AIAnalysis) => a.error).length;
+    const itemsToCreate = aiResults
+      .filter((a: AIAnalysis) => !a.error && a.photoUrl && a.photoUrl !== '(unknown)')
+      .map((a: AIAnalysis) => ({
+        saleId,
+        title: a.suggestedTitle,
+        description: a.suggestedDescription,
+        price: a.suggestedPrice,
+        category: a.suggestedCategory,
+        condition: a.suggestedCondition,
+        photoUrls: [a.photoUrl],
+        tags: a.suggestedTags || [],
+        isAiTagged: true,
+        aiConfidence: a.confidence || 0.5,
+      }));
 
-    setAnalyses(itemsToReview);
     setUploadProgress(100);
-    setStep('review');
     setTimeout(() => setUploadProgress(0), 500);
+
+    if (itemsToCreate.length === 0) {
+      showToast('No photos could be analyzed — try again', 'error');
+      return;
+    }
+
+    if (failedCount > 0) {
+      showToast(`${failedCount} photo${failedCount !== 1 ? 's' : ''} failed to analyze and will be skipped`, 'info');
+    }
+
+    await createItemsMutation.mutateAsync(itemsToCreate);
   };
 
   // Update analysis item
@@ -412,8 +430,8 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                 {uploadProgress < 50
                   ? 'Uploading photos...'
                   : uploadProgress < 75
-                  ? 'Analyzing with AI...'
-                  : 'Finalizing...'}
+                  ? 'Analyzing...'
+                  : 'Saving items...'}
               </p>
             </div>
           )}
@@ -442,11 +460,12 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
               disabled={
                 photoFiles.length === 0 ||
                 uploadPhotosMutation.isPending ||
-                batchAnalyzeMutation.isPending
+                batchAnalyzeMutation.isPending ||
+                createItemsMutation.isPending
               }
               className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg"
             >
-              {uploadPhotosMutation.isPending || batchAnalyzeMutation.isPending
+              {uploadPhotosMutation.isPending || batchAnalyzeMutation.isPending || createItemsMutation.isPending
                 ? 'Processing...'
                 : 'Analyze All'}
             </button>
