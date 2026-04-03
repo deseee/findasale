@@ -400,6 +400,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Trophy size={16} className="text-indigo-500" />
               <span>League</span>
             </Link>
+            <Link href="/shopper/loyalty" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Star size={16} className="text-indigo-500" />
+              <span>Loyalty Passport</span>
+            </Link>
             <Link href="/shopper/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Target size={16} className="text-indigo-500" />
               <span>Bounties</span>
@@ -1042,6 +1046,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Trophy size={14} className="inline mr-2 text-indigo-500" /> League
+                        </Link>
+                        <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Star size={14} className="inline mr-2 text-indigo-500" /> Loyalty Passport
                         </Link>
                         <Link href="/shopper/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Trophy size={14} className="inline mr-2 text-indigo-500" /> Explorer Leaderboard
