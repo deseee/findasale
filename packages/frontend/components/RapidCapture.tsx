@@ -842,25 +842,21 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         <div className="absolute -top-1 -left-1 text-xs z-10">✨</div>
                       )}
 
-                      {/* + button — always visible (not gated on thumbnailUrl), bigger (w-7 h-7), corner-tucked */}
+                      {/* + button — always visible and clickable, bigger (w-7 h-7), corner-tucked */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (!item.id.startsWith('temp-')) {
-                            onAddToItem(item.id);
-                          }
+                          onAddToItem(item.id);
                         }}
-                        className={`absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold text-white transition-all z-10 ${
-                          isAddingTo && !item.id.startsWith('temp-')
-                            ? 'bg-amber-500 shadow-md'
-                            : item.id.startsWith('temp-')
-                            ? 'bg-gray-400/60 border border-white/30 opacity-60'
-                            : 'bg-black/70 border border-white/60 hover:bg-black/90 shadow-md'
+                        className={`absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold text-white transition-all z-10 shadow-md ${
+                          isAddingTo
+                            ? 'bg-amber-500'
+                            : 'bg-black/70 border border-white/60 hover:bg-black/90'
                         }`}
                         aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
-                        title={item.id.startsWith('temp-') ? 'Item is being processed' : isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
+                        title={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
                       >
-                        {isAddingTo && !item.id.startsWith('temp-') ? '×' : '+'}
+                        {isAddingTo ? '×' : '+'}
                       </button>
                     </div>
                   );

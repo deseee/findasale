@@ -789,6 +789,12 @@ const AddItemsDetailPage = () => {
           )
         );
 
+        // If user tapped + on this item while it was still temp-, update the ref to the real ID
+        if (addingToItemIdRef.current === tempId) {
+          addingToItemIdRef.current = itemId;
+          setAddingToItemId(itemId);
+        }
+
         // Invalidate caches for item lists
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
 
