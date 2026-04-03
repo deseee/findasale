@@ -56,6 +56,8 @@ import {
   Wallet,
   UserCircle,
   Settings,
+  Gift,
+  Mail,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { useShopperCart } from '../hooks/useShopperCart';
@@ -594,6 +596,24 @@ const AvatarDropdown: React.FC = () => {
                     <span>Fraud Signals</span>
                   </Link>
                   <Link
+                    href="/organizer/bounties"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Buyer bounty requests for your sale items"
+                  >
+                    <Trophy size={16} className="text-purple-400" />
+                    <span>Bounties</span>
+                  </Link>
+                  <Link
+                    href="/organizer/email-digest-preview"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Preview your email digest before it sends"
+                  >
+                    <Mail size={16} className="text-purple-400" />
+                    <span>Email Digest</span>
+                  </Link>
+                  <Link
                     href="/organizer/hubs"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
                     onClick={() => setIsOpen(false)}
@@ -761,6 +781,14 @@ const AvatarDropdown: React.FC = () => {
                     <Package size={16} className="text-indigo-500" />
                     <span>My History</span>
                   </Link>
+                  <Link
+                    href="/shopper/settings"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Settings size={16} className="text-indigo-500" />
+                    <span>Settings</span>
+                  </Link>
                 </>
               )}
 
@@ -863,6 +891,14 @@ const AvatarDropdown: React.FC = () => {
                   >
                     <ArrowLeftRight size={16} className="text-indigo-400" />
                     <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
+                  </Link>
+                  <Link
+                    href="/referral-dashboard"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Gift size={16} className="text-indigo-500" />
+                    <span>Refer a Friend</span>
                   </Link>
                 </>
               )}

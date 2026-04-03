@@ -19,7 +19,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useLootLog, useLootLogStats } from '../../hooks/useLootLog';
 
-type ViewType = 'list' | 'gallery' | 'receipts';
+type ViewType = 'list' | 'gallery' | 'receipts' | 'disputes';
 
 const PurchaseHistoryPage = () => {
   const router = useRouter();
@@ -73,6 +73,16 @@ const PurchaseHistoryPage = () => {
       return response.data.returnRequests || [];
     },
     enabled: !!user?.id && view === 'receipts',
+  });
+
+  // Disputes view data
+  const { data: disputesData, isLoading: disputesLoading, isError: disputesError } = useQuery({
+    queryKey: ['my-disputes'],
+    queryFn: async () => {
+      const response = await api.get('/disputes/my');
+      return response.data.disputes || [];
+    },
+    enabled: !!user?.id && view === 'disputes',
   });
 
   useEffect(() => {
@@ -150,6 +160,16 @@ const PurchaseHistoryPage = () => {
                 }`}
               >
                 Receipts
+              </button>
+              <button
+                onClick={() => handleViewChange('disputes')}
+                className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+                  view === 'disputes'
+                    ? 'border-amber-600 text-amber-600'
+                    : 'border-transparent text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100'
+                }`}
+              >
+                Disputes
               </button>
             </div>
           </div>
@@ -379,6 +399,59 @@ const PurchaseHistoryPage = () => {
                   ) : (
                     <div className="text-center py-12"><p className="text-gray-600 dark:text-gray-400">You don't have any return requests yet.</p></div>
                   )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* DISPUTES VIEW */}
+          {view === 'disputes' && (
+            <>
+              {disputesLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
+                </div>
+              ) : disputesError ? (
+                <div className="text-center py-12">
+                  <p className="text-warm-600 dark:text-warm-400 mb-4">Failed to load disputes. Please try again.</p>
+                  <button onClick={() => window.location.reload()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">
+                    Retry
+                  </button>
+                </div>
+              ) : disputesData && disputesData.length > 0 ? (
+                <div className="space-y-4">
+                  {disputesData.map((dispute: any) => (
+                    <div key={dispute.id} className="bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 rounded-lg shadow-sm p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">{dispute.itemTitle || 'Item'}</h3>
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">Filed {new Date(dispute.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                          dispute.status === 'OPEN' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+                          : dispute.status === 'RESOLVED' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                        }`}>
+                          {dispute.status}
+                        </span>
+                      </div>
+                      <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded">
+                        <p className="text-sm text-warm-700 dark:text-warm-300"><span className="font-semibold">Issue:</span> {dispute.description || 'No description provided'}</p>
+                      </div>
+                      <div className="text-sm text-warm-600 dark:text-warm-400">
+                        <p>Sale: {dispute.saleName || 'Unknown sale'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-4xl mb-4">⚖️</p>
+                  <p className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">No disputes filed</p>
+                  <p className="text-warm-600 dark:text-warm-400">If you have an issue with a purchase, please contact the seller or reach out to our support team.</p>
+                  <a href="mailto:support@finda.sale" className="inline-block mt-4 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium underline">
+                    Contact Support
+                  </a>
                 </div>
               )}
             </>

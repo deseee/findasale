@@ -296,11 +296,11 @@ const ShopperDashboard = () => {
               <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">My History</p>
             </Link>
             <Link
-              href="/shopper/hauls"
+              href="/shopper/history?view=gallery"
               className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30 border border-orange-200 dark:border-orange-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
             >
               <div className="text-lg mb-0.5">📸</div>
-              <p className="text-xs font-semibold text-orange-900 dark:text-orange-300">Hauls</p>
+              <p className="text-xs font-semibold text-orange-900 dark:text-orange-300">My Finds</p>
             </Link>
           </div>
 

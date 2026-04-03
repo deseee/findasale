@@ -53,6 +53,7 @@ import {
   Send,
   Camera,
   Scale,
+  Gift,
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
@@ -226,17 +227,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Printer size={16} className="text-amber-500" />
               <span>Print Inventory</span>
             </Link>
-            <Link href="/organizer/map" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Map size={16} className="text-amber-500" />
-              <span>Sale Map</span>
-            </Link>
             <Link href="/organizer/qr-codes" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <QrCode size={16} className="text-amber-500" />
               <span>QR Codes</span>
-            </Link>
-            <Link href="/organizer/analytics" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <BarChart2 size={16} className="text-amber-500" />
-              <span>Analytics</span>
             </Link>
             <Link href="/organizer/earnings" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <DollarSign size={16} className="text-amber-500" />
@@ -284,13 +277,17 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <TrendingUp size={16} className="text-purple-400" />
               <span>Flip Report</span>
             </Link>
-            <Link href="/organizer/item-tagger" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="AI-powered item category and condition detection">
-              <Tag size={16} className="text-purple-400" />
-              <span>Item Tagger</span>
-            </Link>
             <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals — PRO">
               <Scale size={16} className="text-purple-400" />
               <span>Appraisals</span>
+            </Link>
+            <Link href="/organizer/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Buyer bounty requests for your sale items">
+              <Trophy size={16} className="text-purple-400" />
+              <span>Bounties</span>
+            </Link>
+            <Link href="/organizer/email-digest-preview" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Preview your email digest before it sends">
+              <MessageSquare size={16} className="text-purple-400" />
+              <span>Email Digest</span>
             </Link>
             <Link href="/organizer/command-center" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-sale overview dashboard — PRO">
               <LayoutDashboard size={16} className="text-purple-400" />
@@ -359,10 +356,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Bookmark size={16} className="text-indigo-500" />
               <span>Saved Sales</span>
             </Link>
-            <Link href="/shopper/saved-items" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Star size={16} className="text-indigo-500" />
-              <span>Saved Items</span>
-            </Link>
             <Link href="/shopper/bids" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Gavel size={16} className="text-indigo-500" />
               <span>My Bids</span>
@@ -374,6 +367,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/shopper/history" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Package size={16} className="text-indigo-500" />
               <span>My History</span>
+            </Link>
+            <Link href="/shopper/settings" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Settings size={16} className="text-indigo-500" />
+              <span>Settings</span>
             </Link>
 
             {/* Show "Host a Sale" for shoppers without organizer role */}
@@ -414,6 +411,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/shopper/trades" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
               <ArrowLeftRight size={16} className="text-indigo-400" />
               <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
+            </Link>
+            <Link href="/referral-dashboard" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Gift size={16} className="text-indigo-500" />
+              <span>Refer a Friend</span>
             </Link>
           </>
         )}
