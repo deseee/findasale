@@ -1268,8 +1268,6 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
     const { awardXp, checkDailyXpCap, XP_AWARDS } = await import('../services/xpService');
 
     // Check daily cap (max 2 unique sales per day)
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
     const visitCountToday = await prisma.pointsTransaction.count({
       where: {
         userId,
