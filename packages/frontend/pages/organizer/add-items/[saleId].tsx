@@ -421,6 +421,7 @@ const AddItemsDetailPage = () => {
   }
 
   const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
+  const unpublishedCount = items.filter((i: any) => computeDraftStatus(i) !== 'PUBLISHED').length;
   const draftCount = items.filter((i: any) => computeDraftStatus(i) === 'DRAFT').length;
 
   const createMutation = useMutation({
@@ -1261,8 +1262,7 @@ const AddItemsDetailPage = () => {
 
           {/* Manual Entry Tab */}
           {activeTab === 'manual' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
-              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-6">Add Item Manually</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden mb-8">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -1272,175 +1272,13 @@ const AddItemsDetailPage = () => {
                   }
                   createMutation.mutate();
                 }}
-                className="space-y-4"
               >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Title *</label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                        placeholder="Item title"
-                      />
-                      {voiceSupported && user?.organizerTier === 'PRO' && (
-                        <button
-                          type="button"
-                          onClick={handleVoiceToggle}
-                          disabled={voiceLoading}
-                          className={`px-3 py-2 rounded-lg text-xl font-semibold transition-all ${
-                            isListening
-                              ? 'bg-red-600 text-white animate-pulse ring-2 ring-red-400'
-                              : 'bg-warm-200 text-warm-900 dark:text-warm-100 hover:bg-warm-300'
-                          } disabled:opacity-50`}
-                          title="Record item description"
-                          aria-label={isListening ? 'Stop recording' : 'Start recording'}
-                        >
-                          🎤
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Category</label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => handleCategoryChange(e.target.value)}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="">Select a category</option>
-                      {CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Condition</label>
-                    <select
-                      value={formData.condition}
-                      onChange={(e) => handleConditionChange(e.target.value)}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="">Select condition</option>
-                      {CONDITIONS.map((cond) => (
-                        <option key={cond} value={cond}>
-                          {cond}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      placeholder="0.00"
-                    />
-                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">💡 PRO organizers: Use pricing insights to research comparable sales. Create the item first, then view suggestions below.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Rarity Badge</label>
-                    <select
-                      value={formData.rarity}
-                      onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    >
-                      {RARITY_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Listing Type</label>
-                    <select
-                      value={formData.listingType}
-                      onChange={(e) => setFormData({ ...formData, listingType: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="FIXED">Fixed Price</option>
-                      <option value="AUCTION">Auction</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={4}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    placeholder="Item description"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
-                  <div className="flex gap-2 items-start">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {formData.tags.map((tag) => (
-                          <span key={tag} className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-                            {tag}
-                            <button
-                              type="button"
-                              onClick={() => setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tag) })}
-                              className="text-amber-600 hover:text-amber-900 font-bold"
-                              aria-label={`Remove tag ${tag}`}
-                            >
-                              ✕
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                      <input
-                        type="text"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const value = (e.target as HTMLInputElement).value.trim();
-                            if (value && !formData.tags.includes(value)) {
-                              setFormData({ ...formData, tags: [...formData.tags, value] });
-                              (e.target as HTMLInputElement).value = '';
-                            }
-                          }
-                        }}
-                        placeholder="Add tags (press Enter)"
-                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                    <VoiceTagButton
-                      onExtraction={(result) => {
-                        const newTags = result.tags.filter((t) => !formData.tags.includes(t));
-                        if (newTags.length > 0) {
-                          setFormData({ ...formData, tags: [...formData.tags, ...newTags] });
-                        }
-                      }}
-                      className="px-3 py-2 rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Photos</label>
-                  {formData.photoUrls.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-3">
+                {/* Photo strip — top, like a card thumbnail */}
+                <div className="bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 p-4">
+                  {formData.photoUrls.length > 0 ? (
+                    <div className="flex gap-2 flex-wrap">
                       {formData.photoUrls.map((url, i) => (
-                        <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100">
+                        <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
                           <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                           <button
                             type="button"
@@ -1452,7 +1290,28 @@ const AddItemsDetailPage = () => {
                           </button>
                         </div>
                       ))}
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                        disabled={photoUploading}
+                        className="w-20 h-20 rounded-lg border-2 border-dashed border-warm-300 dark:border-gray-600 flex items-center justify-center text-warm-400 dark:text-gray-500 hover:border-amber-400 transition-colors disabled:opacity-50 text-2xl"
+                      >
+                        {photoUploading ? '⏳' : '+'}
+                      </button>
                     </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={photoUploading}
+                      className="w-full border-2 border-dashed border-warm-300 dark:border-gray-600 rounded-lg p-4 text-center hover:border-amber-400 transition-colors disabled:opacity-50"
+                    >
+                      {photoUploading ? (
+                        <span className="text-warm-500 dark:text-warm-400 text-sm">Uploading...</span>
+                      ) : (
+                        <span className="text-warm-500 dark:text-warm-400 text-sm">📷 Add photos</span>
+                      )}
+                    </button>
                   )}
                   <input
                     ref={photoInputRef}
@@ -1481,32 +1340,184 @@ const AddItemsDetailPage = () => {
                       }
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => photoInputRef.current?.click()}
-                    disabled={photoUploading}
-                    className="w-full bg-warm-50 dark:bg-gray-900 border-2 border-dashed border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg p-6 text-center hover:border-amber-400 transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {photoUploading ? (
-                      <span className="text-warm-600 dark:text-warm-400 text-sm">Uploading...</span>
-                    ) : (
-                      <>
-                        <svg className="w-8 h-8 mx-auto text-warm-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 16v-8m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.32 3.75 3.75 0 013.572 5.095H19.5a4.5 4.5 0 01-4.5 4.5H9a4.5 4.5 0 01-2.25-.615z" />
-                        </svg>
-                        <span className="text-warm-600 dark:text-warm-400 text-sm">Click to upload photos</span>
-                      </>
-                    )}
-                  </button>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
-                >
-                  {createMutation.isPending ? 'Creating...' : 'Create Item'}
-                </button>
+                {/* Core fields — compact 2-col grid */}
+                <div className="px-4 py-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Title *</label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="flex-1 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                        placeholder="Item title"
+                        autoFocus
+                      />
+                      {voiceSupported && user?.organizerTier === 'PRO' && (
+                        <button
+                          type="button"
+                          onClick={handleVoiceToggle}
+                          disabled={voiceLoading}
+                          className={`px-3 py-1.5 rounded text-sm font-semibold transition-all ${
+                            isListening
+                              ? 'bg-red-600 text-white animate-pulse ring-2 ring-red-400'
+                              : 'bg-warm-200 text-warm-900 dark:text-warm-100 hover:bg-warm-300'
+                          } disabled:opacity-50`}
+                          aria-label={isListening ? 'Stop recording' : 'Start recording'}
+                        >
+                          🎤
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Price</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Category</label>
+                      <select
+                        value={formData.category}
+                        onChange={(e) => handleCategoryChange(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                      >
+                        <option value="">Category</option>
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
+                      <select
+                        value={formData.condition}
+                        onChange={(e) => handleConditionChange(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                      >
+                        <option value="">Condition</option>
+                        {CONDITIONS.map((cond) => (
+                          <option key={cond} value={cond}>{cond}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Listing Type</label>
+                      <select
+                        value={formData.listingType}
+                        onChange={(e) => setFormData({ ...formData, listingType: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                      >
+                        <option value="FIXED">Fixed Price</option>
+                        <option value="AUCTION">Auction</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Description</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      rows={2}
+                      className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                      placeholder="Item description (optional)"
+                    />
+                  </div>
+
+                  {/* Tags */}
+                  <div>
+                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Tags</label>
+                    <div className="flex gap-2 items-start">
+                      <div className="flex-1">
+                        {formData.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-1.5">
+                            {formData.tags.map((tag) => (
+                              <span key={tag} className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full text-xs flex items-center gap-1">
+                                {tag}
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tag) })}
+                                  className="text-amber-600 hover:text-amber-900 font-bold"
+                                  aria-label={`Remove tag ${tag}`}
+                                >
+                                  ✕
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <input
+                          type="text"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const value = (e.target as HTMLInputElement).value.trim();
+                              if (value && !formData.tags.includes(value)) {
+                                setFormData({ ...formData, tags: [...formData.tags, value] });
+                                (e.target as HTMLInputElement).value = '';
+                              }
+                            }
+                          }}
+                          placeholder="Add tags (press Enter)"
+                          className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                        />
+                      </div>
+                      <VoiceTagButton
+                        onExtraction={(result) => {
+                          const newTags = result.tags.filter((t) => !formData.tags.includes(t));
+                          if (newTags.length > 0) {
+                            setFormData({ ...formData, tags: [...formData.tags, ...newTags] });
+                          }
+                        }}
+                        className="px-2 py-1.5 rounded text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rarity — less prominent */}
+                  <div>
+                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Rarity Badge</label>
+                    <select
+                      value={formData.rarity}
+                      onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}
+                      className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                    >
+                      {RARITY_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Action bar */}
+                <div className="px-4 py-3 bg-warm-50 dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={createMutation.isPending}
+                    className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg disabled:opacity-50 text-sm transition-colors"
+                  >
+                    {createMutation.isPending ? 'Saving...' : 'Save Item'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(emptyForm)}
+                    className="px-4 py-2 text-warm-500 dark:text-warm-400 text-sm rounded hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Clear
+                  </button>
+                  <p className="ml-auto text-xs text-warm-400 dark:text-warm-500">Items save directly — no review needed</p>
+                </div>
               </form>
             </div>
           )}
@@ -1677,7 +1688,7 @@ const AddItemsDetailPage = () => {
                     href={`/organizer/add-items/${saleId}/review`}
                     className="text-sm font-medium text-amber-700 hover:text-amber-900 hover:underline"
                   >
-                    Review & Publish &rarr;
+                    Review & Publish{unpublishedCount > 0 ? ` (${unpublishedCount})` : ''} &rarr;
                   </Link>
                 </div>
               </div>
@@ -1838,7 +1849,7 @@ const AddItemsDetailPage = () => {
                           <Link
                             href={`/organizer/edit-item/${item.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="font-semibold text-amber-700 hover:underline truncate block text-sm"
+                            className="font-semibold text-amber-700 hover:underline truncate inline-block max-w-full text-sm"
                           >
                             {item.title || 'Untitled'}
                           </Link>
