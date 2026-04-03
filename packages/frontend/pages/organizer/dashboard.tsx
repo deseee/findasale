@@ -451,7 +451,7 @@ const OrganizerDashboard = () => {
       {flashDealSaleId && (
         <FlashDealForm
           saleId={flashDealSaleId}
-          onClose={() => setFlashDealSaleId(null)}
+          onCancel={() => setFlashDealSaleId(null)}
         />
       )}
 
