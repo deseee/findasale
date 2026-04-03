@@ -793,6 +793,8 @@ const AddItemsDetailPage = () => {
         if (addingToItemIdRef.current === tempId) {
           addingToItemIdRef.current = itemId;
           setAddingToItemId(itemId);
+          // Hold the backend 4.5s AI debounce — user is adding more photos
+          api.post(`/items/${itemId}/hold-analysis`).catch(() => {}); // fire-and-forget
         }
 
         // Invalidate caches for item lists
@@ -848,10 +850,15 @@ const AddItemsDetailPage = () => {
   // Background uploads now happen in onPhotoCapture as photos are captured
   // This handler just closes the camera when user taps "Done"
   const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
+    // Release AI hold for the current item if we're in add-mode when camera closes
+    if (addingToItemIdRef.current && !addingToItemIdRef.current.startsWith('temp-')) {
+      api.post(`/items/${addingToItemIdRef.current}/release-analysis`).catch(() => {});
+    }
+    setAddingToItemId(null);
+    addingToItemIdRef.current = null;
+
     // Close camera — uploads already happened in background via onPhotoCapture
     setCameraOpen(false);
-    // Reset add-mode when closing camera
-    setAddingToItemId(null);
   };
 
   // Quality modal handlers
@@ -1600,25 +1607,37 @@ const AddItemsDetailPage = () => {
           {cameraOpen && (
             <RapidCapture
               onComplete={handleRapidCameraComplete}
-              onCancel={() => setCameraOpen(false)}
+              onCancel={() => {
+                // If user closes camera while in add-mode, release the hold so AI can run
+                if (addingToItemIdRef.current && !addingToItemIdRef.current.startsWith('temp-')) {
+                  api.post(`/items/${addingToItemIdRef.current}/release-analysis`).catch(() => {});
+                }
+                setAddingToItemId(null);
+                addingToItemIdRef.current = null;
+                setCameraOpen(false);
+              }}
               maxPhotos={captureMode === 'rapidfire' ? 20 : 5}
               mode={captureMode}
               onModeChange={setCaptureMode}
               rapidItems={rapidItems}
               addingToItemId={addingToItemId}
               onAddToItem={(id) => {
-                setAddingToItemId((prev) => {
-                  if (prev === id) {
-                    // exiting add-mode — restart the 4.5s timer
+                if (addingToItemId === id) {
+                  // Exiting add-mode — release the AI hold so backend restarts 4.5s debounce
+                  if (!id.startsWith('temp-')) {
                     api.post(`/items/${id}/release-analysis`).catch(() => {});
-                    addingToItemIdRef.current = null;
-                    return null;
                   }
-                  // entering add-mode — cancel the timer entirely while repositioning
-                  api.post(`/items/${id}/hold-analysis`).catch(() => {});
+                  setAddingToItemId(null);
+                  addingToItemIdRef.current = null;
+                } else {
+                  // Entering add-mode — hold AI if we already have a real ID
+                  if (!id.startsWith('temp-')) {
+                    api.post(`/items/${id}/hold-analysis`).catch(() => {});
+                  }
+                  // If still temp-, the hold will be called when real ID arrives (see processAndUploadRapidPhoto above)
+                  setAddingToItemId(id);
                   addingToItemIdRef.current = id;
-                  return id;
-                });
+                }
               }}
               onThumbnailTap={(id) => {
                 // BUG 4 FIX: Keep camera open, open preview modal on top
