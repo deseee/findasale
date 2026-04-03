@@ -5,7 +5,7 @@
  * Defines resource limits for each subscription tier (SIMPLE, PRO, TEAMS)
  */
 
-export type SubscriptionTier = 'SIMPLE' | 'PRO' | 'TEAMS';
+export type SubscriptionTier = 'SIMPLE' | 'PRO' | 'TEAMS' | 'ENTERPRISE';
 
 export const TIER_LIMITS: Record<SubscriptionTier, {
   itemsPerSale: number;
@@ -13,6 +13,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
   aiTagsPerMonth: number;
   batchOpsAllowed: boolean;
   multiUserAllowed: boolean;
+  maxConcurrentSales: number;
 }> = {
   SIMPLE: {
     itemsPerSale: 200,
@@ -20,6 +21,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     aiTagsPerMonth: 100,
     batchOpsAllowed: false,
     multiUserAllowed: false,
+    maxConcurrentSales: 1,
   },
   PRO: {
     itemsPerSale: 500,
@@ -27,6 +29,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     aiTagsPerMonth: 2000,
     batchOpsAllowed: true,
     multiUserAllowed: false,
+    maxConcurrentSales: 3,
   },
   TEAMS: {
     itemsPerSale: 2000,
@@ -34,6 +37,15 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     aiTagsPerMonth: Infinity,
     batchOpsAllowed: true,
     multiUserAllowed: true,
+    maxConcurrentSales: Number.MAX_SAFE_INTEGER,
+  },
+  ENTERPRISE: {
+    itemsPerSale: Number.MAX_SAFE_INTEGER,
+    photosPerItem: Infinity,
+    aiTagsPerMonth: Infinity,
+    batchOpsAllowed: true,
+    multiUserAllowed: true,
+    maxConcurrentSales: Number.MAX_SAFE_INTEGER,
   },
 };
 

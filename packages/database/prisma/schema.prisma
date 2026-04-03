@@ -424,6 +424,7 @@ model Sale {
   @@index([deletedAt])
   @@index([prelaunchAt])
   @@index([lifecycleStage])
+  @@index([organizerId, status, endDate]) // Feature #249: Concurrent Sales Gate optimization
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales

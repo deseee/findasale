@@ -19,6 +19,7 @@ import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Fea
 import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
+import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -348,8 +349,11 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     const saleData = saleCreateSchema.parse(req.body);
 
     let organizerId = req.user.organizerProfile?.id;
+    let organizer = req.user.organizerProfile;
+
     if (!organizerId && isAdmin) {
       organizerId = req.body.organizerId;
+      organizer = await prisma.organizer.findUnique({ where: { id: organizerId } });
     } else if (!organizerId && hasOrganizerRole) {
       let organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile) {
@@ -363,8 +367,34 @@ export const createSale = async (req: AuthRequest, res: Response) => {
         });
       }
       organizerId = organizerProfile.id;
+      organizer = organizerProfile;
     }
-    
+
+    // Feature #249: Check concurrent sales gate before creating draft
+    if (organizer) {
+      const tier = (organizer.subscriptionTier as string) || 'SIMPLE';
+      const limit = TIER_LIMITS[tier as keyof typeof TIER_LIMITS]?.maxConcurrentSales ?? 1;
+
+      const activeSalesCount = await prisma.sale.count({
+        where: {
+          organizerId,
+          status: 'PUBLISHED',
+          endDate: { gt: new Date() }
+        }
+      });
+
+      if (activeSalesCount >= limit) {
+        return res.status(409).json({
+          message: `You've reached the maximum number of active sales for your ${tier} tier.`,
+          code: 'TIER_LIMIT_EXCEEDED',
+          limit,
+          current: activeSalesCount,
+          tier,
+          upgradeUrl: '/pricing'
+        });
+      }
+    }
+
     const sale = await prisma.sale.create({
       data: { ...saleData, organizerId, status: 'DRAFT' }
     });
@@ -499,11 +529,14 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     const existingSale = await prisma.sale.findUnique({ where: { id } });
     if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
 
+    let organizerProfile = null;
     if (!isAdmin) {
-      const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+      organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {
         return res.status(403).json({ message: 'Access denied. You can only update your own sales.' });
       }
+    } else {
+      organizerProfile = await prisma.organizer.findUnique({ where: { id: existingSale.organizerId } });
     }
 
     const transitions: Record<string, string[]> = {
@@ -516,6 +549,34 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         message: `Cannot transition from ${existingSale.status} to ${status}.`,
       });
+    }
+
+    // Feature #249: Check concurrent sales gate when transitioning DRAFT → PUBLISHED or ENDED → PUBLISHED
+    if ((status === 'PUBLISHED' && existingSale.status === 'DRAFT') || (status === 'PUBLISHED' && existingSale.status === 'ENDED')) {
+      if (organizerProfile) {
+        const tier = (organizerProfile.subscriptionTier as string) || 'SIMPLE';
+        const limit = TIER_LIMITS[tier as keyof typeof TIER_LIMITS]?.maxConcurrentSales ?? 1;
+
+        const activeSalesCount = await prisma.sale.count({
+          where: {
+            organizerId: organizerProfile.id,
+            status: 'PUBLISHED',
+            endDate: { gt: new Date() },
+            id: { not: id } // Exclude current sale from count
+          }
+        });
+
+        if (activeSalesCount >= limit) {
+          return res.status(409).json({
+            message: `You've reached the maximum number of active sales for your ${tier} tier.`,
+            code: 'TIER_LIMIT_EXCEEDED',
+            limit,
+            current: activeSalesCount,
+            tier,
+            upgradeUrl: '/pricing'
+          });
+        }
+      }
     }
 
     const updated = await prisma.sale.update({ where: { id }, data: { status } });

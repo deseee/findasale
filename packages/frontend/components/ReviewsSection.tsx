@@ -13,6 +13,7 @@ interface Review {
   createdAt: string;
   response?: string | null;
   respondedAt?: string | null;
+  verifiedPurchase?: boolean;
   user: { name: string };
   sale?: { id: string; title: string };
 }
@@ -161,10 +162,18 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
           {data.reviews.map((review) => (
             <div key={review.id} className="border-b border-warm-100 dark:border-gray-700 pb-4 last:border-0">
               <div className="flex items-start justify-between mb-1">
-                <div>
+                <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm text-warm-800 dark:text-gray-100">{review.user.name}</span>
+                  {review.verifiedPurchase && (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Verified Purchase
+                    </span>
+                  )}
                   {review.sale && (
-                    <span className="text-xs text-warm-400 dark:text-gray-500 ml-2">on {review.sale.title}</span>
+                    <span className="text-xs text-warm-400 dark:text-gray-500">on {review.sale.title}</span>
                   )}
                 </div>
                 <span className="text-xs text-warm-400 dark:text-gray-500">

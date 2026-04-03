@@ -249,6 +249,8 @@ export const getItemById = async (req: Request, res: Response) => {
         tags: true,
         qrEmbedEnabled: true,
         rarity: true,
+        priceBeforeMarkdown: true,
+        markdownApplied: true,
         createdAt: true,
         updatedAt: true,
         // embedding intentionally excluded — crashes serialization
@@ -355,6 +357,8 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         reverseFloorPrice: true,
         reverseStartDate: true,
         rarity: true,
+        priceBeforeMarkdown: true,
+        markdownApplied: true,
         draftStatus: true,
         createdAt: true,
         updatedAt: true,

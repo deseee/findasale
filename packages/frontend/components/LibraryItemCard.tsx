@@ -14,6 +14,8 @@ interface LibraryItemCardProps {
   onDelete?: () => void;
   onViewHistory?: () => void;
   isLoading?: boolean;
+  priceBeforeMarkdown?: number;
+  markdownApplied?: boolean;
 }
 
 const statusColors: Record<string, { bg: string; text: string }> = {
@@ -38,6 +40,8 @@ const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
   onDelete,
   onViewHistory,
   isLoading = false,
+  priceBeforeMarkdown,
+  markdownApplied,
 }) => {
   const [showActions, setShowActions] = useState(false);
   const colors = statusColors[status] || statusColors.AVAILABLE;
@@ -84,8 +88,21 @@ const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
 
         {/* Price */}
         {price && (
-          <div className="mt-3 text-lg font-bold text-gray-900 dark:text-gray-100">
-            ${price.toFixed(2)}
+          <div className="mt-3 flex items-center gap-2">
+            {markdownApplied && priceBeforeMarkdown ? (
+              <>
+                <span className="text-sm line-through text-gray-400 dark:text-gray-500">
+                  ${priceBeforeMarkdown.toFixed(2)}
+                </span>
+                <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                  ${price.toFixed(2)}
+                </span>
+              </>
+            ) : (
+              <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                ${price.toFixed(2)}
+              </div>
+            )}
           </div>
         )}
 

@@ -43,6 +43,7 @@ const CreateSalePage = () => {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [tierLimitError, setTierLimitError] = useState<any>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -135,13 +136,20 @@ const CreateSalePage = () => {
     }
 
     setIsSubmitting(true);
+    setTierLimitError(null);
 
     try {
       const response = await api.post('/sales', formData);
       showToast('Sale created! Add items next.', 'success');
       router.push(`/organizer/add-items/${response.data.id}`);
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Failed to create sale', 'error');
+      // Feature #249: Handle concurrent sales tier limit (409)
+      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+        setTierLimitError(error.response.data);
+        showToast(error.response.data.message, 'error');
+      } else {
+        showToast(error.response?.data?.message || 'Failed to create sale', 'error');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -162,6 +170,31 @@ const CreateSalePage = () => {
 
           <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Create a New Sale</h1>
           <p className="text-warm-600 dark:text-warm-400 mb-8">Get your sale online in minutes.</p>
+
+          {/* Feature #249: Tier limit error modal */}
+          {tierLimitError && (
+            <div className="mb-8 p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+              <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100 mb-2">
+                Concurrent Sales Limit Reached
+              </h3>
+              <p className="text-amber-800 dark:text-amber-200 mb-4">
+                You're currently running <strong>{tierLimitError.current}</strong> active sale{tierLimitError.current !== 1 ? 's' : ''}.
+                Your <strong>{tierLimitError.tier}</strong> tier allows <strong>{tierLimitError.limit}</strong> concurrent sale{tierLimitError.limit !== 1 ? 's' : ''} at a time.
+              </p>
+              <Link
+                href={tierLimitError.upgradeUrl}
+                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                Upgrade to PRO
+              </Link>
+              <button
+                onClick={() => setTierLimitError(null)}
+                className="ml-4 text-amber-700 dark:text-amber-300 font-semibold underline hover:no-underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}

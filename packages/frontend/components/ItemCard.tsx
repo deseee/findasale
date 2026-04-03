@@ -44,6 +44,10 @@ export interface UnifiedItemCardItem {
 
   // AI confidence (not displayed)
   aiConfidence?: number;
+
+  // Markdown pricing
+  priceBeforeMarkdown?: number;
+  markdownApplied?: boolean;
 }
 
 // Legacy Item interface (deprecated, kept for backward compatibility)
@@ -67,6 +71,9 @@ interface Item {
   businessName?: string;
   _count?: { favorites?: number };
   rankingIndex?: number;
+  // Markdown pricing
+  priceBeforeMarkdown?: number;
+  markdownApplied?: boolean;
 }
 
 export interface ItemCardProps {
@@ -330,9 +337,22 @@ const ItemCard: React.FC<ItemCardProps> = ({
         {(showPrice || showCountdown) && (
           <div className="flex items-center justify-between mt-auto">
             {showPrice && displayPrice !== undefined && (
-              <span className="text-base font-bold text-warm-900 dark:text-gray-100">
-                {formatPrice(displayPrice)}
-              </span>
+              <div className="flex items-center gap-1">
+                {(item as any).markdownApplied && (item as any).priceBeforeMarkdown ? (
+                  <>
+                    <span className="line-through text-gray-400 dark:text-gray-500 text-sm">
+                      {formatPrice((item as any).priceBeforeMarkdown)}
+                    </span>
+                    <span className="text-base font-bold text-green-600 dark:text-green-400">
+                      {formatPrice(displayPrice)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-base font-bold text-warm-900 dark:text-gray-100">
+                    {formatPrice(displayPrice)}
+                  </span>
+                )}
+              </div>
             )}
             {showCountdown && countdown && (
               <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{countdown}</span>
