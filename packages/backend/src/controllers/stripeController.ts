@@ -15,7 +15,7 @@ import { pushSaleStatus } from '../services/saleStatusService';
 import { sendItemSoldAlert } from '../services/saleAlertEmailService';
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
-import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
+import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
@@ -659,12 +659,32 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
         // Award XP to shopper for completing purchase (only if user exists — not for POS walk-ins)
         if (purchase.userId) {
-          awardXp(purchase.userId, 'PURCHASE_COMPLETED', XP_AWARDS.PURCHASE, {
+          // Apply Hunt Pass 1.5x multiplier if active
+          const baseXp = XP_AWARDS.PURCHASE;
+          const multipliedXp = await applyHuntPassMultiplier(purchase.userId, baseXp);
+
+          awardXp(purchase.userId, 'PURCHASE_COMPLETED', multipliedXp, {
             itemId: purchase.itemId ?? undefined,
             saleId: purchase.saleId ?? undefined
           }).catch(err =>
             console.error('[XP] Failed to award XP for purchase completed:', err)
           );
+
+          // Wire referral first-purchase reward
+          try {
+            const purchaseCount = await prisma.purchase.count({ where: { userId: purchase.userId } });
+            if (purchaseCount === 1) {
+              // This is their first purchase — award referral first-purchase XP bonus
+              awardXp(purchase.userId, 'REFERRAL_FIRST_PURCHASE', XP_AWARDS.REFERRAL_FIRST_PURCHASE, {
+                saleId: purchase.saleId ?? undefined,
+                description: 'First purchase referral bonus'
+              }).catch(err =>
+                console.error('[XP] Failed to award first-purchase referral XP:', err)
+              );
+            }
+          } catch (err) {
+            console.error('[XP] Failed to check first-purchase referral:', err);
+          }
         }
 
         // Notify organizer of payment received

@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { getStripe } from '../utils/stripe';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
-import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
+import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
 const stripe = () => getStripe();
 
 let _resend: any = null;
@@ -112,7 +112,9 @@ export const endAuctions = async () => {
           Math.floor((price / 100) * XP_AWARDS.AUCTION_VALUE_BONUS_PER_100),
           XP_AWARDS.AUCTION_MAX_BONUS
         );
-        const totalXp = XP_AWARDS.AUCTION_WIN + valueBonus;
+        const baseXp = XP_AWARDS.AUCTION_WIN + valueBonus;
+        // Apply Hunt Pass 1.5x multiplier if active
+        const totalXp = await applyHuntPassMultiplier(highestBid.userId, baseXp);
         awardXp(highestBid.userId, 'AUCTION_WIN', totalXp, { itemId: item.id, saleId: item.sale.id }).catch(err =>
           console.error('[XP] Failed to award XP for auction win:', err)
         );

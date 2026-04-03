@@ -1,5 +1,6 @@
 import { ExplorerRank } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { createNotification } from './notificationService';
 
 /**
  * XP Service — Single source of truth for all Explorer's Guild XP logic
@@ -209,6 +210,16 @@ export async function awardXp(
         where: { id: userId },
         data: { explorerRank: newRank },
       });
+
+      // Send rank-up notification
+      await createNotification(
+        userId,
+        'RANK_UP',
+        `You've reached ${newRank}!`,
+        `Congratulations! You've advanced to ${newRank} rank. Keep hunting!`,
+        `/shopper/profile`, // deep link to profile page
+        'OPERATIONAL'
+      );
     }
 
     return {

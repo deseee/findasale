@@ -24,11 +24,11 @@ function getGpsRadiusBySaleType(saleType: string): number {
 // Feature #121: Hold duration in minutes by explorer rank
 function getHoldDurationMinutes(rank: string): number {
   switch (rank) {
-    case 'RANGER':      return 45;
-    case 'SAGE':        return 60;
+    case 'INITIATE':    return 30;
+    case 'SCOUT':       return 45;
+    case 'RANGER':      return 60;
+    case 'SAGE':        return 75;
     case 'GRANDMASTER': return 90;
-    case 'INITIATE':
-    case 'SCOUT':
     default:            return 30;
   }
 }

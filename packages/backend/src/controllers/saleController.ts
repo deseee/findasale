@@ -1264,9 +1264,51 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Award 10 XP for visit
-    const { awardXp } = await import('../services/xpService');
-    const xpResult = await awardXp(userId, 'VISIT', 10, { saleId, description: `Visited sale: ${sale.title}` });
+    // Award visit XP with daily and monthly caps
+    const { awardXp, checkDailyXpCap, XP_AWARDS } = await import('../services/xpService');
+
+    // Check daily cap (max 2 unique sales per day)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const visitCountToday = await prisma.pointsTransaction.count({
+      where: {
+        userId,
+        type: 'VISIT',
+        createdAt: { gte: today },
+      },
+    });
+
+    if (visitCountToday >= 2) {
+      res.status(200).json({
+        message: 'Daily visit XP limit reached (2 sales per day).',
+        guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
+      });
+      return;
+    }
+
+    // Check monthly cap (max 100 XP from visits)
+    const monthStart = new Date();
+    monthStart.setUTCHours(0, 0, 0, 0);
+    monthStart.setDate(1);
+    const monthlyVisitXp = await prisma.pointsTransaction.aggregate({
+      where: {
+        userId,
+        type: 'VISIT',
+        createdAt: { gte: monthStart },
+      },
+      _sum: { points: true },
+    });
+    const visitedXpThisMonth = monthlyVisitXp._sum.points || 0;
+
+    if (visitedXpThisMonth >= 100) {
+      res.status(200).json({
+        message: 'Monthly visit XP limit reached (100 XP per month).',
+        guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
+      });
+      return;
+    }
+
+    const xpResult = await awardXp(userId, 'VISIT', XP_AWARDS.VISIT, { saleId, description: `Visited sale: ${sale.title}` });
 
     if (!xpResult) {
       res.status(500).json({ message: 'Failed to award XP.' });
