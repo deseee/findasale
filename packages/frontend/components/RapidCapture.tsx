@@ -448,7 +448,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         </div>
 
         {/* Mode hint text */}
-        <div className="absolute top-12 left-0 right-0 z-10 flex justify-center pointer-events-none">
+        <div className="absolute left-0 right-0 z-10 flex justify-center pointer-events-none" style={{ top: '54px' }}>
           <span className="text-xs text-white/50 bg-black/30 rounded-full px-3 py-1.5">
             {isRapidfire
               ? inAddMode
@@ -689,53 +689,52 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         {/* Bottom section: compact single row with stats line above */}
         <div className="bg-black/90 pb-safe flex flex-col">
           {/* Stats line (compact, text-xs) */}
-          {/* Regular mode stats line — shown when photos captured; Analyze resets shutter for next item */}
-          {!isRapidfire && photosThisItem > 0 && (
+          {/* Stats line — single unified row for both modes */}
+          {(rapidItems.length > 0 || (!isRapidfire && photosThisItem > 0)) && (
             <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
-              <span>{photosThisItem} {photosThisItem === 1 ? 'photo' : 'photos'} taken</span>
-              <button
-                onClick={() => {
-                  // Capture photos before resetting state
-                  const photosToAnalyze = photos.map(({ blob, previewUrl }) => ({ blob, previewUrl }));
-                  // Reset shutter immediately for next item
-                  setPhotos([]);
-                  setPhotosThisItem(0);
-                  // Fire off background analysis (non-blocking)
-                  onAnalyze?.(photosToAnalyze);
-                }}
-                className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors"
-                aria-label="Analyze photos"
-              >
-                ✨ Analyze
-              </button>
-            </div>
-          )}
-
-          {/* Stats line — shown for both modes when items have been analyzed */}
-          {rapidItems.length > 0 && (
-            <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
-              <span>
-                {rapidItems.length} taken · {rapidItems.filter((i) => i.autoEnhanced).length} enhanced ✨
-              </span>
-              {onEnhanceAll && (
-                <button
-                  onClick={onEnhanceAll}
-                  className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors"
-                  title="Trigger AI enhancement for all items"
-                >
-                  Enhance
-                </button>
+              {/* Pending photos + Analyze (regular mode only) */}
+              {!isRapidfire && photosThisItem > 0 && (
+                <>
+                  <span>{photosThisItem} {photosThisItem === 1 ? 'photo' : 'photos'}</span>
+                  <button
+                    onClick={() => {
+                      const photosToAnalyze = photos.map(({ blob, previewUrl }) => ({ blob, previewUrl }));
+                      setPhotos([]);
+                      setPhotosThisItem(0);
+                      onAnalyze?.(photosToAnalyze);
+                    }}
+                    className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors"
+                  >
+                    ✨ Analyze
+                  </button>
+                </>
               )}
-              <span
-                onClick={readyCount > 0 ? onNavigateToReview : undefined}
-                className={`text-xs whitespace-nowrap transition-colors ${
-                  readyCount > 0
-                    ? 'text-amber-300 underline underline-offset-2 cursor-pointer hover:text-amber-200'
-                    : 'text-white/30'
-                }`}
-              >
-                Review ({readyCount})
-              </span>
+              {/* Analyzed items count */}
+              {rapidItems.length > 0 && (
+                <>
+                  <span>
+                    {rapidItems.length} taken · {rapidItems.filter((i) => i.autoEnhanced).length} enhanced ✨
+                  </span>
+                  {isRapidfire && onEnhanceAll && (
+                    <button
+                      onClick={onEnhanceAll}
+                      className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors"
+                    >
+                      Enhance
+                    </button>
+                  )}
+                  <span
+                    onClick={readyCount > 0 ? onNavigateToReview : undefined}
+                    className={`text-xs whitespace-nowrap transition-colors ${
+                      readyCount > 0
+                        ? 'text-amber-300 underline underline-offset-2 cursor-pointer hover:text-amber-200'
+                        : 'text-white/30'
+                    }`}
+                  >
+                    Review ({readyCount})
+                  </span>
+                </>
+              )}
             </div>
           )}
 
@@ -778,8 +777,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               className="flex items-center gap-2"
               style={{ paddingLeft: 'calc(50% + 40px)', paddingRight: '16px' }}
             >
-              {/* Thumbnail carousel (rapidfire only) — all items, no slice limit */}
-              {isRapidfire && rapidItems.length > 0 && rapidItems.map((item) => {
+              {/* Thumbnail carousel — all analyzed items (both modes) */}
+              {rapidItems.length > 0 && rapidItems.map((item) => {
                   const isAddingTo = addingToItemId === item.id;
                   const status = !item.thumbnailUrl
                     ? { icon: '📷', bgColor: 'bg-gray-200', iconColor: 'text-gray-600' }
