@@ -77,17 +77,20 @@ const EditItemPage = () => {
         }
       }
 
-      // Normalize condition to UPPERCASE (e.g. "good" → "GOOD", "Excellent" → "EXCELLENT")
-      // Map common values to form options
+      // Normalize condition to match standard values: NEW, USED, REFURBISHED, PARTS_OR_REPAIR
       let normalizedCondition = '';
       if (item.condition) {
-        const condUpper = item.condition.toUpperCase().trim();
-        // Map to available options or use as-is if it matches
-        if (['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR', 'EXCELLENT'].includes(condUpper)) {
-          // Handle "EXCELLENT" as "LIKE_NEW" if not available
-          normalizedCondition = condUpper === 'EXCELLENT' ? 'LIKE_NEW' : condUpper;
-        } else {
+        const condUpper = item.condition.toUpperCase().trim().replace(/\s+/g, '_');
+        const validConditions = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
+        if (validConditions.includes(condUpper)) {
           normalizedCondition = condUpper;
+        } else {
+          // Map legacy values
+          const legacyMap: Record<string, string> = {
+            LIKE_NEW: 'NEW', EXCELLENT: 'NEW',
+            GOOD: 'USED', FAIR: 'USED', POOR: 'PARTS_OR_REPAIR',
+          };
+          normalizedCondition = legacyMap[condUpper] || 'USED';
         }
       }
 
@@ -160,6 +163,24 @@ const EditItemPage = () => {
     onError: (error: any) => {
       const message = error.response?.data?.message || 'Failed to unpublish item';
       showToast(message, 'error');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return await api.delete(`/items/${id}`);
+    },
+    onSuccess: () => {
+      showToast('Item deleted', 'success');
+      const saleId = item?.saleId;
+      if (saleId) {
+        router.push(`/organizer/add-items/${saleId}`);
+      } else {
+        router.push('/organizer/dashboard');
+      }
+    },
+    onError: () => {
+      showToast('Failed to delete item', 'error');
     },
   });
 
@@ -318,10 +339,9 @@ const EditItemPage = () => {
               >
                 <option value="">Select condition</option>
                 <option value="NEW">New</option>
-                <option value="LIKE_NEW">Like New</option>
-                <option value="GOOD">Good</option>
-                <option value="FAIR">Fair</option>
-                <option value="POOR">Poor</option>
+                <option value="USED">Used</option>
+                <option value="REFURBISHED">Refurbished</option>
+                <option value="PARTS_OR_REPAIR">Parts or Repair</option>
               </select>
             </div>
 
@@ -598,7 +618,7 @@ const EditItemPage = () => {
                 onClick={handlePublishItem}
                 className={`flex-1 font-bold py-2 px-4 rounded-lg disabled:opacity-50 ${
                   item.draftStatus === 'PUBLISHED'
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    ? 'bg-gray-500 hover:bg-gray-600 text-white'
                     : 'bg-green-600 hover:bg-green-700 text-white'
                 }`}
               >
@@ -607,6 +627,22 @@ const EditItemPage = () => {
                   : item.draftStatus === 'PUBLISHED'
                     ? 'Unpublish'
                     : 'Publish'}
+              </button>
+            </div>
+
+            {/* Danger zone */}
+            <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {deleteMutation.isPending ? 'Deleting…' : '🗑️ Delete Item'}
               </button>
             </div>
           </form>

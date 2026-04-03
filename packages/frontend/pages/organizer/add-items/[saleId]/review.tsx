@@ -667,11 +667,14 @@ const ReviewPage = () => {
                     {/* Column headers */}
                     <div className="px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-4 text-xs font-medium text-warm-400 dark:text-warm-500 border-b border-warm-100 dark:border-gray-700 mb-1">
                       <span className="w-4 flex-shrink-0" />
-                      <span className="w-16 flex-shrink-0">Photo</span>
-                      <span className="flex-1">Item · Health Score</span>
-                      <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
-                        <span className="w-20 text-right hidden sm:inline">AI Confidence</span>
-                        <span className="w-16 text-center hidden sm:inline">Status</span>
+                      <span className="w-16 flex-shrink-0 hidden xs:inline">Photo</span>
+                      <span className="flex-1 truncate">
+                        <span className="sm:hidden">Item</span>
+                        <span className="hidden sm:inline">Item · Price · Category · Completeness</span>
+                      </span>
+                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                        <span className="text-right hidden sm:inline whitespace-nowrap">· Confidence</span>
+                        <span className="text-center whitespace-nowrap">· Status</span>
                         <span className="w-4" />
                       </div>
                     </div>

@@ -345,19 +345,11 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     return (
       <div className="space-y-6">
         <div className="bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-700 rounded-lg p-8 text-center">
-          <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">
-            📦 Smart Inventory Upload
-          </h3>
-          <p className="text-warm-600 dark:text-warm-400 mb-6">
-            Drop up to 20 photos here. AI will analyze and create draft listings
-            automatically.
-          </p>
-
           <div
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-blue-300 dark:border-gray-600 rounded-lg p-12 cursor-pointer hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors"
+            className="border-2 border-dashed border-blue-300 dark:border-gray-600 rounded-lg p-12 cursor-pointer hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors mb-6"
           >
             <input
               ref={fileInputRef}
@@ -379,8 +371,15 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
             )}
           </div>
 
+          <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-1">
+            📦 Smart Inventory Upload
+          </h3>
+          <p className="text-warm-600 dark:text-warm-400 mb-4 text-sm">
+            Drop up to 20 individual item photos here. Then click Analyze All to create draft listings automatically.
+          </p>
+
           {photoFiles.length > 0 && (
-            <div className="mt-6 grid grid-cols-4 gap-4">
+            <div className="mt-2 grid grid-cols-4 gap-4">
               {photoFiles.slice(0, 4).map((file, idx) => (
                 <div key={idx} className="relative">
                   <img
@@ -709,17 +708,23 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
           ✓ Items Added Successfully!
         </h3>
         <p className="text-green-600 dark:text-green-500 mb-6">
-          Your inventory has been updated. View it below or add more items.
+          Your inventory has been updated. Review and publish your new items, or add more.
         </p>
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-3 justify-center flex-wrap">
+          <a
+            href={`/organizer/add-items/${saleId}/review`}
+            className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg"
+          >
+            Review & Publish →
+          </a>
           <button
             onClick={() => {
               setStep('upload');
               onComplete?.();
             }}
-            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg"
+            className="px-6 py-3 border border-green-600 text-green-700 dark:text-green-400 font-bold rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20"
           >
-            Start Over
+            Add More
           </button>
         </div>
       </div>

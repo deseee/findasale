@@ -26,7 +26,7 @@
  * - maxPhotos=5 per camera session (one-item-at-a-time flow)
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -218,7 +218,7 @@ const CATEGORIES = [
   'Other',
 ];
 
-const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
+const CONDITIONS = ['New', 'Used', 'Refurbished', 'Parts or Repair'];
 
 // Feature #57: Rarity tiers — empty string means auto-assign from price
 const RARITY_OPTIONS = [
@@ -331,6 +331,39 @@ const AddItemsDetailPage = () => {
     value?: any;
   } | null>(null);
   const [bulkPhotoModalOpen, setBulkPhotoModalOpen] = useState(false);
+
+  // Expandable item cards (like review & publish page)
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string }>>({});
+
+  const getItemEditState = useCallback((item: any) => {
+    return itemEditState[item.id] || {
+      title: item.title || '',
+      price: item.price != null ? item.price.toString() : '',
+      category: item.category || '',
+      condition: item.condition || '',
+      description: item.description || '',
+    };
+  }, [itemEditState]);
+
+  const handleInlineItemSave = useCallback(async (itemId: string) => {
+    const state = itemEditState[itemId];
+    if (!state) return;
+    try {
+      await api.put(`/items/${itemId}`, {
+        title: state.title,
+        price: state.price ? parseFloat(state.price) : undefined,
+        category: state.category,
+        condition: state.condition,
+        description: state.description,
+      });
+      showToast('Item saved', 'success');
+      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+      setExpandedItemId(null);
+    } catch {
+      showToast('Failed to save item', 'error');
+    }
+  }, [itemEditState, saleId, queryClient, showToast]);
 
   // Feature #244: eBay CSV export state
   const [ebayExportOpen, setEbayExportOpen] = useState(false);
@@ -1215,7 +1248,7 @@ const AddItemsDetailPage = () => {
                     : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400'
                 }`}
               >
-                {tab === 'camera' ? 'Camera (AI)' : tab === 'batch' ? 'Batch Upload' : 'Manual Entry'}
+                {tab === 'camera' ? 'Camera' : tab === 'batch' ? 'Batch Upload' : 'Manual Entry'}
               </button>
             ))}
             <button
@@ -1498,84 +1531,37 @@ const AddItemsDetailPage = () => {
                 {items.length > 0 ? '📷 Add More Photos' : 'Capture with Camera'}
               </h2>
 
-              {captureMode === 'rapidfire' ? (
-                <div className="space-y-6">
-                  <p className="text-warm-600 dark:text-warm-400">
-                    Rapidly capture multiple items. Photos upload and analyze in the background. Mode and options are in the camera view.
-                  </p>
-
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => setCameraOpen(true)}
-                      className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2 2V9z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                      </svg>
-                      Open Camera
-                    </button>
-                  </div>
-
-                  {/* Review & Publish button */}
-                  {rapidItems.some((i) => i.draftStatus === 'PENDING_REVIEW') && (
-                    <button
-                      onClick={() =>
-                        router.push(`/organizer/add-items/${saleId}/review`)
-                      }
-                      className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
-                    >
-                      Review & Publish ({rapidItems.filter((i) => i.draftStatus === 'PENDING_REVIEW').length} ready)
-                    </button>
-                  )}
+              <div className="space-y-5">
+                {/* Open Camera button — always at top */}
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => setCameraOpen(true)}
+                    className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2 2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Open Camera
+                  </button>
                 </div>
-              ) : (
-                <div>
-                  {cameraAnalyzing ? (
-                    <div className="text-center py-12">
-                      <div className="inline-block w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4" />
-                      <p className="text-warm-700 dark:text-warm-300 font-medium">Analyzing photo with AI...</p>
-                      <p className="text-warm-500 dark:text-warm-400 text-sm mt-1">This may take a few seconds</p>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-warm-600 dark:text-warm-400 mb-4">
-                        Take a photo of an item. AI will identify it and pre-fill the details for you to review.
-                      </p>
-                      <button
-                        onClick={() => setCameraOpen(true)}
-                        className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2 2V9z"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                        Open Camera
-                      </button>
-                    </div>
-                  )}
+
+                {/* Mode descriptions */}
+                <div className="text-sm text-warm-500 dark:text-warm-400 space-y-2 border-t border-warm-100 dark:border-gray-700 pt-4">
+                  <p><span className="font-semibold text-warm-700 dark:text-warm-300">Rapidfire Mode:</span> Rapidly capture multiple items. 1 Photo = 1 Item. Photos upload and analyze in the background. Tap + on the thumbnail to add more photos to that item.</p>
+                  <p><span className="font-semibold text-warm-700 dark:text-warm-300">Regular Mode:</span> Take and retake up to 5 photos of a single item. Once happy, click the analyze button and the photo(s) will begin to analyze in the background. Start taking photos of the next item.</p>
                 </div>
-              )}
+
+                {/* Review & Publish button when items are ready */}
+                {rapidItems.some((i) => i.draftStatus === 'PENDING_REVIEW') && (
+                  <button
+                    onClick={() => router.push(`/organizer/add-items/${saleId}/review`)}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Review & Publish ({rapidItems.filter((i) => i.draftStatus === 'PENDING_REVIEW').length} ready)
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -1791,143 +1777,184 @@ const AddItemsDetailPage = () => {
                 </div>
               )}
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700">
-                    <tr>
-                      <th className="px-4 py-3 text-left w-12">
+              {/* Card-based expandable items list */}
+              <div className="divide-y divide-warm-100 dark:divide-gray-700">
+                {items.map((item: any) => {
+                  const draftStatus = computeDraftStatus(item);
+                  const isExpanded = expandedItemId === item.id;
+                  const editState = getItemEditState(item);
+                  return (
+                    <div key={item.id} className="bg-white dark:bg-gray-800">
+                      {/* Collapsed row */}
+                      <div
+                        className={`px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors ${selectedItems.has(item.id) ? 'bg-blue-50 dark:bg-blue-900/10' : ''}`}
+                        onClick={() => {
+                          setExpandedItemId(isExpanded ? null : item.id);
+                          if (!isExpanded && !itemEditState[item.id]) {
+                            setItemEditState((prev) => ({ ...prev, [item.id]: {
+                              title: item.title || '',
+                              price: item.price != null ? item.price.toString() : '',
+                              category: item.category || '',
+                              condition: item.condition || '',
+                              description: item.description || '',
+                            }}));
+                          }
+                        }}
+                      >
                         <input
                           type="checkbox"
-                          checked={selectedItems.size === items.length && items.length > 0}
+                          checked={selectedItems.has(item.id)}
                           onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedItems(new Set(items.map((i: any) => i.id)));
-                            } else {
-                              setSelectedItems(new Set());
+                            e.stopPropagation();
+                            const newSet = new Set(selectedItems);
+                            if (e.target.checked) newSet.add(item.id);
+                            else newSet.delete(item.id);
+                            setSelectedItems(newSet);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded cursor-pointer flex-shrink-0"
+                        />
+                        {/* Thumbnail — links to public item page */}
+                        <a
+                          href={`/items/${item.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-shrink-0"
+                        >
+                          {item.photoUrls && item.photoUrls.length > 0 ? (
+                            <img
+                              src={item.photoUrls[0]}
+                              alt={item.title}
+                              className="w-14 h-14 object-cover rounded border border-warm-200 dark:border-gray-700 hover:ring-2 hover:ring-amber-400"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded border border-warm-200 dark:border-gray-700 flex items-center justify-center text-gray-400 text-xl">📷</div>
+                          )}
+                        </a>
+                        {/* Title — links to edit-item page */}
+                        <div className="flex-1 min-w-0">
+                          <Link
+                            href={`/organizer/edit-item/${item.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-semibold text-amber-700 hover:underline truncate block text-sm"
+                          >
+                            {item.title || 'Untitled'}
+                          </Link>
+                          <p className="text-xs text-warm-500 dark:text-warm-400 truncate">
+                            {item.price != null ? `$${item.price}` : 'No price'} · {formatCategory(item.category) || 'Uncategorized'}
+                          </p>
+                        </div>
+                        {/* Status badge */}
+                        <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full hidden sm:inline-block ${
+                          draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                          draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                          'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                          {draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
+                        </span>
+                        {/* Delete button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
+                              deleteMutation.mutate(item.id);
                             }
                           }}
-                          className="rounded cursor-pointer"
-                          title="Select all items"
-                        />
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-20">Photo</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Title</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-32">Category</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-20">Price</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-20">Photos</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-28">Status</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100 w-32">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-warm-200">
-                    {items.map((item: any) => {
-                      const draftStatus = computeDraftStatus(item);
-                      const photoCount = item.photoUrls?.length || 0;
-                      const statusColors = {
-                        'DRAFT': 'bg-gray-100 text-gray-700',
-                        'PENDING_REVIEW': 'bg-amber-100 text-amber-700',
-                        'PUBLISHED': 'bg-green-100 text-green-700',
-                      };
-                      return (
-                        <tr key={item.id} className={`hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition-colors ${selectedItems.has(item.id) ? 'bg-blue-50' : ''}`}>
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={selectedItems.has(item.id)}
-                              onChange={(e) => {
-                                const newSet = new Set(selectedItems);
-                                if (e.target.checked) newSet.add(item.id);
-                                else newSet.delete(item.id);
-                                setSelectedItems(newSet);
-                              }}
-                              className="rounded cursor-pointer"
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            {item.photoUrls && item.photoUrls.length > 0 ? (
-                              <img
-                                key={item.photoUrls[0]}
-                                src={item.photoUrls[0]}
-                                alt={item.title}
-                                className="w-16 h-16 object-cover rounded border border-warm-200 dark:border-gray-700"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                                referrerPolicy="no-referrer"
+                          disabled={deleteMutation.isPending}
+                          className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors disabled:opacity-50 p-1"
+                          aria-label="Delete item"
+                        >
+                          🗑️
+                        </button>
+                        <span className="text-warm-400 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                      </div>
+
+                      {/* Expanded edit panel */}
+                      {isExpanded && (
+                        <div className="border-t border-warm-100 dark:border-gray-700 px-4 py-4 bg-warm-50 dark:bg-gray-900 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Title</label>
+                              <input
+                                type="text"
+                                value={editState.title}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, title: e.target.value } }))}
+                                className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                               />
-                            ) : (
-                              <div className="w-16 h-16 bg-gray-200 rounded border border-warm-200 dark:border-gray-700 flex items-center justify-center text-gray-400 text-2xl">
-                                📷
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-medium">
-                            <span title={item.title} className="block truncate text-amber-700">
-                              {item.title}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-warm-600 dark:text-warm-400">
-                            <span className="inline-block bg-warm-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">
-                              {formatCategory(item.category)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-warm-900 dark:text-warm-100 font-semibold">
-                            ${item.price ?? item.auctionStartPrice ?? '\u2014'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-center text-warm-600 dark:text-warm-400">
-                            {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <div className="flex gap-2 flex-wrap items-center">
-                              <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                                item.status === 'AVAILABLE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                                item.status === 'SOLD' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
-                                item.status === 'RESERVED' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
-                                'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                              }`}>
-                                {item.status}
-                              </span>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <div className="flex gap-2">
-                              <Link
-                                href={`/organizer/edit-item/${item.id}`}
-                                className="text-amber-700 hover:text-amber-900 font-medium text-xs px-2 py-1 rounded hover:bg-amber-50 dark:bg-amber-900/20"
+                            <div>
+                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Price</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={editState.price}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, price: e.target.value } }))}
+                                className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Category</label>
+                              <select
+                                value={editState.category}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, category: e.target.value } }))}
+                                className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                               >
-                                Edit
-                              </Link>
-                              {deleteConfirmId === item.id ? (
-                                <span className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => deleteMutation.mutate(item.id)}
-                                    disabled={deleteMutation.isPending}
-                                    className="text-red-600 hover:text-red-700 dark:text-red-300 font-medium text-xs px-1 disabled:opacity-50"
-                                  >
-                                    Yes
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirmId(null)}
-                                    className="text-warm-600 dark:text-warm-400 hover:text-warm-700 dark:text-warm-300 font-medium text-xs px-1"
-                                  >
-                                    No
-                                  </button>
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => setDeleteConfirmId(item.id)}
-                                  className="text-red-600 hover:text-red-700 dark:text-red-300 font-medium text-xs px-2 py-1 rounded hover:bg-red-50 dark:bg-red-900/20"
-                                >
-                                  Delete
-                                </button>
-                              )}
+                                <option value="">Select category</option>
+                                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                              </select>
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            <div>
+                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
+                              <select
+                                value={editState.condition}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, condition: e.target.value } }))}
+                                className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                              >
+                                <option value="">Select condition</option>
+                                {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Description</label>
+                            <textarea
+                              value={editState.description}
+                              onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, description: e.target.value } }))}
+                              rows={2}
+                              className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleInlineItemSave(item.id)}
+                              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded transition-colors"
+                            >
+                              Save
+                            </button>
+                            <Link
+                              href={`/organizer/edit-item/${item.id}`}
+                              className="px-4 py-1.5 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 text-sm font-semibold rounded hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              Full Edit ↗
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedItemId(null)}
+                              className="px-4 py-1.5 text-warm-500 dark:text-warm-400 text-sm rounded hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : (
