@@ -49,15 +49,15 @@ export default function OrganizerReviews() {
   }, [user, authLoading, router]);
 
   const { data, isLoading } = useQuery<ReviewsResponse>({
-    queryKey: ['reviews', 'organizer', 'all', user?.organizerId, page],
+    queryKey: ['reviews', 'organizer', 'me', user?.id, page],
     queryFn: async () => {
-      if (!user?.organizerId) throw new Error('No organizer ID');
-      const res = await api.get(`/reviews/organizer/${user.organizerId}/all`, {
+      if (!user?.id) throw new Error('Not authenticated');
+      const res = await api.get(`/reviews/organizer/me`, {
         params: { page, limit: 10 }
       });
       return res.data;
     },
-    enabled: !!user?.organizerId,
+    enabled: !!user?.id && user.roles?.includes('ORGANIZER'),
   });
 
   const respondMutation = useMutation({
