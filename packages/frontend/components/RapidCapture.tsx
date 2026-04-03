@@ -791,15 +791,15 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   return (
                     <div
                       key={item.id}
-                      className={`flex-shrink-0 relative cursor-pointer transition-all w-14 h-14 rounded-lg overflow-hidden border ${
-                        isAddingTo ? 'ring-2 ring-amber-400 border-amber-400' : 'border-white/40'
+                      className={`flex-shrink-0 relative cursor-pointer transition-all w-14 h-14 ${
+                        isAddingTo ? 'ring-2 ring-amber-400 rounded-lg' : ''
                       }`}
                       onClick={() => onThumbnailTap(item.id)}
                       title={item.title || 'Item'}
                     >
-                      {/* Thumbnail image */}
-                      <div className={`w-full h-full flex items-center justify-center flex-shrink-0 ${
-                        isAddingTo ? 'bg-amber-900/30' : 'bg-white/10'
+                      {/* Image container — overflow-hidden for rounded corners, no badge clipping */}
+                      <div className={`w-full h-full rounded-lg overflow-hidden border flex items-center justify-center ${
+                        isAddingTo ? 'border-amber-400 bg-amber-900/30' : 'border-white/40 bg-white/10'
                       }`}>
                         {item.thumbnailUrl ? (
                           <img
@@ -823,15 +823,15 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
                       {/* Loading spinner overlay */}
                       {!item.id.startsWith('temp-') && item.draftStatus === 'DRAFT' && !item.aiError && item.thumbnailUrl && (
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <div className="absolute inset-0 rounded-lg bg-black/20 flex items-center justify-center">
                           <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" />
                         </div>
                       )}
 
-                      {/* Status badge (top-right) */}
+                      {/* Status badge (top-right) — on outer div, not clipped */}
                       {item.thumbnailUrl && (
                         <div
-                          className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold ${status.bgColor} ${status.iconColor}`}
+                          className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold z-10 ${status.bgColor} ${status.iconColor}`}
                         >
                           {status.icon}
                         </div>
@@ -839,31 +839,29 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
                       {/* Auto-enhance badge (top-left) */}
                       {item.autoEnhanced && (
-                        <div className="absolute -top-0.5 -left-0.5 text-xs">✨</div>
+                        <div className="absolute -top-1 -left-1 text-xs z-10">✨</div>
                       )}
 
-                      {/* "+" button — shown as soon as thumbnail exists (immediately visible, enabled when item has real DB id) */}
-                      {item.thumbnailUrl && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!item.id.startsWith('temp-')) {
-                              onAddToItem(item.id);
-                            }
-                          }}
-                          className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white transition-all ${
-                            isAddingTo && !item.id.startsWith('temp-')
-                              ? 'bg-amber-500'
-                              : item.id.startsWith('temp-')
-                              ? 'bg-gray-400/40 border border-white/30 opacity-50'
-                              : 'bg-black/60 border border-white/50 hover:bg-black/80'
-                          }`}
-                          aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
-                          title={item.id.startsWith('temp-') ? 'Item is being processed' : isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
-                        >
-                          {isAddingTo && !item.id.startsWith('temp-') ? '×' : '+'}
-                        </button>
-                      )}
+                      {/* + button — always visible (not gated on thumbnailUrl), bigger (w-7 h-7), corner-tucked */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!item.id.startsWith('temp-')) {
+                            onAddToItem(item.id);
+                          }
+                        }}
+                        className={`absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold text-white transition-all z-10 ${
+                          isAddingTo && !item.id.startsWith('temp-')
+                            ? 'bg-amber-500 shadow-md'
+                            : item.id.startsWith('temp-')
+                            ? 'bg-gray-400/60 border border-white/30 opacity-60'
+                            : 'bg-black/70 border border-white/60 hover:bg-black/90 shadow-md'
+                        }`}
+                        aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
+                        title={item.id.startsWith('temp-') ? 'Item is being processed' : isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
+                      >
+                        {isAddingTo && !item.id.startsWith('temp-') ? '×' : '+'}
+                      </button>
                     </div>
                   );
                 })}
