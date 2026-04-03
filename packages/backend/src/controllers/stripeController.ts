@@ -107,9 +107,9 @@ const sendReceiptEmail = async (purchase: {
       html,
     });
 
-    // Update purchase record to track when confirmation email was sent
-    await prisma.purchase.update({
-      where: { id: purchase.id },
+    // Update CheckoutAttempt to track when confirmation email was sent (field lives on CheckoutAttempt, not Purchase)
+    await prisma.checkoutAttempt.updateMany({
+      where: { purchaseId: purchase.id },
       data: { emailSentAt: new Date() },
     });
   } catch (err) {

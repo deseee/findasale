@@ -469,7 +469,7 @@ const AddItemsDetailPage = () => {
   });
 
   const bulkUpdateMutation = useMutation({
-    mutationFn: async (payload: { itemIds: string[]; operation: string; value?: any }) => {
+    mutationFn: async (payload: { itemIds: string[]; operation: string; value?: any; priceType?: string }) => {
       return await api.post(`/items/bulk`, payload);
     },
     onMutate: () => { inMutationFlight.current = true; },
