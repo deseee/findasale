@@ -157,18 +157,18 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 </span>
               )}
 
-              {/* Delete button — top-right, shows on hover */}
+              {/* Delete button — top-right, always visible on mobile */}
               <button
                 type="button"
                 onClick={() => handleDelete(i)}
-                className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold opacity-80 hover:opacity-100 transition-opacity"
                 aria-label={`Remove photo ${i + 1}`}
               >
                 ×
               </button>
 
-              {/* Reorder arrows \u2014 bottom, shows on hover */}
-              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Reorder arrows — bottom, always visible on mobile */}
+              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-1 opacity-80 hover:opacity-100 transition-opacity">
                 {i > 0 && (
                   <button
                     type="button"
@@ -196,7 +196,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
       )}
 
       <p className="text-xs text-warm-400 mt-2">
-        First photo is the cover shown on item cards. Hover a photo to reorder or delete.
+        First photo is the cover shown on item cards. Tap × to delete, ← → to reorder.
       </p>
     </div>
   );
