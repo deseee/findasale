@@ -617,75 +617,27 @@ const AddItemsDetailPage = () => {
     }
   };
 
-  // Regular mode: analyze captured photos (called from Analyze button)
-  const handleRegularAnalyze = async (photos: { blob: Blob; previewUrl: string }[]) => {
-    if (photos.length === 0) return;
+  // Regular mode: fire off background pipeline same as rapidfire
+  // RapidCapture already reset its photos state before calling this
+  const handleRegularAnalyze = (capturedPhotos: { blob: Blob; previewUrl: string }[]) => {
+    if (capturedPhotos.length === 0) return;
 
-    setRegularAnalyzing(true);
-    try {
-      // Upload first photo and get AI analysis
-      const formData = new FormData();
-      formData.append('photo', photos[0].blob, 'camera-capture.jpg');
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-      const response = await api.post('/upload/analyze-photo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+    // Add cover thumbnail to carousel immediately — collapses to left of shutter
+    setRapidItems((prev) => [
+      ...prev,
+      { id: tempId, thumbnailUrl: capturedPhotos[0].previewUrl, draftStatus: 'DRAFT' },
+    ]);
 
-      const ai = response.data;
-
-      // Upload all photos to get Cloudinary URLs
-      const photoFormData = new FormData();
-      photos.forEach((p, i) => {
-        photoFormData.append('photos', p.blob, `capture-${i}.jpg`);
-      });
-
-      const uploadRes = await api.post('/upload/sale-photos', photoFormData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      const uploadedUrls: string[] = (uploadRes.data?.urls || uploadRes.data || []);
-
-      // Pre-fill manual form with AI results
-      setFormData({
-        ...emptyForm,
-        title: ai.title || '',
-        description: ai.description || '',
-        category: normalizeToArray(ai.category, CATEGORIES),
-        condition: normalizeToArray(ai.condition, CONDITIONS),
-        price: ai.suggestedPrice ? String(ai.suggestedPrice) : '',
-        photoUrls: uploadedUrls,
-      });
-
-      // Close camera and switch to manual tab so organizer can review & submit
-      setCameraOpen(false);
-      setActiveTab('manual');
-      showToast(`AI identified: "${ai.title || 'item'}". Review and save below.`, 'success');
-    } catch (err: any) {
-      console.error('Camera AI analysis error:', err);
-      showToast('Photo captured but AI analysis failed. You can add details manually.', 'error');
-
-      // Still upload photos even if AI fails
-      try {
-        const photoFormData = new FormData();
-        photos.forEach((p, i) => {
-          photoFormData.append('photos', p.blob, `capture-${i}.jpg`);
-        });
-        const uploadRes = await api.post('/upload/sale-photos', photoFormData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        const uploadedUrls: string[] = (uploadRes.data?.urls || uploadRes.data || []);
-        setFormData((prev) => ({ ...prev, photoUrls: uploadedUrls }));
-      } catch {
-        // Photo upload also failed — user can still add manually
-      }
-
-      setCameraOpen(false);
-      setActiveTab('manual');
-    } finally {
-      setRegularAnalyzing(false);
-      // Clean up blob URLs
-      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
-    }
+    // Non-blocking background pipeline (same as rapidfire)
+    // Additional photos (2–5) are appended to the item after it's created
+    processAndUploadRapidPhoto(
+      capturedPhotos[0],
+      tempId,
+      null,
+      capturedPhotos.length > 1 ? capturedPhotos.slice(1) : undefined
+    );
   };
 
   // Background upload handler for rapidfire photos — called async from onPhotoCapture
@@ -695,7 +647,8 @@ const AddItemsDetailPage = () => {
   const processAndUploadRapidPhoto = async (
     photo: { blob: Blob; previewUrl: string },
     tempId: string,
-    appendToItemId: string | null
+    appendToItemId: string | null,
+    additionalPhotos?: { blob: Blob; previewUrl: string }[]
   ): Promise<void> => {
     try {
       // Phase 3: On-device processing pipeline
@@ -798,6 +751,26 @@ const AddItemsDetailPage = () => {
 
         // Poll for AI completion
         pollForAI(itemId);
+
+        // Upload additional photos (regular mode multi-photo items)
+        if (additionalPhotos && additionalPhotos.length > 0) {
+          for (const addPhoto of additionalPhotos) {
+            try {
+              const fd = new FormData();
+              fd.append('photos', addPhoto.blob, 'regular-capture.jpg');
+              fd.append('saleId', saleId as string);
+              const uploadRes = await api.post('/upload/sale-photos', fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+              });
+              const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
+              if (urls[0]) {
+                await api.post(`/items/${itemId}/photos`, { url: urls[0] });
+              }
+            } catch (addErr) {
+              console.error('[regular] Additional photo upload failed:', addErr);
+            }
+          }
+        }
       }
     } catch (err: any) {
       console.error('[rapidfire] Background upload failed:', err);

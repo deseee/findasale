@@ -448,7 +448,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         </div>
 
         {/* Mode hint text */}
-        <div className="absolute top-14 left-0 right-0 z-10 flex justify-center pointer-events-none">
+        <div className="absolute top-12 left-0 right-0 z-10 flex justify-center pointer-events-none">
           <span className="text-xs text-white/50 bg-black/30 rounded-full px-3 py-1.5">
             {isRapidfire
               ? inAddMode
@@ -689,29 +689,30 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         {/* Bottom section: compact single row with stats line above */}
         <div className="bg-black/90 pb-safe flex flex-col">
           {/* Stats line (compact, text-xs) */}
-          {/* Regular mode stats line — shows when photos captured, with compact Analyze button */}
+          {/* Regular mode stats line — shown when photos captured; Analyze resets shutter for next item */}
           {!isRapidfire && photosThisItem > 0 && (
             <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
               <span>{photosThisItem} {photosThisItem === 1 ? 'photo' : 'photos'} taken</span>
               <button
-                onClick={() => onAnalyze?.(photos.map(({ blob, previewUrl }) => ({ blob, previewUrl })))}
-                disabled={isAnalyzing}
-                className="text-xs bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors flex items-center gap-1"
+                onClick={() => {
+                  // Capture photos before resetting state
+                  const photosToAnalyze = photos.map(({ blob, previewUrl }) => ({ blob, previewUrl }));
+                  // Reset shutter immediately for next item
+                  setPhotos([]);
+                  setPhotosThisItem(0);
+                  // Fire off background analysis (non-blocking)
+                  onAnalyze?.(photosToAnalyze);
+                }}
+                className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors"
                 aria-label="Analyze photos"
               >
-                {isAnalyzing ? (
-                  <>
-                    <div className="w-3 h-3 border border-amber-300/50 border-t-amber-300 rounded-full animate-spin" />
-                    <span>Analyzing…</span>
-                  </>
-                ) : (
-                  <span>✨ Analyze</span>
-                )}
+                ✨ Analyze
               </button>
             </div>
           )}
 
-          {isRapidfire && rapidItems.length > 0 && (
+          {/* Stats line — shown for both modes when items have been analyzed */}
+          {rapidItems.length > 0 && (
             <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
               <span>
                 {rapidItems.length} taken · {rapidItems.filter((i) => i.autoEnhanced).length} enhanced ✨
