@@ -304,11 +304,19 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <span>Manage Photos</span>
             </Link>
 
-            <SectionHeader icon={Sparkles} label="Pro Tools" color="purple" />
-            <Link href="/organizer/brand-kit" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Custom logos, colors, and banners for your sale pages">
+            <SectionHeader icon={BarChart2} label="Insights" color="purple" />
+            <Link href="/organizer/insights" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Advanced analytics and sale performance insights — PRO">
+              <BarChart2 size={16} className="text-purple-400" />
+              <span>Advanced Analytics</span>
+            </Link>
+
+            <SectionHeader icon={Palette} label="Branding" color="purple" />
+            <Link href="/organizer/brand-kit" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Custom logos, colors, and banners for your sale pages — PRO">
               <Palette size={16} className="text-purple-400" />
               <span>Brand Kit</span>
             </Link>
+
+            <SectionHeader icon={Sparkles} label="Pro Tools" color="purple" />
             <Link href="/organizer/ripples" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Free sale performance analytics">
               <Activity size={16} className="text-purple-400" />
               <span>Sale Ripples</span>
@@ -445,9 +453,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             )}
 
             <SectionHeader icon={Compass} label="Explore & Connect" color="indigo" />
-            <Link href="/shopper/explorer-passport" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your full shopper profile, badges, and history">
+            <Link href="/shopper/explorer-passport" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your collector journey, badges, and discovery history">
               <Award size={16} className="text-indigo-500" />
-              <span>Explorer Passport</span>
+              <span>Collector Passport</span>
             </Link>
             <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
               <Ticket size={16} className="text-indigo-500" />
@@ -1100,7 +1108,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                           <Compass size={14} className="inline mr-2 text-indigo-500" /> My Trails
                         </Link>
                         <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
+                          <Award size={14} className="inline mr-2 text-indigo-500" /> Collector Passport
                         </Link>
                         <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Ticket size={14} className="inline mr-2 text-indigo-500" /> Hunt Pass
@@ -1221,7 +1229,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
                     </Link>
                     <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Passport
+                      <Award size={14} className="inline mr-2 text-indigo-500" /> Collector Passport
                     </Link>
                     <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Ticket size={14} className="inline mr-2 text-indigo-500" /> Hunt Pass

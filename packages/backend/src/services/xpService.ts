@@ -429,3 +429,23 @@ export async function applyHuntPassMultiplier(userId: string, baseXp: number): P
     return baseXp;
   }
 }
+
+/**
+ * Rank-Based XP Multiplier for Treasure Hunt Scans
+ * Ranger+ get bonus multipliers on ITEM_SCANNED awards
+ * INITIATE/SCOUT: 1x (25 XP), RANGER: 1.5x (38 XP), SAGE: 1.75x (44 XP), GRANDMASTER: 2x (50 XP)
+ */
+export function getRankXpMultiplier(rank: ExplorerRank): number {
+  switch (rank) {
+    case 'GRANDMASTER':
+      return 2.0;
+    case 'SAGE':
+      return 1.75;
+    case 'RANGER':
+      return 1.5;
+    case 'SCOUT':
+    case 'INITIATE':
+    default:
+      return 1.0;
+  }
+}

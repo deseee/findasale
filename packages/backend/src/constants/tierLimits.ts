@@ -19,7 +19,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     itemsPerSale: 200,
     photosPerItem: 5,
     aiTagsPerMonth: 100,
-    batchOpsAllowed: false,
+    batchOpsAllowed: true,
     multiUserAllowed: false,
     maxConcurrentSales: 1,
   },

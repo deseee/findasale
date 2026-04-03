@@ -44,6 +44,8 @@ const ShopperDashboard = () => {
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
+  const [isReferralDismissed, setIsReferralDismissed] = useState(false);
+  const [referralLink, setReferralLink] = useState<string | null>(null);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
@@ -63,9 +65,48 @@ const ShopperDashboard = () => {
     }
   }, []);
 
+  // Load Referral dismissal state from localStorage
+  useEffect(() => {
+    const dismissed = localStorage.getItem('referral_cta_dismissed');
+    if (dismissed) {
+      setIsReferralDismissed(true);
+    }
+  }, []);
+
+  // Fetch referral code
+  useEffect(() => {
+    if (user?.id && !isReferralDismissed) {
+      const fetchReferralCode = async () => {
+        try {
+          const response = await api.get('/referrals/my-code');
+          if (response.data?.code) {
+            const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+            setReferralLink(`${baseUrl}/register?ref=${response.data.code}`);
+          }
+        } catch (error) {
+          console.error('Failed to fetch referral code:', error);
+        }
+      };
+      fetchReferralCode();
+    }
+  }, [user?.id, isReferralDismissed]);
+
   const handleDismissHuntPass = () => {
     localStorage.setItem('huntpass_cta_dismissed', 'true');
     setIsHuntPassDismissed(true);
+  };
+
+  const handleDismissReferral = () => {
+    localStorage.setItem('referral_cta_dismissed', 'true');
+    setIsReferralDismissed(true);
+  };
+
+  const handleCopyReferralLink = () => {
+    if (referralLink) {
+      navigator.clipboard.writeText(referralLink).then(() => {
+        alert('Referral link copied to clipboard!');
+      });
+    }
   };
 
   if (!isLoading && !user) {
@@ -337,6 +378,16 @@ const ShopperDashboard = () => {
                     xpProfile.rankProgress.currentXp,
                     xpProfile.rankProgress.nextRank
                   );
+
+                  // Rank-specific benefits for next rank
+                  const nextRankBenefits: Record<ExplorerRank, string> = {
+                    INITIATE: '+15 min holds',
+                    SCOUT: '+1 extra concurrent hold',
+                    RANGER: '+30 min holds + 2x Treasure Hunt XP',
+                    SAGE: 'Access to Collector\'s League + premium features',
+                    GRANDMASTER: 'You\'ve reached the top rank!',
+                  };
+
                   return (
                     <>
                       <div className="mb-4">
@@ -353,6 +404,11 @@ const ShopperDashboard = () => {
                         <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
                           {rankCopy.untilNextRank}
                         </p>
+                        {xpProfile.rankProgress.nextRank && xpProfile.rankProgress.nextRank !== 'GRANDMASTER' && (
+                          <p className="text-sm text-amber-700 dark:text-amber-300 mb-3 font-medium">
+                            Next rank: {xpProfile.rankProgress.nextRank.charAt(0) + xpProfile.rankProgress.nextRank.slice(1).toLowerCase()} — {nextRankBenefits[xpProfile.rankProgress.nextRank]}
+                          </p>
+                        )}
                         <p className="text-sm text-warm-600 dark:text-warm-400">
                           Best way to earn right now: {rankCopy.earnTip}
                         </p>
@@ -361,12 +417,20 @@ const ShopperDashboard = () => {
                         </p>
                       </div>
 
-                      <Link
-                        href={rankCopy.ctaHref}
-                        className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                      >
-                        {rankCopy.ctaText} →
-                      </Link>
+                      <div className="flex gap-2">
+                        <Link
+                          href={rankCopy.ctaHref}
+                          className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                        >
+                          {rankCopy.ctaText} →
+                        </Link>
+                        <Link
+                          href="/shopper/explorer-passport"
+                          className="inline-block bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                        >
+                          See all rank benefits →
+                        </Link>
+                      </div>
                     </>
                   );
                 })()}
@@ -423,6 +487,45 @@ const ShopperDashboard = () => {
                 </div>
               </div>
             ) : null}
+
+            {/* Referral Card — Share & Earn */}
+            {user && !isReferralDismissed && (
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-300 dark:border-blue-600 rounded-lg p-6">
+                <div className="flex items-start gap-4">
+                  <span className="text-3xl">🎁</span>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg text-blue-900 dark:text-blue-300 mb-2">Share & Earn</h3>
+                    <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
+                      Refer a friend and earn <strong>20 XP</strong> when they sign up and make their first purchase.
+                    </p>
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={handleCopyReferralLink}
+                        disabled={!referralLink}
+                        className="inline-block bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                      >
+                        📋 Copy referral link
+                      </button>
+                      <Link
+                        href="/referral-dashboard"
+                        className="inline-block bg-blue-100 dark:bg-blue-800 hover:bg-blue-200 dark:hover:bg-blue-700 text-blue-900 dark:text-blue-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                      >
+                        View my referrals →
+                      </Link>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleDismissReferral}
+                    className="flex-shrink-0 text-blue-400 dark:text-blue-500 hover:text-blue-600 dark:hover:text-blue-400"
+                    aria-label="Dismiss referral card"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
 
@@ -502,7 +605,7 @@ const ShopperDashboard = () => {
                       <h3 className="font-bold text-lg text-purple-900 dark:text-purple-300 mb-2">Unlock Hunt Pass Premium</h3>
                       <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">Level up your treasure hunting with exclusive benefits:</p>
                       <ul className="text-sm text-purple-800 dark:text-purple-200 mb-4 space-y-1 ml-4">
-                        <li>⭐ <strong>2x XP multiplier</strong> on every action</li>
+                        <li>⭐ <strong>1.5x XP multiplier</strong> on every action</li>
                         <li>⚡ <strong>6h early access</strong> to Legendary item drops</li>
                         <li>🎖️ <strong>Exclusive Hunt Pass badge</strong> on your profile</li>
                       </ul>
@@ -542,7 +645,7 @@ const ShopperDashboard = () => {
                     <span className="text-xl">✅</span>
                     <div className="flex-1">
                       <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass Active</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 2x XP on every action and get early access to flash deals!</p>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 1.5x XP on every action and get 6-hour early access to Legendary items!</p>
                     </div>
                   </div>
                 </div>

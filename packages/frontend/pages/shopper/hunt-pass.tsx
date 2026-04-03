@@ -2,7 +2,7 @@
  * /shopper/hunt-pass - Hunt Pass Information & Upgrade Page
  *
  * Hunt Pass is a $4.99/month premium shopper subscription that grants:
- * - 2x points on every action
+ * - 1.5x XP on every action
  * - Early access to flash deals
  * - Exclusive Hunt Pass badge
  */
@@ -70,16 +70,16 @@ const HuntPassPage = () => {
             </h2>
 
             <div className="space-y-4">
-              {/* Benefit 1: 2x Points */}
+              {/* Benefit 1: 1.5x XP */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
                   <div className="text-3xl flex-shrink-0">⭐</div>
                   <div>
                     <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                      2x Streak XP
+                      1.5x Streak XP
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Earn double XP on every action — favorites, visits, purchases, and more. Build your streak twice as fast and unlock badges sooner.
+                      Earn 1.5x XP on every action — visits, purchases, treasure hunts, and more. Build your streak faster and unlock badges sooner.
                     </p>
                   </div>
                 </div>
@@ -91,10 +91,10 @@ const HuntPassPage = () => {
                   <div className="text-3xl flex-shrink-0">⚡</div>
                   <div>
                     <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                      Early Access to Flash Deals
+                      6-Hour Early Access to Flash Deals
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Get notified first when flash deals go live. See the best treasures before other shoppers, so you never miss out on amazing finds.
+                      Get notified 6 hours before other shoppers when flash deals go live. See the best treasures first, so you never miss out on amazing finds.
                     </p>
                   </div>
                 </div>
@@ -117,6 +117,66 @@ const HuntPassPage = () => {
             </div>
           </div>
 
+          {/* XP Earning Matrix */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">
+              XP Earning Matrix
+            </h2>
+            <p className="text-warm-600 dark:text-warm-400 mb-4">
+              See how much XP you earn for each action with and without Hunt Pass.
+            </p>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-warm-100 dark:bg-gray-700">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Action</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Standard XP</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-purple-600 dark:text-purple-300">Hunt Pass XP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Visit a sale</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">5 XP</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">8 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Make a purchase ($)</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">1 XP per $1</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">1.5 XP per $1</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Treasure Hunt scan</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">25 XP</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">38 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Write an item review</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">5 XP</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">8 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Social share</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Win an auction</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">15 XP</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">23 XP</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-6 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+              <p className="text-sm text-purple-900 dark:text-purple-300">
+                <strong>Quick math:</strong> If you earn 50 XP/month without Hunt Pass, you'll earn 75 XP/month with it — saving ~3 months of progression per rank!
+              </p>
+            </div>
+          </div>
+
           {/* FAQ Section */}
           <div className="mb-12">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">
@@ -135,10 +195,10 @@ const HuntPassPage = () => {
 
               <details className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <summary className="font-semibold text-warm-900 dark:text-warm-100 cursor-pointer">
-                  How is 2x XP calculated?
+                  How is 1.5x XP calculated?
                 </summary>
                 <p className="text-warm-600 dark:text-warm-400 mt-3">
-                  Every action that normally earns XP — visiting a sale, favoriting an item, making a purchase — is doubled. This includes all individual action XP, streak multipliers, and bonus promotions.
+                  Every action that normally earns XP — visiting a sale, making a purchase, scanning items, writing reviews — is multiplied by 1.5x. This applies to all action XP rewards.
                 </p>
               </details>
 
@@ -147,7 +207,7 @@ const HuntPassPage = () => {
                   What is Streak XP?
                 </summary>
                 <p className="text-warm-600 dark:text-warm-400 mt-3">
-                  Streak XP is the reward you earn for engaging with FindA.Sale. Visit sales, favorite items, make purchases, and interact with the community to build your streak. Hunt Pass holders earn XP twice as fast, unlocking badges and exclusive rewards sooner.
+                  Streak XP is the reward you earn for engaging with FindA.Sale. Visit sales, make purchases, scan items, and interact with the community to build your streak. Hunt Pass holders earn 1.5x XP, unlocking badges and exclusive rewards sooner.
                 </p>
               </details>
 

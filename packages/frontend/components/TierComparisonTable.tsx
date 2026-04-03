@@ -87,7 +87,19 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Batch item operations',
-    simple: false,
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Link click stats',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Seller verification badge',
+    simple: true,
     pro: true,
     teams: true,
   },

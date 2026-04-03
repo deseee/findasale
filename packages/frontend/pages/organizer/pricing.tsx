@@ -49,6 +49,9 @@ const TIERS: PricingTier[] = [
       'Single sale dashboard',
       'Basic inventory management',
       'Photo upload & tagging',
+      'Batch operations',
+      'Link click stats',
+      'Seller verification badge',
       'FAQ + Organizer Guide',
       'Email support',
     ],
@@ -390,6 +393,53 @@ const PricingPage = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* À la Carte Section — Pay-as-you-go option */}
+          <div className="mb-12 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8 text-center">
+            <div className="max-w-2xl mx-auto">
+              <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
+                Just one sale? Pay as you go.
+              </h2>
+              <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
+                No monthly commitment. Publish a single sale for <strong>$9.99</strong>.
+              </p>
+
+              {/* Features for à la carte */}
+              <div className="grid md:grid-cols-3 gap-4 mb-8">
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                    Everything in SIMPLE
+                  </p>
+                  <p className="text-xs text-warm-600 dark:text-warm-300">
+                    All features, one time
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                    One-time payment
+                  </p>
+                  <p className="text-xs text-warm-600 dark:text-warm-300">
+                    No recurring fees
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                    No subscription required
+                  </p>
+                  <p className="text-xs text-warm-600 dark:text-warm-300">
+                    Cancel anytime
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                href="/organizer/create-sale"
+                className="inline-block bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200"
+              >
+                Create a single sale
+              </Link>
+            </div>
           </div>
 
           {/* Premium CTA for SIMPLE tier users */}

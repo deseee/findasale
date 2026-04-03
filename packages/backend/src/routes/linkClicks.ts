@@ -11,8 +11,8 @@ const router = express.Router();
 router.get('/record', recordClickHandler);
 
 /**
- * Protected endpoint — requires organizer auth + PRO tier
+ * Protected endpoint — requires organizer auth + SIMPLE tier (moved from PRO in S391)
  */
-router.get('/stats/:saleId', authenticate, requireTier('PRO'), getStatsHandler);
+router.get('/stats/:saleId', authenticate, requireTier('SIMPLE'), getStatsHandler);
 
 export default router;

@@ -635,6 +635,41 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
+          {/* Tier Progress Widget — show upgrade CTAs for SIMPLE and PRO tiers */}
+          {isClient && user?.organizerTier === 'SIMPLE' && (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-6 mb-8">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: SIMPLE</h3>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Unlock more features — PRO is just $29/mo</p>
+                  <p className="text-sm text-warm-700 dark:text-warm-300">
+                    <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit • Command Center
+                  </p>
+                </div>
+                <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
+                  Upgrade to PRO
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {isClient && user?.organizerTier === 'PRO' && (
+            <div className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-6 mb-8">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: PRO</h3>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Scale with your team — TEAMS is $79/mo</p>
+                  <p className="text-sm text-warm-700 dark:text-warm-300">
+                    <strong>TEAMS includes:</strong> Multi-user workspace • API access • White-label support
+                  </p>
+                </div>
+                <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
+                  Learn about TEAMS
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* STATE-AWARE CONTENT */}
 
           {dashboardState === 'new' && (
@@ -671,6 +706,13 @@ const OrganizerDashboard = () => {
                 </Link>
                 <p className="text-sm text-warm-600 dark:text-warm-400">
                   <Link href="#" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 underline">Watch a quick tour</Link>
+                </p>
+              </div>
+
+              {/* À la Carte callout for new organizers */}
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 text-center">
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  <strong className="text-warm-900 dark:text-warm-100">Just testing?</strong> Try our à la carte option: publish a single sale for <strong>$9.99</strong> — no monthly commitment needed.
                 </p>
               </div>
 

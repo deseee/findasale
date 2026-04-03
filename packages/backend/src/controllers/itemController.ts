@@ -1474,7 +1474,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Import awardXp and cap check here to avoid circular dependency
-    const { awardXp, checkDailyXpCap, XP_AWARDS } = await import('../services/xpService');
+    const { awardXp, checkDailyXpCap, XP_AWARDS, getRankXpMultiplier } = await import('../services/xpService');
 
     // Check if user has already scanned this item today (prevent duplicate scans)
     const today = new Date();
@@ -1498,9 +1498,25 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    // Get user's current rank for XP multiplier calculation
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { explorerRank: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found.' });
+      return;
+    }
+
+    // Apply rank-based multiplier to base XP
+    const baseXp = XP_AWARDS.ITEM_SCANNED;
+    const rankMultiplier = getRankXpMultiplier(user.explorerRank);
+    const multipliedXp = Math.round(baseXp * rankMultiplier);
+
     // Check daily cap for ITEM_SCANNED XP
     const dailyRemaining = await checkDailyXpCap(userId, 'ITEM_SCANNED');
-    const xpToAward = Math.min(25, dailyRemaining);
+    const xpToAward = Math.min(multipliedXp, dailyRemaining);
 
     if (xpToAward === 0) {
       res.status(200).json({
@@ -1510,7 +1526,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Award XP (respecting daily cap)
+    // Award XP (respecting daily cap and rank multiplier)
     const xpResult = await awardXp(userId, 'ITEM_SCANNED', xpToAward, { itemId });
 
     // Find or create "Item Scout" badge

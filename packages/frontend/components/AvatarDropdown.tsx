@@ -879,10 +879,10 @@ const AvatarDropdown: React.FC = () => {
                     href="/shopper/explorer-passport"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Your full shopper profile, badges, and history"
+                    title="Your collector journey, badges, and discovery history"
                   >
                     <Award size={16} className="text-indigo-500" />
-                    <span>Explorer Passport</span>
+                    <span>Collector Passport</span>
                   </Link>
                   <Link
                     href="/shopper/hunt-pass"
