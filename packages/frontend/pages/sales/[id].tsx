@@ -40,6 +40,8 @@ import LeaveSaleWarning from '../../components/LeaveSaleWarning'; // Feature #12
 import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart Cart
 import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: Smart Cart
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
+import ActivityFeed from '../../components/ActivityFeed'; // Feature #51: Activity Feed + HypeMeter
+import HypeMeter from '../../components/HypeMeter'; // Feature #51: Hype Meter (viewer count)
 
 
 interface Sale {
@@ -549,6 +551,11 @@ const SaleDetailPage = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Feature #51: Hype Meter — Live Viewer Count */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          <HypeMeter saleId={id as string} />
         </div>
 
         {/* Flash Deal Banner */}
@@ -1162,6 +1169,11 @@ const SaleDetailPage = () => {
             </div>
           </div>
         )}
+
+        {/* Feature #51: Activity Feed — Recent Activity + Social Proof */}
+        <div className="mt-12">
+          <ActivityFeed saleId={id as string} />
+        </div>
 
       </main>
 

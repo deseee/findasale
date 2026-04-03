@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { recalculateShopperRating } from '../services/reputationService';
 
 // POST /api/reviews — authenticated shoppers only, one review per sale
 export const createReview = async (req: AuthRequest, res: Response) => {
@@ -100,6 +101,10 @@ export const createReview = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Wave 2B: Update OrganizerReputation.shopperRating (fire-and-forget)
+    recalculateShopperRating(sale.organizer.id).catch((err) => {
+      console.error('[reviewController] Error updating shopperRating:', err);
+    });
 
     return res.status(201).json(review);
   } catch (error) {
@@ -177,6 +182,105 @@ export const getOrganizerReviews = async (req: Request, res: Response) => {
     return res.json({ reviews, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Get organizer reviews error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+// GET /api/reviews/organizer/:organizerId/all — authenticated organizer only, all reviews for their sales
+export const getOrganizerAllReviews = async (req: AuthRequest, res: Response) => {
+  try {
+    const { organizerId } = req.params;
+    const page = Math.max(1, parseInt(String(req.query.page || '1')));
+    const limit = Math.min(50, parseInt(String(req.query.limit || '10')));
+    const skip = (page - 1) * limit;
+
+    // Verify this organizer belongs to the authenticated user
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId }
+    });
+    if (!organizer || organizer.userId !== req.user!.id) {
+      return res.status(403).json({ error: 'Not your organizer profile' });
+    }
+
+    // Get all reviews for this organizer's sales (including unapproved ones)
+    const [reviews, total] = await Promise.all([
+      prisma.review.findMany({
+        where: {
+          sale: { organizerId }
+        },
+        include: {
+          user: { select: { name: true, id: true } },
+          sale: { select: { id: true, title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.review.count({
+        where: {
+          sale: { organizerId }
+        }
+      }),
+    ]);
+
+    return res.json({ reviews, total, page, pages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('Get organizer all reviews error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+// PATCH /api/reviews/:reviewId/respond — Organizer responds to a review
+export const respondToReview = async (req: AuthRequest, res: Response) => {
+  try {
+    const { reviewId } = req.params;
+    const { response } = req.body;
+
+    if (!response || response.trim().length === 0) {
+      return res.status(400).json({ error: 'Response text is required' });
+    }
+
+    // Get the organizer record for this user
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user!.id }
+    });
+    if (!organizer) {
+      return res.status(403).json({ error: 'Not an organizer' });
+    }
+
+    // Find the review and verify it belongs to one of this organizer's sales
+    const review = await prisma.review.findUnique({
+      where: { id: reviewId },
+      include: { sale: true }
+    });
+    if (!review) {
+      return res.status(404).json({ error: 'Review not found' });
+    }
+    if (review.sale?.organizerId !== organizer.id) {
+      return res.status(403).json({ error: 'Not your review to respond to' });
+    }
+
+    // Update response + timestamp
+    const updated = await prisma.review.update({
+      where: { id: reviewId },
+      data: {
+        response: response.trim(),
+        respondedAt: new Date()
+      },
+      include: {
+        user: { select: { name: true, id: true } },
+        sale: { select: { id: true, title: true, organizerId: true } }
+      }
+    });
+
+    // Wave 2B: Update shopperRating (fire-and-forget)
+    recalculateShopperRating(updated.sale.organizerId).catch((err) => {
+      console.error('[reviewController] Error updating shopperRating after response:', err);
+    });
+
+    return res.json(updated);
+  } catch (error) {
+    console.error('Respond to review error:', error);
     return res.status(500).json({ message: 'Server error.' });
   }
 };

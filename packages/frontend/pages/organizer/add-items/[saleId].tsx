@@ -47,6 +47,7 @@ import BulkTagModal from '../../../components/BulkTagModal';
 import BulkActionDropdown from '../../../components/BulkActionDropdown';
 import BulkCategoryModal from '../../../components/BulkCategoryModal';
 import BulkStatusModal from '../../../components/BulkStatusModal';
+import BulkPriceModal from '../../../components/BulkPriceModal';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
 import ValuationWidget from '../../../components/ValuationWidget';
 import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
@@ -372,6 +373,7 @@ const AddItemsDetailPage = () => {
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
   const [bulkCategoryModalOpen, setBulkCategoryModalOpen] = useState(false);
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
+  const [bulkPriceModalOpen, setBulkPriceModalOpen] = useState(false);
   const [bulkErrorModalOpen, setBulkErrorModalOpen] = useState(false);
   const [bulkErrorData, setBulkErrorData] = useState<{
     title: string;
@@ -622,6 +624,16 @@ const AddItemsDetailPage = () => {
       operation: 'status',
       value: status,
     });
+  };
+
+  const handleBulkPrice = async (priceType: 'fixed' | 'discount', value: number) => {
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'price',
+      priceType,
+      value,
+    });
+    setBulkPriceModalOpen(false);
   };
 
   const handleEbayExport = async () => {
@@ -1774,6 +1786,16 @@ const AddItemsDetailPage = () => {
                       🖨️ Print Kit
                     </button>
 
+                    {/* More Actions Dropdown */}
+                    <BulkActionDropdown
+                      onSetCategory={() => setBulkCategoryModalOpen(true)}
+                      onSetStatus={() => setBulkStatusModalOpen(true)}
+                      onManageTags={() => setBulkTagModalOpen(true)}
+                      onManagePhotos={() => setBulkPhotoModalOpen(true)}
+                      onSetPrice={() => setBulkPriceModalOpen(true)}
+                      disabled={bulkUpdateMutation.isPending}
+                    />
+
                     {/* Delete button */}
                     <div className="ml-auto">
                       <button
@@ -2099,6 +2121,14 @@ const AddItemsDetailPage = () => {
         selectedCount={selectedItems.size}
         onClose={() => setBulkStatusModalOpen(false)}
         onApply={handleBulkStatus}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkPriceModal
+        isOpen={bulkPriceModalOpen}
+        selectedCount={selectedItems.size}
+        onClose={() => setBulkPriceModalOpen(false)}
+        onConfirm={handleBulkPrice}
         loading={bulkUpdateMutation.isPending}
       />
 

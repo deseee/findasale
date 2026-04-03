@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+import { recalculateShopperRating } from '../services/reputationService';
 
 /**
  * Phase 22: Creator Tier Program — weekly reputation recalculation.
@@ -61,6 +62,9 @@ export const recalculateOrganizerTiers = async (): Promise<void> => {
         });
         updated++;
       }
+
+      // Wave 2B: Recalculate shopperRating in batch
+      await recalculateShopperRating(organizer.id);
     }
 
     console.log(`[reputationJob] Done — ${updated} organizer(s) updated.`);

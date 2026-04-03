@@ -106,6 +106,12 @@ const sendReceiptEmail = async (purchase: {
       subject: `Receipt: ${purchase.item?.title ?? 'Your purchase'} - Transaction ID: ${purchase.id.slice(0, 8)}`,
       html,
     });
+
+    // Update purchase record to track when confirmation email was sent
+    await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { emailSentAt: new Date() },
+    });
   } catch (err) {
     console.error('Failed to send receipt email:', err);
   }
