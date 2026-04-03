@@ -98,7 +98,7 @@ const TIERS: PricingTier[] = [
       '15 photos per item',
       'Unlimited AI tags',
       'Unlimited concurrent sales',
-      'Up to 5 team members',
+      'Up to 12 team members',
       'Multi-user workspace',
       'Team roles & permissions',
       'CSV exports',
