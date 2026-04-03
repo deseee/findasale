@@ -93,7 +93,7 @@ const PlanPage = () => {
         <title>Sale Planning Assistant | FindA.Sale</title>
         <meta
           name="description"
-          content={`Get free guidance from an AI assistant about planning your sale in ${defaultState}`}
+          content={`Get free guidance from a planning assistant about organizing your sale in ${defaultState}`}
         />
       </Head>
 
@@ -149,9 +149,9 @@ const PlanPage = () => {
                   {msg.role === 'assistant' && (
                     <div className="flex items-start gap-2 mb-2">
                       <div className="w-6 h-6 rounded-full bg-sage-600 text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">
-                        AI
+                        A
                       </div>
-                      <span className="text-xs text-warm-500 dark:text-warm-400 font-medium">Planning Assistant</span>
+                      <span className="text-xs text-warm-500 dark:text-warm-400 font-medium">Assistant</span>
                     </div>
                   )}
                   <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
@@ -164,7 +164,7 @@ const PlanPage = () => {
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 px-4 py-3 rounded-lg rounded-bl-none">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-sage-600 text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">
-                      AI
+                      A
                     </div>
                     <div className="flex gap-1">
                       <span className="w-2 h-2 bg-warm-400 rounded-full animate-bounce"></span>

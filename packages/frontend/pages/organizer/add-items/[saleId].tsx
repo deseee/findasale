@@ -1028,18 +1028,6 @@ const AddItemsDetailPage = () => {
     }
   };
 
-  const showShotGuidance = (shotNumber: number) => {
-    const messages = [
-      'Great first shot! This will be your listing photo. Want to add a back view or maker\'s mark?',
-      'Two down! Look for any maker\'s marks or labels — these are the most valuable shots.',
-      'You\'ve got the minimum! Want to add a detail or damage photo, or are you ready to review?',
-      'Four photos — almost complete. Any damage to be honest about? Or scale reference?',
-      '⭐ Five photos is excellent! Ready to review and tag?',
-    ];
-    const msg = messages[Math.min(shotNumber - 1, messages.length - 1)] || messages[messages.length - 1];
-    showToast(msg, 'info');
-  };
-
   // Poll for AI draft analysis completion (draftStatus: DRAFT → PENDING_REVIEW)
   const pollForAI = (itemId: string) => {
     let attempts = 0;

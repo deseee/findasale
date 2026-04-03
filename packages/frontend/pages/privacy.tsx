@@ -48,7 +48,7 @@ const PrivacyPage = () => {
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Content You Upload</h3>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               Organizers upload item photos, which we store via Cloudinary. We may pass uploaded images through
-              third-party AI services to generate suggested item descriptions; those
+              automated analysis services to generate suggested item descriptions; those
               descriptions are saved only if the Organizer accepts them.
             </p>
 
@@ -103,8 +103,8 @@ const PrivacyPage = () => {
                 sent to Sentry for monitoring.
               </li>
               <li>
-                <strong>AI Services:</strong> If AI tagging is enabled, item photos may be sent to third-party AI
-                services for label generation. No personally identifiable information is included
+                <strong>Auto-Tagging Services:</strong> If auto-tagging is enabled, item photos may be sent to automated
+                analysis services for label generation. No personally identifiable information is included
                 in these requests.
               </li>
               <li>

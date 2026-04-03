@@ -136,6 +136,38 @@ const shopperFAQs: FAQItem[] = [
       </>
     ),
   },
+  {
+    question: 'What is the Explorer\'s Guild?',
+    answer: (
+      <>
+        The Explorer's Guild is our loyalty program. You earn Guild XP by visiting sales, making purchases, and completing seasonal challenges. As you earn XP, you progress through ranks — Initiate, Scout, Ranger, Sage, and Grandmaster — each unlocking perks like longer hold times and Hunt Pass discounts.
+      </>
+    ),
+  },
+  {
+    question: 'What are seasonal challenges?',
+    answer: (
+      <>
+        Each season (Spring, Summer, Fall, Winter) brings themed challenges — like visiting a certain number of sales or collecting items in specific categories. Complete challenges to earn bonus XP and exclusive seasonal badges.
+      </>
+    ),
+  },
+  {
+    question: 'What is the Collector Passport?',
+    answer: (
+      <>
+        Your Collector Passport is your personal profile showing your Explorer rank, earned badges, specialties, and collection highlights. It's your identity in the FindA.Sale community.
+      </>
+    ),
+  },
+  {
+    question: 'What is a Condition Rating?',
+    answer: (
+      <>
+        Every item on FindA.Sale has a condition rating: Excellent, Good, Fair, Poor, or As-Is. These help you know what to expect before you visit. See our full Condition Guide for details.
+      </>
+    ),
+  },
 ];
 
 const organizerFAQs: FAQItem[] = [
@@ -183,12 +215,12 @@ const organizerFAQs: FAQItem[] = [
     ),
   },
   {
-    question: 'How does the AI auto-tagging work?',
+    question: 'How does auto-tagging work?',
     answer: (
       <>
-        After you upload a photo, our AI analyzes the image and suggests
+        After you upload a photo, our system analyzes the image and suggests
         a title, description, category, and tags. You review each suggestion and apply, edit, or dismiss
-        as you see fit. The AI saves time on the first draft — you stay in control of the final listing.
+        as you see fit. Auto-tagging saves time on the first draft — you stay in control of the final listing.
       </>
     ),
   },
@@ -244,6 +276,30 @@ const organizerFAQs: FAQItem[] = [
         From your sale dashboard, click <strong>Export</strong> to download a CSV of your full inventory.
         The file includes titles, descriptions, prices, categories, tags, and sold status — useful for
         accounting, record-keeping, or import into other systems.
+      </>
+    ),
+  },
+  {
+    question: 'What\'s the difference between SIMPLE, PRO, and TEAMS?',
+    answer: (
+      <>
+        SIMPLE is free — you get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics, the Command Center, export tools, and more. TEAMS ($79/month) adds multi-user workspaces with roles and permissions for organizations that run sales together.
+      </>
+    ),
+  },
+  {
+    question: 'What is the Brand Kit?',
+    answer: (
+      <>
+        Brand Kit lets you customize your organizer profile with your logo, colors, and a custom URL. Basic branding (logo and colors) is available on all plans. PRO unlocks custom fonts, banners, and accent colors.
+      </>
+    ),
+  },
+  {
+    question: 'What is the Command Center?',
+    answer: (
+      <>
+        The Command Center is a PRO feature that gives you a real-time dashboard across all your active sales — track items, holds, messages, and performance in one place.
       </>
     ),
   },

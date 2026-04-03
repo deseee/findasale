@@ -547,9 +547,9 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                   <div className="p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm">
                     <strong>Analysis Failed</strong>
                     <p className="text-xs mt-1">
-                      {item.errorCode === 'AI_TIMEOUT' && 'AI service timed out'}
-                      {item.errorCode === 'AI_RATE_LIMIT' && 'AI service busy — try again later'}
-                      {item.errorCode === 'AI_PARSE_ERROR' && 'AI returned invalid data'}
+                      {item.errorCode === 'AI_TIMEOUT' && 'Analysis service timed out'}
+                      {item.errorCode === 'AI_RATE_LIMIT' && 'Analysis service busy — try again later'}
+                      {item.errorCode === 'AI_PARSE_ERROR' && 'Analysis returned invalid data'}
                       {!item.errorCode && (item.error || 'Unable to analyze this image')}
                     </p>
                   </div>

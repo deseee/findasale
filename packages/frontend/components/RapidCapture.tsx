@@ -115,6 +115,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [torchSupported, setTorchSupported] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [photosThisItem, setPhotosThisItem] = useState(0);
+  const [coachingBannerDismissed, setCoachingBannerDismissed] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number }>({ min: 1, max: 5 });
@@ -758,6 +759,29 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 onClick={() => onAddToItem(addingToItemId)}
                 className="text-white/60 hover:text-white text-sm"
                 aria-label="Cancel add mode"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Coaching banner (regular mode only) */}
+          {!isRapidfire && !coachingBannerDismissed && (
+            <div className="bg-black/60 border-t border-white/10 px-4 py-1.5 flex items-center justify-between text-xs h-10">
+              <div className="flex-1">
+                <span className="text-white text-sm">
+                  {photosThisItem === 0 && "Start with the front view — this becomes your listing photo"}
+                  {photosThisItem === 1 && "Shot 1 ✓ — Add a back view or maker's mark next"}
+                  {photosThisItem === 2 && "Shot 2 ✓ — Look for labels, tags, or maker's marks"}
+                  {photosThisItem === 3 && "Shot 3 ✓ — Add a detail or condition shot"}
+                  {photosThisItem === 4 && "Shot 4 ✓ — One more for complete coverage!"}
+                  {photosThisItem >= 5 && "Great coverage! Ready to review"}
+                </span>
+              </div>
+              <button
+                onClick={() => setCoachingBannerDismissed(true)}
+                className="text-white/60 hover:text-white text-sm ml-3 flex-shrink-0"
+                aria-label="Dismiss coaching banner"
               >
                 ✕
               </button>

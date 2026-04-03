@@ -103,7 +103,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <h4 className="font-semibold text-warm-900 mb-1">
-                AI Price Suggestion
+                Smart Price Suggestion
               </h4>
               <p className="text-sm text-warm-600">
                 <span className="font-medium text-amber-700">

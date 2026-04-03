@@ -89,11 +89,11 @@ const sections: Section[] = [
           or condition details help shoppers make confident decisions.
         </p>
 
-        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">AI Auto-Tagging</h3>
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Smart Auto-Tagging</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          After you upload photos, our AI suggests a title, description, category, and tags based on
+          After you upload photos, our system suggests a title, description, category, and tags based on
           what it sees. Review each suggestion — you know your items best. Accept useful suggestions,
-          dismiss irrelevant ones, or edit them freely. The AI handles the first draft; you refine it.
+          dismiss irrelevant ones, or edit them freely. Smart tagging handles the first draft; you refine it.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Setting Price</h3>

@@ -32,7 +32,7 @@ const STEPS = [
   {
     headline: 'Great photos = more sales',
     subtext:
-      'Use your phone camera. Our AI automatically tags items and suggests prices. Blurry photos get flagged — we\'ll tell you which ones to retake.',
+      'Use your phone camera. Smart tagging automatically suggests descriptions and prices. Blurry photos get flagged — we\'ll tell you which ones to retake.',
     visual: (
       <div className="text-center mb-6">
         <div className="text-6xl">📷</div>

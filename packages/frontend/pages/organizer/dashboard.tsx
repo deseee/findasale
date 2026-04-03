@@ -661,8 +661,8 @@ const OrganizerDashboard = () => {
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                   <p className="text-4xl mb-3">🤖</p>
-                  <p className="font-semibold text-warm-900 dark:text-warm-100 mb-2">List items with photos — AI tags them automatically</p>
-                  <p className="text-sm text-warm-600 dark:text-warm-400">Snap photos and let AI handle the descriptions</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 mb-2">List items with photos — smart tagging suggests descriptions</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">Snap photos and get auto-tagged suggestions instantly</p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                   <p className="text-4xl mb-3">💰</p>

@@ -11,9 +11,9 @@ import { prisma } from '../lib/prisma';
 export const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   INITIATE: 0,
   SCOUT: 500,
-  RANGER: 1500,
-  SAGE: 2500,
-  GRANDMASTER: 5000,
+  RANGER: 2000,
+  SAGE: 5000,
+  GRANDMASTER: 12000,
 };
 
 // Seasonal reset floor — when resetting, users drop to this rank minimum
@@ -27,13 +27,13 @@ export const SEASONAL_RESET_FLOOR: Record<ExplorerRank, ExplorerRank> = {
 
 // XP awards for different event types
 export const XP_AWARDS = {
-  // Visits (per spec Decision 2, base 10 XP)
-  VISIT: 10,
+  // Visits (per spec Decision 2, base 5 XP)
+  VISIT: 5,
   COMEBACK_BONUS: 20, // One-time if returning after 2+ weeks away
   STREAK_BONUS_PER_WEEK: 2, // Max +10 XP at 5+ consecutive weeks
 
   // Purchases and engagement
-  PURCHASE: 15, // Base for completed purchase
+  PURCHASE: 1, // Base for completed purchase ($1 = 1 XP)
   REVIEW: 5, // For leaving a product review
   SHARE: 10, // For social share (honor system)
   ITEM_SCANNED: 25, // Feature #85: Treasure Hunt QR scan

@@ -56,7 +56,7 @@ const TIERS: PricingTier[] = [
   {
     id: 'PRO',
     name: 'PRO',
-    price: 49,
+    price: 29,
     period: 'per month',
     description: 'For growing organizers',
     featured: true,
@@ -87,7 +87,7 @@ const TIERS: PricingTier[] = [
   {
     id: 'TEAMS',
     name: 'TEAMS',
-    price: 99,
+    price: 79,
     period: 'per month',
     description: 'For enterprise operations',
     featured: false,

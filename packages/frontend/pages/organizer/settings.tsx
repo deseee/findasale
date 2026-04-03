@@ -426,7 +426,7 @@ const OrganizerSettingsPage = () => {
                   )}
                 </div>
 
-                {/* B2: AI Assistance toggle */}
+                {/* B2: Smart Tagging toggle */}
                 <div className="border-t border-warm-100 dark:border-gray-700 pt-4 mt-2">
                   <label className="flex items-center gap-3">
                     <input
@@ -441,7 +441,7 @@ const OrganizerSettingsPage = () => {
                       className="w-4 h-4 rounded"
                     />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-warm-800 dark:text-gray-200">AI Assistance</p>
+                      <p className="text-sm font-medium text-warm-800 dark:text-gray-200">Smart Tagging</p>
                       <p className="text-sm text-warm-600 dark:text-gray-400">
                         Let our system auto-suggest tags and descriptions when you add items. We&apos;ll always flag what&apos;s auto-suggested so you can review and change it.
                       </p>
