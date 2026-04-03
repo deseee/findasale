@@ -76,6 +76,18 @@ const OrganizerDashboard = () => {
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
+  const { data: flashDealItems = [] } = useQuery<Array<{ id: string; title: string; price: number }>>({
+    queryKey: ['flash-deal-items', flashDealSaleId],
+    queryFn: async () => {
+      const res = await api.get(`/items?saleId=${flashDealSaleId}&limit=200`);
+      return (res.data.items ?? res.data).map((item: { id: string; title: string; price?: number }) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price ?? 0,
+      }));
+    },
+    enabled: !!flashDealSaleId,
+  });
   const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [cloningId, setCloningId] = useState<string | null>(null);
@@ -451,7 +463,9 @@ const OrganizerDashboard = () => {
       {flashDealSaleId && (
         <FlashDealForm
           saleId={flashDealSaleId}
+          saleItems={flashDealItems}
           onCancel={() => setFlashDealSaleId(null)}
+          onSuccess={() => setFlashDealSaleId(null)}
         />
       )}
 
