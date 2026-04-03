@@ -49,7 +49,7 @@ import SimilarItems from '../../components/SimilarItems';
 import AddToCalendarButton from '../../components/AddToCalendarButton';
 import LocationMap from '../../components/LocationMap';
 import SocialProofBadge from '../../components/SocialProofBadge';
-import { useSocialProof } from '../../hooks/useSocialProof';
+import { useSaleSocialProof } from '../../hooks/useSocialProof';
 import BountyModal from '../../components/BountyModal';
 
 
@@ -242,7 +242,7 @@ const SaleDetailPage = () => {
   const { data: approachNotes, isLoading: approachNotesLoading } = useArrivalAssistant(id as string);
 
   // Feature #67: Fetch social proof metrics for this sale
-  const { data: saleSocialProof, isLoading: socialProofLoading } = useSocialProof(id as string, 'sale');
+  const { data: saleSocialProof, isLoading: socialProofLoading } = useSaleSocialProof(id as string);
 
   const handleBuyNow = (itemId: string, itemTitle: string) => {
     setCheckoutItem({ id: itemId, title: itemTitle });
