@@ -38,6 +38,19 @@ export const XP_AWARDS = {
   REVIEW: 5, // For leaving a product review
   SHARE: 10, // For social share (honor system)
   ITEM_SCANNED: 25, // Feature #85: Treasure Hunt QR scan
+  CONDITION_RATING: 3, // Feature #145: Shopper rates item condition
+
+  // RSVPs and engagement
+  RSVP: 2, // Feature #154: Shopper RSVPs to sale (capped 10/month)
+
+  // Streak milestones
+  STREAK_MILESTONE_5: 5, // 5-day streak bonus
+  STREAK_MILESTONE_10: 10, // 10-day streak bonus
+  STREAK_MILESTONE_20: 20, // 20-day streak bonus
+
+  // Collections and challenges
+  COLLECTOR_PASSPORT_COMPLETE: 50, // One-time: 5+ categories collected
+  TRAIL_COMPLETE: 100, // One-time per trail: all QR codes found
 
   // Auctions (per spec Decision 5, wins only)
   AUCTION_WIN: 15,
@@ -60,6 +73,7 @@ export const XP_SINKS = {
 export const MONTHLY_XP_CAPS = {
   VISIT: 150,
   AUCTION: 100,
+  RSVP: 10, // Max 10 XP from RSVPs per calendar month
 };
 
 // Daily XP caps (exploit prevention)
@@ -156,6 +170,48 @@ export async function checkDailyXpCap(
   } catch (error) {
     console.error(
       `[xpService] Failed to check daily cap for ${type}:`,
+      error
+    );
+    return cap; // Return full cap on error (fail open)
+  }
+}
+
+/**
+ * Check if user has reached monthly XP cap for a given type
+ * Returns remaining XP that can be awarded this month (0 if cap reached)
+ * Monthly period is calendar month (1st to last day)
+ */
+export async function checkMonthlyXpCap(
+  userId: string,
+  type: string
+): Promise<number> {
+  const cap = MONTHLY_XP_CAPS[type as keyof typeof MONTHLY_XP_CAPS];
+  if (!cap) return Number.MAX_SAFE_INTEGER; // No cap for this type
+
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+
+    const monthXp = await prisma.pointsTransaction.aggregate({
+      where: {
+        userId,
+        type,
+        createdAt: {
+          gte: monthStart,
+        },
+      },
+      _sum: {
+        points: true,
+      },
+    });
+
+    const awarded = monthXp._sum.points || 0;
+    const remaining = Math.max(0, cap - awarded);
+    return remaining;
+  } catch (error) {
+    console.error(
+      `[xpService] Failed to check monthly cap for ${type}:`,
       error
     );
     return cap; // Return full cap on error (fail open)
@@ -447,5 +503,67 @@ export function getRankXpMultiplier(rank: ExplorerRank): number {
     case 'INITIATE':
     default:
       return 1.0;
+  }
+}
+
+/**
+ * Check and award streak milestone bonuses
+ * Called when a streak is incremented. Checks if it just crossed 5, 10, or 20 days.
+ * Prevents duplicate awards via PointsTransaction history check.
+ */
+export async function checkStreakMilestones(
+  userId: string,
+  newStreakDays: number
+): Promise<void> {
+  const milestones = [5, 10, 20];
+
+  for (const milestone of milestones) {
+    if (newStreakDays === milestone) {
+      try {
+        // Check if user already earned this milestone in the current month
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const existingMilestone = await prisma.pointsTransaction.findFirst({
+          where: {
+            userId,
+            type: `STREAK_MILESTONE_${milestone}`,
+            createdAt: { gte: monthStart },
+          },
+        });
+
+        // Only award if not already earned this milestone this month
+        if (!existingMilestone) {
+          const xpAmount = XP_AWARDS[`STREAK_MILESTONE_${milestone}` as keyof typeof XP_AWARDS] || 0;
+          if (xpAmount > 0) {
+            await awardXp(userId, `STREAK_MILESTONE_${milestone}`, xpAmount, {
+              description: `${milestone}-day streak milestone reached`,
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`[xpService] Failed to check streak milestone ${milestone}:`, error);
+      }
+    }
+  }
+}
+
+/**
+ * Check if user has already earned trail completion bonus
+ * Returns true if XP has already been awarded for this trail
+ */
+export async function hasEarnedTrailBonus(userId: string, trailId: string): Promise<boolean> {
+  try {
+    const existing = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId,
+        type: 'TRAIL_COMPLETE',
+        description: { contains: trailId },
+      },
+    });
+    return !!existing;
+  } catch (error) {
+    console.error('[xpService] Failed to check trail bonus:', error);
+    return false;
   }
 }

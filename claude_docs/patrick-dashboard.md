@@ -4,9 +4,9 @@
 
 ## Status
 
-- **Vercel:** ⚠️ S390 push pending (12 files changed, 1 new — see push block below)
-- **Railway:** ⚠️ S390 backend push pending (4 backend files)
-- **DB:** ⚠️ S389 migration still pending — concurrent sales gate index (see S389 action items)
+- **Vercel:** ⚠️ S390b push pending — see push block below (23 files total)
+- **Railway:** ⚠️ S390b backend push pending (5 backend files)
+- **DB:** ✅ S389 concurrent sales migration complete (Patrick confirmed)
 
 ---
 

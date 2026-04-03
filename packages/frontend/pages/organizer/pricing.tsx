@@ -329,7 +329,7 @@ const PricingPage = () => {
                       {tier.id === 'PRO' &&
                         'Best for active organizers. Lower fees (8%) plus tools that speed up your workflow and bring more buyers to your sales.'}
                       {tier.id === 'TEAMS' &&
-                        'For companies or families running multiple sales at once. One account, multiple organizers.'}
+                        'For companies or families running multiple sales at once. One account, multiple organizers. Solo power users: unlock API access, webhooks, and white-label integrations.'}
                     </p>
 
                     {/* Price */}

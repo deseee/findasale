@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
+import { awardXp, checkMonthlyXpCap, XP_AWARDS } from '../services/xpService';
 
 // POST /sales/:id/rsvp — add/toggle RSVP for current user
 export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
@@ -41,6 +42,22 @@ export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
           userId: req.user.id,
         },
       });
+
+      // Award XP for RSVP (capped 10 XP/month)
+      try {
+        const remaining = await checkMonthlyXpCap(req.user.id, 'RSVP');
+        if (remaining > 0) {
+          const xpToAward = Math.min(XP_AWARDS.RSVP, remaining);
+          await awardXp(req.user.id, 'RSVP', xpToAward, {
+            saleId,
+            description: `RSVP to sale: ${sale.title}`,
+          });
+        }
+      } catch (error) {
+        console.error('[rsvpController] Failed to award RSVP XP:', error);
+        // Non-blocking: continue if XP award fails
+      }
+
       res.json({ message: 'RSVP added', isGoing: true, rsvp });
     }
   } catch (error) {

@@ -164,7 +164,7 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'API access & webhooks',
+    name: 'API access & webhooks (connect to your tools)',
     simple: false,
     pro: false,
     teams: true,

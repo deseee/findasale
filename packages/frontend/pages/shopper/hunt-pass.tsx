@@ -114,6 +114,36 @@ const HuntPassPage = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Benefit 4: Golden Trophy Avatar Frame */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">🏆</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      Golden Trophy Avatar Frame
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      Display an exclusive golden avatar frame on your profile and leaderboard. Stand out as a premium Hunt Pass member in the community.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Benefit 5: Hunt Pass Insider Newsletter */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">📧</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      Hunt Pass Insider Newsletter
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      Get exclusive tips, early sale previews, and featured finds delivered to your inbox. Stay ahead of the hunt with insider knowledge.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -7,6 +7,44 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S390b COMPLETE (2026-04-03):** Deferred + gap items from alignment doc — 5 parallel agents, all zero TS errors.
+
+**S390b Summary:**
+
+Implemented all remaining S389 alignment items: backend XP sources, share moments, Hunt Pass cosmetic add-ons, feature audits.
+
+**Agent 1 — Backend XP + Gating (4 files):** RSVP 2 XP (monthly cap 10) wired to rsvpController. Trail completion 100 XP wired to trailController. Legendary-first access 6h gating in flashDealController (Sage+/Hunt Pass see flash deals 6h early). xpService.ts: 7 new XP action types added (CONDITION_RATING, RSVP, STREAK_MILESTONE_5/10/20, TRAIL_COMPLETE, COLLECTOR_PASSPORT_COMPLETE), checkMonthlyXpCap(), checkStreakMilestones(), hasEarnedTrailBonus() functions. Skipped: condition rating (no endpoint), streak milestone trigger (function ready, no hook point), passport completion (needs schema migration).
+
+**Agent 2 — Frontend Nav/Dashboard Gaps (3 files):** Command Center nav already existed (line 340 Layout.tsx — confirmed present, no change). Explorer's Guild onboarding card added to shopper/dashboard.tsx (shows for INITIATE or guildXp < 50, dismissible, localStorage persisted). TEAMS solo differentiator copy updated on pricing.tsx + TierComparisonTable.tsx ("API access, webhooks, white-label for solo power users").
+
+**Agent 3 — Share Moments (3 files):** Post-purchase "Share Your Haul" CTA on checkout-success.tsx (Web Share API + clipboard fallback). Rank achievement share button on notifications.tsx (appears on rank-up notification type). Trail completion share on trails/[trailId].tsx (celebration section + share when all stops found).
+
+**Agent 4 — Hunt Pass Cosmetic Option A (4 files):** Golden Trophy amber ring frame in AvatarDropdown.tsx (ring-2 ring-amber-400 when huntPassActive). Hunt-pass.tsx: added "🏆 Golden Trophy avatar frame" + "📧 Hunt Pass Insider newsletter" benefits. league.tsx: Hunt Pass badge (🏆) next to subscriber names on leaderboard. loyaltyController.ts: huntPassActive added to getCollectorLeague select.
+
+**Agent 5 — Feature Audit + Brand Follow Fix (1 file):** Haul Posts (#88) = DEAD — backend complete, frontend has coming-soon page only, needs 2 new pages + nav (8-12h effort). Brand Follow (#87) = PARTIAL→FIXED — BrandFollowManager was present but not mounted in dashboard Brands tab; agent wired it (5 lines in shopper/dashboard.tsx). Now LIVE.
+
+**S390b Files Changed:**
+- `packages/backend/src/services/xpService.ts` — 7 new XP types + 3 helper functions
+- `packages/backend/src/controllers/rsvpController.ts` — RSVP 2 XP wired
+- `packages/backend/src/controllers/trailController.ts` — trail completion 100 XP
+- `packages/backend/src/controllers/flashDealController.ts` — 6h legendary-first access gate
+- `packages/backend/src/controllers/loyaltyController.ts` — huntPassActive in leaderboard
+- `packages/frontend/pages/shopper/dashboard.tsx` — Guild onboarding card + Brand Follow wiring (⚠️ dual-agent write — verify)
+- `packages/frontend/pages/organizer/pricing.tsx` — TEAMS solo copy
+- `packages/frontend/components/TierComparisonTable.tsx` — API/webhooks clarified
+- `packages/frontend/components/AvatarDropdown.tsx` — golden trophy frame
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — Option A benefits added
+- `packages/frontend/pages/shopper/league.tsx` — Hunt Pass badge on leaderboard
+- `packages/frontend/pages/shopper/checkout-success.tsx` — Share Your Haul CTA
+- `packages/frontend/pages/shopper/notifications.tsx` — rank achievement share
+- `packages/frontend/pages/shopper/trails/[trailId].tsx` — trail completion share
+
+**S390b Deferred/Flagged:**
+- Haul Posts (#88): DEAD — needs 2 new pages + nav (8-12h). Backlog.
+- Condition rating XP: No submission endpoint found to hook to. Backlog.
+- Streak milestone trigger: Function ready in xpService, no hook point found. Backlog.
+- Collector Passport completion XP: Needs schema migration for `passportCompleted` flag. Backlog.
+
 **S390 COMPLETE (2026-04-03):** S389 alignment doc implementation — all 4 open questions approved, 7 subagent dispatches across 2 parallel batches. 12 files changed, 1 new file.
 
 **S390 Summary:**

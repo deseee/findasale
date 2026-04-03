@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { randomBytes } from 'crypto';
+import { awardXp, hasEarnedTrailBonus, XP_AWARDS } from '../services/xpService';
 
 /**
  * POST /api/trails
@@ -238,6 +239,9 @@ export const completeTrail = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
+    // Check if already completed and bonus already awarded
+    const alreadyEarned = await hasEarnedTrailBonus(req.user.id, trailId);
+
     // Mark as completed
     const updated = await prisma.treasureTrail.update({
       where: { id: trailId },
@@ -246,6 +250,18 @@ export const completeTrail = async (req: AuthRequest, res: Response) => {
         completedAt: new Date(),
       },
     });
+
+    // Award XP for trail completion (one-time only)
+    if (!alreadyEarned && !trail.isCompleted) {
+      try {
+        await awardXp(req.user.id, 'TRAIL_COMPLETE', XP_AWARDS.TRAIL_COMPLETE, {
+          description: `Trail complete: ${trailId} (${trail.name})`,
+        });
+      } catch (error) {
+        console.error('[Trail] Failed to award trail completion XP:', error);
+        // Non-blocking: continue if XP award fails
+      }
+    }
 
     res.json({
       ...updated,
