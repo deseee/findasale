@@ -10,7 +10,7 @@
  * - Publish all button
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
@@ -253,6 +253,34 @@ const ReviewPage = () => {
       showToast(message, 'error');
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      return await Promise.all(itemIds.map((id) => api.delete(`/items/${id}`)));
+    },
+    onSuccess: (_data, itemIds) => {
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      setSelectedItems(new Set());
+      if (itemIds.length === 1 && expandedItemId === itemIds[0]) setExpandedItemId(null);
+      showToast(`${itemIds.length} item${itemIds.length !== 1 ? 's' : ''} deleted`, 'success');
+    },
+    onError: () => showToast('Failed to delete item(s)', 'error'),
+  });
+
+  // Item card refs for scroll-to-top on expand
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const handleToggleExpand = useCallback((itemId: string) => {
+    const next = expandedItemId === itemId ? null : itemId;
+    setExpandedItemId(next);
+    if (next) {
+      // Small delay so the card re-renders expanded before we scroll
+      setTimeout(() => {
+        const el = itemRefs.current.get(next);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    }
+  }, [expandedItemId]);
 
   // Auth + saleId guards (MUST be after all hooks to respect Rules of Hooks)
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -618,6 +646,17 @@ const ReviewPage = () => {
                           ))}
                         </select>
                         <button
+                          onClick={() => {
+                            if (window.confirm(`Delete ${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''}? This cannot be undone.`)) {
+                              deleteMutation.mutate(Array.from(selectedItems));
+                            }
+                          }}
+                          disabled={deleteMutation.isPending}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded disabled:opacity-50"
+                        >
+                          {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+                        </button>
+                        <button
                           onClick={() => setSelectedItems(new Set())}
                           className="px-3 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-warm-700 dark:text-warm-300 text-sm rounded hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
                         >
@@ -642,12 +681,13 @@ const ReviewPage = () => {
                       return (
                         <div
                           key={item.id}
+                          ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
                           className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden"
                         >
                           {/* Collapsed row — always visible */}
                           <div
                             className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged).split(' ').slice(1).join(' ')}`}
-                            onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                            onClick={() => handleToggleExpand(item.id)}
                           >
                             <input
                               type="checkbox"
@@ -737,6 +777,20 @@ const ReviewPage = () => {
                               }`}>
                                 {item.draftStatus === 'PUBLISHED' ? 'Published' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
                               </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
+                                    deleteMutation.mutate([item.id]);
+                                  }
+                                }}
+                                disabled={deleteMutation.isPending}
+                                className="text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-1"
+                                aria-label="Delete item"
+                              >
+                                🗑️
+                              </button>
                               <span className="text-warm-400 text-sm">{expandedItemId === item.id ? '▲' : '▼'}</span>
                             </div>
                           </div>
