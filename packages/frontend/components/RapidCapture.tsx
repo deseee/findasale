@@ -75,6 +75,10 @@ interface RapidCaptureProps {
     onRetake: () => void;
     pendingPhoto?: { blob: Blob; previewUrl: string };
   } | null;
+  /** Called when user clicks "Analyze" in regular mode */
+  onAnalyze?: (photos: { blob: Blob; previewUrl: string }[]) => void | Promise<void>;
+  /** Whether Analyze button is in loading state */
+  isAnalyzing?: boolean;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
@@ -94,6 +98,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   onEnhanceAll,
   qualityOverlay,
   faceDetectionOverlay,
+  onAnalyze,
+  isAnalyzing = false,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -447,20 +453,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </span>
         </div>
 
-        {/* Regular mode photo counter (dots) */}
+        {/* Regular mode photo counter (live X/5 display) */}
         {!isRapidfire && (
-          <div className="absolute top-24 left-0 right-0 z-10 flex justify-center items-center gap-2">
-            {Array.from({ length: MAX_REGULAR }).map((_, i) => (
-              <div
-                key={i}
-                className={`rounded-full transition-all ${
-                  i < photosThisItem
-                    ? 'bg-white w-2.5 h-2.5'
-                    : 'bg-white/30 w-2 h-2'
-                }`}
-              />
-            ))}
-            <span className="text-white/50 text-xs ml-1">
+          <div className="absolute top-24 left-0 right-0 z-10 flex justify-center items-center">
+            <span className="text-white text-lg font-semibold bg-black/40 backdrop-blur-sm rounded-full px-4 py-2">
               {photosThisItem}/{MAX_REGULAR}
             </span>
           </div>
@@ -827,24 +823,61 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         <div className="absolute -top-0.5 -left-0.5 text-xs">✨</div>
                       )}
 
-                      {/* "+" button — only shown once item has a real DB id (never on temp-* items) */}
-                      {item.thumbnailUrl && !item.id.startsWith('temp-') && (
+                      {/* "+" button — shown as soon as thumbnail exists (immediately visible, enabled when item has real DB id) */}
+                      {item.thumbnailUrl && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onAddToItem(item.id);
+                            if (!item.id.startsWith('temp-')) {
+                              onAddToItem(item.id);
+                            }
                           }}
                           className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white transition-all ${
-                            isAddingTo ? 'bg-amber-500' : 'bg-black/60 border border-white/50 hover:bg-black/80'
+                            isAddingTo && !item.id.startsWith('temp-')
+                              ? 'bg-amber-500'
+                              : item.id.startsWith('temp-')
+                              ? 'bg-gray-400/40 border border-white/30 opacity-50'
+                              : 'bg-black/60 border border-white/50 hover:bg-black/80'
                           }`}
                           aria-label={isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
+                          title={item.id.startsWith('temp-') ? 'Item is being processed' : isAddingTo ? 'Stop adding photos' : 'Add photos to this item'}
                         >
-                          {isAddingTo ? '×' : '+'}
+                          {isAddingTo && !item.id.startsWith('temp-') ? '×' : '+'}
                         </button>
                       )}
                     </div>
                   );
                 })}
+
+              {/* Regular mode photo thumbnails */}
+              {!isRapidfire && photos.length > 0 && photos.map((photo, index) => (
+                <div
+                  key={index}
+                  className="flex-shrink-0 relative cursor-pointer transition-all w-14 h-14 rounded-lg overflow-hidden border border-white/40"
+                  onClick={() => setSelectedIndex(index)}
+                  title={`Photo ${index + 1}`}
+                >
+                  {/* Thumbnail image */}
+                  <img
+                    src={photo.previewUrl}
+                    alt={`Captured ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Quick delete button (bottom-right corner) */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deletePhoto(index);
+                    }}
+                    className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center text-xs font-bold transition-colors shadow-lg"
+                    aria-label={`Delete photo ${index + 1}`}
+                    title="Delete photo"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>{/* end inner flex */}
             </div>{/* end outer RTL scroll */}
 
@@ -871,6 +904,66 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               )}
             </button>
           </div>
+        </div>
+
+        {/* Control buttons: Analyze (regular) / Done (rapidfire) */}
+        <div className="absolute bottom-4 left-0 right-0 z-30 flex justify-center gap-3 px-4">
+          {!isRapidfire && (
+            <>
+              {/* Analyze button (regular mode) */}
+              {photosThisItem > 0 && (
+                <button
+                  onClick={() => onAnalyze?.(
+                    photos.map(({ blob, previewUrl }) => ({ blob, previewUrl }))
+                  )}
+                  disabled={isAnalyzing}
+                  className="flex-1 max-w-xs bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold py-3 rounded-lg transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                  aria-label="Analyze photos"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>✨</span>
+                      <span>Analyze {photosThisItem}</span>
+                    </>
+                  )}
+                </button>
+              )}
+              {/* Cancel button for regular mode */}
+              <button
+                onClick={handleCancel}
+                className="flex-1 max-w-xs bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition-all active:scale-95"
+                aria-label="Cancel camera"
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          {isRapidfire && (
+            <>
+              {/* Done button (rapidfire mode) */}
+              <button
+                onClick={handleDone}
+                className="flex-1 max-w-xs bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-600 hover:to-red-600 text-white font-semibold py-3 rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                aria-label="Done capturing"
+              >
+                <span>✓</span>
+                <span>Done</span>
+              </button>
+              {/* Cancel button for rapidfire mode */}
+              <button
+                onClick={handleCancel}
+                className="flex-1 max-w-xs bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition-all active:scale-95"
+                aria-label="Cancel camera"
+              >
+                Cancel
+              </button>
+            </>
+          )}
         </div>
 
         {/* Full-screen preview overlay when a photo is tapped (regular mode filmstrip or carousel tap) */}

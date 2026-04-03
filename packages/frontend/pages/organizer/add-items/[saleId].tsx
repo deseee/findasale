@@ -294,6 +294,7 @@ const AddItemsDetailPage = () => {
   const [bulkPrice, setBulkPrice] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraAnalyzing, setCameraAnalyzing] = useState(false);
+  const [regularAnalyzing, setRegularAnalyzing] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -305,6 +306,9 @@ const AddItemsDetailPage = () => {
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
   const [aiPaused, setAiPaused] = useState(false);
   const [addingToItemId, setAddingToItemId] = useState<string | null>(null);
+  // Ref to track current append target — avoids stale closure in async processAndUploadRapidPhoto
+  // This ref is read at upload time, not capture time, so it always has the latest value
+  const addingToItemIdRef = useRef<string | null>(null);
   const { queue, enqueue, uploadingCount } = useUploadQueue(saleId as string);
 
   // Phase 3.5: Tiered lighting quality system state
@@ -613,11 +617,11 @@ const AddItemsDetailPage = () => {
     }
   };
 
-  const handleCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
-    setCameraOpen(false);
+  // Regular mode: analyze captured photos (called from Analyze button)
+  const handleRegularAnalyze = async (photos: { blob: Blob; previewUrl: string }[]) => {
     if (photos.length === 0) return;
 
-    setCameraAnalyzing(true);
+    setRegularAnalyzing(true);
     try {
       // Upload first photo and get AI analysis
       const formData = new FormData();
@@ -652,7 +656,8 @@ const AddItemsDetailPage = () => {
         photoUrls: uploadedUrls,
       });
 
-      // Switch to manual tab so organizer can review & submit
+      // Close camera and switch to manual tab so organizer can review & submit
+      setCameraOpen(false);
       setActiveTab('manual');
       showToast(`AI identified: "${ai.title || 'item'}". Review and save below.`, 'success');
     } catch (err: any) {
@@ -674,9 +679,10 @@ const AddItemsDetailPage = () => {
         // Photo upload also failed — user can still add manually
       }
 
+      setCameraOpen(false);
       setActiveTab('manual');
     } finally {
-      setCameraAnalyzing(false);
+      setRegularAnalyzing(false);
       // Clean up blob URLs
       photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     }
@@ -1605,7 +1611,7 @@ const AddItemsDetailPage = () => {
           {/* RapidCapture fullscreen overlay */}
           {cameraOpen && (
             <RapidCapture
-              onComplete={captureMode === 'rapidfire' ? handleRapidCameraComplete : handleCameraComplete}
+              onComplete={handleRapidCameraComplete}
               onCancel={() => setCameraOpen(false)}
               maxPhotos={captureMode === 'rapidfire' ? 20 : 5}
               mode={captureMode}
@@ -1617,10 +1623,12 @@ const AddItemsDetailPage = () => {
                   if (prev === id) {
                     // exiting add-mode — restart the 4.5s timer
                     api.post(`/items/${id}/release-analysis`).catch(() => {});
+                    addingToItemIdRef.current = null;
                     return null;
                   }
                   // entering add-mode — cancel the timer entirely while repositioning
                   api.post(`/items/${id}/hold-analysis`).catch(() => {});
+                  addingToItemIdRef.current = id;
                   return id;
                 });
               }}
@@ -1641,13 +1649,15 @@ const AddItemsDetailPage = () => {
                   { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
                 ]);
                 // Start background upload pipeline (non-blocking)
-                // Uses current addingToItemId for append-mode detection
-                processAndUploadRapidPhoto(photo, tempId, addingToItemId);
+                // Read from ref instead of state to avoid stale closure after AI analysis completes
+                processAndUploadRapidPhoto(photo, tempId, addingToItemIdRef.current);
               }}
               onEnhanceAll={() => {
                 // BUG 6 FIX: Show placeholder since no backend endpoint exists yet
                 showToast('AI enhancement coming soon', 'info');
               }}
+              onAnalyze={captureMode === 'regular' ? handleRegularAnalyze : undefined}
+              isAnalyzing={regularAnalyzing}
               qualityOverlay={
                 qualityModalOpen && qualityResult
                   ? {
