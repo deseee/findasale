@@ -260,8 +260,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           timestamp: Date.now(),
         };
 
-        // Call onPhotoCapture immediately to enable live carousel
-        onPhotoCapture?.(photo);
+        // Only call onPhotoCapture in rapidfire mode — regular mode defers to Analyze button
+        if (isRapidfire) {
+          onPhotoCapture?.(photo);
+        }
 
         if (isRegularMode) {
           setPhotos((prev) => [...prev, photo]);
@@ -349,13 +351,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     onCancel();
   }, [photos, onCancel]);
 
-  // Handle mode change — reset regular mode counters if switching
+  // Handle mode change — reset all captured photos and counters when switching
   const handleModeChange = useCallback((newMode: 'rapidfire' | 'regular') => {
     if (newMode !== mode) {
+      // Revoke blob URLs for any photos captured in the outgoing mode
+      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      setPhotos([]);
       setPhotosThisItem(0);
       onModeChange(newMode);
     }
-  }, [mode, onModeChange]);
+  }, [mode, photos, onModeChange]);
 
   // Get last item thumbnail for gallery thumbnail on left of shutter
   const lastItemThumbnail = isRapidfire
@@ -684,6 +689,28 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         {/* Bottom section: compact single row with stats line above */}
         <div className="bg-black/90 pb-safe flex flex-col">
           {/* Stats line (compact, text-xs) */}
+          {/* Regular mode stats line — shows when photos captured, with compact Analyze button */}
+          {!isRapidfire && photosThisItem > 0 && (
+            <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
+              <span>{photosThisItem} {photosThisItem === 1 ? 'photo' : 'photos'} taken</span>
+              <button
+                onClick={() => onAnalyze?.(photos.map(({ blob, previewUrl }) => ({ blob, previewUrl })))}
+                disabled={isAnalyzing}
+                className="text-xs bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors flex items-center gap-1"
+                aria-label="Analyze photos"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <div className="w-3 h-3 border border-amber-300/50 border-t-amber-300 rounded-full animate-spin" />
+                    <span>Analyzing…</span>
+                  </>
+                ) : (
+                  <span>✨ Analyze</span>
+                )}
+              </button>
+            </div>
+          )}
+
           {isRapidfire && rapidItems.length > 0 && (
             <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
               <span>
@@ -898,29 +925,6 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </div>
         </div>
 
-        {/* Analyze button (regular mode only) — appears below thumbnail strip when photos captured */}
-        {!isRapidfire && photosThisItem > 0 && (
-          <div className="bg-black/90 px-4 pb-3 pt-1 flex justify-center">
-            <button
-              onClick={() => onAnalyze?.(photos.map(({ blob, previewUrl }) => ({ blob, previewUrl })))}
-              disabled={isAnalyzing}
-              className="w-full max-w-xs bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-semibold py-2.5 rounded-lg transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2 text-sm"
-              aria-label="Analyze photos"
-            >
-              {isAnalyzing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                  <span>Analyzing...</span>
-                </>
-              ) : (
-                <>
-                  <span>✨</span>
-                  <span>Analyze {photosThisItem} {photosThisItem === 1 ? 'photo' : 'photos'}</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
 
         {/* Full-screen preview overlay when a photo is tapped (regular mode filmstrip or carousel tap) */}
         {selectedIndex !== null && photos[selectedIndex] && (
