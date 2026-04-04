@@ -480,6 +480,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // Create HoldInvoice record (simplified for MVP — no actual Stripe Checkout)
     const holdInvoice = await prisma.holdInvoice.create({
       data: {
+        reservationId,
         shopperUserId: reservation.userId,
         organizerUserId: organizer.id,
         saleId: reservation.item.sale.id,
@@ -487,6 +488,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         totalAmount: Math.round(reservation.item.price! * 100), // in cents
         platformFeeAmount: Math.round(reservation.item.price! * 0.1 * 100), // 10% fee in cents
         status: 'PENDING',
+        expiresAt: reservation.expiresAt, // inherit hold expiry
       },
     });
 
