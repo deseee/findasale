@@ -212,7 +212,7 @@ const PricingPage = () => {
               Sell smarter. Spend less time on paperwork.
             </h1>
             <p className="text-xl text-warm-600 dark:text-warm-300">
-              Whether you're running one estate sale or managing a team, FindA.Sale handles the listings, exports, and payments so you can focus on the sale.
+              Whether you're running one sale or managing a team, FindA.Sale handles the listings, exports, and payments so you can focus on the sale.
             </p>
           </div>
 
@@ -269,7 +269,7 @@ const PricingPage = () => {
                   List everywhere at once
                 </h3>
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  One-click exports formatted for Facebook Marketplace, Craigslist, and EstateSales.NET.
+                  One-click exports for Facebook Marketplace, Craigslist, eBay, and EstateSales.net
                 </p>
               </div>
 
@@ -291,7 +291,7 @@ const PricingPage = () => {
                   Buyers arrive ready
                 </h3>
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  Shoppers browse and reserve items before sale day through the Explorer's Guild.
+                  Shoppers browse, reserve and buy items before sale day through the Explorer's Guild.
                 </p>
               </div>
 
@@ -353,8 +353,8 @@ const PricingPage = () => {
                           tier.id === 'SIMPLE'
                             ? 'Free plan with a 10% fee per item sold. Perfect for trying out FindA.Sale.'
                             : tier.id === 'PRO'
-                              ? 'Best for active organizers. Monthly subscription with 8% fees and advanced tools like analytics and batch operations.'
-                              : 'Enterprise plan for teams and high-volume sellers. Supports multiple team members and white-label options.'
+                              ? 'Pro plan for active organizers. Monthly subscription with 8% fees and advanced tooling and analytics.'
+                              : 'Teams plan for large operators and high-volume sellers. Dedicated workspace supports multiple team members.'
                         }
                         position="right"
                       />
@@ -365,11 +365,11 @@ const PricingPage = () => {
                     {/* Inline explainer */}
                     <p className="text-warm-500 dark:text-warm-500 text-xs mb-6">
                       {tier.id === 'SIMPLE' &&
-                        'Good for getting started. No monthly cost — just 10% when items sell.'}
+                        'No monthly cost — just 10% when items sell.'}
                       {tier.id === 'PRO' &&
-                        'Best for active organizers. Lower fees (8%) plus tools that speed up your workflow and bring more buyers to your sales.'}
+                        'Lower fees (8%) plus tools that speed your workflow and attract more buyers.'}
                       {tier.id === 'TEAMS' &&
-                        'For companies or families running multiple sales at once. One account, multiple organizers. Solo power users: unlock API access, webhooks, and white-label integrations.'}
+                        'For organizers running multiple sales at once and power users who need unlimited photos and webhooks.'}
                     </p>
 
                     {/* Price */}
@@ -530,7 +530,7 @@ const PricingPage = () => {
                 Running a larger operation?
               </h2>
               <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
-                For auction houses, franchise networks, or high-volume teams that need unlimited everything, custom integrations, and a dedicated support contact.
+                For auction houses, franchise networks, or high-volume teams that need unlimited everything, custom integrations, white labeling and API access.
               </p>
               <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg inline-block">
                 <p className="text-warm-600 dark:text-warm-300 text-sm">Pricing starts at <span className="text-2xl font-bold text-warm-900 dark:text-warm-100">$500/mo</span> (annual contracts)</p>
