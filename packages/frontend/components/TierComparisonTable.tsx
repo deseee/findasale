@@ -62,7 +62,7 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'POS',
+    name: 'Point Of Sale',
     simple: true,
     pro: true,
     teams: true,
@@ -75,6 +75,12 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Basic sales analytics',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+    {
+    name: 'Ripples',
     simple: true,
     pro: true,
     teams: true,
@@ -104,19 +110,7 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Ripples',
-    simple: false,
-    pro: true,
-    teams: true,
-  },
-  {
     name: 'Flip Report (post-sale PDF)',
-    simple: false,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'Command Center (multi-sale)',
     simple: false,
     pro: true,
     teams: true,
@@ -143,7 +137,7 @@ const FEATURES: Feature[] = [
     name: 'Support',
     simple: 'Help center + guides',
     pro: '24/7 support assistant',
-    teams: 'Forum + support assistant',
+    teams: '24/7 support assistant',
   },
   {
     name: 'Custom storefront slug',
@@ -152,7 +146,13 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Multi-user team workspace',
+    name: 'Command Center (multi-sale)',
+    simple: false,
+    pro: false,
+    teams: true,
+  },
+  {
+    name: 'Team workspace',
     simple: false,
     pro: false,
     teams: true,
@@ -182,16 +182,28 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'API access & webhooks',
+    name: 'Webhooks',
     simple: false,
     pro: false,
     teams: true,
   },
   {
-    name: 'White-label customization',
+    name: 'API Access',
     simple: false,
     pro: false,
-    teams: true,
+    teams: 'Enterprise',
+  },
+  {
+    name: 'White-label App',
+    simple: false,
+    pro: false,
+    teams: 'Enterprise',
+  },
+  {
+    name: 'Custom Integrations',
+    simple: false,
+    pro: false,
+    teams: 'Enterprise',
   },
 ];
 
@@ -277,12 +289,6 @@ const TierComparisonTable: React.FC<TierComparisonTableProps> = ({ currentTier =
             You are currently on the {currentTier} plan.
           </p>
         )}
-        <Link
-          href="/pricing"
-          className="inline-block bg-sage-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-sage-700 transition"
-        >
-          View Plans & Pricing
-        </Link>
       </div>
     </div>
   );
