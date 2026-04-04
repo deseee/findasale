@@ -80,19 +80,19 @@ const TIERS: PricingTier[] = [
     name: 'TEAMS',
     price: 79,
     period: 'per month',
-    description: 'For teams running sales across multiple locations, or solo power users who need API access.',
+    description: 'For teams running sales across multiple locations, and users who need unlimited items.',
     featured: false,
     stripePrice: 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
       'Everything in Pro, plus:',
       'Unlimited concurrent sales',
-      '2,000+ items per sale, unlimited photos',
-      'Unlimited auto tags',
-      'Multi-user workspace — up to 12 team members',
+      '2,000+ items per sale, unlimited photos*',
+      'Unlimited auto tags*',
       'Command Center — manage all sales at once',
+      'Multi-user workspace — Includes 5 team members',
+      'Extra members: $20/mo',
       'Team roles & permissions',
-      'API access & webhooks',
-      'White-label customization',
+      'Webhooks',
       '24/7 support assistant + help center',
     ],
   },
@@ -211,10 +211,10 @@ const PricingPage = () => {
           {/* Header */}
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-4">
-              Sell smarter. Spend less time on paperwork.
+              Sell smarter.
             </h1>
             <p className="text-xl text-warm-600 dark:text-warm-300">
-              Whether you're running one sale or managing a team, FindA.Sale handles the listings, exports, and payments so you can focus on the sale.
+              Whether you're running one sale or managing a team, FindA.Sale handles listings, paperwork, and payments so you can focus on customers.
             </p>
           </div>
 
@@ -604,6 +604,15 @@ const PricingPage = () => {
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
                   On Simple, you get 100 per month — resets on the 1st. If you hit the limit, you can still add items manually, or upgrade that sale for $9.99 to get 500 auto tags. On PRO and TEAMS, you won't hit the limit in normal use.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                  *What do you mean Unlimited? 
+                </h3>
+                <p className="text-warm-700 dark:text-warm-300">
+                   While we truly mean unlimited we do employ platform abuse prevention mechanisms, time based rate limits and queues, soft data storage caps, post-sale data archival, etc..  You and your team members won't hit these limits with normal use.
                 </p>
               </div>
 
