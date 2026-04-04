@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
+import { TIER_LIMITS } from '../constants/tierLimits';
 
 export const createWorkspace = async (req: AuthRequest, res: Response) => {
   try {
@@ -105,8 +106,9 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     const ownerOrganizer = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { isEnterpriseAccount: true } });
     if (!ownerOrganizer?.isEnterpriseAccount) {
       const memberCount = await prisma.workspaceMember.count({ where: { workspaceId: workspace.id } });
-      if (memberCount + 1 >= 12) {
-        return res.status(403).json({ message: 'Team member limit (12) reached. Upgrade to Enterprise for unlimited members.', code: 'MEMBER_CAP_EXCEEDED', limit: 12, current: memberCount + 1 });
+      const maxMembers = TIER_LIMITS.TEAMS.maxTeamMembers;
+      if (memberCount + 1 > maxMembers) {
+        return res.status(403).json({ message: `Team member limit (${maxMembers}) reached. Add more seats ($20/mo each) or upgrade to Enterprise for unlimited members.`, code: 'MEMBER_CAP_EXCEEDED', limit: maxMembers, current: memberCount + 1 });
       }
     }
     const member = await prisma.workspaceMember.create({

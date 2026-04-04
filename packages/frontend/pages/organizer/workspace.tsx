@@ -21,6 +21,8 @@ import {
 } from '../../hooks/useWorkspace';
 import TierGate from '../../components/TierGate';
 
+const MAX_TEAM_MEMBERS = 5;
+
 export default function WorkspacePage() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -215,25 +217,25 @@ export default function WorkspacePage() {
                   </h2>
                   {/* D-007: Show member count vs cap */}
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {members.length} / 12 members
+                    {members.length} / {MAX_TEAM_MEMBERS} members
                   </p>
                 </div>
                 {isOwner && !showInviteForm && (
                   <div className="flex flex-col items-end">
                     <button
                       onClick={() => setShowInviteForm(true)}
-                      disabled={members.length >= 12}
+                      disabled={members.length >= MAX_TEAM_MEMBERS}
                       className={`font-bold py-2 px-4 rounded-md text-sm transition-all ${
-                        members.length >= 12
+                        members.length >= MAX_TEAM_MEMBERS
                           ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
                           : 'bg-sage-600 hover:bg-sage-700 text-white'
                       }`}
                     >
                       Invite Member
                     </button>
-                    {members.length >= 12 && (
+                    {members.length >= MAX_TEAM_MEMBERS && (
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-right">
-                        Team is at capacity. <Link href="/pricing" className="font-semibold hover:underline">Upgrade to Enterprise</Link>
+                        Team is at capacity. <Link href="/pricing" className="font-semibold hover:underline">Add more seats</Link> or upgrade to Enterprise.
                       </p>
                     )}
                   </div>

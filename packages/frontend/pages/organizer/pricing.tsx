@@ -80,7 +80,7 @@ const TIERS: PricingTier[] = [
     name: 'TEAMS',
     price: 79,
     period: 'per month',
-    description: 'For teams running sales across multiple locations, and users who need unlimited items.',
+    description: 'For organizers who need unlimited items and teams running sales across multiple locations.',
     featured: false,
     stripePrice: 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
@@ -93,7 +93,6 @@ const TIERS: PricingTier[] = [
       'Extra members: $20/mo',
       'Team roles & permissions',
       'Webhooks',
-      '24/7 support assistant + help center',
     ],
   },
 ];
@@ -371,7 +370,7 @@ const PricingPage = () => {
                       {tier.id === 'PRO' &&
                         'Lower fees (8%) plus tools that speed your workflow and attract more buyers.'}
                       {tier.id === 'TEAMS' &&
-                        'For organizers running multiple sales at once and power users who need unlimited photos and webhooks.'}
+                        'Tools for running multiple sales at once, webhook connections to your other systems. Unlimited photos and auto tags.'}
                     </p>
 
                     {/* Price */}

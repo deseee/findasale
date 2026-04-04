@@ -14,6 +14,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
   batchOpsAllowed: boolean;
   multiUserAllowed: boolean;
   maxConcurrentSales: number;
+  maxTeamMembers: number;
 }> = {
   SIMPLE: {
     itemsPerSale: 200,
@@ -22,6 +23,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     batchOpsAllowed: true,
     multiUserAllowed: false,
     maxConcurrentSales: 1,
+    maxTeamMembers: 0,
   },
   PRO: {
     itemsPerSale: 500,
@@ -30,6 +32,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     batchOpsAllowed: true,
     multiUserAllowed: false,
     maxConcurrentSales: 3,
+    maxTeamMembers: 0,
   },
   TEAMS: {
     itemsPerSale: 2000,
@@ -38,6 +41,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     batchOpsAllowed: true,
     multiUserAllowed: true,
     maxConcurrentSales: Number.MAX_SAFE_INTEGER,
+    maxTeamMembers: 5,
   },
   ENTERPRISE: {
     itemsPerSale: Number.MAX_SAFE_INTEGER,
@@ -46,6 +50,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     batchOpsAllowed: true,
     multiUserAllowed: true,
     maxConcurrentSales: Number.MAX_SAFE_INTEGER,
+    maxTeamMembers: Number.MAX_SAFE_INTEGER,
   },
 };
 

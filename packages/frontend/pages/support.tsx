@@ -12,7 +12,7 @@ const FAQ_DATA = [
     category: 'Billing',
     question: 'How much does FindA.Sale cost?',
     answer:
-      'FindA.Sale offers three tiers: SIMPLE (free), PRO ($4.99/month), and TEAMS ($12.99/month). Each tier includes different features for organizers and shoppers.',
+      'FindA.Sale offers three tiers: SIMPLE (free, 10% platform fee), PRO ($29/month, 8% fee), and TEAMS ($79/month, 8% fee). Each tier includes different features for organizers. Shoppers always use FindA.Sale for free.',
   },
   {
     id: 'billing-2',
