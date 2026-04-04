@@ -85,7 +85,7 @@ const TIERS: PricingTier[] = [
     stripePrice: 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
       'Everything in Pro, plus:',
-      'Unlimited concurrent sales',
+      'Unlimited concurrent sales*',
       '2,000+ items per sale, unlimited photos*',
       'Unlimited auto tags*',
       'Command Center — manage all sales at once',
