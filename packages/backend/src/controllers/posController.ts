@@ -271,20 +271,17 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       paymentLinkUrl = `https://buy.stripe.com/test/sim_${Date.now()}`;
     } else {
       try {
+        // Payment Links require a pre-created Price object (price_data not supported)
+        const adHocPrice = await stripe().prices.create({
+          currency: 'usd',
+          unit_amount: amountCents,
+          product_data: {
+            name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
+          },
+        });
+
         const paymentLink = await stripe().paymentLinks.create({
-          line_items: [
-            {
-              price_data: {
-                currency: 'usd',
-                product_data: {
-                  name: `Purchase (${itemIds.length} item${itemIds.length > 1 ? 's' : ''})`,
-                  description: items.map(i => i.title).join(', '),
-                },
-                unit_amount: amountCents,
-              },
-              quantity: 1,
-            },
-          ],
+          line_items: [{ price: adHocPrice.id, quantity: 1 }],
           after_completion: {
             type: 'hosted_confirmation' as const,
           },
@@ -407,7 +404,7 @@ export const getActiveHolds = async (req: AuthRequest, res: Response) => {
     // Get active holds: CONFIRMED, not expired, no invoice
     const holds = await prisma.itemReservation.findMany({
       where: {
-        sale: { id: saleId },
+        item: { saleId },
         status: 'CONFIRMED',
         expiresAt: { gt: new Date() },
         invoiceId: null,
@@ -489,7 +486,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         itemIds: [reservation.itemId],
         totalAmount: Math.round(reservation.item.price! * 100), // in cents
         platformFeeAmount: Math.round(reservation.item.price! * 0.1 * 100), // 10% fee in cents
-        status: 'SENT',
+        status: 'PENDING',
       },
     });
 
