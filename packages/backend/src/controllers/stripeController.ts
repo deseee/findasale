@@ -1362,6 +1362,87 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
       break;
     }
+    case 'payment_link.completed': {
+      // POS Upgrade: Payment Link completed via Stripe Payment Link (shopper self-checkout via QR)
+      const paymentLink = event.data.object;
+      const stripePaymentLinkId = paymentLink.id;
+
+      const posPaymentLink = await prisma.pOSPaymentLink.findUnique({
+        where: { stripePaymentLinkId },
+        include: {
+          sale: true,
+        },
+      });
+
+      if (!posPaymentLink) {
+        console.log(`[pos] Payment link not found: ${stripePaymentLinkId}`);
+        break;
+      }
+
+      // Idempotency check: if already completed, skip
+      if (posPaymentLink.status === 'COMPLETED') {
+        console.warn(`[pos] Payment link ${stripePaymentLinkId} already completed, skipping duplicate webhook`);
+        break;
+      }
+
+      // Mark items SOLD and update payment link status
+      await prisma.$transaction(async (tx) => {
+        // Update payment link status to COMPLETED
+        await tx.pOSPaymentLink.update({
+          where: { id: posPaymentLink.id },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+          },
+        });
+
+        // Mark all items in this payment link as SOLD
+        if (posPaymentLink.itemIds && posPaymentLink.itemIds.length > 0) {
+          await tx.item.updateMany({
+            where: { id: { in: posPaymentLink.itemIds } },
+            data: { status: 'SOLD' },
+          });
+        }
+
+        // Create Purchase records for each item (if not already created)
+        if (posPaymentLink.itemIds && posPaymentLink.itemIds.length > 0) {
+          const existingPurchases = await tx.purchase.findMany({
+            where: { id: { in: posPaymentLink.purchaseIds } },
+          });
+
+          // If purchases don't exist yet, create them
+          if (existingPurchases.length === 0) {
+            const items = await tx.item.findMany({
+              where: { id: { in: posPaymentLink.itemIds } },
+            });
+
+            for (const item of items) {
+              const purchase = await tx.purchase.create({
+                data: {
+                  itemId: item.id,
+                  saleId: posPaymentLink.saleId,
+                  amount: item.price || 0,
+                  platformFeeAmount: (item.price || 0) * 0.1,
+                  status: 'PAID',
+                  source: 'POS',
+                  stripePaymentIntentId: `pos_${posPaymentLink.id}`,
+                },
+              });
+              posPaymentLink.purchaseIds.push(purchase.id);
+            }
+
+            // Update the payment link with purchase IDs
+            await tx.pOSPaymentLink.update({
+              where: { id: posPaymentLink.id },
+              data: { purchaseIds: posPaymentLink.purchaseIds },
+            });
+          }
+        }
+      });
+
+      console.log(`[pos] Payment link completed: ${stripePaymentLinkId} (${posPaymentLink.itemIds?.length || 0} items)`);
+      break;
+    }
     default:
       console.warn(`[stripe] Unhandled event type: ${event.type}`);
   }

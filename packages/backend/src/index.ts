@@ -153,6 +153,7 @@ import xpController from './controllers/xpController';          // Phase 2a: Exp
 import supportRoutes from './routes/support';                  // #128: Automated Support Stack
 import posTiersRoutes from './routes/posTiers';               // POS Tier Status tracking
 import settlementRoutes from './routes/settlement';           // Feature #228: Settlement Hub
+import posRoutes from './routes/pos';                         // POS Upgrade: Open Cart & Payment Links
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -403,6 +404,7 @@ app.use('/api/flash-deals', flashDealRoutes); // Flash Deals & Promotions
 app.use('/api/wishlists', wishlistRoutes); // Wishlist / Registry feature
 app.use('/api/tiers', tierRoutes); // Phase 31: Organizer Tier Rewards
 app.use('/api/organizer/pos-tiers', posTiersRoutes); // POS Tier Status tracking
+app.use('/api/pos', posRoutes);                       // POS Upgrade: Open Cart & Payment Links
 app.use('/api/planner', plannerRoutes); // Planning assistant chatbot
 app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
