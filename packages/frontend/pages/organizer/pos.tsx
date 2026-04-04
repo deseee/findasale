@@ -1048,7 +1048,7 @@ export default function POSPage() {
           <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">📲 Shopper Scan to Pay</h4>
           <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Total: ${cartTotal.toFixed(2)}</p>
 
-          {paymentLinkStatus === 'idle' && (
+          {(paymentLinkStatus === 'idle' || paymentLinkStatus === 'generating') && (
             <button
               onClick={handleGeneratePaymentQr}
               disabled={paymentLinkStatus === 'generating'}
