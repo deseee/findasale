@@ -38,7 +38,7 @@ const TIERS: PricingTier[] = [
     name: 'SIMPLE',
     price: null,
     period: 'Free — 10% when items sell',
-    description: 'Perfect for trying FindA.Sale or running occasional sales.',
+    description: 'Perfect for trying FindA.Sale',
     featured: false,
     stripePrice: null,
     features: [
@@ -47,7 +47,9 @@ const TIERS: PricingTier[] = [
       '100 auto tags per month',
       '1 active sale at a time',
       'QR codes for every item and sale',
+      'Built-in point-of-sale',
       'Social post generator',
+      'Ripples — track who clicks your sale links',
       'Self-serve help center + organizer guides',
     ],
   },
@@ -63,12 +65,11 @@ const TIERS: PricingTier[] = [
       'Everything in Simple, plus:',
       '3 concurrent sales, 500 items each',
       '10 photos per item, 2,000 auto tags/month',
-      'Flip Report — post-sale earnings breakdown',
       'Smart Pricing — market value estimates',
-      'Ripples — track who clicks your sale links',
+      'Flip Report — post-sale earnings breakdown',
+      'Insights - Advanced sale analytics',
       'Brand Kit — custom logo, colors, storefront',
-      'Command Center — manage all sales at once',
-      'Batch operations + advanced analytics',
+      'Batch operations + Tools',
       'Multi-platform exports (CSV, JSON, Text)',
       'Seller verification badge',
       '24/7 support assistant + help center',
@@ -88,10 +89,11 @@ const TIERS: PricingTier[] = [
       '2,000+ items per sale, unlimited photos',
       'Unlimited auto tags',
       'Multi-user workspace — up to 12 team members',
+      'Command Center — manage all sales at once',
       'Team roles & permissions',
       'API access & webhooks',
       'White-label customization',
-      'Community forum + 24/7 support assistant',
+      '24/7 support assistant + help center',
     ],
   },
 ];
@@ -457,10 +459,10 @@ const PricingPage = () => {
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                   <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-                    500 auto tags for that sale
+                    500 auto tags
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    Every item gets tagged. Descriptions fill themselves in.
+                    Every item gets tagged. Descriptions fill themselves.
                   </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -468,7 +470,7 @@ const PricingPage = () => {
                     Flip Report included
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    See exactly what sold, what didn't, and your total earnings.
+                    See exactly what sold, what didn't, and your earnings.
                   </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -476,7 +478,7 @@ const PricingPage = () => {
                     Virtual Queue
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    Let shoppers reserve items online before sale day.
+                    We handle the early birds, you handle the sale
                   </p>
                 </div>
               </div>
@@ -502,10 +504,10 @@ const PricingPage = () => {
                 title="Ready to Scale Your Sales?"
                 description="Upgrade to PRO to unlock powerful tools, lower fees, and expert support."
                 benefits={[
+                  'More Photos, More Tags',
                   'Drop fees from 10% to 8%',
-                  'Run 3 sales at once',
+                  'Run up to 3 sales at once',
                   'Smart Pricing and Flip Reports',
-                  'Command Center for multi-sale management',
                   '24/7 support assistant',
                 ]}
                 ctaText="Upgrade to PRO"
@@ -530,7 +532,7 @@ const PricingPage = () => {
                 Running a larger operation?
               </h2>
               <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
-                For auction houses, franchise networks, or high-volume teams that need unlimited everything, custom integrations, white labeling and API access.
+                For auction houses, franchises, or high-volume teams that need unlimited everything, custom integrations, white labeling and API access.
               </p>
               <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg inline-block">
                 <p className="text-warm-600 dark:text-warm-300 text-sm">Pricing starts at <span className="text-2xl font-bold text-warm-900 dark:text-warm-100">$500/mo</span> (annual contracts)</p>
@@ -539,7 +541,7 @@ const PricingPage = () => {
                 href="/contact"
                 className="inline-block bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200"
               >
-                Contact Sales
+                Contact Us
               </Link>
             </div>
           </div>
@@ -565,7 +567,7 @@ const PricingPage = () => {
                   Is there a free trial?
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                  SIMPLE is always free, so you can try FindA.Sale without any commitment. PRO and TEAMS are available for a trial on your first month.
+                  SIMPLE is always free, so you can try FindA.Sale without any commitment.
                 </p>
               </div>
 
@@ -589,10 +591,10 @@ const PricingPage = () => {
 
               <div>
                 <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                  I'm worried about the 10% fee on Simple. How does that compare?
+                  How do fees work?
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                  When you list an item for $100 and it sells, we take $10 as a platform fee. PRO and TEAMS drop that to 8%. Many organizers find the fee pays for itself — the time you save is worth more than the 2% difference.
+                  When you sell an item for $100, we receive $10 as a platform fee. PRO and TEAMS drop that to 8%.  If the shopper pays with credit card, Stripe fees average 3%.
                 </p>
               </div>
 
