@@ -532,7 +532,7 @@ const PricingPage = () => {
                 Running a larger operation?
               </h2>
               <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
-                For auction houses, franchises, or high-volume teams that need unlimited everything, custom integrations, white labeling and API access.
+                For auction houses, franchises, or high-volume teams that need unlimited everything, our enterprise solutions include custom integrations, white labeling and API access.
               </p>
               <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg inline-block">
                 <p className="text-warm-600 dark:text-warm-300 text-sm">Pricing starts at <span className="text-2xl font-bold text-warm-900 dark:text-warm-100">$500/mo</span> (annual contracts)</p>
