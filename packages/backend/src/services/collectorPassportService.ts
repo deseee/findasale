@@ -42,6 +42,7 @@ export const getOrCreatePassport = async (userId: string): Promise<any> => {
 
 /**
  * Update a user's collector passport
+ * After update, checks if passport is now complete and awards XP if applicable
  */
 export const updatePassport = async (
   userId: string,
@@ -58,7 +59,7 @@ export const updatePassport = async (
   // Ensure passport exists first
   await getOrCreatePassport(userId);
 
-  return await prisma.collectorPassport.update({
+  const updated = await prisma.collectorPassport.update({
     where: { userId },
     data: {
       ...(data.bio !== undefined && { bio: data.bio }),
@@ -71,6 +72,14 @@ export const updatePassport = async (
       updatedAt: new Date(),
     },
   });
+
+  // Fire-and-forget: check if passport is now complete and award XP if so
+  // This is non-blocking and errors are caught internally
+  checkAndAwardPassportCompletion(userId).catch((err) => {
+    console.error('[collectorPassport] Error checking passport completion:', err);
+  });
+
+  return updated;
 };
 
 /**
@@ -344,5 +353,64 @@ export const incrementTotalFinds = async (userId: string): Promise<void> => {
     });
   } catch (error) {
     console.error('[collectorPassport] incrementTotalFinds failed:', error);
+  }
+};
+
+/**
+ * Check if passport is "complete" — defined as having at least one entry in each of:
+ * specialties, categories, and keywords
+ * If complete and user hasn't earned the award yet, grant 50 XP via xpService
+ * Fire-and-forget: errors logged but never thrown
+ */
+export const checkAndAwardPassportCompletion = async (userId: string): Promise<void> => {
+  try {
+    const { awardXp } = await import('./xpService');
+
+    // Get the user's passport and current state
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { passportCompleted: true },
+    });
+
+    if (!user) return;
+
+    // If already awarded, skip
+    if (user.passportCompleted) return;
+
+    // Get passport
+    const passport = await prisma.collectorPassport.findUnique({
+      where: { userId },
+      select: { specialties: true, categories: true, keywords: true },
+    });
+
+    if (!passport) return;
+
+    // Check if all three are non-empty
+    const isComplete =
+      passport.specialties.length > 0 &&
+      passport.categories.length > 0 &&
+      passport.keywords.length > 0;
+
+    if (isComplete) {
+      // Award 50 XP and mark completed
+      const xpResult = await awardXp(userId, 'COLLECTOR_PASSPORT_COMPLETE', 50, {
+        description: 'Collector Passport completed: specialties + categories + keywords defined',
+      });
+
+      if (xpResult) {
+        // Mark user as passport completed
+        await prisma.user.update({
+          where: { id: userId },
+          data: { passportCompleted: true },
+        });
+
+        console.log(
+          `[collectorPassport] Passport completion awarded to user ${userId}: +50 XP, new total: ${xpResult.newXp}`
+        );
+      }
+    }
+  } catch (error) {
+    console.error('[collectorPassport] checkAndAwardPassportCompletion failed:', error);
+    // Fire-and-forget: never throw
   }
 };

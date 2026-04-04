@@ -20,6 +20,7 @@ import { createNotification } from '../services/notificationService'; // P0: Bid
 import { closeAuction } from '../services/auctionService'; // Auction close flow
 import { resetRapidDraftDebounce, rapidfireAIDebounce } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
+import { awardXp, XP_AWARDS } from '../services/xpService'; // Phase 2a: XP awards
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -86,6 +87,28 @@ const assignRarity = (price: number | undefined | null): string => {
   if (price >= 200) return 'ULTRA_RARE';
   if (price >= 75) return 'RARE';
   return 'UNCOMMON';
+};
+
+// Hunt Pass Feature: Helper to check if item is visible to user based on rarity + Hunt Pass status
+// Rare/Ultra-Rare: 6 hours early access for Hunt Pass holders
+// Legendary: 12 hours early access for Hunt Pass holders
+const isItemVisibleToUser = (
+  item: { rarity: string; createdAt: Date },
+  hasHuntPass: boolean
+): boolean => {
+  const now = new Date();
+  const createdAt = new Date(item.createdAt);
+  const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+
+  if (item.rarity === 'LEGENDARY') {
+    // 12 hours early access for Hunt Pass
+    return hasHuntPass || hoursSinceCreation >= 12;
+  } else if (item.rarity === 'RARE' || item.rarity === 'ULTRA_RARE') {
+    // 6 hours early access for Hunt Pass
+    return hasHuntPass || hoursSinceCreation >= 6;
+  }
+  // Common/Uncommon always visible
+  return true;
 };
 
 // Simulated image upload function - replace with your actual upload logic
@@ -314,21 +337,14 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     // Check if user has active Hunt Pass
     const hasHuntPass = user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date();
 
-    // Hunt Pass Feature: Exclude LEGENDARY items with active early access for non-Hunt-Pass users
+    // Hunt Pass Feature: Rarity-based visibility filtering
+    // Query items without visibility restrictions, then filter in app code based on rarity + Hunt Pass
     const filterWhere: any = {
       saleId: saleId as string,
       ...PUBLIC_ITEM_FILTER,
     };
 
-    if (!hasHuntPass) {
-      // Non-Hunt-Pass users: exclude items that have earlyAccessUntil set and not yet passed
-      filterWhere.OR = [
-        { earlyAccessUntil: null },
-        { earlyAccessUntil: { lte: new Date() } },
-      ];
-    }
-
-    const items = await prisma.item.findMany({
+    let items = await prisma.item.findMany({
       where: filterWhere,
       take: 500,
       select: {
@@ -365,6 +381,10 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
       }
     });
+
+    // Filter based on rarity visibility + Hunt Pass status
+    items = items.filter(item => isItemVisibleToUser(item, hasHuntPass));
+
     res.json(items);
   } catch (error) {
     console.error('Error fetching items by sale ID:', error);
@@ -652,6 +672,37 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: updateData
     });
+
+    // Feature #145: Award XP for condition rating (once per item, when first set)
+    if (conditionGrade !== undefined && conditionGrade && !item.conditionGrade) {
+      // Only award if conditionGrade was previously null/undefined and is now set to a non-null value
+      try {
+        // Check if this item has already earned CONDITION_RATING XP
+        const existingConditionXp = await prisma.pointsTransaction.findFirst({
+          where: {
+            userId: req.user.id,
+            type: 'CONDITION_RATING',
+            itemId: id,
+          },
+        });
+
+        if (!existingConditionXp) {
+          // Award XP to the organizer
+          await awardXp(
+            req.user.id,
+            'CONDITION_RATING',
+            XP_AWARDS.CONDITION_RATING,
+            {
+              itemId: id,
+              saleId: item.saleId,
+              description: `Condition rating S-D for item "${updatedItem.title}"`,
+            }
+          );
+        }
+      } catch (err) {
+        console.warn('[xpService] Failed to award condition rating XP:', err);
+      }
+    }
 
     // Feature #372: Wire auto high-value flagging after AI analysis
     // If aiConfidence or estimatedValue was just updated, re-evaluate auto-flagging
@@ -1498,10 +1549,10 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Get user's current rank for XP multiplier calculation
+    // Get user's current rank and Hunt Pass status for XP multiplier calculation
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { explorerRank: true },
+      select: { explorerRank: true, huntPassActive: true, huntPassExpiry: true },
     });
 
     if (!user) {
@@ -1512,7 +1563,12 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     // Apply rank-based multiplier to base XP
     const baseXp = XP_AWARDS.ITEM_SCANNED;
     const rankMultiplier = getRankXpMultiplier(user.explorerRank);
-    const multipliedXp = Math.round(baseXp * rankMultiplier);
+    let multipliedXp = Math.round(baseXp * rankMultiplier);
+
+    // Apply Hunt Pass bonus: +10% XP on top of rank multiplier
+    if (user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > new Date()) {
+      multipliedXp = Math.round(multipliedXp * 1.1);
+    }
 
     // Check daily cap for ITEM_SCANNED XP
     const dailyRemaining = await checkDailyXpCap(userId, 'ITEM_SCANNED');
@@ -1626,5 +1682,98 @@ export const closeAuctionEndpoint = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Close auction error:', error);
     res.status(500).json({ message: 'Failed to close auction' });
+  }
+};
+
+// Feature #78: Rare Finds endpoint for Hunt Pass subscribers
+export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
+  try {
+    // Auth required for Hunt Pass check
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Hunt Pass required
+    const hasHuntPass = req.user.huntPassActive && req.user.huntPassExpiry && req.user.huntPassExpiry > new Date();
+    if (!hasHuntPass) {
+      return res.status(403).json({ message: 'Hunt Pass subscription required' });
+    }
+
+    const { limit: rawLimit = 20, offset: rawOffset = 0 } = req.query;
+    const limit = Math.min(Math.max(1, parseInt(String(rawLimit)) || 20), 100);
+    const offset = Math.max(0, parseInt(String(rawOffset)) || 0);
+
+    // Get rare/legendary items from active sales
+    const rareItems = await prisma.item.findMany({
+      where: {
+        rarity: {
+          in: ['RARE', 'LEGENDARY', 'ULTRA_RARE']
+        },
+        isActive: true,
+        ...PUBLIC_ITEM_FILTER,
+        sale: {
+          status: {
+            in: ['LIVE', 'ACTIVE']
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: limit,
+      skip: offset,
+      select: {
+        id: true,
+        saleId: true,
+        title: true,
+        description: true,
+        price: true,
+        photoUrls: true,
+        category: true,
+        condition: true,
+        rarity: true,
+        listingType: true,
+        isAiTagged: true,
+        createdAt: true,
+        updatedAt: true,
+        sale: {
+          select: {
+            id: true,
+            title: true,
+            organizerId: true,
+            organizer: {
+              select: { businessName: true }
+            }
+          }
+        }
+      }
+    });
+
+    // Get total count for pagination
+    const total = await prisma.item.count({
+      where: {
+        rarity: {
+          in: ['RARE', 'LEGENDARY', 'ULTRA_RARE']
+        },
+        isActive: true,
+        ...PUBLIC_ITEM_FILTER,
+        sale: {
+          status: {
+            in: ['LIVE', 'ACTIVE']
+          }
+        }
+      }
+    });
+
+    res.json({
+      data: rareItems,
+      total,
+      limit,
+      offset,
+      hasMore: offset + limit < total
+    });
+  } catch (error) {
+    console.error('Error fetching rare finds:', error);
+    res.status(500).json({ message: 'Server error while fetching rare finds' });
   }
 };

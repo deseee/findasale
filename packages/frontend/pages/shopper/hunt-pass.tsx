@@ -85,6 +85,21 @@ const HuntPassPage = () => {
                 </div>
               </div>
 
+              {/* Benefit 1.5: Treasure Hunt Pro */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">🎯</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      Treasure Hunt Pro
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      Get +10% XP bonus per QR code scan and enjoy a raised daily treasure hunt XP cap of 150 (vs 100). Collect more treasure, earn more rewards.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Benefit 2: Early Access */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
@@ -95,6 +110,21 @@ const HuntPassPage = () => {
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
                       Get notified 6 hours before other shoppers when flash deals go live. See the best treasures first, so you never miss out on amazing finds.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Benefit 2.5: Rare Finds Pass */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">💎</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      Rare Finds Pass — Early Rarity Access
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      See Rare items 6 hours early and Legendary items 12 hours early. Plus, get exclusive access to the dedicated Rare Finds feed packed with the finest treasures.
                     </p>
                   </div>
                 </div>
@@ -178,8 +208,8 @@ const HuntPassPage = () => {
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Treasure Hunt scan</td>
-                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">25 XP</td>
-                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">38 XP</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">25 XP<br/><span className="text-xs text-warm-500">(max 100/day)</span></td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">28 XP*<br/><span className="text-xs text-purple-500">(max 150/day)</span></td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Write an item review</td>
@@ -200,9 +230,12 @@ const HuntPassPage = () => {
               </table>
             </div>
 
-            <div className="mt-6 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+            <div className="mt-6 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4 space-y-2">
               <p className="text-sm text-purple-900 dark:text-purple-300">
                 <strong>Quick math:</strong> If you earn 50 XP/month without Hunt Pass, you'll earn 75 XP/month with it — saving ~3 months of progression per rank!
+              </p>
+              <p className="text-xs text-purple-800 dark:text-purple-400">
+                * Treasure Hunt scans with Hunt Pass receive +10% bonus on top of your rank multiplier. Example: base 25 XP × 1.1 Hunt Pass bonus = 28 XP (rounded).
               </p>
             </div>
           </div>
