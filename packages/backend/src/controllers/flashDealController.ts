@@ -152,7 +152,7 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
       if (user) {
         userRank = user.explorerRank;
         // Check if Hunt Pass is active and not expired
-        hasHuntPass = user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > now;
+        hasHuntPass = !!(user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > now);
       }
     }
 
