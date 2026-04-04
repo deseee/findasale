@@ -16,7 +16,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
+import jsQR from 'jsqr';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
 import PosTierGates from '../../components/PosTierGates';
 import { PosTierStatus } from '../../lib/types/posTiers';
@@ -50,7 +52,7 @@ interface CartItem {
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | 'success' | 'error' | 'cancelled';
-type PaymentMode = 'card' | 'cash';
+type PaymentMode = 'card' | 'cash' | 'qr' | 'invoice';
 type NumpadMode = 'price';
 
 interface CashPaymentResponse {
@@ -58,11 +60,31 @@ interface CashPaymentResponse {
   cashFeeBalance: number;
 }
 
+interface HoldItem {
+  reservationId: string;
+  itemId: string;
+  itemTitle: string;
+  itemPrice: number;
+  shopperId: string;
+  shopperName: string;
+  shopperEmail: string;
+  expiresAt: string;
+}
+
+interface LinkedCart {
+  id: string;
+  shopperName: string;
+  cartItems: Array<{ id: string; title: string; price: number; photoUrl?: string; saleId: string }>;
+  cartTotal: number;
+  createdAt: string;
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────────
 
 export default function POSPage() {
   const { user, isLoading: loading } = useAuth();
   const router = useRouter();
+  const { showToast } = useToast();
 
   // Sale + item state
   const [sales, setSales] = useState<Sale[]>([]);
@@ -94,9 +116,31 @@ export default function POSPage() {
   // Cash fee state
   const [lastCashFee, setLastCashFee] = useState<CashPaymentResponse | null>(null);
 
+  // QR Scan camera state
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [qrScanStatus, setQrScanStatus] = useState<'idle' | 'scanning' | 'found' | 'error'>('idle');
+  const [qrScanMessage, setQrScanMessage] = useState('');
+
+  // Payment QR state (for sending payment link to shopper)
+  const [paymentLinkId, setPaymentLinkId] = useState('');
+  const [paymentLinkQr, setPaymentLinkQr] = useState(''); // base64 data URL
+  const [paymentLinkStatus, setPaymentLinkStatus] = useState<'idle' | 'generating' | 'waiting' | 'paid'>('idle');
+  const [paymentLinkPollInterval, setPaymentLinkPollInterval] = useState<NodeJS.Timeout | null>(null);
+
+  // Invoice/Holds state
+  const [holds, setHolds] = useState<HoldItem[]>([]);
+  const [holdsLoading, setHoldsLoading] = useState(false);
+
+  // Open Carts state
+  const [linkedCarts, setLinkedCarts] = useState<LinkedCart[]>([]);
+  const [linkedCartsPollInterval, setLinkedCartsPollInterval] = useState<NodeJS.Timeout | null>(null);
+
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
   const sdkLoadedRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // POS Tiers data
   const { data: posTierStatus, isLoading: posTierLoading } = useQuery<PosTierStatus>({
@@ -216,6 +260,61 @@ export default function POSPage() {
     const cents = parseInt(cashNumpadValue || '0', 10);
     setCashReceived(cents / 100);
   }, [cashNumpadValue]);
+
+  // ─── Load holds when sale changes ──────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!selectedSaleId) {
+      setHolds([]);
+      return;
+    }
+    setHoldsLoading(true);
+    api
+      .get<{ holds: HoldItem[] }>(`/pos/holds?saleId=${selectedSaleId}`)
+      .then(res => setHolds(res.data.holds || []))
+      .catch(err => console.error('[pos] Failed to load holds:', err))
+      .finally(() => setHoldsLoading(false));
+  }, [selectedSaleId]);
+
+  // ─── Payment link polling ─────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (paymentLinkStatus !== 'waiting' || !paymentLinkId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get<{ status: string }>(`/pos/payment-links/${paymentLinkId}`);
+        if (res.data.status === 'COMPLETED') {
+          setPaymentLinkStatus('paid');
+          clearInterval(interval);
+          setPaymentLinkPollInterval(null);
+        }
+      } catch (err) {
+        console.error('[pos] Poll error:', err);
+      }
+    }, 3000);
+
+    setPaymentLinkPollInterval(interval);
+    return () => clearInterval(interval);
+  }, [paymentLinkStatus, paymentLinkId]);
+
+  // ─── Linked carts polling ────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!selectedSaleId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}`);
+        setLinkedCarts(res.data.sessions || []);
+      } catch (err) {
+        console.error('[pos] Linked carts poll error:', err);
+      }
+    }, 10000);
+
+    setLinkedCartsPollInterval(interval);
+    return () => clearInterval(interval);
+  }, [selectedSaleId]);
 
   // ─── Cart operations ────────────────────────────────────────────────────────────────────
 
@@ -431,6 +530,162 @@ export default function POSPage() {
     setLastCashFee(null);
   };
 
+  // ─── QR Code Scanning ─────────────────────────────────────────────────────────────────────
+
+  const startQRScan = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+
+      videoRef.current.srcObject = stream;
+      const video = videoRef.current;
+
+      const scanLoop = () => {
+        if (!video || !canvasRef.current || !video.videoWidth) {
+          animationFrameRef.current = requestAnimationFrame(scanLoop);
+          return;
+        }
+
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+        if (!context) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        // @ts-ignore - jsqr types may not be perfect
+        const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+        if (code) {
+          const qrText = code.data;
+          // Extract itemId from URL like https://finda.sale/qr/items/[itemId]
+          const match = qrText.match(/items\/([a-z0-9]+)$/i);
+          if (match) {
+            const itemId = match[1];
+            setQrScanStatus('found');
+            setQrScanMessage('Item found! Adding to cart…');
+
+            // Fetch item and add to cart
+            api
+              .get<Item>(`/items/${itemId}`)
+              .then(res => {
+                addToCart(res.data);
+                showToast('✓ Item added to cart', 'success');
+                setQrScanStatus('scanning');
+                setQrScanMessage('');
+                // Keep scanning open for next item
+                animationFrameRef.current = requestAnimationFrame(scanLoop);
+              })
+              .catch(err => {
+                setQrScanStatus('error');
+                setQrScanMessage('Item not found or already in cart');
+                console.error('[pos] QR item fetch error:', err);
+                setTimeout(() => {
+                  setQrScanStatus('scanning');
+                  setQrScanMessage('');
+                  animationFrameRef.current = requestAnimationFrame(scanLoop);
+                }, 2000);
+              });
+          } else {
+            setQrScanStatus('error');
+            setQrScanMessage('Invalid QR code format');
+            setTimeout(() => {
+              setQrScanStatus('scanning');
+              setQrScanMessage('');
+              animationFrameRef.current = requestAnimationFrame(scanLoop);
+            }, 2000);
+          }
+        } else {
+          animationFrameRef.current = requestAnimationFrame(scanLoop);
+        }
+      };
+
+      setQrScanStatus('scanning');
+      animationFrameRef.current = requestAnimationFrame(scanLoop);
+    } catch (err: any) {
+      setQrScanStatus('error');
+      if (err.name === 'NotAllowedError') {
+        setQrScanMessage('Camera permission denied. Enable camera in browser settings.');
+      } else {
+        setQrScanMessage('Failed to access camera');
+      }
+      console.error('[pos] Camera access error:', err);
+    }
+  }, []);
+
+  const stopQRScan = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setCameraOpen(false);
+    setQrScanStatus('idle');
+    setQrScanMessage('');
+  }, []);
+
+  // ─── Payment QR Code Generation ────────────────────────────────────────────────────────
+
+  const handleGeneratePaymentQr = async () => {
+    if (!selectedSaleId || cart.length === 0) return;
+    setPaymentLinkStatus('generating');
+    try {
+      const itemIds = cart.filter(c => c.itemId).map(c => c.itemId!);
+      const res = await api.post<{ linkId: string; qrCode: string }>('/pos/payment-links', {
+        saleId: selectedSaleId,
+        amount: cartTotal,
+        itemIds,
+      });
+      setPaymentLinkId(res.data.linkId);
+      setPaymentLinkQr(res.data.qrCode); // base64 data URL
+      setPaymentLinkStatus('waiting');
+    } catch (err) {
+      console.error('[pos] QR generation error:', err);
+      setPaymentLinkStatus('idle');
+      setErrorMessage('Failed to generate QR code');
+    }
+  };
+
+  // ─── Invoice Sending ──────────────────────────────────────────────────────────────────
+
+  const handleSendInvoice = async (reservationId: string, shopperEmail: string) => {
+    try {
+      await api.post(`/pos/holds/${reservationId}/invoice`, { deliverVia: 'EMAIL' });
+      setHolds(prev => prev.filter(h => h.reservationId !== reservationId));
+      showToast(`Invoice sent to ${shopperEmail}`, 'success');
+    } catch (err) {
+      console.error('[pos] Send invoice error:', err);
+      setErrorMessage('Failed to send invoice');
+    }
+  };
+
+  // ─── Linked Cart Addition ─────────────────────────────────────────────────────────────
+
+  const handleAddLinkedCart = async (sessionId: string, cartItems: LinkedCart['cartItems']) => {
+    try {
+      await api.post(`/pos/sessions/${sessionId}/pull`);
+      // Add items to cart
+      cartItems.forEach(item => {
+        addToCart({
+          title: item.title,
+          amount: item.price,
+        });
+      });
+      showToast(`${cartItems.length} item${cartItems.length !== 1 ? 's' : ''} added to cart`, 'success');
+    } catch (err) {
+      console.error('[pos] Add linked cart error:', err);
+      setErrorMessage('Failed to add items from linked cart');
+    }
+  };
+
   // ─── Reader status badge ───────────────────────────────────────────────────────────────────
 
   const readerBadge = {
@@ -525,6 +780,16 @@ export default function POSPage() {
               placeholder="Search by title or SKU…"
               className="flex-1 border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
             />
+            <button
+              onClick={() => {
+                setCameraOpen(true);
+                startQRScan();
+              }}
+              className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 transition"
+              title="Scan QR code on price label"
+            >
+              📷
+            </button>
           </div>
 
           {searchResults.length > 0 && (
@@ -625,6 +890,30 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Open Carts Banner */}
+      {linkedCarts.length > 0 && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-2">
+            🛒 {linkedCarts.length} shopper{linkedCarts.length !== 1 ? 's have' : ' has'} shared cart{linkedCarts.length !== 1 ? 's' : ''}
+          </p>
+          <div className="space-y-2">
+            {linkedCarts.map(lc => (
+              <div key={lc.id} className="flex justify-between items-center">
+                <span className="text-xs text-amber-900 dark:text-amber-200">
+                  {lc.shopperName} ({lc.cartItems.length} item{lc.cartItems.length !== 1 ? 's' : ''})
+                </span>
+                <button
+                  onClick={() => handleAddLinkedCart(lc.id, lc.cartItems)}
+                  className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline"
+                >
+                  [Add]
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Cart display */}
       {cart.length > 0 && (
         <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-sage-200 dark:border-gray-700">
@@ -686,36 +975,153 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Payment mode selector */}
+      {/* Payment method selector (2×2 grid) */}
       {cart.length > 0 && (
-        <div className="mb-4 flex gap-2">
-          <button
-            onClick={() => {
-              setPaymentMode('card');
-              setNumpadOpen(false);
-            }}
-            className={`flex-1 py-3 rounded-xl font-semibold transition ${
-              paymentMode === 'card'
-                ? 'bg-sage-700 text-white'
-                : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
-            }`}
-          >
-            💳 Card
-          </button>
-          <button
-            onClick={() => {
-              setPaymentMode('cash');
-              setCashReceived(0);
-              setCashNumpadValue('');
-            }}
-            className={`flex-1 py-3 rounded-xl font-semibold transition ${
-              paymentMode === 'cash'
-                ? 'bg-sage-700 text-white'
-                : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
-            }`}
-          >
-            💵 Cash
-          </button>
+        <div className="mb-4">
+          <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">How are they paying?</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                setPaymentMode('card');
+                setNumpadOpen(false);
+              }}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'card'
+                  ? 'bg-sage-700 text-white'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+              }`}
+            >
+              <span className="text-xl">💳</span>
+              <span className="text-xs">Card Reader</span>
+            </button>
+            <button
+              onClick={() => {
+                setPaymentMode('cash');
+                setCashReceived(0);
+                setCashNumpadValue('');
+              }}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'cash'
+                  ? 'bg-sage-700 text-white'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+              }`}
+            >
+              <span className="text-xl">💵</span>
+              <span className="text-xs">Cash</span>
+            </button>
+            <button
+              onClick={() => setPaymentMode('qr')}
+              disabled={cart.length === 0}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'qr'
+                  ? 'bg-sage-700 text-white'
+                  : cart.length === 0
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+              }`}
+            >
+              <span className="text-xl">📲</span>
+              <span className="text-xs">Send QR</span>
+            </button>
+            <button
+              onClick={() => setPaymentMode('invoice')}
+              disabled={!holds || holds.length === 0}
+              title={!holds || holds.length === 0 ? 'No active holds' : ''}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'invoice'
+                  ? 'bg-sage-700 text-white'
+                  : !holds || holds.length === 0
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+              }`}
+            >
+              <span className="text-xl">📧</span>
+              <span className="text-xs">Invoice</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method: QR Code */}
+      {paymentMode === 'qr' && cart.length > 0 && (
+        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
+          <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">📲 Shopper Scan to Pay</h4>
+          <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Total: ${cartTotal.toFixed(2)}</p>
+
+          {paymentLinkStatus === 'idle' && (
+            <button
+              onClick={handleGeneratePaymentQr}
+              disabled={paymentLinkStatus === 'generating'}
+              className="w-full py-3 rounded-lg bg-sage-700 text-white font-semibold hover:bg-sage-800 transition disabled:opacity-50"
+            >
+              {paymentLinkStatus === 'generating' ? 'Generating…' : 'Generate QR Code'}
+            </button>
+          )}
+
+          {paymentLinkQr && (
+            <div className="my-3 flex justify-center">
+              <img src={paymentLinkQr} alt="Payment QR" className="w-48 h-48 rounded-lg" />
+            </div>
+          )}
+
+          {paymentLinkStatus === 'waiting' && (
+            <div className="text-center text-sm text-warm-600 dark:text-warm-400">
+              ⏳ Waiting for payment…
+            </div>
+          )}
+
+          {paymentLinkStatus === 'paid' && (
+            <div className="text-center">
+              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-3">
+                ✅ Paid! ${cartTotal.toFixed(2)} received
+              </p>
+              <button
+                onClick={handleNewTransaction}
+                className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
+              >
+                New Transaction
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment Method: Invoice/Holds */}
+      {paymentMode === 'invoice' && (
+        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
+          <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">📧 Send Invoice</h4>
+
+          {holdsLoading && <p className="text-sm text-warm-600 dark:text-warm-400">Loading holds…</p>}
+
+          {!holdsLoading && holds.length === 0 && (
+            <p className="text-sm text-warm-600 dark:text-warm-400">No active holds for this sale.</p>
+          )}
+
+          {!holdsLoading && holds.length > 0 && (
+            <div className="space-y-3 max-h-60 overflow-y-auto">
+              {holds.map(hold => (
+                <div
+                  key={hold.reservationId}
+                  className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">{hold.shopperName}</p>
+                      <p className="text-xs text-warm-500 dark:text-warm-400">{hold.shopperEmail}</p>
+                    </div>
+                    <span className="text-sm font-bold text-sage-700">${(hold.itemPrice / 100).toFixed(2)}</span>
+                  </div>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-2">{hold.itemTitle}</p>
+                  <button
+                    onClick={() => handleSendInvoice(hold.reservationId, hold.shopperEmail)}
+                    className="w-full py-2 rounded-lg bg-sage-700 text-white text-xs font-semibold hover:bg-sage-800 transition"
+                  >
+                    Send Invoice →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -864,6 +1270,53 @@ export default function POSPage() {
         </a>
       </div>
       </div>
+
+      {/* QR Scan Camera Modal */}
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex flex-col items-center justify-center">
+          <div className="w-full h-full max-w-md max-h-screen flex flex-col items-center justify-center p-4 relative">
+            <button
+              onClick={stopQRScan}
+              className="absolute top-4 right-4 z-50 text-white text-2xl hover:text-gray-300 transition"
+              aria-label="Close camera"
+            >
+              ✕
+            </button>
+
+            <div className="relative w-full">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full rounded-lg"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+
+              {qrScanStatus === 'scanning' && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-32 h-32 border-2 border-green-500 rounded-lg opacity-50" />
+                </div>
+              )}
+
+              {qrScanStatus === 'error' && qrScanMessage && (
+                <div className="absolute bottom-0 left-0 right-0 bg-red-600 text-white p-2 text-xs rounded-b-lg text-center">
+                  {qrScanMessage}
+                </div>
+              )}
+
+              {qrScanStatus === 'found' && (
+                <div className="absolute bottom-0 left-0 right-0 bg-green-600 text-white p-2 text-xs rounded-b-lg text-center">
+                  ✓ {qrScanMessage}
+                </div>
+              )}
+            </div>
+
+            <p className="mt-4 text-white text-center text-sm">
+              Point at the white QR tag on the price label
+            </p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

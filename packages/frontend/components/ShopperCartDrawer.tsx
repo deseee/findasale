@@ -4,10 +4,11 @@
  * Slide-in from right, shows summary and allows removal.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useShopperCart } from '../hooks/useShopperCart';
 import { useToast } from './ToastContext';
+import api from '../lib/api';
 import { getThumbnailUrl } from '../lib/imageUtils';
 
 interface ShopperCartDrawerProps {
@@ -19,6 +20,7 @@ interface ShopperCartDrawerProps {
 const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, saleName = 'Sale' }) => {
   const cart = useShopperCart();
   const { showToast } = useToast();
+  const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'error'>('idle');
 
   const handleRemoveItem = (itemId: string) => {
     cart.removeItem(itemId);
@@ -29,6 +31,29 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
     if (typeof window !== 'undefined' && window.confirm('Clear your entire cart?')) {
       cart.clearCart();
       showToast('Cart cleared', 'info');
+    }
+  };
+
+  const handleShareWithCashier = async () => {
+    if (!cart.saleId || cart.cartCount === 0) return;
+    setShareStatus('sharing');
+    try {
+      await api.post('/pos/sessions', {
+        saleId: cart.saleId,
+        cartItems: cart.items.map(item => ({
+          id: item.id,
+          title: item.title,
+          price: item.price ?? 0,
+          photoUrl: item.photoUrl,
+          saleId: item.saleId,
+        })),
+      });
+      setShareStatus('shared');
+      showToast('Cart shared with cashier', 'success');
+    } catch (err) {
+      setShareStatus('error');
+      showToast('Failed to share cart', 'error');
+      console.error('[drawer] Share cart error:', err);
     }
   };
 
@@ -191,6 +216,20 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
               >
                 Go to Checkout
               </button>
+
+              {/* Share with cashier */}
+              {cart.saleId && (
+                <button
+                  onClick={handleShareWithCashier}
+                  disabled={shareStatus === 'sharing'}
+                  className="w-full py-3 rounded-xl bg-sage-700 text-white font-semibold text-sm hover:bg-sage-800 transition disabled:opacity-50"
+                >
+                  {shareStatus === 'sharing' ? 'Sharing...' : shareStatus === 'shared' ? '✓ Cart shared with cashier' : '🛒 Share cart with cashier'}
+                </button>
+              )}
+              {shareStatus === 'shared' && (
+                <p className="text-xs text-center text-warm-500 mt-1">The organizer can now see your items at checkout</p>
+              )}
 
               {/* Clear Cart */}
               <button

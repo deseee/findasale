@@ -145,6 +145,8 @@ model User {
   organizerInvoices HoldInvoice[] @relation("OrganizerInvoices")
   // Feature #228: Settlement Hub — buyer transaction history
   saleTransactions SaleTransaction[]
+  // POS Upgrade: Shopper cart sessions
+  shopperPOSSessions POSSession[] @relation("ShopperPOSSessions")
 
   // Phase 2a: Explorer's Guild — XP Economy
   guildXp         Int           @default(0)         // Phase 2a: Cumulative XP, never resets, used for rank calculation
@@ -254,6 +256,9 @@ model Organizer {
   defaultCommissionRate Decimal?
   // Feature #235: Charity Close + Tax Receipt PDF
   donations       SaleDonation[]
+  // POS Upgrade: Open Cart sessions and payment links
+  posSessions     POSSession[]
+  posPaymentLinks POSPaymentLink[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -419,6 +424,9 @@ model Sale {
   // Feature #371: Auto High-Value Item Flagging
   highValueThresholdUSD Decimal @default(500)
   autoFlagHighValue     Boolean @default(true)
+  // POS Upgrade: Open Cart sessions and payment links
+  posSessions     POSSession[]
+  posPaymentLinks POSPaymentLink[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -2477,4 +2485,48 @@ model DonatedItem {
 
   @@index([donationId])
   @@index([itemId])
+}
+
+// POS Upgrade: Server-side session for Open Carts (shopper cart → organizer POS sync)
+model POSSession {
+  id          String   @id @default(cuid())
+  organizerId String
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  shopperId   String?
+  shopper     User?    @relation("ShopperPOSSessions", fields: [shopperId], references: [id], onDelete: SetNull)
+  // Cart items shared from shopper's localStorage cart
+  cartItems   Json     @default("[]") // Array of {id, title, price, photoUrl, saleId}
+  status      String   @default("OPEN") // OPEN | PULLED | COMPLETED | ABANDONED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime // 2 hours from creation
+
+  @@index([organizerId, saleId, status])
+  @@index([shopperId])
+  @@index([expiresAt])
+}
+
+// POS Upgrade: Stripe Payment Link generated for shopper self-checkout via QR
+model POSPaymentLink {
+  id                  String   @id @default(cuid())
+  organizerId         String
+  organizer           Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  saleId              String
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  stripePaymentLinkId String   @unique
+  stripePaymentLinkUrl String  // the buy.stripe.com/... URL
+  qrCodeDataUrl       String?  // base64 QR code image, generated on backend
+  amount              Int      // total in cents
+  status              String   @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED | EXPIRED
+  // Items in this payment link (for marking SOLD on webhook)
+  itemIds             String[] @default([])
+  purchaseIds         String[] @default([]) // created when shopper pays
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  expiresAt           DateTime? // 24h
+
+  @@index([organizerId, status])
+  @@index([saleId])
 }
