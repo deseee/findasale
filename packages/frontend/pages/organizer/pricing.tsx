@@ -526,7 +526,7 @@ const PricingPage = () => {
           </div>
 
           {/* D-007: Enterprise CTA Section */}
-          <div className="mt-12 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8 text-center">
+          <div className="mt-12 mb-12 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8 text-center">
             <div className="max-w-2xl mx-auto">
               <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
                 Running a larger operation?
@@ -636,3 +636,4 @@ const PricingPage = () => {
 };
 
 export default PricingPage;
+                                                                                                                                                                                                                                                                                                                  
