@@ -594,7 +594,7 @@ const PricingPage = () => {
                   How do fees work?
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                  When you sell an item for $100, we receive $10 as a platform fee. PRO and TEAMS drop that to 8%.  If the shopper pays with credit card, Stripe fees average 3%.
+                  When you sell an item for $100, we receive $10 (10%) as a platform fee. PRO and TEAMS drop that to $8 (8%).  If the shopper pays with credit card, Stripe fees average $3.20 (2.9% + 0.30 cents) .
                 </p>
               </div>
 
@@ -609,10 +609,10 @@ const PricingPage = () => {
 
               <div>
                 <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                  *What do you mean Unlimited? 
+                  * What do you mean Unlimited? *
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                   While we truly mean unlimited we do employ platform abuse prevention mechanisms, time based rate limits and queues, soft data storage caps, post-sale data archival, etc..  You and your team members won't hit these limits with normal use.
+                   While we truly mean unlimited we do employ practical platform abuse prevention mechanisms, time based rate limits and queues, soft data storage caps, post-sale data archival, etc..  You and your team members won't hit these limits with normal use.
                 </p>
               </div>
 
