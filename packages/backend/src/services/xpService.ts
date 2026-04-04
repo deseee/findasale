@@ -49,7 +49,7 @@ export const XP_AWARDS = {
   STREAK_MILESTONE_20: 20, // 20-day streak bonus
 
   // Collections and challenges
-  COLLECTOR_PASSPORT_COMPLETE: 50, // One-time: 5+ categories collected
+  COLLECTOR_PASSPORT_COMPLETE: 50, // One-time: passport complete (specialties + categories + keywords all non-empty)
   TRAIL_COMPLETE: 100, // One-time per trail: all QR codes found
 
   // Auctions (per spec Decision 5, wins only)
@@ -139,15 +139,31 @@ export function getRankProgress(currentXp: number) {
 /**
  * Check if user has reached daily XP cap for a given type
  * Returns remaining XP that can be awarded today (0 if cap reached)
+ * For ITEM_SCANNED, Hunt Pass subscribers get a higher cap (150 instead of 100)
  */
 export async function checkDailyXpCap(
   userId: string,
   type: string
 ): Promise<number> {
-  const cap = DAILY_XP_CAPS[type as keyof typeof DAILY_XP_CAPS];
+  let cap = DAILY_XP_CAPS[type as keyof typeof DAILY_XP_CAPS];
   if (!cap) return Number.MAX_SAFE_INTEGER; // No cap for this type
 
   try {
+    // Hunt Pass bonus: raise ITEM_SCANNED cap from 100 to 150
+    if (type === 'ITEM_SCANNED') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          huntPassActive: true,
+          huntPassExpiry: true,
+        },
+      });
+
+      if (user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date()) {
+        cap = 150; // Hunt Pass XP cap for treasure hunt scans
+      }
+    }
+
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 

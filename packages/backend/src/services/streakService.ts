@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { checkAndAward } from './achievementService';
+import { checkStreakMilestones } from './xpService'; // Phase 2a: XP streak milestones
 
 /**
  * Get ISO week string: "2026-W12"
@@ -89,6 +90,11 @@ export const recordVisit = async (userId: string): Promise<void> => {
       // Award weekend visit achievements (fire-and-forget)
       checkAndAward(userId, 'WEEKEND_VISIT').catch((err) =>
         console.warn('[streak] Failed to award visit achievement:', err)
+      );
+
+      // Phase 2a: Check streak milestones (5, 10, 20 day bonuses) — fire-and-forget
+      checkStreakMilestones(userId, newStreak).catch((err) =>
+        console.warn('[xpService] Failed to check streak milestones:', err)
       );
     }
     // If same week, no-op (already visited this week)

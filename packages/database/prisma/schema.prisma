@@ -151,6 +151,7 @@ model User {
   explorerRank    ExplorerRank  @default(INITIATE)  // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
   seasonalResetAt DateTime?                         // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
   rarityBoosts    RarityBoost[]  @relation("RarityBoosts")  // Phase 2a: Active rarity boosts for upcoming sales
+  passportCompleted Boolean      @default(false)    // Phase 2a: Collector Passport completed (earned COLLECTOR_PASSPORT_COMPLETE 50 XP)
 
   // Platform Safety #99: Export Rate Limiting (1 per month per account)
   lastExportAt DateTime?

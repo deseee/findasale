@@ -7,6 +7,50 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S391 COMPLETE (2026-04-03):** All 5 deferred S390b items resolved — 6 parallel agents across 2 batches, zero TS errors.
+
+**S391 Summary:**
+
+Resolved all items deferred from S390b plus Hunt Pass Option B (game-designed and implemented).
+
+**Batch 1 (4 agents parallel):**
+- **Condition Rating XP (WIRED):** itemController.ts updateItem now awards 3 XP when organizer sets conditionGrade for the first time. Checks PointsTransaction to prevent duplicates.
+- **Streak Milestone Triggers (WIRED):** streakService.ts recordVisit() now calls checkStreakMilestones() after updating VisitStreak. Awards 5/10/20 XP at 5/10/20-day streaks.
+- **Collector Passport Completion XP (WIRED + MIGRATION):** collectorPassportService.ts checkAndAwardPassportCompletion() fires after every passport update. Awards 50 XP when specialties + categories + keywords all non-empty. `passportCompleted` Boolean added to User model. Migration: 20260403_add_passport_completed.
+- **Haul Posts #88 (LIVE):** 3 new files created — useHaulPosts.ts hook, haul-posts.tsx feed page (grid, likes, dark mode), haul-posts/create.tsx (photo upload, caption, linked items). Layout.tsx wired with nav link. coming-soon.tsx redirects to new page.
+
+**Batch 2 (2 agents parallel — Hunt Pass Option B):**
+- **Treasure Hunt Pro (WIRED):** xpService.ts checkDailyXpCap raises cap from 100→150 for Hunt Pass. itemController.ts recordQrScan applies +10% bonus multiplier for Hunt Pass holders. hunt-pass.tsx benefit added.
+- **Rare Finds Pass (WIRED + NEW PAGES):** itemController.ts isItemVisibleToUser() filters Rare items 6h early, Legendary 12h early for Hunt Pass. New GET /items/rare-finds endpoint (auth + Hunt Pass required). New RareFindsFeed.tsx component on shopper dashboard (Hunt Pass only). New rare-finds.tsx full page with rarity filters. hunt-pass.tsx benefit added.
+
+**S391 Files Changed (16 modified, 5 new):**
+- `packages/backend/src/controllers/itemController.ts` — condition rating XP + treasure hunt pro + rare finds visibility + rare finds endpoint
+- `packages/backend/src/services/xpService.ts` — daily cap Hunt Pass override + passport comment
+- `packages/backend/src/services/streakService.ts` — streak milestone trigger wired
+- `packages/backend/src/services/collectorPassportService.ts` — passport completion check + XP award
+- `packages/backend/src/routes/items.ts` — rare-finds route added
+- `packages/database/prisma/schema.prisma` — passportCompleted on User
+- `packages/database/prisma/migrations/20260403_add_passport_completed/migration.sql` — NEW
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — Treasure Hunt Pro + Rare Finds Pass benefits
+- `packages/frontend/pages/shopper/dashboard.tsx` — Rare Finds feed section (Hunt Pass only)
+- `packages/frontend/pages/shopper/haul-posts.tsx` — NEW (community haul feed)
+- `packages/frontend/pages/shopper/haul-posts/create.tsx` — NEW (create haul post)
+- `packages/frontend/pages/shopper/rare-finds.tsx` — NEW (full rare finds page)
+- `packages/frontend/hooks/useHaulPosts.ts` — NEW (haul post hooks)
+- `packages/frontend/components/RareFindsFeed.tsx` — NEW (rare finds dashboard widget)
+- `packages/frontend/components/Layout.tsx` — Haul Posts nav link
+- `packages/frontend/pages/haul/coming-soon.tsx` — redirect to new haul-posts page
+
+**S391 Migration Required:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
 **S390b COMPLETE (2026-04-03):** Deferred + gap items from alignment doc — 5 parallel agents, all zero TS errors.
 
 **S390b Summary:**

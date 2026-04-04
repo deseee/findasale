@@ -22,6 +22,7 @@ import {
   getQrCode,
   recordQrScan,
   closeAuctionEndpoint,
+  getRareFindsItems,
 } from '../controllers/itemController';
 import { getComps } from '../controllers/ebayController'; // Feature #229: eBay price comps
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
@@ -55,6 +56,7 @@ router.use(itemEndpointLimiter);
 router.get('/search', searchItemsHandler);           // GET /api/items/search?q=...
 router.get('/categories', getItemCategoriesHandler); // GET /api/items/categories
 router.get('/inspiration', getInspirationItems);     // GET /api/items/inspiration — Feature #78
+router.get('/rare-finds', authenticate, getRareFindsItems); // GET /api/items/rare-finds — Hunt Pass exclusive
 
 // Phase 2B: Rapidfire Mode — Organizer-only draft items for review page
 // Must be before /:id to prevent 'drafts' being captured as an item ID

@@ -1,76 +1,63 @@
-# Patrick's Dashboard — S390 Complete (2026-04-03)
+# Patrick's Dashboard — S391 Complete (2026-04-03)
 
 ---
 
 ## Status
 
-- **Vercel:** ⚠️ S390b push pending — see push block below (23 files total)
-- **Railway:** ⚠️ S390b backend push pending (5 backend files)
-- **DB:** ✅ S389 concurrent sales migration complete (Patrick confirmed)
+- **Vercel:** ⚠️ S391 push pending — 16 modified + 5 new files (see pushblock below)
+- **Railway:** ⚠️ S391 backend push pending (6 backend files + migration)
+- **DB:** ⚠️ New migration needed: `20260403_add_passport_completed` (adds `passportCompleted` Boolean to User)
 
 ---
 
-## What Happened This Session (S390)
+## What Happened This Session (S391)
 
-**S389 alignment doc fully implemented — all 7 recommendations shipped.**
+**All 5 deferred items from S390b resolved + Hunt Pass Option B shipped.**
 
-- **Hunt Pass page:** Fixed "2x XP" → "1.5x XP" everywhere. Added XP Earning Matrix (Standard vs Hunt Pass columns). Flash deals now says "6 hours early". Dashboard CTA also fixed.
-- **À la carte $9.99:** Now visible on pricing page (pay-as-you-go callout section). Also mentioned in organizer onboarding state on dashboard.
-- **Treasure Hunt XP multiplier:** Ranger earns 1.5x (38 XP), Sage 1.75x (44 XP), Grandmaster 2x (50 XP) per QR scan. Daily cap still applies.
-- **Tier restructuring:** Batch operations, link click stats, and seller verification badge now available to SIMPLE tier (were PRO-only).
-- **Organizer nav:** Added "Insights" and "Branding" direct links. PRO features are now discoverable from nav.
-- **Organizer dashboard:** Tier Progress widget shows SIMPLE → PRO upgrade pitch or PRO → TEAMS pitch based on current tier.
-- **Shopper dashboard:** Rank card now shows next-rank specific benefit. New "Share & Earn" referral card added (dismissible).
-- **Collector Passport:** Renamed from "Explorer Passport" across all 4 nav locations.
-- **Shopper Referrals page:** NEW `/shopper/referrals` — full share UI with link, share buttons (WhatsApp/SMS/Twitter/Email), and referral stats.
+- **Condition Rating XP:** Organizers now earn 3 XP when they set a condition grade (S/A/B/C/D) on an item for the first time. One-time award per item.
+- **Streak Milestone Triggers:** Visit streaks now check for 5/10/20-day milestones and award 5/10/20 XP. Fires automatically when a user records a visit.
+- **Collector Passport Completion XP:** 50 XP awarded when a shopper fills in all three passport fields (specialties, categories, keywords). One-time award, tracked via new `passportCompleted` field.
+- **Haul Posts (#88) LIVE:** Two new pages — community haul feed (/shopper/haul-posts) + create page (/shopper/haul-posts/create). Grid layout, likes, dark mode, nav link added.
+- **Treasure Hunt Pro (Hunt Pass perk):** +10% XP bonus per QR scan on top of rank multiplier. Daily cap raised from 100 → 150 for Hunt Pass subscribers.
+- **Rare Finds Pass (Hunt Pass perk):** Rare items visible 6h early, Legendary 12h early to Hunt Pass holders. New /shopper/rare-finds page with rarity filters. Dashboard widget shows latest rare finds for subscribers.
 
 ---
 
-## What Happened Last Session (S389)
+## What Happened Last Session (S390/S390b)
 
-**P2/P3 sprint + gamification wave + TS fix + comprehensive alignment analysis.**
-
-**Wave 1 — 18 files:**
-- New **Price Research Panel** consolidates AI estimate + eBay comps + valuation into collapsible panel on add/edit/review item pages
-- **Reverse Auction** listing type added to add-items dropdown
-- **Flash Deal ⚡** button fully wired in organizer dashboard (was broken before)
-- **TierComparisonTable** fixed: SIMPLE now correctly shows 5 photos / 200 items (was showing 3/100)
-- **Verified Purchase badge** added to reviews (✓ on reviews from verified buyers)
-- **Settlement receipt** now shows Stripe transfer ID + failure banner
-- **Crossed-out original price** on item cards and detail pages (when markdown was applied)
-- **Concurrent sales gate** fully implemented: SIMPLE=1 active sale, PRO=3, TEAMS=unlimited. 409 error + upgrade CTA shown if exceeded.
-
-**Wave 2 — 6 files (gamification):**
-- **Scout hold bug fixed** — Scout was getting 30 min holds (same as Initiate). Now correctly 45 min.
-- **Visit XP capped** — max 2 unique sales/day earn XP, 100 XP/month from visits total
-- **Hunt Pass 1.5x multiplier** now actually applies to purchase XP and auction win XP
-- **Rank-up notifications** — when you rank up, you get a congratulatory in-app notification
-- **Referral system backend complete** — signing up with a referral code now awards 20 XP to referrer; first purchase awards 30 XP
-
-**TS fix:** Railway was blocked by a duplicate variable declaration in saleController.ts. Fixed and pushed. Railway is green.
-
-**Comprehensive alignment doc produced:** `claude_docs/strategy/S389-comprehensive-alignment.md` — full audit of all features × gamification × nav × dashboards. Read this before next session.
-
----
-
-## What Happened Last Session (S388)
-
-Documentation & coaching overhaul: pricing fixes ($29/$79), XP thresholds, AI branding purge, camera coaching banner, 7 new FAQs.
-
----
-
-## ⚠️ High Priority Before Next Session
-
-1. **Hunt Pass page says "2x XP" — code enforces 1.5x.** Fix the copy on hunt-pass.tsx before any beta user sees it. (15 min fix)
-2. **À la carte $9.99 is invisible on the pricing page.** Organizers who just want one sale don't know this exists. Revenue leak. Needs a section on pricing.tsx.
-3. **Referral UI page missing.** Backend is wired but there's no `/shopper/referrals` page where users can see their referral code. Feature works but is invisible.
+S389 alignment doc fully implemented — Hunt Pass copy fixes, à la carte pricing, tier restructuring, organizer nav/dashboard improvements, referral UI page, share moments, Hunt Pass cosmetics, Brand Follow wiring.
 
 ---
 
 ## Patrick Action Items
 
 ```powershell
-# Run concurrent sales migration against Railway DB
+# STEP 1: Push all files
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/services/streakService.ts
+git add packages/backend/src/services/collectorPassportService.ts
+git add packages/backend/src/routes/items.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260403_add_passport_completed/migration.sql
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/pages/shopper/haul-posts.tsx
+git add packages/frontend/pages/shopper/haul-posts/create.tsx
+git add packages/frontend/pages/shopper/rare-finds.tsx
+git add packages/frontend/hooks/useHaulPosts.ts
+git add packages/frontend/components/RareFindsFeed.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/haul/coming-soon.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S391: condition rating XP, streak milestones, passport completion, haul posts, Hunt Pass Option B (Treasure Hunt Pro + Rare Finds Pass)"
+.\push.ps1
+```
+
+```powershell
+# STEP 2: Run migration (after push deploys)
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
@@ -97,12 +84,8 @@ Full report: `claude_docs/audits/weekly-audit-2026-04-02.md`
 
 ---
 
-## Next Session (S390)
+## Next Session (S392)
 
-Read `claude_docs/strategy/S389-comprehensive-alignment.md` first. Key decisions it surfaces:
-
-1. **Hunt Pass copy fix** (2x → 1.5x) + XP earning matrix added to hunt-pass.tsx — 15 min
-2. **À la carte on pricing page** — add visible section, estimate 30 min
-3. **First rank gate implementation** — make rank non-cosmetic for Ranger+ (proposal in alignment doc)
-4. **Referral UI page** — /shopper/referrals showing code + status
-5. **Tier rearrangement** — move batch ops + seller badge + link click stats → SIMPLE (board approved S389)
+- Chrome QA: Haul Posts feed + create page, Rare Finds page, treasure hunt pro XP
+- Smoke test all S391 changes on finda.sale after deploy
+- Continue from roadmap — next deferred items or bug fixes from audit alerts

@@ -1,65 +1,104 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../components/AuthContext';
 import api from '../lib/api';
+
+export interface HaulPostUser {
+  id: string;
+  name: string;
+}
 
 export interface HaulPost {
   id: number;
   userId: string;
+  user: HaulPostUser;
   photoUrl: string;
-  caption: string | null;
-  likesCount: number;
-  createdAt: string;
-  user?: { id: string; name: string | null };
-  sale?: { id: string; title: string } | null;
-  isHaulPost: boolean;
+  caption?: string;
   linkedItemIds: string[];
+  likesCount: number;
+  isHaulPost: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export const useHaulPosts = () => {
-  const [hauls, setHauls] = useState<HaulPost[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * Fetch paginated list of approved haul posts (public feed)
+ */
+export const useHaulPosts = (page: number = 1, limit: number = 20) => {
+  return useQuery({
+    queryKey: ['haul-posts', page, limit],
+    queryFn: async (): Promise<HaulPost[]> => {
+      const response = await api.get('/ugc-photos/haul-posts', {
+        params: { page, limit },
+      });
+      return response.data;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+};
 
-  const fetchHauls = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const res = await api.get('/ugc-photos/haul-posts');
-      setHauls(res.data || []);
-    } catch (err: any) {
-      console.error('Failed to load haul posts:', err);
-      setError(err.message || 'Failed to load haul posts');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+/**
+ * Create a new haul post (authenticated)
+ */
+export const useCreateHaulPost = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  useEffect(() => {
-    fetchHauls();
-  }, [fetchHauls]);
+  return useMutation({
+    mutationFn: async (data: {
+      photoUrl: string;
+      caption?: string;
+      saleId?: string;
+      linkedItemIds?: string[];
+    }) => {
+      const response = await api.post('/ugc-photos/haul-posts', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate haul posts list
+      queryClient.invalidateQueries({
+        queryKey: ['haul-posts'],
+      });
+    },
+  });
+};
 
-  const createHaulPost = async (data: { photoUrl: string; caption?: string; saleId?: string; linkedItemIds?: string[] }) => {
-    try {
-      const res = await api.post('/ugc-photos/haul-posts', data);
-      await fetchHauls();
-      return res.data;
-    } catch (err: any) {
-      throw new Error(err.response?.data?.message || 'Failed to create haul post');
-    }
-  };
+/**
+ * Like/react to a haul post (authenticated)
+ */
+export const useAddHaulReaction = () => {
+  const queryClient = useQueryClient();
 
-  const toggleLike = async (photoId: number, isLiked: boolean) => {
-    try {
-      if (isLiked) {
-        await api.delete(`/ugc-photos/${photoId}/reactions`);
-      } else {
-        await api.post(`/ugc-photos/${photoId}/reactions`, { type: 'LIKE' });
-      }
-      await fetchHauls();
-    } catch (err: any) {
-      console.error('Failed to toggle like:', err);
-      throw new Error(err.response?.data?.message || 'Failed to toggle like');
-    }
-  };
+  return useMutation({
+    mutationFn: async (photoId: number) => {
+      const response = await api.post(`/ugc-photos/${photoId}/reactions`);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate haul posts to refresh counts
+      queryClient.invalidateQueries({
+        queryKey: ['haul-posts'],
+      });
+    },
+  });
+};
 
-  return { hauls, isLoading, error, createHaulPost, toggleLike, refetch: fetchHauls };
+/**
+ * Unlike/remove reaction from a haul post (authenticated)
+ */
+export const useRemoveHaulReaction = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (photoId: number) => {
+      const response = await api.delete(`/ugc-photos/${photoId}/reactions`);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate haul posts to refresh counts
+      queryClient.invalidateQueries({
+        queryKey: ['haul-posts'],
+      });
+    },
+  });
 };

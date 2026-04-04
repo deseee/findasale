@@ -28,6 +28,7 @@ import NotificationPreferences from '../../components/NotificationPreferences';
 import MyPickupAppointments from '../../components/MyPickupAppointments';
 import EmptyState from '../../components/EmptyState';
 import StreakWidget from '../../components/StreakWidget'; // CD2 Phase 2: Streak Challenges
+import RareFindsFeed from '../../components/RareFindsFeed'; // Hunt Pass: Rare Finds section
 import Skeleton from '../../components/Skeleton';
 import { useFollows } from '../../hooks/useFollows';
 import BrandFollowManager from '../../components/BrandFollowManager';
@@ -697,10 +698,15 @@ const ShopperDashboard = () => {
                     <span className="text-xl">✅</span>
                     <div className="flex-1">
                       <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass Active</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 1.5x XP on every action and get 6-hour early access to Legendary items!</p>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 1.5x XP on every action and get early access to Rare and Legendary items!</p>
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Rare Finds Feed — Hunt Pass only */}
+              {userData && userData.huntPassActive && (
+                <RareFindsFeed />
               )}
 
               {/* Achievements Badges */}
