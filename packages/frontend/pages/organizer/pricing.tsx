@@ -37,23 +37,18 @@ const TIERS: PricingTier[] = [
     id: 'SIMPLE',
     name: 'SIMPLE',
     price: null,
-    period: 'Free + 10% fee',
-    description: 'Perfect for getting started',
+    period: 'Free — 10% when items sell',
+    description: 'Perfect for trying FindA.Sale or running occasional sales.',
     featured: false,
     stripePrice: null,
     features: [
-      '10% platform fee per item',
-      'Up to 200 items per sale',
-      'Up to 5 photos per item',
-      '100 AI tags per month',
-      'Single sale dashboard',
-      'Basic inventory management',
-      'Photo upload & tagging',
-      'Batch operations',
-      'Link click stats',
-      'Seller verification badge',
-      'FAQ + Organizer Guide',
-      'Email support',
+      'Photo to listing — snap, confirm, publish',
+      'Up to 200 items per sale, 5 photos each',
+      '100 auto tags per month',
+      '1 active sale at a time',
+      'QR codes for every item and sale',
+      'Social post generator',
+      'Self-serve help center + organizer guides',
     ],
   },
   {
@@ -61,30 +56,22 @@ const TIERS: PricingTier[] = [
     name: 'PRO',
     price: 29,
     period: 'per month',
-    description: 'For growing organizers',
+    description: 'For organizers running multiple sales who want to save hours of manual work.',
     featured: true,
     stripePrice: 'price_1TDUQsLTUdEUnHOTzG6cVDwu',
     features: [
-      '8% platform fee',
-      '500 items per sale',
-      '10 photos per item',
-      '2,000 AI tags per month',
-      'Unlimited concurrent sales',
-      'CSV exports',
-      'AI valuation engine',
-      'Flip Report generation',
-      'Seller Performance analytics',
-      'Print Kit templates',
-      'Brand Kit customization',
-      'Auto-Markdown descriptions',
-      'Inventory Syndication',
-      'Payout PDF exports',
-      'Typology Classifier',
-      'Photo Op Stations',
-      'Command Center dashboard',
-      'Batch operations',
-      'Advanced analytics',
-      'Email support, 48-hour SLA',
+      'Everything in Simple, plus:',
+      '3 concurrent sales, 500 items each',
+      '10 photos per item, 2,000 auto tags/month',
+      'Flip Report — post-sale earnings breakdown',
+      'Smart Pricing — market value estimates',
+      'Ripples — track who clicks your sale links',
+      'Brand Kit — custom logo, colors, storefront',
+      'Command Center — manage all sales at once',
+      'Batch operations + advanced analytics',
+      'Multi-platform exports (CSV, JSON, Text)',
+      'Seller verification badge',
+      '24/7 support assistant + help center',
     ],
   },
   {
@@ -92,37 +79,19 @@ const TIERS: PricingTier[] = [
     name: 'TEAMS',
     price: 79,
     period: 'per month',
-    description: 'For enterprise operations',
+    description: 'For teams running sales across multiple locations, or solo power users who need API access.',
     featured: false,
     stripePrice: 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
-      '8% platform fee',
-      '2,000+ items per sale',
-      '15 photos per item',
-      'Unlimited AI tags',
+      'Everything in Pro, plus:',
       'Unlimited concurrent sales',
-      'Up to 12 team members',
-      'Multi-user workspace',
+      '2,000+ items per sale, unlimited photos',
+      'Unlimited auto tags',
+      'Multi-user workspace — up to 12 team members',
       'Team roles & permissions',
-      'CSV exports',
-      'AI valuation engine',
-      'Flip Report generation',
-      'Seller Performance analytics',
-      'Print Kit templates',
-      'Brand Kit customization',
-      'Auto-Markdown descriptions',
-      'Inventory Syndication',
-      'Payout PDF exports',
-      'Typology Classifier',
-      'Photo Op Stations',
-      'Command Center dashboard',
-      'Batch operations',
-      'Advanced analytics',
-      'API & webhooks',
-      'White-label options',
-      'Advanced fraud detection',
-      'Email support, 24-hour SLA + 1 onboarding call',
-      'Dedicated account manager',
+      'API access & webhooks',
+      'White-label customization',
+      'Community forum + 24/7 support assistant',
     ],
   },
 ];
@@ -240,10 +209,10 @@ const PricingPage = () => {
           {/* Header */}
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-4">
-              Simple, Transparent Pricing
+              Sell smarter. Spend less time on paperwork.
             </h1>
             <p className="text-xl text-warm-600 dark:text-warm-300">
-              Choose the plan that fits your business
+              Whether you're running one estate sale or managing a team, FindA.Sale handles the listings, exports, and payments so you can focus on the sale.
             </p>
           </div>
 
@@ -278,6 +247,77 @@ const PricingPage = () => {
               </button>
             </div>
           )}
+
+          {/* Value Props Callout Section */}
+          <div className="mb-16">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Photo to listing */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-3xl mb-3">📸</div>
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
+                  Photo to listing in seconds
+                </h3>
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  Snap a photo. The app fills in title, description, tags, and estimated value. Confirm and publish.
+                </p>
+              </div>
+
+              {/* List everywhere */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-3xl mb-3">🌐</div>
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
+                  List everywhere at once
+                </h3>
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  One-click exports formatted for Facebook Marketplace, Craigslist, and EstateSales.NET.
+                </p>
+              </div>
+
+              {/* Social posts */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-3xl mb-3">📱</div>
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
+                  Social posts, ready to share
+                </h3>
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  Auto-generated posts with sale photos. Track engagement with Ripples.
+                </p>
+              </div>
+
+              {/* Buyers arrive ready */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-3xl mb-3">🛍️</div>
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
+                  Buyers arrive ready
+                </h3>
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  Shoppers browse and reserve items before sale day through the Explorer's Guild.
+                </p>
+              </div>
+
+              {/* Take payments */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-3xl mb-3">💳</div>
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
+                  Take payments on the spot
+                </h3>
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  Built-in point-of-sale. No extra hardware needed.
+                </p>
+              </div>
+
+              {/* QR codes */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
+                <div className="text-3xl mb-3">🔲</div>
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
+                  QR codes on every item
+                </h3>
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  Print, stick, scan. Shoppers see listings and prices from their phone.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Pricing Tiers */}
           <div className="grid md:grid-cols-3 gap-4 md:gap-8 mb-12">
@@ -399,39 +439,51 @@ const PricingPage = () => {
           <div className="mb-12 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8 text-center">
             <div className="max-w-2xl mx-auto">
               <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
-                Just one sale? Pay as you go.
+                Just one big sale? Upgrade for $9.99.
               </h2>
               <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
-                No monthly commitment. Publish a single sale for <strong>$9.99</strong>.
+                Unlock PRO-level capacity for a single sale. No subscription needed.
               </p>
 
               {/* Features for à la carte */}
-              <div className="grid md:grid-cols-3 gap-4 mb-8">
+              <div className="grid md:grid-cols-2 gap-4 mb-8">
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                   <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-                    Everything in SIMPLE
+                    500 items, 10 photos each
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    All features, one time
+                    5x the items, 2x the photos vs. the free plan.
                   </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                   <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-                    One-time payment
+                    500 auto tags for that sale
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    No recurring fees
+                    Every item gets tagged. Descriptions fill themselves in.
                   </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                   <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-                    No subscription required
+                    Flip Report included
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-300">
-                    Cancel anytime
+                    See exactly what sold, what didn't, and your total earnings.
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                    Virtual Queue
+                  </p>
+                  <p className="text-xs text-warm-600 dark:text-warm-300">
+                    Let shoppers reserve items online before sale day.
                   </p>
                 </div>
               </div>
+
+              <p className="text-sm text-warm-600 dark:text-warm-300 mb-6">
+                Same 10% platform fee as Simple. One-time $9.99 payment.
+              </p>
 
               <Link
                 href="/organizer/create-sale"
@@ -450,11 +502,11 @@ const PricingPage = () => {
                 title="Ready to Scale Your Sales?"
                 description="Upgrade to PRO to unlock powerful tools, lower fees, and expert support."
                 benefits={[
-                  'Reduce fees from 10% to 8%',
-                  'Unlimited photos per item',
-                  'Advanced analytics & insights',
+                  'Drop fees from 10% to 8%',
+                  'Run 3 sales at once',
+                  'Smart Pricing and Flip Reports',
                   'Command Center for multi-sale management',
-                  'Priority support (24-hour response)',
+                  '24/7 support assistant',
                 ]}
                 ctaText="Upgrade to PRO"
                 ctaHref="/organizer/pricing"
@@ -475,10 +527,10 @@ const PricingPage = () => {
           <div className="mt-12 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8 text-center">
             <div className="max-w-2xl mx-auto">
               <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
-                Need Unlimited Team Members?
+                Running a larger operation?
               </h2>
               <p className="text-lg text-warm-700 dark:text-warm-300 mb-6">
-                Upgrade to <strong>Enterprise</strong> for unlimited team members, unlimited items per sale, priority support, and annual contract flexibility.
+                For auction houses, franchise networks, or high-volume teams that need unlimited everything, custom integrations, and a dedicated support contact.
               </p>
               <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg inline-block">
                 <p className="text-warm-600 dark:text-warm-300 text-sm">Pricing starts at <span className="text-2xl font-bold text-warm-900 dark:text-warm-100">$500/mo</span> (annual contracts)</p>
@@ -532,6 +584,33 @@ const PricingPage = () => {
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
                   Yes, you can cancel your subscription at any time. You'll retain access until the end of your billing period.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                  I'm worried about the 10% fee on Simple. How does that compare?
+                </h3>
+                <p className="text-warm-700 dark:text-warm-300">
+                  When you list an item for $100 and it sells, we take $10 as a platform fee. PRO and TEAMS drop that to 8%. Many organizers find the fee pays for itself — the time you save is worth more than the 2% difference.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                  What happens if I run out of auto tags mid-sale?
+                </h3>
+                <p className="text-warm-700 dark:text-warm-300">
+                  On Simple, you get 100 per month — resets on the 1st. If you hit the limit, you can still add items manually, or upgrade that sale for $9.99 to get 500 auto tags. On PRO and TEAMS, you won't hit the limit in normal use.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                  Can I export my data if I leave?
+                </h3>
+                <p className="text-warm-700 dark:text-warm-300">
+                  Yes. You can download all your listings, photos, and sales data anytime, no questions asked. Your data is yours.
                 </p>
               </div>
             </div>

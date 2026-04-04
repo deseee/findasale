@@ -5,6 +5,30 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-04-04 (S392) — À La Carte Feature Set Defined
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** The $9.99 per-sale ala carte fee (S268) now has a defined feature set: 500 items per sale, 10 photos per item, 500 auto tags for that sale, Flip Report, Virtual Queue (Hold & Reservations). Platform fee remains 10% (same as SIMPLE). Multi-platform exports are NOT an ala carte differentiator — already available to all tiers. Designed as "PRO capacity for one sale" to drive PRO conversion after 3 purchases ($29.97 > $29/mo PRO). Supersedes the vague "Everything in SIMPLE" framing.
+
+---
+
+## 2026-04-04 (S392) — S251 Support Tiers SUPERSEDED by S268 Automated Support Stack
+
+**Status:** LOCKED (clarification)
+**Made by:** Patrick
+**Rationale:** S251 (Support Tier Definitions) is superseded by S268 (Automated Support Stack — Zero-Human, 5-Layer). The pricing page must NOT show: "Email support, 48-hour SLA" (PRO), "24-hour SLA + 1 onboarding call" (TEAMS), or "Dedicated account manager" (TEAMS). Correct support language: SIMPLE = self-serve help center + organizer guides; PRO = 24/7 support assistant + help center; TEAMS = community forum + support assistant + help center; ENTERPRISE = dedicated support contact. No SLA promises on any tier. No "AI" in support language.
+
+---
+
+## 2026-04-04 (S392) — Feature Naming Standardization (Pricing Page)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Three renames locked for all customer-facing copy: "AI tags" → "Auto Tags", "AI valuation engine" → "Smart Pricing", "Link click stats" → "Ripples". No feature on the pricing page or in-app menus should reference "AI" in its name. These names apply to the pricing page, TierComparisonTable, and any marketing copy.
+
+---
+
 ## 2026-03-30 (S341) — Hold-to-Pay Architecture Decisions (7 items)
 
 **Status:** LOCKED (all 7 items)
@@ -177,7 +201,7 @@ Only decisions that affect future sessions — not implementation details.
 
 ## 2026-03-23 (S251) — Support Tier Definitions (SIMPLE/PRO/TEAMS/ENTERPRISE)
 
-**Status:** LOCKED
+**Status:** LOCKED ⚠️ SUPERSEDED by S268 (Automated Support Stack) + S392 (no-SLA confirmation)
 **Made by:** Patrick
 **Rationale:** SIMPLE (Free): FAQ + Organizer Guide only. PRO ($29/mo): email support 48h SLA (Intercom/Crisp). TEAMS ($79/mo): 24h SLA + 1 onboarding call. ENTERPRISE: named contact, 4h SLA. Automation stack: Intercom or Crisp free tier + FAQ deflects 80% volume. Patrick handles escalations only.
 

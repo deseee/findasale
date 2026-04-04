@@ -14,13 +14,7 @@ interface TierComparisonTableProps {
 
 const FEATURES: Feature[] = [
   {
-    name: 'Create unlimited sales',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'Manage item inventory',
+    name: 'Photo to listing',
     simple: true,
     pro: true,
     teams: true,
@@ -38,19 +32,37 @@ const FEATURES: Feature[] = [
     teams: 'Unlimited',
   },
   {
+    name: 'Auto tags per month',
+    simple: '100',
+    pro: '2,000',
+    teams: 'Unlimited',
+  },
+  {
+    name: 'Concurrent sales',
+    simple: '1',
+    pro: '3',
+    teams: 'Unlimited',
+  },
+  {
+    name: 'QR codes',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Social post generator',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
     name: 'Email & SMS reminders',
     simple: true,
     pro: true,
     teams: true,
   },
   {
-    name: 'POS integration',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'AI-powered item tags',
+    name: 'POS',
     simple: true,
     pro: true,
     teams: true,
@@ -68,7 +80,31 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
+    name: 'Batch item operations',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Seller verification badge',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
     name: 'Brand Kit customization',
+    simple: false,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Smart Pricing',
+    simple: false,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Ripples',
     simple: false,
     pro: true,
     teams: true,
@@ -86,24 +122,6 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Batch item operations',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'Link click stats',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'Seller verification badge',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
     name: 'Advanced analytics & insights',
     simple: false,
     pro: true,
@@ -116,16 +134,16 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Social media templates',
+    name: 'Multi-platform exports (CSV, JSON, Text)',
     simple: false,
     pro: true,
     teams: true,
   },
   {
-    name: 'Priority support (24h)',
-    simple: false,
-    pro: true,
-    teams: true,
+    name: 'Support',
+    simple: 'Help center + guides',
+    pro: '24/7 support assistant',
+    teams: 'Forum + support assistant',
   },
   {
     name: 'Custom storefront slug',
@@ -164,19 +182,13 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'API access & webhooks (connect to your tools)',
+    name: 'API access & webhooks',
     simple: false,
     pro: false,
     teams: true,
   },
   {
     name: 'White-label customization',
-    simple: false,
-    pro: false,
-    teams: true,
-  },
-  {
-    name: 'Dedicated account manager',
     simple: false,
     pro: false,
     teams: true,
