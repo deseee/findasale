@@ -645,13 +645,27 @@ export default function POSPage() {
                 }, 2000);
               });
           } else {
-            setQrScanStatus('error');
-            setQrScanMessage('Invalid QR code format');
-            setTimeout(() => {
-              setQrScanStatus('scanning');
-              setQrScanMessage('');
-              animationFrameRef.current = requestAnimationFrame(scanLoop);
-            }, 2000);
+            // Check for price sheet misc-add QR (action=add-misc&price=X.XX)
+            const hasMiscAction = qrText.includes('action=add-misc');
+            const priceMatch = qrText.match(/[?&]price=([0-9.]+)/);
+            if (hasMiscAction && priceMatch) {
+              const price = parseFloat(priceMatch[1]);
+              if (!isNaN(price) && price > 0) {
+                quickAddMisc(price);
+                showToast(`✓ $${price.toFixed(2)} misc added to cart`, 'success');
+                setQrScanStatus('scanning');
+                setQrScanMessage('');
+                animationFrameRef.current = requestAnimationFrame(scanLoop);
+              }
+            } else {
+              setQrScanStatus('error');
+              setQrScanMessage('Invalid QR code format');
+              setTimeout(() => {
+                setQrScanStatus('scanning');
+                setQrScanMessage('');
+                animationFrameRef.current = requestAnimationFrame(scanLoop);
+              }, 2000);
+            }
           }
         } else {
           animationFrameRef.current = requestAnimationFrame(scanLoop);
