@@ -1007,12 +1007,17 @@ export default function POSPage() {
             </button>
             <button
               onClick={() => {
+                if (readerStatus !== 'connected') return;
                 setPaymentMode('card');
                 setNumpadOpen(false);
               }}
+              disabled={readerStatus !== 'connected'}
+              title={readerStatus !== 'connected' ? 'Tap the status indicator in the top corner to connect your reader' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
-                paymentMode === 'card'
+                paymentMode === 'card' && readerStatus === 'connected'
                   ? 'bg-sage-700 text-white'
+                  : readerStatus !== 'connected'
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
             >
