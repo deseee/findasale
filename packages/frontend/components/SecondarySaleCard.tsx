@@ -51,9 +51,9 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4">
-      <div className="flex gap-4">
+      <div className="flex flex-col sm:flex-row gap-4">
         {/* Thumbnail */}
-        <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+        <div className="flex-shrink-0 w-full sm:w-16 h-32 sm:h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
           {thumbnail ? (
             <img
               src={thumbnail}
@@ -70,7 +70,7 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
         {/* Content */}
         <div className="flex-1 min-w-0">
           {/* Title row */}
-          <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
             <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate flex-1">
               {sale.title}
             </h3>
