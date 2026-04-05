@@ -1001,7 +1001,7 @@ export default function POSPage() {
                   <p className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
                 </div>
                 <div className="flex items-center gap-3 ml-2">
-                  <span className="text-sm font-semibold text-sage-700">
+                  <span className="text-sm font-semibold text-sage-700 dark:text-green-400">
                     ${item.amount.toFixed(2)}
                   </span>
                   <button
