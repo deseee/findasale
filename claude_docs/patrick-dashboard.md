@@ -1,26 +1,30 @@
-# Patrick's Dashboard — S396 Complete (2026-04-05)
+# Patrick's Dashboard — S397 Complete (2026-04-05)
 
 ---
 
 ## Status
 
-- **Vercel:** ✅ S396 pushed
-- **Railway:** ✅ No new migrations this session
+- **Vercel:** ⏳ S397 changes ready to push
+- **Railway:** ⏳ Backend changes ready to push (itemController limit, organizers.ts active sale fix)
 - **DB:** ✅ No migration required
 
 ---
 
-## What Happened This Session (S396)
+## What Happened This Session (S397)
 
-**Rapidfire hold fix, tier limits enforced, upgrade CTAs, modal navigation fixed.**
+**Add-items page mobile UI overhaul — sort controls, toolbar layout, dark mode, navigation fixes.**
 
-- **Rapidfire photo 2+ AI hold** — Taking a 2nd photo while in add-mode no longer fires AI immediately. Backend now tracks held items in a Set and blocks the debounce reset on photo append.
-- **Photo limits enforced** — SIMPLE organizers are now blocked at 5 photos/item (ala carte and PRO get 10). Backend returns 403 with upgrade prompt; frontend RapidCapture respects the limit via tier-aware `maxPhotos`.
-- **Item limit upgrade CTA** — Hitting the 200-item SIMPLE limit now shows a clear message with a link to upgrade, instead of a silent error.
-- **AI tag limit** — `processRapidDraft` now checks monthly tag usage before running AI. SIMPLE organizers at 100 tags/month get PENDING_REVIEW status without AI tags, with a prompt to upgrade.
-- **Ala carte pricing copy** — Added "Payment of $9.99 is collected when you publish your sale." to the pricing page CTA. (The flow itself was correct — payment fires at publish.)
-- **Onboarding modals fixed** — First organizer sign-in modal completion now routes to `/organizer/create-sale`. Teams "Complete Setup" now always routes to `/organizer/workspace`.
-- **Null bytes cleaned** — `PosManualCard.tsx` and `TierComparisonTable.tsx` had trailing null bytes causing build risk; stripped.
+- **Teams modal race condition fixed** — Was firing for users who already had a workspace because the query hadn't loaded yet. Added loading guard.
+- **Review Drafts link fixed** — Was pointing to wrong sale. Now uses the correct active sale ID.
+- **Active sale logic improved** — Backend now prefers PUBLISHED sales over DRAFT when selecting the active sale.
+- **Item limit raised** — Review page was capped at 20 items. Now fetches up to 500.
+- **Sort controls added** — Name/Price/Status/Date sort buttons on add-items and review pages.
+- **Mobile item rows restructured** — Checkbox+arrow stacked left, status+trash stacked right, giving item names much more horizontal space.
+- **Header and toolbar rebuilt** — Replaced broken flex-wrap with two explicit rows each. No more elements escaping the container.
+- **Dark mode fixed** — Toolbar buttons, More Actions dropdown text, and hover states all visible now.
+- **More Actions dropdown fixed** — Was clipping off right edge of screen. Now uses fixed positioning with viewport-calculated coordinates.
+- **Item name link removed** — Clicking the item title no longer navigates to the edit page (unnecessary).
+- **Thumbnail back-nav fixed** — Removed `target="_blank"` from thumbnail link so swiping back in the PWA returns to add-items instead of exiting the app.
 
 ---
 
@@ -28,19 +32,15 @@
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/uploadController.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/backend/src/routes/organizers.ts
 git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/lib/tierEnforcement.ts
-git add packages/backend/src/jobs/processRapidDraft.ts
-git add packages/frontend/pages/organizer/pricing.tsx
 git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/frontend/components/OrganizerOnboardingModal.tsx
-git add packages/frontend/components/TeamsOnboardingWizard.tsx
-git add packages/frontend/components/PosManualCard.tsx
-git add packages/frontend/components/TierComparisonTable.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add packages/frontend/components/BulkActionDropdown.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S396: rapidfire hold fix, tier limits enforced, upgrade CTAs, modal nav fixes"
+git commit -m "S397: add-items mobile UI overhaul — sort, toolbar, dark mode, nav fixes"
 .\push.ps1
 ```
 
@@ -65,9 +65,9 @@ Full report: `claude_docs/audits/weekly-audit-2026-04-02.md`
 
 ---
 
-## Next Session (S397)
+## Next Session (S398)
 
+- Chrome QA: S397 add-items page — sort controls, toolbar, dark mode, item row layout, link removal, back-nav
 - Chrome QA: S396 fixes — rapidfire hold behavior, photo limit prompt, onboarding modal routes
 - Chrome QA: Full POS walkthrough (all 4 payment modes, camera, QR, invoice, card reader)
-- Chrome QA: S392 pricing page on finda.sale
 - Concurrent sales gate: implement from spec at `claude_docs/specs/concurrent-sales-gate-spec.md`

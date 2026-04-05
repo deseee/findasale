@@ -7,6 +7,49 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S397 COMPLETE (2026-04-05):** Add-items page mobile UI polish — sort controls, toolbar layout, dark mode fixes, item row restructure, dropdown escape fix, link/navigation cleanup
+
+**S397 Summary:**
+
+Extensive mobile UI session on the organizer add-items page (`[saleId].tsx`) and review page (`review.tsx`). Also fixed organizer dashboard bugs (Teams modal, Review Drafts link, active sale mismatch) and backend item limit.
+
+**Fixes & Changes:**
+- **Teams onboarding modal** — Was firing even when workspace existed (loading state race). Added `workspaceLoading` + `existingWorkspace` guards.
+- **Review Drafts link** — Was linking to wrong sale. Fixed to use `activeSale?.id ?? id`.
+- **Active sale selection** — Backend now prefers PUBLISHED over DRAFT when selecting active sale.
+- **Draft count scoping** — `draftItems` count now scoped to active sale only (was counting across all sales).
+- **Item limit raised** — Default limit changed from 20 to 500 in `itemController.ts` to show all items on review page.
+- **Sort controls added** — Name/Price/Status/Date sort buttons on both add-items and review pages.
+- **Item row restructure** — Checkbox+expand arrow stacked LEFT, thumbnail center, title flex-1, status badge+trash stacked RIGHT. More room for item names on mobile.
+- **Header restructured** — Two explicit rows: Row1 = checkbox + "N Items" + Review & Publish; Row2 = Export to eBay + Buyer Preview.
+- **Toolbar restructured** — Two explicit rows replacing flex-wrap chaos. Row1 = select all + count + Hide/Show/Delete; Row2 = price input + Set Price + Labels + More.
+- **Dark mode fixes** — Toolbar buttons, More Actions dropdown text, hover states all corrected.
+- **BulkActionDropdown.tsx** — Switched from `absolute` to `position: fixed` with viewport coordinates to escape parent `overflow-hidden` clipping. Dark mode text and hover fixed.
+- **Overflow fix** — Removed `overflow-hidden` from outer items card container that was clipping toolbar and dropdown.
+- **Item name link removed** — Title no longer links to edit-item page (was unnecessary navigation away).
+- **Thumbnail target="_blank" removed** — Shopper view link no longer opens new tab, fixing mobile PWA swipe-back exiting the app.
+
+**S397 Files Changed (5 files):**
+- `packages/frontend/pages/organizer/dashboard.tsx` — Teams modal guards, Review Drafts link fix, active sale preference
+- `packages/backend/src/routes/organizers.ts` — Active sale prefers PUBLISHED over DRAFT, draft count scoped
+- `packages/backend/src/controllers/itemController.ts` — Default item limit 20→500
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — Sort controls, row restructure, header/toolbar two-row layout, overflow fix, dark mode, link removal, target="_blank" removal
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Sort controls, limit=500 fetch, createdAt type fix
+- `packages/frontend/components/BulkActionDropdown.tsx` — position:fixed dropdown, dark mode, viewport coordinates
+
+**S397 QA Queue (Chrome — next session):**
+- Add-items page: sort by Name/Price/Status/Date all work correctly
+- Add-items page: item row layout — checkbox+arrow left, status+trash right, title has room
+- Add-items page: toolbar buttons visible in dark mode, no overflow
+- Add-items page: More Actions dropdown renders fully on screen, readable in dark mode
+- Add-items page: tapping item name does NOT navigate away
+- Add-items page: tapping thumbnail opens shopper view in same tab, back button returns to add-items
+- Review page: shows all items (not capped at 20), sort controls work
+- Dashboard: Teams modal does NOT fire for users with existing workspace
+- Dashboard: Review Drafts links to correct active sale
+
+---
+
 **S396 COMPLETE (2026-04-05):** Rapidfire batch hold fix, tier limit enforcement, upgrade CTAs, modal navigation fixes
 
 **S396 Summary:**
