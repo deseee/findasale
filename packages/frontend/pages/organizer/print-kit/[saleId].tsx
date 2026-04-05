@@ -466,6 +466,16 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     </button>
                     <p className="text-sm text-warm-600 dark:text-warm-400">Price tags & item stickers (12 per page)</p>
                   </div>
+
+                  <div className="text-center">
+                    <button
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/print-kit/price-sheet`, 'price-sheet.pdf')}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      💰 Price Sheet
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Pre-printed price cheat sheet ($0.25–$20)</p>
+                  </div>
                 </div>
               </div>
 

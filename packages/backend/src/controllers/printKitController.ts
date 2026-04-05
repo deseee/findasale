@@ -113,6 +113,18 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
     const items = sale.items;
     let itemIndex = 0;
 
+    // Pre-generate all item QR codes
+    const itemQrBuffers: { [itemId: string]: Buffer } = {};
+    for (const item of items) {
+      const itemUrl = `${frontendUrl}/items/${item.id}`;
+      itemQrBuffers[item.id] = await QRCode.toBuffer(itemUrl, {
+        type: 'png',
+        width: 200,
+        margin: 1,
+        color: { dark: '#1a1a2e', light: '#ffffff' },
+      });
+    }
+
     while (itemIndex < items.length) {
       doc.addPage();
 
@@ -125,7 +137,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
           const x = PAGE_MARGIN + col * STICKER_W;
           const y = PAGE_MARGIN + row * STICKER_H;
 
-          drawSticker(doc, item, x, y);
+          drawSticker(doc, item, x, y, itemQrBuffers[item.id]);
         }
       }
     }
@@ -276,7 +288,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 300,
+      width: 500,
       margin: 1,
       color: { dark: '#1a1a2e', light: '#ffffff' },
     });
@@ -328,7 +340,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
         .text('→ This Way', 90, yOffset + 75, { width: 300, align: 'left' });
 
       // QR (right side)
-      doc.image(qrBuffer, 430, yOffset + 40, { width: 140, height: 140 });
+      doc.image(qrBuffer, 430, yOffset + 40, { width: 150, height: 150 });
     }
 
     doc.end();
@@ -367,7 +379,7 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 250,
+      width: 500,
       margin: 1,
       color: { dark: '#1a1a2e', light: '#ffffff' },
     });
@@ -422,7 +434,7 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
         .font('Helvetica')
         .text(`${startDate} – ${endDate}`, 25, yOffset + 50, { width: 260, align: 'center' });
 
-      doc.image(qrBuffer, 100, yOffset + 65, { width: 100, height: 100 });
+      doc.image(qrBuffer, 100, yOffset + 65, { width: 110, height: 110 });
 
       // Back (right half): FindA.Sale URL
       doc
@@ -486,10 +498,10 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="hang-tags-${saleId}.pdf"`);
     doc.pipe(res);
 
-    // 3" × 2" tags = 216 × 144 points
-    const TAG_W = 216;
-    const TAG_H = 144;
-    const COLS = 4;
+    // 3" × 2" tags in landscape orientation = 144 × 216 points (wide × tall)
+    const TAG_W = 144;
+    const TAG_H = 216;
+    const COLS = 5;
     const ROWS = 2;
     const START_X = 36;
     const START_Y = 36;
@@ -825,18 +837,122 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * GET /api/organizers/:saleId/print-kit/price-sheet
+ * Generates a single-page PDF with pre-printed price tags organizers can cut out
+ * and use for items without individual labels.
+ * 3 columns × 9 rows = 27 price points ($0.25 to $20)
+ */
+export const getPriceSheet = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+
+    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="price-sheet-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    // Layout: 3 columns × 9 rows = 27 price points
+    const COLS = 3;
+    const ROWS = 9;
+    const CELL_W = 612 / COLS; // 204 points per column
+    const CELL_H = 792 / ROWS; // 88 points per row
+    const MARGIN = 12;
+
+    // Price points: $0.25, $0.50, $0.75, $1–$5 (0.25 increments), then $6–$20
+    const prices: number[] = [
+      0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5,
+      4.0, 4.5, 5.0, 6, 7, 8, 9, 10, 11,
+      12, 13, 14, 15, 16, 17, 18, 19, 20,
+    ];
+
+    let priceIndex = 0;
+    for (let row = 0; row < ROWS && priceIndex < prices.length; row++) {
+      for (let col = 0; col < COLS && priceIndex < prices.length; col++) {
+        const x = col * CELL_W;
+        const y = row * CELL_H;
+        const price = prices[priceIndex++];
+
+        // Perforated border (dashed)
+        doc
+          .rect(x + MARGIN / 2, y + MARGIN / 2, CELL_W - MARGIN, CELL_H - MARGIN)
+          .lineWidth(0.5)
+          .dash(2, { space: 2 })
+          .stroke('#cccccc')
+          .undash();
+
+        // Sale name (tiny, top)
+        doc
+          .fontSize(6)
+          .fillColor('#666666')
+          .font('Helvetica')
+          .text(sale.title, x + MARGIN, y + 4, {
+            width: CELL_W - MARGIN * 2,
+            align: 'center',
+            ellipsis: true,
+          });
+
+        // Price (large, centered)
+        const priceText = `$${price.toFixed(2)}`;
+        doc
+          .fontSize(28)
+          .fillColor('#16a34a')
+          .font('Helvetica-Bold')
+          .text(priceText, x + MARGIN, y + 25, {
+            width: CELL_W - MARGIN * 2,
+            align: 'center',
+          });
+
+        // Website (tiny, bottom)
+        doc
+          .fontSize(6)
+          .fillColor('#999999')
+          .font('Helvetica')
+          .text('finda.sale', x + MARGIN, y + CELL_H - 12, {
+            width: CELL_W - MARGIN * 2,
+            align: 'center',
+          });
+      }
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('getPriceSheet error:', error);
+    res.status(500).json({ message: 'Failed to generate price sheet.' });
+  }
+};
+
+/**
  * Draw a single item sticker at position (x, y)
- * Format: item title + price + barcode (Code128-style ID)
+ * Format: item title + price + barcode (Code128-style ID) + QR code
  */
 function drawSticker(
   doc: any,
   item: { id: string; title: string; price: number | null },
   x: number,
   y: number,
+  qrBuffer: Buffer,
 ) {
   const stickerX = x + MARGIN;
   const stickerY = y + MARGIN;
-  const contentW = STICKER_W - MARGIN * 2;
+  const contentW = STICKER_W - MARGIN * 2 - 52; // Reserve space for QR on right
 
   // Item title (bold, truncated)
   doc
@@ -864,6 +980,11 @@ function drawSticker(
     .fillColor('#555555')
     .font('Courier')
     .text(`ID: ${item.id}`, stickerX, doc.y - 2, { width: contentW, align: 'left' });
+
+  // QR code in bottom-right corner (48×48 pixels)
+  const qrX = x + STICKER_W - MARGIN - 48;
+  const qrY = y + STICKER_H - MARGIN - 48;
+  doc.image(qrBuffer, qrX, qrY, { width: 48, height: 48 });
 
   // Border around sticker
   doc

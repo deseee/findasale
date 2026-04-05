@@ -17,29 +17,32 @@ async function drawLabel(
   item: { title: string; price: number | null; category: string | null; condition: string | null; id: string },
   saleTitle: string,
   qrBuffer: Buffer,
+  xOffset: number = MARGIN,
+  yOffset: number = MARGIN,
 ) {
-  const x = MARGIN;
-  const y = doc.y;
+  // Save current position and set to yOffset
+  const startY = yOffset;
+  doc.y = startY;
 
   // Sale name (small, top)
   doc
     .fontSize(7)
     .fillColor('#666666')
-    .text(saleTitle, x, y, { width: LABEL_W - MARGIN * 2, align: 'left' });
+    .text(saleTitle, xOffset, doc.y, { width: LABEL_W - MARGIN * 2, align: 'left' });
 
   // Item title
   doc
     .fontSize(14)
     .fillColor('#111111')
     .font('Helvetica-Bold')
-    .text(item.title, x, doc.y + 4, { width: LABEL_W - MARGIN * 2 - 50, align: 'left' });
+    .text(item.title, xOffset, doc.y + 4, { width: LABEL_W - MARGIN * 2 - 50, align: 'left' });
 
   // Price
   const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'Price on request';
   doc
     .fontSize(20)
     .fillColor(item.price != null ? '#16a34a' : '#999999')
-    .text(priceText, x, doc.y + 8, { width: LABEL_W - MARGIN * 2 - 50, align: 'left' });
+    .text(priceText, xOffset, doc.y + 8, { width: LABEL_W - MARGIN * 2 - 50, align: 'left' });
 
   // Category + condition chips
   const chips = [item.category, item.condition].filter(Boolean).join('  \u00b7  ');
@@ -48,7 +51,7 @@ async function drawLabel(
       .fontSize(8)
       .fillColor('#555555')
       .font('Helvetica')
-      .text(chips, x, doc.y + 6, { width: LABEL_W - MARGIN * 2 - 50 });
+      .text(chips, xOffset, doc.y + 6, { width: LABEL_W - MARGIN * 2 - 50 });
   }
 
   // Item ID (small, bottom-left — useful for checkout scanning)
@@ -56,17 +59,17 @@ async function drawLabel(
     .fontSize(6)
     .fillColor('#aaaaaa')
     .font('Helvetica')
-    .text(`ID: ${item.id}`, x, doc.y + 10, { width: LABEL_W - MARGIN * 2 - 50 });
+    .text(`ID: ${item.id}`, xOffset, doc.y + 10, { width: LABEL_W - MARGIN * 2 - 50 });
 
   // QR code in bottom-right corner (40×40 pixels)
-  const qrX = LABEL_W - MARGIN - 40;
-  const qrY = y + LABEL_H - MARGIN - 40;
+  const qrX = xOffset + LABEL_W - MARGIN - 40;
+  const qrY = startY + LABEL_H - MARGIN - 40;
   doc.image(qrBuffer, qrX, qrY, { width: 40, height: 40 });
 
   // Border around label
-  const labelH = doc.y - y + 12;
+  const labelH = doc.y - startY + 12;
   doc
-    .rect(0, y - 4, LABEL_W, Math.max(labelH, 50))
+    .rect(xOffset, startY - 4, LABEL_W, Math.max(labelH, 50))
     .lineWidth(0.5)
     .stroke('#dddddd');
 }
@@ -154,15 +157,41 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
     );
     const qrBuffers = await Promise.all(qrPromises);
 
-    const doc = new PDFDocument({ size: [LABEL_W, LABEL_H], margin: 0, autoFirstPage: false });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0, autoFirstPage: false });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="labels-${saleId}.pdf"`);
     doc.pipe(res);
 
+    // 2 labels per page: top and bottom halves of Letter
+    const PAGE_W = 612; // 8.5 inches
+    const PAGE_H = 792; // 11 inches
+    const LABEL_H_HALF = PAGE_H / 2; // ~396 points per label area
+
     for (let i = 0; i < sale.items.length; i++) {
-      doc.addPage({ size: [LABEL_W, LABEL_H], margin: 0 });
-      doc.moveDown(0.5);
-      await drawLabel(doc, sale.items[i], sale.title, qrBuffers[i]);
+      // Add new page every 2 items
+      if (i % 2 === 0) {
+        doc.addPage({ size: 'LETTER', margin: 0 });
+      }
+
+      // Top label = index 0, Bottom label = index 1
+      const isBottom = i % 2 === 1;
+      const yOffset = isBottom ? LABEL_H_HALF : 36;
+
+      // Center label horizontally on the page
+      const xOffset = (PAGE_W - LABEL_W) / 2;
+
+      await drawLabel(doc, sale.items[i], sale.title, qrBuffers[i], xOffset, yOffset);
+
+      // Add dashed cut line between labels
+      if (isBottom === false && i < sale.items.length - 1) {
+        doc
+          .moveTo(36, LABEL_H_HALF)
+          .lineTo(PAGE_W - 36, LABEL_H_HALF)
+          .lineWidth(0.5)
+          .dash(3, { space: 2 })
+          .stroke('#cccccc')
+          .undash();
+      }
     }
 
     doc.end();

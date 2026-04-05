@@ -6,7 +6,7 @@ import { getPerformanceMetricsHandler } from '../controllers/performanceControll
 import { exportOrganizer } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
-import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getHangTagKit, getFullSignKitPDF } from '../controllers/printKitController';
+import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getHangTagKit, getFullSignKitPDF, getPriceSheet } from '../controllers/printKitController';
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 
 const router = Router();
@@ -530,6 +530,10 @@ router.get('/:saleId/signs/directional', authenticate, getDirectionalSignKit);
 router.get('/:saleId/signs/table-tent', authenticate, getTableTentKit);
 router.get('/:saleId/signs/hang-tag', authenticate, getHangTagKit);
 router.get('/:saleId/signs/full-kit', authenticate, getFullSignKitPDF);
+
+// Feature #241: GET /api/organizers/:saleId/print-kit/price-sheet
+// Download pre-printed price cheat sheet (27 price points, 3×9 grid)
+router.get('/:saleId/print-kit/price-sheet', authenticate, getPriceSheet);
 
 // GET /organizers/efficiency-stats — Organizer benchmarks vs. cohort
 // Must be registered BEFORE /:id to avoid Express matching 'efficiency-stats' as an id param
