@@ -43,7 +43,7 @@ import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget'
 import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
-import { Clock, ShoppingCart, Megaphone } from 'lucide-react';
+import { Clock, ShoppingCart, Megaphone, Pencil } from 'lucide-react';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -489,11 +489,6 @@ const OrganizerDashboard = () => {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
-            <p className="text-warm-600 dark:text-warm-400">
-              {dashboardState === 'new' && "Let's set up your first sale in 5 minutes"}
-              {dashboardState === 'active' && activeSale && getSaleTypeConfig(activeSale.saleType).greeting}
-              {dashboardState === 'between' && 'Great job! Your sale has ended. Ready for the next one?'}
-            </p>
           </div>
 
           {/* Consolidated Action Bar — always visible */}
@@ -813,9 +808,16 @@ const OrganizerDashboard = () => {
 
                   {/* Consolidated Action Buttons Row */}
                   <div className="flex flex-wrap gap-2 mt-2 border-t border-warm-200 dark:border-gray-700">
-                    <Link href={`/sales/${activeSale.id}`} className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="See your sale as shoppers see it">
-                      View Live
-                    </Link>
+                    {activeSale.status === 'PUBLISHED' && (
+                      <>
+                        <Link href={`/sales/${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="See your sale as shoppers see it">
+                          🟢 Live
+                        </Link>
+                        <Link href={`/organizer/edit-sale/${activeSale.id}`} className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1" title="Edit sale details">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Link>
+                      </>
+                    )}
                     {activeSale.status === 'PUBLISHED' && (
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
                         Items
@@ -831,14 +833,16 @@ const OrganizerDashboard = () => {
                         Publish Sale
                       </Link>
                     )}
-                    <Link href={`/organizer/print-kit/${activeSale.id}`} className="text-sm px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors" title="Generate and print labels for your items">
-                      🖨️ Print Kit
+                    <Link href={`/organizer/pos?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors flex items-center gap-1" title="Open Point of Sale to process in-person transactions">
+                      <ShoppingCart className="w-4 h-4" />
+                      POS
                     </Link>
-                    <Link href={`/organizer/holds?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors" title="View and manage shopper holds for this sale">
+                    <Link href={`/organizer/holds?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-full hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors flex items-center gap-1" title="View and manage shopper holds for this sale">
+                      <Clock className="w-4 h-4" />
                       Holds
                     </Link>
-                    <Link href={`/organizer/pos?saleId=${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="Open Point of Sale to process in-person transactions">
-                      POS
+                    <Link href={`/organizer/print-kit/${activeSale.id}`} className="text-sm px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors" title="Generate and print labels for your items">
+                      🖨️ Print Kit
                     </Link>
                     {activeSale.status === 'PUBLISHED' && (
                       <button
