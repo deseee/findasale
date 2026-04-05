@@ -516,7 +516,7 @@ const OrganizerDashboard = () => {
                     + Items
                   </button>
                   {addItemsDropdownOpen && (
-                    <div className="absolute top-full mt-2 left-0 z-50 bg-gray-800 dark:bg-gray-900 border border-gray-700 rounded-lg shadow-lg p-0 w-max min-w-48">
+                    <div className="absolute top-full mt-2 left-0 z-50 bg-gray-800 dark:bg-gray-900 border border-gray-700 rounded-lg shadow-lg p-0 max-w-xs overflow-hidden">
                       {activeOrDraftSales.map((sale: Sale) => (
                         <Link
                           key={sale.id}
@@ -524,9 +524,9 @@ const OrganizerDashboard = () => {
                           className="block w-full px-4 py-2 text-sm text-white hover:bg-gray-700 dark:hover:bg-gray-800 transition-colors first:rounded-t-lg last:rounded-b-lg border-b border-gray-700 last:border-b-0"
                           onClick={() => setAddItemsDropdownOpen(false)}
                         >
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center justify-between gap-2 min-w-0">
                             <span className="truncate">{sale.title}</span>
-                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full flex-shrink-0 ${
                               sale.status === 'PUBLISHED'
                                 ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
                                 : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
@@ -563,7 +563,7 @@ const OrganizerDashboard = () => {
                     POS
                   </button>
                   {posDropdownOpen && (
-                    <div className="absolute top-full mt-2 left-0 z-50 bg-gray-800 dark:bg-gray-900 border border-gray-700 rounded-lg shadow-lg p-0 w-max min-w-48">
+                    <div className="absolute top-full mt-2 left-0 z-50 bg-gray-800 dark:bg-gray-900 border border-gray-700 rounded-lg shadow-lg p-0 max-w-xs overflow-hidden">
                       {activeOrDraftSales.map((sale: Sale) => (
                         <Link
                           key={sale.id}
@@ -571,9 +571,9 @@ const OrganizerDashboard = () => {
                           className="block w-full px-4 py-2 text-sm text-white hover:bg-gray-700 dark:hover:bg-gray-800 transition-colors first:rounded-t-lg last:rounded-b-lg border-b border-gray-700 last:border-b-0"
                           onClick={() => setPosDropdownOpen(false)}
                         >
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center justify-between gap-2 min-w-0">
                             <span className="truncate">{sale.title}</span>
-                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full flex-shrink-0 ${
                               sale.status === 'PUBLISHED'
                                 ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
                                 : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
