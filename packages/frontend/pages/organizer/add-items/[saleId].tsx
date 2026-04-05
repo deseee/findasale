@@ -1900,7 +1900,7 @@ const AddItemsDetailPage = () => {
 
               {/* Sort controls bar */}
               {items.length > 0 && (
-                <div className="px-4 py-3 bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
+                <div className="px-4 py-3 bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 flex items-center gap-2">
                   {(['name', 'price', 'status', 'date'] as const).map((option) => (
                     <button
                       key={option}
