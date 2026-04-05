@@ -1777,7 +1777,7 @@ const AddItemsDetailPage = () => {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : items && items.length > 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
               <div className="p-4 border-b border-warm-200 dark:border-gray-700 flex flex-col gap-2">
                 {/* Row 1: select-all + count + Review & Publish */}
                 <div className="flex items-center gap-3">
