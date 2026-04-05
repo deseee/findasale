@@ -9,7 +9,6 @@ import Layout from '../components/Layout';
 import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
 import { CartProvider } from '../context/CartContext';
-import FeedbackWidget from '../components/FeedbackWidget';
 import InstallPrompt from '../components/InstallPrompt';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 import { useTheme } from '../hooks/useTheme'; // #63: Dark Mode
@@ -148,16 +147,6 @@ function OnboardingShower() {
 }
 
 /**
- * Global feedback widget: floating button appears on every page for logged-in users
- */
-function FeedbackWidgetWrapper() {
-  const { user } = useAuth();
-
-  if (!user) return null;
-  return <FeedbackWidget />;
-}
-
-/**
  * Feature #20: Monitor server degradation and update global state
  */
 function DegradationMonitor() {
@@ -275,8 +264,6 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <OAuthBridge />
               {/* Phase 27: First-time shopper onboarding */}
               <OnboardingShower />
-              {/* Global feedback widget */}
-              <FeedbackWidgetWrapper />
               </QueryClientProvider>
             </LowBandwidthProvider>
           </DegradationProvider>
