@@ -15,6 +15,7 @@ interface PosPaymentQrProps {
   paymentLinkStatus: 'idle' | 'generating' | 'waiting' | 'paid';
   onGenerate: () => void;
   onNewTransaction: () => void;
+  onReset?: () => void;
 }
 
 export default function PosPaymentQr({
@@ -24,6 +25,7 @@ export default function PosPaymentQr({
   paymentLinkStatus,
   onGenerate,
   onNewTransaction,
+  onReset,
 }: PosPaymentQrProps) {
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
 
@@ -105,6 +107,16 @@ export default function PosPaymentQr({
                 ⏳ Waiting for payment…
               </p>
             </div>
+
+            {/* Cancel / Regenerate */}
+            {onReset && (
+              <button
+                onClick={onReset}
+                className="w-full py-2 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-600 dark:text-warm-400 text-sm hover:bg-warm-50 dark:hover:bg-gray-700 transition"
+              >
+                Cancel &amp; Regenerate
+              </button>
+            )}
           </div>
         )}
 

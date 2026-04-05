@@ -317,6 +317,16 @@ export default function POSPage() {
     return () => clearInterval(interval);
   }, [paymentLinkStatus, paymentLinkId]);
 
+  const handleResetPaymentQr = () => {
+    if (paymentLinkPollInterval) {
+      clearInterval(paymentLinkPollInterval);
+      setPaymentLinkPollInterval(null);
+    }
+    setPaymentLinkId('');
+    setPaymentLinkQr('');
+    setPaymentLinkStatus('idle');
+  };
+
   // ─── Linked carts polling ────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -1083,6 +1093,7 @@ export default function POSPage() {
           paymentLinkStatus={paymentLinkStatus}
           onGenerate={handleGeneratePaymentQr}
           onNewTransaction={handleNewTransaction}
+          onReset={handleResetPaymentQr}
         />
       )}
 
