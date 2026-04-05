@@ -1384,7 +1384,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       return res.status(403).json({ message: 'Organizer access required' });
     }
 
-    const { saleId, page = '1', limit = '20' } = req.query;
+    const { saleId, page = '1', limit = '500' } = req.query;
 
     if (!saleId) {
       return res.status(400).json({ message: 'saleId is required' });
@@ -1401,7 +1401,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     }
 
     const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
+    const limitNum = Math.min(500, Math.max(1, parseInt(limit as string) || 500));
 
     const items = await prisma.item.findMany({
       where: {

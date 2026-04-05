@@ -336,6 +336,8 @@ const AddItemsDetailPage = () => {
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string }>>({});
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const getItemEditState = useCallback((item: any) => {
     return itemEditState[item.id] || {
@@ -365,6 +367,32 @@ const AddItemsDetailPage = () => {
       showToast('Failed to save item', 'error');
     }
   }, [itemEditState, saleId, queryClient, showToast]);
+
+  // Sort items based on current sort state
+  const getSortedItems = useCallback((itemsToSort: any[]) => {
+    const sorted = [...itemsToSort];
+    sorted.sort((a: any, b: any) => {
+      let comparison = 0;
+
+      if (sortBy === 'name') {
+        comparison = (a.title || '').localeCompare(b.title || '');
+      } else if (sortBy === 'price') {
+        comparison = (a.price || 0) - (b.price || 0);
+      } else if (sortBy === 'status') {
+        const statusOrder = { 'DRAFT': 0, 'PENDING_REVIEW': 1, 'PUBLISHED': 2 };
+        const statusA = statusOrder[computeDraftStatus(a) as keyof typeof statusOrder] ?? -1;
+        const statusB = statusOrder[computeDraftStatus(b) as keyof typeof statusOrder] ?? -1;
+        comparison = statusA - statusB;
+      } else if (sortBy === 'date') {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        comparison = dateB - dateA; // Default: newest first
+      }
+
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    return sorted;
+  }, [sortBy, sortOrder]);
 
   // Feature #244: eBay CSV export state
   const [ebayExportOpen, setEbayExportOpen] = useState(false);
@@ -1886,9 +1914,39 @@ const AddItemsDetailPage = () => {
                 </div>
               )}
 
+              {/* Sort controls bar */}
+              {items.length > 0 && (
+                <div className="px-4 py-3 bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-warm-700 dark:text-warm-300">Sort by:</span>
+                  {(['name', 'price', 'status', 'date'] as const).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => {
+                        if (sortBy === option) {
+                          // Toggle sort order on same column
+                          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          // Switch to new column, default to desc
+                          setSortBy(option);
+                          setSortOrder('desc');
+                        }
+                      }}
+                      className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                        sortBy === option
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-700 hover:bg-warm-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      {option.charAt(0).toUpperCase() + option.slice(1)}
+                      {sortBy === option && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Card-based expandable items list */}
               <div className="divide-y divide-warm-100 dark:divide-gray-700">
-                {items.map((item: any) => {
+                {getSortedItems(items).map((item: any) => {
                   const draftStatus = computeDraftStatus(item);
                   const isExpanded = expandedItemId === item.id;
                   const editState = getItemEditState(item);
@@ -1955,8 +2013,8 @@ const AddItemsDetailPage = () => {
                             {item.price != null ? `$${item.price}` : 'No price'} · {formatCategory(item.category) || 'Uncategorized'}
                           </p>
                         </div>
-                        {/* Status badge */}
-                        <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full hidden sm:inline-block ${
+                        {/* Status badge — visible on all screen sizes */}
+                        <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
                           draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
                           draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                           'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'

@@ -196,7 +196,7 @@ const ReviewPage = () => {
     queryFn: async () => {
       if (!saleId) return [];
       // Fetch draft/pending review items for this sale
-      const response = await api.get(`/items/drafts?saleId=${saleId}`);
+      const response = await api.get(`/items/drafts?saleId=${saleId}&limit=500`);
       return (response.data || []) as Item[];
     },
     enabled: !!saleId,
