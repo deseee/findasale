@@ -70,13 +70,13 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
         {/* Content */}
         <div className="flex-1 min-w-0">
           {/* Title row */}
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2">
             <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate flex-1">
               {sale.title}
             </h3>
             <Link
               href={`/sales/${sale.id}`}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${getStatusBadgeColor(
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 ${getStatusBadgeColor(
                 sale.status
               )} hover:opacity-80 transition-opacity`}
             >
@@ -88,15 +88,13 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
           {sale.city && (
             <p className="text-xs text-warm-600 dark:text-warm-400 truncate mb-2">
               {sale.city}
-              {sale.startDate && (
+              {sale.startDate && sale.status !== 'LIVE' && sale.status !== 'PUBLISHED' && (
                 <>
                   {' • '}
-                  {sale.status === 'LIVE' || sale.status === 'PUBLISHED'
-                    ? 'Live now'
-                    : new Date(sale.startDate).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+                  {new Date(sale.startDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
                 </>
               )}
             </p>
