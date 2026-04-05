@@ -176,6 +176,8 @@ const ReviewPage = () => {
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkCategory, setBulkCategory] = useState('');
   const [showBuyerPreview, setShowBuyerPreview] = useState(router.query.preview === 'true');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
@@ -284,6 +286,30 @@ const ReviewPage = () => {
       }, 50);
     }
   }, [expandedItemId]);
+
+  const getSortedItems = useCallback((itemsToSort: Item[]) => {
+    return [...itemsToSort].sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+        case 'name':
+          comparison = (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase());
+          break;
+        case 'price':
+          comparison = (Number(a.price) || 0) - (Number(b.price) || 0);
+          break;
+        case 'status': {
+          const statusOrder: Record<string, number> = { DRAFT: 0, PENDING_REVIEW: 1, PUBLISHED: 2 };
+          comparison = (statusOrder[a.draftStatus || ''] ?? 0) - (statusOrder[b.draftStatus || ''] ?? 0);
+          break;
+        }
+        case 'date':
+        default:
+          comparison = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+          break;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [sortBy, sortOrder]);
 
   // Auth + saleId guards (MUST be after all hooks to respect Rules of Hooks)
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -696,8 +722,34 @@ const ReviewPage = () => {
                         <span className="w-4" />
                       </div>
                     </div>
+                    {items.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap mb-3">
+                        <span className="text-xs font-semibold text-warm-700 dark:text-warm-300">Sort by:</span>
+                        {(['name', 'price', 'status', 'date'] as const).map((option) => (
+                          <button
+                            key={option}
+                            onClick={() => {
+                              if (sortBy === option) {
+                                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortBy(option);
+                                setSortOrder('desc');
+                              }
+                            }}
+                            className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                              sortBy === option
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-700 hover:bg-warm-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            {option.charAt(0).toUpperCase() + option.slice(1)}
+                            {sortBy === option && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <div className="space-y-3">
-                      {items.map((item) => {
+                      {getSortedItems(items).map((item) => {
                       const conf = confidenceLabel(item.aiConfidence, item.isAiTagged);
                       return (
                         <div
