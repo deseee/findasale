@@ -1968,11 +1968,9 @@ const AddItemsDetailPage = () => {
                           />
                           <span className="text-warm-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
                         </div>
-                        {/* Thumbnail — links to public item page */}
+                        {/* Thumbnail — links to public item page (no target="_blank" to preserve PWA back-navigation) */}
                         <a
                           href={`/items/${item.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           className="flex-shrink-0"
                         >
@@ -1987,15 +1985,11 @@ const AddItemsDetailPage = () => {
                             <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded border border-warm-200 dark:border-gray-700 flex items-center justify-center text-gray-400 text-xl">📷</div>
                           )}
                         </a>
-                        {/* Title — links to edit-item page */}
+                        {/* Title — plain text, no navigation link */}
                         <div className="flex-1 min-w-0">
-                          <Link
-                            href={`/organizer/edit-item/${item.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="font-semibold text-amber-700 hover:underline truncate inline-block max-w-full text-sm"
-                          >
+                          <span className="font-semibold text-amber-700 truncate inline-block max-w-full text-sm">
                             {item.title || 'Untitled'}
-                          </Link>
+                          </span>
                           <p className="text-xs text-warm-500 dark:text-warm-400 truncate">
                             {item.price != null ? `$${item.price}` : 'No price'} · {formatCategory(item.category) || 'Uncategorized'}
                           </p>
