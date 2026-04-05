@@ -2013,29 +2013,30 @@ const AddItemsDetailPage = () => {
                             {item.price != null ? `$${item.price}` : 'No price'} · {formatCategory(item.category) || 'Uncategorized'}
                           </p>
                         </div>
-                        {/* Status badge — visible on all screen sizes */}
-                        <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                          draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
-                          'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
-                        </span>
-                        {/* Delete button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
-                              deleteMutation.mutate(item.id);
-                            }
-                          }}
-                          disabled={deleteMutation.isPending}
-                          className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors disabled:opacity-50 p-1"
-                          aria-label="Delete item"
-                        >
-                          🗑️
-                        </button>
+                        {/* Status badge + delete stacked vertically */}
+                        <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                            draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                            draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                          }`}>
+                            {draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
+                                deleteMutation.mutate(item.id);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                            className="text-red-400 hover:text-red-600 transition-colors disabled:opacity-50 p-0.5 leading-none"
+                            aria-label="Delete item"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                         <span className="text-warm-400 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
                       </div>
 
