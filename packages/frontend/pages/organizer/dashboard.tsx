@@ -43,6 +43,7 @@ import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget'
 import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
+import { Clock, ShoppingCart, Megaphone } from 'lucide-react';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -487,7 +488,7 @@ const OrganizerDashboard = () => {
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
+            <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
             <p className="text-warm-600 dark:text-warm-400">
               {dashboardState === 'new' && "Let's set up your first sale in 5 minutes"}
               {dashboardState === 'active' && activeSale && getSaleTypeConfig(activeSale.saleType).greeting}
@@ -506,8 +507,8 @@ const OrganizerDashboard = () => {
               const activeOrDraftSales = salesData?.filter((s: Sale) => ['DRAFT', 'PUBLISHED', 'SCHEDULED'].includes(s.status)) ?? [];
               if (activeOrDraftSales.length <= 1) {
                 return (
-                  <Link href={activeSale ? `/organizer/add-items/${activeSale.id}` : '/organizer/sales'} className="rounded-full px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors">
-                    Add Items
+                  <Link href={activeSale ? `/organizer/add-items/${activeSale.id}` : '/organizer/sales'} className="rounded-full px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors flex items-center gap-1">
+                    + Items
                   </Link>
                 );
               }
@@ -515,9 +516,9 @@ const OrganizerDashboard = () => {
                 <div className="relative">
                   <button
                     onClick={() => setAddItemsDropdownOpen(!addItemsDropdownOpen)}
-                    className="rounded-full px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+                    className="rounded-full px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors flex items-center gap-1"
                   >
-                    Add Items
+                    + Items
                   </button>
                   {addItemsDropdownOpen && (
                     <div className="absolute top-full mt-2 left-0 z-50 bg-gray-800 dark:bg-gray-900 border border-gray-700 rounded-lg shadow-lg p-0 w-max min-w-48">
@@ -546,16 +547,13 @@ const OrganizerDashboard = () => {
               );
             })()}
 
-            <Link href="/organizer/holds" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors">
-              Holds
-            </Link>
-
             {/* POS with dropdown for multi-sale */}
             {(() => {
               const activeOrDraftSales = salesData?.filter((s: Sale) => ['DRAFT', 'PUBLISHED', 'SCHEDULED'].includes(s.status)) ?? [];
               if (activeOrDraftSales.length <= 1) {
                 return (
-                  <Link href={activeSale ? `/organizer/pos?saleId=${activeSale.id}` : '/organizer/sales'} className="rounded-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors">
+                  <Link href={activeSale ? `/organizer/pos?saleId=${activeSale.id}` : '/organizer/sales'} className="rounded-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors flex items-center gap-1">
+                    <ShoppingCart className="w-4 h-4" />
                     POS
                   </Link>
                 );
@@ -564,8 +562,9 @@ const OrganizerDashboard = () => {
                 <div className="relative">
                   <button
                     onClick={() => setPosDropdownOpen(!posDropdownOpen)}
-                    className="rounded-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors"
+                    className="rounded-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors flex items-center gap-1"
                   >
+                    <ShoppingCart className="w-4 h-4" />
                     POS
                   </button>
                   {posDropdownOpen && (
@@ -595,7 +594,13 @@ const OrganizerDashboard = () => {
               );
             })()}
 
-            <Link href="/organizer/ripples" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 transition-colors">
+            <Link href="/organizer/holds" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors flex items-center gap-1">
+              <Clock className="w-4 h-4" />
+              Holds
+            </Link>
+
+            <Link href="/organizer/ripples" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 transition-colors flex items-center gap-1">
+              <Megaphone className="w-4 h-4" />
               Ripples
             </Link>
           </div>
@@ -954,17 +959,17 @@ const OrganizerDashboard = () => {
                   );
                 }
 
-                // Condition 4: items.draft > 0
+                // Condition 4: items.draft > 0 (includes drafts and unpublished items)
                 if (draft > 0) {
                   return (
                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-5">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">You have {draft} items in draft.</p>
-                          <p className="text-sm text-amber-700 dark:text-amber-300">Finish adding photos or publish when ready.</p>
+                          <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">You have {draft} items to review.</p>
+                          <p className="text-sm text-amber-700 dark:text-amber-300">Finish adding photos or details and publish when ready.</p>
                         </div>
                         <Link href={`/organizer/add-items/${activeSale?.id ?? id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
-                          Review Drafts
+                          Review Items
                         </Link>
                       </div>
                     </div>

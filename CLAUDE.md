@@ -169,6 +169,15 @@ npx prisma generate         # regenerates TypeScript client with new fields
 The main window is an **orchestrator**, not an implementer. All code implementation
 MUST go through subagents. This is not advisory — it is a hard gate.
 
+**Dispatch routing (HARD RULE — survives compression):**
+`findasale-dev`, `findasale-qa`, `findasale-architect`, `findasale-ops`, and ALL
+other `findasale-*` names are **Skills**, not agent types. Invoke them with
+`Skill('findasale-dev')`, NEVER with `Agent(subagent_type='findasale-dev')`.
+The Agent tool only accepts these types: `general-purpose`, `Explore`, `Plan`,
+`statusline-setup`, `claude-code-guide`. If you catch yourself reasoning about
+"which agent type to use" for a findasale skill — STOP. Use the Skill tool.
+Do not waste tokens deliberating. This mapping is fixed and non-negotiable.
+
 **GATE (before every Write/Edit that creates or modifies code in `packages/`):**
 
 1. Is this a **single targeted edit** to 1–2 existing files, totaling <20 lines changed?
