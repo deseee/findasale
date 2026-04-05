@@ -485,14 +485,14 @@ const OrganizerDashboard = () => {
       {/* Main Dashboard */}
       {!isSimpleMode && (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
-        <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto px-4 py-4">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
+          <div className="mb-4">
+            <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
           </div>
 
           {/* Consolidated Action Bar — always visible */}
-          <div className="flex flex-wrap gap-2 mb-8 relative">
+          <div className="flex flex-wrap gap-2 mb-6 relative">
             <Link href="/organizer/create-sale" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
               + New Sale
             </Link>
@@ -822,6 +822,13 @@ const OrganizerDashboard = () => {
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
                         Items
                       </Link>
+                    )}
+                    {activeSale.status === 'DRAFT' && (
+                      <>
+                        <Link href={`/organizer/edit-sale/${activeSale.id}`} className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1" title="Edit sale details">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Link>
+                      </>
                     )}
                     {activeSale.status === 'DRAFT' && (
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add items to this draft sale">

@@ -148,11 +148,9 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
     sales.forEach((sale: any) => {
       sale.items.forEach((item: any) => {
         totalItems++;
-        if (item.draftStatus === 'DRAFT') {
-          // Only count draft items from the active sale
-          if (activeSale && sale.id === activeSale.id) {
-            draftItems++;
-          }
+        // Count unpublished items (DRAFT or PENDING_REVIEW) from all active/draft sales
+        if (item.draftStatus !== 'PUBLISHED') {
+          draftItems++;
         } else if (item.status === 'SOLD') {
           soldItems++;
         } else if (item.status === 'AVAILABLE') {
