@@ -310,20 +310,36 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
         .lineWidth(2)
         .stroke('#cccccc');
 
-      // Arrow — filled right-pointing polygon (LEFT third)
+      // Arrow — right-pointing for sign 1 (i=0), left-pointing for sign 2 (i=1)
       const ax = 20;
       const ay = yOffset + 80;
-      doc
-        .polygon(
-          [ax, ay + 75],              // left-top
-          [ax + 90, ay],              // right-top point
-          [ax + 90, ay + 40],         // step in
-          [ax + 140, ay + 40],        // arrow shaft top-right
-          [ax + 140, ay + 110],       // arrow shaft bottom-right
-          [ax + 90, ay + 110],        // step out
-          [ax + 90, ay + 150],        // right-bottom point
-        )
-        .fill('#16a34a');
+      if (i === 0) {
+        // Right-pointing arrow (LEFT third)
+        doc
+          .polygon(
+            [ax, ay + 75],              // left-top
+            [ax + 90, ay],              // right-top point
+            [ax + 90, ay + 40],         // step in
+            [ax + 140, ay + 40],        // arrow shaft top-right
+            [ax + 140, ay + 110],       // arrow shaft bottom-right
+            [ax + 90, ay + 110],        // step out
+            [ax + 90, ay + 150],        // right-bottom point
+          )
+          .fill('#16a34a');
+      } else {
+        // Left-pointing arrow (tip on LEFT, shaft on RIGHT)
+        doc
+          .polygon(
+            [ax + 140, ay + 75],        // right-center (tail right edge)
+            [ax + 50, ay],              // upper-right of arrowhead
+            [ax + 50, ay + 40],         // notch into shaft
+            [ax, ay + 40],              // shaft top-left
+            [ax, ay + 110],             // shaft bottom-left
+            [ax + 50, ay + 110],        // notch out of shaft
+            [ax + 50, ay + 150],        // lower-right of arrowhead
+          )
+          .fill('#16a34a');
+      }
 
       // Sale name (middle section)
       doc
@@ -934,13 +950,14 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
 
     const prices = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 2.50, 3.00, 3.50,
                     4.00, 4.50, 5.00, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
-    // 27 prices total — fits exactly in 3×9 grid on one page
+    // 27 prices total — fits in 3×10 Avery 5160 grid (30 cells per page, 27 used)
 
     const COLS = 3;
-    const ROWS = 9;
-    const CELL_W = 204;   // 612 / 3
-    const CELL_H = 88;    // 792 / 9
-    const QR_SIZE = 36;
+    const CELL_W = 189;   // Avery 5160 sticker width
+    const CELL_H = 72;    // Avery 5160 sticker height
+    const QR_SIZE = 48;
+    const LEFT_MARGIN = 13;
+    const TOP_MARGIN = 36;
 
     // Create doc WITHOUT calling addPage() — autoFirstPage:true handles it
     const doc = new PDFDocument({ size: 'LETTER', margin: 0, autoFirstPage: true });
@@ -948,46 +965,41 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="price-sheet-${saleId}.pdf"`);
     doc.pipe(res);
 
-    // Draw all 27 cells
+    // Draw all 27 cells (3 cols × 10 rows = 30 cells, 27 prices fit in slots 0-26)
     for (let i = 0; i < prices.length; i++) {
+      if (i > 0 && i % 30 === 0) {
+        doc.addPage({ size: 'LETTER', margin: 0 });
+      }
+
       const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      const cellX = col * CELL_W;
-      const cellY = row * CELL_H;
+      const row = Math.floor((i % 30) / COLS);
+      const cellX = LEFT_MARGIN + col * CELL_W;
+      const cellY = TOP_MARGIN + row * CELL_H;
 
-      // Dashed cell border
-      doc
-        .rect(cellX, cellY, CELL_W, CELL_H)
-        .dash(2, { space: 2 })
-        .lineWidth(1)
-        .stroke('#cccccc')
-        .undash();
-
-      // Sale name (top)
+      // Sale name — top, tiny, no border
       doc
         .font('Helvetica')
         .fontSize(6)
         .fillColor('#666666')
-        .text(sale.title, cellX + 6, cellY + 5, { width: CELL_W - 12, align: 'center', lineBreak: false });
+        .text(sale.title, cellX + 8, cellY + 5, { width: 129, lineBreak: false });
 
-      // Price — SAME 22pt size for ALL prices
+      // Price — large bold, left-aligned
       const priceText = `$${prices[i].toFixed(2)}`;
       doc
         .font('Helvetica-Bold')
-        .fontSize(22)
+        .fontSize(18)
         .fillColor('#1a1a2e')
-        .text(priceText, cellX, cellY + 18, { width: CELL_W, align: 'center', lineBreak: false });
+        .text(priceText, cellX + 8, cellY + 18, { width: 100, lineBreak: false });
 
-      // QR code — bottom right
-      doc.image(saleQrBuffer, cellX + CELL_W - QR_SIZE - 6, cellY + CELL_H - QR_SIZE - 6,
-        { width: QR_SIZE, height: QR_SIZE });
-
-      // finda.sale — bottom left
+      // finda.sale — bottom left, tiny
       doc
         .font('Helvetica')
         .fontSize(5)
         .fillColor('#999999')
-        .text('finda.sale', cellX + 6, cellY + CELL_H - 14, { width: 80, lineBreak: false });
+        .text('finda.sale', cellX + 8, cellY + 56, { width: 80, lineBreak: false });
+
+      // QR code — right side, 48×48, vertically centered
+      doc.image(saleQrBuffer, cellX + 137, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
     }
 
     doc.end();
