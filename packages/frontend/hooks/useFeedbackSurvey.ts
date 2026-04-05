@@ -108,7 +108,8 @@ interface UseFeedbackSurveyReturn {
 export const useFeedbackSurvey = (): UseFeedbackSurveyReturn => {
   const { user, isLoading: authLoading } = useAuth();
   const { openSurvey, closeSurvey, isSurveyOpen, cooldownEndTime, setCooldownEndTime } = useFeedbackContext();
-  const { tier: organizerTier } = useOrganizerTier();
+  // useOrganizerTier available if tier gating needed in future
+  const _orgTier = useOrganizerTier();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suppressions, setSuppressions] = useState<Set<string>>(new Set());
@@ -169,12 +170,7 @@ export const useFeedbackSurvey = (): UseFeedbackSurveyReturn => {
         return; // Silently skip if suppressed
       }
 
-      // Check tier gate (OG-4 only for SIMPLE+)
-      if (survey.tierGate === 'SIMPLE+') {
-        if (organizerTier === 'FREE') {
-          return; // Silently skip for FREE tier
-        }
-      }
+      // Tier gate: SIMPLE is the lowest tier, so SIMPLE+ = all tiers. No gate needed.
 
       // Check cooldown (30 minutes)
       if (cooldownEndTime && Date.now() < cooldownEndTime) {
@@ -197,7 +193,7 @@ export const useFeedbackSurvey = (): UseFeedbackSurveyReturn => {
       const cooldownMs = 30 * 60 * 1000;
       setCooldownEndTime(Date.now() + cooldownMs);
     },
-    [user, authLoading, isSurveyOpen, suppressions, organizerTier, cooldownEndTime, openSurvey, setCooldownEndTime]
+    [user, authLoading, isSurveyOpen, suppressions, cooldownEndTime, openSurvey, setCooldownEndTime]
   );
 
   return {
