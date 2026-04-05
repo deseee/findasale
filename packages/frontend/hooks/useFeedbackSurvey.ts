@@ -177,17 +177,22 @@ export const useFeedbackSurvey = (): UseFeedbackSurveyReturn => {
         return; // Silently skip if in cooldown
       }
 
-      // Check 24-hour frequency cap
-      if (user.lastSurveyShownAt) {
-        const lastSurveyTime = new Date(user.lastSurveyShownAt).getTime();
-        const oneDayMs = 24 * 60 * 60 * 1000;
-        if (Date.now() - lastSurveyTime < oneDayMs) {
-          return; // Silently skip if shown within 24 hours
+      // Check 24-hour frequency cap (client-side; backend also tracks lastSurveyShownAt)
+      try {
+        const lastShown = window.localStorage.getItem('feedback_last_shown');
+        if (lastShown) {
+          const oneDayMs = 24 * 60 * 60 * 1000;
+          if (Date.now() - parseInt(lastShown, 10) < oneDayMs) {
+            return; // Silently skip if shown within 24 hours
+          }
         }
-      }
+      } catch { /* localStorage unavailable — proceed */ }
 
       // All checks passed — open survey
       openSurvey(survey);
+
+      // Record last-shown timestamp for 24h frequency cap
+      try { window.localStorage.setItem('feedback_last_shown', String(Date.now())); } catch { /* noop */ }
 
       // Set cooldown end time (30 minutes from now)
       const cooldownMs = 30 * 60 * 1000;
